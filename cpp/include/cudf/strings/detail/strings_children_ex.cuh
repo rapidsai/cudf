@@ -38,6 +38,24 @@ namespace experimental {
  * @brief Creates child offsets and chars data by applying the template function that
  * can be used for computing the output size of each string as well as create the output
  *
+ * The `size_and_exec_fn` is expected to be functor with 3 settable member variables.
+ * @code{.cpp}
+ * struct size_and_exec_fn {
+ *   size_type* d_sizes;
+ *   char* d_chars{};
+ *   cudf::detail::input_offsetalator d_offsets;
+ *   __device__ void operator()(size_type thread_idx) {
+ *      // functor-specific logic to resolve out_idx from thread_idx
+ *      if( !d_chars ) {
+ *         d_sizes[out_idx] = output_size;
+ *      } else {
+ *         auto d_output = d_chars + d_offsets[out_idx];
+ *         // write characters to d_output
+ *      }
+ *   }
+ * };
+ * @endcode
+ *
  * @tparam SizeAndExecuteFunction Function must accept a row index.
  *         It must also have member `d_sizes` to hold computed row output sizes on the 1st pass
  *         and members `d_offsets` and `d_chars` for the 2nd pass to resolve the output memory
@@ -93,7 +111,24 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
 
 /**
  * @brief Creates child offsets and chars columns by applying the template function that
- * can be used for computing the output size of each string as well as create the output.
+ * can be used for computing the output size of each string as well as create the output
+ *
+ * The `size_and_exec_fn` is expected to be functor with 3 settable member variables.
+ * @code{.cpp}
+ * struct size_and_exec_fn {
+ *   size_type* d_sizes;
+ *   char* d_chars{};
+ *   cudf::detail::input_offsetalator d_offsets;
+ *   __device__ void operator()(size_type idx) {
+ *      if( !d_chars ) {
+ *         d_sizes[idx] = output_size;
+ *      } else {
+ *         auto d_output = d_chars + d_offsets[idx];
+ *         // write characters to d_output
+ *      }
+ *   }
+ * };
+ * @endcode
  *
  * @tparam SizeAndExecuteFunction Function must accept a row index.
  *         It must also have member `d_sizes` to hold computed row output sizes on the 1st pass
