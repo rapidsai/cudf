@@ -31,6 +31,7 @@
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -238,9 +239,10 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
 
 template <bool check_exact_equality>
 struct column_property_comparator {
-  bool types_equivalent(cudf::data_type const& lhs, cudf::data_type const& rhs)
+  bool types_equivalent(cudf::column_view const& lhs, cudf::column_view const& rhs)
   {
-    return is_fixed_point(lhs) ? lhs.id() == rhs.id() : lhs == rhs;
+    return cudf::is_fixed_point(lhs.type()) ? lhs.type().id() == rhs.type().id()
+                                            : cudf::have_same_types(lhs, rhs);
   }
 
   bool compare_common(cudf::column_view const& lhs,
@@ -252,9 +254,9 @@ struct column_property_comparator {
     bool result = true;
 
     if (check_exact_equality) {
-      PROP_EXPECT_EQ(lhs.type(), rhs.type());
+      PROP_EXPECT_EQ(cudf::have_same_types(lhs, rhs), true);
     } else {
-      PROP_EXPECT_EQ(types_equivalent(lhs.type(), rhs.type()), true);
+      PROP_EXPECT_EQ(types_equivalent(lhs, rhs), true);
     }
 
     auto const lhs_size = check_exact_equality ? lhs.size() : lhs_row_indices.size();

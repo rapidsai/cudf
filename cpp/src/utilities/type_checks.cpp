@@ -143,6 +143,11 @@ bool have_same_types(column_view const& lhs, column_view const& rhs)
   return type_dispatcher(lhs.type(), columns_equal_fn{}, lhs, rhs);
 }
 
+bool column_types_equal(column_view const& lhs, column_view const& rhs)
+{
+  return have_same_types(lhs, rhs);
+}
+
 bool have_same_types(column_view const& lhs, scalar const& rhs)
 {
   return type_dispatcher(lhs.type(), column_scalar_equal_fn{}, lhs, rhs);
@@ -158,7 +163,7 @@ bool have_same_types(scalar const& lhs, scalar const& rhs)
   return type_dispatcher(lhs.type(), scalars_equal_fn{}, lhs, rhs);
 }
 
-bool types_equivalent(column_view const& lhs, column_view const& rhs)
+bool column_types_equivalent(column_view const& lhs, column_view const& rhs)
 {
   // Check if the columns have fixed point types. This is the only case where
   // type equality and equivalence differ.

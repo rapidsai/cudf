@@ -143,7 +143,7 @@ TEST_F(ColumnTypeCheckTest, DifferentFixedWidth)
   cudf::test::fixed_point_column_wrapper<int32_t> rhs5({10000}, numeric::scale_type{0});
 
   EXPECT_FALSE(cudf::have_same_types(lhs5, rhs5));
-  EXPECT_TRUE(cudf::types_equivalent(lhs5, rhs5));
+  EXPECT_TRUE(cudf::column_types_equivalent(lhs5, rhs5));
 
   // Different rep, same scale
   cudf::test::fixed_point_column_wrapper<int32_t> lhs6({10000}, numeric::scale_type{-1});
