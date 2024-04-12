@@ -102,7 +102,8 @@ __device__ inline double stod(string_view const& d_str)
           ch = *in_ptr++;
           if (ch < '0' || ch > '9') break;
           exp_ten = (exp_ten * 10) + (int)(ch - '0');
-          // prevent integer overflow
+          // Prevent integer overflow in exp_ten. 100,000,000 is the largest
+          // power of ten that can be multiplied by 10 without overflow.
           if (exp_ten >= 100'000'000) { break; }
         }
       }
