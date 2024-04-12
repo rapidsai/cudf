@@ -195,6 +195,7 @@ files:
 channels:
   - rapidsai
   - rapidsai-nightly
+  - pytorch
   - dask/label/dev
   - conda-forge
   - nvidia
