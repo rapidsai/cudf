@@ -22,10 +22,15 @@ from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.extensions import no_default
-from cudf.api.types import is_bool_dtype, is_float_dtype, is_list_like
+from cudf.api.types import (
+    is_bool_dtype,
+    is_float_dtype,
+    is_list_like,
+    is_numeric_dtype,
+)
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
-from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.column import ColumnBase, StructDtype, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
@@ -109,11 +114,11 @@ Falcon    350.0
 Parrot     30.0
 Parrot     20.0
 Name: Max Speed, dtype: float64
->>> ser.groupby(level=0).mean()
+>>> ser.groupby(level=0, sort=True).mean()
 Falcon    370.0
 Parrot     25.0
 Name: Max Speed, dtype: float64
->>> ser.groupby(ser > 100).mean()
+>>> ser.groupby(ser > 100, sort=True).mean()
 Max Speed
 False     25.0
 True     370.0
@@ -133,7 +138,7 @@ Name: Max Speed, dtype: float64
 1  Falcon      370.0
 2  Parrot       24.0
 3  Parrot       26.0
->>> df.groupby(['Animal']).mean()
+>>> df.groupby(['Animal'], sort=True).mean()
         Max Speed
 Animal
 Falcon      375.0
@@ -151,22 +156,22 @@ Falcon Captive      390.0
         Wild         350.0
 Parrot Captive       30.0
         Wild          20.0
->>> df.groupby(level=0).mean()
+>>> df.groupby(level=0, sort=True).mean()
         Max Speed
 Animal
 Falcon      370.0
 Parrot       25.0
->>> df.groupby(level="Type").mean()
+>>> df.groupby(level="Type", sort=True).mean()
         Max Speed
 Type
-Wild         185.0
 Captive      210.0
+Wild         185.0
 
 >>> df = cudf.DataFrame({{'A': 'a a b'.split(),
 ...                      'B': [1,2,3],
 ...                      'C': [4,6,5]}})
->>> g1 = df.groupby('A', group_keys=False)
->>> g2 = df.groupby('A', group_keys=True)
+>>> g1 = df.groupby('A', group_keys=False, sort=True)
+>>> g2 = df.groupby('A', group_keys=True, sort=True)
 
 Notice that ``g1`` have ``g2`` have two groups, ``a`` and ``b``, and only
 differ in their ``group_keys`` argument. Calling `apply` in various ways,
@@ -282,9 +287,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         if isinstance(group_names, cudf.BaseIndex):
             group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
-            yield (name,) if isinstance(self._by, list) and len(
-                self._by
-            ) == 1 else name, grouped_values[offsets[i] : offsets[i + 1]]
+            yield (
+                (name,)
+                if isinstance(self._by, list) and len(self._by) == 1
+                else name,
+                grouped_values[offsets[i] : offsets[i + 1]],
+            )
 
     @property
     def dtypes(self):
@@ -363,13 +371,22 @@ class GroupBy(Serializable, Reducible, Scannable):
         >>> df.groupby(by=["a"]).indices
         {10: array([0, 1]), 40: array([2])}
         """
-        group_names, offsets, _, grouped_values = self._grouped()
+        offsets, group_keys, (indices,) = self._groupby.groups(
+            [
+                cudf.core.column.as_column(
+                    range(len(self.obj)), dtype=size_type_dtype
+                )
+            ]
+        )
 
+        group_keys = libcudf.stream_compaction.drop_duplicates(group_keys)
+        if len(group_keys) > 1:
+            index = cudf.MultiIndex.from_arrays(group_keys)
+        else:
+            (group_keys,) = group_keys
+            index = cudf.Index(group_keys)
         return dict(
-            zip(
-                group_names.to_pandas(),
-                np.split(grouped_values.index.values, offsets[1:-1]),
-            )
+            zip(index.to_pandas(), cp.split(indices.values, offsets[1:-1]))
         )
 
     @_cudf_nvtx_annotate
@@ -414,8 +431,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "instead of ``gb.get_group(name, obj=df)``.",
                 FutureWarning,
             )
-
-        return obj.loc[self.groups[name].drop_duplicates()]
+        return obj.iloc[self.indices[name]]
 
     @_cudf_nvtx_annotate
     def size(self):
@@ -539,11 +555,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...     'b': [1, 2, 3],
         ...     'c': [2, 2, 1]
         ... })
-        >>> a.groupby('a').agg('sum')
+        >>> a.groupby('a', sort=True).agg('sum')
            b  c
         a
-        2  3  1
         1  3  4
+        2  3  1
 
         Specifying a list of aggregations to perform on each column.
 
@@ -553,12 +569,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...     'b': [1, 2, 3],
         ...     'c': [2, 2, 1]
         ... })
-        >>> a.groupby('a').agg(['sum', 'min'])
+        >>> a.groupby('a', sort=True).agg(['sum', 'min'])
             b       c
           sum min sum min
         a
-        2   3   3   1   1
         1   3   1   4   2
+        2   3   3   1   1
 
         Using a dict to specify aggregations to perform per column.
 
@@ -568,12 +584,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...     'b': [1, 2, 3],
         ...     'c': [2, 2, 1]
         ... })
-        >>> a.groupby('a').agg({'a': 'max', 'b': ['min', 'mean']})
+        >>> a.groupby('a', sort=True).agg({'a': 'max', 'b': ['min', 'mean']})
             a   b
           max min mean
         a
-        2   2   3  3.0
         1   1   1  1.5
+        2   2   3  3.0
 
         Using lambdas/callables to specify aggregations taking parameters.
 
@@ -690,6 +706,11 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return result
 
+    def _reduce_numeric_only(self, op: str):
+        raise NotImplementedError(
+            f"numeric_only is not implemented for {type(self)}"
+        )
+
     def _reduce(
         self,
         op: str,
@@ -720,14 +741,12 @@ class GroupBy(Serializable, Reducible, Scannable):
 
             The numeric_only, min_count
         """
-        if numeric_only:
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
         if min_count != 0:
             raise NotImplementedError(
                 "min_count parameter is not implemented yet"
             )
+        if numeric_only:
+            return self._reduce_numeric_only(op)
         return self.agg(op)
 
     def _scan(self, op: str, *args, **kwargs):
@@ -1300,12 +1319,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         chunk_results = jit_groupby_apply(
             offsets, grouped_values, function, *args
         )
-        result = cudf.Series._from_data(
-            {None: chunk_results}, index=group_names
+        return self._post_process_chunk_results(
+            chunk_results, group_names, group_keys, grouped_values
         )
-        result.index.names = self.grouping.names
-
-        return result
 
     @_cudf_nvtx_annotate
     def _iterative_groupby_apply(
@@ -1333,12 +1349,15 @@ class GroupBy(Serializable, Reducible, Scannable):
     ):
         if not len(chunk_results):
             return self.obj.head(0)
-        if cudf.api.types.is_scalar(chunk_results[0]):
-            result = cudf.Series._from_data(
-                {None: chunk_results}, index=group_names
-            )
+        if isinstance(chunk_results, ColumnBase) or cudf.api.types.is_scalar(
+            chunk_results[0]
+        ):
+            data = {None: chunk_results}
+            ty = cudf.Series if self._as_index else cudf.DataFrame
+            result = ty._from_data(data, index=group_names)
             result.index.names = self.grouping.names
             return result
+
         elif isinstance(chunk_results[0], cudf.Series) and isinstance(
             self.obj, cudf.DataFrame
         ):
@@ -1372,6 +1391,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                     index_data = group_keys._data.copy(deep=True)
                     index_data[None] = grouped_values.index._column
                     result.index = cudf.MultiIndex._from_data(index_data)
+            elif len(chunk_results) == len(group_names):
+                result = cudf.concat(chunk_results, axis=1).T
+                result.index = group_names
+                result.index.names = self.grouping.names
             else:
                 raise TypeError(
                     "Error handling Groupby apply output with input of "
@@ -1544,7 +1567,6 @@ class GroupBy(Serializable, Reducible, Scannable):
             result = result.sort_index()
         if self._as_index is False:
             result = result.reset_index()
-            result[None] = result.pop(0)
         return result
 
     @_cudf_nvtx_annotate
@@ -2036,10 +2058,14 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
                 x, y = str(x), str(y)
 
-            column_pair_structs[(x, y)] = cudf.core.column.build_struct_column(
-                names=(x, y),
+            column_pair_structs[(x, y)] = cudf.core.column.StructColumn(
+                data=None,
+                dtype=StructDtype(
+                    fields={x: self.obj._data[x].dtype, y: self.obj._data[y]}
+                ),
                 children=(self.obj._data[x], self.obj._data[y]),
                 size=len(self.obj),
+                offset=0,
             )
 
         column_pair_groupby = cudf.DataFrame._from_data(
@@ -2254,8 +2280,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         warnings.warn(
             "groupby fillna is deprecated and "
-            "will be removed in a future version. Use groupby ffill or groupby bfill "
-            "for forward or backward filling instead.",
+            "will be removed in a future version. Use groupby ffill "
+            "or groupby bfill for forward or backward filling instead.",
             FutureWarning,
         )
         if inplace:
@@ -2629,6 +2655,17 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
     obj: "cudf.core.dataframe.DataFrame"
 
     _PROTECTED_KEYS = frozenset(("obj",))
+
+    def _reduce_numeric_only(self, op: str):
+        columns = list(
+            name
+            for name in self.obj._data.names
+            if (
+                is_numeric_dtype(self.obj._data[name].dtype)
+                and name not in self.grouping.names
+            )
+        )
+        return self[columns].agg(op)
 
     def __getitem__(self, key):
         return self.obj[key].groupby(

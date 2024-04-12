@@ -24,7 +24,7 @@ rapids_test_init()
 # properties and linking to build the test
 function(ConfigureTest CMAKE_TEST_NAME)
   set(options)
-  set(one_value GPUS PERCENT STREAM_MODE)
+  set(one_value GPUS PERCENT STREAM_MODE EXTRA_LIB)
   set(multi_value)
   cmake_parse_arguments(_CUDF_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
   if(NOT DEFINED _CUDF_TEST_GPUS AND NOT DEFINED _CUDF_TEST_PERCENT)
@@ -55,8 +55,8 @@ function(ConfigureTest CMAKE_TEST_NAME)
   )
 
   target_link_libraries(
-    ${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main
-                               $<TARGET_NAME_IF_EXISTS:conda_env>
+    ${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main nvtx3-cpp
+                               $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIB}"
   )
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
@@ -132,6 +132,7 @@ ConfigureTest(
   groupby/min_scan_tests.cpp
   groupby/nth_element_tests.cpp
   groupby/nunique_tests.cpp
+  groupby/product_scan_tests.cpp
   groupby/product_tests.cpp
   groupby/quantile_tests.cpp
   groupby/rank_scan_tests.cpp
@@ -152,7 +153,7 @@ ConfigureTest(
 # * join tests ------------------------------------------------------------------------------------
 ConfigureTest(
   JOIN_TEST join/join_tests.cpp join/conditional_join_tests.cu join/cross_join_tests.cpp
-  join/semi_anti_join_tests.cpp join/mixed_join_tests.cu
+  join/semi_anti_join_tests.cpp join/mixed_join_tests.cu join/distinct_join_tests.cpp
 )
 
 # ##################################################################################################
@@ -259,15 +260,15 @@ ConfigureTest(
   transform/mask_to_bools_test.cpp
   transform/bools_to_mask_test.cpp
   transform/row_bit_count_test.cu
+  transform/segmented_row_bit_count_test.cu
   transform/one_hot_encode_tests.cpp
 )
-
-ConfigureTest(ROW_CONVERSION_TEST transform/row_conversion.cpp)
 
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
-  INTEROP_TEST interop/to_arrow_test.cpp interop/from_arrow_test.cpp interop/dlpack_test.cpp
+  INTEROP_TEST interop/to_arrow_device_test.cpp interop/to_arrow_test.cpp
+  interop/from_arrow_test.cpp interop/dlpack_test.cpp EXTRA_LIB nanoarrow
 )
 
 # ##################################################################################################
@@ -377,6 +378,7 @@ ConfigureTest(
   utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
+  utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
   utilities_tests/logger_tests.cpp
   utilities_tests/default_stream_tests.cpp

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -259,6 +259,11 @@ public final class MemoryCleaner {
   static void register(ColumnVector vec, Cleaner cleaner) {
     // It is now registered...
     all.put(cleaner.id, new CleanerWeakReference(vec, cleaner, collected, true));
+  }
+
+  static void register(Scalar s, Cleaner cleaner) {
+    // It is now registered...
+    all.put(cleaner.id, new CleanerWeakReference(s, cleaner, collected, true));
   }
 
   static void register(HostColumnVectorCore vec, Cleaner cleaner) {

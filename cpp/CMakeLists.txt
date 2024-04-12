@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
-include(../fetch_rapids.cmake)
+include(../rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
@@ -26,7 +26,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 24.04.00
+  VERSION "${RAPIDS_VERSION}"
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -182,6 +182,8 @@ endif()
 rapids_cpm_init()
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
+# find NVTX
+include(cmake/thirdparty/get_nvtx.cmake)
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
 # find CCCL before rmm so that we get cudf's patched version of CCCL
@@ -208,12 +210,14 @@ include(cmake/thirdparty/get_kvikio.cmake)
 include(cmake/thirdparty/get_fmt.cmake)
 # find spdlog
 include(cmake/thirdparty/get_spdlog.cmake)
+# find nanoarrow
+include(cmake/thirdparty/get_nanoarrow.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow)
   if(TARGET cufile::cuFile_interface)
     list(APPEND dependencies cuFile)
   endif()
@@ -337,11 +341,11 @@ add_library(
   src/groupby/sort/group_count_scan.cu
   src/groupby/sort/group_max_scan.cu
   src/groupby/sort/group_min_scan.cu
+  src/groupby/sort/group_product_scan.cu
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
   src/groupby/sort/sort_helper.cu
-  src/hash/hashing.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
   src/hash/murmurhash3_x64_128.cu
@@ -350,11 +354,11 @@ add_library(
   src/hash/sha256_hash.cu
   src/hash/sha384_hash.cu
   src/hash/sha512_hash.cu
-  src/hash/spark_murmurhash3_x86_32.cu
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
+  src/interop/to_arrow_device.cu
   src/interop/detail/arrow_allocator.cpp
   src/io/avro/avro.cpp
   src/io/avro/avro_gpu.cu
@@ -376,12 +380,13 @@ add_library(
   src/io/functions.cpp
   src/io/json/byte_range_info.cu
   src/io/json/json_column.cu
-  src/io/json/json_quote_normalization.cu
+  src/io/json/json_normalization.cu
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
   src/io/json/read_json.cu
   src/io/json/legacy/json_gpu.cu
   src/io/json/legacy/reader_impl.cu
+  src/io/json/parser_features.cpp
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
@@ -411,6 +416,7 @@ add_library(
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/writer_impl.cu
+  src/io/parquet/decode_fixed.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/byte_range_info.cpp
@@ -434,6 +440,7 @@ add_library(
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
+  src/join/distinct_hash_join.cu
   src/join/hash_join.cu
   src/join/join.cu
   src/join/join_utils.cu
@@ -444,7 +451,6 @@ add_library(
   src/join/mixed_join_semi.cu
   src/join/mixed_join_size_kernel.cu
   src/join/mixed_join_size_kernel_nulls.cu
-  src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
@@ -584,10 +590,13 @@ add_library(
   src/strings/regex/regex_program.cpp
   src/strings/repeat_strings.cu
   src/strings/replace/backref_re.cu
+  src/strings/replace/find_replace.cu
   src/strings/replace/multi.cu
   src/strings/replace/multi_re.cu
   src/strings/replace/replace.cu
+  src/strings/replace/replace_nulls.cu
   src/strings/replace/replace_re.cu
+  src/strings/replace/replace_slice.cu
   src/strings/reverse.cu
   src/strings/scan/scan_inclusive.cu
   src/strings/search/findall.cu
@@ -638,7 +647,6 @@ add_library(
   src/transform/nans_to_nulls.cu
   src/transform/one_hot_encode.cu
   src/transform/row_bit_count.cu
-  src/transform/row_conversion.cu
   src/transform/transform.cpp
   src/transpose/transpose.cu
   src/unary/cast_ops.cu
@@ -727,6 +735,7 @@ target_include_directories(
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+          "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -774,8 +783,8 @@ add_dependencies(cudf jitify_preprocess_run)
 target_link_libraries(
   cudf
   PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
-  PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
-          $<TARGET_NAME_IF_EXISTS:cuFile_interface>
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
+          $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
 )
 
 # Add Conda library, and include paths if specified
@@ -1079,7 +1088,8 @@ rapids_export(
 add_custom_command(
   OUTPUT CUDF_DOXYGEN
   WORKING_DIRECTORY ${CUDF_SOURCE_DIR}/doxygen
-  COMMAND doxygen Doxyfile
+  COMMAND ${CMAKE_COMMAND} -E env "RAPIDS_VERSION=${RAPIDS_VERSION}"
+          "RAPIDS_VERSION_MAJOR_MINOR=${RAPIDS_VERSION_MAJOR_MINOR}" doxygen Doxyfile
   VERBATIM
   COMMENT "Custom command for building cudf doxygen docs."
 )

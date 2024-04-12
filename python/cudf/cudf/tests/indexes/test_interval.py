@@ -5,9 +5,9 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.index import IntervalIndex, interval_range
-from cudf.testing._utils import assert_eq, expect_warning_if
+from cudf.testing._utils import assert_eq
 
 
 def test_interval_constructor_default_closed():
@@ -100,8 +100,18 @@ def test_interval_range_freq_basic_dtype(start_t, end_t, freq_t):
     gindex = cudf.interval_range(
         start=start, end=end, freq=freq, closed="left"
     )
+    if gindex.dtype.subtype.kind == "f":
+        gindex = gindex.astype(
+            cudf.IntervalDtype(subtype="float64", closed=gindex.dtype.closed)
+        )
+    elif gindex.dtype.subtype.kind == "i":
+        gindex = gindex.astype(
+            cudf.IntervalDtype(subtype="int64", closed=gindex.dtype.closed)
+        )
 
-    assert_eq(pindex, gindex)
+    # pandas upcasts to 64 bit https://github.com/pandas-dev/pandas/issues/57268
+    # using Series to use check_dtype
+    assert_eq(pd.Series(pindex), cudf.Series(gindex), check_dtype=False)
 
 
 @pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
@@ -142,7 +152,7 @@ def test_interval_range_periods_basic_dtype(start_t, end_t, periods_t):
 def test_interval_range_periods_warnings():
     start_val, end_val, periods_val = 0, 4, 1.0
 
-    with expect_warning_if(PANDAS_GE_220):
+    with pytest.warns(FutureWarning):
         pindex = pd.interval_range(
             start=start_val, end=end_val, periods=periods_val, closed="left"
         )
@@ -221,7 +231,9 @@ def test_interval_range_periods_freq_start_dtype(periods_t, freq_t, start_t):
         start=start, freq=freq, periods=periods, closed="left"
     )
 
-    assert_eq(pindex, gindex)
+    # pandas upcasts to 64 bit https://github.com/pandas-dev/pandas/issues/57268
+    # using Series to use check_dtype
+    assert_eq(pd.Series(pindex), cudf.Series(gindex), check_dtype=False)
 
 
 @pytest.mark.parametrize("closed", ["right", "left", "both", "neither"])
@@ -303,8 +315,8 @@ def test_interval_index_from_breaks(closed):
             1.0,
             0.2,
             None,
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_210,
+            marks=pytest.mark.skipif(
+                condition=PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
                 reason="https://github.com/pandas-dev/pandas/pull/54477",
             ),
         ),
@@ -315,7 +327,7 @@ def test_interval_index_from_breaks(closed):
             0.1,
             None,
             marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_210,
+                condition=PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
                 reason="https://github.com/pandas-dev/pandas/pull/54477",
             ),
         ),

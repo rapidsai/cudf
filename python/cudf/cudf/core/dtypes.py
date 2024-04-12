@@ -42,38 +42,43 @@ def dtype(arbitrary):
     # next, try interpreting arbitrary as a NumPy dtype that we support:
     try:
         np_dtype = np.dtype(arbitrary)
-        if np_dtype.kind in ("OU"):
-            return np.dtype("object")
     except TypeError:
         pass
     else:
-        if np_dtype not in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
+        if np_dtype.kind in set("OU"):
+            return np.dtype("object")
+        elif np_dtype not in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
+
+    if isinstance(arbitrary, str) and arbitrary in {"hex", "hex32", "hex64"}:
+        # read_csv only accepts "hex"
+        # e.g. test_csv_reader_hexadecimals, test_csv_reader_hexadecimal_overflow
+        return arbitrary
 
     # use `pandas_dtype` to try and interpret
     # `arbitrary` as a Pandas extension type.
     #  Return the corresponding NumPy/cuDF type.
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)
-    if cudf.get_option(
-        "mode.pandas_compatible"
-    ) and cudf.api.types._is_pandas_nullable_extension_dtype(pd_dtype):
-        raise NotImplementedError("not supported")
-    try:
-        return dtype(pd_dtype.numpy_dtype)
-    except AttributeError:
-        if isinstance(pd_dtype, pd.CategoricalDtype):
-            return cudf.CategoricalDtype.from_pandas(pd_dtype)
+    if cudf.api.types._is_pandas_nullable_extension_dtype(pd_dtype):
+        if cudf.get_option("mode.pandas_compatible"):
+            raise NotImplementedError(
+                "Nullable types not supported in pandas compatibility mode"
+            )
         elif isinstance(pd_dtype, pd.StringDtype):
             return np.dtype("object")
-        elif isinstance(pd_dtype, pd.IntervalDtype):
-            return cudf.IntervalDtype.from_pandas(pd_dtype)
-        elif isinstance(pd_dtype, pd.DatetimeTZDtype):
-            return pd_dtype
         else:
-            raise TypeError(
-                f"Cannot interpret {arbitrary} as a valid cuDF dtype"
-            )
+            return dtype(pd_dtype.numpy_dtype)
+    elif isinstance(pd_dtype, pd.core.dtypes.dtypes.NumpyEADtype):
+        return dtype(pd_dtype.numpy_dtype)
+    elif isinstance(pd_dtype, pd.CategoricalDtype):
+        return cudf.CategoricalDtype.from_pandas(pd_dtype)
+    elif isinstance(pd_dtype, pd.IntervalDtype):
+        return cudf.IntervalDtype.from_pandas(pd_dtype)
+    elif isinstance(pd_dtype, pd.DatetimeTZDtype):
+        return pd_dtype
+    else:
+        raise TypeError(f"Cannot interpret {arbitrary} as a valid cuDF dtype")
 
 
 def _decode_type(
@@ -205,10 +210,6 @@ class CategoricalDtype(_BaseDtype):
         """
         return self._ordered
 
-    @ordered.setter
-    def ordered(self, value) -> None:
-        self._ordered = value
-
     @classmethod
     def from_pandas(cls, dtype: pd.CategoricalDtype) -> "CategoricalDtype":
         """
@@ -244,14 +245,10 @@ class CategoricalDtype(_BaseDtype):
         """  # noqa: E501
         if self._categories is None:
             categories = None
+        elif self._categories.dtype.kind == "f":
+            categories = self._categories.dropna().to_pandas()
         else:
-            if self._categories.dtype in {
-                cudf.dtype("float32"),
-                cudf.dtype("float64"),
-            }:
-                categories = self._categories.dropna().to_pandas()
-            else:
-                categories = self._categories.to_pandas()
+            categories = self._categories.to_pandas()
         return pd.CategoricalDtype(categories=categories, ordered=self.ordered)
 
     def _init_categories(self, categories: Any):
@@ -1007,7 +1004,10 @@ def _is_categorical_dtype(obj):
             pd.Series,
         ),
     ):
-        return _is_categorical_dtype(obj.dtype)
+        try:
+            return isinstance(cudf.dtype(obj.dtype), cudf.CategoricalDtype)
+        except TypeError:
+            return False
     if hasattr(obj, "type"):
         if obj.type is pd.CategoricalDtype.type:
             return True

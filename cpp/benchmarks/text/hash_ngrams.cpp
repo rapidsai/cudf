@@ -20,9 +20,9 @@
 
 #include <nvtext/generate_ngrams.hpp>
 
-#include <nvbench/nvbench.cuh>
-
 #include <rmm/device_buffer.hpp>
+
+#include <nvbench/nvbench.cuh>
 
 static void bench_hash_ngrams(nvbench::state& state)
 {

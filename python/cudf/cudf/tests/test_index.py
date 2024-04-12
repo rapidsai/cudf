@@ -3,6 +3,8 @@
 """
 Test related to Index
 """
+
+import datetime
 import operator
 import re
 
@@ -15,7 +17,6 @@ import pytest
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
@@ -797,26 +798,9 @@ def test_index_to_series(data):
     "name_data,name_other",
     [("abc", "c"), (None, "abc"), ("abc", pd.NA), ("abc", "abc")],
 )
-def test_index_difference(request, data, other, sort, name_data, name_other):
+def test_index_difference(data, other, sort, name_data, name_other):
     pd_data = pd.Index(data, name=name_data)
     pd_other = pd.Index(other, name=name_other)
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=PANDAS_GE_220
-            and isinstance(pd_data.dtype, pd.CategoricalDtype)
-            and not isinstance(pd_other.dtype, pd.CategoricalDtype)
-            and pd_other.isnull().any(),
-            reason="https://github.com/pandas-dev/pandas/issues/57318",
-        )
-    )
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_220
-            and len(pd_other) == 0
-            and len(pd_data) != len(pd_data.unique()),
-            reason="Bug fixed in pandas-2.2+",
-        )
-    )
 
     gd_data = cudf.from_pandas(pd_data)
     gd_other = cudf.from_pandas(pd_other)
@@ -1534,7 +1518,7 @@ def test_index_from_arrow(data):
     arrow_array = pa.Array.from_pandas(pdi)
     expected_index = pd.Index(arrow_array.to_pandas())
     gdi = cudf.Index.from_arrow(arrow_array)
-    if PANDAS_GE_200 and gdi.dtype == cudf.dtype("datetime64[s]"):
+    if gdi.dtype == cudf.dtype("datetime64[s]"):
         # Arrow bug:
         # https://github.com/apache/arrow/issues/33321
         # arrow cannot convert non-nanosecond
@@ -1738,8 +1722,7 @@ def test_get_indexer_single_unique_numeric(idx, key, method):
 
     if (
         # `method` only applicable to monotonic index
-        not pi.is_monotonic_increasing
-        and method is not None
+        not pi.is_monotonic_increasing and method is not None
     ):
         assert_exceptions_equal(
             lfunc=pi.get_loc,
@@ -1748,8 +1731,7 @@ def test_get_indexer_single_unique_numeric(idx, key, method):
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
         )
     else:
-        with expect_warning_if(not PANDAS_GE_200 and method is not None):
-            expected = pi.get_indexer(key, method=method)
+        expected = pi.get_indexer(key, method=method)
         got = gi.get_indexer(key, method=method)
 
         assert_eq(expected, got)
@@ -2068,14 +2050,6 @@ def test_get_loc_multi_numeric_deviate(idx, key, result):
 
 
 @pytest.mark.parametrize(
-    "idx",
-    [
-        pd.MultiIndex.from_tuples(
-            [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 10), (1, 1, 1), (2, 2, 1)]
-        )
-    ],
-)
-@pytest.mark.parametrize(
     "key",
     [
         ((1, 2, 3),),
@@ -2084,19 +2058,37 @@ def test_get_loc_multi_numeric_deviate(idx, key, result):
     ],
 )
 @pytest.mark.parametrize("method", [None, "ffill", "bfill"])
-def test_get_indexer_multi_numeric_deviate(request, idx, key, method):
-    pi = idx
+def test_get_indexer_multi_numeric_deviate(key, method):
+    pi = pd.MultiIndex.from_tuples(
+        [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 10), (1, 1, 1), (2, 2, 1)]
+    ).sort_values()
     gi = cudf.from_pandas(pi)
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=method is not None and key == ((1, 2, 3),),
-            reason="https://github.com/pandas-dev/pandas/issues/53452",
-        )
-    )
+
     expected = pi.get_indexer(key, method=method)
     got = gi.get_indexer(key, method=method)
 
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("method", ["ffill", "bfill"])
+def test_get_indexer_multi_error(method):
+    pi = pd.MultiIndex.from_tuples(
+        [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 10), (1, 1, 1), (2, 2, 1)]
+    )
+    gi = cudf.from_pandas(pi)
+
+    assert_exceptions_equal(
+        pi.get_indexer,
+        gi.get_indexer,
+        lfunc_args_and_kwargs=(
+            [],
+            {"target": ((1, 2, 3),), "method": method},
+        ),
+        rfunc_args_and_kwargs=(
+            [],
+            {"target": ((1, 2, 3),), "method": method},
+        ),
+    )
 
 
 @pytest.mark.parametrize(
@@ -2424,10 +2416,7 @@ def test_index_type_methods(data, func):
     pidx = pd.Index(data)
     gidx = cudf.from_pandas(pidx)
 
-    if PANDAS_GE_200:
-        with pytest.warns(FutureWarning):
-            expected = getattr(pidx, func)()
-    else:
+    with pytest.warns(FutureWarning):
         expected = getattr(pidx, func)()
     with pytest.warns(FutureWarning):
         actual = getattr(gidx, func)()
@@ -2525,7 +2514,7 @@ def test_isin_index(index, values):
     )
     with expect_warning_if(is_dt_str):
         got = gidx.isin(values)
-    with expect_warning_if(PANDAS_GE_220 and is_dt_str):
+    with expect_warning_if(is_dt_str):
         expected = pidx.isin(values)
 
     assert_eq(got, expected)
@@ -3035,22 +3024,7 @@ def test_index_getitem_time_duration(dtype):
 
 
 @pytest.mark.parametrize("dtype", ALL_TYPES)
-def test_index_empty_from_pandas(request, dtype):
-    request.node.add_marker(
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_200
-            and dtype
-            in {
-                "datetime64[ms]",
-                "datetime64[s]",
-                "datetime64[us]",
-                "timedelta64[ms]",
-                "timedelta64[s]",
-                "timedelta64[us]",
-            },
-            reason="Fixed in pandas-2.0",
-        )
-    )
+def test_index_empty_from_pandas(dtype):
     pidx = pd.Index([], dtype=dtype)
     gidx = cudf.from_pandas(pidx)
 
@@ -3074,8 +3048,7 @@ def test_index_to_frame(data, data_name, index, name):
     pidx = pd.Index(data, name=data_name)
     gidx = cudf.from_pandas(pidx)
 
-    with expect_warning_if(not PANDAS_GE_200 and name is None):
-        expected = pidx.to_frame(index=index, name=name)
+    expected = pidx.to_frame(index=index, name=name)
     actual = gidx.to_frame(index=index, name=name)
 
     assert_eq(expected, actual)
@@ -3094,7 +3067,7 @@ def test_index_with_index_dtype(data, dtype):
 
 
 def test_period_index_error():
-    pidx = pd.PeriodIndex(year=[2000, 2002], quarter=[1, 3])
+    pidx = pd.PeriodIndex(data=[pd.Period("2020-01")])
     with pytest.raises(NotImplementedError):
         cudf.from_pandas(pidx)
     with pytest.raises(NotImplementedError):
@@ -3166,3 +3139,40 @@ def test_from_pandas_rangeindex_return_rangeindex():
 def test_index_to_pandas_nullable_notimplemented(idx):
     with pytest.raises(NotImplementedError):
         idx.to_pandas(nullable=True)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        1.0,
+        "a",
+        datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        {"1": 2},
+    ],
+)
+def test_index_to_pandas_arrow_type_nullable_raises(scalar):
+    pa_array = pa.array([scalar, None])
+    idx = cudf.Index(pa_array)
+    with pytest.raises(ValueError):
+        idx.to_pandas(nullable=True, arrow_type=True)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        1.0,
+        "a",
+        datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        {"1": 2},
+    ],
+)
+def test_index_to_pandas_arrow_type(scalar):
+    pa_array = pa.array([scalar, None])
+    idx = cudf.Index(pa_array)
+    result = idx.to_pandas(arrow_type=True)
+    expected = pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
+    pd.testing.assert_index_equal(result, expected)

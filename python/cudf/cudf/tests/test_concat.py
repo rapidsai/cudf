@@ -9,8 +9,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.api.types import _is_categorical_dtype
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     assert_eq,
@@ -390,13 +388,12 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
 
-    with expect_warning_if(not PANDAS_GE_200):
-        assert_exceptions_equal(
-            lfunc=pd.concat,
-            rfunc=cudf.concat,
-            lfunc_args_and_kwargs=([], {"objs": [ps1, ps2], "axis": 1}),
-            rfunc_args_and_kwargs=([], {"objs": [s1, s2], "axis": 1}),
-        )
+    assert_exceptions_equal(
+        lfunc=pd.concat,
+        rfunc=cudf.concat,
+        lfunc_args_and_kwargs=([], {"objs": [ps1, ps2], "axis": 1}),
+        rfunc_args_and_kwargs=([], {"objs": [s1, s2], "axis": 1}),
+    )
 
 
 @pytest.mark.parametrize("name", [None, "a"])
@@ -459,75 +456,45 @@ def test_concat_mixed_input():
         [pd.Series([1, 2, 3]), pd.DataFrame({"a": []})],
         [pd.Series([], dtype="float64"), pd.DataFrame({"a": []})],
         [pd.Series([], dtype="float64"), pd.DataFrame({"a": [1, 2]})],
-        pytest.param(
-            [
-                pd.Series([1, 2, 3.0, 1.2], name="abc"),
-                pd.DataFrame({"a": [1, 2]}),
-            ],
-            marks=pytest.mark.xfail(
-                not PANDAS_GE_220,
-                reason="https://github.com/pandas-dev/pandas/pull/56365",
+        [
+            pd.Series([1, 2, 3.0, 1.2], name="abc"),
+            pd.DataFrame({"a": [1, 2]}),
+        ],
+        [
+            pd.Series(
+                [1, 2, 3.0, 1.2], name="abc", index=[100, 110, 120, 130]
             ),
-        ),
-        pytest.param(
-            [
-                pd.Series(
-                    [1, 2, 3.0, 1.2], name="abc", index=[100, 110, 120, 130]
-                ),
-                pd.DataFrame({"a": [1, 2]}),
-            ],
-            marks=pytest.mark.xfail(
-                not PANDAS_GE_220,
-                reason="https://github.com/pandas-dev/pandas/pull/56365",
+            pd.DataFrame({"a": [1, 2]}),
+        ],
+        [
+            pd.Series(
+                [1, 2, 3.0, 1.2], name="abc", index=["a", "b", "c", "d"]
             ),
-        ),
-        pytest.param(
-            [
-                pd.Series(
-                    [1, 2, 3.0, 1.2], name="abc", index=["a", "b", "c", "d"]
-                ),
-                pd.DataFrame({"a": [1, 2]}, index=["a", "b"]),
-            ],
-            marks=pytest.mark.xfail(
-                not PANDAS_GE_220,
-                reason="https://github.com/pandas-dev/pandas/pull/56365",
+            pd.DataFrame({"a": [1, 2]}, index=["a", "b"]),
+        ],
+        [
+            pd.Series(
+                [1, 2, 3.0, 1.2, 8, 100],
+                name="New name",
+                index=["a", "b", "c", "d", "e", "f"],
             ),
-        ),
-        pytest.param(
-            [
-                pd.Series(
-                    [1, 2, 3.0, 1.2, 8, 100],
-                    name="New name",
-                    index=["a", "b", "c", "d", "e", "f"],
-                ),
-                pd.DataFrame(
-                    {"a": [1, 2, 4, 10, 11, 12]},
-                    index=["a", "b", "c", "d", "e", "f"],
-                ),
-            ],
-            marks=pytest.mark.xfail(
-                not PANDAS_GE_220,
-                reason="https://github.com/pandas-dev/pandas/pull/56365",
+            pd.DataFrame(
+                {"a": [1, 2, 4, 10, 11, 12]},
+                index=["a", "b", "c", "d", "e", "f"],
             ),
-        ),
-        pytest.param(
-            [
-                pd.Series(
-                    [1, 2, 3.0, 1.2, 8, 100],
-                    name="New name",
-                    index=["a", "b", "c", "d", "e", "f"],
-                ),
-                pd.DataFrame(
-                    {"a": [1, 2, 4, 10, 11, 12]},
-                    index=["a", "b", "c", "d", "e", "f"],
-                ),
-            ]
-            * 7,
-            marks=pytest.mark.xfail(
-                not PANDAS_GE_220,
-                reason="https://github.com/pandas-dev/pandas/pull/56365",
+        ],
+        [
+            pd.Series(
+                [1, 2, 3.0, 1.2, 8, 100],
+                name="New name",
+                index=["a", "b", "c", "d", "e", "f"],
             ),
-        ),
+            pd.DataFrame(
+                {"a": [1, 2, 4, 10, 11, 12]},
+                index=["a", "b", "c", "d", "e", "f"],
+            ),
+        ]
+        * 7,
     ],
 )
 def test_concat_series_dataframe_input(objs):
@@ -641,8 +608,8 @@ def test_concat_empty_dataframes(df, other, ignore_index):
     actual = cudf.concat(other_gd, ignore_index=ignore_index)
     if expected.shape != df.shape:
         for key, col in actual[actual.columns].items():
-            if _is_categorical_dtype(col.dtype):
-                if not _is_categorical_dtype(expected[key].dtype):
+            if isinstance(col.dtype, cudf.CategoricalDtype):
+                if not isinstance(expected[key].dtype, pd.CategoricalDtype):
                     # TODO: Pandas bug:
                     # https://github.com/pandas-dev/pandas/issues/42840
                     expected[key] = expected[key].fillna("-1").astype("str")
@@ -663,7 +630,7 @@ def test_concat_empty_dataframes(df, other, ignore_index):
             expected,
             actual,
             check_index_type=not gdf.empty,
-            check_column_type=not PANDAS_GE_200,
+            check_column_type=False,
         )
 
 
@@ -1137,7 +1104,7 @@ def test_concat_join_no_overlapping_columns_empty_df_basic(
         expected,
         actual,
         check_index_type=True,
-        check_column_type=not PANDAS_GE_200,
+        check_column_type=False,
     )
 
 
@@ -1227,10 +1194,10 @@ def test_concat_join_series(ignore_index, sort, join, axis):
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0])
 def test_concat_join_empty_dataframes(
-    df, other, ignore_index, axis, join, sort
+    request, df, other, ignore_index, join, sort
 ):
+    axis = 0
     other_pd = [df] + other
     gdf = cudf.from_pandas(df)
     other_gd = [gdf] + [cudf.from_pandas(o) for o in other]
@@ -1241,50 +1208,27 @@ def test_concat_join_empty_dataframes(
     actual = cudf.concat(
         other_gd, ignore_index=ignore_index, axis=axis, join=join, sort=sort
     )
-    if expected.shape != df.shape:
-        if axis == 0:
-            for key, col in actual[actual.columns].items():
-                if _is_categorical_dtype(col.dtype):
-                    if not _is_categorical_dtype(expected[key].dtype):
-                        # TODO: Pandas bug:
-                        # https://github.com/pandas-dev/pandas/issues/42840
-                        expected[key] = (
-                            expected[key].fillna("-1").astype("str")
-                        )
-                    else:
-                        expected[key] = (
-                            expected[key]
-                            .cat.add_categories(["-1"])
-                            .fillna("-1")
-                            .astype("str")
-                        )
-                    actual[key] = col.astype("str").fillna("-1")
-                else:
-                    expected[key] = expected[key].fillna(-1)
-                    actual[key] = col.fillna(-1)
-
-            assert_eq(
-                expected.fillna(-1),
-                actual.fillna(-1),
-                check_dtype=False,
-                check_index_type=False
-                if len(expected) == 0 or actual.empty
-                else True,
-                check_column_type=False,
+    if (
+        join == "outer"
+        and any(
+            isinstance(dtype, pd.CategoricalDtype)
+            for dtype in df.dtypes.tolist()
+        )
+        and any(
+            isinstance(dtype, pd.CategoricalDtype)
+            for other_df in other
+            for dtype in other_df.dtypes.tolist()
+        )
+    ):
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/42840"
             )
-        else:
-            # no need to fill in if axis=1
-            assert_eq(
-                expected,
-                actual,
-                check_index_type=False,
-                check_column_type=False,
-            )
+        )
     assert_eq(
         expected,
         actual,
         check_dtype=False,
-        check_index_type=False,
         check_column_type=False,
     )
 
@@ -1364,7 +1308,7 @@ def test_concat_join_empty_dataframes_axis_1(
     if expected.shape != df.shape:
         if axis == 0:
             for key, col in actual[actual.columns].items():
-                if _is_categorical_dtype(col.dtype):
+                if isinstance(expected[key].dtype, pd.CategoricalDtype):
                     expected[key] = expected[key].fillna("-1")
                     actual[key] = col.astype("str").fillna("-1")
             # if not expected.empty:
@@ -1737,7 +1681,7 @@ def test_concat_decimal_numeric_series(s1, s2, s3, expected):
             cudf.Series(
                 np.arange(
                     "2005-02-01T12", "2005-02-01T15", dtype="datetime64[h]"
-                ),
+                ).astype("datetime64[s]"),
                 dtype="datetime64[s]",
             ),
             cudf.Series(

@@ -15,8 +15,10 @@
  */
 
 #include "file_io_utilities.hpp"
+
+#include "io/utilities/config_utils.hpp"
+
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <io/utilities/config_utils.hpp>
 
 #include <rmm/device_buffer.hpp>
 
@@ -31,6 +33,14 @@
 namespace cudf {
 namespace io {
 namespace detail {
+
+void force_init_cuda_context()
+{
+  // Workaround for https://github.com/rapidsai/cudf/issues/14140, where cuFileDriverOpen errors
+  // out if no CUDA calls have been made before it. This is a no-op if the CUDA context is already
+  // initialized.
+  cudaFree(0);
+}
 
 [[noreturn]] void throw_on_file_open_failure(std::string const& filepath, bool is_create)
 {

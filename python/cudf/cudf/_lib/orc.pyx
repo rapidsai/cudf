@@ -3,6 +3,7 @@
 import cudf
 from cudf.core.buffer import acquire_spill_lock
 
+from libc.stdint cimport int64_t
 from libcpp cimport bool, int
 from libcpp.map cimport map
 from libcpp.memory cimport unique_ptr
@@ -98,8 +99,8 @@ cpdef read_orc(object filepaths_or_buffers,
         filepaths_or_buffers,
         columns,
         stripes or [],
-        get_size_t_arg(skip_rows, "skip_rows"),
-        get_size_t_arg(num_rows, "num_rows"),
+        get_skiprows_arg(skip_rows),
+        get_num_rows_arg(num_rows),
         (
             type_id.EMPTY
             if timestamp_type is None else
@@ -318,15 +319,16 @@ def write_orc(
         libcudf_write_orc(c_orc_writer_options)
 
 
-cdef size_type get_size_t_arg(object arg, str name) except*:
-    if name == "skip_rows":
-        arg = 0 if arg is None else arg
-        if not isinstance(arg, int) or arg < 0:
-            raise TypeError(f"{name} must be an int >= 0")
-    else:
-        arg = -1 if arg is None else arg
-        if not isinstance(arg, int) or arg < -1:
-            raise TypeError(f"{name} must be an int >= -1")
+cdef int64_t get_skiprows_arg(object arg) except*:
+    arg = 0 if arg is None else arg
+    if not isinstance(arg, int) or arg < 0:
+        raise TypeError("skiprows must be an int >= 0")
+    return <int64_t> arg
+
+cdef size_type get_num_rows_arg(object arg) except*:
+    arg = -1 if arg is None else arg
+    if not isinstance(arg, int) or arg < -1:
+        raise TypeError("num_rows must be an int >= -1")
     return <size_type> arg
 
 
@@ -334,7 +336,7 @@ cdef orc_reader_options make_orc_reader_options(
     object filepaths_or_buffers,
     object column_names,
     object stripes,
-    size_type skip_rows,
+    int64_t skip_rows,
     size_type num_rows,
     type_id timestamp_type,
     bool use_index

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <io/utilities/output_builder.cuh>
+#include "io/utilities/output_builder.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -38,15 +38,13 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <cub/block/block_load.cuh>
+#include <cub/block/block_scan.cuh>
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
-
-#include <cub/block/block_load.cuh>
-#include <cub/block/block_scan.cuh>
-
-#include <cuda/functional>
 
 #include <cstdint>
 #include <limits>

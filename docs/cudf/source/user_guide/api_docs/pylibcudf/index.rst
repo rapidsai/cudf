@@ -13,6 +13,7 @@ This page provides API documentation for pylibcudf.
     column
     concatenate
     copying
+    filling
     gpumemoryview
     groupby
     join
@@ -21,6 +22,7 @@ This page provides API documentation for pylibcudf.
     reduce
     rolling
     scalar
+    search
     stream_compaction
     sorting
     replace

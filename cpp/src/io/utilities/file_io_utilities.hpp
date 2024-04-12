@@ -20,13 +20,14 @@
 #include "thread_pool.hpp"
 
 #include <cudf_test/file_utilities.hpp>
+
 #include <cufile.h>
 #endif
 
-#include <rmm/cuda_stream_view.hpp>
-
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <string>
 
@@ -35,6 +36,9 @@ namespace io {
 namespace detail {
 
 [[noreturn]] void throw_on_file_open_failure(std::string const& filepath, bool is_create);
+
+// Call before any cuFile API calls to ensure the CUDA context is initialized.
+void force_init_cuda_context();
 
 /**
  * @brief Class that provides RAII for file handling.

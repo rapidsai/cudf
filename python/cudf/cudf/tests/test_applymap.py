@@ -3,10 +3,14 @@
 import pytest
 
 from cudf import NA, DataFrame
-from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import _utils as utils
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in all versions of pandas",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -29,22 +33,15 @@ from cudf.testing import _utils as utils
 def test_applymap_dataframe(data, func, na_action, request):
     request.applymarker(
         pytest.mark.xfail(
-            PANDAS_GE_220
+            PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
             and request.node.callspec.id == "None-<lambda>2-data3",
             reason="https://github.com/pandas-dev/pandas/issues/57390",
-        )
-    )
-    request.applymarker(
-        pytest.mark.xfail(
-            PANDAS_GE_220
-            and request.node.callspec.id == "ignore-<lambda>3-data3",
-            reason="https://github.com/pandas-dev/pandas/pull/57388",
         )
     )
     gdf = DataFrame(data)
     pdf = gdf.to_pandas(nullable=True)
 
-    with utils.expect_warning_if(PANDAS_GE_210):
+    with pytest.warns(FutureWarning):
         expect = pdf.applymap(func, na_action=na_action)
     with pytest.warns(FutureWarning):
         got = gdf.applymap(func, na_action=na_action)

@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -157,6 +157,10 @@ def _check_series(expect, got):
     assert direct_equal or nanfilled_equal, msg
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="bug in older version of pandas",
+)
 def test_dataframe_join_suffix():
     np.random.seed(0)
 
@@ -175,7 +179,7 @@ def test_dataframe_join_suffix():
         right.to_pandas(),
         lsuffix="_left",
         rsuffix="_right",
-        sort=PANDAS_GE_220,
+        sort=True,
     )
     # TODO: Retain result index name
     expect.index.name = None
@@ -1523,7 +1527,7 @@ def test_categorical_typecast_outer():
         result = left.merge(right, how="outer", on="key")
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["object"])
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str"])
 def test_categorical_typecast_inner_one_cat(dtype):
     data = np.array([1, 2, 3], dtype=dtype)
 
@@ -1534,7 +1538,7 @@ def test_categorical_typecast_inner_one_cat(dtype):
     assert result["key"].dtype == left["key"].dtype.categories.dtype
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["object"])
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str"])
 def test_categorical_typecast_left_one_cat(dtype):
     data = np.array([1, 2, 3], dtype=dtype)
 
@@ -1545,7 +1549,7 @@ def test_categorical_typecast_left_one_cat(dtype):
     assert result["key"].dtype == left["key"].dtype
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["object"])
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str"])
 def test_categorical_typecast_outer_one_cat(dtype):
     data = np.array([1, 2, 3], dtype=dtype)
 
@@ -1931,10 +1935,7 @@ def test_string_join_key(str_data, num_keys, how):
         gdf[i] = cudf.Series(str_data, dtype="str")
     pdf["a"] = other_data
     gdf["a"] = other_data
-    if PANDAS_GE_200 and len(other_data) == 0:
-        # TODO: Remove this workaround after
-        # the following bug is fixed:
-        # https://github.com/pandas-dev/pandas/issues/56679
+    if len(other_data) == 0:
         pdf["a"] = pdf["a"].astype("str")
     pdf2 = pdf.copy()
     gdf2 = gdf.copy()
@@ -2011,10 +2012,7 @@ def test_string_join_non_key(str_data, num_cols, how):
         gdf[i] = cudf.Series(str_data, dtype="str")
     pdf["a"] = other_data
     gdf["a"] = other_data
-    if PANDAS_GE_200 and len(other_data) == 0:
-        # TODO: Remove this workaround after
-        # the following bug is fixed:
-        # https://github.com/pandas-dev/pandas/issues/56679
+    if len(other_data) == 0:
         pdf["a"] = pdf["a"].astype("str")
 
     pdf2 = pdf.copy()
@@ -2156,19 +2154,13 @@ def test_join_multiindex_empty():
     rhs = pd.DataFrame(index=["a", "c", "d"])
     g_lhs = cudf.from_pandas(lhs)
     g_rhs = cudf.from_pandas(rhs)
-    if PANDAS_GE_200:
-        assert_exceptions_equal(
-            lfunc=lhs.join,
-            rfunc=g_lhs.join,
-            lfunc_args_and_kwargs=([rhs], {"how": "inner"}),
-            rfunc_args_and_kwargs=([g_rhs], {"how": "inner"}),
-            check_exception_type=False,
-        )
-    else:
-        with pytest.warns(FutureWarning):
-            _ = lhs.join(rhs, how="inner")
-        with pytest.raises(ValueError):
-            _ = g_lhs.join(g_rhs, how="inner")
+    assert_exceptions_equal(
+        lfunc=lhs.join,
+        rfunc=g_lhs.join,
+        lfunc_args_and_kwargs=([rhs], {"how": "inner"}),
+        rfunc_args_and_kwargs=([g_rhs], {"how": "inner"}),
+        check_exception_type=False,
+    )
 
 
 def test_join_on_index_with_duplicate_names():

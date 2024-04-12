@@ -17,12 +17,8 @@ from pyarrow import fs as pa_fs
 
 import cudf
 from cudf import read_csv
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
-from cudf.testing._utils import (
-    assert_eq,
-    assert_exceptions_equal,
-    expect_warning_if,
-)
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -276,14 +272,30 @@ def test_csv_reader_mixed_data_delimiter_sep(
     gdf1 = read_csv(
         str(fname),
         names=["1", "2", "3", "4", "5", "6", "7"],
-        dtype=["int64", "date", "float64", "int64", "category", "str", "bool"],
+        dtype=[
+            "int64",
+            "datetime64[ns]",
+            "float64",
+            "int64",
+            "category",
+            "str",
+            "bool",
+        ],
         dayfirst=True,
         **cudf_arg,
     )
     gdf2 = read_csv(
         str(fname),
         names=["1", "2", "3", "4", "5", "6", "7"],
-        dtype=["int64", "date", "float64", "int64", "category", "str", "bool"],
+        dtype=[
+            "int64",
+            "datetime64[ns]",
+            "float64",
+            "int64",
+            "category",
+            "str",
+            "bool",
+        ],
         dayfirst=True,
         **pandas_arg,
     )
@@ -348,6 +360,10 @@ def test_csv_reader_dtype_extremes(use_names):
     assert_eq(gdf, pdf)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="https://github.com/pandas-dev/pandas/issues/52449",
+)
 def test_csv_reader_skiprows_skipfooter(tmpdir, pd_mixed_dataframe):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file5.csv")
 
@@ -368,7 +384,7 @@ def test_csv_reader_skiprows_skipfooter(tmpdir, pd_mixed_dataframe):
     out = read_csv(
         str(fname),
         names=["1", "2", "3"],
-        dtype=["int64", "date", "float64"],
+        dtype=["int64", "datetime64[ns]", "float64"],
         skiprows=1,
         skipfooter=1,
         dayfirst=True,
@@ -376,12 +392,8 @@ def test_csv_reader_skiprows_skipfooter(tmpdir, pd_mixed_dataframe):
 
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
-    if PANDAS_GE_200:
-        # TODO: Remove typecast to `ns` after following
-        # issue is fixed:
-        # https://github.com/pandas-dev/pandas/issues/52449
-        out["2"] = out["2"].astype("datetime64[ns]")
-    assert_eq(df_out, out)
+
+    assert_eq(df_out, out, check_dtype=False)
 
 
 def test_csv_reader_negative_vals(tmpdir):
@@ -1269,14 +1281,14 @@ def test_csv_reader_delim_whitespace():
     # with header row
     with pytest.warns(FutureWarning):
         cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
-    with expect_warning_if(PANDAS_GE_220):
+    with pytest.warns(FutureWarning):
         pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
     assert_eq(pd_df, cu_df)
 
     # without header row
     with pytest.warns(FutureWarning):
         cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
-    with expect_warning_if(PANDAS_GE_220):
+    with pytest.warns(FutureWarning):
         pd_df = pd.read_csv(
             StringIO(buffer), delim_whitespace=True, header=None
         )

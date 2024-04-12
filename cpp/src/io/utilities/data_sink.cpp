@@ -14,15 +14,17 @@
  * limitations under the License.
  */
 
-#include <fstream>
-
 #include "file_io_utilities.hpp"
+#include "io/utilities/config_utils.hpp"
+
 #include <cudf/io/data_sink.hpp>
 #include <cudf/utilities/error.hpp>
-#include <io/utilities/config_utils.hpp>
 
 #include <kvikio/file_handle.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
+
+#include <fstream>
 
 namespace cudf {
 namespace io {
@@ -34,6 +36,7 @@ class file_sink : public data_sink {
  public:
   explicit file_sink(std::string const& filepath)
   {
+    detail::force_init_cuda_context();
     _output_stream.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
     if (!_output_stream.is_open()) { detail::throw_on_file_open_failure(filepath, true); }
 

@@ -21,12 +21,11 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 
+#include <cuda/atomic>
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/tuple.h>
-
-#include <cuda/atomic>
-#include <cuda/functional>
 
 #include <optional>
 

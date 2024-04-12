@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf/strings/udf/udf_apis.hpp>
-#include <cudf/strings/udf/udf_string.cuh>
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/udf/udf_apis.hpp>
+#include <cudf/strings/udf/udf_string.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/device_uvector.hpp>

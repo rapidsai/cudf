@@ -23,11 +23,10 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/optional.h>
 #include <thrust/transform.h>
-
-#include <cuda/functional>
 
 namespace cudf {
 namespace strings {

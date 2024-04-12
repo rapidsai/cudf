@@ -23,14 +23,13 @@
 #include <cudf/strings/udf/strip.cuh>
 #include <cudf/strings/udf/udf_string.cuh>
 
+#include <cooperative_groups.h>
 #include <cuda/atomic>
 
-#include <cooperative_groups.h>
+#include <numba_cuda_runtime.cuh>
 
 #include <limits>
 #include <type_traits>
-
-#include <numba_cuda_runtime.cuh>
 
 using namespace cudf::strings::udf;
 

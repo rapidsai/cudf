@@ -46,6 +46,12 @@ np_dtypes_to_pandas_dtypes = {
     np.dtype("int64"): pd.Int64Dtype(),
     np.dtype("bool_"): pd.BooleanDtype(),
     np.dtype("object"): pd.StringDtype(),
+    np.dtype("float32"): pd.Float32Dtype(),
+    np.dtype("float64"): pd.Float64Dtype(),
+}
+pandas_dtypes_to_np_dtypes = {
+    pd_dtype: np_dtype
+    for np_dtype, pd_dtype in np_dtypes_to_pandas_dtypes.items()
 }
 
 pyarrow_dtypes_to_pandas_dtypes = {
@@ -61,38 +67,6 @@ pyarrow_dtypes_to_pandas_dtypes = {
     pa.string(): pd.StringDtype(),
 }
 
-pandas_dtypes_to_np_dtypes = {
-    pd.UInt8Dtype(): np.dtype("uint8"),
-    pd.UInt16Dtype(): np.dtype("uint16"),
-    pd.UInt32Dtype(): np.dtype("uint32"),
-    pd.UInt64Dtype(): np.dtype("uint64"),
-    pd.Int8Dtype(): np.dtype("int8"),
-    pd.Int16Dtype(): np.dtype("int16"),
-    pd.Int32Dtype(): np.dtype("int32"),
-    pd.Int64Dtype(): np.dtype("int64"),
-    pd.BooleanDtype(): np.dtype("bool_"),
-    pd.StringDtype(): np.dtype("object"),
-}
-
-pandas_dtypes_alias_to_cudf_alias = {
-    "UInt8": "uint8",
-    "UInt16": "uint16",
-    "UInt32": "uint32",
-    "UInt64": "uint64",
-    "Int8": "int8",
-    "Int16": "int16",
-    "Int32": "int32",
-    "Int64": "int64",
-    "boolean": "bool",
-}
-
-
-np_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
-np_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
-pandas_dtypes_to_np_dtypes[pd.Float32Dtype()] = np.dtype("float32")
-pandas_dtypes_to_np_dtypes[pd.Float64Dtype()] = np.dtype("float64")
-pandas_dtypes_alias_to_cudf_alias["Float32"] = "float32"
-pandas_dtypes_alias_to_cudf_alias["Float64"] = "float64"
 
 SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
 UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}
@@ -213,6 +187,8 @@ def cudf_dtype_from_pa_type(typ):
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
     elif pa.types.is_decimal(typ):
         return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
+    elif pa.types.is_large_string(typ):
+        return cudf.dtype("str")
     else:
         return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
 
@@ -416,9 +392,9 @@ def get_min_float_dtype(col):
 
 
 def is_mixed_with_object_dtype(lhs, rhs):
-    if cudf.api.types._is_categorical_dtype(lhs.dtype):
+    if isinstance(lhs.dtype, cudf.CategoricalDtype):
         return is_mixed_with_object_dtype(lhs.dtype.categories, rhs)
-    elif cudf.api.types._is_categorical_dtype(rhs.dtype):
+    elif isinstance(rhs.dtype, cudf.CategoricalDtype):
         return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
 
     return (lhs.dtype == "object" and rhs.dtype != "object") or (
@@ -611,7 +587,7 @@ def find_common_type(dtypes):
 def _dtype_pandas_compatible(dtype):
     """
     A utility function, that returns `str` instead of `object`
-    dtype when pandas comptibility mode is enabled.
+    dtype when pandas compatibility mode is enabled.
     """
     if cudf.get_option("mode.pandas_compatible") and dtype == cudf.dtype("O"):
         return "str"

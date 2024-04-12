@@ -6,6 +6,7 @@ files:
       cuda: ["11.8", "12.2"]
       arch: [x86_64]
     includes:
+      - build_base
       - build_all
       - build_cpp
       - build_wheels
@@ -27,6 +28,10 @@ files:
       - test_python_cudf
       - test_python_dask_cudf
       - depends_on_cupy
+  test_static_build:
+    output: none
+    includes:
+      - build_base
   test_cpp:
     output: none
     includes:
@@ -45,6 +50,7 @@ files:
   test_java:
     output: none
     includes:
+      - build_base
       - build_all
       - cuda
       - cuda_version
@@ -75,6 +81,7 @@ files:
     extras:
       table: build-system
     includes:
+      - build_base
       - build_python_common
       - build_python_cudf
   py_run_cudf:
@@ -144,6 +151,7 @@ files:
     extras:
       table: build-system
     includes:
+      - build_base
       - build_python_common
   py_run_cudf_kafka:
     output: pyproject
@@ -188,19 +196,22 @@ channels:
   - rapidsai
   - rapidsai-nightly
   - dask/label/dev
-  - pytorch
   - conda-forge
   - nvidia
 dependencies:
+  build_base:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - &cmake_ver cmake>=3.26.4
+          - &ninja ninja
   build_all:
     common:
       - output_types: conda
         packages:
-          - &cmake_ver cmake>=3.26.4
-          - &ninja ninja
           - c-compiler
           - cxx-compiler
-          - dlpack>=0.5,<0.6.0a0
+          - dlpack>=0.8,<1.0
           - zlib>=1.2.13
     specific:
       - output_types: conda
@@ -239,11 +250,11 @@ dependencies:
           - &gbench benchmark==1.8.0
           - &gtest gtest>=1.13.0
           - &gmock gmock>=1.13.0
-          - librmm==24.4.*
-          - libkvikio==24.4.*
+          - librmm==24.6.*
+          - libkvikio==24.6.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
-          - nvcomp==3.0.5
+          - nvcomp==3.0.6
           - spdlog>=1.12.0,<1.13
   build_wheels:
     common:
@@ -255,16 +266,18 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - *cmake_ver
           - cython>=3.0.3
-          - *ninja
-          - &numpy numpy>=1.21
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==14.0.1.*
+          - pyarrow==14.0.2.*
       - output_types: conda
         packages:
           - scikit-build-core>=0.7.0
+      - output_types: pyproject
+        packages:
+          # Hard pin the patch version used during the build.
+          # Sync with conda build constraint & wheel run constraint.
+          - numpy==1.23.*
       - output_types: [requirements, pyproject]
         packages:
           - scikit-build-core[pyproject]>=0.7.0
@@ -272,7 +285,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &rmm_conda rmm==24.4.*
+          - &rmm_conda rmm==24.6.*
           - &protobuf protobuf>=4.21,<5
           - pip
           - pip:
@@ -292,10 +305,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages: &build_python_packages_cu12
-              - &rmm_cu12 rmm-cu12==24.4.*
+              - &rmm_cu12 rmm-cu12==24.6.*
           - matrix: {cuda: "11.*"}
             packages: &build_python_packages_cu11
-              - &rmm_cu11 rmm-cu11==24.4.*
+              - &rmm_cu11 rmm-cu11==24.6.*
           - {matrix: null, packages: null }
       - output_types: pyproject
         matrices:
@@ -306,10 +319,10 @@ dependencies:
         packages:
           # Hard pin the Arrow patch version used during the build. This must
           # be kept in sync with the version pinned in get_arrow.cmake.
-          - libarrow-acero==14.0.1.*
-          - libarrow-dataset==14.0.1.*
-          - libarrow==14.0.1.*
-          - libparquet==14.0.1.*
+          - libarrow-acero==14.0.2.*
+          - libarrow-dataset==14.0.2.*
+          - libarrow==14.0.2.*
+          - libparquet==14.0.2.*
   libarrow_run:
     common:
       - output_types: conda
@@ -453,7 +466,7 @@ dependencies:
       - output_types: [conda]
         packages:
           - breathe>=4.35.0
-          - dask-cuda==24.4.*
+          - dask-cuda==24.6.*
           - *doxygen
           - make
           - myst-nb
@@ -489,15 +502,19 @@ dependencies:
             packages:
               - python=3.10
           - matrix:
+              py: "3.11"
             packages:
-              - python>=3.9,<3.11
+              - python=3.11
+          - matrix:
+            packages:
+              - python>=3.9,<3.12
   run_common:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - *numpy
-          - pandas>=2.0,<2.1.5dev0
+          - numpy>=1.23,<2.0a0
+          - pandas>=2.0,<2.2.2dev0
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -541,11 +558,11 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - rmm-cu12==24.4.*
+              - rmm-cu12==24.6.*
               - pynvjitlink-cu12
           - matrix: {cuda: "11.*"}
             packages:
-              - rmm-cu11==24.4.*
+              - rmm-cu11==24.6.*
               - cubinlinker-cu11
               - ptxcompiler-cu11
           - {matrix: null, packages: null}
@@ -556,7 +573,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - rapids-dask-dependency==24.4.*
+          - rapids-dask-dependency==24.6.*
   run_custreamz:
     common:
       - output_types: conda
@@ -612,7 +629,6 @@ dependencies:
           - hypothesis
           - pytest-benchmark
           - pytest-cases>=3.8.2
-          - python-snappy>=0.6.0
           - scipy
       - output_types: conda
         packages:
@@ -625,8 +641,8 @@ dependencies:
       - output_types: pyproject
         packages:
           - msgpack
-          - &tokenizers tokenizers==0.13.1
-          - &transformers transformers==4.24.0
+          - &tokenizers tokenizers==0.15.2
+          - &transformers transformers==4.38.1
           - tzdata
     specific:
       - output_types: conda
@@ -634,9 +650,8 @@ dependencies:
           - matrix:
               arch: x86_64
             packages:
-              # Currently, CUDA builds of pytorch do not exist for aarch64. We require
-              # version <1.12.0 because newer versions use nvidia::cuda-toolkit.
-              - pytorch<1.12.0
+              # Currently, CUDA + aarch64 builds of pytorch do not exist on conda-forge.
+              - pytorch>=2.1.0
               # We only install these on x86_64 to avoid pulling pytorch as a
               # dependency of transformers.
               - *tokenizers
@@ -647,13 +662,13 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask-cuda==24.4.*
+          - dask-cuda==24.6.*
           - *numba
   depends_on_cudf:
     common:
       - output_types: conda
         packages:
-          - &cudf_conda cudf==24.4.*
+          - &cudf_conda cudf==24.6.*
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -665,16 +680,16 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cudf-cu12==24.4.*
+              - cudf-cu12==24.6.*
           - matrix: {cuda: "11.*"}
             packages:
-              - cudf-cu11==24.4.*
+              - cudf-cu11==24.6.*
           - {matrix: null, packages: [*cudf_conda]}
   depends_on_cudf_kafka:
     common:
       - output_types: conda
         packages:
-          - &cudf_kafka_conda cudf_kafka==24.4.*
+          - &cudf_kafka_conda cudf_kafka==24.6.*
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -686,10 +701,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cudf_kafka-cu12==24.4.*
+              - cudf_kafka-cu12==24.6.*
           - matrix: {cuda: "11.*"}
             packages:
-              - cudf_kafka-cu11==24.4.*
+              - cudf_kafka-cu11==24.6.*
           - {matrix: null, packages: [*cudf_kafka_conda]}
   depends_on_cupy:
     common:
@@ -712,48 +727,11 @@ dependencies:
         packages:
           # dependencies to run pandas tests
           # https://github.com/pandas-dev/pandas/blob/main/environment.yml
-          # TODO: When pandas 2.0 is the minimum version, can just specify pandas[all]
-          - beautifulsoup4
-          - blosc
-          - brotlipy
-          - boto3
-          - botocore>=1.24.21
-          - bottleneck
-          - fastparquet
-          - flask
-          - fsspec
-          - html5lib
-          - hypothesis
-          - gcsfs
-          - ipython
-          - jinja2
-          - lxml
-          - matplotlib
-          - moto
-          - numba
-          - numexpr
-          - openpyxl
-          - odfpy
-          - py
-          - psycopg2-binary
-          - pyarrow
-          - pymysql
-          - pyreadstat
-          - pytest-asyncio
+          # pandas[...] includes all of the required dependencies.
+          # Intentionally excluding `postgresql` because of
+          # installation issues with `psycopg2`.
+          - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
           - pytest-reportlog
-          - python-snappy
-          - pyxlsb
-          - s3fs
-          - scipy
-          - sqlalchemy
-          - tables
-          - pandas-gbq
-          - tabulate
-          - xarray
-          - xlrd
-          - xlsxwriter
-          - xlwt
-          - zstandard
   test_python_cudf_pandas:
     common:
       - output_types: pyproject

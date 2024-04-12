@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <reductions/nested_type_minmax_util.cuh>
+#include "reductions/nested_type_minmax_util.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -74,6 +74,8 @@ static constexpr bool is_group_scan_supported()
 {
   if (K == aggregation::SUM)
     return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
+  else if (K == aggregation::PRODUCT)
+    return cudf::is_numeric<T>();
   else if (K == aggregation::MIN or K == aggregation::MAX)
     return not cudf::is_dictionary<T>() and
            (is_relationally_comparable<T, T>() or std::is_same_v<T, cudf::struct_view>);

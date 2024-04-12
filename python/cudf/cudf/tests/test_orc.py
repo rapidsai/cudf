@@ -13,6 +13,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.io.orc import ORCWriter
 from cudf.testing import assert_frame_equal
 from cudf.testing._utils import (
@@ -128,18 +129,16 @@ def test_orc_reader_filepath_or_buffer(path_or_buf, src):
     assert_eq(expect, got)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Bug in older version of pandas",
+)
 def test_orc_reader_trailing_nulls(datadir):
     path = datadir / "TestOrcFile.nulls-at-end-snappy.orc"
+    expect = pd.read_orc(path)
+    got = cudf.read_orc(path)
 
-    expect = pd.read_orc(path).fillna(0)
-    got = cudf.read_orc(path).fillna(0)
-
-    # PANDAS uses NaN to represent invalid data, which forces float dtype
-    # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
-    for col in expect.columns:
-        expect[col] = expect[col].astype(got[col].dtype)
-
-    assert_eq(expect, got, check_categorical=False)
+    assert_eq(expect, got, check_categorical=True)
 
 
 @pytest.mark.parametrize("use_index", [False, True])
@@ -609,7 +608,8 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
     supported_stat_types = supported_numpy_dtypes + ["str"]
-    # Writing bool columns to multiple row groups is disabled until #6763 is fixed
+    # Writing bool columns to multiple row groups is disabled
+    # until #6763 is fixed
     if nrows == 100000:
         supported_stat_types.remove("bool")
 
@@ -684,7 +684,8 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
 
     np.random.seed(0)
     supported_stat_types = supported_numpy_dtypes + ["str"]
-    # Writing bool columns to multiple row groups is disabled until #6763 is fixed
+    # Writing bool columns to multiple row groups is disabled
+    # until #6763 is fixed
     if nrows == 200000:
         supported_stat_types.remove("bool")
 
@@ -698,8 +699,7 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     # Make a dataframe
     gdf = cudf.DataFrame(
         {
-            "col_"
-            + str(dtype): gen_rand_series(
+            "col_" + str(dtype): gen_rand_series(
                 dtype,
                 nrows // 2,
                 has_nulls=True,
@@ -717,8 +717,7 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     # write and no pointers are saved into the original table
     gdf = cudf.DataFrame(
         {
-            "col_"
-            + str(dtype): gen_rand_series(
+            "col_" + str(dtype): gen_rand_series(
                 dtype,
                 nrows // 2,
                 has_nulls=True,

@@ -28,6 +28,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/atomic>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -35,8 +36,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
-
-#include <cuda/atomic>
 
 namespace cudf::strings::detail {
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <io/orc/orc.hpp>
+#include "io/orc/orc.hpp"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -404,7 +404,7 @@ orc_metadata read_orc_metadata(source_info const& src_info, rmm::cuda_stream_vie
   auto const footer = orc::metadata(sources.front().get(), stream).ff;
 
   return {{make_orc_column_schema(footer.types, 0, "")},
-          static_cast<size_type>(footer.numberOfRows),
+          footer.numberOfRows,
           static_cast<size_type>(footer.stripes.size())};
 }
 
@@ -436,16 +436,7 @@ void write_orc(orc_writer_options const& options, rmm::cuda_stream_view stream)
 
   auto writer = std::make_unique<orc::detail::writer>(
     std::move(sinks[0]), options, io_detail::single_write_mode::YES, stream);
-  try {
-    writer->write(options.get_table());
-  } catch (...) {
-    // If an exception is thrown, the output is incomplete/corrupted.
-    // Make sure the writer will not close with such corrupted data.
-    // In addition, the writer may throw an exception while trying to close, which would terminate
-    // the process.
-    writer->skip_close();
-    throw;
-  }
+  writer->write(options.get_table());
 }
 
 /**
