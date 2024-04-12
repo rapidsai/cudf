@@ -24,9 +24,9 @@ from cudf.core.column.column import as_column
 from cudf.core.dtypes import dtype
 from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.strings_typing import (
+    managed_udf_string,
     str_view_arg_handler,
     string_view,
-    udf_string,
 )
 from cudf.utils import cudautils
 from cudf.utils._numba import _CUDFNumbaConfig, _get_ptx_file
@@ -317,13 +317,15 @@ def _get_input_args_from_frame(fr):
 
 def _return_arr_from_dtype(dtype, size):
     if dtype == _cudf_str_dtype:
-        return rmm.DeviceBuffer(size=size * _get_extensionty_size(udf_string))
+        return rmm.DeviceBuffer(
+            size=size * _get_extensionty_size(managed_udf_string)
+        )
     return cp.empty(size, dtype=dtype)
 
 
 def _post_process_output_col(col, retty):
     if retty == _cudf_str_dtype:
-        return strings_udf.column_from_udf_string_array(col)
+        return strings_udf.column_from_managed_udf_string_array(col)
     return as_column(col, retty)
 
 
