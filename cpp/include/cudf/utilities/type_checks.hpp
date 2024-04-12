@@ -44,8 +44,6 @@ namespace cudf {
 /**
  * @brief Compare the type IDs of two `column_view`s
  *
- * @deprecated Since 24.06.
- *
  * This function returns true if the type of `lhs` equals that of `rhs`.
  * - For fixed point types, the scale is ignored.
  *
@@ -53,7 +51,7 @@ namespace cudf {
  * @param rhs The second `column_view` to compare
  * @return true if column types match
  */
-[[deprecated]] bool column_types_equivalent(column_view const& lhs, column_view const& rhs);
+bool column_types_equivalent(column_view const& lhs, column_view const& rhs);
 
 /**
  * @brief Compares the type of two `column_view`s
