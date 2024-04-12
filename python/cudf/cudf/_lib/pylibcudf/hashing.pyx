@@ -21,6 +21,7 @@ from cudf._lib.cpp.table.table cimport table
 from .column cimport Column
 from .table cimport Table
 
+LIBCUDF_DEFAULT_HASH_SEED = DEFAULT_HASH_SEED
 
 cpdef Column murmurhash3_x86_32(
     Table input,

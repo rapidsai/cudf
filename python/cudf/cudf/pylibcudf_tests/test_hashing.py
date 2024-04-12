@@ -3,6 +3,7 @@
 import hashlib
 import struct
 
+import mmh3
 import numpy as np
 import pyarrow as pa
 import pytest
@@ -140,7 +141,14 @@ def python_hash_value(x, method):
         binary = x.tobytes()
     else:
         raise NotImplementedError
-    return getattr(hashlib, method)(binary).hexdigest()
+    if method == 'murmurhash3_x86_32':
+        raise NotImplementedError
+    elif method == 'murmurhash3_x64_128':
+        hasher = mmh3.mmh3_x64_128(seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED)
+        hasher.update(binary)
+        return hasher.digest()
+    else:
+        return getattr(hashlib, method)(binary).hexdigest()
 
 
 @pytest.mark.parametrize(
@@ -261,3 +269,29 @@ def test_xxhash64_decimal(xxhash_64_decimal_tbl):
     )
     got = plc.hashing.xxhash_64(xxhash_64_decimal_tbl, 0)
     assert_table_eq(got, expected)
+
+def test_murmurhash3_x86_32(pa_input_column):
+    plc_tbl = plc.interop.from_arrow(
+        pa.Table.from_arrays([pa_input_column], names=["data"])
+    )
+    got = plc.hashing.murmurhash3_x86_32(plc_tbl, 0)
+    expect = pa.Array.from_pandas(
+        pa_input_column.to_pandas().apply(python_hash_value, args=("murmurhash3_x86_32",))
+    )
+    assert_table_eq(got, expect)
+
+
+def test_murmurhash3_x64_128(pa_input_column):
+    plc_tbl = plc.interop.from_arrow(
+        pa.Table.from_arrays([pa_input_column], names=["data"])
+    )
+    got = plc.hashing.murmurhash3_x64_128(plc_tbl, 0)
+    breakpoint()
+    expect = pa.Table.from_arrays(
+                pa.Array.from_pandas(
+                    [pa_input_column.to_pandas().apply(python_hash_value, args=("murmurhash3_x64_128",))]
+                ),
+                names=["data"]
+    )
+
+    assert_table_eq(got, expect)
