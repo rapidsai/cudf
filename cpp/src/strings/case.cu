@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/case.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
@@ -34,6 +35,9 @@
 
 #include <cuda/atomic>
 #include <cuda/functional>
+#include <thrust/for_each.h>
+#include <thrust/merge.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
@@ -110,23 +114,22 @@ struct convert_char_fn {
  *
  * This can be used in calls to make_strings_children.
  */
-struct upper_lower_fn {
+struct base_upper_lower_fn {
   convert_char_fn converter;
-  column_device_view d_strings;
   size_type* d_offsets{};
   char* d_chars{};
 
-  __device__ void operator()(size_type idx) const
+  base_upper_lower_fn(convert_char_fn converter) : converter(converter) {}
+
+  __device__ inline void process_string(string_view d_str, size_type idx) const
   {
-    if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
-      return;
-    }
-    auto const d_str = d_strings.element<string_view>(idx);
-    size_type bytes  = 0;
-    char* d_buffer   = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    for (auto itr = d_str.begin(); itr != d_str.end(); ++itr) {
-      auto const size = converter.process_character(*itr, d_buffer);
+    size_type bytes = 0;
+    char* d_buffer  = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    for (auto itr = d_str.data(); itr < (d_str.data() + d_str.size_bytes()); ++itr) {
+      if (is_utf8_continuation_char(static_cast<u_char>(*itr))) continue;
+      char_utf8 chr = 0;
+      to_char_utf8(itr, chr);
+      auto const size = converter.process_character(chr, d_buffer);
       if (d_buffer) {
         d_buffer += size;
       } else {
@@ -137,44 +140,115 @@ struct upper_lower_fn {
   }
 };
 
+struct upper_lower_fn : public base_upper_lower_fn {
+  column_device_view d_strings;
+
+  upper_lower_fn(convert_char_fn converter, column_device_view const& d_strings)
+    : base_upper_lower_fn{converter}, d_strings{d_strings}
+  {
+  }
+
+  __device__ void operator()(size_type idx) const
+  {
+    if (d_strings.is_null(idx)) {
+      if (!d_chars) { d_offsets[idx] = 0; }
+      return;
+    }
+    auto const d_str = d_strings.element<string_view>(idx);
+    process_string(d_str, idx);
+  }
+};
+
+// Long strings are divided into smaller strings using this value as a guide.
+// Generally strings are split into sub-blocks of bytes of this size but
+// care is taken to not sub-block in the middle of a multi-byte character.
+constexpr size_type LS_SUB_BLOCK_SIZE = 32;
+
+/**
+ * @brief Produces sub-offsets for the chars in the given strings column
+ */
+struct sub_offset_fn {
+  char const* d_input_chars;
+  int64_t first_offset;
+  int64_t last_offset;
+
+  __device__ int64_t operator()(int64_t idx) const
+  {
+    auto const end = d_input_chars + last_offset;
+    auto position  = (idx + 1) * LS_SUB_BLOCK_SIZE;
+    auto begin     = d_input_chars + first_offset + position;
+    while ((begin < end) && is_utf8_continuation_char(static_cast<u_char>(*begin))) {
+      ++begin;
+      ++position;
+    }
+    return (begin < end) ? position + first_offset : last_offset;
+  }
+};
+
+/**
+ * @brief Specialized case conversion for long strings
+ *
+ * This is needed since the offset count can exceed size_type.
+ * Also, nulls are ignored since this purely builds the output chars.
+ * The d_offsets are only temporary to help address the sub-blocks.
+ */
+struct upper_lower_ls_fn : public base_upper_lower_fn {
+  convert_char_fn converter;
+  char const* d_input_chars;
+  int64_t* d_input_offsets;  // includes column offset
+
+  upper_lower_ls_fn(convert_char_fn converter, char const* d_input_chars, int64_t* d_input_offsets)
+    : base_upper_lower_fn{converter}, d_input_chars{d_input_chars}, d_input_offsets{d_input_offsets}
+  {
+  }
+
+  // idx is row index
+  __device__ void operator()(size_type idx) const
+  {
+    auto const offset = d_input_offsets[idx];
+    auto const d_str  = string_view{d_input_chars + offset,
+                                   static_cast<size_type>(d_input_offsets[idx + 1] - offset)};
+    process_string(d_str, idx);
+  }
+};
+
 /**
  * @brief Count output bytes in warp-parallel threads
  *
  * This executes as one warp per string and just computes the output sizes.
  */
-struct count_bytes_fn {
-  convert_char_fn converter;
-  column_device_view d_strings;
-  size_type* d_offsets;
+CUDF_KERNEL void count_bytes_kernel(convert_char_fn converter,
+                                    column_device_view d_strings,
+                                    size_type* d_sizes)
+{
+  auto idx = cudf::detail::grid_1d::global_thread_id();
+  if (idx >= (d_strings.size() * cudf::detail::warp_size)) { return; }
 
-  __device__ void operator()(size_type idx) const
-  {
-    auto const str_idx  = idx / cudf::detail::warp_size;
-    auto const lane_idx = idx % cudf::detail::warp_size;
+  auto const str_idx  = idx / cudf::detail::warp_size;
+  auto const lane_idx = idx % cudf::detail::warp_size;
 
-    // initialize the output for the atomicAdd
-    if (lane_idx == 0) { d_offsets[str_idx] = 0; }
-    __syncwarp();
+  // initialize the output for the atomicAdd
+  if (lane_idx == 0) { d_sizes[str_idx] = 0; }
+  __syncwarp();
 
-    if (d_strings.is_null(str_idx)) { return; }
-    auto const d_str   = d_strings.element<string_view>(str_idx);
-    auto const str_ptr = d_str.data();
+  if (d_strings.is_null(str_idx)) { return; }
+  auto const d_str   = d_strings.element<string_view>(str_idx);
+  auto const str_ptr = d_str.data();
 
-    size_type size = 0;
-    for (auto i = lane_idx; i < d_str.size_bytes(); i += cudf::detail::warp_size) {
-      auto const chr = str_ptr[i];
-      if (is_utf8_continuation_char(chr)) { continue; }
-      char_utf8 u8 = 0;
-      to_char_utf8(str_ptr + i, u8);
-      size += converter.process_character(u8);
-    }
-    // this is every so slightly faster than using the cub::warp_reduce
-    if (size > 0) {
-      cuda::atomic_ref<size_type, cuda::thread_scope_block> ref{*(d_offsets + str_idx)};
-      ref.fetch_add(size, cuda::std::memory_order_relaxed);
-    }
+  size_type size = 0;
+  for (auto i = lane_idx; i < d_str.size_bytes(); i += cudf::detail::warp_size) {
+    auto const chr = str_ptr[i];
+    if (is_utf8_continuation_char(chr)) { continue; }
+    char_utf8 u8 = 0;
+    to_char_utf8(str_ptr + i, u8);
+    size += converter.process_character(u8);
   }
-};
+  // this is slightly faster than using the cub::warp_reduce
+  if (size > 0) {
+    cuda::atomic_ref<size_type, cuda::thread_scope_block> ref{*(d_sizes + str_idx)};
+    ref.fetch_add(size, cuda::std::memory_order_relaxed);
+  }
+}
 
 /**
  * @brief Special functor for processing ASCII-only data
@@ -208,11 +282,18 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   auto const d_cases   = get_character_cases_table();
   auto const d_special = get_special_case_mapping_table();
 
+  auto const first_offset = (input.offset() == 0) ? 0L
+                                                  : cudf::strings::detail::get_offset_value(
+                                                      input.offsets(), input.offset(), stream);
+  auto const last_offset =
+    cudf::strings::detail::get_offset_value(input.offsets(), input.size() + input.offset(), stream);
+  auto const chars_size = last_offset - first_offset;
+
   convert_char_fn ccfn{case_flag, d_flags, d_cases, d_special};
   upper_lower_fn converter{ccfn, *d_strings};
 
   // For smaller strings, use the regular string-parallel algorithm
-  if ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
+  if ((chars_size / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
     auto [offsets, chars] =
       cudf::strings::detail::make_strings_children(converter, input.size(), stream, mr);
     return make_strings_column(input.size(),
@@ -235,9 +316,8 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
                        [] __device__(auto chr) { return is_utf8_continuation_char(chr); })) > 0;
   if (!multi_byte_chars) {
     // optimization for ASCII-only case: copy the input column and inplace replace each character
-    auto result           = std::make_unique<column>(input.parent(), stream, mr);
-    auto d_chars          = result->mutable_view().head<char>();
-    auto const chars_size = strings_column_view(result->view()).chars_size(stream);
+    auto result  = std::make_unique<column>(input.parent(), stream, mr);
+    auto d_chars = result->mutable_view().head<char>();
     thrust::transform(
       rmm::exec_policy(stream), d_chars, d_chars + chars_size, d_chars, ascii_converter_fn{ccfn});
     result->set_null_count(input.null_count());
@@ -245,30 +325,46 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   }
 
   // This will use a warp-parallel algorithm to compute the output sizes for each string
-  // and then uses the normal string parallel functor to build the output.
-  auto offsets = make_numeric_column(
-    data_type{type_to_id<size_type>()}, input.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  auto d_offsets = offsets->mutable_view().data<size_type>();
-
-  // first pass, compute output sizes
   // note: tried to use segmented-reduce approach instead here and it was consistently slower
-  count_bytes_fn counter{ccfn, *d_strings, d_offsets};
-  auto const count_itr = thrust::make_counting_iterator<size_type>(0);
-  thrust::for_each_n(
-    rmm::exec_policy(stream), count_itr, input.size() * cudf::detail::warp_size, counter);
+  auto [offsets, bytes] = [&] {
+    rmm::device_uvector<size_type> sizes(input.size(), stream);
+    constexpr int block_size = 512;
+    cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+    count_bytes_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+      ccfn, *d_strings, sizes.data());
+    // convert sizes to offsets
+    return cudf::strings::detail::make_offsets_child_column(sizes.begin(), sizes.end(), stream, mr);
+  }();
 
-  // convert sizes to offsets
-  auto const bytes =
-    cudf::detail::sizes_to_offsets(d_offsets, d_offsets + input.size() + 1, d_offsets, stream);
-  CUDF_EXPECTS(bytes <= std::numeric_limits<size_type>::max(),
-               "Size of output exceeds the column size limit",
-               std::overflow_error);
+  // build sub-offsets
+  auto const input_chars = input.chars_begin(stream);
+  auto const sub_count   = chars_size / LS_SUB_BLOCK_SIZE;
+  auto tmp_offsets       = rmm::device_uvector<int64_t>(sub_count + input.size() + 1, stream);
+  {
+    rmm::device_uvector<size_type> sub_offsets(sub_count, stream);
+    auto const count_itr = thrust::make_counting_iterator<size_type>(0);
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      count_itr,
+                      count_itr + sub_count,
+                      sub_offsets.data(),
+                      sub_offset_fn{input_chars, first_offset, last_offset});
 
-  rmm::device_uvector<char> chars(bytes, stream, mr);
-  // second pass, write output
-  converter.d_offsets = d_offsets;
-  converter.d_chars   = chars.data();
-  thrust::for_each_n(rmm::exec_policy(stream), count_itr, input.size(), converter);
+    // merge them with input offsets
+    auto input_offsets =
+      cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
+    thrust::merge(rmm::exec_policy_nosync(stream),
+                  input_offsets,
+                  input_offsets + input.size() + 1,
+                  sub_offsets.begin(),
+                  sub_offsets.end(),
+                  tmp_offsets.begin());
+  }
+
+  // run case conversion over the new sub-strings
+  auto const tmp_size = static_cast<size_type>(tmp_offsets.size()) - 1;
+  upper_lower_ls_fn sub_conv{ccfn, input_chars, tmp_offsets.data()};
+  auto chars =
+    std::get<1>(cudf::strings::detail::make_strings_children(sub_conv, tmp_size, stream, mr));
 
   return make_strings_column(input.size(),
                              std::move(offsets),
