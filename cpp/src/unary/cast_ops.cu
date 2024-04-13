@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -116,8 +116,12 @@ struct fixed_point_unary_cast {
     std::enable_if_t<(cudf::is_fixed_point<_SourceT>() && cudf::is_numeric<TargetT>())>* = nullptr>
   __device__ inline TargetT operator()(DeviceT const element)
   {
-    auto const fp = SourceT{numeric::scaled_integer<DeviceT>{element, scale}};
-    return static_cast<TargetT>(fp);
+    auto const fixed_point = SourceT{numeric::scaled_integer<DeviceT>{element, scale}};
+    if constexpr (cuda::std::is_floating_point_v<TargetT>) {
+      return convert_fixed_to_floating<TargetT>(fixed_point);
+    } else {
+      return static_cast<TargetT>(fixed_point);
+    }
   }
 
   template <
@@ -126,7 +130,11 @@ struct fixed_point_unary_cast {
     std::enable_if_t<(cudf::is_numeric<_SourceT>() && cudf::is_fixed_point<TargetT>())>* = nullptr>
   __device__ inline DeviceT operator()(SourceT const element)
   {
-    return TargetT{element, scale}.value();
+    if constexpr (cuda::std::is_floating_point_v<SourceT>) {
+      return convert_floating_to_fixed<TargetT>(element, scale).value();
+    } else {
+      return TargetT{element, scale}.value();
+    }
   }
 };
 
