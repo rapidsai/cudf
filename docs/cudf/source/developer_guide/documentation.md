@@ -164,7 +164,7 @@ The directive should be used inside docstrings like so:
 Docstring body
 
 .. pandas-compat::
-    :func:`pandas.API_NAME`
+    **$API_NAME**
 
     Explanation of differences
 ```
