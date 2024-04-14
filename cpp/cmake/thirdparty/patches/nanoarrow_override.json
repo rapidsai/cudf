@@ -1,0 +1,18 @@
+
+{
+  "packages" : {
+    "nanoarrow" : {
+      "version" : "0.4.0",
+      "git_url" : "https://github.com/apache/arrow-nanoarrow.git",
+      "git_tag" : "c97720003ff863b81805bcdb9f7c91306ab6b6a8",
+      "git_shallow" : false,
+      "patches" : [
+        {
+          "file" : "${current_json_dir}/nanoarrow_cmake.diff",
+          "issue" : "Fix add support for global setup to initialize RMM in nvbench [https://github.com/NVIDIA/nvbench/pull/123]",
+          "fixed_in" : "0.5.0"
+        }
+      ]
+    }
+  }
+}
