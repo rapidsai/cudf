@@ -6,6 +6,7 @@ files:
       cuda: ["11.8", "12.2"]
       arch: [x86_64]
     includes:
+      - build_base
       - build_all
       - build_cpp
       - build_wheels
@@ -27,6 +28,10 @@ files:
       - test_python_cudf
       - test_python_dask_cudf
       - depends_on_cupy
+  test_static_build:
+    output: none
+    includes:
+      - build_base
   test_cpp:
     output: none
     includes:
@@ -45,6 +50,7 @@ files:
   test_java:
     output: none
     includes:
+      - build_base
       - build_all
       - cuda
       - cuda_version
@@ -75,6 +81,7 @@ files:
     extras:
       table: build-system
     includes:
+      - build_base
       - build_python_common
       - build_python_cudf
   py_run_cudf:
@@ -144,6 +151,7 @@ files:
     extras:
       table: build-system
     includes:
+      - build_base
       - build_python_common
   py_run_cudf_kafka:
     output: pyproject
@@ -191,12 +199,16 @@ channels:
   - conda-forge
   - nvidia
 dependencies:
+  build_base:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - &cmake_ver cmake>=3.26.4
+          - &ninja ninja
   build_all:
     common:
       - output_types: conda
         packages:
-          - &cmake_ver cmake>=3.26.4
-          - &ninja ninja
           - c-compiler
           - cxx-compiler
           - dlpack>=0.8,<1.0
@@ -254,9 +266,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - *cmake_ver
           - cython>=3.0.3
-          - *ninja
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - pyarrow==14.0.2.*

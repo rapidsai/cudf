@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import random
 import string
@@ -330,9 +330,8 @@ def test_ngrams(n, separator, expected_values):
                 "he",
                 "er",
                 "re",
-                cudf.NA,
             ],
-            [1, 1, 1, 2, 3, 4, 4, 4, 5, 5, 5, 6],
+            [1, 1, 1, 2, 3, 4, 4, 4, 5, 5, 5],
             False,
         ),
         (
@@ -340,15 +339,12 @@ def test_ngrams(n, separator, expected_values):
             [
                 "thi",
                 "his",
-                cudf.NA,
-                cudf.NA,
                 "boo",
                 "ook",
                 "her",
                 "ere",
-                cudf.NA,
             ],
-            [1, 1, 2, 3, 4, 4, 5, 5, 6],
+            [1, 1, 4, 4, 5, 5],
             False,
         ),
         (
