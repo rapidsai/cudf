@@ -195,7 +195,7 @@ files:
 channels:
   - rapidsai
   - rapidsai-nightly
-  - pytorch
+  # - pytorch
   - dask/label/dev
   - conda-forge
   - nvidia
@@ -652,7 +652,7 @@ dependencies:
               arch: x86_64
             packages:
               # Currently, CUDA + aarch64 builds of pytorch do not exist on conda-forge.
-              - pytorch>=2.1.0
+              # - pytorch>=2.1.0
               # We only install these on x86_64 to avoid pulling pytorch as a
               # dependency of transformers.
               - *tokenizers

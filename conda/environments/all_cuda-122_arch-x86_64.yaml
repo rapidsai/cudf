@@ -3,7 +3,6 @@
 channels:
 - rapidsai
 - rapidsai-nightly
-- pytorch
 - dask/label/dev
 - conda-forge
 - nvidia
@@ -78,7 +77,6 @@ dependencies:
 - pytest<8
 - python-confluent-kafka>=1.9.0,<1.10.0a0
 - python>=3.9,<3.12
-- pytorch>=2.1.0
 - rapids-dask-dependency==24.6.*
 - rich
 - rmm==24.6.*
