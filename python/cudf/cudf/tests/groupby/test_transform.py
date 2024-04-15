@@ -39,5 +39,5 @@ def test_transform_broadcast(agg, df):
 
 def test_transform_invalid():
     df = cudf.DataFrame({"key": [1, 1], "values": [4, 5]})
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         df.groupby("key").transform({"values": "cumprod"})

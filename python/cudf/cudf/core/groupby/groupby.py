@@ -1768,7 +1768,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         agg
         """
         if not (isinstance(function, str) or callable(function)):
-            raise ValueError(
+            raise TypeError(
                 "Aggregation must be a named aggregation or a callable"
             )
         try:
