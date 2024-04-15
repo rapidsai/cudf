@@ -18,7 +18,9 @@ function(find_and_configure_gtest)
 
   # Find or install GoogleTest
   rapids_cpm_gtest(
-    BUILD_EXPORT_SET cudf-testing-exports INSTALL_EXPORT_SET cudf-testing-exports BUILD_STATIC
+    BUILD_EXPORT_SET cudf-testing-exports
+    INSTALL_EXPORT_SET cudf-testing-exports
+    BUILD_STATIC
   )
 
   if(GTest_ADDED)
