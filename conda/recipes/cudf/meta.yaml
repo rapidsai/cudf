@@ -78,7 +78,7 @@ requirements:
     {% endif %}
     - cuda-version ={{ cuda_version }}
   run:
-    - {{ pin_compatible('protobuf', min_pin='x.x', max_pin='x') }}
+    - protobuf >=3.20,<5.0a0
     - python
     - typing_extensions >=4.0.0
     - pandas >=2.0,<2.2.2dev0
