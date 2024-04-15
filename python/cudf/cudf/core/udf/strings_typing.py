@@ -30,9 +30,15 @@ class UDFString(types.Type):
 
 
 class ManagedUDFString(types.Type):
+    np_dtype = np.dtype("object")
+
     def __init__(self):
         # initialize the memsys module
         super().__init__(name="managed_udf_string")
+
+    @property
+    def return_type(self):
+        return self
 
 
 class StringView(types.Type):
@@ -43,7 +49,7 @@ class StringView(types.Type):
 
     @property
     def return_type(self):
-        return UDFString()
+        return ManagedUDFString()
 
 
 @register_model(StringView)

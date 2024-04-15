@@ -22,6 +22,7 @@ from cudf._lib import strings_udf
 from cudf.api.types import is_scalar
 from cudf.core.column.column import as_column
 from cudf.core.dtypes import dtype
+from cudf.core.udf._nrt_cuda import memsys
 from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.strings_typing import (
     managed_udf_string,
@@ -185,7 +186,6 @@ def _construct_signature(frame, return_type, args):
 
     # return_type, size, data, masks, offsets, extra args
     sig = void(*(sig + offsets + [typeof(arg) for arg in args]))
-
     return sig
 
 
@@ -325,7 +325,7 @@ def _return_arr_from_dtype(dtype, size):
 
 def _post_process_output_col(col, retty):
     if retty == _cudf_str_dtype:
-        return strings_udf.column_from_managed_udf_string_array(col)
+        return strings_udf.column_from_managed_udf_string_array(col, memsys)
     return as_column(col, retty)
 
 
