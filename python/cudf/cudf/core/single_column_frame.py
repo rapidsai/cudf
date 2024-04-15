@@ -103,11 +103,6 @@ class SingleColumnFrame(Frame, NotIterable):
     def _column(self):
         return self._data[self.name]
 
-    @_column.setter  # type: ignore
-    @_cudf_nvtx_annotate
-    def _column(self, value):
-        self._data[self.name] = value
-
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def values(self):  # noqa: D102
