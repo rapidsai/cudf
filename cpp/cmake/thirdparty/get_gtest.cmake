@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -17,7 +17,9 @@ function(find_and_configure_gtest)
   include(${rapids-cmake-dir}/cpm/gtest.cmake)
 
   # Find or install GoogleTest
-  rapids_cpm_gtest(BUILD_EXPORT_SET cudf-testing-exports INSTALL_EXPORT_SET cudf-testing-exports)
+  rapids_cpm_gtest(
+    BUILD_EXPORT_SET cudf-testing-exports INSTALL_EXPORT_SET cudf-testing-exports BUILD_STATIC
+  )
 
   if(GTest_ADDED)
     rapids_export(

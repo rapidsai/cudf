@@ -956,7 +956,7 @@ endif()
 if(CUDF_BUILD_BENCHMARKS)
   # Find or install GoogleBench
   include(${rapids-cmake-dir}/cpm/gbench.cmake)
-  rapids_cpm_gbench()
+  rapids_cpm_gbench(BUILD_STATIC)
 
   # Find or install nvbench
   include(cmake/thirdparty/get_nvbench.cmake)

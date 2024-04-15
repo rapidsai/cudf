@@ -8,7 +8,6 @@ channels:
 - nvidia
 dependencies:
 - aiobotocore>=2.2.0
-- benchmark==1.8.0
 - boto3>=1.21.21
 - botocore>=1.24.21
 - breathe>=4.35.0
@@ -35,8 +34,6 @@ dependencies:
 - fmt>=10.1.1,<11
 - fsspec>=0.6.0
 - gcc_linux-64=11.*
-- gmock>=1.13.0
-- gtest>=1.13.0
 - hypothesis
 - identify>=2.5.20
 - ipython
