@@ -2205,7 +2205,6 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                     std::move(chunks),
                     std::move(global_rowgroup_base),
                     std::move(first_rg_in_part),
-                    std::move(num_rowgroups),
                     std::move(rg_to_part),
                     std::move(comp_stats),
                     std::move(uncomp_bfr),
@@ -2312,7 +2311,6 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                          chunks,
                          global_rowgroup_base,
                          first_rg_in_part,
-                         num_rowgroups,
                          rg_to_part,
                          comp_stats,
                          uncomp_bfr,   // unused, but contains data for later write to sink
@@ -2356,7 +2354,6 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                              chunks,
                              global_rowgroup_base,
                              first_rg_in_part,
-                             num_rowgroups,
                              rg_to_part,
                              bounce_buffer);
 
@@ -2371,18 +2368,17 @@ void writer::impl::write_parquet_data_to_sink(
   host_2dspan<EncColumnChunk const> chunks,
   host_span<size_t const> global_rowgroup_base,
   host_span<int const> first_rg_in_part,
-  size_type const num_rowgroups,
   host_span<int const> rg_to_part,
   host_span<uint8_t> bounce_buffer)
 {
-  _agg_meta              = std::move(updated_agg_meta);
-  auto const num_columns = chunks.size().second;
+  _agg_meta                = std::move(updated_agg_meta);
+  auto const num_rowgroups = chunks.size().first;
+  auto const num_columns   = chunks.size().second;
 
   if (num_rowgroups != 0) {
-    auto const rnext = num_rowgroups;
     std::vector<std::future<void>> write_tasks;
 
-    for (auto r = 0; r < rnext; r++) {
+    for (auto r = 0; r < static_cast<int>(num_rowgroups); r++) {
       int const p        = rg_to_part[r];
       int const global_r = global_rowgroup_base[p] + r - first_rg_in_part[p];
       auto& row_group    = _agg_meta->file(p).row_groups[global_r];
@@ -2427,9 +2423,8 @@ void writer::impl::write_parquet_data_to_sink(
 
     // add column and offset indexes to metadata
     if (num_rowgroups != 0) {
-      auto const rnext   = num_rowgroups;
       auto curr_page_idx = chunks[0][0].first_page;
-      for (auto r = 0; r < rnext; r++) {
+      for (auto r = 0; r < static_cast<int>(num_rowgroups); r++) {
         int const p           = rg_to_part[r];
         int const global_r    = global_rowgroup_base[p] + r - first_rg_in_part[p];
         auto const& row_group = _agg_meta->file(p).row_groups[global_r];
