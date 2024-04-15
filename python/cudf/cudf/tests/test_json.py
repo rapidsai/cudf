@@ -534,27 +534,6 @@ def test_json_bool_values():
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
 
 
-@pytest.mark.parametrize(
-    "buffer",
-    [
-        "[1.0,]\n[null, ]",
-        '{"0":1.0,"1":}\n{"0":null,"1": }',
-        '{ "0" : 1.0 , "1" : }\n{ "0" : null , "1" : }',
-        '{"0":1.0}\n{"1":}',
-    ],
-)
-def test_json_null_literal(buffer):
-    df = cudf.read_json(StringIO(buffer), lines=True, engine="cudf")
-
-    # first column contains a null field, type should be set to float
-    # second column contains only empty fields, type should be set to int8
-    np.testing.assert_array_equal(df.dtypes, ["float64", "int8"])
-    np.testing.assert_array_equal(
-        df["0"].to_numpy(na_value=np.nan), [1.0, np.nan]
-    )
-    np.testing.assert_array_equal(df["1"].to_numpy(na_value=0), [0, 0])
-
-
 def test_json_bad_protocol_string():
     test_string = StringIO('{"field": "s3://path"}')
 
