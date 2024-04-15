@@ -85,22 +85,23 @@ constexpr inline auto is_supported_construction_value_type()
 namespace detail {
 
 /**
- * @brief Recursively calculate a large power of 10 (>= 10^19) that can only be stored in an 128bit
- * integer
+ * @brief Recursively calculate a signed large power of 10 (>= 10^18) that can only be stored in an
+ * 128bit integer
  *
- * @note Intended to be run at compile time
+ * @note Intended to be run at compile time.
  *
  * @tparam Exp10 The power of 10 to calculate
  * @return Returns 10^Exp10
  */
 template <int Exp10>
-constexpr __uint128_t large_power_of_10()
+constexpr __int128_t large_power_of_10()
 {
-  static_assert(Exp10 >= 19);
-  if constexpr (Exp10 == 19)
-    return __uint128_t(10000000000000000000ULL);
+  // Stop at 10^18 to speed up compilation; literals can be used for smaller powers of 10.
+  static_assert(Exp10 >= 18);
+  if constexpr (Exp10 == 18)
+    return __int128_t(1000000000000000000LL);
   else
-    return large_power_of_10<Exp10 - 1>() * __uint128_t(10);
+    return large_power_of_10<Exp10 - 1>() * __int128_t(10);
 }
 
 /**
@@ -141,6 +142,8 @@ CUDF_HOST_DEVICE inline T divide_power10_32bit(T value, int exp10)
   // struct. This is because the NotEqual benchmark is slower when doing that; I guess the compiler
   // is getting confused by all of the templating and inlining and can't optimize it as well?
 
+  // Note: Using signed powers of 10 (where possible) to avoid unintended integer conversion
+
   switch (exp10) {
     case 0: return value;
     case 1: return value / 10;
@@ -180,16 +183,16 @@ CUDF_HOST_DEVICE inline T divide_power10_64bit(T value, int exp10)
     case 7 : return value / 10000000;
     case 8 : return value / 100000000;
     case 9 : return value / 1000000000;
-    case 10: return value / 10000000000ULL;
-    case 11: return value / 100000000000ULL;
-    case 12: return value / 1000000000000ULL;
-    case 13: return value / 10000000000000ULL;
-    case 14: return value / 100000000000000ULL;
-    case 15: return value / 1000000000000000ULL;
-    case 16: return value / 10000000000000000ULL;
-    case 17: return value / 100000000000000000ULL;
-    case 18: return value / 1000000000000000000ULL;
-    case 19: return value / 10000000000000000000ULL;
+    case 10: return value / 10000000000LL;
+    case 11: return value / 100000000000LL;
+    case 12: return value / 1000000000000LL;
+    case 13: return value / 10000000000000LL;
+    case 14: return value / 100000000000000LL;
+    case 15: return value / 1000000000000000LL;
+    case 16: return value / 10000000000000000LL;
+    case 17: return value / 100000000000000000LL;
+    case 18: return value / 1000000000000000000LL;
+    case 19: return value / 10000000000000000000ULL; //10^19 only fits if unsigned!
     default: return 0;
   }
   // clang-format on
@@ -229,16 +232,16 @@ CUDF_HOST_DEVICE constexpr T divide_power10_128bit(T value, int exp10)
     case 7 : return value / 10000000;
     case 8 : return value / 100000000;
     case 9 : return value / 1000000000;
-    case 10: return value / 10000000000ULL;
-    case 11: return value / 100000000000ULL;
-    case 12: return value / 1000000000000ULL;
-    case 13: return value / 10000000000000ULL;
-    case 14: return value / 100000000000000ULL;
-    case 15: return value / 1000000000000000ULL;
-    case 16: return value / 10000000000000000ULL;
-    case 17: return value / 100000000000000000ULL;
-    case 18: return value / 1000000000000000000ULL;
-    case 19: return value / 10000000000000000000ULL;
+    case 10: return value / 10000000000LL;
+    case 11: return value / 100000000000LL;
+    case 12: return value / 1000000000000LL;
+    case 13: return value / 10000000000000LL;
+    case 14: return value / 100000000000000LL;
+    case 15: return value / 1000000000000000LL;
+    case 16: return value / 10000000000000000LL;
+    case 17: return value / 100000000000000000LL;
+    case 18: return value / 1000000000000000000LL;
+    case 19: return value / large_power_of_10<19>();
     case 20: return value / large_power_of_10<20>();
     case 21: return value / large_power_of_10<21>();
     case 22: return value / large_power_of_10<22>();
@@ -314,16 +317,16 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10_64bit(T value, int exp10)
     case 7 : return value * 10000000;
     case 8 : return value * 100000000;
     case 9 : return value * 1000000000;
-    case 10: return value * 10000000000ULL;
-    case 11: return value * 100000000000ULL;
-    case 12: return value * 1000000000000ULL;
-    case 13: return value * 10000000000000ULL;
-    case 14: return value * 100000000000000ULL;
-    case 15: return value * 1000000000000000ULL;
-    case 16: return value * 10000000000000000ULL;
-    case 17: return value * 100000000000000000ULL;
-    case 18: return value * 1000000000000000000ULL;
-    case 19: return value * 10000000000000000000ULL;
+    case 10: return value * 10000000000LL;
+    case 11: return value * 100000000000LL;
+    case 12: return value * 1000000000000LL;
+    case 13: return value * 10000000000000LL;
+    case 14: return value * 100000000000000LL;
+    case 15: return value * 1000000000000000LL;
+    case 16: return value * 10000000000000000LL;
+    case 17: return value * 100000000000000000LL;
+    case 18: return value * 1000000000000000000LL;
+    case 19: return value * 10000000000000000000ULL; //10^19 only fits if unsigned!
     default: return 0;
   }
   // clang-format on
@@ -358,16 +361,16 @@ CUDF_HOST_DEVICE constexpr T multiply_power10_128bit(T value, int exp10)
     case 7 : return value * 10000000;
     case 8 : return value * 100000000;
     case 9 : return value * 1000000000;
-    case 10: return value * 10000000000ULL;
-    case 11: return value * 100000000000ULL;
-    case 12: return value * 1000000000000ULL;
-    case 13: return value * 10000000000000ULL;
-    case 14: return value * 100000000000000ULL;
-    case 15: return value * 1000000000000000ULL;
-    case 16: return value * 10000000000000000ULL;
-    case 17: return value * 100000000000000000ULL;
-    case 18: return value * 1000000000000000000ULL;
-    case 19: return value * 10000000000000000000ULL;
+    case 10: return value * 10000000000LL;
+    case 11: return value * 100000000000LL;
+    case 12: return value * 1000000000000LL;
+    case 13: return value * 10000000000000LL;
+    case 14: return value * 100000000000000LL;
+    case 15: return value * 1000000000000000LL;
+    case 16: return value * 10000000000000000LL;
+    case 17: return value * 100000000000000000LL;
+    case 18: return value * 1000000000000000000LL;
+    case 19: return value * large_power_of_10<19>();
     case 20: return value * large_power_of_10<20>();
     case 21: return value * large_power_of_10<21>();
     case 22: return value * large_power_of_10<22>();
@@ -398,19 +401,22 @@ CUDF_HOST_DEVICE constexpr T multiply_power10_128bit(T value, int exp10)
  * @note Use this function if you have no a-priori knowledge of what exp10 might be.
  * If you do, prefer calling the bit-size-specific versions
  *
+ * @tparam Rep Representation type needed for integer exponentiation
  * @tparam T Integral type of value to be multiplied.
  * @param value The number to be multiplied.
  * @param exp10 The power-of-10 of the multiplier.
  * @return Returns value * 10^exp10
  */
-template <typename T, typename cuda::std::enable_if_t<(cuda::std::is_integral_v<T>)>* = nullptr>
+template <typename Rep,
+          typename T,
+          typename cuda::std::enable_if_t<(cuda::std::is_integral_v<T>)>* = nullptr>
 CUDF_HOST_DEVICE inline constexpr T multiply_power10(T value, int exp10)
 {
   // Use this function if you have no knowledge of what exp10 might be
   // If you do, prefer calling the bit-size-specific versions
-  if constexpr (sizeof(T) <= 4) {
+  if constexpr (sizeof(Rep) <= 4) {
     return multiply_power10_32bit(value, exp10);
-  } else if constexpr (sizeof(T) == 8) {
+  } else if constexpr (sizeof(Rep) == 8) {
     return multiply_power10_64bit(value, exp10);
   } else {
     return multiply_power10_128bit(value, exp10);
@@ -423,17 +429,20 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10(T value, int exp10)
  * @note Use this function if you have no a-priori knowledge of what exp10 might be.
  * If you do, prefer calling the bit-size-specific versions
  *
+ * @tparam Rep Representation type needed for integer exponentiation
  * @tparam T Integral type of value to be divided-from.
  * @param value The number to be divided-from.
  * @param exp10 The power-of-10 of the denominator.
  * @return Returns value / 10^exp10
  */
-template <typename T, typename cuda::std::enable_if_t<(cuda::std::is_integral_v<T>)>* = nullptr>
+template <typename Rep,
+          typename T,
+          typename cuda::std::enable_if_t<(cuda::std::is_integral_v<T>)>* = nullptr>
 CUDF_HOST_DEVICE inline constexpr T divide_power10(T value, int exp10)
 {
-  if constexpr (sizeof(T) <= 4) {
+  if constexpr (sizeof(Rep) <= 4) {
     return divide_power10_32bit(value, exp10);
-  } else if constexpr (sizeof(T) == 8) {
+  } else if constexpr (sizeof(Rep) == 8) {
     return divide_power10_64bit(value, exp10);
   } else {
     return divide_power10_128bit(value, exp10);
@@ -494,7 +503,7 @@ CUDF_HOST_DEVICE inline constexpr T right_shift(T const& val, scale_type const& 
     // slows down the NOT_EQUAL binary-op benchmark.
     return val / ipow<Rep, Rad>(int_scale);
   } else if constexpr (Rad == Radix::BASE_10) {
-    return divide_power10(val, int_scale);
+    return divide_power10<Rep>(val, int_scale);
   } else if constexpr (Rad == Radix::BASE_2) {
     return val >> int_scale;
   } else {
@@ -522,7 +531,7 @@ CUDF_HOST_DEVICE inline constexpr T left_shift(T const& val, scale_type const& s
     // slows down the NOT_EQUAL binary-op benchmark.
     return val * ipow<Rep, Rad>(int_scale);
   } else if constexpr (Rad == Radix::BASE_10) {
-    return multiply_power10(val, int_scale);
+    return multiply_power10<Rep>(val, int_scale);
   } else if constexpr (Rad == Radix::BASE_2) {
     return val << int_scale;
   } else {
