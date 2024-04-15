@@ -17,15 +17,13 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 
-#include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/attributes.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-
-#include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
@@ -196,6 +194,42 @@ TEST_F(StringsFindTest, ContainsLongStrings)
   results  = cudf::strings::contains(strings_view, cudf::string_scalar("~"));
   expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 0, 0, 1, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+}
+
+TEST_F(StringsFindTest, MultiContains)
+{
+  using cudf::test::iterators::null_at;
+  auto const strings = cudf::test::strings_column_wrapper{
+    {"Héllo, there world and goodbye",
+     "quick brown fox jumped over the lazy brown dog; the fat cats jump in place without moving",
+     "the following code snippet demonstrates how to use search for values in an ordered range",
+     "it returns the last position where value could be inserted without violating the ordering",
+     "algorithms execution is parallelized as determined by an execution policy. t",
+     "he this is a continuation of previous row to make sure string boundaries are honored",
+     "abcdefghijklmnopqrstuvwxyz 0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ !@#$%^&*()~",
+     "",
+     ""},
+    null_at(8)};
+  auto strings_view = cudf::strings_column_view(strings);
+
+  auto search_key_0 = cudf::string_scalar{" the "};
+  auto search_key_1 = cudf::string_scalar{"a"};
+  auto search_key_2 = cudf::string_scalar{""};
+  auto search_keys  = std::vector<std::reference_wrapper<cudf::string_scalar>>{};
+  search_keys.emplace_back(search_key_0);
+  search_keys.emplace_back(search_key_1);
+  search_keys.emplace_back(search_key_2);
+
+  auto results = cudf::strings::contains(strings_view, search_keys);
+  auto expected_0 =
+    cudf::test::fixed_width_column_wrapper<bool>({0, 1, 0, 1, 0, 0, 0, 0, 0}, null_at(8));
+  auto expected_1 =
+    cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1, 1, 0, 0}, null_at(8));
+  auto expected_2 =
+    cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1, 1, 1, 0}, null_at(8));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(0), expected_0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(1), expected_1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(2), expected_2);
 }
 
 TEST_F(StringsFindTest, StartsWith)
