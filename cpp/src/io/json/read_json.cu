@@ -242,15 +242,14 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
       next_delim_pos = find_first_delimiter(bufptr_offset - bytes_read, bufptr_offset, '\n');
       if (next_delim_pos == -1) { next_subchunk_start += size_per_subchunk; }
     }
-    if (next_delim_pos == -1)
-      next_delim_pos = total_source_size - (next_subchunk_start - size_per_subchunk);
+    if (next_delim_pos == -1) next_delim_pos = bufptr_offset;
 
     auto* released_bufptr = bufptr.release();
     return datasource::owning_buffer<rmm::device_uvector<char>>(
       std::move(*released_bufptr),
       reinterpret_cast<uint8_t*>(released_bufptr->data()) + first_delim_pos +
         (chunk_offset ? 1 : 0),
-      next_delim_pos - first_delim_pos);
+      next_delim_pos - first_delim_pos - (chunk_offset ? 1 : 0));
   }
   auto* released_bufptr = bufptr.release();
   return datasource::owning_buffer<rmm::device_uvector<char>>(
