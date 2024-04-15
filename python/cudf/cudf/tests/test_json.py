@@ -495,9 +495,6 @@ def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.filterwarnings(
-    "ignore:engine='cudf_legacy' is a deprecated engine."
-)
 def test_json_engine_selection():
     json = "[1, 2, 3]"
 
@@ -519,10 +516,6 @@ def test_json_engine_selection():
     for col_name in df.columns:
         assert isinstance(col_name, int)
 
-    # should raise an exception
-    with pytest.raises(ValueError):
-        cudf.read_json(StringIO(json), lines=False, engine="cudf_legacy")
-
 
 def test_json_bool_values():
     buffer = "[true,1]\n[false,false]\n[true,true]"
@@ -541,9 +534,6 @@ def test_json_bool_values():
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
 
 
-@pytest.mark.filterwarnings(
-    "ignore:engine='cudf_legacy' is a deprecated engine."
-)
 @pytest.mark.parametrize(
     "buffer",
     [
@@ -554,7 +544,7 @@ def test_json_bool_values():
     ],
 )
 def test_json_null_literal(buffer):
-    df = cudf.read_json(StringIO(buffer), lines=True, engine="cudf_legacy")
+    df = cudf.read_json(StringIO(buffer), lines=True, engine="cudf")
 
     # first column contains a null field, type should be set to float
     # second column contains only empty fields, type should be set to int8
@@ -739,14 +729,8 @@ def test_default_integer_bitwidth(default_integer_bitwidth, engine):
 @pytest.mark.parametrize(
     "engine",
     [
-        pytest.param(
-            "cudf_legacy",
-            marks=pytest.mark.skip(
-                reason="cannot partially set dtypes for cudf json engine"
-            ),
-        ),
-        "pandas",
         "cudf",
+        "pandas",
     ],
 )
 def test_default_integer_bitwidth_partial(default_integer_bitwidth, engine):
