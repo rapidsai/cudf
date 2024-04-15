@@ -23,7 +23,6 @@ function(find_and_configure_nanoarrow)
     GIT_REPOSITORY https://github.com/apache/arrow-nanoarrow.git
     GIT_TAG 11e73a8c85b45e3d49c8c541b4e1497a649fe03c
     GIT_SHALLOW FALSE
-    CPM_ARGS
     OPTIONS "BUILD_SHARED_LIBS OFF" "NANOARROW_NAMESPACE cudf"
   )
   set_target_properties(nanoarrow PROPERTIES POSITION_INDEPENDENT_CODE ON)
