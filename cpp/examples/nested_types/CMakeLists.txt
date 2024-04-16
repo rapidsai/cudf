@@ -21,15 +21,16 @@ add_executable(deduplication deduplication.cpp)
 target_link_libraries(deduplication PRIVATE cudf::cudf)
 target_compile_features(deduplication PRIVATE cxx_std_17)
 
-# Install the example only if CMAKE_INSTALL_PREFIX is set
+# Force set CMAKE_INSTALL_PREFIX from environment variable
 if(NOT $ENV{CMAKE_INSTALL_PREFIX} STREQUAL "")
   # set the CMAKE_INSTALL_PREFIX to the environment variable value
   set(CMAKE_INSTALL_PREFIX
       "$ENV{CMAKE_INSTALL_PREFIX}"
       CACHE STRING "Force CMAKE_INSTALL_PREFIX to environment variable" FORCE
   )
-  install(TARGETS deduplication DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/examples/libcudf)
-  install(FILES ${CMAKE_CURRENT_LIST_DIR}/example.json
-          DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/examples/libcudf
-  )
 endif()
+
+install(TARGETS deduplication DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/examples/libcudf)
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/example.json
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/examples/libcudf
+)

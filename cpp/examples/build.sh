@@ -27,7 +27,7 @@ build_example() {
   cmake --build ${build_dir} -j${PARALLEL_LEVEL}
 
   # Install only if CMAKE_INSTALL_PREFIX is set
-  if [[ -n "${CMAKE_INSTALL_PREFIX}" ]]; then
+  if [[ -n "${CMAKE_INSTALL_PREFIX:-""}" ]]; then
     cmake --install ${build_dir}
   fi
 }
