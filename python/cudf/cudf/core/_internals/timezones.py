@@ -3,16 +3,18 @@
 import os
 import zoneinfo
 from functools import lru_cache
+from typing import Literal, Tuple
 
 import numpy as np
 
 from cudf._lib.timezone import make_timezone_transition_table
 from cudf.core.column.column import as_column
-from cudf.core.dataframe import DataFrame
+from cudf.core.column.datetime import DatetimeColumn
+from cudf.core.column.timedelta import TimeDeltaColumn
 
 
 @lru_cache(maxsize=20)
-def get_tz_data(zone_name) -> DataFrame:
+def get_tz_data(zone_name: str) -> Tuple[DatetimeColumn, TimeDeltaColumn]:
     """
     Return timezone data (transition times and UTC offsets) for the
     given IANA time zone.
@@ -36,14 +38,18 @@ def get_tz_data(zone_name) -> DataFrame:
     return tz_table
 
 
-def _find_and_read_tzfile_tzpath(zone_name) -> DataFrame:
+def _find_and_read_tzfile_tzpath(
+    zone_name: str,
+) -> Tuple[DatetimeColumn, TimeDeltaColumn]:
     for search_path in zoneinfo.TZPATH:
         if os.path.isfile(os.path.join(search_path, zone_name)):
             return _read_tzfile_as_frame(search_path, zone_name)
     raise zoneinfo.ZoneInfoNotFoundError(zone_name)
 
 
-def _find_and_read_tzfile_tzdata(zone_name) -> DataFrame:
+def _find_and_read_tzfile_tzdata(
+    zone_name: str,
+) -> Tuple[DatetimeColumn, TimeDeltaColumn]:
     import importlib.resources
 
     package_base = "tzdata.zoneinfo"
@@ -70,7 +76,9 @@ def _find_and_read_tzfile_tzdata(zone_name) -> DataFrame:
         raise zoneinfo.ZoneInfoNotFoundError(zone_name)
 
 
-def _read_tzfile_as_frame(tzdir, zone_name) -> DataFrame:
+def _read_tzfile_as_frame(
+    tzdir, zone_name: str
+) -> Tuple[DatetimeColumn, TimeDeltaColumn]:
     transition_times_and_offsets = make_timezone_transition_table(
         tzdir, zone_name
     )
@@ -78,19 +86,13 @@ def _read_tzfile_as_frame(tzdir, zone_name) -> DataFrame:
     if not transition_times_and_offsets:
         # this happens for UTC-like zones
         min_date = np.int64(np.iinfo("int64").min + 1).astype("M8[s]")
-        transition_times_and_offsets = (
-            as_column([min_date]),
-            as_column([np.timedelta64(0, "s")]),
-        )
-
-    return DataFrame._from_data(
-        dict(
-            zip(["transition_times", "offsets"], transition_times_and_offsets)
-        )
-    )
+        return (as_column([min_date]), as_column([np.timedelta64(0, "s")]))
+    return tuple(transition_times_and_offsets)  # type: ignore[return-value]
 
 
-def check_ambiguous_and_nonexistent(ambiguous, nonexistent) -> None:
+def check_ambiguous_and_nonexistent(
+    ambiguous: Literal["NaT"], nonexistent: Literal["NaT"]
+) -> None:
     if ambiguous != "NaT":
         raise NotImplementedError(
             "Only ambiguous='NaT' is currently supported"

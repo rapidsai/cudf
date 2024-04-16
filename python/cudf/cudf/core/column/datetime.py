@@ -718,19 +718,16 @@ class DatetimeColumn(column.ColumnBase):
         """
         from cudf.core._internals.timezones import get_tz_data
 
-        tz_data_for_zone = get_tz_data(zone_name)
-        transition_times = tz_data_for_zone["transition_times"]
-        offsets = tz_data_for_zone["offsets"].astype(
-            f"timedelta64[{self.time_unit}]"
-        )
+        transition_times, offsets = get_tz_data(zone_name)
+        offsets = offsets.astype(f"timedelta64[{self.time_unit}]")  # type: ignore[assignment]
 
         if len(offsets) == 1:  # no transitions
             return False, False
 
         transition_times, offsets, old_offsets = (
-            transition_times[1:]._column,
-            offsets[1:]._column,
-            offsets[:-1]._column,
+            transition_times.slice(1, len(transition_times)),
+            offsets.slice(1, len(offsets)),
+            offsets.slice(0, len(offsets) - 1),
         )
 
         # Assume we have two clocks at the moment of transition:
@@ -796,8 +793,7 @@ class DatetimeColumn(column.ColumnBase):
             cudf.Scalar(cudf.NaT, dtype=self.dtype),
         )
 
-        tz_data_for_zone = get_tz_data(tz)
-        transition_times, offsets = tz_data_for_zone._columns
+        transition_times, offsets = get_tz_data(tz)
         transition_times_local = (transition_times + offsets).astype(
             localized.dtype
         )
@@ -887,8 +883,7 @@ class DatetimeTZColumn(DatetimeColumn):
         """Return the local time as naive timestamps."""
         from cudf.core._internals.timezones import get_tz_data
 
-        tz_data_for_zone = get_tz_data(str(self.dtype.tz))
-        transition_times, offsets = tz_data_for_zone._columns
+        transition_times, offsets = get_tz_data(str(self.dtype.tz))
         transition_times = transition_times.astype(_get_base_dtype(self.dtype))
         indices = search_sorted([transition_times], [self], "right") - 1
         offsets_from_utc = offsets.take(indices, nullify=True)
