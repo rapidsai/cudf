@@ -28,8 +28,7 @@ build_example() {
 
   # Install only if CMAKE_INSTALL_PREFIX is set
   if [[ -n "${CMAKE_INSTALL_PREFIX}" ]]; then
-    echo "Setting prefix = ${CMAKE_INSTALL_PREFIX}"
-    cmake --install ${build_dir} --prefix /home/coder/testing/basic
+    cmake --install ${build_dir}
   fi
 }
 
