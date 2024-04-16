@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,11 @@
 #include <cudf/lists/detail/gather.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <thrust/binary_search.h>
-#include <thrust/execution_policy.h>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
-
-#include <rmm/cuda_stream_view.hpp>
+#include <thrust/binary_search.h>
+#include <thrust/execution_policy.h>
 
 namespace cudf {
 namespace lists {

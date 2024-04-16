@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@
 #include "in_reg_array.cuh"
 
 #include <cub/cub.cuh>
-
 #include <thrust/execution_policy.h>
 #include <thrust/sequence.h>
 
@@ -92,7 +91,7 @@ class DFASimulationCallbackWrapper {
   {
     uint32_t const count = transducer_table(old_state, symbol_id, read_symbol);
     if (write) {
-#if __CUDA_ARCH__ > 0
+#if defined(__CUDA_ARCH__)
 #pragma unroll 1
 #endif
       for (uint32_t out_char = 0; out_char < count; out_char++) {
@@ -493,7 +492,7 @@ template <bool IS_TRANS_VECTOR_PASS,
           typename TransducedOutItT,
           typename TransducedIndexOutItT,
           typename TransducedCountOutItT>
-__launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
+__launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
   void SimulateDFAKernel(DfaT dfa,
                          SymbolItT d_chars,
                          OffsetT const num_chars,

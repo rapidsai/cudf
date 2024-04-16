@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -211,7 +211,7 @@ __device__ inline T round_up_pow2(T number_to_round, T modulus)
 }
 
 template <class F>
-__global__ void single_thread_kernel(F f)
+CUDF_KERNEL void single_thread_kernel(F f)
 {
   f();
 }

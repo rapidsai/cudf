@@ -455,18 +455,27 @@ Column comparison functions in the `cudf::test::detail` namespace should **NOT**
 
 ### Printing and accessing column data
 
-`include/cudf_test/column_utilities.hpp` defines various functions and overloads for printing
+The `<cudf_test/debug_utilities.hpp>` header defines various functions and overloads for printing
 columns (`print`), converting column data to string (`to_string`, `to_strings`), and copying data to
-the host (`to_host`).
-
+the host (`to_host`). For example, to print a `cudf::column_view` contents or `column_wrapper` instance
+to the console use the `cudf::test::print()`:
+```cpp
+  cudf::test::fixed_width_column_wrapper<int32_t> input({1,2,3,4});
+  auto splits = cudf::split(input,{2});
+  cudf::test::print(input);
+  cudf::test::print(splits.front());
+```
+Fixed-width and strings columns output as comma-separated entries including null rows.
+Nested columns are also supported and output includes the offsets and data children as well as
+the null mask bits.
 
 ## Validating Stream Usage
 
 ### Background
 
-libcudf employs a custom-built [preload library
-docs](https://man7.org/linux/man-pages/man8/ld.so.8.html) to validate its internal stream usage (the
-code may be found
+libcudf employs a custom-built [preload
+library](https://man7.org/linux/man-pages/man8/ld.so.8.html) to validate its internal stream usage
+(the code may be found
 [`here`](https://github.com/rapidsai/cudf/blob/main/cpp/tests/utilities/identify_stream_usage.cpp)).
 This library wraps every asynchronous CUDA runtime API call that accepts a stream with a check to
 ensure that the passed CUDA stream is a valid one, immediately throwing an exception if an invalid

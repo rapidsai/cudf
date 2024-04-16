@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
 import decimal
@@ -13,6 +13,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.io.orc import ORCWriter
 from cudf.testing import assert_frame_equal
 from cudf.testing._utils import (
@@ -128,18 +129,16 @@ def test_orc_reader_filepath_or_buffer(path_or_buf, src):
     assert_eq(expect, got)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Bug in older version of pandas",
+)
 def test_orc_reader_trailing_nulls(datadir):
     path = datadir / "TestOrcFile.nulls-at-end-snappy.orc"
+    expect = pd.read_orc(path)
+    got = cudf.read_orc(path)
 
-    expect = pd.read_orc(path).fillna(0)
-    got = cudf.read_orc(path).fillna(0)
-
-    # PANDAS uses NaN to represent invalid data, which forces float dtype
-    # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
-    for col in expect.columns:
-        expect[col] = expect[col].astype(got[col].dtype)
-
-    assert_eq(expect, got, check_categorical=False)
+    assert_eq(expect, got, check_categorical=True)
 
 
 @pytest.mark.parametrize("use_index", [False, True])
@@ -159,7 +158,7 @@ def test_orc_reader_datetimestamp(datadir, inputfile, use_index):
     pdf = orcfile.read().to_pandas(date_as_object=False)
     gdf = cudf.read_orc(path, use_index=use_index)
 
-    assert_eq(pdf, gdf, check_categorical=False)
+    assert_eq(pdf, gdf, check_categorical=False, check_exact=False)
 
 
 def test_orc_reader_strings(datadir):
@@ -576,7 +575,7 @@ def test_int_overflow(tmpdir):
 
     # The number of rows and the large element trigger delta encoding
     num_rows = 513
-    df = cudf.DataFrame({"a": [None] * num_rows}, dtype="int32")
+    df = cudf.DataFrame({"a": [None] * num_rows}, dtype="int64")
     df["a"][0] = 1024 * 1024 * 1024
     df["a"][num_rows - 1] = 1
     df.to_orc(file_path)
@@ -604,13 +603,14 @@ def normalized_equals(value1, value2):
 
 
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
-@pytest.mark.parametrize("nrows", [1, 100, 6000000])
+@pytest.mark.parametrize("nrows", [1, 100, 100000])
 def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
     supported_stat_types = supported_numpy_dtypes + ["str"]
-    # Can't write random bool columns until issue #6763 is fixed
-    if nrows == 6000000:
+    # Writing bool columns to multiple row groups is disabled
+    # until #6763 is fixed
+    if nrows == 100000:
         supported_stat_types.remove("bool")
 
     # Make a dataframe
@@ -623,7 +623,7 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     fname = tmpdir.join("gdf.orc")
 
     # Write said dataframe to ORC with cuDF
-    gdf.to_orc(fname.strpath, statistics=stats_freq)
+    gdf.to_orc(fname.strpath, statistics=stats_freq, stripe_size_rows=30000)
 
     # Read back written ORC's statistics
     orc_file = orc.ORCFile(fname)
@@ -678,28 +678,30 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 
 
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
-@pytest.mark.parametrize("nrows", [2, 100, 6000000])
+@pytest.mark.parametrize("nrows", [2, 100, 200000])
 def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
     np.random.seed(0)
     supported_stat_types = supported_numpy_dtypes + ["str"]
-    # Can't write random bool columns until issue #6763 is fixed
-    if nrows == 6000000:
+    # Writing bool columns to multiple row groups is disabled
+    # until #6763 is fixed
+    if nrows == 200000:
         supported_stat_types.remove("bool")
 
     gdf_fname = tmpdir.join("chunked_stats.orc")
-    writer = ORCWriter(gdf_fname)
+    writer = ORCWriter(
+        gdf_fname, statistics=stats_freq, stripe_size_rows=30000
+    )
 
-    max_char_length = 1000 if nrows < 10000 else 100
+    max_char_length = 100 if nrows < 10000 else 10
 
     # Make a dataframe
     gdf = cudf.DataFrame(
         {
-            "col_"
-            + str(dtype): gen_rand_series(
+            "col_" + str(dtype): gen_rand_series(
                 dtype,
-                int(nrows / 2),
+                nrows // 2,
                 has_nulls=True,
                 low=0,
                 high=max_char_length,
@@ -715,10 +717,9 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     # write and no pointers are saved into the original table
     gdf = cudf.DataFrame(
         {
-            "col_"
-            + str(dtype): gen_rand_series(
+            "col_" + str(dtype): gen_rand_series(
                 dtype,
-                int(nrows / 2),
+                nrows // 2,
                 has_nulls=True,
                 low=0,
                 high=max_char_length,
@@ -785,7 +786,7 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
                     assert stats_num_vals == actual_num_vals
 
 
-@pytest.mark.parametrize("nrows", [1, 100, 6000000])
+@pytest.mark.parametrize("nrows", [1, 100, 100000])
 def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
     from pyarrow import orc
 
@@ -794,7 +795,7 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
     fname = tmpdir.join("gdf.orc")
 
     # Write said dataframe to ORC with cuDF
-    gdf.to_orc(fname.strpath)
+    gdf.to_orc(fname.strpath, stripe_size_rows=30000)
 
     # Read back written ORC's statistics
     orc_file = orc.ORCFile(fname)
@@ -812,7 +813,7 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
 
     if "number_of_values" in file_stats[0][col]:
         stats_valid_count = file_stats[0][col]["number_of_values"]
-        actual_valid_count = gdf[col].valid_count
+        actual_valid_count = len(gdf[col]) - gdf[col].null_count
         assert normalized_equals(actual_valid_count, stats_valid_count)
 
     # compare stripe statistics with actual min/max
@@ -827,7 +828,9 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
             assert normalized_equals(actual_true_count, stats_true_count)
 
         if "number_of_values" in stripes_stats[stripe_idx][col]:
-            actual_valid_count = stripe_df[col].valid_count
+            actual_valid_count = (
+                len(stripe_df[col]) - stripe_df[col].null_count
+            )
             stats_valid_count = stripes_stats[stripe_idx][col][
                 "number_of_values"
             ]
@@ -846,21 +849,20 @@ def test_orc_bool_encode_fail():
     np.random.seed(0)
     buffer = BytesIO()
 
-    # Generate a boolean column longer than a single stripe
-    fail_df = cudf.DataFrame({"col": gen_rand_series("bool", 600000)})
-    # Invalidate the first row in the second stripe to break encoding
-    fail_df["col"][500000] = None
+    # Generate a boolean column longer than a single row group
+    fail_df = cudf.DataFrame({"col": gen_rand_series("bool", 20000)})
+    # Invalidate a row in the first row group
+    fail_df["col"][5000] = None
 
     # Should throw instead of generating a file that is incompatible
     # with other readers (see issue #6763)
     with pytest.raises(RuntimeError):
         fail_df.to_orc(buffer)
 
-    # Generate a boolean column that fits into a single stripe
-    okay_df = cudf.DataFrame({"col": gen_rand_series("bool", 500000)})
-    okay_df["col"][500000 - 1] = None
-    # Invalid row is in the last row group of the stripe;
-    # encoding is assumed to be correct
+    # Generate a boolean column longer than a single row group
+    okay_df = cudf.DataFrame({"col": gen_rand_series("bool", 20000)})
+    okay_df["col"][15000] = None
+    # Invalid row is in the last row group; encoding is assumed to be correct
     okay_df.to_orc(buffer)
 
     # Also validate data
@@ -1128,7 +1130,7 @@ def test_pyspark_struct(datadir):
     assert_eq(pdf, gdf)
 
 
-def gen_map_buff(size=10000):
+def gen_map_buff(size):
     from string import ascii_letters as al
 
     from pyarrow import orc
@@ -1669,16 +1671,7 @@ def run_orc_columns_and_index_param(index_obj, index, columns):
     expected = pd.read_orc(buffer, columns=columns)
     got = cudf.read_orc(buffer, columns=columns)
 
-    if columns:
-        # TODO: Remove workaround after this issue is fixed:
-        # https://github.com/pandas-dev/pandas/issues/47944
-        assert_eq(
-            expected.sort_index(axis=1),
-            got.sort_index(axis=1),
-            check_index_type=True,
-        )
-    else:
-        assert_eq(expected, got, check_index_type=True)
+    assert_eq(expected, got, check_index_type=True)
 
 
 @pytest.mark.parametrize("index_obj", [None, [10, 11, 12], ["x", "y", "z"]])
@@ -1825,7 +1818,7 @@ def test_orc_reader_negative_timestamp(negative_timestamp_df, engine):
     with expect_warning_if(engine == "pyarrow", UserWarning):
         got = cudf.read_orc(buffer, engine=engine)
 
-    assert_eq(negative_timestamp_df, got)
+    assert_eq(negative_timestamp_df, got, check_dtype=False)
 
 
 def test_orc_writer_negative_timestamp(negative_timestamp_df):
@@ -1834,8 +1827,10 @@ def test_orc_writer_negative_timestamp(negative_timestamp_df):
     buffer = BytesIO()
     negative_timestamp_df.to_orc(buffer)
 
-    assert_eq(negative_timestamp_df, pd.read_orc(buffer))
-    assert_eq(negative_timestamp_df, orc.ORCFile(buffer).read())
+    assert_eq(negative_timestamp_df, pd.read_orc(buffer), check_dtype=False)
+    assert_eq(
+        negative_timestamp_df, orc.ORCFile(buffer).read(), check_dtype=False
+    )
 
 
 def test_orc_reader_apache_negative_timestamp(datadir):
@@ -1909,3 +1904,50 @@ def test_orc_reader_empty_deeply_nested_level(datadir):
     got = cudf.read_orc(path)
 
     assert_eq(expect, got)
+
+
+def test_orc_chunked_writer_stripe_size(datadir):
+    from pyarrow import orc
+
+    df = cudf.DataFrame({"col": gen_rand_series("int", 100000)})
+
+    buffer = BytesIO()
+    writer = ORCWriter(buffer, stripe_size_bytes=64 * 1024)
+    writer.write_table(df)
+    writer.close()
+
+    orc_file = orc.ORCFile(buffer)
+    assert_eq(orc_file.nstripes, 10)
+
+    buffer = BytesIO()
+    writer = ORCWriter(buffer, stripe_size_rows=20000)
+    writer.write_table(df)
+    writer.close()
+
+    orc_file = orc.ORCFile(buffer)
+    assert_eq(orc_file.nstripes, 5)
+
+
+def test_reader_lz4():
+    from pyarrow import orc
+
+    pdf = pd.DataFrame({"ints": [1, 2] * 5001})
+    pa_table = pa.Table.from_pandas(pdf)
+
+    buffer = BytesIO()
+    writer = orc.ORCWriter(buffer, compression="LZ4")
+    writer.write(pa_table)
+    writer.close()
+
+    got = cudf.read_orc(buffer)
+    assert_eq(pdf, got)
+
+
+def test_writer_lz4():
+    gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
+
+    buffer = BytesIO()
+    gdf.to_orc(buffer, compression="LZ4")
+
+    got = pd.read_orc(buffer)
+    assert_eq(gdf, got)

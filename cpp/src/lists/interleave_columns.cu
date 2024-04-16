@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -37,8 +38,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
-
-#include <cuda/functional>
 
 namespace cudf {
 namespace lists {
@@ -193,8 +192,7 @@ struct compute_string_sizes_and_interleave_lists_fn {
       auto const start_byte = str_offsets[start_str_idx];
       auto const end_byte   = str_offsets[end_str_idx];
       if (start_byte < end_byte) {
-        auto const input_ptr =
-          str_col.child(strings_column_view::chars_column_index).template data<char>() + start_byte;
+        auto const input_ptr  = str_col.template head<char>() + start_byte;
         auto const output_ptr = d_chars + d_offsets[write_idx];
         thrust::copy(thrust::seq, input_ptr, input_ptr + end_byte - start_byte, output_ptr);
       }
@@ -230,7 +228,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
       rmm::device_uvector<int8_t>(data_has_null_mask ? num_output_entries : 0, stream);
     comp_fn.d_validities = validities.data();
 
-    auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
+    auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
       comp_fn, num_output_lists, num_output_entries, stream, mr);
 
     auto [null_mask, null_count] =
@@ -238,7 +236,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
 
     return make_strings_column(num_output_entries,
                                std::move(offsets_column),
-                               std::move(chars_column),
+                               chars.release(),
                                null_count,
                                std::move(null_mask));
   }

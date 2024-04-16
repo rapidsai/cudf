@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -13,7 +13,7 @@
 # =============================================================================
 cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
-include(../../../../fetch_rapids.cmake)
+include(../../../../rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cuda)
 include(rapids-find)
@@ -28,7 +28,7 @@ rapids_cuda_init_architectures(CUDF_JNI)
 
 project(
   CUDF_JNI
-  VERSION 24.02.00
+  VERSION "${RAPIDS_VERSION}"
   LANGUAGES C CXX CUDA
 )
 
@@ -93,6 +93,10 @@ rapids_cmake_build_type("Release")
 
 set(cudf_ROOT "${CUDF_CPP_BUILD_DIR}")
 rapids_find_package(cudf REQUIRED)
+
+# ##################################################################################################
+# * nvtx3-------------------------------------------------------------------------------------------
+include(${CUDF_SOURCE_DIR}/cmake/thirdparty/get_nvtx.cmake)
 
 # ##################################################################################################
 # * nvcomp------------------------------------------------------------------------------------------
@@ -235,7 +239,7 @@ endif()
 # When nvcomp is installed we need to use nvcomp::nvcomp but from the cudf build directory it will
 # just be nvcomp.
 target_link_libraries(
-  cudfjni ${CUDF_LINK} PRIVATE $<TARGET_NAME_IF_EXISTS:nvcomp>
+  cudfjni ${CUDF_LINK} PRIVATE nvtx3-cpp $<TARGET_NAME_IF_EXISTS:nvcomp>
                                $<TARGET_NAME_IF_EXISTS:nvcomp::nvcomp>
 )
 

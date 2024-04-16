@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/structs/structs_column_view.hpp>
@@ -229,6 +230,7 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
                                                       rmm::cuda_stream_view stream,
                                                       rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   if (input->type().id() == cudf::type_id::EMPTY) {
     // EMPTY columns should not have a null mask,
     // so don't superimpose null mask on empty columns.
@@ -258,19 +260,11 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
   // If the input is also a struct, repeat for all its children. Otherwise just return.
   if (input->type().id() != cudf::type_id::STRUCT) { return std::move(input); }
 
-  auto const current_mask   = input->view().null_mask();
   auto const new_null_count = input->null_count();  // this was just computed in the step above
   auto content              = input->release();
 
-  // Build new children columns.
-  std::for_each(content.children.begin(),
-                content.children.end(),
-                [current_mask, new_null_count, stream, mr](auto& child) {
-                  child = superimpose_nulls_no_sanitize(
-                    current_mask, new_null_count, std::move(child), stream, mr);
-                });
-
   // Replace the children columns.
+  // make_structs_column recursively calls superimpose_nulls
   return cudf::make_structs_column(num_rows,
                                    std::move(content.children),
                                    new_null_count,

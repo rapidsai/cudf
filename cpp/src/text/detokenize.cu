@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <nvtext/tokenize.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -29,6 +27,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <nvtext/tokenize.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -156,7 +156,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
 
   cudf::string_view const d_separator(separator.data(), separator.size());
 
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     detokenizer_fn{*strings_column, d_row_map, tokens_offsets.data(), d_separator},
     output_count,
     stream,
@@ -164,7 +164,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
 
   // make the output strings column from the offsets and chars column
   return cudf::make_strings_column(
-    output_count, std::move(children.first), std::move(children.second), 0, rmm::device_buffer{});
+    output_count, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

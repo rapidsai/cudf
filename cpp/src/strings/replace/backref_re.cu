@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,8 @@
  */
 
 #include "backref_re.cuh"
-
-#include <strings/regex/regex_program_impl.h>
-#include <strings/regex/utilities.cuh>
+#include "strings/regex/regex_program_impl.h"
+#include "strings/regex/utilities.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -126,8 +125,8 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
-  using BackRefIterator = decltype(backrefs.begin());
-  auto children         = make_strings_children(
+  using BackRefIterator        = decltype(backrefs.begin());
+  auto [offsets_column, chars] = make_strings_children(
     backrefs_fn<BackRefIterator>{*d_strings, d_repl_template, backrefs.begin(), backrefs.end()},
     *d_prog,
     input.size(),
@@ -135,8 +134,8 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
     mr);
 
   return make_strings_column(input.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             chars.release(),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }

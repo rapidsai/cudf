@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,18 @@
  * limitations under the License.
  */
 
+#include "io/utilities/string_parsing.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <io/utilities/string_parsing.hpp>
-
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
@@ -32,6 +34,8 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/adjacent_difference.h>
 
 #include <algorithm>
 #include <iterator>
@@ -42,25 +46,15 @@ using namespace cudf::test::iterators;
 struct JSONTypeCastTest : public cudf::test::BaseFixture {};
 
 namespace {
-struct offsets_to_length {
-  __device__ cudf::size_type operator()(thrust::tuple<cudf::size_type, cudf::size_type> const& p)
-  {
-    return thrust::get<1>(p) - thrust::get<0>(p);
-  }
-};
 
 /// Returns length of each string in the column
 auto string_offset_to_length(cudf::strings_column_view const& column, rmm::cuda_stream_view stream)
 {
-  auto offsets_begin = column.offsets_begin();
-  auto offsets_pair =
-    thrust::make_zip_iterator(thrust::make_tuple(offsets_begin, thrust::next(offsets_begin)));
   rmm::device_uvector<cudf::size_type> svs_length(column.size(), stream);
-  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
-                    offsets_pair,
-                    offsets_pair + column.size(),
-                    svs_length.begin(),
-                    offsets_to_length{});
+  auto itr =
+    cudf::detail::offsetalator_factory::make_input_iterator(column.offsets(), column.offset());
+  thrust::adjacent_difference(
+    rmm::exec_policy(stream), itr + 1, itr + column.size() + 1, svs_length.begin());
   return svs_length;
 }
 }  // namespace
@@ -94,8 +88,9 @@ TEST_F(JSONTypeCastTest, String)
     std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + column.size()));
 
   auto str_col = cudf::io::json::detail::parse_data(
-    column.chars().data<char>(),
-    thrust::make_zip_iterator(thrust::make_tuple(column.offsets_begin(), svs_length.begin())),
+    column.chars_begin(stream),
+    thrust::make_zip_iterator(
+      thrust::make_tuple(column.offsets().begin<cudf::size_type>(), svs_length.begin())),
     column.size(),
     type,
     std::move(null_mask),
@@ -127,8 +122,9 @@ TEST_F(JSONTypeCastTest, Int)
     std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + column.size()));
 
   auto col = cudf::io::json::detail::parse_data(
-    column.chars().data<char>(),
-    thrust::make_zip_iterator(thrust::make_tuple(column.offsets_begin(), svs_length.begin())),
+    column.chars_begin(stream),
+    thrust::make_zip_iterator(
+      thrust::make_tuple(column.offsets().begin<cudf::size_type>(), svs_length.begin())),
     column.size(),
     type,
     std::move(null_mask),
@@ -167,8 +163,9 @@ TEST_F(JSONTypeCastTest, StringEscapes)
     std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + column.size()));
 
   auto col = cudf::io::json::detail::parse_data(
-    column.chars().data<char>(),
-    thrust::make_zip_iterator(thrust::make_tuple(column.offsets_begin(), svs_length.begin())),
+    column.chars_begin(stream),
+    thrust::make_zip_iterator(
+      thrust::make_tuple(column.offsets().begin<cudf::size_type>(), svs_length.begin())),
     column.size(),
     type,
     std::move(null_mask),
@@ -236,8 +233,9 @@ TEST_F(JSONTypeCastTest, ErrorNulls)
       std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + column.size()));
 
     auto str_col = cudf::io::json::detail::parse_data(
-      column.chars().data<char>(),
-      thrust::make_zip_iterator(thrust::make_tuple(column.offsets_begin(), svs_length.begin())),
+      column.chars_begin(stream),
+      thrust::make_zip_iterator(
+        thrust::make_tuple(column.offsets().begin<cudf::size_type>(), svs_length.begin())),
       column.size(),
       type,
       std::move(null_mask),

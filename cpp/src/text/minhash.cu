@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <nvtext/minhash.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -31,15 +29,16 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <nvtext/minhash.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/atomic>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 
 #include <limits>
-
-#include <cuda/atomic>
 
 namespace nvtext {
 namespace detail {
@@ -62,10 +61,10 @@ template <
   typename HashFunction,
   typename hash_value_type = std::
     conditional_t<std::is_same_v<typename HashFunction::result_type, uint32_t>, uint32_t, uint64_t>>
-__global__ void minhash_kernel(cudf::column_device_view const d_strings,
-                               cudf::device_span<hash_value_type const> seeds,
-                               cudf::size_type width,
-                               hash_value_type* d_hashes)
+CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
+                                cudf::device_span<hash_value_type const> seeds,
+                                cudf::size_type width,
+                                hash_value_type* d_hashes)
 {
   auto const idx = static_cast<std::size_t>(threadIdx.x + blockIdx.x * blockDim.x);
   if (idx >= (static_cast<std::size_t>(d_strings.size()) *

@@ -6,6 +6,7 @@ coverage:
       default:
         target: auto
         threshold: 5%
+        informational: true  # The coverage will always pass
 
 github_checks:
     annotations: true

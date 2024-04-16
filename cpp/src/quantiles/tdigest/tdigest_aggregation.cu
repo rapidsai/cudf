@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <quantiles/tdigest/tdigest_util.cuh>
+#include "quantiles/tdigest/tdigest_util.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
@@ -28,11 +28,13 @@
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/advance.h>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
@@ -51,8 +53,6 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
-
-#include <cuda/functional>
 
 namespace cudf {
 namespace tdigest {
@@ -74,7 +74,7 @@ struct make_centroid {
   centroid operator() __device__(size_type index) const
   {
     auto const is_valid = col.is_valid(index);
-    auto const mean     = is_valid ? static_cast<double>(col.element<T>(index)) : 0.0;
+    auto const mean     = is_valid ? convert_to_floating<double>(col.element<T>(index)) : 0.0;
     auto const weight   = is_valid ? 1.0 : 0.0;
     return {mean, weight, is_valid};
   }
@@ -88,7 +88,7 @@ struct make_centroid_no_nulls {
 
   centroid operator() __device__(size_type index) const
   {
-    return {static_cast<double>(col.element<T>(index)), 1.0, true};
+    return {convert_to_floating<double>(col.element<T>(index)), 1.0, true};
   }
 };
 
@@ -370,15 +370,15 @@ std::unique_ptr<scalar> to_tdigest_scalar(std::unique_ptr<column>&& tdigest,
  */
 
 template <typename GroupInfo, typename NearestWeightFunc, typename CumulativeWeight>
-__global__ void generate_cluster_limits_kernel(int delta,
-                                               size_type num_groups,
-                                               NearestWeightFunc nearest_weight,
-                                               GroupInfo group_info,
-                                               CumulativeWeight cumulative_weight,
-                                               double* group_cluster_wl,
-                                               size_type* group_num_clusters,
-                                               size_type const* group_cluster_offsets,
-                                               bool has_nulls)
+CUDF_KERNEL void generate_cluster_limits_kernel(int delta,
+                                                size_type num_groups,
+                                                NearestWeightFunc nearest_weight,
+                                                GroupInfo group_info,
+                                                CumulativeWeight cumulative_weight,
+                                                double* group_cluster_wl,
+                                                size_type* group_num_clusters,
+                                                size_type const* group_cluster_offsets,
+                                                bool has_nulls)
 {
   int const tid = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -809,8 +809,9 @@ struct get_scalar_minmax_grouped {
     auto const valid_count = group_valid_counts[group_index];
     return valid_count > 0
              ? thrust::make_tuple(
-                 static_cast<double>(col.element<T>(group_offsets[group_index])),
-                 static_cast<double>(col.element<T>(group_offsets[group_index] + valid_count - 1)))
+                 convert_to_floating<double>(col.element<T>(group_offsets[group_index])),
+                 convert_to_floating<double>(
+                   col.element<T>(group_offsets[group_index] + valid_count - 1)))
              : thrust::make_tuple(0.0, 0.0);
   }
 };
@@ -824,8 +825,8 @@ struct get_scalar_minmax {
   __device__ thrust::tuple<double, double> operator()(size_type)
   {
     return valid_count > 0
-             ? thrust::make_tuple(static_cast<double>(col.element<T>(0)),
-                                  static_cast<double>(col.element<T>(valid_count - 1)))
+             ? thrust::make_tuple(convert_to_floating<double>(col.element<T>(0)),
+                                  convert_to_floating<double>(col.element<T>(valid_count - 1)))
              : thrust::make_tuple(0.0, 0.0);
   }
 };

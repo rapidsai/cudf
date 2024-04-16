@@ -1742,7 +1742,7 @@ public class JCudfSerialization {
       }
       DType dtype = column.getType();
       long bufferAddress = combinedBuffer.getAddress();
-      long dataAddress = dtype.isNestedType() ? 0 : bufferAddress + offsetsInfo.data;
+      long dataAddress = offsetsInfo.dataLen == 0 ? 0 : bufferAddress + offsetsInfo.data;
       long validityAddress = needsValidityBuffer(column.getNullCount())
           ? bufferAddress + offsetsInfo.validity : 0;
       long offsetsAddress = dtype.hasOffsets() ? bufferAddress + offsetsInfo.offsets : 0;

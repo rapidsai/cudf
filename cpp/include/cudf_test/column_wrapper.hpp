@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,10 @@
  */
 
 #pragma once
+
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/default_stream.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -32,10 +36,6 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/default_stream.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -757,20 +757,21 @@ class strings_column_wrapper : public detail::column_wrapper {
   strings_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{}
   {
     size_type num_strings = std::distance(begin, end);
+    if (num_strings == 0) {
+      wrapped = cudf::make_empty_column(cudf::type_id::STRING);
+      return;
+    }
     auto all_valid        = thrust::make_constant_iterator(true);
     auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, all_valid);
-    auto d_chars          = std::make_unique<cudf::column>(
-      cudf::detail::make_device_uvector_sync(
-        chars, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
-      rmm::device_buffer{},
-      0);
+    auto d_chars          = cudf::detail::make_device_uvector_async(
+      chars, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
     auto d_offsets = std::make_unique<cudf::column>(
       cudf::detail::make_device_uvector_sync(
         offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
       rmm::device_buffer{},
       0);
     wrapped =
-      cudf::make_strings_column(num_strings, std::move(d_offsets), std::move(d_chars), 0, {});
+      cudf::make_strings_column(num_strings, std::move(d_offsets), d_chars.release(), 0, {});
   }
 
   /**
@@ -805,23 +806,24 @@ class strings_column_wrapper : public detail::column_wrapper {
   strings_column_wrapper(StringsIterator begin, StringsIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    size_type num_strings        = std::distance(begin, end);
+    size_type num_strings = std::distance(begin, end);
+    if (num_strings == 0) {
+      wrapped = cudf::make_empty_column(cudf::type_id::STRING);
+      return;
+    }
     auto [chars, offsets]        = detail::make_chars_and_offsets(begin, end, v);
     auto [null_mask, null_count] = detail::make_null_mask_vector(v, v + num_strings);
-    auto d_chars                 = std::make_unique<cudf::column>(
-      cudf::detail::make_device_uvector_sync(
-        chars, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
-      rmm::device_buffer{},
-      0);
+    auto d_chars                 = cudf::detail::make_device_uvector_async(
+      chars, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
     auto d_offsets = std::make_unique<cudf::column>(
-      cudf::detail::make_device_uvector_sync(
+      cudf::detail::make_device_uvector_async(
         offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
       rmm::device_buffer{},
       0);
     auto d_bitmask = cudf::detail::make_device_uvector_sync(
       null_mask, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
     wrapped = cudf::make_strings_column(
-      num_strings, std::move(d_offsets), std::move(d_chars), null_count, d_bitmask.release());
+      num_strings, std::move(d_offsets), d_chars.release(), null_count, d_bitmask.release());
   }
 
   /**
@@ -1818,12 +1820,12 @@ class structs_column_wrapper : public detail::column_wrapper {
    * child_columns.push_back(std::move(child_int_col));
    * child_columns.push_back(std::move(child_string_col));
    *
-   * struct_column_wrapper struct_column_wrapper{
+   * structs_column_wrapper structs_col{
    *  child_cols,
    *  {1,0,1,0,1} // Validity.
    * };
    *
-   * auto struct_col {struct_column_wrapper.release()};
+   * auto struct_col {structs_col.release()};
    * @endcode
    *
    * @param child_columns The vector of pre-constructed child columns
@@ -1844,12 +1846,12 @@ class structs_column_wrapper : public detail::column_wrapper {
    * fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
    * string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
    *
-   * struct_column_wrapper struct_column_wrapper{
+   * structs_column_wrapper structs_col{
    *  {child_int_col_wrapper, child_string_col_wrapper}
    *  {1,0,1,0,1} // Validity.
    * };
    *
-   * auto struct_col {struct_column_wrapper.release()};
+   * auto struct_col {structs_col.release()};
    * @endcode
    *
    * @param child_column_wrappers The list of child column wrappers
@@ -1880,12 +1882,12 @@ class structs_column_wrapper : public detail::column_wrapper {
    * fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
    * string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
    *
-   * struct_column_wrapper struct_column_wrapper{
+   * structs_column_wrapper structs_col{
    *  {child_int_col_wrapper, child_string_col_wrapper}
    *  cudf::detail::make_counting_transform_iterator(0, [](auto i){ return i%2; }) // Validity.
    * };
    *
-   * auto struct_col {struct_column_wrapper.release()};
+   * auto struct_col {structs_col.release()};
    * @endcode
    *
    * @param child_column_wrappers The list of child column wrappers

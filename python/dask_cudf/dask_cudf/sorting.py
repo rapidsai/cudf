@@ -1,6 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+import warnings
 from collections.abc import Iterator
+from functools import wraps
 
 import cupy
 import numpy as np
@@ -14,11 +16,36 @@ from dask.dataframe.shuffle import rearrange_by_column
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M
 
-import cudf as gd
-from cudf.api.types import is_categorical_dtype
+import cudf
+from cudf.api.types import _is_categorical_dtype
 from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
 
 _SHUFFLE_SUPPORT = ("tasks", "p2p")  # "disk" not supported
+
+
+def _deprecate_shuffle_kwarg(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        old_arg_value = kwargs.pop("shuffle", None)
+
+        if old_arg_value is not None:
+            new_arg_value = old_arg_value
+            msg = (
+                "the 'shuffle' keyword is deprecated, "
+                "use 'shuffle_method' instead."
+            )
+
+            warnings.warn(msg, FutureWarning)
+            if kwargs.get("shuffle_method") is not None:
+                msg = (
+                    "Can only specify 'shuffle' "
+                    "or 'shuffle_method', not both."
+                )
+                raise TypeError(msg)
+            kwargs["shuffle_method"] = new_arg_value
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 @_dask_cudf_nvtx_annotate
@@ -91,7 +118,7 @@ def merge_quantiles(finalq, qs, vals):
         return val
 
     # Sort by calculated quantile values, then number of observations.
-    combined_vals_counts = gd.core.reshape._merge_sorted(
+    combined_vals_counts = cudf.core.reshape._merge_sorted(
         [*map(_append_counts, vals, counts)]
     )
     combined_counts = cupy.asnumpy(combined_vals_counts["_counts"].values)
@@ -153,7 +180,7 @@ def _approximate_quantile(df, q):
 
     if len(qs) == 0:
         name = "quantiles-" + token
-        empty_index = gd.Index([], dtype=float)
+        empty_index = cudf.Index([], dtype=float)
         return Series(
             {
                 (name, 0): final_type(
@@ -203,7 +230,7 @@ def quantile_divisions(df, by, npartitions):
     if (
         len(columns) == 1
         and df[columns[0]].dtype != "object"
-        and not is_categorical_dtype(df[columns[0]].dtype)
+        and not _is_categorical_dtype(df[columns[0]].dtype)
     ):
         dtype = df[columns[0]].dtype
         divisions = divisions[columns[0]].astype("int64")
@@ -229,6 +256,7 @@ def quantile_divisions(df, by, npartitions):
     return divisions
 
 
+@_deprecate_shuffle_kwarg
 @_dask_cudf_nvtx_annotate
 def sort_values(
     df,
@@ -277,7 +305,7 @@ def sort_values(
 
     # Step 2 - Perform repartitioning shuffle
     meta = df._meta._constructor_sliced([0])
-    if not isinstance(divisions, (gd.Series, gd.DataFrame)):
+    if not isinstance(divisions, (cudf.Series, cudf.DataFrame)):
         dtype = df[by[0]].dtype
         divisions = df._meta._constructor_sliced(divisions, dtype=dtype)
 
@@ -302,7 +330,7 @@ def sort_values(
 
     # Step 3 - Return final sorted df
     df4 = df3.map_partitions(sort_function, **sort_kwargs)
-    if not isinstance(divisions, gd.DataFrame) and set_divisions:
+    if not isinstance(divisions, cudf.DataFrame) and set_divisions:
         # Can't have multi-column divisions elsewhere in dask (yet)
         df4.divisions = tuple(methods.tolist(divisions))
 

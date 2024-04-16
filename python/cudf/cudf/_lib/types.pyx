@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from enum import IntEnum
 
@@ -238,15 +238,15 @@ cdef dtype_from_column_view(column_view cv):
 
 cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
     cdef libcudf_types.type_id tid
-    if cudf.api.types.is_list_dtype(dtype):
+    if isinstance(dtype, cudf.ListDtype):
         tid = libcudf_types.type_id.LIST
-    elif cudf.api.types.is_struct_dtype(dtype):
+    elif isinstance(dtype, cudf.StructDtype):
         tid = libcudf_types.type_id.STRUCT
-    elif cudf.api.types.is_decimal128_dtype(dtype):
+    elif isinstance(dtype, cudf.Decimal128Dtype):
         tid = libcudf_types.type_id.DECIMAL128
-    elif cudf.api.types.is_decimal64_dtype(dtype):
+    elif isinstance(dtype, cudf.Decimal64Dtype):
         tid = libcudf_types.type_id.DECIMAL64
-    elif cudf.api.types.is_decimal32_dtype(dtype):
+    elif isinstance(dtype, cudf.Decimal32Dtype):
         tid = libcudf_types.type_id.DECIMAL32
     else:
         tid = <libcudf_types.type_id> (
@@ -259,21 +259,21 @@ cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
         return libcudf_types.data_type(tid)
 
 cpdef dtype_to_pylibcudf_type(dtype):
-    if cudf.api.types.is_list_dtype(dtype):
+    if isinstance(dtype, cudf.ListDtype):
         return pylibcudf.DataType(pylibcudf.TypeId.LIST)
-    elif cudf.api.types.is_struct_dtype(dtype):
+    elif isinstance(dtype, cudf.StructDtype):
         return pylibcudf.DataType(pylibcudf.TypeId.STRUCT)
-    elif cudf.api.types.is_decimal_dtype(dtype):
-        if cudf.api.types.is_decimal128_dtype(dtype):
-            tid = pylibcudf.TypeId.DECIMAL128
-        elif cudf.api.types.is_decimal64_dtype(dtype):
-            tid = pylibcudf.TypeId.DECIMAL64
-        else:
-            tid = pylibcudf.TypeId.DECIMAL32
+    elif isinstance(dtype, cudf.Decimal128Dtype):
+        tid = pylibcudf.TypeId.DECIMAL128
         return pylibcudf.DataType(tid, -dtype.scale)
-
+    elif isinstance(dtype, cudf.Decimal64Dtype):
+        tid = pylibcudf.TypeId.DECIMAL64
+        return pylibcudf.DataType(tid, -dtype.scale)
+    elif isinstance(dtype, cudf.Decimal32Dtype):
+        tid = pylibcudf.TypeId.DECIMAL32
+        return pylibcudf.DataType(tid, -dtype.scale)
     # libcudf types don't support localization so convert to the base type
-    if isinstance(dtype, pd.DatetimeTZDtype):
+    elif isinstance(dtype, pd.DatetimeTZDtype):
         dtype = np.dtype(f"<M8[{dtype.unit}]")
     else:
         dtype = np.dtype(dtype)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@
 #include <cudf/types.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
+
+#include <stdexcept>
 
 using namespace cudf::test::iterators;
 
@@ -77,8 +79,8 @@ TYPED_TEST(FixedWidthGetValueTest, IndexOutOfBounds)
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> col({9, 8, 7, 6}, {0, 1, 0, 1});
 
   // Test for out of bounds indexes in both directions.
-  EXPECT_THROW(cudf::get_element(col, -1), cudf::logic_error);
-  EXPECT_THROW(cudf::get_element(col, 4), cudf::logic_error);
+  EXPECT_THROW(cudf::get_element(col, -1), std::out_of_range);
+  EXPECT_THROW(cudf::get_element(col, 4), std::out_of_range);
 }
 
 struct StringGetValueTest : public cudf::test::BaseFixture {};

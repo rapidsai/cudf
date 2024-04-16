@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <nvtext/detail/generate_ngrams.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -32,14 +30,17 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <nvtext/detail/generate_ngrams.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_scan.h>
 
-#include <cuda/functional>
+#include <stdexcept>
 
 namespace nvtext {
 namespace detail {
@@ -91,9 +92,12 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be valid");
+  CUDF_EXPECTS(
+    separator.is_valid(stream), "Parameter separator must be valid", std::invalid_argument);
   cudf::string_view const d_separator(separator.data(), separator.size());
-  CUDF_EXPECTS(ngrams > 1, "Parameter ngrams should be an integer value of 2 or greater");
+  CUDF_EXPECTS(ngrams > 1,
+               "Parameter ngrams should be an integer value of 2 or greater",
+               std::invalid_argument);
 
   auto strings_count = strings.size();
   if (strings_count == 0)  // if no strings, return an empty column
@@ -104,11 +108,8 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
 
   // first create a new offsets vector removing nulls and empty strings from the input column
   std::unique_ptr<cudf::column> non_empty_offsets_column = [&] {
-    cudf::column_view offsets_view(cudf::data_type{cudf::type_id::INT32},
-                                   strings_count + 1,
-                                   strings.offsets_begin(),
-                                   nullptr,
-                                   0);
+    cudf::column_view offsets_view(
+      strings.offsets().type(), strings_count + 1, strings.offsets().head(), nullptr, 0);
     auto table_offsets = cudf::detail::copy_if(
                            cudf::table_view({offsets_view}),
                            [d_strings, strings_count] __device__(cudf::size_type idx) {
@@ -128,23 +129,23 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
   // create a temporary column view from the non-empty offsets and chars column views
   cudf::column_view strings_view(cudf::data_type{cudf::type_id::STRING},
                                  strings_count,
-                                 nullptr,
+                                 strings.chars_begin(stream),
                                  nullptr,
                                  0,
                                  0,
-                                 {non_empty_offsets_column->view(), strings.chars()});
+                                 {non_empty_offsets_column->view()});
   strings_column = cudf::column_device_view::create(strings_view, stream);
   d_strings      = *strings_column;
 
   // compute the number of strings of ngrams
   auto const ngrams_count = strings_count - ngrams + 1;
 
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     ngram_generator_fn{d_strings, ngrams, d_separator}, ngrams_count, stream, mr);
 
   // make the output strings column from the offsets and chars column
   return cudf::make_strings_column(
-    ngrams_count, std::move(children.first), std::move(children.second), 0, rmm::device_buffer{});
+    ngrams_count, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail
@@ -200,47 +201,45 @@ struct character_ngram_generator_fn {
 };
 }  // namespace
 
-std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_view const& input,
                                                         cudf::size_type ngrams,
                                                         rmm::cuda_stream_view stream,
                                                         rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(ngrams > 1, "Parameter ngrams should be an integer value of 2 or greater");
+  CUDF_EXPECTS(ngrams >= 2,
+               "Parameter ngrams should be an integer value of 2 or greater",
+               std::invalid_argument);
 
-  auto const strings_count = strings.size();
-  if (strings_count == 0)  // if no strings, return an empty column
+  auto const strings_count = input.size();
+  if (strings_count == 0) {  // if no strings, return an empty column
     return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
+  }
 
-  auto const strings_column = cudf::column_device_view::create(strings.parent(), stream);
-  auto const d_strings      = *strings_column;
+  auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
 
-  // create a vector of ngram offsets for each string
-  rmm::device_uvector<cudf::size_type> ngram_offsets(strings_count + 1, stream);
-  thrust::transform_exclusive_scan(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<cudf::size_type>(0),
-    thrust::make_counting_iterator<cudf::size_type>(strings_count + 1),
-    ngram_offsets.begin(),
+  auto sizes_itr = cudf::detail::make_counting_transform_iterator(
+    0,
     cuda::proclaim_return_type<cudf::size_type>(
-      [d_strings, strings_count, ngrams] __device__(auto idx) {
-        if (d_strings.is_null(idx) || (idx == strings_count)) return 0;
+      [d_strings = *d_strings, ngrams] __device__(auto idx) {
+        if (d_strings.is_null(idx)) { return 0; }
         auto const length = d_strings.element<cudf::string_view>(idx).length();
         return std::max(0, static_cast<cudf::size_type>(length + 1 - ngrams));
-      }),
-    cudf::size_type{0},
-    thrust::plus<cudf::size_type>());
-
-  // total ngrams count is the last entry
-  cudf::size_type const total_ngrams = ngram_offsets.back_element(stream);
+      }));
+  auto [offsets, total_ngrams] =
+    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + input.size(), stream, mr);
+  auto d_offsets = offsets->view().data<cudf::size_type>();
   CUDF_EXPECTS(total_ngrams > 0,
                "Insufficient number of characters in each string to generate ngrams");
 
-  character_ngram_generator_fn generator{d_strings, ngrams, ngram_offsets.data()};
-  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
+  character_ngram_generator_fn generator{*d_strings, ngrams, d_offsets};
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     generator, strings_count, total_ngrams, stream, mr);
 
-  return cudf::make_strings_column(
-    total_ngrams, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
+  auto output = cudf::make_strings_column(
+    total_ngrams, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
+
+  return make_lists_column(
+    input.size(), std::move(offsets), std::move(output), 0, rmm::device_buffer{}, stream, mr);
 }
 
 namespace {
@@ -281,7 +280,9 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
                                                     rmm::cuda_stream_view stream,
                                                     rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(ngrams >= 2, "Parameter ngrams should be an integer value of 2 or greater");
+  CUDF_EXPECTS(ngrams >= 2,
+               "Parameter ngrams should be an integer value of 2 or greater",
+               std::invalid_argument);
 
   auto output_type = cudf::data_type{cudf::type_to_id<cudf::hash_value_type>()};
   if (input.is_empty()) { return cudf::make_empty_column(output_type); }

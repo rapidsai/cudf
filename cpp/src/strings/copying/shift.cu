@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,9 +59,9 @@ struct output_sizes_fn {
 struct shift_chars_fn {
   column_device_view const d_column;  // input strings column
   string_view const d_filler;
-  size_type const offset;
+  int64_t const offset;
 
-  __device__ char operator()(size_type idx)
+  __device__ char operator()(int64_t idx)
   {
     if (offset < 0) {
       auto const last_index = -offset;
@@ -69,8 +69,7 @@ struct shift_chars_fn {
         auto const first_index =
           offset + d_column.child(strings_column_view::offsets_column_index)
                      .element<size_type>(d_column.offset() + d_column.size());
-        return d_column.child(strings_column_view::chars_column_index)
-          .element<char>(idx + first_index);
+        return d_column.head<char>()[idx + first_index];
       } else {
         auto const char_index = idx - last_index;
         return d_filler.data()[char_index % d_filler.size_bytes()];
@@ -79,10 +78,9 @@ struct shift_chars_fn {
       if (idx < offset) {
         return d_filler.data()[idx % d_filler.size_bytes()];
       } else {
-        return d_column.child(strings_column_view::chars_column_index)
-          .element<char>(idx - offset +
-                         d_column.child(strings_column_view::offsets_column_index)
-                           .element<size_type>(d_column.offset()));
+        return d_column.head<char>()[idx - offset +
+                                     d_column.child(strings_column_view::offsets_column_index)
+                                       .element<size_type>(d_column.offset())];
       }
     }
   }
@@ -112,23 +110,23 @@ std::unique_ptr<column> shift(strings_column_view const& input,
   // compute the shift-offset for the output characters child column
   auto const shift_offset = [&] {
     auto const index = (offset < 0) ? input.size() + offset : offset;
-    return (offset < 0 ? -1 : 1) * cudf::detail::get_value<size_type>(offsets_view, index, stream);
+    return (offset < 0 ? -1 : 1) * get_offset_value(offsets_view, index, stream);
   }();
 
   // create output chars child column
-  auto chars_column = create_chars_child_column(static_cast<size_type>(total_bytes), stream, mr);
-  auto d_chars      = mutable_column_device_view::create(chars_column->mutable_view(), stream);
+  rmm::device_uvector<char> chars(total_bytes, stream, mr);
+  auto d_chars = chars.data();
 
   // run kernel to shift all the characters
   thrust::transform(rmm::exec_policy(stream),
-                    thrust::counting_iterator<size_type>(0),
-                    thrust::counting_iterator<size_type>(total_bytes),
-                    d_chars->data<char>(),
+                    thrust::counting_iterator<int64_t>(0),
+                    thrust::counting_iterator<int64_t>(total_bytes),
+                    d_chars,
                     shift_chars_fn{*d_input, d_fill_str, shift_offset});
 
   // caller sets the null-mask
   return make_strings_column(
-    input.size(), std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
+    input.size(), std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 }
 
 }  // namespace cudf::strings::detail

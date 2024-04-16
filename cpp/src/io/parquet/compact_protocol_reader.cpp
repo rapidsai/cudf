@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,26 +45,35 @@ class parquet_field {
 std::string field_type_string(FieldType type)
 {
   switch (type) {
-    case ST_FLD_TRUE: return "bool(true)";
-    case ST_FLD_FALSE: return "bool(false)";
-    case ST_FLD_BYTE: return "int8";
-    case ST_FLD_I16: return "int16";
-    case ST_FLD_I32: return "int32";
-    case ST_FLD_I64: return "int64";
-    case ST_FLD_DOUBLE: return "double";
-    case ST_FLD_BINARY: return "binary";
-    case ST_FLD_STRUCT: return "struct";
-    case ST_FLD_LIST: return "list";
-    case ST_FLD_SET: return "set";
-    default: return "unknown(" + std::to_string(type) + ")";
+    case FieldType::BOOLEAN_TRUE: return "bool(true)";
+    case FieldType::BOOLEAN_FALSE: return "bool(false)";
+    case FieldType::I8: return "int8";
+    case FieldType::I16: return "int16";
+    case FieldType::I32: return "int32";
+    case FieldType::I64: return "int64";
+    case FieldType::DOUBLE: return "double";
+    case FieldType::BINARY: return "binary";
+    case FieldType::LIST: return "list";
+    case FieldType::SET: return "set";
+    case FieldType::MAP: return "map";
+    case FieldType::STRUCT: return "struct";
+    case FieldType::UUID: return "UUID";
+    default: return "unknown(" + std::to_string(static_cast<uint8_t>(type)) + ")";
   }
 }
 
 void assert_field_type(int type, FieldType expected)
 {
-  CUDF_EXPECTS(type == expected,
+  CUDF_EXPECTS(type == static_cast<int>(expected),
                "expected " + field_type_string(expected) + " field, got " +
                  field_type_string(static_cast<FieldType>(type)) + " field instead");
+}
+
+void assert_bool_field_type(int type)
+{
+  auto const field_type = static_cast<FieldType>(type);
+  CUDF_EXPECTS(field_type == FieldType::BOOLEAN_TRUE || field_type == FieldType::BOOLEAN_FALSE,
+               "expected bool field, got " + field_type_string(field_type) + " field instead");
 }
 
 /**
@@ -86,7 +95,7 @@ class parquet_field_list : public parquet_field {
  public:
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    assert_field_type(field_type, ST_FLD_LIST);
+    assert_field_type(field_type, FieldType::LIST);
     auto const [t, n] = cpr->get_listh();
     assert_field_type(t, EXPECTED_ELEM_TYPE);
     val.resize(n);
@@ -111,8 +120,8 @@ class parquet_field_bool : public parquet_field {
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    CUDF_EXPECTS(field_type == ST_FLD_TRUE || field_type == ST_FLD_FALSE, "expected bool field");
-    val = field_type == ST_FLD_TRUE;
+    assert_bool_field_type(field_type);
+    val = field_type == static_cast<int>(FieldType::BOOLEAN_TRUE);
   }
 };
 
@@ -122,14 +131,13 @@ class parquet_field_bool : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * bool fails
  */
-struct parquet_field_bool_list : public parquet_field_list<bool, ST_FLD_TRUE> {
+struct parquet_field_bool_list : public parquet_field_list<bool, FieldType::BOOLEAN_TRUE> {
   parquet_field_bool_list(int f, std::vector<bool>& v) : parquet_field_list(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
       auto const current_byte = cpr->getb();
-      CUDF_EXPECTS(current_byte == ST_FLD_TRUE || current_byte == ST_FLD_FALSE,
-                   "expected bool field");
-      this->val[i] = current_byte == ST_FLD_TRUE;
+      assert_bool_field_type(current_byte);
+      this->val[i] = current_byte == static_cast<int>(FieldType::BOOLEAN_TRUE);
     };
     bind_read_func(read_value);
   }
@@ -162,9 +170,9 @@ class parquet_field_int : public parquet_field {
   }
 };
 
-using parquet_field_int8  = parquet_field_int<int8_t, ST_FLD_BYTE>;
-using parquet_field_int32 = parquet_field_int<int32_t, ST_FLD_I32>;
-using parquet_field_int64 = parquet_field_int<int64_t, ST_FLD_I64>;
+using parquet_field_int8  = parquet_field_int<int8_t, FieldType::I8>;
+using parquet_field_int32 = parquet_field_int<int32_t, FieldType::I32>;
+using parquet_field_int64 = parquet_field_int<int64_t, FieldType::I64>;
 
 /**
  * @brief Functor to read a vector of integers from CompactProtocolReader
@@ -183,7 +191,7 @@ struct parquet_field_int_list : public parquet_field_list<T, EXPECTED_TYPE> {
   }
 };
 
-using parquet_field_int64_list = parquet_field_int_list<int64_t, ST_FLD_I64>;
+using parquet_field_int64_list = parquet_field_int_list<int64_t, FieldType::I64>;
 
 /**
  * @brief Functor to read a string from CompactProtocolReader
@@ -199,7 +207,7 @@ class parquet_field_string : public parquet_field {
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    assert_field_type(field_type, ST_FLD_BINARY);
+    assert_field_type(field_type, FieldType::BINARY);
     auto const n = cpr->get_u32();
     CUDF_EXPECTS(n < static_cast<size_t>(cpr->m_end - cpr->m_cur), "string length mismatch");
 
@@ -214,7 +222,7 @@ class parquet_field_string : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * string fails
  */
-struct parquet_field_string_list : public parquet_field_list<std::string, ST_FLD_BINARY> {
+struct parquet_field_string_list : public parquet_field_list<std::string, FieldType::BINARY> {
   parquet_field_string_list(int f, std::vector<std::string>& v) : parquet_field_list(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
@@ -241,7 +249,7 @@ class parquet_field_enum : public parquet_field {
   parquet_field_enum(int f, Enum& v) : parquet_field(f), val(v) {}
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    assert_field_type(field_type, ST_FLD_I32);
+    assert_field_type(field_type, FieldType::I32);
     val = static_cast<Enum>(cpr->get_i32());
   }
 };
@@ -253,8 +261,9 @@ class parquet_field_enum : public parquet_field {
  * enum fails
  */
 template <typename Enum>
-struct parquet_field_enum_list : public parquet_field_list<Enum, ST_FLD_I32> {
-  parquet_field_enum_list(int f, std::vector<Enum>& v) : parquet_field_list<Enum, ST_FLD_I32>(f, v)
+struct parquet_field_enum_list : public parquet_field_list<Enum, FieldType::I32> {
+  parquet_field_enum_list(int f, std::vector<Enum>& v)
+    : parquet_field_list<Enum, FieldType::I32>(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
       this->val[i] = static_cast<Enum>(cpr->get_i32());
@@ -278,7 +287,7 @@ class parquet_field_struct : public parquet_field {
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    assert_field_type(field_type, ST_FLD_STRUCT);
+    assert_field_type(field_type, FieldType::STRUCT);
     cpr->read(&val);
   }
 };
@@ -324,7 +333,7 @@ class parquet_field_union_enumerator : public parquet_field {
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    assert_field_type(field_type, ST_FLD_STRUCT);
+    assert_field_type(field_type, FieldType::STRUCT);
     cpr->skip_struct_field(field_type);
     val = static_cast<E>(field());
   }
@@ -337,8 +346,9 @@ class parquet_field_union_enumerator : public parquet_field {
  * struct fails
  */
 template <typename T>
-struct parquet_field_struct_list : public parquet_field_list<T, ST_FLD_STRUCT> {
-  parquet_field_struct_list(int f, std::vector<T>& v) : parquet_field_list<T, ST_FLD_STRUCT>(f, v)
+struct parquet_field_struct_list : public parquet_field_list<T, FieldType::STRUCT> {
+  parquet_field_struct_list(int f, std::vector<T>& v)
+    : parquet_field_list<T, FieldType::STRUCT>(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
       cpr->read(&this->val[i]);
@@ -361,7 +371,7 @@ class parquet_field_binary : public parquet_field {
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    assert_field_type(field_type, ST_FLD_BINARY);
+    assert_field_type(field_type, FieldType::BINARY);
     auto const n = cpr->get_u32();
     CUDF_EXPECTS(n <= static_cast<size_t>(cpr->m_end - cpr->m_cur), "binary length mismatch");
 
@@ -377,7 +387,8 @@ class parquet_field_binary : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * binary fails
  */
-struct parquet_field_binary_list : public parquet_field_list<std::vector<uint8_t>, ST_FLD_BINARY> {
+struct parquet_field_binary_list
+  : public parquet_field_list<std::vector<uint8_t>, FieldType::BINARY> {
   parquet_field_binary_list(int f, std::vector<std::vector<uint8_t>>& v) : parquet_field_list(f, v)
   {
     auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
@@ -404,7 +415,7 @@ class parquet_field_struct_blob : public parquet_field {
   parquet_field_struct_blob(int f, std::vector<uint8_t>& v) : parquet_field(f), val(v) {}
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
-    assert_field_type(field_type, ST_FLD_STRUCT);
+    assert_field_type(field_type, FieldType::STRUCT);
     uint8_t const* const start = cpr->m_cur;
     cpr->skip_struct_field(field_type);
     if (cpr->m_cur > start) { val.assign(start, cpr->m_cur - 1); }
@@ -439,24 +450,25 @@ class parquet_field_optional : public parquet_field {
  */
 void CompactProtocolReader::skip_struct_field(int t, int depth)
 {
-  switch (t) {
-    case ST_FLD_TRUE:
-    case ST_FLD_FALSE: break;
-    case ST_FLD_I16:
-    case ST_FLD_I32:
-    case ST_FLD_I64: get_u64(); break;
-    case ST_FLD_BYTE: skip_bytes(1); break;
-    case ST_FLD_DOUBLE: skip_bytes(8); break;
-    case ST_FLD_BINARY: skip_bytes(get_u32()); break;
-    case ST_FLD_LIST: [[fallthrough]];
-    case ST_FLD_SET: {
+  auto const t_enum = static_cast<FieldType>(t);
+  switch (t_enum) {
+    case FieldType::BOOLEAN_TRUE:
+    case FieldType::BOOLEAN_FALSE: break;
+    case FieldType::I16:
+    case FieldType::I32:
+    case FieldType::I64: get_u64(); break;
+    case FieldType::I8: skip_bytes(1); break;
+    case FieldType::DOUBLE: skip_bytes(8); break;
+    case FieldType::BINARY: skip_bytes(get_u32()); break;
+    case FieldType::LIST:
+    case FieldType::SET: {
       auto const [t, n] = get_listh();
       CUDF_EXPECTS(depth <= 10, "struct nesting too deep");
       for (uint32_t i = 0; i < n; i++) {
         skip_struct_field(t, depth + 1);
       }
     } break;
-    case ST_FLD_STRUCT:
+    case FieldType::STRUCT:
       for (;;) {
         int const c = getb();
         t           = c & 0xf;

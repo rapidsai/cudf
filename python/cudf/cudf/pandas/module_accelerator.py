@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -17,7 +17,7 @@ import warnings
 from abc import abstractmethod
 from importlib._bootstrap import _ImportLockContext as ImportLock
 from types import ModuleType
-from typing import Any, ContextManager, Dict, List, NamedTuple
+from typing import Any, ContextManager, Dict, NamedTuple, Tuple
 
 from typing_extensions import Self
 
@@ -377,7 +377,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
     attempts to call the fast version first).
     """
 
-    _denylist: List[str]
+    _denylist: Tuple[str]
     _use_fast_lib: bool
     _use_fast_lib_lock: threading.RLock
     _module_cache_prefix: str = "_slow_lib_"
@@ -407,7 +407,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             if mod.startswith(self.slow_lib):
                 sys.modules[self._module_cache_prefix + mod] = sys.modules[mod]
                 del sys.modules[mod]
-        self._denylist = [*slow_module.__path__, *fast_module.__path__]
+        self._denylist = (*slow_module.__path__, *fast_module.__path__)
 
         # Lock to manage temporarily disabling delivering wrapped attributes
         self._use_fast_lib_lock = threading.RLock()
@@ -556,9 +556,8 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             # We cannot possibly be at the top level.
             assert frame.f_back
             calling_module = pathlib.PurePath(frame.f_back.f_code.co_filename)
-            use_real = any(
-                calling_module.is_relative_to(path)
-                for path in loader._denylist
+            use_real = _caller_in_denylist(
+                calling_module, tuple(loader._denylist)
             )
         try:
             if use_real:
@@ -620,3 +619,13 @@ def disable_module_accelerator() -> contextlib.ExitStack:
                 stack.enter_context(finder.disabled())
         return stack.pop_all()
     assert False  # pacify type checker
+
+
+# because this function gets called so often and is quite
+# expensive to run, we cache the results:
+@functools.lru_cache(maxsize=1024)
+def _caller_in_denylist(calling_module, denylist):
+    CUDF_PANDAS_PATH = __file__.rsplit("/", 1)[0]
+    return not calling_module.is_relative_to(CUDF_PANDAS_PATH) and any(
+        calling_module.is_relative_to(path) for path in denylist
+    )

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,13 @@
 
 #include "rolling.cuh"
 
+#include <cudf_test/column_utilities.hpp>
+
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <cudf_test/column_utilities.hpp>
-
-#include <thrust/extrema.h>
-
 #include <cuda/functional>
+#include <thrust/extrema.h>
 
 namespace cudf::detail {
 

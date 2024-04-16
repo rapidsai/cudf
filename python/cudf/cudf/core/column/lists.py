@@ -1,9 +1,12 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+
+from __future__ import annotations
 
 from functools import cached_property
 from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
@@ -182,15 +185,16 @@ class ListColumn(ColumnBase):
         self: "cudf.core.column.ListColumn", dtype: Dtype
     ) -> "cudf.core.column.ListColumn":
         if isinstance(dtype, ListDtype):
-            return column.build_list_column(
-                indices=self.base_children[0],
-                elements=self.base_children[1]._with_type_metadata(
-                    dtype.element_type
-                ),
+            elements = self.base_children[1]._with_type_metadata(
+                dtype.element_type
+            )
+            return ListColumn(
+                dtype=dtype,
                 mask=self.base_mask,
                 size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
+                children=(self.base_children[0], elements),
             )
 
         return self
@@ -243,7 +247,7 @@ class ListColumn(ColumnBase):
         return res
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         """
         Create a strings column from a list column
@@ -284,6 +288,29 @@ class ListColumn(ColumnBase):
                 children=(o, lc),
             )
         return lc
+
+    def to_pandas(
+        self,
+        *,
+        index: Optional[pd.Index] = None,
+        nullable: bool = False,
+        arrow_type: bool = False,
+    ) -> pd.Series:
+        # Can't rely on Column.to_pandas implementation for lists.
+        # Need to perform `to_pylist` to preserve list types.
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+        pa_array = self.to_arrow()
+        if arrow_type:
+            return pd.Series(
+                pd.arrays.ArrowExtensionArray(pa_array), index=index
+            )
+        else:
+            return pd.Series(pa_array.tolist(), dtype="object", index=index)
 
 
 class ListMethods(ColumnMethods):
@@ -618,11 +645,6 @@ class ListMethods(ColumnMethods):
         -------
         Series or Index with each list sorted
 
-        Notes
-        -----
-        Difference from pandas:
-          * Not supporting: `inplace`, `kind`
-
         Examples
         --------
         >>> s = cudf.Series([[4, 2, None, 9], [8, 8, 2], [2, 1]])
@@ -631,6 +653,11 @@ class ListMethods(ColumnMethods):
         1         [2.0, 8.0, 8.0]
         2              [1.0, 2.0]
         dtype: list
+
+        .. pandas-compat::
+            **ListMethods.sort_values**
+
+            The ``inplace`` and ``kind`` arguments are currently not supported.
         """
         if inplace:
             raise NotImplementedError("`inplace` not currently implemented.")

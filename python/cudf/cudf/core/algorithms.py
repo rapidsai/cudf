@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 import warnings
 
 import cupy as cp
@@ -13,9 +13,7 @@ from cudf.options import get_option
 from cudf.utils.dtypes import can_convert_to_column
 
 
-def factorize(
-    values, sort=False, na_sentinel=None, use_na_sentinel=None, size_hint=None
-):
+def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
     """Encode the input values as integer labels
 
     Parameters
@@ -24,14 +22,6 @@ def factorize(
         The data to be factorized.
     sort : bool, default True
         Sort uniques and shuffle codes to maintain the relationship.
-    na_sentinel : number, default -1
-        Value to indicate missing category.
-
-        .. deprecated:: 23.04
-
-           The na_sentinel argument is deprecated and will be removed in
-           a future version of cudf. Specify use_na_sentinel as
-           either True or False.
     use_na_sentinel : bool, default True
         If True, the sentinel -1 will be used for NA values.
         If False, NA values will be encoded as non-negative
@@ -58,7 +48,7 @@ def factorize(
     >>> codes
     array([0, 1, 1], dtype=int8)
     >>> uniques
-    StringIndex(['a' 'c'], dtype='object')
+    Index(['a' 'c'], dtype='object')
 
     When ``use_na_sentinel=True`` (the default), missing values are indicated
     in the `codes` with the sentinel value ``-1`` and missing values are not
@@ -68,7 +58,7 @@ def factorize(
     >>> codes
     array([ 1, -1,  0,  2,  1], dtype=int8)
     >>> uniques
-    StringIndex(['a' 'b' 'c'], dtype='object')
+    Index(['a', 'b', 'c'], dtype='object')
 
     If NA is in the values, and we want to include NA in the uniques of the
     values, it can be achieved by setting ``use_na_sentinel=False``.
@@ -78,21 +68,13 @@ def factorize(
     >>> codes
     array([ 0,  1,  0, -1], dtype=int8)
     >>> uniques
-    Float64Index([1.0, 2.0], dtype='float64')
+    Index([1.0, 2.0], dtype='float64')
     >>> codes, uniques = cudf.factorize(values, use_na_sentinel=False)
     >>> codes
     array([1, 2, 1, 0], dtype=int8)
     >>> uniques
-    Float64Index([<NA>, 1.0, 2.0], dtype='float64')
+    Index([<NA>, 1.0, 2.0], dtype='float64')
     """
-    # TODO: Drop `na_sentinel` in the next release immediately after
-    # pandas 2.0 upgrade.
-    if na_sentinel is not None and use_na_sentinel is not None:
-        raise ValueError(
-            "Cannot specify both `na_sentinel` and `use_na_sentile`; "
-            f"got `na_sentinel={na_sentinel}` and "
-            f"`use_na_sentinel={use_na_sentinel}`"
-        )
 
     return_cupy_array = isinstance(values, cp.ndarray)
 
@@ -104,39 +86,14 @@ def factorize(
 
     values = as_column(values)
 
-    if na_sentinel is None:
-        na_sentinel = (
-            -1
-            if use_na_sentinel is None or use_na_sentinel
-            else Scalar(None, dtype=values.dtype)
-        )
-    else:
-        if na_sentinel is None:
-            msg = (
-                "Specifying `na_sentinel=None` is deprecated, specify "
-                "`use_na_sentinel=False` instead."
-            )
-        elif na_sentinel == -1:
-            msg = (
-                "Specifying `na_sentinel=-1` is deprecated, specify "
-                "`use_na_sentinel=True` instead."
-            )
-        else:
-            msg = (
-                "Specifying the specific value to use for `na_sentinel` is "
-                "deprecated and will be removed in a future version of cudf. "
-                "Specify `use_na_sentinel=True` to use the sentinel value -1, "
-                "and `use_na_sentinel=False` to encode NA values.",
-            )
-        # Do not remove until pandas 2.0 support is added.
-        warnings.warn(msg, FutureWarning)
-
     if size_hint:
         warnings.warn("size_hint is not applicable for cudf.factorize")
 
-    if use_na_sentinel is None or use_na_sentinel:
+    if use_na_sentinel:
+        na_sentinel = Scalar(-1)
         cats = values.dropna()
     else:
+        na_sentinel = Scalar(None, dtype=values.dtype)
         cats = values
 
     cats = cats.unique().astype(values.dtype)
@@ -146,7 +103,7 @@ def factorize(
 
     labels = values._label_encoding(
         cats=cats,
-        na_sentinel=Scalar(na_sentinel),
+        na_sentinel=na_sentinel,
         dtype="int64" if get_option("mode.pandas_compatible") else None,
     ).values
 

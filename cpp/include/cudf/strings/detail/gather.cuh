@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/utilities.hpp>
@@ -27,6 +28,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/advance.h>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
@@ -34,8 +36,6 @@
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-
-#include <cuda/functional>
 
 namespace cudf {
 namespace strings {
@@ -77,11 +77,11 @@ __forceinline__ __device__ uint4 load_uint4(char const* ptr)
  * @param total_out_strings Number of output strings to be gathered.
  */
 template <typename StringIterator, typename MapIterator>
-__global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
-                                                char* out_chars,
-                                                cudf::device_span<int32_t const> const out_offsets,
-                                                MapIterator string_indices,
-                                                size_type total_out_strings)
+CUDF_KERNEL void gather_chars_fn_string_parallel(StringIterator strings_begin,
+                                                 char* out_chars,
+                                                 cudf::detail::input_offsetalator const out_offsets,
+                                                 MapIterator string_indices,
+                                                 size_type total_out_strings)
 {
   constexpr size_t out_datatype_size = sizeof(uint4);
   constexpr size_t in_datatype_size  = sizeof(uint);
@@ -109,28 +109,25 @@ __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
     // between `[out_start_aligned, out_end_aligned)` will be copied using uint4.
     // `out_start + 4` and `out_end - 4` are used instead of `out_start` and `out_end` to avoid
     // `load_uint4` reading beyond string boundaries.
-    int32_t out_start_aligned =
+    int64_t const out_start_aligned =
       (out_start + in_datatype_size + alignment_offset + out_datatype_size - 1) /
         out_datatype_size * out_datatype_size -
       alignment_offset;
-    int32_t out_end_aligned =
+    int64_t const out_end_aligned =
       (out_end - in_datatype_size + alignment_offset) / out_datatype_size * out_datatype_size -
       alignment_offset;
 
-    for (size_type ichar = out_start_aligned + warp_lane * out_datatype_size;
-         ichar < out_end_aligned;
+    for (int64_t ichar = out_start_aligned + warp_lane * out_datatype_size; ichar < out_end_aligned;
          ichar += cudf::detail::warp_size * out_datatype_size) {
       *(out_chars_aligned + (ichar + alignment_offset) / out_datatype_size) =
         load_uint4(in_start + ichar - out_start);
     }
 
-    // Tail logic: copy characters of the current string outside `[out_start_aligned,
-    // out_end_aligned)`.
+    // Copy characters of the current string outside [out_start_aligned, out_end_aligned)
     if (out_end_aligned <= out_start_aligned) {
       // In this case, `[out_start_aligned, out_end_aligned)` is an empty set, and we copy the
       // entire string.
-      for (int32_t ichar = out_start + warp_lane; ichar < out_end;
-           ichar += cudf::detail::warp_size) {
+      for (auto ichar = out_start + warp_lane; ichar < out_end; ichar += cudf::detail::warp_size) {
         out_chars[ichar] = in_start[ichar - out_start];
       }
     } else {
@@ -139,7 +136,7 @@ __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
         out_chars[out_start + warp_lane] = in_start[warp_lane];
       }
       // Copy characters in range `[out_end_aligned, out_end)`.
-      int32_t ichar = out_end_aligned + warp_lane;
+      auto const ichar = out_end_aligned + warp_lane;
       if (ichar < out_end) { out_chars[ichar] = in_start[ichar - out_start]; }
     }
   }
@@ -162,13 +159,13 @@ __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
  * @param total_out_strings Number of output strings to be gathered.
  */
 template <int strings_per_threadblock, typename StringIterator, typename MapIterator>
-__global__ void gather_chars_fn_char_parallel(StringIterator strings_begin,
-                                              char* out_chars,
-                                              cudf::device_span<int32_t const> const out_offsets,
-                                              MapIterator string_indices,
-                                              size_type total_out_strings)
+CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
+                                               char* out_chars,
+                                               cudf::detail::input_offsetalator const out_offsets,
+                                               MapIterator string_indices,
+                                               size_type total_out_strings)
 {
-  __shared__ int32_t out_offsets_threadblock[strings_per_threadblock + 1];
+  __shared__ int64_t out_offsets_threadblock[strings_per_threadblock + 1];
 
   // Current thread block will process output strings starting at `begin_out_string_idx`.
   size_type begin_out_string_idx = blockIdx.x * strings_per_threadblock;
@@ -185,7 +182,7 @@ __global__ void gather_chars_fn_char_parallel(StringIterator strings_begin,
   }
   __syncthreads();
 
-  for (int32_t out_ibyte = threadIdx.x + out_offsets_threadblock[0];
+  for (int64_t out_ibyte = threadIdx.x + out_offsets_threadblock[0];
        out_ibyte < out_offsets_threadblock[strings_current_threadblock];
        out_ibyte += blockDim.x) {
     // binary search for the string index corresponding to out_ibyte
@@ -197,7 +194,7 @@ __global__ void gather_chars_fn_char_parallel(StringIterator strings_begin,
     size_type string_idx = thrust::distance(out_offsets_threadblock, string_idx_iter);
 
     // calculate which character to load within the string
-    int32_t icharacter = out_ibyte - out_offsets_threadblock[string_idx];
+    auto const icharacter = out_ibyte - out_offsets_threadblock[string_idx];
 
     size_type in_string_idx = string_indices[begin_out_string_idx + string_idx];
     out_chars[out_ibyte]    = strings_begin[in_string_idx].data()[icharacter];
@@ -224,19 +221,19 @@ __global__ void gather_chars_fn_char_parallel(StringIterator strings_begin,
  * @return New chars column fit for a strings column.
  */
 template <typename StringIterator, typename MapIterator>
-std::unique_ptr<cudf::column> gather_chars(StringIterator strings_begin,
-                                           MapIterator map_begin,
-                                           MapIterator map_end,
-                                           cudf::device_span<int32_t const> const offsets,
-                                           size_type chars_bytes,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
+                                       MapIterator map_begin,
+                                       MapIterator map_end,
+                                       cudf::detail::input_offsetalator const offsets,
+                                       size_type chars_bytes,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   auto const output_count = std::distance(map_begin, map_end);
-  if (output_count == 0) return make_empty_column(type_id::INT8);
+  if (output_count == 0) return rmm::device_uvector<char>(0, stream, mr);
 
-  auto chars_column  = create_chars_child_column(chars_bytes, stream, mr);
-  auto const d_chars = chars_column->mutable_view().template data<char>();
+  auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
+  auto d_chars    = chars_data.data();
 
   constexpr int warps_per_threadblock = 4;
   // String parallel strategy will be used if average string length is above this threshold.
@@ -262,7 +259,7 @@ std::unique_ptr<cudf::column> gather_chars(StringIterator strings_begin,
          stream.value()>>>(strings_begin, d_chars, offsets, map_begin, output_count);
   }
 
-  return chars_column;
+  return chars_data;
 }
 
 /**
@@ -300,7 +297,9 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
 
   // build offsets column
   auto const d_strings    = column_device_view::create(strings.parent(), stream);
-  auto const d_in_offsets = !strings.is_empty() ? strings.offsets_begin() : nullptr;
+  auto const d_in_offsets = cudf::detail::offsetalator_factory::make_input_iterator(
+    strings.is_empty() ? make_empty_column(type_id::INT32)->view() : strings.offsets(),
+    strings.offset());
 
   auto offsets_itr = thrust::make_transform_iterator(
     begin,
@@ -308,19 +307,20 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
       [d_strings = *d_strings, d_in_offsets] __device__(size_type idx) {
         if (NullifyOutOfBounds && (idx < 0 || idx >= d_strings.size())) { return 0; }
         if (not d_strings.is_valid(idx)) { return 0; }
-        return d_in_offsets[idx + 1] - d_in_offsets[idx];
+        return static_cast<size_type>(d_in_offsets[idx + 1] - d_in_offsets[idx]);
       }));
   auto [out_offsets_column, total_bytes] =
     cudf::detail::make_offsets_child_column(offsets_itr, offsets_itr + output_count, stream, mr);
 
   // build chars column
-  auto const offsets_view = out_offsets_column->view();
-  auto out_chars_column   = gather_chars(
+  auto const offsets_view =
+    cudf::detail::offsetalator_factory::make_input_iterator(out_offsets_column->view());
+  auto out_chars_data = gather_chars(
     d_strings->begin<string_view>(), begin, end, offsets_view, total_bytes, stream, mr);
 
   return make_strings_column(output_count,
                              std::move(out_offsets_column),
-                             std::move(out_chars_column),
+                             out_chars_data.release(),
                              0,  // caller sets these
                              rmm::device_buffer{});
 }

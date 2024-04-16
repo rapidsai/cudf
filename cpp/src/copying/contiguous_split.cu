@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -45,10 +46,9 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
-#include <cuda/functional>
-
 #include <cstddef>
 #include <numeric>
+#include <stdexcept>
 
 namespace cudf {
 namespace {
@@ -280,9 +280,9 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
  * @param buf_info Information on the range of values to be copied for each destination buffer
  */
 template <int block_size, typename IndexToDstBuf>
-__global__ void copy_partitions(IndexToDstBuf index_to_buffer,
-                                uint8_t const** src_bufs,
-                                dst_buf_info* buf_info)
+CUDF_KERNEL void copy_partitions(IndexToDstBuf index_to_buffer,
+                                 uint8_t const** src_bufs,
+                                 dst_buf_info* buf_info)
 {
   auto const buf_index     = blockIdx.x;
   auto const src_buf_index = buf_info[buf_index].src_buf_index;
@@ -502,23 +502,34 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
   int offset_stack_pos,
   int parent_offset_index,
   int offset_depth,
-  rmm::cuda_stream_view)
+  rmm::cuda_stream_view stream)
 {
   if (col.nullable()) {
     std::tie(current, offset_stack_pos) =
       add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
   }
 
-  // string columns hold no actual data, but we need to keep a record
-  // of it so we know it's size when we are constructing the output columns
-  *current = src_buf_info(
-    type_id::STRING, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
-  current++;
-  offset_stack_pos += offset_depth;
+  // the way strings are arranged, the strings column itself contains char data, but our child
+  // offsets column actually contains our offsets. So our parent_offset_index is actually our child.
 
-  // string columns don't necessarily have children
-  if (col.num_children() > 0) {
-    CUDF_EXPECTS(col.num_children() == 2, "Encountered malformed string column");
+  // string columns don't necessarily have children if they are empty
+  auto const has_offsets_child = col.num_children() > 0;
+
+  // string columns contain the underlying chars data.
+  *current = src_buf_info(type_id::STRING,
+                          nullptr,
+                          offset_stack_pos,
+                          // if I have an offsets child, it's index will be my parent_offset_index
+                          has_offsets_child ? ((current + 1) - head) : parent_offset_index,
+                          false,
+                          col.offset());
+
+  // if I have offsets, I need to include that in the stack size
+  offset_stack_pos += has_offsets_child ? offset_depth + 1 : offset_depth;
+  current++;
+
+  if (has_offsets_child) {
+    CUDF_EXPECTS(col.num_children() == 1, "Encountered malformed string column");
     strings_column_view scv(col);
 
     // info for the offsets buffer
@@ -539,15 +550,6 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
     // since we are crossing an offset boundary, calculate our new depth and parent offset index.
     offset_depth++;
     parent_offset_index = offset_col - head;
-
-    // prevent appending buf_info for non-existent chars buffer
-    CUDF_EXPECTS(not scv.chars().nullable(), "Encountered nullable string chars column");
-
-    // info for the chars buffer
-    *current = src_buf_info(
-      type_id::INT8, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
-    current++;
-    offset_stack_pos += offset_depth;
   }
 
   return {current, offset_stack_pos};
@@ -716,10 +718,24 @@ std::tuple<size_type, int64_t, int64_t, size_type> build_output_column_metadata(
   }();
 
   // size/data pointer for the column
-  auto const col_size       = static_cast<size_type>(current_info->num_elements);
-  int64_t const data_offset = src.num_children() > 0 || col_size == 0 || src.head() == nullptr
-                                ? -1
-                                : static_cast<int64_t>(current_info->dst_offset);
+  auto const col_size = [&]() {
+    // if I am a string column, I need to use the number of rows from my child offset column. the
+    // number of rows in my dst_buf_info struct will be equal to the number of chars, which is
+    // incorrect. this is a quirk of how cudf stores strings.
+    if (src.type().id() == type_id::STRING) {
+      // if I have no children (no offsets), then I must have a row count of 0
+      if (src.num_children() == 0) { return 0; }
+
+      // otherwise my actual number of rows will be the num_rows field of the next dst_buf_info
+      // struct (our child offsets column)
+      return (current_info + 1)->num_rows;
+    }
+
+    // otherwise the number of rows is the number of elements
+    return static_cast<size_type>(current_info->num_elements);
+  }();
+  int64_t const data_offset =
+    col_size == 0 || src.head() == nullptr ? -1 : static_cast<int64_t>(current_info->dst_offset);
 
   mb.add_column_info_to_meta(
     src.type(), col_size, null_count, data_offset, bitmask_offset, src.num_children());
@@ -902,9 +918,17 @@ struct dst_valid_count_output_iterator {
  */
 struct size_of_helper {
   template <typename T>
-  constexpr std::enable_if_t<not is_fixed_width<T>(), int> __device__ operator()() const
+  constexpr std::enable_if_t<!is_fixed_width<T>() && !std::is_same_v<T, cudf::string_view>, int>
+    __device__ operator()() const
   {
     return 0;
+  }
+
+  template <typename T>
+  constexpr std::enable_if_t<!is_fixed_width<T>() && std::is_same_v<T, cudf::string_view>, int>
+    __device__ operator()() const
+  {
+    return sizeof(cudf::device_storage_type_t<int8_t>);
   }
 
   template <typename T>
@@ -1115,7 +1139,7 @@ struct packed_src_and_dst_pointers {
 
 /**
  * @brief Create an instance of `packed_src_and_dst_pointers` populating destination
- * partitition buffers (if any) from `out_buffers`. In the chunked_pack case
+ * partition buffers (if any) from `out_buffers`. In the chunked_pack case
  * `out_buffers` is empty, and the destination pointer is provided separately
  * to the `copy_partitions` kernel.
  *
@@ -1236,7 +1260,7 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
       }
 
       // final element indices and row count
-      int const out_element_index = src_info.is_validity ? row_start / 32 : row_start;
+      int const src_element_index = src_info.is_validity ? row_start / 32 : row_start;
       int const num_rows          = row_end - row_start;
       // if I am an offsets column, all my values need to be shifted
       int const value_shift = src_info.offsets == nullptr ? 0 : src_info.offsets[row_start];
@@ -1259,7 +1283,7 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
                           num_elements,
                           element_size,
                           num_rows,
-                          out_element_index,
+                          src_element_index,
                           0,
                           value_shift,
                           bit_shift,
@@ -1706,13 +1730,15 @@ bool check_inputs(cudf::table_view const& input, std::vector<size_type> const& s
   if (input.num_columns() == 0) { return true; }
   if (splits.size() > 0) {
     CUDF_EXPECTS(splits.back() <= input.column(0).size(),
-                 "splits can't exceed size of input columns");
+                 "splits can't exceed size of input columns",
+                 std::out_of_range);
   }
   size_type begin = 0;
   for (auto end : splits) {
-    CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
-    CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
-    CUDF_EXPECTS(end <= input.column(0).size(), "Slice range out of bounds.");
+    CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.", std::out_of_range);
+    CUDF_EXPECTS(
+      end >= begin, "End index cannot be smaller than the starting index.", std::invalid_argument);
+    CUDF_EXPECTS(end <= input.column(0).size(), "Slice range out of bounds.", std::out_of_range);
     begin = end;
   }
   return input.column(0).size() == 0;

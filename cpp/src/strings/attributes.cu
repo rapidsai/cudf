@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/warp/warp_reduce.cuh>
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -39,10 +41,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
-
-#include <cub/warp/warp_reduce.cuh>
-
-#include <cuda/functional>
 
 namespace cudf {
 namespace strings {
@@ -110,8 +108,8 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
  * @param d_strings Column with strings to count
  * @param d_lengths Results of the counts per string
  */
-__global__ void count_characters_parallel_fn(column_device_view const d_strings,
-                                             size_type* d_lengths)
+CUDF_KERNEL void count_characters_parallel_fn(column_device_view const d_strings,
+                                              size_type* d_lengths)
 {
   auto const idx    = cudf::detail::grid_1d::global_thread_id();
   using warp_reduce = cub::WarpReduce<size_type>;
@@ -170,7 +168,8 @@ std::unique_ptr<column> count_characters(strings_column_view const& input,
                                          rmm::mr::device_memory_resource* mr)
 {
   if ((input.size() == input.null_count()) ||
-      ((input.chars_size() / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD)) {
+      ((input.chars_size(stream) / (input.size() - input.null_count())) <
+       AVG_CHAR_BYTES_THRESHOLD)) {
     auto ufn = cuda::proclaim_return_type<size_type>(
       [] __device__(string_view const& d_str) { return d_str.length(); });
     return counts_fn(input, ufn, stream, mr);

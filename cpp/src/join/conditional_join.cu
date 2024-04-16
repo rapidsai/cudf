@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+#include "join/conditional_join.hpp"
+#include "join/conditional_join_kernels.cuh"
+#include "join/join_common_utils.cuh"
+#include "join/join_common_utils.hpp"
+
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -23,10 +28,6 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <join/conditional_join.hpp>
-#include <join/conditional_join_kernels.cuh>
-#include <join/join_common_utils.cuh>
-#include <join/join_common_utils.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 

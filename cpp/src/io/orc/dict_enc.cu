@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,10 +27,10 @@ namespace cudf::io::orc::gpu {
 /**
  * @brief Counts the number of characters in each rowgroup of each string column.
  */
-__global__ void rowgroup_char_counts_kernel(device_2dspan<size_type> char_counts,
-                                            device_span<orc_column_device_view const> orc_columns,
-                                            device_2dspan<rowgroup_rows const> rowgroup_bounds,
-                                            device_span<uint32_t const> str_col_indexes)
+CUDF_KERNEL void rowgroup_char_counts_kernel(device_2dspan<size_type> char_counts,
+                                             device_span<orc_column_device_view const> orc_columns,
+                                             device_2dspan<rowgroup_rows const> rowgroup_bounds,
+                                             device_span<uint32_t const> str_col_indexes)
 {
   // Index of the column in the `str_col_indexes` array
   auto const str_col_idx = blockIdx.y;
@@ -75,7 +75,7 @@ void rowgroup_char_counts(device_2dspan<size_type> counts,
 }
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   initialize_dictionary_hash_maps_kernel(device_span<stripe_dictionary> dictionaries)
 {
   auto const dict_map = dictionaries[blockIdx.x].map_slots;
@@ -107,7 +107,7 @@ struct hash_functor {
 };
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   populate_dictionary_hash_maps_kernel(device_2dspan<stripe_dictionary> dictionaries,
                                        device_span<orc_column_device_view const> columns)
 {
@@ -162,7 +162,7 @@ __global__ void __launch_bounds__(block_size)
 }
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   collect_map_entries_kernel(device_2dspan<stripe_dictionary> dictionaries)
 {
   auto const col_idx    = blockIdx.x;
@@ -196,7 +196,7 @@ __global__ void __launch_bounds__(block_size)
 }
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   get_dictionary_indices_kernel(device_2dspan<stripe_dictionary> dictionaries,
                                 device_span<orc_column_device_view const> columns)
 {

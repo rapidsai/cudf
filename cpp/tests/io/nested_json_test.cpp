@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,17 @@
  * limitations under the License.
  */
 
-#include <io/json/nested_json.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
+#include "io/json/nested_json.hpp"
+#include "io/utilities/hostdevice_vector.hpp"
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/io_metadata_utilities.hpp>
+#include <cudf_test/random.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
@@ -24,13 +33,6 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/io_metadata_utilities.hpp>
-#include <cudf_test/table_utilities.hpp>
 
 #include <rmm/exec_policy.hpp>
 

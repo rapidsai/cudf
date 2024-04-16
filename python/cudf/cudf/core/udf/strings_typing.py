@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import operator
 
@@ -17,7 +17,6 @@ size_type = types.int32
 
 # String object definitions
 class UDFString(types.Type):
-
     np_dtype = np.dtype("object")
 
     def __init__(self):
@@ -29,7 +28,6 @@ class UDFString(types.Type):
 
 
 class StringView(types.Type):
-
     np_dtype = np.dtype("object")
 
     def __init__(self):

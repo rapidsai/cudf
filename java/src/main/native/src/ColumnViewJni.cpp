@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,6 +111,9 @@ std::size_t calc_device_memory_size(cudf::column_view const &view, bool const pa
   auto dtype = view.type();
   if (cudf::is_fixed_width(dtype)) {
     total += pad_size(cudf::size_of(dtype) * view.size(), pad_for_cpu);
+  } else if (dtype.id() == cudf::type_id::STRING) {
+    auto scv = cudf::strings_column_view(view);
+    total += pad_size(scv.chars_size(cudf::get_default_stream()), pad_for_cpu);
   }
 
   return std::accumulate(view.child_begin(), view.child_end(), total,
@@ -1974,18 +1977,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeCudfColumnView(
             new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0));
       } else {
         JNI_NULL_CHECK(env, j_offset, "offset is null", 0);
-        // This must be kept in sync with how string columns are created
-        // offsets are always the first child
-        // data is the second child
-
         cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
         cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets,
                                          nullptr, 0);
-        cudf::column_view data_column(cudf::data_type{cudf::type_id::INT8}, j_data_size, data,
-                                      nullptr, 0);
         return ptr_as_jlong(new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, size,
-                                                  nullptr, valid, j_null_count, 0,
-                                                  {offsets_column, data_column}));
+                                                  data, valid, j_null_count, 0, {offsets_column}));
       }
     } else if (n_type == cudf::type_id::LIST) {
       JNI_NULL_CHECK(env, j_children, "children of a list are null", 0);
@@ -2082,8 +2078,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeDataAddress(JNIE
     if (column->type().id() == cudf::type_id::STRING) {
       if (column->size() > 0) {
         cudf::strings_column_view view = cudf::strings_column_view(*column);
-        cudf::column_view data_view = view.chars();
-        result = reinterpret_cast<jlong>(data_view.data<char>());
+        result = reinterpret_cast<jlong>(view.chars_begin(cudf::get_default_stream()));
       }
     } else if (column->type().id() != cudf::type_id::LIST &&
                column->type().id() != cudf::type_id::STRUCT) {
@@ -2104,8 +2099,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeDataLength(JNIEn
     if (column->type().id() == cudf::type_id::STRING) {
       if (column->size() > 0) {
         cudf::strings_column_view view = cudf::strings_column_view(*column);
-        cudf::column_view data_view = view.chars();
-        result = data_view.size();
+        result = view.chars_size(cudf::get_default_stream());
       }
     } else if (column->type().id() != cudf::type_id::LIST &&
                column->type().id() != cudf::type_id::STRUCT) {
@@ -2442,9 +2436,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyColumnViewToCV(JNIEnv
   CATCH_STD(env, 0)
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(JNIEnv *env, jclass,
-                                                                     jlong j_view_handle,
-                                                                     jlong j_scalar_handle) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(
+    JNIEnv *env, jclass, jlong j_view_handle, jlong j_scalar_handle, jboolean allow_single_quotes,
+    jboolean strip_quotes_from_single_strings, jboolean missing_fields_as_nulls) {
 
   JNI_NULL_CHECK(env, j_view_handle, "view cannot be null", 0);
   JNI_NULL_CHECK(env, j_scalar_handle, "path cannot be null", 0);
@@ -2454,7 +2448,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(JNIEnv *env
     cudf::column_view *n_column_view = reinterpret_cast<cudf::column_view *>(j_view_handle);
     cudf::strings_column_view n_strings_col_view(*n_column_view);
     cudf::string_scalar *n_scalar_path = reinterpret_cast<cudf::string_scalar *>(j_scalar_handle);
-    return release_as_jlong(cudf::get_json_object(n_strings_col_view, *n_scalar_path));
+    auto options = cudf::get_json_object_options{};
+    options.set_allow_single_quotes(allow_single_quotes);
+    options.set_strip_quotes_from_single_strings(strip_quotes_from_single_strings);
+    options.set_missing_fields_as_nulls(missing_fields_as_nulls);
+    auto result_col_ptr = [&]() {
+      try {
+        return cudf::get_json_object(n_strings_col_view, *n_scalar_path, options);
+      } catch (std::invalid_argument const &err) {
+        auto const null_scalar = cudf::string_scalar(std::string(""), false);
+        return cudf::make_column_from_scalar(null_scalar, n_strings_col_view.size());
+      } catch (...) { throw; }
+    }();
+    return release_as_jlong(result_col_ptr);
   }
   CATCH_STD(env, 0)
 }

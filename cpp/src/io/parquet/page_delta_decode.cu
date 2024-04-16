@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,14 +15,14 @@
  */
 
 #include "delta_binary.cuh"
+#include "io/utilities/block_utils.cuh"
 #include "page_string_utils.cuh"
 #include "parquet_gpu.hpp"
-
-#include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <rmm/exec_policy.hpp>
+
 #include <thrust/transform_scan.h>
 
 namespace cudf::io::parquet::detail {
@@ -305,7 +305,7 @@ struct delta_byte_array_decoder {
 // with V2 page headers; see https://www.mail-archive.com/dev@parquet.apache.org/msg11826.html).
 // this kernel only needs 96 threads (3 warps)(for now).
 template <typename level_t>
-__global__ void __launch_bounds__(96)
+CUDF_KERNEL void __launch_bounds__(96)
   gpuDecodeDeltaBinary(PageInfo* pages,
                        device_span<ColumnChunkDesc const> chunks,
                        size_t min_row,
@@ -430,7 +430,7 @@ __global__ void __launch_bounds__(96)
 // suffixes are not encoded in the header, we're going to have to first do a quick pass through them
 // to find the start/end of each structure.
 template <typename level_t>
-__global__ void __launch_bounds__(decode_block_size)
+CUDF_KERNEL void __launch_bounds__(decode_block_size)
   gpuDecodeDeltaByteArray(PageInfo* pages,
                           device_span<ColumnChunkDesc const> chunks,
                           size_t min_row,
@@ -459,6 +459,14 @@ __global__ void __launch_bounds__(decode_block_size)
                           num_rows,
                           mask_filter{decode_kernel_mask::DELTA_BYTE_ARRAY},
                           page_processing_stage::DECODE)) {
+    return;
+  }
+
+  if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
+    // we cannot read decimal encoded with DELTA_BYTE_ARRAY yet
+    if (t == 0) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_DATA_TYPE), error_code);
+    }
     return;
   }
 
@@ -587,7 +595,7 @@ __global__ void __launch_bounds__(decode_block_size)
 // Decode page data that is DELTA_LENGTH_BYTE_ARRAY packed. This encoding consists of a
 // DELTA_BINARY_PACKED array of string lengths, followed by the string data.
 template <typename level_t>
-__global__ void __launch_bounds__(decode_block_size)
+CUDF_KERNEL void __launch_bounds__(decode_block_size)
   gpuDecodeDeltaLengthByteArray(PageInfo* pages,
                                 device_span<ColumnChunkDesc const> chunks,
                                 size_t min_row,
@@ -617,6 +625,14 @@ __global__ void __launch_bounds__(decode_block_size)
                           num_rows,
                           mask_filter{mask},
                           page_processing_stage::DECODE)) {
+    return;
+  }
+
+  if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
+    // we cannot read decimal encoded with DELTA_LENGTH_BYTE_ARRAY yet
+    if (t == 0) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_DATA_TYPE), error_code);
+    }
     return;
   }
 
@@ -745,8 +761,8 @@ __global__ void __launch_bounds__(decode_block_size)
 /**
  * @copydoc cudf::io::parquet::detail::DecodeDeltaBinary
  */
-void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                       cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void DecodeDeltaBinary(cudf::detail::hostdevice_span<PageInfo> pages,
+                       cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                        size_t num_rows,
                        size_t min_row,
                        int level_type_size,
@@ -770,8 +786,8 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
 /**
  * @copydoc cudf::io::parquet::gpu::DecodeDeltaByteArray
  */
-void DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                          cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
+                          cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
@@ -795,8 +811,8 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
 /**
  * @copydoc cudf::io::parquet::gpu::DecodeDeltaByteArray
  */
-void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                                cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
+                                cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                                 size_t num_rows,
                                 size_t min_row,
                                 int level_type_size,

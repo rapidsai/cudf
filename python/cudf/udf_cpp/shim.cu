@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +23,8 @@
 #include <cudf/strings/udf/strip.cuh>
 #include <cudf/strings/udf/udf_string.cuh>
 
-#include <cuda/atomic>
-
 #include <cooperative_groups.h>
+#include <cuda/atomic>
 
 #include <limits>
 #include <type_traits>

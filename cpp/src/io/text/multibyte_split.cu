@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <io/utilities/output_builder.cuh>
+#include "io/utilities/output_builder.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -38,15 +38,13 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <cub/block/block_load.cuh>
+#include <cub/block/block_scan.cuh>
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
-
-#include <cub/block/block_load.cuh>
-#include <cub/block/block_scan.cuh>
-
-#include <cuda/functional>
 
 #include <cstdint>
 #include <limits>
@@ -138,7 +136,7 @@ using byte_offset   = int64_t;
 // it begins in. From there, each thread can then take deterministic action. In this case, the
 // deterministic action is counting and outputting delimiter offsets when a delimiter is found.
 
-__global__ void multibyte_split_init_kernel(
+CUDF_KERNEL void multibyte_split_init_kernel(
   cudf::size_type base_tile_idx,
   cudf::size_type num_tiles,
   cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
@@ -154,7 +152,7 @@ __global__ void multibyte_split_init_kernel(
   }
 }
 
-__global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
+CUDF_KERNEL __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   cudf::size_type base_tile_idx,
   byte_offset base_input_offset,
   output_offset base_output_offset,
@@ -231,7 +229,7 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   }
 }
 
-__global__ __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
+CUDF_KERNEL __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
   cudf::size_type base_tile_idx,
   byte_offset base_input_offset,
   output_offset base_output_offset,
@@ -556,7 +554,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     return cudf::make_strings_column(
       string_count,
       std::make_unique<cudf::column>(std::move(offsets), rmm::device_buffer{}, 0),
-      std::make_unique<cudf::column>(std::move(chars), rmm::device_buffer{}, 0),
+      chars.release(),
       0,
       {});
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
+#include "groupby/sort/group_single_pass_reduction_util.cuh"
+
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/span.hpp>
-#include <groupby/sort/group_single_pass_reduction_util.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 

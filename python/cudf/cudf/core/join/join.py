@@ -1,8 +1,7 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import itertools
-import warnings
 from typing import Any, ClassVar, List, Optional
 
 import cudf
@@ -232,7 +231,11 @@ class Merge:
         key_order = list(
             itertools.chain.from_iterable(
                 libcudf.copying.gather(
-                    [cudf.core.column.arange(n, dtype=size_type_dtype)],
+                    [
+                        cudf.core.column.as_column(
+                            range(n), dtype=size_type_dtype
+                        )
+                    ],
                     map_,
                     nullify=null,
                 )
@@ -532,12 +535,10 @@ class Merge:
             # modified in the size 0 case.
             and max(lhs._data.nlevels, 1) != max(rhs._data.nlevels, 1)
         ):
-            # Do not remove until pandas 2.0 support is added.
-            warnings.warn(
-                "merging between different levels is deprecated and will be "
-                f"removed in a future version. ({lhs._data.nlevels} levels on "
-                f"the left, {rhs._data.nlevels} on the right)",
-                FutureWarning,
+            raise ValueError(
+                "Not allowed to merge between different levels. "
+                f"({lhs._data.nlevels} levels on "
+                f"the left, {rhs._data.nlevels} on the right)"
             )
 
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,14 +21,13 @@
 
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
+#include "io/comp/nvcomp_adapter.hpp"
+#include "io/statistics/column_statistics.cuh"
+#include "io/utilities/column_utils.cuh"
+#include "io/utilities/config_utils.hpp"
 #include "parquet_common.hpp"
 #include "parquet_gpu.cuh"
 #include "writer_impl.hpp"
-
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/statistics/column_statistics.cuh>
-#include <io/utilities/column_utils.cuh>
-#include <io/utilities/config_utils.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
@@ -54,6 +53,10 @@
 #include <cstring>
 #include <numeric>
 #include <utility>
+
+#ifndef CUDF_VERSION
+#error "CUDF_VERSION is not defined"
+#endif
 
 namespace cudf::io::parquet::detail {
 
@@ -108,7 +111,7 @@ struct aggregate_writer_metadata {
     meta.num_rows           = this->files[part].num_rows;
     meta.row_groups         = this->files[part].row_groups;
     meta.key_value_metadata = this->files[part].key_value_metadata;
-    meta.created_by         = this->created_by;
+    meta.created_by         = "cudf version " CUDF_STRINGIFY(CUDF_VERSION);
     meta.column_orders      = this->column_orders;
     return meta;
   }
@@ -171,7 +174,6 @@ struct aggregate_writer_metadata {
     std::vector<std::vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
-  std::string created_by                                   = "";
   thrust::optional<std::vector<ColumnOrder>> column_orders = thrust::nullopt;
 };
 
@@ -189,6 +191,9 @@ Compression to_parquet_compression(compression_type compression)
     case compression_type::AUTO:
     case compression_type::SNAPPY: return Compression::SNAPPY;
     case compression_type::ZSTD: return Compression::ZSTD;
+    case compression_type::LZ4:
+      // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
+      return Compression::LZ4_RAW;
     case compression_type::NONE: return Compression::UNCOMPRESSED;
     default: CUDF_FAIL("Unsupported compression type");
   }
@@ -262,11 +267,13 @@ bool is_col_fixed_width(column_view const& column)
  * 2. stats_dtype: datatype for statistics calculation required for the data stream of a leaf node.
  * 3. ts_scale: scale to multiply or divide timestamp by in order to convert timestamp to parquet
  *    supported types
+ * 4. requested_encoding: A user provided encoding to use for the column.
  */
 struct schema_tree_node : public SchemaElement {
   cudf::detail::LinkedColPtr leaf_column;
   statistics_dtype stats_dtype;
   int32_t ts_scale;
+  column_encoding requested_encoding;
 
   // TODO(fut): Think about making schema a class that holds a vector of schema_tree_nodes. The
   // function construct_schema_tree could be its constructor. It can have method to get the per
@@ -583,7 +590,7 @@ std::vector<schema_tree_node> construct_schema_tree(
 
   std::function<void(cudf::detail::LinkedColPtr const&, column_in_metadata&, size_t)> add_schema =
     [&](cudf::detail::LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
-      bool col_nullable = is_col_nullable(col, col_meta, write_mode);
+      bool const col_nullable = is_col_nullable(col, col_meta, write_mode);
 
       auto set_field_id = [&schema, parent_idx](schema_tree_node& s,
                                                 column_in_metadata const& col_meta) {
@@ -599,6 +606,74 @@ std::vector<schema_tree_node> construct_schema_tree(
         return child_col_type == type_id::UINT8;
       };
 
+      // only call this after col_schema.type has been set
+      auto set_encoding = [&schema, parent_idx](schema_tree_node& s,
+                                                column_in_metadata const& col_meta) {
+        s.requested_encoding = column_encoding::USE_DEFAULT;
+
+        if (schema[parent_idx].name != "list" and
+            col_meta.get_encoding() != column_encoding::USE_DEFAULT) {
+          // do some validation
+          switch (col_meta.get_encoding()) {
+            case column_encoding::DELTA_BINARY_PACKED:
+              if (s.type != Type::INT32 && s.type != Type::INT64) {
+                CUDF_LOG_WARN(
+                  "DELTA_BINARY_PACKED encoding is only supported for INT32 and INT64 columns; the "
+                  "requested encoding will be ignored");
+                return;
+              }
+              break;
+
+            case column_encoding::DELTA_LENGTH_BYTE_ARRAY:
+              if (s.type != Type::BYTE_ARRAY) {
+                CUDF_LOG_WARN(
+                  "DELTA_LENGTH_BYTE_ARRAY encoding is only supported for BYTE_ARRAY columns; the "
+                  "requested encoding will be ignored");
+                return;
+              }
+              // we don't yet allow encoding decimal128 with DELTA_LENGTH_BYTE_ARRAY (nor with
+              // the BYTE_ARRAY physical type, but check anyway)
+              if (s.converted_type.value_or(ConvertedType::UNKNOWN) == ConvertedType::DECIMAL) {
+                CUDF_LOG_WARN(
+                  "Decimal types cannot yet be encoded as DELTA_LENGTH_BYTE_ARRAY; the "
+                  "requested encoding will be ignored");
+                return;
+              }
+              break;
+
+            case column_encoding::DELTA_BYTE_ARRAY:
+              if (s.type != Type::BYTE_ARRAY && s.type != Type::FIXED_LEN_BYTE_ARRAY) {
+                CUDF_LOG_WARN(
+                  "DELTA_BYTE_ARRAY encoding is only supported for BYTE_ARRAY and "
+                  "FIXED_LEN_BYTE_ARRAY columns; the requested encoding will be ignored");
+                return;
+              }
+              // we don't yet allow encoding decimal128 with DELTA_BYTE_ARRAY
+              if (s.converted_type.value_or(ConvertedType::UNKNOWN) == ConvertedType::DECIMAL) {
+                CUDF_LOG_WARN(
+                  "Decimal types cannot yet be encoded as DELTA_BYTE_ARRAY; the "
+                  "requested encoding will be ignored");
+                return;
+              }
+              break;
+
+            // supported parquet encodings
+            case column_encoding::PLAIN:
+            case column_encoding::DICTIONARY: break;
+
+            // all others
+            default:
+              CUDF_LOG_WARN(
+                "Unsupported page encoding requested: {}; the requested encoding will be ignored",
+                static_cast<int>(col_meta.get_encoding()));
+              return;
+          }
+
+          // requested encoding seems to be ok, set it
+          s.requested_encoding = col_meta.get_encoding();
+        }
+      };
+
       // There is a special case for a list<int8> column with one byte column child. This column can
       // have a special flag that indicates we write this out as binary instead of a list. This is a
       // more efficient storage mechanism for a single-depth list of bytes, but is a departure from
@@ -606,10 +681,10 @@ std::vector<schema_tree_node> construct_schema_tree(
       // column that isn't a single-depth list<int8> the code will throw.
       if (col_meta.is_enabled_output_as_binary() && is_last_list_child(col)) {
         CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
-                     "Binary column's corresponding metadata should have zero or two children!");
+                     "Binary column's corresponding metadata should have zero or two children");
         if (col_meta.num_children() > 0) {
           CUDF_EXPECTS(col->children[lists_column_view::child_column_index]->children.empty(),
-                       "Binary column must not be nested!");
+                       "Binary column must not be nested");
         }
 
         schema_tree_node col_schema{};
@@ -621,6 +696,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         col_schema.parent_idx  = parent_idx;
         col_schema.leaf_column = col;
         set_field_id(col_schema, col_meta);
+        set_encoding(col_schema, col_meta);
         col_schema.output_as_byte_array = col_meta.is_enabled_output_as_binary();
         schema.push_back(col_schema);
       } else if (col->type().id() == type_id::STRUCT) {
@@ -731,8 +807,13 @@ std::vector<schema_tree_node> construct_schema_tree(
       } else {
         // if leaf, add current
         if (col->type().id() == type_id::STRING) {
-          CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
-                       "String column's corresponding metadata should have zero or two children");
+          if (col_meta.is_enabled_output_as_binary()) {
+            CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
+                         "Binary column's corresponding metadata should have zero or two children");
+          } else {
+            CUDF_EXPECTS(col_meta.num_children() == 1 or col_meta.num_children() == 0,
+                         "String column's corresponding metadata should have zero or one children");
+          }
         } else {
           CUDF_EXPECTS(col_meta.num_children() == 0,
                        "Leaf column's corresponding metadata cannot have children");
@@ -751,6 +832,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         col_schema.parent_idx  = parent_idx;
         col_schema.leaf_column = col;
         set_field_id(col_schema, col_meta);
+        set_encoding(col_schema, col_meta);
         schema.push_back(col_schema);
       }
     };
@@ -937,9 +1019,10 @@ parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_stream
 
   desc.level_bits = CompactProtocolReader::NumRequiredBits(max_rep_level()) << 4 |
                     CompactProtocolReader::NumRequiredBits(max_def_level());
-  desc.nullability   = _d_nullability.data();
-  desc.max_def_level = _max_def_level;
-  desc.max_rep_level = _max_rep_level;
+  desc.nullability        = _d_nullability.data();
+  desc.max_def_level      = _max_def_level;
+  desc.max_rep_level      = _max_rep_level;
+  desc.requested_encoding = schema_node.requested_encoding;
   return desc;
 }
 
@@ -1012,6 +1095,8 @@ auto to_nvcomp_compression_type(Compression codec)
 {
   if (codec == Compression::SNAPPY) return nvcomp::compression_type::SNAPPY;
   if (codec == Compression::ZSTD) return nvcomp::compression_type::ZSTD;
+  // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
+  if (codec == Compression::LZ4_RAW) return nvcomp::compression_type::LZ4;
   CUDF_FAIL("Unsupported compression type");
 }
 
@@ -1157,9 +1242,15 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   std::vector<rmm::device_uvector<slot_type>> hash_maps_storage;
   hash_maps_storage.reserve(h_chunks.size());
   for (auto& chunk : h_chunks) {
-    if (col_desc[chunk.col_desc_id].physical_type == Type::BOOLEAN ||
-        (col_desc[chunk.col_desc_id].output_as_byte_array &&
-         col_desc[chunk.col_desc_id].physical_type == Type::BYTE_ARRAY)) {
+    auto const& chunk_col_desc = col_desc[chunk.col_desc_id];
+    auto const is_requested_non_dict =
+      chunk_col_desc.requested_encoding != column_encoding::USE_DEFAULT &&
+      chunk_col_desc.requested_encoding != column_encoding::DICTIONARY;
+    auto const is_type_non_dict =
+      chunk_col_desc.physical_type == Type::BOOLEAN ||
+      (chunk_col_desc.output_as_byte_array && chunk_col_desc.physical_type == Type::BYTE_ARRAY);
+
+    if (is_type_non_dict || is_requested_non_dict) {
       chunk.use_dictionary = false;
     } else {
       chunk.use_dictionary = true;
@@ -1179,6 +1270,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   chunks.device_to_host_sync(stream);
 
   // Make decision about which chunks have dictionary
+  bool cannot_honor_request = false;
   for (auto& ck : h_chunks) {
     if (not ck.use_dictionary) { continue; }
     std::tie(ck.use_dictionary, ck.dict_rle_bits) = [&]() -> std::pair<bool, uint8_t> {
@@ -1205,6 +1297,19 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
 
       return {true, nbits};
     }();
+    // If dictionary encoding was requested, but it cannot be used, then print a warning. It will
+    // actually be disabled in gpuInitPages.
+    if (not ck.use_dictionary) {
+      auto const& chunk_col_desc = col_desc[ck.col_desc_id];
+      if (chunk_col_desc.requested_encoding == column_encoding::DICTIONARY) {
+        cannot_honor_request = true;
+      }
+    }
+  }
+
+  // warn if we have to ignore requested encoding
+  if (cannot_honor_request) {
+    CUDF_LOG_WARN("DICTIONARY encoding was requested, but resource constraints prevent its use");
   }
 
   // TODO: (enh) Deallocate hash map storage for chunks that don't use dict and clear pointers.
@@ -1358,7 +1463,14 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
         CUDF_FAIL("Compression error: " + reason.value());
       }
       nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
-
+      break;
+    }
+    case Compression::LZ4_RAW: {
+      if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::LZ4);
+          reason) {
+        CUDF_FAIL("Compression error: " + reason.value());
+      }
+      nvcomp::batched_compress(nvcomp::compression_type::LZ4, comp_in, comp_out, comp_res, stream);
       break;
     }
     case Compression::UNCOMPRESSED: break;
@@ -2066,7 +2178,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           need_sync = true;
         }
 
-        row_group.total_byte_size += ck.compressed_size;
+        row_group.total_byte_size += ck.bfr_size;
         column_chunk_meta.total_uncompressed_size = ck.bfr_size;
         column_chunk_meta.total_compressed_size   = ck.compressed_size;
       }
@@ -2393,7 +2505,8 @@ void writer::impl::write_parquet_data_to_sink(
             // skip dict pages
             if (enc_page.page_type == PageType::DICTIONARY_PAGE) { continue; }
 
-            int32_t this_page_size = enc_page.hdr_size + enc_page.max_data_size;
+            int32_t const this_page_size =
+              enc_page.hdr_size + (ck.is_compressed ? enc_page.comp_data_size : enc_page.data_size);
             // first_row_idx is relative to start of row group
             PageLocation loc{curr_pg_offset, this_page_size, enc_page.start_row - ck.start_row};
             if (is_byte_arr) { var_bytes.push_back(enc_page.var_bytes_size); }

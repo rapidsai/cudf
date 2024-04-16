@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/types.hpp>
-#include <rmm/cuda_stream_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 namespace cudf::lists::detail {

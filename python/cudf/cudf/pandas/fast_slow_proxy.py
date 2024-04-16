@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.   # noqa: E501
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -24,6 +24,11 @@ from typing import (
 )
 
 from .annotation import nvtx
+
+
+def call_operator(fn, args, kwargs):
+    return fn(*args, **kwargs)
+
 
 _CUDF_PANDAS_NVTX_COLORS = {
     "COPY_SLOW_TO_FAST": 0xCA0020,
@@ -189,22 +194,6 @@ def make_final_proxy_type(
             else _State.SLOW
         )
 
-    def __reduce__(self):
-        # Need a local import to avoid circular import issues
-        from .module_accelerator import disable_module_accelerator
-
-        with disable_module_accelerator():
-            pickled_wrapped_obj = pickle.dumps(self._fsproxy_wrapped)
-        return (_PickleConstructor(type(self)), (), pickled_wrapped_obj)
-
-    def __setstate__(self, state):
-        # Need a local import to avoid circular import issues
-        from .module_accelerator import disable_module_accelerator
-
-        with disable_module_accelerator():
-            unpickled_wrapped_obj = pickle.loads(state)
-        self._fsproxy_wrapped = unpickled_wrapped_obj
-
     slow_dir = dir(slow_type)
     cls_dict = {
         "__init__": __init__,
@@ -215,9 +204,8 @@ def make_final_proxy_type(
         "_fsproxy_slow_to_fast": _fsproxy_slow_to_fast,
         "_fsproxy_fast_to_slow": _fsproxy_fast_to_slow,
         "_fsproxy_state": _fsproxy_state,
-        "__reduce__": __reduce__,
-        "__setstate__": __setstate__,
     }
+
     if additional_attributes is None:
         additional_attributes = {}
     for method in _SPECIAL_METHODS:
@@ -449,9 +437,7 @@ class _FastSlowAttribute:
                 # methods because dir for the method won't be the same as for
                 # the pure unbound function, but the alternative is
                 # materializing the slow object when we don't really want to.
-                result._fsproxy_slow_dir = dir(
-                    slow_result_type
-                )  # type: ignore
+                result._fsproxy_slow_dir = dir(slow_result_type)  # type: ignore
 
         return result
 
@@ -584,7 +570,24 @@ class _FastSlowProxy:
             _raise_attribute_error(self.__class__.__name__, name)
         if name.startswith("_"):
             # private attributes always come from `._fsproxy_slow`:
-            return getattr(self._fsproxy_slow, name)
+            obj = getattr(self._fsproxy_slow, name)
+            if name.startswith("__array"):
+                # TODO: numpy methods raise when given proxy ndarray objects
+                # https://numpy.org/doc/stable/reference/arrays.classes.html#special-attributes-and-methods  # noqa:E501
+                return obj
+
+            if not _is_function_or_method(obj):
+                return _maybe_wrap_result(
+                    obj, getattr, self._fsproxy_slow, name
+                )
+
+            @functools.wraps(obj)
+            def _wrapped_private_slow(*args, **kwargs):
+                slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+                result = obj(*slow_args, **slow_kwargs)
+                return _maybe_wrap_result(result, obj, *args, **kwargs)
+
+            return _wrapped_private_slow
         attr = _FastSlowAttribute(name)
         return attr.__get__(self)
 
@@ -716,6 +719,27 @@ class _FinalProxy(_FastSlowProxy):
         proxy._fsproxy_wrapped = value
         return proxy
 
+    def __reduce__(self):
+        """
+        In conjunction with `__proxy_setstate__`, this effectively enables
+        proxy types to be pickled and unpickled by pickling and unpickling
+        the underlying wrapped types.
+        """
+        # Need a local import to avoid circular import issues
+        from .module_accelerator import disable_module_accelerator
+
+        with disable_module_accelerator():
+            pickled_wrapped_obj = pickle.dumps(self._fsproxy_wrapped)
+        return (_PickleConstructor(type(self)), (), pickled_wrapped_obj)
+
+    def __setstate__(self, state):
+        # Need a local import to avoid circular import issues
+        from .module_accelerator import disable_module_accelerator
+
+        with disable_module_accelerator():
+            unpickled_wrapped_obj = pickle.loads(state)
+        self._fsproxy_wrapped = unpickled_wrapped_obj
+
 
 class _IntermediateProxy(_FastSlowProxy):
     """
@@ -772,6 +796,34 @@ class _IntermediateProxy(_FastSlowProxy):
         args, kwargs = _slow_arg(args), _slow_arg(kwargs)
         return func(*args, **kwargs)
 
+    def __reduce__(self):
+        """
+        In conjunction with `__proxy_setstate__`, this effectively enables
+        proxy types to be pickled and unpickled by pickling and unpickling
+        the underlying wrapped types.
+        """
+        # Need a local import to avoid circular import issues
+        from .module_accelerator import disable_module_accelerator
+
+        with disable_module_accelerator():
+            pickled_wrapped_obj = pickle.dumps(self._fsproxy_wrapped)
+        pickled_method_chain = pickle.dumps(self._method_chain)
+        return (
+            _PickleConstructor(type(self)),
+            (),
+            (pickled_wrapped_obj, pickled_method_chain),
+        )
+
+    def __setstate__(self, state):
+        # Need a local import to avoid circular import issues
+        from .module_accelerator import disable_module_accelerator
+
+        with disable_module_accelerator():
+            unpickled_wrapped_obj = pickle.loads(state[0])
+        unpickled_method_chain = pickle.loads(state[1])
+        self._fsproxy_wrapped = unpickled_wrapped_obj
+        self._method_chain = unpickled_method_chain
+
 
 class _CallableProxyMixin:
     """
@@ -788,7 +840,7 @@ class _CallableProxyMixin:
             # _fast_slow_function_call) to avoid infinite recursion.
             # TODO: When Python 3.11 is the minimum supported Python version
             # this can use operator.call
-            lambda fn, args, kwargs: fn(*args, **kwargs),
+            call_operator,
             self,
             args,
             kwargs,
@@ -1017,7 +1069,7 @@ def _is_intermediate_type(result: Any) -> bool:
 
 
 def _is_function_or_method(obj: Any) -> bool:
-    return isinstance(
+    res = isinstance(
         obj,
         (
             types.FunctionType,
@@ -1029,6 +1081,12 @@ def _is_function_or_method(obj: Any) -> bool:
             types.BuiltinMethodType,
         ),
     )
+    if not res:
+        try:
+            return "cython_function_or_method" in str(type(obj))
+        except Exception:
+            return False
+    return res
 
 
 def _replace_closurevars(

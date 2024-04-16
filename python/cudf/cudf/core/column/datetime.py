@@ -1,8 +1,9 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import datetime
+import functools
 import locale
 import re
 from locale import nl_langinfo
@@ -11,6 +12,7 @@ from typing import Any, Mapping, Optional, Sequence, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -21,12 +23,7 @@ from cudf._typing import (
     DtypeObj,
     ScalarLike,
 )
-from cudf.api.types import (
-    is_datetime64_dtype,
-    is_datetime64tz_dtype,
-    is_scalar,
-    is_timedelta64_dtype,
-)
+from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
@@ -102,6 +99,9 @@ def infer_format(element: str, **kwargs) -> str:
     """
     Infers datetime format from a string, also takes cares for `ms` and `ns`
     """
+    if not cudf.get_option("mode.pandas_compatible"):
+        # We allow "Z" but don't localize it to datetime64[ns, UTC] type (yet)
+        element = element.replace("Z", "")
     fmt = _guess_datetime_format(element, **kwargs)
 
     if fmt is not None:
@@ -109,7 +109,13 @@ def infer_format(element: str, **kwargs) -> str:
             raise NotImplementedError(
                 "cuDF does not yet support timezone-aware datetimes"
             )
-        return fmt
+        if ".%f" not in fmt:
+            # For context read:
+            # https://github.com/pandas-dev/pandas/issues/52418
+            # We cannot rely on format containing only %f
+            # c++/libcudf expects .%3f, .%6f, .%9f
+            # Logic below handles those cases well.
+            return fmt
 
     element_parts = element.split(".")
     if len(element_parts) != 2:
@@ -236,6 +242,8 @@ class DatetimeColumn(column.ColumnBase):
         null_count: Optional[int] = None,
     ):
         dtype = cudf.dtype(dtype)
+        if dtype.kind != "M":
+            raise TypeError(f"{self.dtype} is not a supported datetime type")
 
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
@@ -251,24 +259,26 @@ class DatetimeColumn(column.ColumnBase):
             null_count=null_count,
         )
 
-        if self.dtype.type is not np.datetime64:
-            raise TypeError(f"{self.dtype} is not a supported datetime type")
-
-        self._time_unit, _ = np.datetime_data(self.dtype)
-
     def __contains__(self, item: ScalarLike) -> bool:
         try:
-            item_as_dt64 = np.datetime64(item, self._time_unit)
-        except ValueError:
-            # If item cannot be converted to datetime type
-            # np.datetime64 raises ValueError, hence `item`
-            # cannot exist in `self`.
+            ts = pd.Timestamp(item).as_unit(self.time_unit)
+        except Exception:
+            # pandas can raise a variety of errors
+            # item cannot exist in self.
             return False
-        return item_as_dt64.astype("int64") in self.as_numerical
+        if ts.tzinfo is None and isinstance(self.dtype, pd.DatetimeTZDtype):
+            return False
+        elif ts.tzinfo is not None:
+            ts = ts.tz_convert(None)
+        return ts.to_numpy().astype("int64") in self.as_numerical_column(
+            "int64"
+        )
 
-    @property
+    @functools.cached_property
     def time_unit(self) -> str:
-        return self._time_unit
+        if isinstance(self.dtype, pd.DatetimeTZDtype):
+            return self.dtype.unit
+        return np.datetime_data(self.dtype)[0]
 
     @property
     def year(self) -> ColumnBase:
@@ -306,27 +316,6 @@ class DatetimeColumn(column.ColumnBase):
     def day_of_year(self) -> ColumnBase:
         return self.get_dt_field("day_of_year")
 
-    def to_pandas(
-        self,
-        *,
-        index: Optional[pd.Index] = None,
-        nullable: bool = False,
-    ) -> pd.Series:
-        if nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-        # `copy=True` workaround until following issue is fixed:
-        # https://issues.apache.org/jira/browse/ARROW-9772
-
-        # Pandas only supports `datetime64[ns]` dtype
-        # and conversion to this type is necessary to make
-        # arrow to pandas conversion happen for large values.
-        return pd.Series(
-            self.astype("datetime64[ns]").to_arrow(),
-            copy=True,
-            dtype=self.dtype,
-            index=index,
-        )
-
     @property
     def values(self):
         """
@@ -335,6 +324,12 @@ class DatetimeColumn(column.ColumnBase):
         raise NotImplementedError(
             "DateTime Arrays is not yet implemented in cudf"
         )
+
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        if cudf.get_option("mode.pandas_compatible"):
+            return pd.Timestamp(result)
+        return result
 
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
@@ -371,18 +366,29 @@ class DatetimeColumn(column.ColumnBase):
 
         if isinstance(other, np.datetime64):
             if np.isnat(other):
-                return cudf.Scalar(None, dtype=self.dtype)
+                other_time_unit = cudf.utils.dtypes.get_time_unit(other)
+                if other_time_unit not in {"s", "ms", "ns", "us"}:
+                    other_time_unit = "ns"
+
+                return cudf.Scalar(
+                    None, dtype=f"datetime64[{other_time_unit}]"
+                )
 
             other = other.astype(self.dtype)
             return cudf.Scalar(other)
         elif isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
 
+            if np.isnat(other):
+                return cudf.Scalar(
+                    None,
+                    dtype="timedelta64[ns]"
+                    if other_time_unit not in {"s", "ms", "ns", "us"}
+                    else other.dtype,
+                )
+
             if other_time_unit not in {"s", "ms", "ns", "us"}:
                 other = other.astype("timedelta64[s]")
-
-            if np.isnat(other):
-                return cudf.Scalar(None, dtype=other.dtype)
 
             return cudf.Scalar(other)
         elif isinstance(other, str):
@@ -392,19 +398,6 @@ class DatetimeColumn(column.ColumnBase):
                 pass
 
         return NotImplemented
-
-    @property
-    def as_numerical(self) -> "cudf.core.column.NumericalColumn":
-        return cast(
-            "cudf.core.column.NumericalColumn",
-            column.build_column(
-                data=self.base_data,
-                dtype=np.int64,
-                mask=self.base_mask,
-                offset=self.offset,
-                size=self.size,
-            ),
-        )
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -429,28 +422,35 @@ class DatetimeColumn(column.ColumnBase):
             )
         return output
 
-    def as_datetime_column(self, dtype: Dtype, **kwargs) -> DatetimeColumn:
+    def as_datetime_column(
+        self, dtype: Dtype, format: str | None = None
+    ) -> DatetimeColumn:
         dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
     def as_timedelta_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.TimeDeltaColumn":
         raise TypeError(
             f"cannot astype a datetimelike from {self.dtype} to {dtype}"
         )
 
     def as_numerical_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
-        return cast(
-            "cudf.core.column.NumericalColumn", self.as_numerical.astype(dtype)
+        col = column.build_column(
+            data=self.base_data,
+            dtype=np.int64,
+            mask=self.base_mask,
+            offset=self.offset,
+            size=self.size,
         )
+        return cast("cudf.core.column.NumericalColumn", col.astype(dtype))
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         if format is None:
             format = _dtype_to_format_conversion.get(
@@ -480,11 +480,11 @@ class DatetimeColumn(column.ColumnBase):
         self, skipna=None, min_count: int = 0, dtype=np.float64
     ) -> ScalarLike:
         return pd.Timestamp(
-            self.as_numerical.mean(
+            self.as_numerical_column("int64").mean(
                 skipna=skipna, min_count=min_count, dtype=dtype
             ),
             unit=self.time_unit,
-        )
+        ).as_unit(self.time_unit)
 
     def std(
         self,
@@ -494,15 +494,34 @@ class DatetimeColumn(column.ColumnBase):
         ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical.std(
+            self.as_numerical_column("int64").std(
                 skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
             )
             * _unit_to_nanoseconds_conversion[self.time_unit],
-        )
+        ).as_unit(self.time_unit)
 
     def median(self, skipna: Optional[bool] = None) -> pd.Timestamp:
         return pd.Timestamp(
-            self.as_numerical.median(skipna=skipna), unit=self.time_unit
+            self.as_numerical_column("int64").median(skipna=skipna),
+            unit=self.time_unit,
+        ).as_unit(self.time_unit)
+
+    def cov(self, other: DatetimeColumn) -> float:
+        if not isinstance(other, DatetimeColumn):
+            raise TypeError(
+                f"cannot perform cov with types {self.dtype}, {other.dtype}"
+            )
+        return self.as_numerical_column("int64").cov(
+            other.as_numerical_column("int64")
+        )
+
+    def corr(self, other: DatetimeColumn) -> float:
+        if not isinstance(other, DatetimeColumn):
+            raise TypeError(
+                f"cannot perform corr with types {self.dtype}, {other.dtype}"
+            )
+        return self.as_numerical_column("int64").corr(
+            other.as_numerical_column("int64")
         )
 
     def quantile(
@@ -512,14 +531,16 @@ class DatetimeColumn(column.ColumnBase):
         exact: bool,
         return_scalar: bool,
     ) -> ColumnBase:
-        result = self.as_numerical.quantile(
+        result = self.as_numerical_column("int64").quantile(
             q=q,
             interpolation=interpolation,
             exact=exact,
             return_scalar=return_scalar,
         )
         if return_scalar:
-            return pd.Timestamp(result, unit=self.time_unit)
+            return pd.Timestamp(result, unit=self.time_unit).as_unit(
+                self.time_unit
+            )
         return result.astype(self.dtype)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
@@ -584,19 +605,21 @@ class DatetimeColumn(column.ColumnBase):
         if out_dtype is None:
             return NotImplemented
 
-        result = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-        if cudf.get_option(
+        result_col = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if out_dtype != cudf.dtype(np.bool_) and op == "__add__":
+            return result_col
+        elif cudf.get_option(
             "mode.pandas_compatible"
         ) and out_dtype == cudf.dtype(np.bool_):
-            result = result.fillna(op == "__ne__")
-        return result
+            return result_col.fillna(op == "__ne__")
+        else:
+            return result_col
 
     def fillna(
         self,
         fill_value: Any = None,
         method: Optional[str] = None,
-        dtype: Optional[Dtype] = None,
-    ) -> DatetimeColumn:
+    ) -> Self:
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
                 return self.copy(deep=True)
@@ -613,12 +636,12 @@ class DatetimeColumn(column.ColumnBase):
     ) -> cudf.core.column.NumericalColumn:
         value = column.as_column(
             pd.to_datetime(value), dtype=self.dtype
-        ).as_numerical
-        return self.as_numerical.indices_of(value)
+        ).as_numerical_column("int64")
+        return self.as_numerical_column("int64").indices_of(value)
 
     @property
     def is_unique(self) -> bool:
-        return self.as_numerical.is_unique
+        return self.as_numerical_column("int64").is_unique
 
     def isin(self, values: Sequence) -> ColumnBase:
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)
@@ -654,7 +677,7 @@ class DatetimeColumn(column.ColumnBase):
             return False
 
     def _with_type_metadata(self, dtype):
-        if is_datetime64tz_dtype(dtype):
+        if isinstance(dtype, pd.DatetimeTZDtype):
             return DatetimeTZColumn(
                 data=self.base_data,
                 dtype=dtype,
@@ -691,15 +714,25 @@ class DatetimeTZColumn(DatetimeColumn):
         *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
-        if nullable:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-        series = self._local_time.to_pandas().dt.tz_localize(
-            self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
-        )
-        if index is not None:
-            series.index = index
-        return series
+        elif arrow_type:
+            return pd.Series(
+                pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
+            )
+        else:
+            series = self._local_time.to_pandas().dt.tz_localize(
+                self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
+            )
+            if index is not None:
+                series.index = index
+            return series
 
     def to_arrow(self):
         return pa.compute.assume_timezone(
@@ -726,9 +759,9 @@ class DatetimeTZColumn(DatetimeColumn):
         return utc_to_local(self, str(self.dtype.tz))
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
-        return self._local_time.as_string_column(dtype, format, **kwargs)
+        return self._local_time.as_string_column(dtype, format)
 
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(

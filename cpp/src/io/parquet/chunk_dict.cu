@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ constexpr int DEFAULT_BLOCK_SIZE = 256;
 }
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   initialize_chunk_hash_maps_kernel(device_span<EncColumnChunk> chunks)
 {
   auto const chunk = chunks[blockIdx.x];
@@ -98,7 +98,7 @@ struct map_find_fn {
 };
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   populate_chunk_hash_maps_kernel(cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;
@@ -189,7 +189,7 @@ __global__ void __launch_bounds__(block_size)
 }
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   collect_map_entries_kernel(device_span<EncColumnChunk> chunks)
 {
   auto& chunk = chunks[blockIdx.x];
@@ -223,7 +223,7 @@ __global__ void __launch_bounds__(block_size)
 }
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   get_dictionary_indices_kernel(cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;

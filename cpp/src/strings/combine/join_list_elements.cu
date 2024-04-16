@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -207,7 +207,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                                     separate_nulls,
                                                     empty_list_policy};
 
-  auto [offsets_column, chars_column] = make_strings_children(comp_fn, num_rows, stream, mr);
+  auto [offsets_column, chars] = make_strings_children(comp_fn, num_rows, stream, mr);
   auto [null_mask, null_count] =
     cudf::detail::valid_if(thrust::counting_iterator<size_type>(0),
                            thrust::counting_iterator<size_type>(num_rows),
@@ -216,7 +216,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                            mr);
 
   return make_strings_column(
-    num_rows, std::move(offsets_column), std::move(chars_column), null_count, std::move(null_mask));
+    num_rows, std::move(offsets_column), chars.release(), null_count, std::move(null_mask));
 }
 
 namespace {
@@ -282,7 +282,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                                     separate_nulls,
                                                     empty_list_policy};
 
-  auto [offsets_column, chars_column] = make_strings_children(comp_fn, num_rows, stream, mr);
+  auto [offsets_column, chars] = make_strings_children(comp_fn, num_rows, stream, mr);
   auto [null_mask, null_count] =
     cudf::detail::valid_if(thrust::counting_iterator<size_type>(0),
                            thrust::counting_iterator<size_type>(num_rows),
@@ -291,7 +291,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                            mr);
 
   return make_strings_column(
-    num_rows, std::move(offsets_column), std::move(chars_column), null_count, std::move(null_mask));
+    num_rows, std::move(offsets_column), chars.release(), null_count, std::move(null_mask));
 }
 
 }  // namespace detail
