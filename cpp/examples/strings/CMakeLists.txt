@@ -22,18 +22,23 @@ add_executable(libcudf_apis libcudf_apis.cpp)
 target_compile_features(libcudf_apis PRIVATE cxx_std_17)
 target_link_libraries(libcudf_apis PRIVATE cudf::cudf nvToolsExt)
 # Install the example only if CMAKE_INSTALL_PREFIX is set
-if (NOT $ENV{CMAKE_INSTALL_PREFIX} STREQUAL "")
+if(NOT $ENV{CMAKE_INSTALL_PREFIX} STREQUAL "")
   # set the CMAKE_INSTALL_PREFIX to the environment variable value
-  set(CMAKE_INSTALL_PREFIX "$ENV{CMAKE_INSTALL_PREFIX}" CACHE STRING "Force CMAKE_INSTALL_PREFIX to environment variable" FORCE)
+  set(CMAKE_INSTALL_PREFIX
+      "$ENV{CMAKE_INSTALL_PREFIX}"
+      CACHE STRING "Force CMAKE_INSTALL_PREFIX to environment variable" FORCE
+  )
   install(TARGETS libcudf_apis DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/examples/libcudf)
-  install(FILES ${CMAKE_CURRENT_LIST_DIR}/names.csv DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/examples/libcudf)
+  install(FILES ${CMAKE_CURRENT_LIST_DIR}/names.csv
+          DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/examples/libcudf
+  )
 endif()
 
 add_executable(custom_with_malloc custom_with_malloc.cu)
 target_compile_features(custom_with_malloc PRIVATE cxx_std_17)
 target_compile_options(custom_with_malloc PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
 target_link_libraries(custom_with_malloc PRIVATE cudf::cudf nvToolsExt)
-if (NOT ${CMAKE_INSTALL_PREFIX} STREQUAL "")
+if(NOT ${CMAKE_INSTALL_PREFIX} STREQUAL "")
   install(TARGETS custom_with_malloc DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/examples/libcudf)
 endif()
 
@@ -41,7 +46,7 @@ add_executable(custom_prealloc custom_prealloc.cu)
 target_compile_features(custom_prealloc PRIVATE cxx_std_17)
 target_compile_options(custom_prealloc PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
 target_link_libraries(custom_prealloc PRIVATE cudf::cudf nvToolsExt)
-if (NOT ${CMAKE_INSTALL_PREFIX} STREQUAL "")
+if(NOT ${CMAKE_INSTALL_PREFIX} STREQUAL "")
   install(TARGETS custom_prealloc DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/examples/libcudf)
 endif()
 
@@ -49,6 +54,6 @@ add_executable(custom_optimized custom_optimized.cu)
 target_compile_features(custom_optimized PRIVATE cxx_std_17)
 target_compile_options(custom_optimized PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
 target_link_libraries(custom_optimized PRIVATE cudf::cudf nvToolsExt)
-if (NOT ${CMAKE_INSTALL_PREFIX} STREQUAL "")
+if(NOT ${CMAKE_INSTALL_PREFIX} STREQUAL "")
   install(TARGETS custom_optimized DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/examples/libcudf)
 endif()

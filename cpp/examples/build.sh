@@ -25,7 +25,7 @@ build_example() {
   cmake -S ${example_dir} -B ${build_dir} -Dcudf_ROOT="${LIB_BUILD_DIR}"
   # Build
   cmake --build ${build_dir} -j${PARALLEL_LEVEL}
- 
+
   # Install only if CMAKE_INSTALL_PREFIX is set
   if [[ -n "${CMAKE_INSTALL_PREFIX}" ]]; then
     echo "Setting prefix = ${CMAKE_INSTALL_PREFIX}"
