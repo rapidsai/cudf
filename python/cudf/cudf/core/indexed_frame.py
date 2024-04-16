@@ -1534,11 +1534,6 @@ class IndexedFrame(Frame):
             **DataFrame.median, Series.median**
 
             Parameters currently not supported are `level` and `numeric_only`.
-
-        .. pandas-compat::
-            **DataFrame.median, Series.median**
-
-            Parameters currently not supported are `level` and `numeric_only`.
         """
         return self._reduce(
             "median",
