@@ -182,7 +182,7 @@ jobs:
   pandas-tests-diff:
     # diff the results of running the Pandas unit tests and publish a job summary
     needs: pandas-tests
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@patch-1
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.06
     with:
         node_type: cpu4
         build_type: pull-request
