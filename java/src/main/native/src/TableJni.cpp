@@ -3432,7 +3432,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(JNIEnv *env, j
     // `temp_mr` is the memory resource that `cudf::chunked_pack` will use to create temporary
     // and scratch memory only.
     auto temp_mr = memoryResourceHandle != 0 ?
-                       reinterpret_cast<rmm::device_async_resource_ref>(memoryResourceHandle) :
+                       reinterpret_cast<rmm::mr::device_memory_resource *>(memoryResourceHandle) :
                        rmm::mr::get_current_device_resource();
     auto chunked_pack = cudf::chunked_pack::create(*n_table, bounce_buffer_size, temp_mr);
     return reinterpret_cast<jlong>(chunked_pack.release());
