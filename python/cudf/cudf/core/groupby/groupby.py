@@ -1767,13 +1767,23 @@ class GroupBy(Serializable, Reducible, Scannable):
         --------
         agg
         """
+        if not (isinstance(function, str) or callable(function)):
+            raise TypeError(
+                "Aggregation must be a named aggregation or a callable"
+            )
         try:
             result = self.agg(function)
         except TypeError as e:
             raise NotImplementedError(
                 "Currently, `transform()` supports only aggregations."
             ) from e
-
+        # If the aggregation is a scan, don't broadcast
+        if libgroupby._is_all_scan_aggregate([[function]]):
+            if len(result) != len(self.obj):
+                raise AssertionError(
+                    "Unexpected result length for scan transform"
+                )
+            return result
         return self._broadcast(result)
 
     def rolling(self, *args, **kwargs):
