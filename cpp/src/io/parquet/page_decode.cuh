@@ -441,7 +441,7 @@ gpuInitStringDescriptors(page_state_s* s, [[maybe_unused]] state_buf* sb, int ta
 
     while (pos < target_pos) {
       int len = 0;
-      if ((s->col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
+      if (s->col.physical_type == FIXED_LEN_BYTE_ARRAY) {
         if (k < dict_size) { len = s->dtype_len_in; }
       } else {
         if (k + 4 <= dict_size) {
@@ -1144,11 +1144,11 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
     if (s->page.num_input_values > 0) {
       uint8_t* cur = s->page.page_data;
       uint8_t* end = cur + s->page.uncompressed_page_size;
-
-      uint32_t dtype_len_out = s->col.data_type >> 3;
-      s->ts_scale            = 0;
+      s->ts_scale  = 0;
       // Validate data type
-      auto const data_type = s->col.data_type & 7;
+      auto const data_type = s->col.physical_type;
+      auto const is_decimal =
+        s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
       switch (data_type) {
         case BOOLEAN:
           s->dtype_len = 1;  // Boolean are stored as 1 byte on the output
@@ -1159,13 +1159,15 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           if (s->col.ts_clock_rate) {
             int32_t units = 0;
             // Duration types are not included because no scaling is done when reading
-            if (s->col.converted_type == TIMESTAMP_MILLIS) {
-              units = cudf::timestamp_ms::period::den;
-            } else if (s->col.converted_type == TIMESTAMP_MICROS) {
-              units = cudf::timestamp_us::period::den;
-            } else if (s->col.logical_type.has_value() and
-                       s->col.logical_type->is_timestamp_nanos()) {
-              units = cudf::timestamp_ns::period::den;
+            if (s->col.logical_type.has_value()) {
+              auto const& lt = s->col.logical_type.value();
+              if (lt.is_timestamp_millis()) {
+                units = cudf::timestamp_ms::period::den;
+              } else if (lt.is_timestamp_micros()) {
+                units = cudf::timestamp_us::period::den;
+              } else if (lt.is_timestamp_nanos()) {
+                units = cudf::timestamp_ns::period::den;
+              }
             }
             if (units and units != s->col.ts_clock_rate) {
               s->ts_scale = (s->col.ts_clock_rate < units) ? -(units / s->col.ts_clock_rate)
@@ -1176,8 +1178,8 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
         case DOUBLE: s->dtype_len = 8; break;
         case INT96: s->dtype_len = 12; break;
         case BYTE_ARRAY:
-          if (s->col.converted_type == DECIMAL) {
-            auto const decimal_precision = s->col.decimal_precision;
+          if (is_decimal) {
+            auto const decimal_precision = s->col.logical_type->precision();
             s->dtype_len                 = [decimal_precision]() {
               if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
                 return sizeof(int32_t);
@@ -1192,14 +1194,14 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           }
           break;
         default:  // FIXED_LEN_BYTE_ARRAY:
-          s->dtype_len = dtype_len_out;
+          s->dtype_len = s->col.type_length;
           if (s->dtype_len <= 0) { s->set_error_code(decode_error::INVALID_DATA_TYPE); }
           break;
       }
       // Special check for downconversions
       s->dtype_len_in = s->dtype_len;
       if (data_type == FIXED_LEN_BYTE_ARRAY) {
-        if (s->col.converted_type == DECIMAL) {
+        if (is_decimal) {
           s->dtype_len = [dtype_len = s->dtype_len]() {
             if (dtype_len <= sizeof(int32_t)) {
               return sizeof(int32_t);
@@ -1213,17 +1215,17 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           s->dtype_len = sizeof(string_index_pair);
         }
       } else if (data_type == INT32) {
-        if (dtype_len_out == 1) {
-          // INT8 output
-          s->dtype_len = 1;
-        } else if (dtype_len_out == 2) {
-          // INT16 output
-          s->dtype_len = 2;
-        } else if (s->col.converted_type == TIME_MILLIS) {
-          // INT64 output
-          s->dtype_len = 8;
+        // check for smaller bitwidths
+        if (s->col.logical_type.has_value()) {
+          auto const& lt = s->col.logical_type.value();
+          if (lt.type == LogicalType::INTEGER) {
+            s->dtype_len = lt.bit_width() / 8;
+          } else if (lt.is_time_millis()) {
+            // cudf outputs as INT64
+            s->dtype_len = 8;
+          }
         }
-      } else if (data_type == BYTE_ARRAY && dtype_len_out == 4) {
+      } else if (data_type == BYTE_ARRAY && s->col.is_strings_to_cat) {
         s->dtype_len = 4;  // HASH32 output
       } else if (data_type == INT96) {
         s->dtype_len = 8;  // Convert to 64-bit timestamp
@@ -1298,7 +1300,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
         case Encoding::PLAIN_DICTIONARY:
         case Encoding::RLE_DICTIONARY:
           // RLE-packed dictionary indices, first byte indicates index length in bits
-          if (((s->col.data_type & 7) == BYTE_ARRAY) && (s->col.str_dict_index)) {
+          if (s->col.physical_type == BYTE_ARRAY && s->col.str_dict_index != nullptr) {
             // String dictionary: use index
             s->dict_base = reinterpret_cast<uint8_t const*>(s->col.str_dict_index);
             s->dict_size = s->col.dict_page->num_input_values * sizeof(string_index_pair);
@@ -1316,7 +1318,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
         case Encoding::PLAIN:
           s->dict_size = static_cast<int32_t>(end - cur);
           s->dict_val  = 0;
-          if ((s->col.data_type & 7) == BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }
+          if (s->col.physical_type == BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }
           break;
         case Encoding::RLE: {
           // first 4 bytes are length of RLE data

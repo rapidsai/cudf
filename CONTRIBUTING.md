@@ -105,7 +105,7 @@ Instructions for a minimal build environment without conda are included below.
 # create the conda environment (assuming in base `cudf` directory)
 # note: RAPIDS currently doesn't support `channel_priority: strict`;
 # use `channel_priority: flexible` instead
-conda env create --name cudf_dev --file conda/environments/all_cuda-118_arch-x86_64.yaml
+conda env create --name cudf_dev --file conda/environments/all_cuda-122_arch-x86_64.yaml
 # activate the environment
 conda activate cudf_dev
 ```
@@ -217,7 +217,7 @@ cuda-gdb -ex r --args python <program_name>.py <program_arguments>
 ```
 
 ```bash
-cuda-memcheck python <program_name>.py <program_arguments>
+compute-sanitizer --tool memcheck python <program_name>.py <program_arguments>
 ```
 
 ### Device debug symbols

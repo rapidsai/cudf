@@ -34,7 +34,7 @@ dependencies = [
     "nvtx>=0.2.1",
     "packaging",
     "pandas>=2.0,<2.2.2dev0",
-    "protobuf>=4.21,<5",
+    "protobuf>=3.20,<5",
     "ptxcompiler",
     "pyarrow>=14.0.1,<15.0.0a0",
     "rich",

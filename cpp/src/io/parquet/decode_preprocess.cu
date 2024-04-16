@@ -389,7 +389,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   // we only need to preprocess hierarchies with repetition in them (ie, hierarchies
   // containing lists anywhere within).
   compute_string_sizes =
-    compute_string_sizes && ((s->col.data_type & 7) == BYTE_ARRAY && s->dtype_len != 4);
+    compute_string_sizes && s->col.physical_type == BYTE_ARRAY && !s->col.is_strings_to_cat;
 
   // early out optimizations:
 

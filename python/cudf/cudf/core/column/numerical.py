@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 from typing import (
     Any,
     Callable,
@@ -75,7 +76,6 @@ class NumericalColumn(NumericalBaseColumn):
     mask : Buffer, optional
     """
 
-    _nan_count: Optional[int]
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def __init__(
@@ -93,7 +93,6 @@ class NumericalColumn(NumericalBaseColumn):
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = (data.size // dtype.itemsize) - offset
-        self._nan_count = None
         super().__init__(
             data,
             size=size,
@@ -105,7 +104,10 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _clear_cache(self):
         super()._clear_cache()
-        self._nan_count = None
+        try:
+            del self.nan_count
+        except AttributeError:
+            pass
 
     def __contains__(self, item: ScalarLike) -> bool:
         """
@@ -424,14 +426,12 @@ class NumericalColumn(NumericalBaseColumn):
 
         return libcudf.reduce.reduce("any", result_col, dtype=np.bool_)
 
-    @property
+    @functools.cached_property
     def nan_count(self) -> int:
         if self.dtype.kind != "f":
-            self._nan_count = 0
-        elif self._nan_count is None:
-            nan_col = libcudf.unary.is_nan(self)
-            self._nan_count = nan_col.sum()
-        return self._nan_count
+            return 0
+        nan_col = libcudf.unary.is_nan(self)
+        return nan_col.sum()
 
     def _process_values_for_isin(
         self, values: Sequence
