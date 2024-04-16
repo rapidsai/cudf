@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 """Module used for global configuration of benchmarks.
 
@@ -20,6 +20,7 @@ variables could affect test collection or other properties, we must define them
 in this file and import them in conftest.py to ensure that they are handled
 appropriately.
 """
+
 import os
 import sys
 

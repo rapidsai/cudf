@@ -1,8 +1,10 @@
 #!/bin/bash
 
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 # libcudf examples build script
+
+set -euo pipefail
 
 # Parallelism control
 PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}

@@ -210,6 +210,29 @@ template <>
 std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c);
 //! @endcond
 
+/**
+ * @brief For enabling large strings testing in specific tests
+ */
+struct large_strings_enabler {
+  /**
+   * @brief Create large strings enable object
+   *
+   * @param default_enable Default enables large strings support
+   */
+  large_strings_enabler(bool default_enable = true);
+  ~large_strings_enabler();
+
+  /**
+   * @brief Enable large strings support
+   */
+  void enable();
+
+  /**
+   * @brief Disable large strings support
+   */
+  void disable();
+};
+
 }  // namespace cudf::test
 
 // Macros for showing line of failure.
@@ -242,3 +265,5 @@ std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(c
     SCOPED_TRACE(" <--  line of failure\n");                        \
     cudf::test::detail::expect_equal_buffers(lhs, rhs, size_bytes); \
   } while (0)
+
+#define CUDF_TEST_ENABLE_LARGE_STRINGS() cudf::test::large_strings_enabler ls___
