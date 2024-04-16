@@ -130,20 +130,22 @@ void ingest_raw_input(std::unique_ptr<rmm::device_uvector<char>>& bufptr,
     }
     bufptr_offset += bytes_read;
   } else {
-    // Iterate through the user defined sources and read the contents into the local buffer
-    auto const total_source_size =
-      sources_size(sources, range_offset, range_size) + num_extra_delimiters;
-    auto buffer = std::vector<uint8_t>(total_source_size);
+    /* TODO: allow byte range reading from multiple compressed files.
+     */
+    range_size  = !range_size || (range_size > sources[0]->size() - range_offset)
+                    ? sources[0]->size() - range_offset
+                    : range_size;
+    auto buffer = std::vector<uint8_t>(range_size);
     // Single read because only a single compressed source is supported
     // Reading to host because decompression of a single block is much faster on the CPU
-    sources[0]->host_read(range_offset, total_source_size, buffer.data());
+    sources[0]->host_read(range_offset, range_size, buffer.data());
     auto uncomp_data = decompress(compression, buffer);
     CUDF_CUDA_TRY(cudaMemcpyAsync(bufptr->data() + bufptr_offset,
                                   reinterpret_cast<char*>(uncomp_data.data()),
                                   uncomp_data.size() * sizeof(char),
-                                  cudaMemcpyDefault,
+                                  cudaMemcpyHostToDevice,
                                   stream.value()));
-    bufptr_offset += uncomp_data.size() * sizeof(char);
+    bufptr_offset += uncomp_data.size();
   }
   stream.synchronize();
 }
@@ -213,7 +215,15 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
 
   if (!chunk_size || chunk_size > total_source_size - chunk_offset)
     chunk_size = total_source_size - chunk_offset + num_extra_delimiters;
-  bufptr = std::make_unique<rmm::device_uvector<char>>(chunk_size + 3 * size_per_subchunk, stream);
+  // The allocation for single source compressed input is estimated by assuming a ~4:1
+  // compression ratio. For uncompressed inputs, we can getter a better estimate using the idea
+  // of subchunks.
+  if (reader_compression != compression_type::NONE)
+    bufptr = std::make_unique<rmm::device_uvector<char>>(
+      (chunk_size + 3 * size_per_subchunk) * 4 + 4096, stream);
+  else
+    bufptr =
+      std::make_unique<rmm::device_uvector<char>>(chunk_size + 3 * size_per_subchunk, stream);
   size_t bufptr_offset = 0;
 
   ingest_raw_input(
