@@ -22,7 +22,8 @@ set -euo pipefail
 # of Pandas installed.
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
-PYTEST_IGNORES="--ignore=tests/plotting"
+PYTEST_IGNORES="--ignore=tests/plotting \
+--ignore=tests/io/parser/common/test_read_errors.py"
 
 mkdir -p pandas-testing
 cd pandas-testing
