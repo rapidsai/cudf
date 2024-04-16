@@ -38,25 +38,6 @@ def read_json(
             f"or a bool, or None. Got {type(dtype)}"
         )
 
-    if engine == "cudf_experimental":
-        raise ValueError(
-            "engine='cudf_experimental' support has been removed, "
-            "use `engine='cudf'`"
-        )
-
-    if engine == "cudf_legacy":
-        # TODO: Deprecated in 23.02, please
-        # give some time until(more than couple of
-        # releases from now) `cudf_legacy`
-        # support can be removed completely.
-        warnings.warn(
-            "engine='cudf_legacy' is a deprecated engine."
-            "This will be removed in a future release."
-            "Please switch to using engine='cudf'.",
-            FutureWarning,
-        )
-    if engine == "cudf_legacy" and not lines:
-        raise ValueError(f"{engine} engine only supports JSON Lines format")
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
     if engine != "cudf" and keep_quotes:
@@ -64,7 +45,7 @@ def read_json(
             "keep_quotes='True' is supported only with engine='cudf'"
         )
 
-    if engine == "cudf_legacy" or engine == "cudf":
+    if engine == "cudf":
         if dtype is None:
             dtype = True
 
@@ -117,7 +98,7 @@ def read_json(
             lines,
             compression,
             byte_range,
-            engine == "cudf_legacy",
+            False,
             keep_quotes,
             mixed_types_as_string,
         )
