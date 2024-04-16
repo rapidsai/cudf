@@ -2438,7 +2438,6 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
-  init_state();
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
@@ -2460,20 +2459,13 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
-  init_state();
 }
 
 writer::impl::~impl() { close(); }
 
-void writer::impl::init_state()
-{
-  // Write file header
-  _out_sink->host_write(MAGIC, std::strlen(MAGIC));
-}
-
 void writer::impl::write(table_view const& input)
 {
-  CUDF_EXPECTS(not _closed, "Data has already been flushed to out and closed");
+  CUDF_EXPECTS(_state != writer_state::CLOSED, "Data has already been flushed to out and closed");
 
   if (not _table_meta) { _table_meta = make_table_meta(input); }
 
@@ -2516,6 +2508,11 @@ void writer::impl::write(table_view const& input)
     }
   }();
 
+  if (_state == writer_state::NO_DATA_WRITTEN) {
+    // Write the ORC file header if this is the first write
+    _out_sink->host_write(MAGIC, std::strlen(MAGIC));
+  }
+
   // Compression/encoding were all successful. Now write the intermediate results.
   write_orc_data_to_sink(enc_data,
                          segmentation,
@@ -2533,6 +2530,8 @@ void writer::impl::write(table_view const& input)
 
   // Update file-level and compression statistics
   update_statistics(orc_table.num_rows(), std::move(intermediate_stats), compression_stats);
+
+  _state = writer_state::DATA_WRITTEN;
 }
 
 void writer::impl::update_statistics(
@@ -2683,8 +2682,11 @@ void writer::impl::add_table_to_footer_data(orc_table_view const& orc_table,
 
 void writer::impl::close()
 {
-  if (_closed) { return; }
-  _closed = true;
+  if (_state != writer_state::DATA_WRITTEN) {
+    // writer is either closed or no data has been written
+    _state = writer_state::CLOSED;
+    return;
+  }
   PostScript ps;
 
   if (_stats_freq != statistics_freq::STATISTICS_NONE) {
@@ -2769,6 +2771,8 @@ void writer::impl::close()
   pbw.put_byte(ps_length);
   _out_sink->host_write(pbw.data(), pbw.size());
   _out_sink->flush();
+
+  _state = writer_state::CLOSED;
 }
 
 // Forward to implementation
@@ -2794,9 +2798,6 @@ writer::~writer() = default;
 
 // Forward to implementation
 void writer::write(table_view const& table) { _impl->write(table); }
-
-// Forward to implementation
-void writer::skip_close() { _impl->skip_close(); }
 
 // Forward to implementation
 void writer::close() { _impl->close(); }

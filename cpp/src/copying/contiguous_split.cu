@@ -1139,7 +1139,7 @@ struct packed_src_and_dst_pointers {
 
 /**
  * @brief Create an instance of `packed_src_and_dst_pointers` populating destination
- * partitition buffers (if any) from `out_buffers`. In the chunked_pack case
+ * partition buffers (if any) from `out_buffers`. In the chunked_pack case
  * `out_buffers` is empty, and the destination pointer is provided separately
  * to the `copy_partitions` kernel.
  *
