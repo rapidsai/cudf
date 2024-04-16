@@ -19,9 +19,14 @@ cpdef Column capitalize(
     # https://github.com/rapidsai/cudf/issues/15505
 ):
     cdef unique_ptr[column] c_result
+    cdef const string_scalar* cpp_delimiters = <const string_scalar*>(
+        delimiters.c_obj.get()
+    )
+
     with nogil:
         c_result = cpp_capitalize.capitalize(
-            input.view(), <string_scalar>(dereference(delimiters.c_obj))
+            input.view(),
+            dereference(cpp_delimiters)
         )
 
     return Column.from_libcudf(move(c_result))
