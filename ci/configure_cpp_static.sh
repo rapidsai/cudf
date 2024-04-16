@@ -3,8 +3,6 @@
 
 set -euo pipefail
 
-rapids-configure-conda-channels
-
 source rapids-date-string
 
 rapids-logger "Configure static cpp build"
