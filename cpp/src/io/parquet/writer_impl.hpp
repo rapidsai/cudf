@@ -129,7 +129,6 @@ class writer::impl {
    * @param chunks Column chunks
    * @param global_rowgroup_base Numbers of rowgroups in each file/partition
    * @param first_rg_in_part The first rowgroup in each partition
-   * @param batch_list The batches of rowgroups to encode
    * @param rg_to_part A map from rowgroup to partition
    * @param[out] bounce_buffer Temporary host output buffer
    */
@@ -138,7 +137,6 @@ class writer::impl {
                                   host_2dspan<EncColumnChunk const> chunks,
                                   host_span<size_t const> global_rowgroup_base,
                                   host_span<int const> first_rg_in_part,
-                                  host_span<size_type const> batch_list,
                                   host_span<int const> rg_to_part,
                                   host_span<uint8_t> bounce_buffer);
 
