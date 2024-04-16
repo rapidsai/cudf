@@ -19,8 +19,6 @@ file(
 )
 include(${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake)
 
-# allow using local packages if already installed
-set(CPM_USE_LOCAL_PACKAGES ON)
 set(CUDF_TAG branch-24.06)
 
 # find or build it via CPM

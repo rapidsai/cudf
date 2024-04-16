@@ -13,8 +13,8 @@ compute-sanitizer --tool memcheck basic_example
 
 compute-sanitizer --tool memcheck deduplication
 
-compute-sanitizer --tool memcheck ./strings/build/custom_optimized names.csv
-compute-sanitizer --tool memcheck ./strings/build/custom_prealloc names.csv
-compute-sanitizer --tool memcheck ./strings/build/custom_with_malloc names.csv
+compute-sanitizer --tool memcheck custom_optimized names.csv
+compute-sanitizer --tool memcheck custom_prealloc names.csv
+compute-sanitizer --tool memcheck custom_with_malloc names.csv
 
 exit ${EXITCODE}
