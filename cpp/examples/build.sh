@@ -8,6 +8,23 @@ set -euo pipefail
 
 # Parallelism control
 PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
+# Installation disabled by default
+INSTALL_EXAMPLES=false
+
+# Check for -i or --install flags to enable installation
+ARGS=$(getopt -o i --long install -- "$@")
+eval set -- "$ARGS"
+while [ : ]; do
+  case "$1" in
+    -i | --install)
+        INSTALL_EXAMPLES=true
+        shift
+        ;;
+    --) shift;
+        break
+        ;;
+  esac
+done
 
 # Root of examples
 EXAMPLES_DIR=$(dirname "$(realpath "$0")")
@@ -25,10 +42,9 @@ build_example() {
   cmake -S ${example_dir} -B ${build_dir} -Dcudf_ROOT="${LIB_BUILD_DIR}"
   # Build
   cmake --build ${build_dir} -j${PARALLEL_LEVEL}
-
-  # Install only if CMAKE_INSTALL_PREFIX is set
-  if [[ -n "${CMAKE_INSTALL_PREFIX:-""}" ]]; then
-    cmake --install ${build_dir}
+  # Install if needed
+  if [ "$INSTALL_EXAMPLES" = true ]; then
+    cmake --install ${build_dir} --prefix ${INSTALL_PREFIX:-${PREFIX:-${CONDA_PREFIX:-${example_dir}/install}}}
   fi
 }
 

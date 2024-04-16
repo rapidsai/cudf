@@ -12,16 +12,7 @@
 # the License.
 # =============================================================================
 
-# get the CUDF_TAG from fetch_dependencies.cmake (remove all whitespace & parse line: set(CUDF_TAG
-# ..))
-execute_process(
-  COMMAND
-    bash -c
-    "sed '/^$/d;s/[[:blank:]]//g' ./fetch_dependencies.cmake | grep 'set(CUDF_TAG' | sed 's/.*CUDF_TAG//' | sed 's/.$//'"
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  OUTPUT_VARIABLE CUDF_TAG
-  WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
-)
+include(${CMAKE_CURRENT_LIST_DIR}/versions.cmake)
 
 if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/libcudf_cpp_examples_RAPIDS.cmake)
   file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/${CUDF_TAG}/RAPIDS.cmake
