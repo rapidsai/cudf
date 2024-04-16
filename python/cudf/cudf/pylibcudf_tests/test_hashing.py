@@ -42,7 +42,10 @@ def python_hash_value(x, method):
     else:
         raise NotImplementedError
     if method == "murmurhash3_x86_32":
-        raise NotImplementedError
+        # mmh3.hash by default uses MurmurHash3_x86_32
+        return mmh3.hash(
+            binary, seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED, signed=False
+        )
     elif method == "murmurhash3_x64_128":
         hasher = mmh3.mmh3_x64_128(seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED)
         hasher.update(binary)
@@ -131,7 +134,7 @@ def test_murmurhash3_x86_32(pa_input_column):
             python_hash_value, args=("murmurhash3_x86_32",)
         )
     )
-    assert_table_eq(got, expect)
+    assert_column_eq(got, expect)
 
 
 def test_murmurhash3_x64_128(pa_input_column):
