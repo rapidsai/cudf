@@ -559,7 +559,6 @@ dependencies:
           - matrix: {cuda: "12.*"}
             packages:
               - rmm-cu12==24.6.*
-              - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
               - pynvjitlink-cu12==0.2.0
           - matrix: {cuda: "11.*"}
             packages:
