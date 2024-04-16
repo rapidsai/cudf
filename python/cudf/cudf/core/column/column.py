@@ -52,7 +52,6 @@ from cudf._lib.transform import bools_to_mask
 from cudf._lib.types import size_type_dtype
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
-    _is_categorical_dtype,
     _is_non_decimal_numeric_dtype,
     _is_pandas_nullable_extension_dtype,
     infer_dtype,
@@ -1381,7 +1380,7 @@ def column_empty_like(
 
     if (
         hasattr(column, "dtype")
-        and _is_categorical_dtype(column.dtype)
+        and isinstance(column.dtype, cudf.CategoricalDtype)
         and dtype == column.dtype
     ):
         catcolumn = cast("cudf.core.column.CategoricalColumn", column)
@@ -2008,7 +2007,9 @@ def as_column(
             length = 1
         elif length < 0:
             raise ValueError(f"{length=} must be >=0.")
-        if isinstance(arbitrary, pd.Interval) or _is_categorical_dtype(dtype):
+        if isinstance(
+            arbitrary, pd.Interval
+        ) or cudf.api.types._is_categorical_dtype(dtype):
             # No cudf.Scalar support yet
             return as_column(
                 pd.Series([arbitrary] * length),
