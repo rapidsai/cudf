@@ -549,7 +549,7 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - pynvjitlink
+              - pynvjitlink=0.2.0
           - matrix: {cuda: "11.*"}
             packages:
               - cubinlinker
@@ -559,7 +559,8 @@ dependencies:
           - matrix: {cuda: "12.*"}
             packages:
               - rmm-cu12==24.6.*
-              - pynvjitlink-cu12
+              - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+              - pynvjitlink-cu12=0.2.0
           - matrix: {cuda: "11.*"}
             packages:
               - rmm-cu11==24.6.*
