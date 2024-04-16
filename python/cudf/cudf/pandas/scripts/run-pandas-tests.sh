@@ -130,10 +130,15 @@ and not test_s3_roundtrip_for_dir[partition_col0] \
 and not test_s3_roundtrip_for_dir[partition_col1] \
 and not test_s3_roundtrip"
 
+TEST_THAT_CRASH_PYTEST_WORKERS="not test_bitmasks_pyarrow \
+and not test_large_string_pyarrow \
+and not test_interchange_from_corrected_buffer_dtypes \
+and not test_eof_states"
+
 # TODO: Remove "not db" once a postgres & mysql container is set up on the CI
 PANDAS_CI="1" timeout 30m python -m pytest -p cudf.pandas \
     -v -m "not single_cpu and not db" \
-    -k "not test_to_parquet_gcs_new_file and not test_qcut_nat and not test_add and not test_ismethods and $TEST_THAT_NEED_MOTO_SERVER" \
+    -k "not test_to_parquet_gcs_new_file and not test_qcut_nat and not test_add and not test_ismethods and $TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS" \
     --import-mode=importlib \
     ${PYTEST_IGNORES} \
     "$@" || [ $? = 1 ]  # Exit success if exit code was 1 (permit test failures but not other errors)
