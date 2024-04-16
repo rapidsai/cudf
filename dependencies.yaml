@@ -656,8 +656,27 @@ dependencies:
               # dependency of transformers.
               - *tokenizers
               - *transformers
-          - matrix:
+      - output_types: conda
+        matrices:
+          - matrix: {cuda: "12.*"}
             packages:
+              - pynvjitlink=0.2.0
+          - matrix: {cuda: "11.*"}
+            packages:
+              - cubinlinker
+              - ptxcompiler
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix: {cuda: "12.*"}
+            packages:
+              - rmm-cu12==24.6.*
+              - pynvjitlink-cu12==0.2.0
+          - matrix: {cuda: "11.*"}
+            packages:
+              - rmm-cu11==24.6.*
+              - cubinlinker-cu11
+              - ptxcompiler-cu11
+          - {matrix: null, packages: null}
   test_python_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
