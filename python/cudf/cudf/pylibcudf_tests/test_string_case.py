@@ -14,15 +14,6 @@ def string_col():
     )
 
 
-def wrap_nulls(func):
-    def wrapper(x):
-        if x is None:
-            return None
-        return func(x)
-
-    return wrapper
-
-
 def test_to_upper(string_col):
     plc_col = plc.interop.from_arrow(string_col)
     got = plc.strings.case.to_upper(plc_col)

@@ -16,6 +16,7 @@
 
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/types.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -46,8 +47,8 @@ CUDF_HOST_DEVICE inline Result linear(T lhs, T rhs, double frac)
   // Underflow may occur when converting int64 to double
   // detail: https://github.com/rapidsai/cudf/issues/1417
 
-  auto dlhs             = static_cast<double>(lhs);
-  auto drhs             = static_cast<double>(rhs);
+  auto dlhs             = convert_to_floating<double>(lhs);
+  auto drhs             = convert_to_floating<double>(rhs);
   double one_minus_frac = 1.0 - frac;
   return static_cast<Result>(one_minus_frac * dlhs + frac * drhs);
 }
@@ -56,8 +57,8 @@ template <typename Result, typename T>
 CUDF_HOST_DEVICE inline Result midpoint(T lhs, T rhs)
 {
   // TODO: try std::midpoint (C++20) if available
-  auto dlhs = static_cast<double>(lhs);
-  auto drhs = static_cast<double>(rhs);
+  auto dlhs = convert_to_floating<double>(lhs);
+  auto drhs = convert_to_floating<double>(rhs);
   return static_cast<Result>(dlhs / 2 + drhs / 2);
 }
 
