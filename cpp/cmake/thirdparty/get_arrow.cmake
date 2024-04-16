@@ -390,14 +390,11 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     BUILD Arrow [=[${CMAKE_CURRENT_LIST_DIR}]=] EXPORT_SET cudf-exports
   )
   rapids_export_find_package_root(
-    BUILD Parquet [=[${CMAKE_CURRENT_LIST_DIR}]=]
-    EXPORT_SET cudf-exports
-    CONDITION ENABLE_PARQUET
+    BUILD Parquet [=[${CMAKE_CURRENT_LIST_DIR}]=] EXPORT_SET cudf-exports CONDITION ENABLE_PARQUET
   )
   rapids_export_find_package_root(
-    BUILD ArrowDataset [=[${CMAKE_CURRENT_LIST_DIR}]=]
-    EXPORT_SET cudf-exports
-    CONDITION ENABLE_PARQUET
+    BUILD ArrowDataset [=[${CMAKE_CURRENT_LIST_DIR}]=] EXPORT_SET cudf-exports CONDITION
+    ENABLE_PARQUET
   )
 
   set(ARROW_LIBRARIES

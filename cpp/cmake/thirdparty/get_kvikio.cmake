@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -27,9 +27,7 @@ function(find_and_configure_kvikio VERSION)
 
   include("${rapids-cmake-dir}/export/find_package_root.cmake")
   rapids_export_find_package_root(
-    BUILD KvikIO "${KvikIO_BINARY_DIR}"
-    EXPORT_SET cudf-exports
-    CONDITION KvikIO_BINARY_DIR
+    BUILD KvikIO "${KvikIO_BINARY_DIR}" EXPORT_SET cudf-exports CONDITION KvikIO_BINARY_DIR
   )
 
 endfunction()
