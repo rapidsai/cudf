@@ -4,8 +4,6 @@
 # Support invoking test_cpp.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../
 
-cp _rapids-download-from-s3 /usr/local/bin/_rapids-download-from-s3
-
 source ./ci/test_cpp_common.sh
 
 EXITCODE=0
