@@ -31,6 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cub/cub.cuh>
 #include <thrust/copy.h>
@@ -796,7 +797,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
                                             rmm::device_scalar<size_type>& d_null_count,
                                             cudf::io::parse_options_view const& options,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   //  CUDF_FUNC_RANGE();
 
@@ -914,7 +915,7 @@ std::unique_ptr<column> parse_data(
   size_type null_count,
   cudf::io::parse_options_view const& options,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 

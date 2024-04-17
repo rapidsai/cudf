@@ -30,6 +30,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -178,7 +179,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                            separator_on_nulls separate_nulls,
                                            output_if_empty_list empty_list_policy,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(lists_strings_column.child().type().id() == type_id::STRING,
                "The input column must be a column of lists of strings");
@@ -251,7 +252,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                            separator_on_nulls separate_nulls,
                                            output_if_empty_list empty_list_policy,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(lists_strings_column.child().type().id() == type_id::STRING,
                "The input column must be a column of lists of strings");
@@ -302,7 +303,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                            separator_on_nulls separate_nulls,
                                            output_if_empty_list empty_list_policy,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::join_list_elements(
@@ -316,7 +317,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                            separator_on_nulls separate_nulls,
                                            output_if_empty_list empty_list_policy,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::join_list_elements(lists_strings_column,

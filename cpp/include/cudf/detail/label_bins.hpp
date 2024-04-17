@@ -25,6 +25,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 
@@ -40,7 +41,7 @@ namespace detail {
 /**
  * @copydoc cudf::label_bins(column_view const& input, column_view const& left_edges, inclusive
  * left_inclusive, column_view const& right_edges, inclusive right_inclusive, rmm::cuda_stream_view,
- * rmm::mr::device_memory_resource* mr)
+ * rmm::device_async_resource_ref mr)
  *
  * @param stream Stream view on which to allocate resources and queue execution.
  */
@@ -50,7 +51,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    column_view const& right_edges,
                                    inclusive right_inclusive,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr);
+                                   rmm::device_async_resource_ref mr);
 
 /** @} */  // end of group
 }  // namespace detail
