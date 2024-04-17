@@ -26,11 +26,6 @@ def numeric_pa_type(request):
     return request.param
 
 
-@pytest.fixture(scope="module")
-def numeric_columns(numeric_pa_type):
-    return pa.array([1, 2, 3], type=numeric_pa_type)
-
-
 def test_make_empty_column_dtype(pa_type):
     pa_col = pa.array([], type=pa_type)
 
@@ -70,5 +65,44 @@ def test_make_numeric_column_no_mask(numeric_pa_type):
 
     got = plc.column_factories.make_numeric_column(
         plc_type, size, plc.column_factories.MaskState.UNALLOCATED
+    )
+    assert_column_eq(got, expected)
+
+
+def test_make_numeric_column_all_valid(numeric_pa_type):
+    size = 3
+    expected = pa.array([0] * size, type=numeric_pa_type)
+    plc_type = plc.interop.from_arrow(
+        pa.array([], type=numeric_pa_type)
+    ).type()
+
+    got = plc.column_factories.make_numeric_column(
+        plc_type, size, plc.column_factories.MaskState.ALL_VALID
+    )
+    assert_column_eq(got, expected)
+
+
+def test_make_numeric_column_all_null(numeric_pa_type):
+    size = 3
+    expected = pa.array([None] * size, type=numeric_pa_type)
+    plc_type = plc.interop.from_arrow(
+        pa.array([], type=numeric_pa_type)
+    ).type()
+
+    got = plc.column_factories.make_numeric_column(
+        plc_type, size, plc.column_factories.MaskState.ALL_NULL
+    )
+    assert_column_eq(got, expected)
+
+
+def test_make_numeric_column_uninit_mask(numeric_pa_type):
+    size = 3
+    expected = pa.array([0] * size, type=numeric_pa_type)
+    plc_type = plc.interop.from_arrow(
+        pa.array([], type=numeric_pa_type)
+    ).type()
+
+    got = plc.column_factories.make_numeric_column(
+        plc_type, size, plc.column_factories.MaskState.UNINITIALIZED
     )
     assert_column_eq(got, expected)
