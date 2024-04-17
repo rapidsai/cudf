@@ -239,8 +239,10 @@ void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
 Encoding __device__ determine_encoding(PageType page_type,
                                        Type physical_type,
                                        bool use_dictionary,
-                                       bool write_v2_headers)
+                                       bool write_v2_headers,
+                                       bool is_split_stream)
 {
+  if (is_split_stream) { return Encoding::BYTE_STREAM_SPLIT; }
   // NOTE: For dictionary encoding, parquet v2 recommends using PLAIN in dictionary page and
   // RLE_DICTIONARY in data page, but parquet v1 uses PLAIN_DICTIONARY in both dictionary and
   // data pages (actual encoding is identical).
@@ -1666,15 +1668,13 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   }();
 
   if (t == 0) {
-    uint8_t* dst   = s->cur;
-    s->rle_run     = 0;
-    s->rle_pos     = 0;
-    s->rle_numvals = 0;
-    s->rle_out     = dst;
-    s->page.encoding =
-      is_split_stream ? Encoding::BYTE_STREAM_SPLIT
-                      : determine_encoding(
-                          s->page.page_type, physical_type, s->ck.use_dictionary, write_v2_headers);
+    uint8_t* dst     = s->cur;
+    s->rle_run       = 0;
+    s->rle_pos       = 0;
+    s->rle_numvals   = 0;
+    s->rle_out       = dst;
+    s->page.encoding = determine_encoding(
+      s->page.page_type, physical_type, s->ck.use_dictionary, write_v2_headers, is_split_stream);
     s->page_start_val  = row_to_value_idx(s->page.start_row, s->col);
     s->chunk_start_val = row_to_value_idx(s->ck.start_row, s->col);
   }
@@ -1895,13 +1895,13 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
                            ? s->ck.dict_rle_bits
                            : -1;
   if (t == 0) {
-    uint8_t* dst   = s->cur;
-    s->rle_run     = 0;
-    s->rle_pos     = 0;
-    s->rle_numvals = 0;
-    s->rle_out     = dst;
-    s->page.encoding =
-      determine_encoding(s->page.page_type, physical_type, s->ck.use_dictionary, write_v2_headers);
+    uint8_t* dst     = s->cur;
+    s->rle_run       = 0;
+    s->rle_pos       = 0;
+    s->rle_numvals   = 0;
+    s->rle_out       = dst;
+    s->page.encoding = determine_encoding(
+      s->page.page_type, physical_type, s->ck.use_dictionary, write_v2_headers, false);
     if (dict_bits >= 0 && physical_type != BOOLEAN) {
       dst[0]     = dict_bits;
       s->rle_out = dst + 1;

@@ -398,10 +398,10 @@ inline __device__ void gpuOutputGeneric(
 }
 
 /**
- * Output a BYTE_STREAM_SPLIT value of length `byte_length`.
+ * Output a BYTE_STREAM_SPLIT value of type `T`.
  *
- * Data is encoded as N streams of length M, forming an NxM sized matrix. Rows are streams,
- * columns are individual values.
+ * Data is encoded as N == sizeof(T) streams of length M, forming an NxM sized matrix.
+ * Rows are streams, columns are individual values.
  *
  * @param dst pointer to output data
  * @param src pointer to first byte of input data in stream 0

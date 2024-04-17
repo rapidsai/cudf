@@ -177,10 +177,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
             // TIME_MILLIS is the only duration type stored as int32:
             // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
             gpuOutputByteStreamSplit<int32_t>(dst, src, num_values);
-            dst[4] = 0;
-            dst[5] = 0;
-            dst[6] = 0;
-            dst[7] = 0;
+            // zero out most significant bytes
+            memset(dst + 4, 0, 4);
           } else if (s->ts_scale) {
             gpuOutputSplitInt64Timestamp(
               reinterpret_cast<int64_t*>(dst), src, num_values, s->ts_scale);
