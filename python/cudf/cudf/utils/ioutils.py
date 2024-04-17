@@ -543,7 +543,7 @@ path_or_buf : list, str, path object, or file-like object
     function or `StringIO`). Multiple inputs may be provided as a list. If a
     list is specified each list entry may be of a different input type as long
     as each input is of a valid type and all input JSON schema(s) match.
-engine : {{ 'auto', 'cudf', 'cudf_legacy', 'pandas' }}, default 'auto'
+engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the engine will be
     automatically selected based on the other parameters. See notes below.
 orient : string

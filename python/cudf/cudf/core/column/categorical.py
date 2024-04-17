@@ -614,12 +614,6 @@ class CategoricalColumn(column.ColumnBase):
     def categories(self) -> ColumnBase:
         return self.dtype.categories._values
 
-    @categories.setter
-    def categories(self, value):
-        self._dtype = CategoricalDtype(
-            categories=value, ordered=self.dtype.ordered
-        )
-
     @property
     def codes(self) -> NumericalColumn:
         if self._codes is None:
