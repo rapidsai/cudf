@@ -193,7 +193,7 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
 /**
  * @copydoc cudf::lists::extract_list_element(lists_column_view const&,
  *                                            size_type,
- *                                            rmm::device_async_resource_ref )
+ *                                            rmm::device_async_resource_ref)
  */
 std::unique_ptr<column> extract_list_element(lists_column_view const& lists_column,
                                              size_type index,
@@ -207,7 +207,7 @@ std::unique_ptr<column> extract_list_element(lists_column_view const& lists_colu
 /**
  * @copydoc cudf::lists::extract_list_element(lists_column_view const&,
  *                                            column_view const&,
- *                                            rmm::device_async_resource_ref )
+ *                                            rmm::device_async_resource_ref)
  */
 std::unique_ptr<column> extract_list_element(lists_column_view const& lists_column,
                                              column_view const& indices,

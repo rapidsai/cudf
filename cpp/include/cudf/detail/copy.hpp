@@ -124,7 +124,7 @@ std::vector<table_view> split(table_view const& input,
 
 /**
  * @copydoc cudf::shift(column_view const&,size_type,scalar const&,
- * rmm::device_async_resource_ref )
+ * rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -176,7 +176,7 @@ std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
 
 /**
  * @copydoc cudf::allocate_like(column_view const&, size_type, mask_allocation_policy,
- * rmm::device_async_resource_ref )
+ * rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -188,7 +188,7 @@ std::unique_ptr<column> allocate_like(column_view const& input,
 
 /**
  * @copydoc cudf::copy_if_else( column_view const&, column_view const&,
- * column_view const&, rmm::device_async_resource_ref )
+ * column_view const&, rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -200,7 +200,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
 
 /**
  * @copydoc cudf::copy_if_else( scalar const&, column_view const&,
- * column_view const&, rmm::device_async_resource_ref )
+ * column_view const&, rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -212,7 +212,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
 
 /**
  * @copydoc cudf::copy_if_else( column_view const&, scalar const&,
- * column_view const&, rmm::device_async_resource_ref )
+ * column_view const&, rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -224,7 +224,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
 
 /**
  * @copydoc cudf::copy_if_else( scalar const&, scalar const&,
- * column_view const&, rmm::device_async_resource_ref )
+ * column_view const&, rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */

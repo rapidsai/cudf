@@ -75,7 +75,7 @@ std::unique_ptr<column> replace_indices(column_view const& input,
 
 /**
  * @copydoc cudf::dictionary::detail::replace_nulls(cudf::column_view const&,cudf::column_view
- * const& rmm::cuda_stream_view, rmm::device_async_resource_ref )
+ * const& rmm::cuda_stream_view, rmm::device_async_resource_ref)
  */
 std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       dictionary_column_view const& replacement,
@@ -108,7 +108,7 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
 
 /**
  * @copydoc cudf::dictionary::detail::replace_nulls(cudf::column_view const&,cudf::scalar
- * const&, rmm::cuda_stream_view, rmm::device_async_resource_ref )
+ * const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
  */
 std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       scalar const& replacement,

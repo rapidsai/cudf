@@ -111,7 +111,7 @@ CUDF_KERNEL void offset_bitmask_binop(Binop op,
 
 /**
  * @copydoc bitmask_binop(Binop op, host_span<bitmask_type const* const>, host_span<size_type>
- * const, size_type, rmm::device_async_resource_ref )
+ * const, size_type, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  */

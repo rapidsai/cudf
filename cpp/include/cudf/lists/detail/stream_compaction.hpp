@@ -25,7 +25,7 @@ namespace cudf::lists::detail {
 
 /**
  * @copydoc cudf::lists::apply_boolean_mask(lists_column_view const&, lists_column_view const&,
- * rmm::device_async_resource_ref )
+ * rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  */

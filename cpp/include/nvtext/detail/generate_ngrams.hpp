@@ -25,7 +25,7 @@ namespace detail {
 
 /**
  * @copydoc hash_character_ngrams(cudf::strings_column_view const&,
- * cudf::size_type, rmm::device_async_resource_ref )
+ * cudf::size_type, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for allocating/copying device memory and launching kernels
  */

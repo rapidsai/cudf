@@ -54,7 +54,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
 
 /**
  * @copydoc cudf::percentile_approx(tdigest_column_view const&, column_view const&,
- * rmm::device_async_resource_ref )
+ * rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */

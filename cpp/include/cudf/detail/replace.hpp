@@ -28,7 +28,7 @@ namespace cudf {
 namespace detail {
 /**
  * @copydoc cudf::replace_nulls(column_view const&, column_view const&,
- * rmm::device_async_resource_ref )
+ * rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -39,7 +39,7 @@ std::unique_ptr<column> replace_nulls(column_view const& input,
 
 /**
  * @copydoc cudf::replace_nulls(column_view const&, scalar const&,
- * rmm::device_async_resource_ref )
+ * rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -50,7 +50,7 @@ std::unique_ptr<column> replace_nulls(column_view const& input,
 
 /**
  * @copydoc cudf::replace_nulls(column_view const&, replace_policy const&,
- * rmm::device_async_resource_ref )
+ * rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -61,7 +61,7 @@ std::unique_ptr<column> replace_nulls(column_view const& input,
 
 /**
  * @copydoc cudf::replace_nans(column_view const&, column_view const&,
- * rmm::device_async_resource_ref )
+ * rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -72,7 +72,7 @@ std::unique_ptr<column> replace_nans(column_view const& input,
 
 /**
  * @copydoc cudf::replace_nans(column_view const&, scalar const&,
- * rmm::device_async_resource_ref )
+ * rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */

@@ -28,7 +28,7 @@ namespace detail {
 
 /**
  * @copydoc cudf::dictionary::get_index(dictionary_column_view const&,scalar
- * const&,rmm::device_async_resource_ref )
+ * const&,rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */

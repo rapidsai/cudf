@@ -51,14 +51,14 @@ std::unique_ptr<column> upper_bound(table_view const& haystack,
                                     rmm::device_async_resource_ref mr);
 
 /**
- * @copydoc cudf::contains(column_view const&, scalar const&, rmm::device_async_resource_ref )
+ * @copydoc cudf::contains(column_view const&, scalar const&, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 bool contains(column_view const& haystack, scalar const& needle, rmm::cuda_stream_view stream);
 
 /**
- * @copydoc cudf::contains(column_view const&, column_view const&, rmm::device_async_resource_ref )
+ * @copydoc cudf::contains(column_view const&, column_view const&, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */

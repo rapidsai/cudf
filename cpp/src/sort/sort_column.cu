@@ -30,7 +30,7 @@ namespace detail {
 
 /**
  * @copydoc
- * sorted_order(column_view&,order,null_order,rmm::cuda_stream_view,rmm::device_async_resource_ref )
+ * sorted_order(column_view&,order,null_order,rmm::cuda_stream_view,rmm::device_async_resource_ref)
  */
 template <>
 std::unique_ptr<column> sorted_order<sort_method::UNSTABLE>(column_view const& input,

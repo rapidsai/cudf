@@ -31,7 +31,7 @@ namespace detail {
 
 /**
  * @copydoc concatenate(table_view const&,string_scalar const&,string_scalar
- * const&,rmm::device_async_resource_ref )
+ * const&,rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -44,7 +44,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 
 /**
  * @copydoc join_strings(table_view const&,string_scalar const&,string_scalar
- * const&,rmm::device_async_resource_ref )
+ * const&,rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -56,7 +56,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
 
 /**
  * @copydoc join_list_elements(table_view const&,string_scalar const&,string_scalar
- * const&,separator_on_nulls,output_if_empty_list,rmm::device_async_resource_ref )
+ * const&,separator_on_nulls,output_if_empty_list,rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */

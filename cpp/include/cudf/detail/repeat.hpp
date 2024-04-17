@@ -29,7 +29,7 @@ namespace detail {
 
 /**
  * @copydoc cudf::repeat(table_view const&, column_view const&, bool,
- * rmm::device_async_resource_ref )
+ * rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -41,7 +41,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 
 /**
  * @copydoc cudf::repeat(table_view const&, size_type,
- * rmm::device_async_resource_ref )
+ * rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */

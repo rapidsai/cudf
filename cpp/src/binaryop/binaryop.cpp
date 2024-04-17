@@ -180,7 +180,7 @@ void fixed_point_binary_operation_validation(binary_operator op,
 
 /**
  * @copydoc cudf::binary_operation(column_view const&, column_view const&,
- * binary_operator, data_type, rmm::device_async_resource_ref )
+ * binary_operator, data_type, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */

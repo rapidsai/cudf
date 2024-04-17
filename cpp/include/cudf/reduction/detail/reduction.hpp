@@ -28,7 +28,7 @@ namespace cudf::reduction::detail {
 
 /**
  * @copydoc cudf::reduce(column_view const&, reduce_aggregation const&, data_type,
- * std::optional<std::reference_wrapper<scalar const>>, rmm::device_async_resource_ref )
+ * std::optional<std::reference_wrapper<scalar const>>, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */

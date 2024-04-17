@@ -29,7 +29,7 @@ namespace cudf {
 namespace detail {
 
 /**
- * @copydoc cudf::create_null_mask(size_type, mask_state, rmm::device_async_resource_ref )
+ * @copydoc cudf::create_null_mask(size_type, mask_state, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -195,7 +195,7 @@ std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
 
 /**
  * @copydoc cudf::copy_bitmask(bitmask_type const*, size_type, size_type,
- *rmm::device_async_resource_ref )
+ *rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -206,7 +206,7 @@ rmm::device_buffer copy_bitmask(bitmask_type const* mask,
                                 rmm::device_async_resource_ref mr);
 
 /**
- * @copydoc cudf::copy_bitmask(column_view const& view, rmm::device_async_resource_ref )
+ * @copydoc cudf::copy_bitmask(column_view const& view, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -216,7 +216,7 @@ rmm::device_buffer copy_bitmask(column_view const& view,
 
 /**
  * @copydoc bitmask_and(host_span<bitmask_type const* const>, host_span<size_type> const,
- * size_type, rmm::device_async_resource_ref )
+ * size_type, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  */

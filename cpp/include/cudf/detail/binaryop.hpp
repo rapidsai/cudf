@@ -27,7 +27,7 @@ namespace detail {
 
 /**
  * @copydoc cudf::binary_operation(column_view const&, column_view const&,
- * std::string const&, data_type, rmm::device_async_resource_ref )
+ * std::string const&, data_type, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -40,7 +40,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
 /**
  * @copydoc cudf::binary_operation(scalar const&, column_view const&, binary_operator,
- * data_type, rmm::device_async_resource_ref )
+ * data_type, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -53,7 +53,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
 
 /**
  * @copydoc cudf::binary_operation(column_view const&, scalar const&, binary_operator,
- * data_type, rmm::device_async_resource_ref )
+ * data_type, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -66,7 +66,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
 /**
  * @copydoc cudf::binary_operation(column_view const&, column_view const&,
- * binary_operator, data_type, rmm::device_async_resource_ref )
+ * binary_operator, data_type, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */

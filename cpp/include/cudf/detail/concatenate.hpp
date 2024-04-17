@@ -30,7 +30,7 @@ namespace cudf {
 //! Inner interfaces and implementations
 namespace detail {
 /**
- * @copydoc cudf::concatenate(host_span<column_view const>,rmm::device_async_resource_ref )
+ * @copydoc cudf::concatenate(host_span<column_view const>,rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -39,7 +39,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns_to_conc
                                     rmm::device_async_resource_ref mr);
 
 /**
- * @copydoc cudf::concatenate(host_span<table_view const>,rmm::device_async_resource_ref )
+ * @copydoc cudf::concatenate(host_span<table_view const>,rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */

@@ -29,7 +29,7 @@ namespace cudf {
 namespace detail {
 /**
  * @copydoc cudf::drop_nulls(table_view const&, std::vector<size_type> const&,
- *                           cudf::size_type, rmm::device_async_resource_ref )
+ *                           cudf::size_type, rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -41,7 +41,7 @@ std::unique_ptr<table> drop_nulls(table_view const& input,
 
 /**
  * @copydoc cudf::drop_nans(table_view const&, std::vector<size_type> const&,
- *                          cudf::size_type, rmm::device_async_resource_ref )
+ *                          cudf::size_type, rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */

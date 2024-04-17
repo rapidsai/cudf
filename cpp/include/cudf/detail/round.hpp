@@ -28,7 +28,7 @@ namespace detail {
 
 /**
  * @copydoc cudf::round(column_view const&, int32_t, rounding_method,
- * rmm::device_async_resource_ref )
+ * rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */

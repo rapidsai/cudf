@@ -24,7 +24,7 @@ namespace cudf::detail {
 
 /**
  * @copydoc cudf::make_timezone_transition_table(std::optional<std::string_view>, std::string_view,
- * rmm::device_async_resource_ref )
+ * rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */

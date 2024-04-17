@@ -134,7 +134,7 @@ bool has_nonempty_nulls(column_view const& input, rmm::cuda_stream_view stream)
 }
 
 /**
- * @copydoc cudf::purge_nonempty_nulls(column_view const&, rmm::device_async_resource_ref )
+ * @copydoc cudf::purge_nonempty_nulls(column_view const&, rmm::device_async_resource_ref)
  */
 std::unique_ptr<cudf::column> purge_nonempty_nulls(column_view const& input,
                                                    rmm::cuda_stream_view stream,

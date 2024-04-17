@@ -28,7 +28,7 @@ namespace detail {
  * @copydoc cudf::lists::index_of(cudf::lists_column_view const&,
  *                                cudf::scalar const&,
  *                                duplicate_find_option,
- *                                rmm::device_async_resource_ref )
+ *                                rmm::device_async_resource_ref)
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
@@ -41,7 +41,7 @@ std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
  * @copydoc cudf::lists::index_of(cudf::lists_column_view const&,
  *                                cudf::column_view const&,
  *                                duplicate_find_option,
- *                                rmm::device_async_resource_ref )
+ *                                rmm::device_async_resource_ref)
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
@@ -53,7 +53,7 @@ std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
 /**
  * @copydoc cudf::lists::contains(cudf::lists_column_view const&,
  *                                cudf::scalar const&,
- *                                rmm::device_async_resource_ref )
+ *                                rmm::device_async_resource_ref)
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
@@ -64,7 +64,7 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
 /**
  * @copydoc cudf::lists::contains(cudf::lists_column_view const&,
  *                                cudf::column_view const&,
- *                                rmm::device_async_resource_ref )
+ *                                rmm::device_async_resource_ref)
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> contains(cudf::lists_column_view const& lists,

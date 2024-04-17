@@ -29,7 +29,7 @@ namespace detail {
 
 /**
  * @copydoc cudf::strings::replace(strings_column_view const&, string_scalar const&,
- * string_scalar const&, int32_t, rmm::cuda_stream_view, rmm::device_async_resource_ref )
+ * string_scalar const&, int32_t, rmm::cuda_stream_view, rmm::device_async_resource_ref)
  */
 std::unique_ptr<column> replace(strings_column_view const& strings,
                                 string_scalar const& target,
@@ -40,7 +40,7 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
 
 /**
  * @copydoc cudf::strings::replace(strings_column_view const&, strings_column_view const&,
- * strings_column_view const&, rmm::cuda_stream_view, rmm::device_async_resource_ref )
+ * strings_column_view const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
  */
 std::unique_ptr<column> replace(strings_column_view const& strings,
                                 strings_column_view const& targets,
@@ -73,7 +73,7 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
 
 /**
  * @copydoc cudf::strings::replace_slice(strings_column_view const&, string_scalar const&,
- * size_type, size_type, rmm::cuda_stream_view, rmm::device_async_resource_ref )
+ * size_type, size_type, rmm::cuda_stream_view, rmm::device_async_resource_ref)
  */
 std::unique_ptr<column> replace_slice(strings_column_view const& strings,
                                       string_scalar const& repl,

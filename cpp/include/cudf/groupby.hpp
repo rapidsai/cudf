@@ -188,7 +188,7 @@ class groupby {
     rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @copydoc aggregate(host_span<aggregation_request const>, rmm::device_async_resource_ref )
+   * @copydoc aggregate(host_span<aggregation_request const>, rmm::device_async_resource_ref)
    *
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
