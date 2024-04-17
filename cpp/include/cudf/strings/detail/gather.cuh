@@ -27,6 +27,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/advance.h>
@@ -227,7 +228,7 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
                                        cudf::detail::input_offsetalator const offsets,
                                        size_type chars_bytes,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   auto const output_count = std::distance(map_begin, map_end);
   if (output_count == 0) return rmm::device_uvector<char>(0, stream, mr);
@@ -290,7 +291,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
                                      MapIterator begin,
                                      MapIterator end,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   auto const output_count = std::distance(begin, end);
   if (output_count == 0) return make_empty_column(type_id::STRING);
@@ -354,7 +355,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
                                      MapIterator end,
                                      bool nullify_out_of_bounds,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   if (nullify_out_of_bounds) return gather<true>(strings, begin, end, stream, mr);
   return gather<false>(strings, begin, end, stream, mr);
