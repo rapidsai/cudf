@@ -31,7 +31,7 @@ EXAMPLES_DIR=$(dirname "$(realpath "$0")")
 LIB_BUILD_DIR=${LIB_BUILD_DIR:-$(readlink -f "${EXAMPLES_DIR}/../build")}
 
 # Setup default install prefix if conda build
-if [ "${CONDA_BUILD:-"0"}" == "1" ]; then 
+if [ "${CONDA_BUILD:-"0"}" == "1" ]; then
   INSTALL_PREFIX="${INSTALL_PREFIX:-${PREFIX}}"
 fi
 
