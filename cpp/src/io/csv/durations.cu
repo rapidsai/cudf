@@ -24,6 +24,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -174,7 +175,7 @@ struct dispatch_from_durations_fn {
   template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& durations,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+                                     rmm::device_async_resource_ref mr) const
   {
     size_type strings_count = durations.size();
     auto column             = column_device_view::create(durations, stream);
@@ -211,7 +212,7 @@ struct dispatch_from_durations_fn {
   template <typename T, std::enable_if_t<not cudf::is_duration<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      rmm::cuda_stream_view,
-                                     rmm::mr::device_memory_resource*) const
+                                     rmm::device_async_resource_ref) const
   {
     CUDF_FAIL("Values for from_durations function must be a duration type.");
   }
@@ -221,7 +222,7 @@ struct dispatch_from_durations_fn {
 
 std::unique_ptr<column> pandas_format_durations(column_view const& durations,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::device_async_resource_ref mr)
 {
   size_type strings_count = durations.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);

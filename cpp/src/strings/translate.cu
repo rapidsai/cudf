@@ -28,6 +28,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
@@ -89,7 +90,7 @@ struct translate_fn {
 std::unique_ptr<column> translate(strings_column_view const& strings,
                                   std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
@@ -127,7 +128,7 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
 std::unique_ptr<column> translate(strings_column_view const& input,
                                   std::vector<std::pair<uint32_t, uint32_t>> const& chars_table,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::translate(input, chars_table, stream, mr);
