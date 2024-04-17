@@ -392,9 +392,9 @@ def get_min_float_dtype(col):
 
 
 def is_mixed_with_object_dtype(lhs, rhs):
-    if cudf.api.types._is_categorical_dtype(lhs.dtype):
+    if isinstance(lhs.dtype, cudf.CategoricalDtype):
         return is_mixed_with_object_dtype(lhs.dtype.categories, rhs)
-    elif cudf.api.types._is_categorical_dtype(rhs.dtype):
+    elif isinstance(rhs.dtype, cudf.CategoricalDtype):
         return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
 
     return (lhs.dtype == "object" and rhs.dtype != "object") or (
