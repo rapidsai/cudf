@@ -331,13 +331,18 @@ ConfigureNVBench(
 ConfigureBench(JSON_BENCH json/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
 ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
-ConfigureNVBench(JSON_READER_OPTION io/json/json_reader_option.cpp)
+ConfigureNVBench(JSON_READER_OPTION_NVBENCH io/json/json_reader_option.cpp)
 ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
 ConfigureNVBench(MULTIBYTE_SPLIT_NVBENCH io/text/multibyte_split.cpp)
 target_link_libraries(MULTIBYTE_SPLIT_NVBENCH PRIVATE ZLIB::ZLIB)
+
+# ##################################################################################################
+# * decimal benchmark
+# ---------------------------------------------------------------------------------
+ConfigureNVBench(DECIMAL_NVBENCH decimal/convert_floating.cpp)
 
 add_custom_target(
   run_benchmarks
