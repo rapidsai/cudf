@@ -21,6 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuco/static_set.cuh>
 
@@ -148,12 +149,12 @@ struct distinct_hash_join {
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
-  inner_join(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr) const;
+  inner_join(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const;
 
   /**
    * @copydoc cudf::distinct_hash_join::left_join
    */
   std::unique_ptr<rmm::device_uvector<size_type>> left_join(
-    rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr) const;
+    rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const;
 };
 }  // namespace cudf::detail

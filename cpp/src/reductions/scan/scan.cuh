@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <utility>
 
@@ -33,14 +34,14 @@ namespace detail {
 std::pair<rmm::device_buffer, size_type> mask_scan(column_view const& input_view,
                                                    scan_type inclusive,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr);
+                                                   rmm::device_async_resource_ref mr);
 
 template <template <typename> typename DispatchFn>
 std::unique_ptr<column> scan_agg_dispatch(column_view const& input,
                                           scan_aggregation const& agg,
                                           bitmask_type const* output_mask,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+                                          rmm::device_async_resource_ref mr)
 {
   switch (agg.kind) {
     case aggregation::SUM:
