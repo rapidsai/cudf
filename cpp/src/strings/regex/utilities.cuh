@@ -25,6 +25,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/scan.h>
 
@@ -113,7 +114,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                            reprog_device& d_prog,
                            size_type strings_count,
                            rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr)
+                           rmm::device_async_resource_ref mr)
 {
   auto offsets = make_numeric_column(
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);

@@ -22,6 +22,7 @@
 #include <mutex>
 
 #include <cudf/io/memory_resource.hpp>
+#include <rmm/aligned.hpp>
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/cuda_async_memory_resource.hpp>
@@ -33,6 +34,7 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include "cudf_jni_apis.hpp"
 
@@ -572,9 +574,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv *env, jclas
                                                               jlong stream) {
   try {
     cudf::jni::auto_set_device(env);
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource();
+    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource();
     auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
-    void *ret = mr->allocate(size, c_stream);
+    void *ret = mr.allocate_async(size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
     return reinterpret_cast<jlong>(ret);
   }
   CATCH_STD(env, 0)
@@ -584,10 +586,10 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_free(JNIEnv *env, jclass clazz, j
                                                     jlong size, jlong stream) {
   try {
     cudf::jni::auto_set_device(env);
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource();
+    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource();
     void *cptr = reinterpret_cast<void *>(ptr);
     auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
-    mr->deallocate(cptr, size, c_stream);
+    mr.deallocate_async(cptr, size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
   }
   CATCH_STD(env, )
 }

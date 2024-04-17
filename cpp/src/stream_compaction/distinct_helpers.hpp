@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf::detail {
 
@@ -82,6 +83,6 @@ rmm::device_uvector<size_type> reduce_by_row(
   null_equality nulls_equal,
   nan_equality nans_equal,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr);
+  rmm::device_async_resource_ref mr);
 
 }  // namespace cudf::detail

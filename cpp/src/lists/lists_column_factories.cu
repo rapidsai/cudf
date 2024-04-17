@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/sequence.h>
@@ -36,7 +37,7 @@ namespace detail {
 std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& value,
                                                             size_type size,
                                                             rmm::cuda_stream_view stream,
-                                                            rmm::mr::device_memory_resource* mr)
+                                                            rmm::device_async_resource_ref mr)
 {
   if (size == 0) {
     return make_lists_column(0,
@@ -84,7 +85,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
 
 std::unique_ptr<column> make_empty_lists_column(data_type child_type,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::device_async_resource_ref mr)
 {
   auto offsets = make_empty_column(data_type(type_to_id<size_type>()));
   auto child   = make_empty_column(child_type);
@@ -95,7 +96,7 @@ std::unique_ptr<column> make_empty_lists_column(data_type child_type,
 std::unique_ptr<column> make_all_nulls_lists_column(size_type size,
                                                     data_type child_type,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+                                                    rmm::device_async_resource_ref mr)
 {
   auto offsets = [&] {
     auto offsets_buff =
@@ -120,7 +121,7 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
                                           size_type null_count,
                                           rmm::device_buffer&& null_mask,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+                                          rmm::device_async_resource_ref mr)
 {
   if (null_count > 0) { CUDF_EXPECTS(null_mask.size() > 0, "Column with nulls must be nullable."); }
   CUDF_EXPECTS(
