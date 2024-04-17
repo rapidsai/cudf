@@ -274,34 +274,15 @@ def read_parquet_metadata(filepath_or_buffer):
     if not is_list_like(filepath_or_buffer):
         filepath_or_buffer = [filepath_or_buffer]
 
-    # Start by trying construct a filesystem object, so we
-    # can apply filters on remote file-systems
+    # Start by trying to construct a filesystem object
     fs, paths = ioutils._get_filesystem_and_paths(
         path_or_data=filepath_or_buffer, storage_options=None
     )
 
-    # Use pyarrow dataset to detect/process directory-partitioned
-    # data and apply filters. Note that we can only support partitioned
-    # data and filtering if the input is a single directory or list of
-    # paths.
-    partition_keys = []
-    partition_categories = {}
-    if fs and paths:
-        (
-            paths,
-            row_groups,
-            partition_keys,
-            partition_categories,
-        ) = _process_dataset(
-            paths=paths,
-            fs=fs,
-            filters=None,
-            row_groups=None,
-            categorical_partitions=True,
-            dataset_kwargs=None,
-        )
+    # Check if filepath or buffer
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
+    # List of filepaths or buffers
     filepaths_or_buffers = []
 
     for source in filepath_or_buffer:

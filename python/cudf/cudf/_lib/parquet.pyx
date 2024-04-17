@@ -324,15 +324,12 @@ cpdef read_parquet_metadata(filepaths_or_buffers):
     """
     Cython function to call into libcudf API, see `read_parquet_metadata`.
 
-    filters, if not None, should be an Expression that evaluates to a
-    boolean predicate as a function of columns being read.
-
     See Also
     --------
     cudf.io.parquet.read_parquet
     cudf.io.parquet.to_parquet
     """
-    # Convert NativeFile buffers to NativeFileDatasource,
+    # Convert NativeFile buffers to NativeFileDatasource
     for i, datasource in enumerate(filepaths_or_buffers):
         if isinstance(datasource, NativeFile):
             filepaths_or_buffers[i] = NativeFileDatasource(datasource)
