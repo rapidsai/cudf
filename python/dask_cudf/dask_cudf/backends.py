@@ -396,7 +396,13 @@ def _table_to_cudf(obj, table, self_destruct=None, **kwargs):
             f"Ignoring the following arguments to "
             f"`from_pyarrow_table_dispatch`: {list(kwargs)}"
         )
-    return obj.from_arrow(table)
+    res = obj.from_arrow(table)
+
+    # we have a materialized RangeIndex, make sure we reset the name
+    if res.index.name == "__index_level_0__":
+        res.index.name = None
+
+    return res
 
 
 @union_categoricals_dispatch.register((cudf.Series, cudf.BaseIndex))
