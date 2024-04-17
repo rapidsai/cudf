@@ -36,6 +36,8 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <algorithm>
 
 namespace cudf::io {
@@ -156,8 +158,7 @@ std::vector<std::unique_ptr<data_sink>> make_datasinks(sink_info const& info)
 
 }  // namespace
 
-table_with_metadata read_avro(avro_reader_options const& options,
-                              rmm::mr::device_memory_resource* mr)
+table_with_metadata read_avro(avro_reader_options const& options, rmm::device_async_resource_ref mr)
 {
   namespace avro = cudf::io::detail::avro;
 
@@ -201,7 +202,7 @@ compression_type infer_compression_type(compression_type compression, source_inf
 
 table_with_metadata read_json(json_reader_options options,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -216,7 +217,7 @@ table_with_metadata read_json(json_reader_options options,
 
 void write_json(json_writer_options const& options,
                 rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr)
+                rmm::device_async_resource_ref mr)
 {
   auto sinks = make_datasinks(options.get_sink());
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for JSON writing");
@@ -231,7 +232,7 @@ void write_json(json_writer_options const& options,
 
 table_with_metadata read_csv(csv_reader_options options,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -253,7 +254,7 @@ table_with_metadata read_csv(csv_reader_options options,
 // Freeform API wraps the detail writer class API
 void write_csv(csv_writer_options const& options,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
+               rmm::device_async_resource_ref mr)
 {
   using namespace cudf::io::detail;
 
@@ -413,7 +414,7 @@ orc_metadata read_orc_metadata(source_info const& src_info, rmm::cuda_stream_vie
  */
 table_with_metadata read_orc(orc_reader_options const& options,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -481,7 +482,7 @@ namespace detail_parquet = cudf::io::parquet::detail;
 
 table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -569,7 +570,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                parquet_reader_options const& options,
                                                rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+                                               rmm::device_async_resource_ref mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(
       chunk_read_limit, 0, make_datasources(options.get_source()), options, stream, mr)}
 {
@@ -582,7 +583,7 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                std::size_t pass_read_limit,
                                                parquet_reader_options const& options,
                                                rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+                                               rmm::device_async_resource_ref mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
                                                             pass_read_limit,
                                                             make_datasources(options.get_source()),

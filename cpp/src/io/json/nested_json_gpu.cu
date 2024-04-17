@@ -36,6 +36,7 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/device_vector.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -1531,7 +1532,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   device_span<SymbolT const> json_in,
   cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   check_input_size(json_in.size());
 
@@ -1664,7 +1665,7 @@ void make_json_column(json_column& root_column,
                       cudf::io::json_reader_options const& options,
                       bool include_quote_char,
                       rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr)
+                      rmm::device_async_resource_ref mr)
 {
   // Range of encapsulating function that parses to internal columnar data representation
   CUDF_FUNC_RANGE();
@@ -2064,7 +2065,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
   cudf::io::json_reader_options const& options,
   std::optional<schema_element> schema,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   // Range of orchestrating/encapsulating function
   CUDF_FUNC_RANGE();
@@ -2222,7 +2223,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 table_with_metadata host_parse_nested_json(device_span<SymbolT const> d_input,
                                            cudf::io::json_reader_options const& options,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   // Range of orchestrating/encapsulating function
   CUDF_FUNC_RANGE();

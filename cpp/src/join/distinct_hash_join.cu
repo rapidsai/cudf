@@ -28,6 +28,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cooperative_groups.h>
 #include <cub/block/block_scan.cuh>
@@ -309,7 +310,7 @@ template <cudf::has_nested HasNested>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr) const
+                                          rmm::device_async_resource_ref mr) const
 {
   cudf::scoped_range range{"distinct_hash_join::inner_join"};
 
@@ -352,7 +353,7 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
 
 template <cudf::has_nested HasNested>
 std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join<HasNested>::left_join(
-  rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr) const
+  rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const
 {
   cudf::scoped_range range{"distinct_hash_join::left_join"};
 
@@ -419,7 +420,7 @@ template <>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 distinct_hash_join<cudf::has_nested::YES>::inner_join(rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr) const
+                                                      rmm::device_async_resource_ref mr) const
 {
   return _impl->inner_join(stream, mr);
 }
@@ -428,7 +429,7 @@ template <>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 distinct_hash_join<cudf::has_nested::NO>::inner_join(rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource* mr) const
+                                                     rmm::device_async_resource_ref mr) const
 {
   return _impl->inner_join(stream, mr);
 }
@@ -436,14 +437,14 @@ distinct_hash_join<cudf::has_nested::NO>::inner_join(rmm::cuda_stream_view strea
 template <>
 std::unique_ptr<rmm::device_uvector<size_type>>
 distinct_hash_join<cudf::has_nested::YES>::left_join(rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource* mr) const
+                                                     rmm::device_async_resource_ref mr) const
 {
   return _impl->left_join(stream, mr);
 }
 
 template <>
 std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join<cudf::has_nested::NO>::left_join(
-  rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr) const
+  rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const
 {
   return _impl->left_join(stream, mr);
 }

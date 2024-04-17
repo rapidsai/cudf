@@ -25,6 +25,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/scatter.h>
@@ -205,7 +206,7 @@ auto get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& reader_opts,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
