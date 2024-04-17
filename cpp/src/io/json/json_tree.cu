@@ -31,6 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cub/device/device_radix_sort.cuh>
 #include <cuco/static_set.cuh>
@@ -218,7 +219,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                     device_span<SymbolOffsetT const> token_indices,
                                     bool is_strict_nested_boundaries,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   // Whether a token does represent a node in the tree representation
@@ -634,7 +635,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
   bool is_array_of_arrays,
   bool is_enabled_lines,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto const num_nodes = parent_node_ids.size();
@@ -779,7 +780,7 @@ std::pair<rmm::device_uvector<NodeIndexT>, rmm::device_uvector<NodeIndexT>> gene
   bool is_array_of_arrays,
   bool is_enabled_lines,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto const num_nodes = d_tree.node_categories.size();
@@ -848,7 +849,7 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
                                                    bool is_array_of_arrays,
                                                    bool is_enabled_lines,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+                                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto const num_nodes = d_tree.node_categories.size();
@@ -947,7 +948,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                               bool is_array_of_arrays,
                               bool is_enabled_lines,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto [new_col_id, new_parent_col_id] =

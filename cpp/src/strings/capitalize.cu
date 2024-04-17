@@ -27,6 +27,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/pair.h>
@@ -227,7 +228,7 @@ template <typename CapitalFn>
 std::unique_ptr<column> capitalizer(CapitalFn cfn,
                                     strings_column_view const& input,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   auto [offsets_column, chars] =
     cudf::strings::detail::make_strings_children(cfn, input.size(), stream, mr);
@@ -244,7 +245,7 @@ std::unique_ptr<column> capitalizer(CapitalFn cfn,
 std::unique_ptr<column> capitalize(strings_column_view const& input,
                                    string_scalar const& delimiters,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(delimiters.is_valid(stream), "Delimiter must be a valid string");
   if (input.is_empty()) return make_empty_column(type_id::STRING);
@@ -256,7 +257,7 @@ std::unique_ptr<column> capitalize(strings_column_view const& input,
 std::unique_ptr<column> title(strings_column_view const& input,
                               string_character_types sequence_type,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
   auto d_column = column_device_view::create(input.parent(), stream);
@@ -265,7 +266,7 @@ std::unique_ptr<column> title(strings_column_view const& input,
 
 std::unique_ptr<column> is_title(strings_column_view const& input,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) return make_empty_column(type_id::BOOL8);
   auto results  = make_numeric_column(data_type{type_id::BOOL8},
@@ -289,7 +290,7 @@ std::unique_ptr<column> is_title(strings_column_view const& input,
 std::unique_ptr<column> capitalize(strings_column_view const& input,
                                    string_scalar const& delimiter,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::capitalize(input, delimiter, stream, mr);
@@ -298,7 +299,7 @@ std::unique_ptr<column> capitalize(strings_column_view const& input,
 std::unique_ptr<column> title(strings_column_view const& input,
                               string_character_types sequence_type,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::title(input, sequence_type, stream, mr);
@@ -306,7 +307,7 @@ std::unique_ptr<column> title(strings_column_view const& input,
 
 std::unique_ptr<column> is_title(strings_column_view const& input,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::is_title(input, stream, mr);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -131,7 +132,7 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
                                        cudf::device_span<size_type const> group_offsets,
                                        size_type num_groups,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(values.type().id() == type_id::STRUCT,
                "Input to `group_merge_m2` must be a structs column.");

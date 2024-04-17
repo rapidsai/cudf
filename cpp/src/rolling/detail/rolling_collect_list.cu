@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/detail/iterator.cuh>
 
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -114,7 +115,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   column_view const& offsets,
   size_type num_child_nulls,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto input_device_view = column_device_view::create(input, stream);
 

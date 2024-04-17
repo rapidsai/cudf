@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #pragma once
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <optional>
@@ -49,6 +50,6 @@ static constexpr uint32_t solar_cycle_entry_count = 2 * solar_cycle_years;
 std::unique_ptr<table> make_timezone_transition_table(
   std::optional<std::string_view> tzif_dir,
   std::string_view timezone_name,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 }  // namespace cudf
