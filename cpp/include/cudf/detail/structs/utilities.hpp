@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf::structs::detail {
 
@@ -175,7 +176,7 @@ class flattened_table {
   std::vector<null_order> const& null_precedence,
   column_nullability nullability,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr);
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Superimpose nulls from a given null mask into the input column, using bitwise AND.
@@ -197,7 +198,7 @@ class flattened_table {
                                                         size_type null_count,
                                                         std::unique_ptr<column>&& input,
                                                         rmm::cuda_stream_view stream,
-                                                        rmm::mr::device_memory_resource* mr);
+                                                        rmm::device_async_resource_ref mr);
 
 /**
  * @brief Push down nulls from the given input column into its children columns, using bitwise AND.
@@ -222,7 +223,7 @@ class flattened_table {
  *         to be kept alive.
  */
 [[nodiscard]] std::pair<column_view, temporary_nullable_data> push_down_nulls(
-  column_view const& input, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
+  column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
 /**
  * @brief Push down nulls from columns of the input table into their children columns, using
@@ -249,7 +250,7 @@ class flattened_table {
  *         to be kept alive.
  */
 [[nodiscard]] std::pair<table_view, temporary_nullable_data> push_down_nulls(
-  table_view const& input, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
+  table_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
 /**
  * @brief Checks if a column or any of its children is a struct column with structs that are null.

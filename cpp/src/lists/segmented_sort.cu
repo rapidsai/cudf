@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/transform.h>
 
@@ -43,7 +44,7 @@ namespace {
  */
 std::unique_ptr<column> build_output_offsets(lists_column_view const& input,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   auto output_offset = make_numeric_column(
     input.offsets().type(), input.size() + 1, mask_state::UNALLOCATED, stream, mr);
@@ -63,7 +64,7 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                                    order column_order,
                                    null_order null_precedence,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) return empty_like(input.parent());
 
@@ -91,7 +92,7 @@ std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
                                           order column_order,
                                           null_order null_precedence,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+                                          rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) { return empty_like(input.parent()); }
 
@@ -120,7 +121,7 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                                    order column_order,
                                    null_order null_precedence,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::sort_lists(input, column_order, null_precedence, stream, mr);
@@ -130,7 +131,7 @@ std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
                                           order column_order,
                                           null_order null_precedence,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+                                          rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::stable_sort_lists(input, column_order, null_precedence, stream, mr);

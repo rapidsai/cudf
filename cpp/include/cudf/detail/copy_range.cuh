@@ -27,6 +27,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cub/cub.cuh>
 #include <cuda_runtime.h>
@@ -203,7 +204,7 @@ std::unique_ptr<column> copy_range(column_view const& source,
                                    size_type source_end,
                                    size_type target_begin,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr);
+                                   rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace cudf

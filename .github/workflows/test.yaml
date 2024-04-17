@@ -44,7 +44,6 @@ jobs:
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_cpp_memcheck.sh"
   static-configure:
-    needs: checks
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.06
     with:
