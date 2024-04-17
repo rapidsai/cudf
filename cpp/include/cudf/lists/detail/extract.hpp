@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,29 +18,31 @@
 #include <cudf/lists/extract.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 namespace cudf {
 namespace lists {
 namespace detail {
 
 /**
  * @copydoc cudf::lists::extract_list_element(lists_column_view, size_type,
- * rmm::mr::device_memory_resource*)
+ * rmm::device_async_resource_ref)
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              size_type const index,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr);
+                                             rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::lists::extract_list_element(lists_column_view, column_view const&,
- * rmm::mr::device_memory_resource*)
+ * rmm::device_async_resource_ref)
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              column_view const& indices,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr);
+                                             rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace lists

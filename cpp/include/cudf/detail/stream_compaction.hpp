@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,12 +23,13 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace detail {
 /**
  * @copydoc cudf::drop_nulls(table_view const&, std::vector<size_type> const&,
- *                           cudf::size_type, rmm::mr::device_memory_resource*)
+ *                           cudf::size_type, rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -36,11 +37,11 @@ std::unique_ptr<table> drop_nulls(table_view const& input,
                                   std::vector<size_type> const& keys,
                                   cudf::size_type keep_threshold,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr);
+                                  rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::drop_nans(table_view const&, std::vector<size_type> const&,
- *                          cudf::size_type, rmm::mr::device_memory_resource*)
+ *                          cudf::size_type, rmm::device_async_resource_ref)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -48,7 +49,7 @@ std::unique_ptr<table> drop_nans(table_view const& input,
                                  std::vector<size_type> const& keys,
                                  cudf::size_type keep_threshold,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr);
+                                 rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::apply_boolean_mask
@@ -58,7 +59,7 @@ std::unique_ptr<table> drop_nans(table_view const& input,
 std::unique_ptr<table> apply_boolean_mask(table_view const& input,
                                           column_view const& boolean_mask,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr);
+                                          rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::unique
@@ -70,7 +71,7 @@ std::unique_ptr<table> unique(table_view const& input,
                               duplicate_keep_option keep,
                               null_equality nulls_equal,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+                              rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::distinct
@@ -83,7 +84,7 @@ std::unique_ptr<table> distinct(table_view const& input,
                                 null_equality nulls_equal,
                                 nan_equality nans_equal,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr);
+                                rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::stable_distinct
@@ -96,7 +97,7 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
                                        null_equality nulls_equal,
                                        nan_equality nans_equal,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr);
+                                       rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::distinct_indices
@@ -108,7 +109,7 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
                                                 null_equality nulls_equal,
                                                 nan_equality nans_equal,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr);
+                                                rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::unique_count(column_view const&, null_policy, nan_policy)
