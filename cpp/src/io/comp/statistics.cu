@@ -33,7 +33,7 @@ writer_compression_statistics collect_compression_statistics(
     rmm::exec_policy(stream),
     results.begin(),
     results.end(),
-    cuda::proclaim_return_type<size_t>([] __device__(const compression_result& res) {
+    cuda::proclaim_return_type<size_t>([] __device__(compression_result const& res) {
       return res.status == compression_status::SUCCESS ? res.bytes_written : 0;
     }),
     0ul,
