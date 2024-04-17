@@ -28,12 +28,15 @@ done
 
 # Root of examples
 EXAMPLES_DIR=$(dirname "$(realpath "$0")")
-LIB_BUILD_DIR=${LIB_BUILD_DIR:-$(readlink -f "${EXAMPLES_DIR}/../build")}
 
-# Setup default install prefix if conda build
+# Set up default libcudf build directory and install prefix if conda build
 if [ "${CONDA_BUILD:-"0"}" == "1" ]; then
+  LIB_BUILD_DIR="${LIB_BUILD_DIR:-${SRC_DIR/cpp/build}}"
   INSTALL_PREFIX="${INSTALL_PREFIX:-${PREFIX}}"
 fi
+
+# libcudf build directory
+LIB_BUILD_DIR=${LIB_BUILD_DIR:-$(readlink -f "${EXAMPLES_DIR}/../build")}
 
 ################################################################################
 # Add individual libcudf examples build scripts down below
