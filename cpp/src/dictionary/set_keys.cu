@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
@@ -61,7 +62,7 @@ struct dispatch_compute_indices {
   operator()(dictionary_column_view const& input,
              column_view const& new_keys,
              rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+             rmm::device_async_resource_ref mr)
   {
     auto dictionary_view = column_device_view::create(input.parent(), stream);
     auto dictionary_itr  = make_dictionary_iterator<Element>(*dictionary_view);
@@ -119,7 +120,7 @@ struct dispatch_compute_indices {
 std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column,
                                  column_view const& new_keys,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!new_keys.has_nulls(), "keys parameter must not have nulls");
   auto keys = dictionary_column.keys();
@@ -177,7 +178,7 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
 std::vector<std::unique_ptr<column>> match_dictionaries(
   cudf::host_span<dictionary_column_view const> input,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   std::vector<column_view> keys(input.size());
   std::transform(input.begin(), input.end(), keys.begin(), [](auto& col) { return col.keys(); });
@@ -191,7 +192,7 @@ std::vector<std::unique_ptr<column>> match_dictionaries(
 }
 
 std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_dictionaries(
-  std::vector<table_view> tables, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  std::vector<table_view> tables, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   // Make a copy of all the column views from each table_view
   std::vector<std::vector<column_view>> updated_columns;
@@ -242,7 +243,7 @@ std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_d
 std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column,
                                  column_view const& keys,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::set_keys(dictionary_column, keys, stream, mr);
@@ -251,7 +252,7 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
 std::vector<std::unique_ptr<column>> match_dictionaries(
   cudf::host_span<dictionary_column_view const> input,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::match_dictionaries(input, stream, mr);

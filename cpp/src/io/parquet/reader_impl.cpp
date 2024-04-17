@@ -23,6 +23,8 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <bitset>
 #include <numeric>
 
@@ -362,7 +364,7 @@ void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_row
 reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    parquet_reader_options const& options,
                    rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
+                   rmm::device_async_resource_ref mr)
   : impl(0 /*chunk_read_limit*/,
          0 /*input_pass_read_limit*/,
          std::forward<std::vector<std::unique_ptr<cudf::io::datasource>>>(sources),
@@ -377,7 +379,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
                    std::vector<std::unique_ptr<datasource>>&& sources,
                    parquet_reader_options const& options,
                    rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
+                   rmm::device_async_resource_ref mr)
   : _stream{stream},
     _mr{mr},
     _sources{std::move(sources)},
