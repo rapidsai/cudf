@@ -84,7 +84,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@use-new-runners
     with:
       build_type: pull-request
-      node_type: "gpu-l4-latest-1-testing"
+      node_type: "gpu-v100-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_java.sh"
@@ -104,7 +104,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@use-new-runners
     with:
       build_type: pull-request
-      node_type: "gpu-l4-latest-1-testing"
+      node_type: "gpu-v100-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_notebooks.sh"
@@ -114,7 +114,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@use-new-runners
     with:
       build_type: pull-request
-      node_type: "gpu-l4-latest-1-testing"
+      node_type: "gpu-v100-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/build_docs.sh"
