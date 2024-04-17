@@ -34,7 +34,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                               strings_column_view const& rhs,
                               cudf::detail::index_vector const& row_order,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   using cudf::detail::side;
   if (row_order.is_empty()) { return make_empty_column(type_id::STRING); }
