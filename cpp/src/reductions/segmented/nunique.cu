@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
@@ -54,7 +55,7 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
                                                 device_span<size_type const> offsets,
                                                 null_policy null_handling,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::device_async_resource_ref mr)
 {
   // only support non-nested types
   CUDF_EXPECTS(!cudf::is_nested(col.type()),

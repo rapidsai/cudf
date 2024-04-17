@@ -29,6 +29,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <algorithm>
 #include <list>
@@ -129,7 +130,7 @@ struct stats_caster {
     size_t col_idx,
     cudf::data_type dtype,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const
+    rmm::device_async_resource_ref mr) const
   {
     // List, Struct, Dictionary types are not supported
     if constexpr (cudf::is_compound<T>() && !std::is_same_v<T, string_view>) {
@@ -165,7 +166,7 @@ struct stats_caster {
 
         static auto make_strings_children(host_span<string_view> host_strings,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+                                          rmm::device_async_resource_ref mr)
         {
           std::vector<char> chars{};
           std::vector<cudf::size_type> offsets(1, 0);
@@ -182,7 +183,7 @@ struct stats_caster {
 
         auto to_device(cudf::data_type dtype,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr)
+                       rmm::device_async_resource_ref mr)
         {
           if constexpr (std::is_same_v<T, string_view>) {
             auto [d_chars, d_offsets] = make_strings_children(val, stream, mr);

@@ -30,6 +30,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace reduction {
@@ -38,14 +39,14 @@ struct reduce_dispatch_functor {
   column_view const col;
   data_type output_dtype;
   std::optional<std::reference_wrapper<scalar const>> init;
-  rmm::mr::device_memory_resource* mr;
+  rmm::device_async_resource_ref mr;
   rmm::cuda_stream_view stream;
 
   reduce_dispatch_functor(column_view const& col,
                           data_type output_dtype,
                           std::optional<std::reference_wrapper<scalar const>> init,
                           rmm::cuda_stream_view stream,
-                          rmm::mr::device_memory_resource* mr)
+                          rmm::device_async_resource_ref mr)
     : col(col), output_dtype(output_dtype), init(init), mr(mr), stream(stream)
   {
   }
@@ -151,7 +152,7 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                data_type output_dtype,
                                std::optional<std::reference_wrapper<scalar const>> init,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!init.has_value() || col.type() == init.value().get().type(),
                "column and initial value must be the same type");
@@ -204,7 +205,7 @@ std::unique_ptr<scalar> reduce(column_view const& col,
 std::unique_ptr<scalar> reduce(column_view const& col,
                                reduce_aggregation const& agg,
                                data_type output_dtype,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return reduction::detail::reduce(
@@ -215,7 +216,7 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                reduce_aggregation const& agg,
                                data_type output_dtype,
                                std::optional<std::reference_wrapper<scalar const>> init,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return reduction::detail::reduce(col, agg, output_dtype, init, cudf::get_default_stream(), mr);
