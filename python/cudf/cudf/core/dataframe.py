@@ -5481,6 +5481,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     out = out.set_index(idx)
             else:
                 out = out.set_index(index_col[0])
+        if "__index_level_0__" in out.index.names:
+            assert len(out.index.names) == 1
+            out.index.name = None
 
         return out
 
@@ -5542,7 +5545,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else:
                 if isinstance(index, cudf.RangeIndex):
                     index = index._as_int_index()
-                    index.name = "__index_level_0__"
+                    index.name = (
+                        index.name
+                        if index.name is not None
+                        else "__index_level_0__"
+                    )
                 if isinstance(index, MultiIndex):
                     gen_names = tuple(
                         f"level_{i}" for i, _ in enumerate(index._data.names)
