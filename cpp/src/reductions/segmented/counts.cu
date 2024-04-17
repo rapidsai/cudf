@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 
 #include <cudf/detail/null_mask.cuh>
 
+#include <rmm/resource_ref.hpp>
+
 #include <thrust/adjacent_difference.h>
 
 namespace cudf {
@@ -29,7 +31,7 @@ rmm::device_uvector<size_type> segmented_counts(bitmask_type const* null_mask,
                                                 device_span<size_type const> offsets,
                                                 null_policy null_handling,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::device_async_resource_ref mr)
 {
   auto const num_segments = offsets.size() - 1;
 

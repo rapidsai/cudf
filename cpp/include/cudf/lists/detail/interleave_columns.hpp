@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace lists {
@@ -47,7 +48,7 @@ namespace detail {
 std::unique_ptr<column> interleave_columns(table_view const& input,
                                            bool has_null_mask,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr);
+                                           rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace lists
