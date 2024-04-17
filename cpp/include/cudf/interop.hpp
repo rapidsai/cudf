@@ -285,8 +285,8 @@ unique_device_array_t to_arrow_device(
  */
 unique_device_array_t to_arrow_device(
   cudf::table_view const& table,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create `ArrowDeviceArray` from a column view
@@ -315,8 +315,8 @@ unique_device_array_t to_arrow_device(
  */
 unique_device_array_t to_arrow_device(
   cudf::column_view const& col,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create `cudf::table` from given arrow Table input
