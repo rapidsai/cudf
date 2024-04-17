@@ -46,7 +46,6 @@
 #include <cudf/utilities/span.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/resource_ref.hpp>
 #include <thrust/iterator/counting_iterator.h>
 
 #include "csv_chunked_writer.hpp"

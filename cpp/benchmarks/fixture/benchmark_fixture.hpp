@@ -22,7 +22,6 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/device/statistics_resource_adaptor.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <benchmark/benchmark.h>
 
