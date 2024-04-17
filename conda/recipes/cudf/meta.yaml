@@ -103,7 +103,7 @@ requirements:
     # xref: https://github.com/rapidsai/cudf/issues/12822
     - cuda-nvrtc
     - cuda-python >=12.0,<13.0a0
-    - pynvjitlink
+    - pynvjitlink=0.2.0
     {% endif %}
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
     - nvtx >=0.2.1
