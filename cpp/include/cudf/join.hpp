@@ -26,6 +26,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <optional>
 #include <utility>
@@ -95,8 +96,8 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 inner_join(cudf::table_view const& left_keys,
            cudf::table_view const& right_keys,
-           null_equality compare_nulls         = null_equality::EQUAL,
-           rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+           null_equality compare_nulls       = null_equality::EQUAL,
+           rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to a
@@ -135,8 +136,8 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 left_join(cudf::table_view const& left_keys,
           cudf::table_view const& right_keys,
-          null_equality compare_nulls         = null_equality::EQUAL,
-          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+          null_equality compare_nulls       = null_equality::EQUAL,
+          rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to a
@@ -174,8 +175,8 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 full_join(cudf::table_view const& left_keys,
           cudf::table_view const& right_keys,
-          null_equality compare_nulls         = null_equality::EQUAL,
-          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+          null_equality compare_nulls       = null_equality::EQUAL,
+          rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a vector of row indices corresponding to a left semi-join
@@ -202,8 +203,8 @@ full_join(cudf::table_view const& left_keys,
 std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality compare_nulls       = null_equality::EQUAL,
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a vector of row indices corresponding to a left anti join
@@ -233,8 +234,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
 std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality compare_nulls       = null_equality::EQUAL,
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a cross join on two tables (`left`, `right`)
@@ -261,7 +262,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
 std::unique_ptr<cudf::table> cross_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief The enum class to specify if any of the input join tables (`build` table and any later
@@ -340,7 +341,7 @@ class hash_join {
   inner_join(cudf::table_view const& probe,
              std::optional<std::size_t> output_size = {},
              rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-             rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
+             rmm::device_async_resource_ref mr      = rmm::mr::get_current_device_resource()) const;
 
   /**
    * Returns the row indices that can be used to construct the result of performing
@@ -365,7 +366,7 @@ class hash_join {
   left_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size = {},
             rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-            rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
+            rmm::device_async_resource_ref mr      = rmm::mr::get_current_device_resource()) const;
 
   /**
    * Returns the row indices that can be used to construct the result of performing
@@ -390,7 +391,7 @@ class hash_join {
   full_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size = {},
             rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-            rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
+            rmm::device_async_resource_ref mr      = rmm::mr::get_current_device_resource()) const;
 
   /**
    * Returns the exact number of matches (rows) when performing an inner join with the specified
@@ -441,8 +442,8 @@ class hash_join {
    */
   std::size_t full_join_size(
     cudf::table_view const& probe,
-    rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) const;
 
  private:
   const std::unique_ptr<impl_type const> _impl;
@@ -497,8 +498,8 @@ class distinct_hash_join {
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
-  inner_join(rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+  inner_join(rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+             rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) const;
 
   /**
    * @brief Returns the build table indices that can be used to construct the result of performing
@@ -515,8 +516,8 @@ class distinct_hash_join {
    * join between two tables with `build` and `probe` as the join keys.
    */
   std::unique_ptr<rmm::device_uvector<size_type>> left_join(
-    rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) const;
 
  private:
   using impl_type = typename cudf::detail::distinct_hash_join<HasNested>;  ///< Implementation type
@@ -561,12 +562,11 @@ class distinct_hash_join {
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-conditional_inner_join(
-  table_view const& left,
-  table_view const& right,
-  ast::expression const& binary_predicate,
-  std::optional<std::size_t> output_size = {},
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+conditional_inner_join(table_view const& left,
+                       table_view const& right,
+                       ast::expression const& binary_predicate,
+                       std::optional<std::size_t> output_size = {},
+                       rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs
@@ -611,7 +611,7 @@ conditional_left_join(table_view const& left,
                       table_view const& right,
                       ast::expression const& binary_predicate,
                       std::optional<std::size_t> output_size = {},
-                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                      rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs
@@ -653,7 +653,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 conditional_full_join(table_view const& left,
                       table_view const& right,
                       ast::expression const& binary_predicate,
-                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                      rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns an index vector corresponding to all rows in the left table
@@ -692,7 +692,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
   table_view const& right,
   ast::expression const& binary_predicate,
   std::optional<std::size_t> output_size = {},
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr      = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns an index vector corresponding to all rows in the left table
@@ -731,7 +731,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
   table_view const& right,
   ast::expression const& binary_predicate,
   std::optional<std::size_t> output_size = {},
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr      = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs of
@@ -789,7 +789,7 @@ mixed_inner_join(
   ast::expression const& binary_predicate,
   null_equality compare_nulls = null_equality::EQUAL,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs of
@@ -849,7 +849,7 @@ mixed_left_join(
   ast::expression const& binary_predicate,
   null_equality compare_nulls = null_equality::EQUAL,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs of
@@ -909,7 +909,7 @@ mixed_full_join(
   ast::expression const& binary_predicate,
   null_equality compare_nulls = null_equality::EQUAL,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns an index vector corresponding to all rows in the left tables
@@ -955,8 +955,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
   table_view const& left_conditional,
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality compare_nulls       = null_equality::EQUAL,
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns an index vector corresponding to all rows in the left tables
@@ -1003,8 +1003,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
   table_view const& left_conditional,
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality compare_nulls       = null_equality::EQUAL,
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
@@ -1043,8 +1043,8 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
   table_view const& left_conditional,
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality compare_nulls       = null_equality::EQUAL,
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
@@ -1083,8 +1083,8 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
   table_view const& left_conditional,
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls         = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality compare_nulls       = null_equality::EQUAL,
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
@@ -1107,7 +1107,7 @@ std::size_t conditional_inner_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
@@ -1130,7 +1130,7 @@ std::size_t conditional_left_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
@@ -1153,7 +1153,7 @@ std::size_t conditional_left_semi_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
@@ -1176,6 +1176,6 @@ std::size_t conditional_left_anti_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 /** @} */  // end of group
 }  // namespace cudf

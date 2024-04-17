@@ -23,6 +23,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <rmm/device_scalar.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/iterator_traits.h>
 #include <thrust/optional.h>
@@ -152,7 +153,7 @@ std::unique_ptr<column> copy_if_else(bool nullable,
                                      FilterFn filter,
                                      cudf::data_type output_type,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   // This is the type of the thrust::optional element in the passed iterators
   using Element = typename thrust::iterator_traits<LeftIter>::value_type::value_type;

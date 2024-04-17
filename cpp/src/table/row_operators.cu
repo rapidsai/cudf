@@ -31,6 +31,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -414,7 +415,7 @@ auto replace_child(column_view const& input,
                    column_view const& new_child,
                    std::vector<std::unique_ptr<column>>& out_cols,
                    rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
+                   rmm::device_async_resource_ref mr)
 {
   auto const make_output = [&input](auto const& offsets_cv, auto const& child_cv) {
     return column_view{data_type{type_id::LIST},
@@ -463,7 +464,7 @@ auto replace_child(column_view const& input,
 auto compute_ranks(column_view const& input,
                    null_order column_null_order,
                    rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
+                   rmm::device_async_resource_ref mr)
 {
   return cudf::detail::rank(input,
                             rank_method::DENSE,
@@ -496,7 +497,7 @@ std::pair<column_view, std::vector<std::unique_ptr<column>>> transform_lists_of_
   column_view const& input,
   null_order column_null_order,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   std::vector<std::unique_ptr<column>> out_cols;
 
@@ -563,7 +564,7 @@ transform_lists_of_structs(column_view const& lhs,
                            column_view const& rhs,
                            null_order column_null_order,
                            rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr)
+                           rmm::device_async_resource_ref mr)
 {
   std::vector<std::unique_ptr<column>> out_cols_lhs;
   std::vector<std::unique_ptr<column>> out_cols_rhs;

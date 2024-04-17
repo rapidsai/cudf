@@ -23,6 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
 
@@ -299,7 +300,7 @@ namespace detail {
 
 rmm::device_uvector<SymbolT> normalize_single_quotes(rmm::device_uvector<SymbolT>&& inbuf,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource* mr)
+                                                     rmm::device_async_resource_ref mr)
 {
   auto parser = fst::detail::make_fst(
     fst::detail::make_symbol_group_lut(normalize_quotes::qna_sgs),
@@ -323,7 +324,7 @@ rmm::device_uvector<SymbolT> normalize_single_quotes(rmm::device_uvector<SymbolT
 
 rmm::device_uvector<SymbolT> normalize_whitespace(rmm::device_uvector<SymbolT>&& inbuf,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::device_async_resource_ref mr)
 {
   auto parser = fst::detail::make_fst(
     fst::detail::make_symbol_group_lut(normalize_whitespace::wna_sgs),

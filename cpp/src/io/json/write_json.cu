@@ -47,6 +47,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/for_each.h>
@@ -167,7 +168,7 @@ struct escape_strings_fn {
 
   std::unique_ptr<column> get_escaped_strings(column_view const& column_v,
                                               rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+                                              rmm::device_async_resource_ref mr)
   {
     auto [offsets_column, chars] =
       cudf::strings::detail::make_strings_children(*this, column_v.size(), stream, mr);
@@ -256,7 +257,7 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                                           string_scalar const& narep,
                                           bool include_nulls,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+                                          rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(column_names.type().id() == type_id::STRING, "Column names must be of type string");
@@ -373,7 +374,7 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
                                              string_view const element_separator,
                                              string_view const element_narep,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -497,7 +498,7 @@ struct column_to_strings_fn {
 
   explicit column_to_strings_fn(json_writer_options const& options,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
     : options_(options),
       stream_(stream),
       mr_(mr),
@@ -740,7 +741,7 @@ struct column_to_strings_fn {
  private:
   json_writer_options const& options_;
   rmm::cuda_stream_view stream_;
-  rmm::mr::device_memory_resource* mr_;
+  rmm::device_async_resource_ref mr_;
   string_scalar const narep;  // "null"
   // struct convert constants
   string_scalar const struct_value_separator;  // ","
@@ -804,7 +805,7 @@ void write_chunked(data_sink* out_sink,
                    int const skip_last_chars,
                    json_writer_options const& options,
                    rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
+                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
@@ -828,7 +829,7 @@ void write_json(data_sink* out_sink,
                 table_view const& table,
                 json_writer_options const& options,
                 rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr)
+                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   std::vector<column_name_info> user_column_names = [&]() {

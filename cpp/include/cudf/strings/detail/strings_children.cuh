@@ -23,6 +23,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -56,7 +57,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                            size_type exec_size,
                            size_type strings_count,
                            rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr)
+                           rmm::device_async_resource_ref mr)
 {
   auto offsets_column = make_numeric_column(
     data_type{type_to_id<size_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
@@ -116,7 +117,7 @@ template <typename SizeAndExecuteFunction>
 auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                            size_type strings_count,
                            rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr)
+                           rmm::device_async_resource_ref mr)
 {
   return make_strings_children(size_and_exec_fn, strings_count, strings_count, stream, mr);
 }
@@ -142,7 +143,7 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
   InputIterator begin,
   InputIterator end,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto constexpr size_type_max = static_cast<int64_t>(std::numeric_limits<size_type>::max());
   auto const lcount            = static_cast<int64_t>(std::distance(begin, end));
