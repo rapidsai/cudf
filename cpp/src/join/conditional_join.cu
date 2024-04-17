@@ -77,8 +77,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
   detail::grid_1d const config(left_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
-  // the code below can also be taken out in the context of semi & anti, but
-  // i will leave that for another PR for sake of being conservative
+  // TODO: Remove the output_size parameter. It is not needed because the
+  // output size is bounded by the size of the left table.
   std::size_t join_size;
   if (output_size.has_value()) {
     join_size = *output_size;
