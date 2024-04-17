@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <optional>
 
@@ -37,21 +38,21 @@ std::unique_ptr<column> string_null_min_max(scalar const& lhs,
                                             binary_operator op,
                                             data_type output_type,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr);
+                                            rmm::device_async_resource_ref mr);
 
 std::unique_ptr<column> string_null_min_max(column_view const& lhs,
                                             scalar const& rhs,
                                             binary_operator op,
                                             data_type output_type,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr);
+                                            rmm::device_async_resource_ref mr);
 
 std::unique_ptr<column> string_null_min_max(column_view const& lhs,
                                             column_view const& rhs,
                                             binary_operator op,
                                             data_type output_type,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr);
+                                            rmm::device_async_resource_ref mr);
 
 /**
  * @brief Performs a binary operation between a string scalar and a string
@@ -77,7 +78,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr);
+                                         rmm::device_async_resource_ref mr);
 
 /**
  * @brief Performs a binary operation between a string column and a string
@@ -103,7 +104,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr);
+                                         rmm::device_async_resource_ref mr);
 
 /**
  * @brief Performs a binary operation between two string columns.
@@ -128,7 +129,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr);
+                                         rmm::device_async_resource_ref mr);
 
 void binary_operation(mutable_column_view& out,
                       scalar const& lhs,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -52,7 +53,7 @@ template <typename ReplacementIter>
 std::unique_ptr<column> replace_indices(column_view const& input,
                                         ReplacementIter replacement_iter,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
 {
   auto const input_view = column_device_view::create(input, stream);
   auto const d_input    = *input_view;
@@ -74,12 +75,12 @@ std::unique_ptr<column> replace_indices(column_view const& input,
 
 /**
  * @copydoc cudf::dictionary::detail::replace_nulls(cudf::column_view const&,cudf::column_view
- * const& rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+ * const& rmm::cuda_stream_view, rmm::device_async_resource_ref)
  */
 std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       dictionary_column_view const& replacement,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) { return cudf::empty_like(input.parent()); }
   if (!input.has_nulls()) { return std::make_unique<cudf::column>(input.parent(), stream, mr); }
@@ -107,12 +108,12 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
 
 /**
  * @copydoc cudf::dictionary::detail::replace_nulls(cudf::column_view const&,cudf::scalar
- * const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+ * const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
  */
 std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       scalar const& replacement,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) { return cudf::empty_like(input.parent()); }
   if (!input.has_nulls() || !replacement.is_valid(stream)) {
