@@ -57,6 +57,7 @@ enum class stack_behavior_t : char {
   PushPopWithoutReset,
 
   /// Opening brackets and braces, [, {, push onto the stack, closing brackets and braces, ], }, pop
+  /// TODO: not only newline, any delimiter chars
   /// from the stack. Newline characters are considered delimiters and therefore reset to an empty
   /// stack.
   ResetOnDelimiter

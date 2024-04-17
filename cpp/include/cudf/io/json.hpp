@@ -100,6 +100,8 @@ class json_reader_options {
   bool _lines = false;
   // Parse mixed types as a string column
   bool _mixed_types_as_string = false;
+  // Delimiter separating records in JSON lines
+  char _delimiter = '\n';
 
   // Bytes to skip from the start
   size_t _byte_range_offset = 0;
