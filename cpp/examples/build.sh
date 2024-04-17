@@ -30,6 +30,11 @@ done
 EXAMPLES_DIR=$(dirname "$(realpath "$0")")
 LIB_BUILD_DIR=${LIB_BUILD_DIR:-$(readlink -f "${EXAMPLES_DIR}/../build")}
 
+# Setup default install prefix if conda build
+if [ "${CONDA_BUILD:-"0"}" == "1" ]; then 
+  INSTALL_PREFIX="${INSTALL_PREFIX:-${PREFIX}}"
+fi
+
 ################################################################################
 # Add individual libcudf examples build scripts down below
 
@@ -44,7 +49,7 @@ build_example() {
   cmake --build ${build_dir} -j${PARALLEL_LEVEL}
   # Install if needed
   if [ "$INSTALL_EXAMPLES" = true ]; then
-    cmake --install ${build_dir} --prefix ${INSTALL_PREFIX:-${PREFIX:-${CONDA_PREFIX:-${example_dir}/install}}}
+    cmake --install ${build_dir} --prefix ${INSTALL_PREFIX:-${example_dir}/install}
   fi
 }
 
