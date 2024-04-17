@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,7 +63,8 @@ std::size_t size_of(data_type element_type)
 std::unique_ptr<column> make_empty_column(data_type type)
 {
   CUDF_EXPECTS(type.id() == type_id::EMPTY || !cudf::is_nested(type),
-               "make_empty_column is invalid to call on nested types");
+               "make_empty_column is invalid to call on nested types",
+               cudf::data_type_error);
   return std::make_unique<column>(type, 0, rmm::device_buffer{}, rmm::device_buffer{}, 0);
 }
 
