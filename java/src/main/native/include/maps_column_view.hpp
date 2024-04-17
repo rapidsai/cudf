@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 
@@ -81,9 +83,9 @@ public:
    * @param mr Device memory resource used to allocate the returned column's device memory.
    * @return std::unique_ptr<column> Column of values corresponding the value of the lookup key.
    */
-  std::unique_ptr<column> get_values_for(
-      column_view const &keys, rmm::cuda_stream_view stream = cudf::get_default_stream(),
-      rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource()) const;
+  std::unique_ptr<column>
+  get_values_for(column_view const &keys, rmm::cuda_stream_view stream = cudf::get_default_stream(),
+                 rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) const;
 
   /**
    * @brief Map lookup by a scalar key.
@@ -99,9 +101,9 @@ public:
    * @param mr Device memory resource used to allocate the returned column's device memory.
    * @return std::unique_ptr<column>
    */
-  std::unique_ptr<column> get_values_for(
-      scalar const &key, rmm::cuda_stream_view stream = cudf::get_default_stream(),
-      rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource()) const;
+  std::unique_ptr<column>
+  get_values_for(scalar const &key, rmm::cuda_stream_view stream = cudf::get_default_stream(),
+                 rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) const;
 
   /**
    * @brief Check if each map row contains a specified scalar key.
@@ -121,7 +123,7 @@ public:
    */
   std::unique_ptr<column>
   contains(scalar const &key, rmm::cuda_stream_view stream = cudf::get_default_stream(),
-           rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource()) const;
+           rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) const;
 
   /**
    * @brief Check if each map row contains keys specified by a column
@@ -142,7 +144,7 @@ public:
 
   std::unique_ptr<column>
   contains(column_view const &key, rmm::cuda_stream_view stream = cudf::get_default_stream(),
-           rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource()) const;
+           rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) const;
 
 private:
   lists_column_view keys_, values_;

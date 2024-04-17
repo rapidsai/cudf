@@ -17,6 +17,7 @@ from . import (
     search,
     sorting,
     stream_compaction,
+    strings,
     types,
     unary,
 )
@@ -48,6 +49,7 @@ __all__ = [
     "rolling",
     "search",
     "stream_compaction",
+    "strings",
     "sorting",
     "types",
     "unary",

@@ -85,13 +85,18 @@ jobs:
                 state: CUSTOM_STATE = 'success'
             } = contentJSON;
 
-            // Fetch the first job ID from the workflow run
-            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+            // Fetch all jobs using pagination
+            const jobs = await github.paginate(
+              github.rest.actions.listJobsForWorkflowRun,
+              {
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 run_id: process.env.WORKFLOW_RUN_ID,
-            });
-            const job = jobs.data.jobs.find(job => job.name === JOB_NAME);
+              }
+            );
+
+            // Fetch the first job ID from the workflow run
+            const job = jobs.find(job => job.name === JOB_NAME);
             const JOB_ID = job ? job.id : null;
 
             // Set default target URL if not defined
