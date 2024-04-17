@@ -92,10 +92,12 @@ struct nvbench_base_fixture {
 
   inline rmm::host_async_resource_ref make_cuio_host_pinned_pool()
   {
-    // Don't store in static, as the CUDA context may be destroyed before static destruction
-    this->host_pooled_mr = std::make_shared<host_pooled_mr_t>(
-      std::make_shared<rmm::mr::pinned_host_memory_resource>().get(),
-      size_t{1} * 1024 * 1024 * 1024);
+    if (!this->host_pooled_mr) {
+      // Don't store in static, as the CUDA context may be destroyed before static destruction
+      this->host_pooled_mr = std::make_shared<host_pooled_mr_t>(
+        std::make_shared<rmm::mr::pinned_host_memory_resource>().get(),
+        size_t{1} * 1024 * 1024 * 1024);
+    }
 
     return *this->host_pooled_mr;
   }

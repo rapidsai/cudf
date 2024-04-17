@@ -21,9 +21,11 @@
 #include <string>
 #include <vector>
 
+namespace cudf {
+
 // strip off the rmm_mode and cuio_host_mem parameters before passing the
 // remaining arguments to nvbench::option_parser
-void arg_handler(std::vector<std::string>& args)
+void benchmark_arg_handler(std::vector<std::string>& args)
 {
   std::vector<std::string> _cudf_tmp_args;
 
@@ -41,9 +43,11 @@ void arg_handler(std::vector<std::string>& args)
   args = _cudf_tmp_args;
 }
 
+}  // namespace cudf
+
 // Install arg handler
 #undef NVBENCH_MAIN_CUSTOM_ARGS_HANDLER
-#define NVBENCH_MAIN_CUSTOM_ARGS_HANDLER(args) arg_handler(args)
+#define NVBENCH_MAIN_CUSTOM_ARGS_HANDLER(args) cudf::benchmark_arg_handler(args)
 
 // Global fixture setup:
 #undef NVBENCH_MAIN_INITIALIZE_CUSTOM_POST
