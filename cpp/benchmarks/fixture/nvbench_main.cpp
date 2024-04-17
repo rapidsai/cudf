@@ -29,13 +29,11 @@ void arg_handler(std::vector<std::string>& args)
 
   for (std::size_t i = 0; i < args.size(); ++i) {
     std::string arg = args[i];
-    std::cout << "Argument: " << arg << std::endl;
     if (arg == cudf::detail::rmm_mode_param) {
-      i++; // skip the next argument
+      i++;  // skip the next argument
     } else if (arg == cudf::detail::cuio_host_mem_param) {
-      i++; // skip the next argument
+      i++;  // skip the next argument
     } else {
-      std::cout << "Adding argument: " << arg << std::endl;
       _cudf_tmp_args.push_back(arg);
     }
   }
