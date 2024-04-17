@@ -710,12 +710,13 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
     auto result = this->join(left, right, predicate);
     std::vector<cudf::size_type> resulting_indices;
     for (size_t i = 0; i < result->size(); ++i) {
+      // Note: Not trying to be terribly efficient here since these tests are
+      // small, otherwise a batch copy to host before constructing the tuples
+      // would be important.
       resulting_indices.push_back(result->element(i, cudf::get_default_stream()));
     }
-
     std::sort(resulting_indices.begin(), resulting_indices.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
-
     EXPECT_TRUE(
       std::equal(resulting_indices.begin(), resulting_indices.end(), expected_outputs.begin()));
   }
