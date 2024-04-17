@@ -924,7 +924,7 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
 
   auto start = cur;
 
-  auto init_rle = [s, lvl, end, level_bits](uint8_t const* cur, uint8_t const* end) {
+  auto init_rle = [s, lvl, level_bits](uint8_t const* cur, uint8_t const* end) {
     uint32_t const run      = get_vlq32(cur, end);
     s->initial_rle_run[lvl] = run;
     if (!(run & 1)) {
@@ -1160,7 +1160,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
             int32_t units = 0;
             // Duration types are not included because no scaling is done when reading
             if (s->col.logical_type.has_value()) {
-              auto const& lt = s->col.logical_type.value();
+              auto const& lt = *s->col.logical_type;
               if (lt.is_timestamp_millis()) {
                 units = cudf::timestamp_ms::period::den;
               } else if (lt.is_timestamp_micros()) {
@@ -1217,7 +1217,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       } else if (data_type == INT32) {
         // check for smaller bitwidths
         if (s->col.logical_type.has_value()) {
-          auto const& lt = s->col.logical_type.value();
+          auto const& lt = *s->col.logical_type;
           if (lt.type == LogicalType::INTEGER) {
             s->dtype_len = lt.bit_width() / 8;
           } else if (lt.is_time_millis()) {
