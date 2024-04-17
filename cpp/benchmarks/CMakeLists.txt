@@ -339,6 +339,11 @@ ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)
 ConfigureNVBench(MULTIBYTE_SPLIT_NVBENCH io/text/multibyte_split.cpp)
 target_link_libraries(MULTIBYTE_SPLIT_NVBENCH PRIVATE ZLIB::ZLIB)
 
+# ##################################################################################################
+# * decimal benchmark
+# ---------------------------------------------------------------------------------
+ConfigureNVBench(DECIMAL_NVBENCH decimal/convert_floating.cpp)
+
 add_custom_target(
   run_benchmarks
   DEPENDS CUDF_BENCHMARKS
