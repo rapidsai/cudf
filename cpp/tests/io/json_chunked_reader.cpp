@@ -22,6 +22,8 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 /**
  * @brief Base test fixture for JSON reader tests
  */
@@ -35,7 +37,7 @@ std::vector<cudf::io::table_with_metadata> skeleton_for_parellel_chunk_reader(
   cudf::io::json_reader_options const& reader_opts,
   int32_t chunk_size,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   using namespace cudf::io::json::detail;
   using cudf::size_type;

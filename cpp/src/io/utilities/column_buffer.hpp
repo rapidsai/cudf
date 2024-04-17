@@ -31,6 +31,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/pair.h>
 
@@ -50,7 +52,7 @@ namespace detail {
 inline rmm::device_buffer create_data(data_type type,
                                       size_type size,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   std::size_t data_size = size_of(type) * size;
 
@@ -96,7 +98,7 @@ class column_buffer_base {
                      size_type _size,
                      bool _is_nullable,
                      rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr)
+                     rmm::device_async_resource_ref mr)
     : column_buffer_base(_type, _is_nullable)
   {
   }
@@ -111,7 +113,7 @@ class column_buffer_base {
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for
   // preprocessing steps such as in the Parquet reader
-  void create(size_type _size, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
+  void create(size_type _size, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
   // Create a new column_buffer that has empty data but with the same basic information as the
   // input column, including same type, nullability, name, and user_data.
@@ -140,7 +142,7 @@ class column_buffer_base {
   rmm::device_buffer _data{};
   rmm::device_buffer _null_mask{};
   size_type _null_count{0};
-  rmm::mr::device_memory_resource* _mr;
+  rmm::device_async_resource_ref _mr{rmm::mr::get_current_device_resource()};
 
  public:
   data_type type{type_id::EMPTY};
@@ -174,7 +176,7 @@ class gather_column_buffer : public column_buffer_base<gather_column_buffer> {
                        size_type _size,
                        bool _is_nullable,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr)
+                       rmm::device_async_resource_ref mr)
     : column_buffer_base<gather_column_buffer>(_type, _size, _is_nullable, stream, mr)
   {
     create(_size, stream, mr);
@@ -208,7 +210,7 @@ class inline_column_buffer : public column_buffer_base<inline_column_buffer> {
                        size_type _size,
                        bool _is_nullable,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr)
+                       rmm::device_async_resource_ref mr)
     : column_buffer_base<inline_column_buffer>(_type, _size, _is_nullable, stream, mr)
   {
     create(_size, stream, mr);
@@ -251,7 +253,7 @@ template <class string_policy>
 std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
                                    column_name_info* schema_info,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr);
+                                   rmm::device_async_resource_ref mr);
 
 /**
  * @brief Given a column_buffer, produce a formatted name string describing the type.

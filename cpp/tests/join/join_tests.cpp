@@ -38,6 +38,8 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <limits>
 
 template <typename T>
@@ -59,7 +61,7 @@ template <std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
             cudf::table_view const& left_keys,
             cudf::table_view const& right_keys,
             cudf::null_equality compare_nulls,
-            rmm::mr::device_memory_resource* mr),
+            rmm::device_async_resource_ref mr),
           cudf::out_of_bounds_policy oob_policy = cudf::out_of_bounds_policy::DONT_CHECK>
 std::unique_ptr<cudf::table> join_and_gather(
   cudf::table_view const& left_input,
@@ -67,7 +69,7 @@ std::unique_ptr<cudf::table> join_and_gather(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   auto left_selected  = left_input.select(left_on);
   auto right_selected = right_input.select(right_on);

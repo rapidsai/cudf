@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -123,7 +124,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
                              PatternIterator const patterns_itr,
                              string_view const& d_escape,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   auto results = make_numeric_column(data_type{type_id::BOOL8},
                                      input.size(),
@@ -151,7 +152,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
                              string_scalar const& pattern,
                              string_scalar const& escape_character,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(pattern.is_valid(stream), "Parameter pattern must be valid");
   CUDF_EXPECTS(escape_character.is_valid(stream), "Parameter escape_character must be valid");
@@ -166,7 +167,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
                              strings_column_view const& patterns,
                              string_scalar const& escape_character,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(patterns.size() == input.size(), "Number of patterns must match the input size");
   CUDF_EXPECTS(patterns.has_nulls() == false, "Parameter patterns must not contain nulls");
@@ -186,7 +187,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
                              string_scalar const& pattern,
                              string_scalar const& escape_character,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::like(input, pattern, escape_character, stream, mr);
@@ -196,7 +197,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
                              strings_column_view const& patterns,
                              string_scalar const& escape_character,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::like(input, patterns, escape_character, stream, mr);

@@ -44,3 +44,5 @@ rapids_cython_create_modules(
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_ ASSOCIATED_TARGETS cudf
 )
 link_to_pyarrow_headers(pylibcudf_interop)
+
+add_subdirectory(strings)
