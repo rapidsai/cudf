@@ -171,18 +171,17 @@ template <typename T>
 CUDF_HOST_DEVICE inline T divide_power10_64bit(T value, int exp10)
 {
   // See comments in divide_power10_32bit() for discussion.
-  // clang-format off
   switch (exp10) {
-    case 0 : return value;
-    case 1 : return value / 10;
-    case 2 : return value / 100;
-    case 3 : return value / 1000;
-    case 4 : return value / 10000;
-    case 5 : return value / 100000;
-    case 6 : return value / 1000000;
-    case 7 : return value / 10000000;
-    case 8 : return value / 100000000;
-    case 9 : return value / 1000000000;
+    case 0: return value;
+    case 1: return value / 10;
+    case 2: return value / 100;
+    case 3: return value / 1000;
+    case 4: return value / 10000;
+    case 5: return value / 100000;
+    case 6: return value / 1000000;
+    case 7: return value / 10000000;
+    case 8: return value / 100000000;
+    case 9: return value / 1000000000;
     case 10: return value / 10000000000LL;
     case 11: return value / 100000000000LL;
     case 12: return value / 1000000000000LL;
@@ -192,10 +191,9 @@ CUDF_HOST_DEVICE inline T divide_power10_64bit(T value, int exp10)
     case 16: return value / 10000000000000000LL;
     case 17: return value / 100000000000000000LL;
     case 18: return value / 1000000000000000000LL;
-    case 19: return value / 10000000000000000000ULL; //10^19 only fits if unsigned!
+    case 19: return value / 10000000000000000000ULL;  // 10^19 only fits if unsigned!
     default: return 0;
   }
-  // clang-format on
 }
 
 /**
@@ -220,18 +218,17 @@ CUDF_HOST_DEVICE constexpr T divide_power10_128bit(T value, int exp10)
   // If inlined it slows down the join benchmarks, perhaps because the code itself becomes too
   // large?
 
-  // clang-format off
   switch (exp10) {
-    case 0 : return value;
-    case 1 : return value / 10;
-    case 2 : return value / 100;
-    case 3 : return value / 1000;
-    case 4 : return value / 10000;
-    case 5 : return value / 100000;
-    case 6 : return value / 1000000;
-    case 7 : return value / 10000000;
-    case 8 : return value / 100000000;
-    case 9 : return value / 1000000000;
+    case 0: return value;
+    case 1: return value / 10;
+    case 2: return value / 100;
+    case 3: return value / 1000;
+    case 4: return value / 10000;
+    case 5: return value / 100000;
+    case 6: return value / 1000000;
+    case 7: return value / 10000000;
+    case 8: return value / 100000000;
+    case 9: return value / 1000000000;
     case 10: return value / 10000000000LL;
     case 11: return value / 100000000000LL;
     case 12: return value / 1000000000000LL;
@@ -263,7 +260,6 @@ CUDF_HOST_DEVICE constexpr T divide_power10_128bit(T value, int exp10)
     case 38: return value / large_power_of_10<38>();
     default: return 0;
   }
-  // clang-format on
 }
 
 /**
@@ -305,18 +301,17 @@ template <typename T>
 CUDF_HOST_DEVICE inline constexpr T multiply_power10_64bit(T value, int exp10)
 {
   // See comments in divide_power10_32bit() for discussion.
-  // clang-format off
   switch (exp10) {
-    case 0 : return value;
-    case 1 : return value * 10;
-    case 2 : return value * 100;
-    case 3 : return value * 1000;
-    case 4 : return value * 10000;
-    case 5 : return value * 100000;
-    case 6 : return value * 1000000;
-    case 7 : return value * 10000000;
-    case 8 : return value * 100000000;
-    case 9 : return value * 1000000000;
+    case 0: return value;
+    case 1: return value * 10;
+    case 2: return value * 100;
+    case 3: return value * 1000;
+    case 4: return value * 10000;
+    case 5: return value * 100000;
+    case 6: return value * 1000000;
+    case 7: return value * 10000000;
+    case 8: return value * 100000000;
+    case 9: return value * 1000000000;
     case 10: return value * 10000000000LL;
     case 11: return value * 100000000000LL;
     case 12: return value * 1000000000000LL;
@@ -326,10 +321,9 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10_64bit(T value, int exp10)
     case 16: return value * 10000000000000000LL;
     case 17: return value * 100000000000000000LL;
     case 18: return value * 1000000000000000000LL;
-    case 19: return value * 10000000000000000000ULL; //10^19 only fits if unsigned!
+    case 19: return value * 10000000000000000000ULL;  // 10^19 only fits if unsigned!
     default: return 0;
   }
-  // clang-format on
 }
 
 /**
@@ -349,18 +343,17 @@ CUDF_HOST_DEVICE constexpr T multiply_power10_128bit(T value, int exp10)
 // clang-format on
 {
   // See comments in divide_power10_128bit() for discussion.
-  // clang-format off
   switch (exp10) {
-    case 0 : return value;
-    case 1 : return value * 10;
-    case 2 : return value * 100;
-    case 3 : return value * 1000;
-    case 4 : return value * 10000;
-    case 5 : return value * 100000;
-    case 6 : return value * 1000000;
-    case 7 : return value * 10000000;
-    case 8 : return value * 100000000;
-    case 9 : return value * 1000000000;
+    case 0: return value;
+    case 1: return value * 10;
+    case 2: return value * 100;
+    case 3: return value * 1000;
+    case 4: return value * 10000;
+    case 5: return value * 100000;
+    case 6: return value * 1000000;
+    case 7: return value * 10000000;
+    case 8: return value * 100000000;
+    case 9: return value * 1000000000;
     case 10: return value * 10000000000LL;
     case 11: return value * 100000000000LL;
     case 12: return value * 1000000000000LL;
@@ -392,7 +385,6 @@ CUDF_HOST_DEVICE constexpr T multiply_power10_128bit(T value, int exp10)
     case 38: return value * large_power_of_10<38>();
     default: return 0;
   }
-  // clang-format on
 }
 
 /**
@@ -416,7 +408,7 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10(T value, int exp10)
   // If you do, prefer calling the bit-size-specific versions
   if constexpr (sizeof(Rep) <= 4) {
     return multiply_power10_32bit(value, exp10);
-  } else if constexpr (sizeof(Rep) == 8) {
+  } else if constexpr (sizeof(Rep) <= 8) {
     return multiply_power10_64bit(value, exp10);
   } else {
     return multiply_power10_128bit(value, exp10);
@@ -442,7 +434,7 @@ CUDF_HOST_DEVICE inline constexpr T divide_power10(T value, int exp10)
 {
   if constexpr (sizeof(Rep) <= 4) {
     return divide_power10_32bit(value, exp10);
-  } else if constexpr (sizeof(Rep) == 8) {
+  } else if constexpr (sizeof(Rep) <= 8) {
     return divide_power10_64bit(value, exp10);
   } else {
     return divide_power10_128bit(value, exp10);
