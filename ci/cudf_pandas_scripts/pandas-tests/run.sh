@@ -22,6 +22,7 @@ bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
   -n 10 \
   --tb=no \
   -m "not slow" \
+  --durations=0 \
   --max-worker-restart=3 \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas.xml" \
   --dist worksteal \
