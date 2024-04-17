@@ -272,7 +272,7 @@ CUDF_KERNEL void conditional_join(table_device_view left_table,
 }
 
 template <cudf::size_type block_size, cudf::size_type output_cache_size, bool has_nulls>
-__global__ void conditional_join_anti_semi(
+CUDF_KERNEL void conditional_join_anti_semi(
   table_device_view left_table,
   table_device_view right_table,
   join_kind join_type,
