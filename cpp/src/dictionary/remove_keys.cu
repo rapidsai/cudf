@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -59,7 +60,7 @@ template <typename KeysKeeper>
 std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_column,
                                        KeysKeeper keys_to_keep_fn,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   auto const keys_view    = dictionary_column.keys();
   auto const indices_type = dictionary_column.indices().type();
@@ -150,7 +151,7 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
 std::unique_ptr<column> remove_keys(dictionary_column_view const& dictionary_column,
                                     column_view const& keys_to_remove,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!keys_to_remove.has_nulls(), "keys_to_remove must not have nulls");
   auto const keys_view = dictionary_column.keys();
@@ -166,7 +167,7 @@ std::unique_ptr<column> remove_keys(dictionary_column_view const& dictionary_col
 
 std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& dictionary_column,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   // locate the keys to remove
   auto const keys_size     = dictionary_column.keys_size();
@@ -196,7 +197,7 @@ std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& diction
 std::unique_ptr<column> remove_keys(dictionary_column_view const& dictionary_column,
                                     column_view const& keys_to_remove,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::remove_keys(dictionary_column, keys_to_remove, stream, mr);
@@ -204,7 +205,7 @@ std::unique_ptr<column> remove_keys(dictionary_column_view const& dictionary_col
 
 std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& dictionary_column,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::remove_unused_keys(dictionary_column, stream, mr);
