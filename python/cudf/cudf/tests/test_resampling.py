@@ -162,3 +162,17 @@ def test_resampling_frequency_conversion(in_freq, sampling_freq, out_freq):
     assert_resample_results_equal(expect, got)
 
     assert got.index.dtype == np.dtype(f"datetime64[{out_freq}]")
+
+
+def test_resampling_downsampling_ms():
+    pdf = pd.DataFrame(
+        {
+            "time": pd.date_range("2020-01-01", periods=5, freq="1ns"),
+            "sign": range(5),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expected = pdf.resample("10ms", on="time").mean()
+    result = gdf.resample("10ms", on="time").mean()
+    result.index = result.index.astype("datetime64[ns]")
+    assert_eq(result, expected, check_freq=False)
