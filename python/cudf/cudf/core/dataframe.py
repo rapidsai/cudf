@@ -5450,9 +5450,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         index_col = None
         col_index_names = None
+        physical_column_md = []
         if isinstance(table, pa.Table) and isinstance(
             table.schema.pandas_metadata, dict
         ):
+            physical_column_md = table.schema.pandas_metadata["columns"]
             index_col = table.schema.pandas_metadata["index_columns"]
             if "column_indexes" in table.schema.pandas_metadata:
                 col_index_names = []
@@ -5481,9 +5483,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     out = out.set_index(idx)
             else:
                 out = out.set_index(index_col[0])
+
         if "__index_level_0__" in out.index.names:
             assert len(out.index.names) == 1
-            out.index.name = None
+            real_index_name = None
+            for md in physical_column_md:
+                if md["field_name"] == "__index_level_0__":
+                    real_index_name = md["name"]
+                    break
+            out.index.name = real_index_name
 
         return out
 
@@ -5545,11 +5553,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else:
                 if isinstance(index, cudf.RangeIndex):
                     index = index._as_int_index()
-                    index.name = (
-                        index.name
-                        if index.name is not None
-                        else "__index_level_0__"
-                    )
+                    index.name = "__index_level_0__"
+                    gen_names = (index.name,)
                 if isinstance(index, MultiIndex):
                     gen_names = tuple(
                         f"level_{i}" for i, _ in enumerate(index._data.names)
@@ -5572,7 +5577,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             columns_to_convert=[self[col] for col in self._data.names],
             df=self,
             column_names=out.schema.names,
-            index_levels=[index],
+            index_levels=[self.index],
             index_descriptors=index_descr,
             preserve_index=preserve_index,
             types=out.schema.types,
