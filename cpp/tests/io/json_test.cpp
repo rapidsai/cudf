@@ -1198,6 +1198,8 @@ TEST_P(JsonReaderParamTest, JsonLinesMultipleFileInputsNoNL)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2, 3.3, 4.4}});
 }
 
+// This can be removed once the legacy option has been removed.
+// The read_json only throws with legacy(true)
 TEST_F(JsonReaderTest, DISABLED_BadDtypeParams)
 {
   std::string buffer = "[1,2,3,4]";
@@ -1755,9 +1757,9 @@ TYPED_TEST(JsonValidFixedPointReaderTest, SingleColumnPositiveScale)
     numeric::scale_type{3});
 }
 
-TYPED_TEST(JsonFixedPointReaderTest, DISABLED_EmptyValues)
+TYPED_TEST(JsonFixedPointReaderTest, EmptyValues)
 {
-  auto const buffer = std::string{"{\"col0\":}"};
+  auto const buffer = std::string{"{\"col0\":\"\"}"};
 
   cudf::io::json_reader_options const in_opts =
     cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
@@ -1770,7 +1772,7 @@ TYPED_TEST(JsonFixedPointReaderTest, DISABLED_EmptyValues)
   ASSERT_EQ(result_view.num_columns(), 1);
   EXPECT_EQ(result_view.num_rows(), 1);
   EXPECT_EQ(result.metadata.schema_info[0].name, "col0");
-  EXPECT_EQ(result_view.column(0).null_count(), 1);
+  EXPECT_EQ(result_view.column(0).null_count(), 0);
 }
 
 TEST_F(JsonReaderTest, UnsupportedMultipleFileInputs)
