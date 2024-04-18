@@ -195,7 +195,7 @@ outputs:
       license: Apache-2.0
       license_family: APACHE
       license_file: LICENSE
-      summary: libcudf_example library
+      summary: libcudf example executables
   - name: libcudf-tests
     version: {{ version }}
     script: install_libcudf_tests.sh

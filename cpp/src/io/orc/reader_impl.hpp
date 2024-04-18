@@ -24,6 +24,7 @@
 #include <cudf/io/orc.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <optional>
@@ -50,7 +51,7 @@ class reader::impl {
   explicit impl(std::vector<std::unique_ptr<datasource>>&& sources,
                 orc_reader_options const& options,
                 rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+                rmm::device_async_resource_ref mr);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns
@@ -93,7 +94,7 @@ class reader::impl {
   table_with_metadata read_chunk_internal();
 
   rmm::cuda_stream_view const _stream;
-  rmm::mr::device_memory_resource* const _mr;
+  rmm::device_async_resource_ref const _mr;
 
   // Reader configs
   data_type const _timestamp_type;  // Override output timestamp resolution
