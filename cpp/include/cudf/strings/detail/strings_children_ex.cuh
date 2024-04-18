@@ -18,16 +18,13 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
-#include <cudf/strings/detail/utilities.hpp>
-#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-
-#include <stdexcept>
 
 namespace cudf {
 namespace strings {
