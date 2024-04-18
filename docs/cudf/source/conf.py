@@ -310,7 +310,7 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable", None),
     "pandas": (
         "https://pandas.pydata.org/pandas-docs/stable/",
-        "https://pandas.pydata.org/pandas-docs/stable/objects.inv",
+        None,
     ),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "python": ("https://docs.python.org/3", None),
