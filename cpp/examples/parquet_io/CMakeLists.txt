@@ -20,3 +20,6 @@ include(../fetch_dependencies.cmake)
 add_executable(parquet_io parquet_io.cpp)
 target_link_libraries(parquet_io PRIVATE cudf::cudf)
 target_compile_features(parquet_io PRIVATE cxx_std_17)
+
+install(TARGETS parquet_io DESTINATION bin/examples/libcudf)
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/example.parquet DESTINATION bin/examples/libcudf)
