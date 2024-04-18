@@ -21,6 +21,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <thrust/scan.h>
 
 #include <functional>
