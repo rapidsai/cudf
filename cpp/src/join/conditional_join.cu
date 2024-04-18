@@ -144,8 +144,8 @@ conditional_join(table_view const& left,
   // We can immediately filter out cases where the right table is empty. In
   // some cases, we return all the rows of the left table with a corresponding
   // null index for the right table; in others, we return an empty output.
-  auto right_num_rows{right.num_rows()};
-  auto left_num_rows{left.num_rows()};
+  auto const right_num_rows{right.num_rows()};
+  auto const left_num_rows{left.num_rows()};
   if (right_num_rows == 0) {
     switch (join_type) {
       // Left, left anti, and full all return all the row indices from left

@@ -245,7 +245,7 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
                                  size_type left_table_row_count,
                                  size_type right_table_row_count,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr);
+                                 rmm::device_async_resource_ref mr);
 
 /**
  * @brief Device functor to determine if an index is contained in a range.

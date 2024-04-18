@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,7 +118,7 @@ class expression_parser {
                     std::optional<std::reference_wrapper<cudf::table_view const>> right,
                     bool has_nulls,
                     rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr)
+                    rmm::device_async_resource_ref mr)
     : _left{left},
       _right{right},
       _expression_count{0},
@@ -139,7 +139,7 @@ class expression_parser {
                     cudf::table_view const& table,
                     bool has_nulls,
                     rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr)
+                    rmm::device_async_resource_ref mr)
     : expression_parser(expr, table, {}, has_nulls, stream, mr)
   {
   }
@@ -240,7 +240,7 @@ class expression_parser {
     data_pointers.push_back(v.data());
   }
 
-  void move_to_device(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  void move_to_device(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
   {
     std::vector<cudf::size_type> sizes;
     std::vector<void const*> data_pointers;
