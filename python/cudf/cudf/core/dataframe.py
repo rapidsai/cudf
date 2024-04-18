@@ -5554,7 +5554,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if isinstance(index, cudf.RangeIndex):
                     index = index._as_int_index()
                     index.name = "__index_level_0__"
-                    gen_names = (index.name,)
                 if isinstance(index, MultiIndex):
                     gen_names = tuple(
                         f"level_{i}" for i, _ in enumerate(index._data.names)
