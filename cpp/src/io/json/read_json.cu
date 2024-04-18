@@ -64,7 +64,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                                    host_span<std::unique_ptr<datasource>> sources,
                                    compression_type compression,
                                    size_t range_offset,
-                                   size_t range_size,
+                                   size_t remaining_bytes_to_read,
                                    rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -90,14 +90,12 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
       std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
     size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
 
-    range_size = range_size + range_offset > prefsum_source_sizes.back()
-                   ? prefsum_source_sizes.back() - range_offset
-                   : range_size;
-    range_offset =
-      start_source ? range_offset - prefsum_source_sizes[start_source - 1] : range_offset;
-    for (size_t i = start_source; i < sources.size() && range_size; i++) {
+    remaining_bytes_to_read =
+      std::min(remaining_bytes_to_read, prefsum_source_sizes.back() - range_offset);
+    range_offset -= start_source ? prefsum_source_sizes[start_source - 1] : 0;
+    for (size_t i = start_source; i < sources.size() && remaining_bytes_to_read; i++) {
       if (sources[i]->is_empty()) continue;
-      auto data_size   = std::min(sources[i]->size() - range_offset, range_size);
+      auto data_size   = std::min(sources[i]->size() - range_offset, remaining_bytes_to_read);
       auto destination = reinterpret_cast<uint8_t*>(buffer.data()) + bytes_read;
       if (sources[i]->is_device_read_preferred(data_size)) {
         bytes_read += sources[i]->device_read(range_offset, data_size, destination, stream);
@@ -109,10 +107,11 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
         bytes_read += h_buffer->size();
       }
       range_offset = 0;
-      range_size -= bytes_read;
+      remaining_bytes_to_read -= bytes_read;
       delimiter_map.push_back(bytes_read);
       bytes_read += num_delimiter_chars;
     }
+    // In the case where all sources are empty, bytes_read is zero
     if (bytes_read) bytes_read -= num_delimiter_chars;
 
     // If this is a multi-file source, we scatter the JSON line delimiters between files
@@ -135,12 +134,11 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   }
   /* TODO: allow byte range reading from multiple compressed files.
    */
-  range_size =
-    range_size > sources[0]->size() - range_offset ? sources[0]->size() - range_offset : range_size;
-  auto hbuffer = std::vector<uint8_t>(range_size);
+  remaining_bytes_to_read = std::min(remaining_bytes_to_read, sources[0]->size() - range_offset);
+  auto hbuffer            = std::vector<uint8_t>(remaining_bytes_to_read);
   // Single read because only a single compressed source is supported
   // Reading to host because decompression of a single block is much faster on the CPU
-  sources[0]->host_read(range_offset, range_size, hbuffer.data());
+  sources[0]->host_read(range_offset, remaining_bytes_to_read, hbuffer.data());
   auto uncomp_data = decompress(compression, hbuffer);
   CUDF_CUDA_TRY(cudaMemcpyAsync(buffer.data(),
                                 reinterpret_cast<char*>(uncomp_data.data()),
@@ -199,7 +197,7 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
 
   CUDF_EXPECTS(total_source_size ? chunk_offset < total_source_size : !chunk_offset,
                "Invalid offseting");
-  bool should_load_all_sources = !chunk_size || chunk_size > total_source_size - chunk_offset;
+  auto should_load_all_sources = !chunk_size || chunk_size > total_source_size - chunk_offset;
   chunk_size =
     should_load_all_sources ? total_source_size - chunk_offset + num_extra_delimiters : chunk_size;
 
@@ -219,9 +217,10 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
   // The allocation for single source compressed input is estimated by assuming a ~4:1
   // compression ratio. For uncompressed inputs, we can getter a better estimate using the idea
   // of subchunks.
-  size_t buffer_size = reader_compression != compression_type::NONE
-                         ? total_source_size * compression_ratio + 4096
-                         : (chunk_size + num_subchunks_prealloced * size_per_subchunk);
+  size_t buffer_size =
+    reader_compression != compression_type::NONE
+      ? total_source_size * compression_ratio + 4096
+      : std::min(total_source_size, chunk_size + num_subchunks_prealloced * size_per_subchunk);
   rmm::device_uvector<char> buffer(buffer_size, stream);
   device_span<char> bufspan(buffer);
 
@@ -230,6 +229,7 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
   auto readbufspan =
     ingest_raw_input(bufspan, sources, reader_compression, chunk_offset, chunk_size, stream);
 
+  std::int64_t shift_for_nonzero_offset = std::min<std::int64_t>(chunk_offset, 1);
   auto first_delim_pos = chunk_offset == 0 ? 0 : find_first_delimiter(readbufspan, '\n', stream);
   if (first_delim_pos == -1) {
     // return empty owning datasource buffer
@@ -254,13 +254,13 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
 
     return datasource::owning_buffer<rmm::device_uvector<char>>(
       std::move(buffer),
-      reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + (chunk_offset ? 1 : 0),
-      next_delim_pos - first_delim_pos - (chunk_offset ? 1 : 0));
+      reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
+      next_delim_pos - first_delim_pos - shift_for_nonzero_offset);
   }
   return datasource::owning_buffer<rmm::device_uvector<char>>(
     std::move(buffer),
-    reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + (chunk_offset ? 1 : 0),
-    readbufspan.size() - first_delim_pos - (chunk_offset ? 1 : 0));
+    reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
+    readbufspan.size() - first_delim_pos - shift_for_nonzero_offset);
 }
 
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
