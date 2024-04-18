@@ -39,6 +39,7 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
@@ -486,7 +487,7 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
                                           device_span<uint64_t const> rec_starts,
                                           device_span<char const> data,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+                                          rmm::device_async_resource_ref mr)
 {
   auto const num_columns = dtypes.size();
   auto const num_records = rec_starts.size();
@@ -598,7 +599,7 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& reader_opts,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(not sources.empty(), "No sources were defined");
   CUDF_EXPECTS(sources.size() == 1 or reader_opts.get_compression() == compression_type::NONE,

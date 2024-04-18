@@ -26,6 +26,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/for_each.h>
@@ -56,7 +57,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                               row_order_iterator begin,
                               row_order_iterator end,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   using cudf::detail::side;
   size_type strings_count = static_cast<size_type>(std::distance(begin, end));
