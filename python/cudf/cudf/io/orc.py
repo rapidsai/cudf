@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
 import warnings
@@ -172,6 +172,8 @@ def read_orc_statistics(
 
     files_statistics = []
     stripes_statistics = []
+    new_files_statistics = []
+    new_stripes_statistics = []
     for source in filepaths_or_buffers:
         path_or_buf, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source, compression=None, **kwargs
@@ -221,7 +223,63 @@ def read_orc_statistics(
             else:
                 stripes_statistics.append(stripe_statistics)
 
-    return files_statistics, stripes_statistics
+    for source in filepaths_or_buffers:
+        path_or_buf, compression = ioutils.get_reader_filepath_or_buffer(
+            path_or_data=source, compression=None, **kwargs
+        )
+        (
+            column_names,
+            parsed_file_statistics,
+            parsed_stripes_statistics,
+        ) = liborc.read_parsed_orc_statistics(path_or_buf)
+
+        # Parse column names
+        column_names = [
+            column_name.decode("utf-8") for column_name in column_names
+        ]
+
+        # Parse file statistics
+        file_statistics = {
+            column_names[i]: parsed_file_statistics[i]
+            for i in range(len(column_names))
+            if columns is None or column_names[i] in columns
+        }
+        new_files_statistics.append(file_statistics)
+
+        # Parse stripe statistics
+        for parsed_stripe_statistics in parsed_stripes_statistics:
+            stripe_statistics = {
+                column_names[i]: parsed_stripe_statistics[i]
+                for i in range(len(column_names))
+                if columns is None or column_names[i] in columns
+            }
+            if any(
+                not parsed_statistics
+                for parsed_statistics in stripe_statistics.values()
+            ):
+                continue
+            else:
+                new_stripes_statistics.append(stripe_statistics)
+
+    print("Old files:\n", files_statistics)
+    print()
+    print("New files:\n", new_files_statistics)
+    print()
+    print("Old stripes:\n", stripes_statistics)
+    print()
+    print("New stripes:\n", new_stripes_statistics)
+    print()
+
+    print("Files statistics match: ", files_statistics == new_files_statistics)
+    print(
+        "Stripes statistics match: ",
+        stripes_statistics == new_stripes_statistics,
+    )
+
+    assert files_statistics == new_files_statistics
+    assert stripes_statistics == new_stripes_statistics
+
+    return new_files_statistics, new_stripes_statistics
 
 
 def _filter_stripes(
