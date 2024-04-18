@@ -298,37 +298,50 @@ using owned_columns_t = std::vector<std::unique_ptr<cudf::column>>;
  * is used to maintain ownership over the data allocated since a `cudf::table_view`
  * doesn't hold ownership.
  */
-template <typename VIEW_TYPE>
+template <typename ViewType>
 struct custom_view_deleter {
+  /**
+   * @brief Construct a new custom view deleter object
+   *
+   * @param owned Vector of owning columns
+   */
   explicit custom_view_deleter(owned_columns_t&& owned) : owned_mem_{std::move(owned)} {}
-  void operator()(VIEW_TYPE* ptr) const { delete ptr; }
-  owned_columns_t owned_mem_;
+
+  /**
+   * @brief operator to delete the unique_ptr
+   *
+   * @param ptr Pointer to the object to be deleted
+   */
+  void operator()(ViewType* ptr) const { delete ptr; }
+
+  owned_columns_t owned_mem_;  ///< Owned columns that must be deleted.
 };
 
 /**
  * @brief typedef for a unique_ptr to a `cudf::table_view` with custom deleter
  *
  */
-using unique_table_view_t = std::unique_ptr<cudf::table_view, custom_view_deleter<cudf::table_view>>;
+using unique_table_view_t =
+  std::unique_ptr<cudf::table_view, custom_view_deleter<cudf::table_view>>;
 
 /**
  * @brief Create `cudf::table_view` from given `ArrowDeviceArray` and `ArrowSchema`
  *
  * Constructs a non-owning `cudf::table_view` using `ArrowDeviceArray` and `ArrowSchema`,
- * data must be accessible to the CUDA device. Because the resulting `cudf::table_view` will 
+ * data must be accessible to the CUDA device. Because the resulting `cudf::table_view` will
  * not own the data, the `ArrowDeviceArray` must be kept alive for the lifetime of the result.
- * It is the responsibility of callers to ensure they call the release callback on the 
- * `ArrowDeviceArray` after it is no longer needed, and that the `cudf::table_view` is not 
+ * It is the responsibility of callers to ensure they call the release callback on the
+ * `ArrowDeviceArray` after it is no longer needed, and that the `cudf::table_view` is not
  * accessed after this happens.
  *
  * @throws cudf::logic_error if device_type is not `ARROW_DEVICE_CUDA`, `ARROW_DEVICE_CUDA_HOST`
  * or `ARROW_DEVICE_CUDA_MANAGED`
- * 
+ *
  * @throws cudf::data_type_error if the input array is not a struct array, non-struct
  * arrays should be passed to `from_arrow_device_column` instead.
- * 
+ *
  * @throws cudf::data_type_error if the input arrow data type is not supported.
- * 
+ *
  * Each child of the input struct will be the columns of the resulting table_view.
  *
  * @note The custom deleter used for the unique_ptr to the table_view maintains ownership
@@ -354,24 +367,25 @@ unique_table_view_t from_arrow_device(
 
 /**
  * @brief typedef for a unique_ptr to a `cudf::column_view` with custom deleter
- * 
+ *
  */
-using unique_column_view_t = std::unique_ptr<cudf::column_view, custom_view_deleter<cudf::column_view>>;
+using unique_column_view_t =
+  std::unique_ptr<cudf::column_view, custom_view_deleter<cudf::column_view>>;
 
 /**
  * @brief Create `cudf::column_view` from given `ArrowDeviceArray` and `ArrowSchema`
  *
  * Constructs a non-owning `cudf::column_view` using `ArrowDeviceArray` and `ArrowSchema`,
- * data must be accessible to the CUDA device. Because the resulting `cudf::column_view` will 
+ * data must be accessible to the CUDA device. Because the resulting `cudf::column_view` will
  * not own the data, the `ArrowDeviceArray` must be kept alive for the lifetime of the result.
- * It is the responsibility of callers to ensure they call the release callback on the 
- * `ArrowDeviceArray` after it is no longer needed, and that the `cudf::column_view` is not 
+ * It is the responsibility of callers to ensure they call the release callback on the
+ * `ArrowDeviceArray` after it is no longer needed, and that the `cudf::column_view` is not
  * accessed after this happens.
  *
  * @throws cudf::logic_error if device_type is not `ARROW_DEVICE_CUDA`, `ARROW_DEVICE_CUDA_HOST`
  * or `ARROW_DEVICE_CUDA_MANAGED`
- * 
- * @throws cudf::data_type_error input arrow data type is not supported. 
+ *
+ * @throws cudf::data_type_error input arrow data type is not supported.
  *
  * @note The custom deleter used for the unique_ptr to the table_view maintains ownership
  * over any memory which is allocated, such as converting boolean columns from the bitmap

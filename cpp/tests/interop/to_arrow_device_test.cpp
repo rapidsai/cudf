@@ -202,11 +202,11 @@ get_nanoarrow_tables(cudf::size_type length)
   NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(arrow.get(), schema.get(), nullptr));
   arrow->length = length;
 
-  populate_from_col<int64_t>(arrow->children[0], columns[0]->view());  
-  populate_from_col<cudf::string_view>(arrow->children[1], columns[1]->view());  
+  populate_from_col<int64_t>(arrow->children[0], columns[0]->view());
+  populate_from_col<cudf::string_view>(arrow->children[1], columns[1]->view());
   populate_dict_from_col<int64_t, uint32_t>(arrow->children[2],
                                             cudf::dictionary_column_view(columns[2]->view()));
-  
+
   populate_from_col<bool>(arrow->children[3], columns[3]->view());
   cudf::lists_column_view list_view{columns[4]->view()};
   populate_list_from_col(arrow->children[4], list_view);
