@@ -7,10 +7,14 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
+from cudf._lib.variant cimport monostate, variant
 
 
 cdef extern from "cudf/io/orc_metadata.hpp" \
         namespace "cudf::io" nogil:
+
+    cdef cppclass no_statistics(monostate):
+        pass
 
     cdef cppclass minmax_statistics[T]:
         optional[T] minimum
@@ -54,10 +58,9 @@ cdef extern from "cudf/io/orc_metadata.hpp" \
         optional[uint32_t] minimum_nanos
         optional[uint32_t] maximum_nanos
 
-    cdef cppclass statistics_type:
-        # This is a std::variant of all the statistics types but Cython doesn't
-        # support std::variant so we have to define it as a class.
-        size_t index()
+    cdef cppclass statistics_type(variant):
+        # This is a std::variant of all the statistics types
+        pass
 
     cdef cppclass column_statistics:
         optional[uint64_t] number_of_values
