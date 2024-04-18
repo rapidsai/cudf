@@ -21,9 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace strings {
-namespace detail {
+namespace cudf ::strings ::detail {
 /**
  * @brief Merges two strings columns
  *
@@ -40,6 +38,4 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace strings
-}  // namespace cudf
+}  // namespace cudf::strings::detail

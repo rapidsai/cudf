@@ -455,4 +455,16 @@ TEST_F(MergeLargeStringsTest, MergeLargeStrings)
   for (auto c : sliced) {
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);
   }
+
+  // also check merge still returns 32-bit offsets for regular columns
+  input_views.clear();
+  input_views.push_back(view);
+  input_views.push_back(view);
+  result = cudf::merge(input_views, {0}, column_order, null_precedence);
+  sv     = cudf::strings_column_view(result->view().column(0));
+  EXPECT_EQ(sv.size(), view.num_rows() * 2);
+  EXPECT_EQ(sv.offsets().type(), cudf::data_type{cudf::type_id::INT32});
+  sliced = cudf::split(sv.parent(), {view.num_rows()});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sliced[0], input);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sliced[1], input);
 }
