@@ -43,7 +43,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
   join_kind join_type,
   std::optional<std::size_t> output_size,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto right_num_rows{right.num_rows()};
   auto left_num_rows{left.num_rows()};
