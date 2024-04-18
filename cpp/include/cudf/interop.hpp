@@ -275,8 +275,10 @@ unique_device_array_t to_arrow_device(
  * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
  * converted to Arrow decimal128 of the precision 38.
  *
- * @note Copies will be performed in the cases where cudf differs from Arrow
- * such as in the representation of bools (Arrow uses a bitmap, cudf uses 1-byte per value).
+ * Copies will be performed in the cases where cudf differs from Arrow:
+ * - BOOL8: Arrow uses a bitmap and cudf uses 1 byte per value
+ * - DECIMAL32 and DECIMAL64: Converted to Arrow decimal128
+ * - STRING: Arrow expects a single value int32 offset child array for empty strings columns
  *
  * @param table Input table
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -305,8 +307,10 @@ unique_device_array_t to_arrow_device(
  * 9 which is the maximum precision for 32-bit types. Similar, numeric::decimal128 will be
  * converted to Arrow decimal128 of the precision 38.
  *
- * @note Copies will be performed in the cases where cudf differs from Arrow such as
- * in the representation of bools (Arrow uses a bitmap, cudf uses 1 byte per value).
+ * Copies will be performed in the cases where cudf differs from Arrow:
+ * - BOOL8: Arrow uses a bitmap and cudf uses 1 byte per value
+ * - DECIMAL32 and DECIMAL64: Converted to Arrow decimal128
+ * - STRING: Arrow expects a single value int32 offset child array for empty strings columns
  *
  * @param col Input column
  * @param stream CUDA stream used for device memory operations and kernel launches
