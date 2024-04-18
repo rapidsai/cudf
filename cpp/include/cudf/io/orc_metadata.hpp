@@ -155,7 +155,7 @@ struct timestamp_statistics : minmax_statistics<int64_t> {
 };
 
 /**
- * @brief Variant type for ORC column statistics.
+ * @brief Variant type for ORC type-specific column statistics.
  *
  * The variant can hold any of the supported column statistics types.
  */
