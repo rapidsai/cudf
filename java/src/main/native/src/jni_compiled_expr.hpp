@@ -16,6 +16,11 @@
 
 #pragma once
 
+#include <cudf/ast/expressions.hpp>
+#include <cudf/scalar/scalar.hpp>
+
+#include <memory>
+#include <utility>
 #include <vector>
 
 namespace cudf {
