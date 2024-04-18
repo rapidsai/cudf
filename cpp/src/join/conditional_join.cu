@@ -69,7 +69,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
   auto const parser =
     ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
-               "The expression must produce a boolean output.");
+               "The expression must produce a Boolean output.");
 
   auto left_table  = table_device_view::create(left, stream);
   auto right_table = table_device_view::create(right, stream);
