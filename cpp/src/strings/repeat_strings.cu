@@ -206,7 +206,7 @@ struct compute_sizes_and_repeat_fn {
 
     if (!d_chars) {
       // repeat_times could be negative
-      d_sizes[idx] = (repeat_times > 0) ? (repeat_times * d_str.size_bytes()) : 0;
+      d_sizes[idx] = std::max(repeat_times, 0) * d_str.size_bytes();
     } else {
       auto output_ptr = d_chars + d_offsets[idx];
       while (repeat_times-- > 0) {
