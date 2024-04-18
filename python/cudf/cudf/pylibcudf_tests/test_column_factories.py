@@ -185,18 +185,13 @@ def test_make_numeric_column_negative_size_err(numeric_pa_type):
         )
 
 
-def test_make_fixed_point_column(mask_state):
-    scale = 2
-    precision = 38  # libcudf drops precision
-
+def test_make_fixed_point_column(fixed_point_pa_type, mask_state):
     if mask_state == plc.column_factories.MaskState.ALL_NULL:
-        expected = pa.array(
-            [None] * size, type=pa.decimal128(precision, scale)
-        )
+        expected = pa.array([None] * size, type=fixed_point_pa_type)
     else:
-        expected = pa.array([0] * size, type=pa.decimal128(precision, scale))
+        expected = pa.array([0] * size, type=fixed_point_pa_type)
 
-    plc_type = pa_type_to_plc_type(pa.decimal128(precision, scale))
+    plc_type = pa_type_to_plc_type(fixed_point_pa_type)
 
     got = plc.column_factories.make_fixed_point_column(
         plc_type, size, mask_state
