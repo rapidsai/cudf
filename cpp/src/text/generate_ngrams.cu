@@ -34,6 +34,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/functional.h>
@@ -90,7 +91,7 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
                                               cudf::size_type ngrams,
                                               cudf::string_scalar const& separator,
                                               rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+                                              rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(
     separator.is_valid(stream), "Parameter separator must be valid", std::invalid_argument);
@@ -154,7 +155,7 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
                                               cudf::size_type ngrams,
                                               cudf::string_scalar const& separator,
                                               rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+                                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::generate_ngrams(strings, ngrams, separator, stream, mr);
@@ -204,7 +205,7 @@ struct character_ngram_generator_fn {
 std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_view const& input,
                                                         cudf::size_type ngrams,
                                                         rmm::cuda_stream_view stream,
-                                                        rmm::mr::device_memory_resource* mr)
+                                                        rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(ngrams >= 2,
                "Parameter ngrams should be an integer value of 2 or greater",
@@ -278,7 +279,7 @@ struct character_ngram_hash_fn {
 std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view const& input,
                                                     cudf::size_type ngrams,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+                                                    rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(ngrams >= 2,
                "Parameter ngrams should be an integer value of 2 or greater",
@@ -325,7 +326,7 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
 std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_view const& strings,
                                                         cudf::size_type ngrams,
                                                         rmm::cuda_stream_view stream,
-                                                        rmm::mr::device_memory_resource* mr)
+                                                        rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::generate_character_ngrams(strings, ngrams, stream, mr);
@@ -334,7 +335,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
 std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view const& strings,
                                                     cudf::size_type ngrams,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+                                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::hash_character_ngrams(strings, ngrams, stream, mr);

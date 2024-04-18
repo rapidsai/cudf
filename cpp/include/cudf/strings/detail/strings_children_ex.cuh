@@ -74,7 +74,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                            size_type exec_size,
                            size_type strings_count,
                            rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr)
+                           rmm::device_async_resource_ref mr)
 {
   auto output_sizes        = rmm::device_uvector<size_type>(strings_count, stream);
   size_and_exec_fn.d_sizes = output_sizes.data();
@@ -146,7 +146,7 @@ template <typename SizeAndExecuteFunction>
 auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                            size_type strings_count,
                            rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr)
+                           rmm::device_async_resource_ref mr)
 {
   return make_strings_children(size_and_exec_fn, strings_count, strings_count, stream, mr);
 }
