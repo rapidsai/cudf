@@ -20,6 +20,7 @@ package ai.rapids.cudf;
 
 import java.util.*;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
 
@@ -3351,6 +3352,24 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(stringContains(getNativeView(), compString.getScalarHandle()));
   }
 
+  private static long[] toPrimitive(Long[] longs) {
+    long[] ret = new long[longs.length];
+    for (int i = 0; i < longs.length; ++i) {
+      ret[i] = longs[i];
+    }
+    return ret;
+  }
+
+  public final ColumnVector[] stringContains(Scalar[] compStrings) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert Arrays.stream(compStrings).allMatch(Objects::nonNull) : "compString scalars may not be null";
+    assert Arrays.stream(compStrings).allMatch(str -> str.getType().equals(DType.STRING)) : "compString scalars must be string scalars";
+    Long[] scalarHandles = Arrays.stream(compStrings).map(Scalar::getScalarHandle).toArray(Long[]::new);
+
+    long[] resultPointers = stringContainsMulti(getNativeView(), toPrimitive(scalarHandles));
+    return Arrays.stream(resultPointers).mapToObj(ColumnVector::new).toArray(ColumnVector[]::new);
+  }
+
   /**
    * Replaces values less than `lo` in `input` with `lo`,
    * and values greater than `hi` with `hi`.
@@ -4455,6 +4474,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column containing the boolean results.
    */
   private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
+
+  /**
+   * Check multiple target strings against the same input column.
+   */
+  private static native long[] stringContainsMulti(long cudfViewHandle, long[] compStrings) throws CudfException;
 
   /**
    * Native method for extracting results from a regex program pattern. Returns a table handle.

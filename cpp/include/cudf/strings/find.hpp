@@ -141,6 +141,31 @@ std::unique_ptr<column> contains(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Returns a table of columns of boolean values for each string where true indicates
+ * the target string was found within that string in the provided column.
+ *
+ * Each column in the result table corresponds to the result for the target string at the same
+ * ordinal. i.e. 0th column is the boolean-column result for the 0th target string, 1th for 1th,
+ * etc.
+ *
+ * If the target is not found for a string, false is returned for that entry in the output column.
+ * If the target is an empty string, true is returned for all non-null entries in the output column.
+ *
+ * Any null string entries return corresponding null entries in the output columns.
+ *
+ * @param input Strings instance for this operation
+ * @param targets UTF-8 encoded strings to search for in each string in `input`
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New BOOL8 column
+ */
+std::unique_ptr<table> contains(
+  strings_column_view const& input,
+  std::vector<std::reference_wrapper<string_scalar>> const& targets,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Returns a column of boolean values for each string where true indicates
  * the corresponding target string was found within that string in the provided column.
  *
