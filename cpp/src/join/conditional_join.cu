@@ -45,8 +45,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto right_num_rows{right.num_rows()};
-  auto left_num_rows{left.num_rows()};
+  auto const right_num_rows{right.num_rows()};
+  auto const left_num_rows{left.num_rows()};
   if (right_num_rows == 0) {
     switch (join_type) {
       case join_kind::LEFT_ANTI_JOIN:
