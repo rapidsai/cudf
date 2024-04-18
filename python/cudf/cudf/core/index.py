@@ -1714,7 +1714,15 @@ class DatetimeIndex(Index):
             raise TypeError("dtype must be a datetime type")
 
         name = _setdefault_name(data, name=name)["name"]
-        data = column.as_column(data, dtype=dtype)
+        data = column.as_column(data)
+
+        # TODO: Remove this if statement and fix tests now that
+        # there's timezone support
+        if isinstance(data.dtype, pd.DatetimeTZDtype):
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
+        data = data.astype(dtype)
 
         if copy:
             data = data.copy()
