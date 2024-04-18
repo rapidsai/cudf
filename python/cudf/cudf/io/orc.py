@@ -186,18 +186,22 @@ def read_orc_statistics(
 
         # Parse file statistics
         file_statistics = {
-            column_names[i]: parsed_file_statistics[i]
-            for i in range(len(column_names))
-            if columns is None or column_names[i] in columns
+            column_name: column_stats
+            for column_name, column_stats in zip(
+                column_names, parsed_file_statistics
+            )
+            if columns is None or column_name in columns
         }
         files_statistics.append(file_statistics)
 
         # Parse stripe statistics
         for parsed_stripe_statistics in parsed_stripes_statistics:
             stripe_statistics = {
-                column_names[i]: parsed_stripe_statistics[i]
-                for i in range(len(column_names))
-                if columns is None or column_names[i] in columns
+                column_name: column_stats
+                for column_name, column_stats in zip(
+                    column_names, parsed_stripe_statistics
+                )
+                if columns is None or column_name in columns
             }
             if any(
                 not parsed_statistics
