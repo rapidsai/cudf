@@ -21,8 +21,62 @@ from cudf._lib import pylibcudf as plc
         pa.float32(),
         pa.float64(),
     ],
+    ids=[
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+    ],
 )
 def numeric_pa_type(request):
+    return request.param
+
+
+@pytest.fixture(
+    scope="module",
+    params=[
+        pa.timestamp("s"),
+        pa.timestamp("ms"),
+        pa.timestamp("us"),
+        pa.timestamp("ns"),
+    ],
+    ids=["s", "ms", "us", "ns"],
+)
+def timestamp_pa_type(request):
+    return request.param
+
+
+@pytest.fixture(
+    scope="module",
+    params=[
+        pa.duration("s"),
+        pa.duration("ms"),
+        pa.duration("us"),
+        pa.duration("ns"),
+    ],
+    ids=["s", "ms", "us", "ns"],
+)
+def duration_pa_type(request):
+    return request.param
+
+
+@pytest.fixture(
+    scope="module",
+    params=[
+        plc.column_factories.MaskState.UNALLOCATED,
+        plc.column_factories.MaskState.ALL_VALID,
+        plc.column_factories.MaskState.ALL_NULL,
+        plc.column_factories.MaskState.UNINITIALIZED,
+    ],
+    ids=["unallocated", "all_valid", "all_null", "uninitialized"],
+)
+def mask_state(request):
     return request.param
 
 
@@ -56,53 +110,74 @@ def test_make_empty_column_typeid(pa_type):
     assert_column_eq(cudf_col, pa_col)
 
 
-def test_make_numeric_column_no_mask(numeric_pa_type):
+def test_make_numeric_column(numeric_pa_type, mask_state):
     size = 3
-    expected = pa.array([0] * size, type=numeric_pa_type)
+
+    if mask_state == plc.column_factories.MaskState.ALL_NULL:
+        expected = pa.array([None] * size, type=numeric_pa_type)
+    else:
+        # TODO: uninitialized not necessarily 0
+        expected = pa.array([0] * size, type=numeric_pa_type)
+
     plc_type = plc.interop.from_arrow(
         pa.array([], type=numeric_pa_type)
     ).type()
 
-    got = plc.column_factories.make_numeric_column(
-        plc_type, size, plc.column_factories.MaskState.UNALLOCATED
+    got = plc.column_factories.make_numeric_column(plc_type, size, mask_state)
+    assert_column_eq(got, expected)
+
+
+def test_make_fixed_point_column(mask_state):
+    size = 3
+    scale = 2
+    precision = 10
+
+    if mask_state == plc.column_factories.MaskState.ALL_NULL:
+        expected = pa.array(
+            [None] * size, type=pa.decimal128(precision, scale)
+        )
+    else:
+        expected = pa.array([0] * size, type=pa.decimal128(precision, scale))
+
+    plc_type = plc.interop.from_arrow(
+        pa.array([], type=pa.decimal128(precision, scale))
+    ).type()
+
+    got = plc.column_factories.make_fixed_point_column(
+        plc_type, size, mask_state
     )
     assert_column_eq(got, expected)
 
 
-def test_make_numeric_column_all_valid(numeric_pa_type):
+def test_make_timestamp_column(timestamp_pa_type, mask_state):
     size = 3
-    expected = pa.array([0] * size, type=numeric_pa_type)
+
+    if mask_state == plc.column_factories.MaskState.ALL_NULL:
+        expected = pa.array([None] * size, type=timestamp_pa_type)
+    else:
+        expected = pa.array([0] * size, type=timestamp_pa_type)
+
     plc_type = plc.interop.from_arrow(
-        pa.array([], type=numeric_pa_type)
+        pa.array([], type=timestamp_pa_type)
     ).type()
 
-    got = plc.column_factories.make_numeric_column(
-        plc_type, size, plc.column_factories.MaskState.ALL_VALID
+    got = plc.column_factories.make_timestamp_column(
+        plc_type, size, mask_state
     )
     assert_column_eq(got, expected)
 
 
-def test_make_numeric_column_all_null(numeric_pa_type):
+def test_make_duration_column(duration_pa_type, mask_state):
     size = 3
-    expected = pa.array([None] * size, type=numeric_pa_type)
+
+    if mask_state == plc.column_factories.MaskState.ALL_NULL:
+        expected = pa.array([None] * size, type=duration_pa_type)
+    else:
+        expected = pa.array([0] * size, type=duration_pa_type)
+
     plc_type = plc.interop.from_arrow(
-        pa.array([], type=numeric_pa_type)
+        pa.array([], type=duration_pa_type)
     ).type()
 
-    got = plc.column_factories.make_numeric_column(
-        plc_type, size, plc.column_factories.MaskState.ALL_NULL
-    )
-    assert_column_eq(got, expected)
-
-
-def test_make_numeric_column_uninit_mask(numeric_pa_type):
-    size = 3
-    expected = pa.array([0] * size, type=numeric_pa_type)
-    plc_type = plc.interop.from_arrow(
-        pa.array([], type=numeric_pa_type)
-    ).type()
-
-    got = plc.column_factories.make_numeric_column(
-        plc_type, size, plc.column_factories.MaskState.UNINITIALIZED
-    )
+    got = plc.column_factories.make_duration_column(plc_type, size, mask_state)
     assert_column_eq(got, expected)
