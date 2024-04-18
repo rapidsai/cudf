@@ -27,6 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cub/device/device_segmented_sort.cuh>
 
@@ -160,7 +161,7 @@ std::unique_ptr<column> fast_segmented_sorted_order(column_view const& input,
                                                     column_view const& segment_offsets,
                                                     order const& column_order,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+                                                    rmm::device_async_resource_ref mr)
 {
   // Unfortunately, CUB's segmented sort functions cannot accept iterators.
   // We have to build a pre-filled sequence of indices as input.
@@ -227,7 +228,7 @@ std::unique_ptr<column> segmented_sorted_order_common(
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   if (keys.num_rows() == 0 || keys.num_columns() == 0) {
     return cudf::make_empty_column(type_to_id<size_type>());
@@ -304,7 +305,7 @@ std::unique_ptr<table> segmented_sort_by_key_common(table_view const& values,
                                                     std::vector<order> const& column_order,
                                                     std::vector<null_order> const& null_precedence,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+                                                    rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(values.num_rows() == keys.num_rows(),
                "Mismatch in number of rows for values and keys");

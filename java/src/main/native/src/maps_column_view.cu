@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <maps_column_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf::jni {
 
@@ -49,7 +50,7 @@ maps_column_view::maps_column_view(lists_column_view const &lists_of_structs,
 template <typename KeyT>
 std::unique_ptr<column> get_values_for_impl(maps_column_view const &maps_view,
                                             KeyT const &lookup_keys, rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource *mr) {
+                                            rmm::device_async_resource_ref mr) {
   auto const keys_ = maps_view.keys();
   auto const values_ = maps_view.values();
   CUDF_EXPECTS(lookup_keys.type().id() == keys_.child().type().id(),
@@ -65,25 +66,25 @@ std::unique_ptr<column> get_values_for_impl(maps_column_view const &maps_view,
   return lists::detail::extract_list_element(values_, key_indices->view(), stream, mr);
 }
 
-std::unique_ptr<column>
-maps_column_view::get_values_for(column_view const &lookup_keys, rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource *mr) const {
+std::unique_ptr<column> maps_column_view::get_values_for(column_view const &lookup_keys,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::device_async_resource_ref mr) const {
   CUDF_EXPECTS(lookup_keys.size() == size(),
                "Lookup keys must have the same size as the map column.");
 
   return get_values_for_impl(*this, lookup_keys, stream, mr);
 }
 
-std::unique_ptr<column>
-maps_column_view::get_values_for(scalar const &lookup_key, rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource *mr) const {
+std::unique_ptr<column> maps_column_view::get_values_for(scalar const &lookup_key,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::device_async_resource_ref mr) const {
   return get_values_for_impl(*this, lookup_key, stream, mr);
 }
 
 template <typename KeyT>
 std::unique_ptr<column> contains_impl(maps_column_view const &maps_view, KeyT const &lookup_keys,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource *mr) {
+                                      rmm::device_async_resource_ref mr) {
   auto const keys = maps_view.keys();
   CUDF_EXPECTS(lookup_keys.type().id() == keys.child().type().id(),
                "Lookup keys must have the same type as the keys of the map column.");
@@ -96,7 +97,7 @@ std::unique_ptr<column> contains_impl(maps_column_view const &maps_view, KeyT co
 
 std::unique_ptr<column> maps_column_view::contains(column_view const &lookup_keys,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource *mr) const {
+                                                   rmm::device_async_resource_ref mr) const {
   CUDF_EXPECTS(lookup_keys.size() == size(),
                "Lookup keys must have the same size as the map column.");
 
@@ -105,7 +106,7 @@ std::unique_ptr<column> maps_column_view::contains(column_view const &lookup_key
 
 std::unique_ptr<column> maps_column_view::contains(scalar const &lookup_key,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource *mr) const {
+                                                   rmm::device_async_resource_ref mr) const {
   return contains_impl(*this, lookup_key, stream, mr);
 }
 

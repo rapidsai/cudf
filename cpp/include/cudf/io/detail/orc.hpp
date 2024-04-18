@@ -23,6 +23,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <string>
@@ -57,7 +58,7 @@ class reader {
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                   orc_reader_options const& options,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  rmm::device_async_resource_ref mr);
 
   /**
    * @brief Destructor explicitly declared to avoid inlining in header

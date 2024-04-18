@@ -29,6 +29,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/copy.h>
@@ -51,7 +52,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<int8_t>>
 generate_list_offsets_and_validities(table_view const& input,
                                      bool has_null_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   auto const num_cols         = input.num_columns();
   auto const num_rows         = input.num_rows();
@@ -99,7 +100,7 @@ generate_list_offsets_and_validities(table_view const& input,
  */
 std::unique_ptr<column> concatenate_and_gather_lists(host_span<column_view const> columns_to_concat,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource* mr)
+                                                     rmm::device_async_resource_ref mr)
 {
   // Concatenate all columns into a single (temporary) column.
   auto const concatenated_col =
@@ -218,7 +219,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
                                      size_type num_output_entries,
                                      bool data_has_null_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const noexcept
+                                     rmm::device_async_resource_ref mr) const noexcept
   {
     auto const table_dv_ptr = table_device_view::create(input, stream);
     auto comp_fn            = compute_string_sizes_and_interleave_lists_fn{
@@ -250,7 +251,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
                                      size_type num_output_entries,
                                      bool data_has_null_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const noexcept
+                                     rmm::device_async_resource_ref mr) const noexcept
   {
     auto const num_cols     = input.num_columns();
     auto const table_dv_ptr = table_device_view::create(input, stream);
@@ -329,7 +330,7 @@ struct interleave_list_entries_fn {
                                      size_type num_output_entries,
                                      bool data_has_null_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+                                     rmm::device_async_resource_ref mr) const
   {
     return interleave_list_entries_impl<T>{}(input,
                                              output_list_offsets,
@@ -350,7 +351,7 @@ struct interleave_list_entries_fn {
 std::unique_ptr<column> interleave_columns(table_view const& input,
                                            bool has_null_mask,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   auto const entry_type = lists_column_view(*input.begin()).child().type();
   for (auto const& col : input) {

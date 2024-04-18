@@ -267,17 +267,45 @@ def write_to_dataset(
 
 @ioutils.doc_read_parquet_metadata()
 @_cudf_nvtx_annotate
-def read_parquet_metadata(path):
+def read_parquet_metadata(filepath_or_buffer):
     """{docstring}"""
-    import pyarrow.parquet as pq
+    # Multiple sources are passed as a list. If a single source is passed,
+    # wrap it in a list for unified processing downstream.
+    if not is_list_like(filepath_or_buffer):
+        filepath_or_buffer = [filepath_or_buffer]
 
-    pq_file = pq.ParquetFile(path)
+    # Start by trying to construct a filesystem object
+    fs, paths = ioutils._get_filesystem_and_paths(
+        path_or_data=filepath_or_buffer, storage_options=None
+    )
 
-    num_rows = pq_file.metadata.num_rows
-    num_row_groups = pq_file.num_row_groups
-    col_names = pq_file.schema.names
+    # Check if filepath or buffer
+    filepath_or_buffer = paths if paths else filepath_or_buffer
 
-    return num_rows, num_row_groups, col_names
+    # List of filepaths or buffers
+    filepaths_or_buffers = []
+
+    for source in filepath_or_buffer:
+        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
+            path_or_data=source,
+            compression=None,
+            fs=fs,
+            use_python_file_object=True,
+            open_file_options=None,
+            storage_options=None,
+            bytes_per_thread=None,
+        )
+
+        if compression is not None:
+            raise ValueError(
+                "URL content-encoding decompression is not supported"
+            )
+        if isinstance(tmp_source, list):
+            filepath_or_buffer.extend(tmp_source)
+        else:
+            filepaths_or_buffers.append(tmp_source)
+
+    return libparquet.read_parquet_metadata(filepaths_or_buffers)
 
 
 @_cudf_nvtx_annotate

@@ -27,6 +27,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <string>
 #include <vector>
@@ -65,7 +66,7 @@ class reader {
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                   parquet_reader_options const& options,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  rmm::device_async_resource_ref mr);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -145,7 +146,7 @@ class chunked_reader : private reader {
                           std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                           parquet_reader_options const& options,
                           rmm::cuda_stream_view stream,
-                          rmm::mr::device_memory_resource* mr);
+                          rmm::device_async_resource_ref mr);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header.
