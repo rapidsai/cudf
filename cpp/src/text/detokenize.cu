@@ -32,6 +32,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -132,7 +133,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
                                          cudf::column_view const& row_indices,
                                          cudf::string_scalar const& separator,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be valid");
   CUDF_EXPECTS(row_indices.size() == strings.size(),
@@ -173,7 +174,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& input,
                                          cudf::column_view const& row_indices,
                                          cudf::string_scalar const& separator,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::detokenize(input, row_indices, separator, stream, mr);

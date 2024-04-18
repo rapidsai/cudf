@@ -21,6 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/transform.h>
@@ -65,7 +66,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(
   cudf::strings_column_view const& values_to_replace,
   cudf::strings_column_view const& replacement_values,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto d_input             = cudf::column_device_view::create(input.parent(), stream);
   auto d_values_to_replace = cudf::column_device_view::create(values_to_replace.parent(), stream);
