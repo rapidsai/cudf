@@ -64,19 +64,10 @@ cdef extern from "cudf/io/orc_metadata.hpp" \
         optional[bool] has_null
         statistics_type type_specific_stats
 
-    cdef cppclass raw_orc_statistics:
-        vector[string] column_names
-        vector[string] file_stats
-        vector[vector[string]] stripes_stats
-
     cdef cppclass parsed_orc_statistics:
         vector[string] column_names
         vector[column_statistics] file_stats
         vector[vector[column_statistics]] stripes_stats
-
-    cdef raw_orc_statistics read_raw_orc_statistics(
-        cudf_io_types.source_info src_info
-    ) except +
 
     cdef parsed_orc_statistics read_parsed_orc_statistics(
         cudf_io_types.source_info src_info

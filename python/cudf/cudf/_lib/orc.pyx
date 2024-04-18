@@ -41,9 +41,7 @@ from cudf._lib.cpp.io.orc_metadata cimport (
     double_statistics,
     integer_statistics,
     parsed_orc_statistics,
-    raw_orc_statistics,
     read_parsed_orc_statistics as libcudf_read_parsed_orc_statistics,
-    read_raw_orc_statistics as libcudf_read_raw_orc_statistics,
     statistics_type,
     string_statistics,
     timestamp_statistics,
@@ -73,25 +71,6 @@ from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 from pyarrow.lib import NativeFile
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
-
-
-cpdef read_raw_orc_statistics(filepath_or_buffer):
-    """
-    Cython function to call into libcudf API, see `read_raw_orc_statistics`.
-
-    See Also
-    --------
-    cudf.io.orc.read_orc_statistics
-    """
-
-    # Handle NativeFile input
-    if isinstance(filepath_or_buffer, NativeFile):
-        filepath_or_buffer = NativeFileDatasource(filepath_or_buffer)
-
-    cdef raw_orc_statistics raw = (
-        libcudf_read_raw_orc_statistics(make_source_info([filepath_or_buffer]))
-    )
-    return (raw.column_names, raw.file_stats, raw.stripes_stats)
 
 
 cdef get_statistics_type(statistics_type stats):
