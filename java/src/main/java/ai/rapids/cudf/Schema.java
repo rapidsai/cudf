@@ -222,6 +222,13 @@ public class Schema {
     return ret;
   }
 
+  public int getNumChildren() {
+    if (childSchemas == null) {
+      return 0;
+    }
+    return childSchemas.size();
+  }
+
   int[] getFlattenedNumChildren() {
     flattenIfNeeded();
     return flattenedCounts;

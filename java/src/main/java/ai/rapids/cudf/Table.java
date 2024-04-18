@@ -1221,29 +1221,20 @@ public final class Table implements AutoCloseable {
             }
           } else {
             if (types[i] == DType.LIST) {
-              Schema childSchema = schema.getChild(i);
-              Schema elementSchema = childSchema.getChild(0);
+              Schema listSchema = schema.getChild(i);
+              Schema elementSchema = listSchema.getChild(0);
               try (Scalar s = Scalar.listFromNull(elementSchema.asHostDataType())) {
                 columns[i] = ColumnVector.fromScalar(s, rowCount);
               }
             } else if (types[i] == DType.STRUCT) {
-              Schema childSchema = schema.getChild(i);
-              int numChildren = 0;
-              String[] childNames = childSchema.getColumnNames();
-              if (childNames == null) {
-                try (Scalar s = Scalar.structFromNull()) {
-                  columns[i] = ColumnVector.fromScalar(s, rowCount);
-                }
-              } else {
-                int numChildChildren = childSchema.getColumnNames().length;
-                DataType[] childChildrenTypes = new DataType[numChildChildren];
-                for (int j = 0; j < numChildChildren; j++) {
-                  Schema s = childSchema.getChild(j);
-                  childChildrenTypes[j] = s.asHostDataType();
-                }
-                try (Scalar s = Scalar.structFromNull(childChildrenTypes)) {
-                  columns[i] = ColumnVector.fromScalar(s, rowCount);
-                }
+              Schema structSchema = schema.getChild(i);
+              int numStructChildren = structSchema.getNumChildren();
+              DataType[] structChildrenTypes = new DataType[numStructChildren];
+              for (int j = 0; j < numStructChildren; j++) {
+                structChildrenTypes[j] = structSchema.getChild(j).asHostDataType();
+              }
+              try (Scalar s = Scalar.structFromNull(structChildrenTypes)) {
+                columns[i] = ColumnVector.fromScalar(s, rowCount);
               }
             } else {
               try (Scalar s = Scalar.fromNull(types[i])) {
