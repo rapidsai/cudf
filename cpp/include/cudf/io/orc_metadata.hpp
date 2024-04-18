@@ -154,6 +154,11 @@ struct timestamp_statistics : minmax_statistics<int64_t> {
   std::optional<uint32_t> maximum_nanos;  ///< nanoseconds part of the maximum
 };
 
+/**
+ * @brief Variant type for ORC column statistics.
+ *
+ * The variant can hold any of the supported column statistics types.
+ */
 using statistics_type = std::variant<no_statistics,
                                      integer_statistics,
                                      double_statistics,
