@@ -10,9 +10,6 @@ import cudf
 from cudf._lib import orc as liborc
 from cudf.api.types import is_list_like
 from cudf.utils import ioutils
-from cudf.utils.metadata import (  # type: ignore
-    orc_column_statistics_pb2 as cs_pb2,
-)
 
 
 def _make_empty_df(filepath_or_buffer, columns):
@@ -172,59 +169,8 @@ def read_orc_statistics(
 
     files_statistics = []
     stripes_statistics = []
-    new_files_statistics = []
-    new_stripes_statistics = []
     for source in filepaths_or_buffers:
-        path_or_buf, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source, compression=None, **kwargs
-        )
-        if compression is not None:
-            ValueError("URL content-encoding decompression is not supported")
-
-        # Read in statistics and unpack
-        (
-            column_names,
-            raw_file_statistics,
-            raw_stripes_statistics,
-        ) = liborc.read_raw_orc_statistics(path_or_buf)
-
-        # Parse column names
-        column_names = [
-            column_name.decode("utf-8") for column_name in column_names
-        ]
-
-        # Parse statistics
-        cs = cs_pb2.ColumnStatistics()
-
-        file_statistics = {
-            column_names[i]: _parse_column_statistics(cs, raw_file_stats)
-            for i, raw_file_stats in enumerate(raw_file_statistics)
-            if columns is None or column_names[i] in columns
-        }
-        if any(
-            not parsed_statistics
-            for parsed_statistics in file_statistics.values()
-        ):
-            continue
-        else:
-            files_statistics.append(file_statistics)
-
-        for raw_stripe_statistics in raw_stripes_statistics:
-            stripe_statistics = {
-                column_names[i]: _parse_column_statistics(cs, raw_file_stats)
-                for i, raw_file_stats in enumerate(raw_stripe_statistics)
-                if columns is None or column_names[i] in columns
-            }
-            if any(
-                not parsed_statistics
-                for parsed_statistics in stripe_statistics.values()
-            ):
-                continue
-            else:
-                stripes_statistics.append(stripe_statistics)
-
-    for source in filepaths_or_buffers:
-        path_or_buf, compression = ioutils.get_reader_filepath_or_buffer(
+        path_or_buf, _ = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source, compression=None, **kwargs
         )
         (
@@ -244,7 +190,7 @@ def read_orc_statistics(
             for i in range(len(column_names))
             if columns is None or column_names[i] in columns
         }
-        new_files_statistics.append(file_statistics)
+        files_statistics.append(file_statistics)
 
         # Parse stripe statistics
         for parsed_stripe_statistics in parsed_stripes_statistics:
@@ -259,27 +205,9 @@ def read_orc_statistics(
             ):
                 continue
             else:
-                new_stripes_statistics.append(stripe_statistics)
+                stripes_statistics.append(stripe_statistics)
 
-    print("Old files:\n", files_statistics)
-    print()
-    print("New files:\n", new_files_statistics)
-    print()
-    print("Old stripes:\n", stripes_statistics)
-    print()
-    print("New stripes:\n", new_stripes_statistics)
-    print()
-
-    print("Files statistics match: ", files_statistics == new_files_statistics)
-    print(
-        "Stripes statistics match: ",
-        stripes_statistics == new_stripes_statistics,
-    )
-
-    assert files_statistics == new_files_statistics
-    assert stripes_statistics == new_stripes_statistics
-
-    return new_files_statistics, new_stripes_statistics
+    return files_statistics, stripes_statistics
 
 
 def _filter_stripes(
