@@ -609,7 +609,8 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
   return parquet_metadata{parquet_schema{walk_schema(&metadata, 0)},
                           metadata.get_num_rows(),
                           metadata.get_num_row_groups(),
-                          metadata.get_key_value_metadata()[0]};
+                          metadata.get_key_value_metadata()[0],
+                          metadata.get_rowgroup_metadata()};
 }
 
 }  // namespace cudf::io::parquet::detail
