@@ -209,11 +209,11 @@ respectively. All memory resource parameters should be defaulted to use the retu
 
 ### Resource Refs
 
-Memory resources are passed via resource ref parameters. A resource ref is memory resource wrapper
+Memory resources are passed via resource ref parameters. A resource ref is a memory resource wrapper
 that enables consumers to specify properties of resources that they expect. These are defined
 in the `cuda::mr` namespace of libcu++, but RMM provides some convenience wrappers in
 `rmm/resource_ref.hpp`:
- - `rmm::device_async_resource_ref` accepts a memory resource that provides synchronous allocation
+ - `rmm::device_resource_ref` accepts a memory resource that provides synchronous allocation
     of device-accessible memory.
  - `rmm::device_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
     of device-accessible memory.
