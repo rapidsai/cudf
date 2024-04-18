@@ -90,7 +90,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
       std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
     size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
 
-    range_size = !range_size || range_size > prefsum_source_sizes.back()
+    range_size = range_size + range_offset > prefsum_source_sizes.back()
                    ? prefsum_source_sizes.back() - range_offset
                    : range_size;
     range_offset =
@@ -135,9 +135,8 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   }
   /* TODO: allow byte range reading from multiple compressed files.
    */
-  range_size   = !range_size || (range_size > sources[0]->size() - range_offset)
-                   ? sources[0]->size() - range_offset
-                   : range_size;
+  range_size =
+    range_size > sources[0]->size() - range_offset ? sources[0]->size() - range_offset : range_size;
   auto hbuffer = std::vector<uint8_t>(range_size);
   // Single read because only a single compressed source is supported
   // Reading to host because decompression of a single block is much faster on the CPU
@@ -194,32 +193,35 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
   size_t const total_source_size            = sources_size(sources, 0, 0);
   auto constexpr num_delimiter_chars        = 1;
   auto const num_extra_delimiters           = num_delimiter_chars * (sources.size() - 1);
-  size_t chunk_size                         = reader_opts.get_byte_range_size();
-  size_t chunk_offset                       = reader_opts.get_byte_range_offset();
   compression_type const reader_compression = reader_opts.get_compression();
+  size_t chunk_offset                       = reader_opts.get_byte_range_offset();
+  size_t chunk_size                         = reader_opts.get_byte_range_size();
+
+  CUDF_EXPECTS(total_source_size ? chunk_offset < total_source_size : !chunk_offset,
+               "Invalid offseting");
+  bool should_load_all_sources = !chunk_size || chunk_size > total_source_size - chunk_offset;
+  chunk_size =
+    should_load_all_sources ? total_source_size - chunk_offset + num_extra_delimiters : chunk_size;
 
   // Some magic numbers
-  constexpr int num_subchunks            = 10;  // per chunk_size
-  constexpr size_t min_subchunk_size     = 10000;
-  constexpr int num_subchunks_prealloced = 3;
-  constexpr int compression_ratio        = 4;
+  constexpr int num_subchunks        = 10;  // per chunk_size
+  constexpr size_t min_subchunk_size = 10000;
+  const int num_subchunks_prealloced = should_load_all_sources ? 0 : 3;
+  constexpr int compression_ratio    = 4;
+
   /*
    * NOTE: heuristic for choosing subchunk size: geometric mean of minimum subchunk size (set to
    * 10kb) and the byte range size
    */
-  size_t size_per_subchunk = geometric_mean(
-    std::ceil((double)reader_opts.get_byte_range_size() / num_subchunks), min_subchunk_size);
-
-  if (!chunk_size || chunk_size > total_source_size - chunk_offset)
-    chunk_size = total_source_size - chunk_offset + num_extra_delimiters;
+  size_t size_per_subchunk =
+    geometric_mean(std::ceil((double)chunk_size / num_subchunks), min_subchunk_size);
 
   // The allocation for single source compressed input is estimated by assuming a ~4:1
   // compression ratio. For uncompressed inputs, we can getter a better estimate using the idea
   // of subchunks.
-  size_t buffer_size =
-    reader_compression != compression_type::NONE
-      ? (chunk_size + num_subchunks_prealloced * size_per_subchunk) * compression_ratio + 4096
-      : (chunk_size + num_subchunks_prealloced * size_per_subchunk);
+  size_t buffer_size = reader_compression != compression_type::NONE
+                         ? total_source_size * compression_ratio + 4096
+                         : (chunk_size + num_subchunks_prealloced * size_per_subchunk);
   rmm::device_uvector<char> buffer(buffer_size, stream);
   device_span<char> bufspan(buffer);
 
@@ -233,8 +235,7 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
     // return empty owning datasource buffer
     auto empty_buf = rmm::device_uvector<char>(0, stream);
     return datasource::owning_buffer<rmm::device_uvector<char>>(std::move(empty_buf));
-  } else if (reader_opts.get_byte_range_size() > 0 &&
-             reader_opts.get_byte_range_size() < total_source_size - chunk_offset) {
+  } else if (!should_load_all_sources) {
     // Find next delimiter
     std::int64_t next_delim_pos = -1;
     size_t next_subchunk_start  = chunk_offset + chunk_size;
@@ -259,7 +260,7 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
   return datasource::owning_buffer<rmm::device_uvector<char>>(
     std::move(buffer),
     reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + (chunk_offset ? 1 : 0),
-    buffer_offset + readbufspan.size() - first_delim_pos - (chunk_offset ? 1 : 0));
+    readbufspan.size() - first_delim_pos - (chunk_offset ? 1 : 0));
 }
 
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
