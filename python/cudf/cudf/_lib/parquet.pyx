@@ -478,7 +478,7 @@ def write_parquet(
         )
 
     dict_policy = (
-        cudf_io_types.dictionary_policy.ALWAYS
+        cudf_io_types.dictionary_policy.ADAPTIVE
         if use_dictionary
         else cudf_io_types.dictionary_policy.NEVER
     )
