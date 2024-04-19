@@ -86,6 +86,7 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import _warn_no_dask_cudf
 
 
 def _format_percentile_names(percentiles):
@@ -3657,6 +3658,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             self._from_data_like_self({self.name: result_col}),
             inplace=inplace,
         )
+
+    @_cudf_nvtx_annotate
+    @_warn_no_dask_cudf
+    def __dask_tokenize__(self):
+        from dask.base import normalize_token
+
+        return [
+            type(self),
+            str(self.dtype),
+            normalize_token(self.to_pandas()),
+        ]
 
 
 def make_binop_func(op):

@@ -111,7 +111,7 @@ def test_categorical_accessor_initialization2(data):
         dsr.cat
 
 
-@xfail_dask_expr("TODO: Unexplained dask-expr failure")
+@xfail_dask_expr("clear_known_categories needs to be generalize")
 @pytest.mark.parametrize("data", [data_cat_1()])
 def test_categorical_basic(data):
     cat = data.copy()
@@ -203,7 +203,6 @@ def test_categorical_compare_unordered(data):
         dsr < dsr
 
 
-@xfail_dask_expr("TODO: Unexplained dask-expr failure")
 @pytest.mark.parametrize("data", [data_cat_3()])
 def test_categorical_compare_ordered(data):
     cat1 = data[0].copy()
@@ -274,7 +273,7 @@ def test_categorical_categories():
     )
 
 
-@xfail_dask_expr("TODO: Unexplained dask-expr failure")
+@xfail_dask_expr("Categories are ordered differently in cudf")
 def test_categorical_as_known():
     df = dask_cudf.from_cudf(DataFrame({"col_1": [0, 1, 2, 3]}), npartitions=2)
     df["col_1"] = df["col_1"].astype("category")
