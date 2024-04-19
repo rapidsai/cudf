@@ -5482,7 +5482,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     # https://github.com/apache/arrow/issues/15178
                     out = out.set_index(idx)
             else:
-                out = out.set_index(index_col[0])
+                out = out.set_index(index_col)
 
         if "__index_level_0__" in out.index.names:
             assert len(out.index.names) == 1
@@ -5541,42 +5541,42 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         write_index = preserve_index is not False
         keep_range_index = write_index and preserve_index is None
         index = self.index
+        index_levels = [self.index]
         if write_index:
             if isinstance(index, cudf.RangeIndex) and keep_range_index:
-                descr = {
-                    "kind": "range",
-                    "name": index.name,
-                    "start": index._start,
-                    "stop": index._stop,
-                    "step": 1,
-                }
+                index_descr = [
+                    {
+                        "kind": "range",
+                        "name": index.name,
+                        "start": index._start,
+                        "stop": index._stop,
+                        "step": 1,
+                    }
+                ]
             else:
                 if isinstance(index, cudf.RangeIndex):
                     index = index._as_int_index()
                     index.name = "__index_level_0__"
                 if isinstance(index, MultiIndex):
-                    gen_names = tuple(
-                        f"level_{i}" for i, _ in enumerate(index._data.names)
-                    )
+                    index_descr = list(index._data.names)
+                    index_levels = index.levels
                 else:
-                    gen_names = (
+                    index_descr = (
                         index.names if index.name is not None else ("index",)
                     )
-                for gen_name, col_name in zip(gen_names, index._data.names):
+                for gen_name, col_name in zip(index_descr, index._data.names):
                     data._insert(
                         data.shape[1],
                         gen_name,
                         index._data[col_name],
                     )
-                descr = gen_names[0]
-            index_descr.append(descr)
 
         out = super(DataFrame, data).to_arrow()
         metadata = pa.pandas_compat.construct_metadata(
             columns_to_convert=[self[col] for col in self._data.names],
             df=self,
-            column_names=out.schema.names,
-            index_levels=[self.index],
+            column_names=list(self.columns),
+            index_levels=index_levels,
             index_descriptors=index_descr,
             preserve_index=preserve_index,
             types=out.schema.types,
