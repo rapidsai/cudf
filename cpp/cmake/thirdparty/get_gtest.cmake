@@ -17,26 +17,7 @@ function(find_and_configure_gtest)
   include(${rapids-cmake-dir}/cpm/gtest.cmake)
 
   # Find or install GoogleTest
-  rapids_cpm_gtest(
-    BUILD_EXPORT_SET cudf-testing-exports
-    INSTALL_EXPORT_SET cudf-testing-exports
-    BUILD_STATIC
-  )
-
-  if(GTest_ADDED)
-    rapids_export(
-      BUILD GTest
-      VERSION ${GTest_VERSION}
-      EXPORT_SET GTestTargets
-      GLOBAL_TARGETS gtest gmock gtest_main gmock_main
-      NAMESPACE GTest::
-    )
-
-    include("${rapids-cmake-dir}/export/find_package_root.cmake")
-    rapids_export_find_package_root(
-      BUILD GTest [=[${CMAKE_CURRENT_LIST_DIR}]=] EXPORT_SET cudf-testing-exports
-    )
-  endif()
+  rapids_cpm_gtest(BUILD_STATIC)
 
 endfunction()
 
