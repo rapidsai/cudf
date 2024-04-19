@@ -5484,8 +5484,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else:
                 out = out.set_index(index_col)
 
-        if "__index_level_0__" in out.index.names:
-            assert len(out.index.names) == 1
+        if (
+            "__index_level_0__" in out.index.names
+            and len(out.index.names) == 1
+        ):
             real_index_name = None
             for md in physical_column_md:
                 if md["field_name"] == "__index_level_0__":
