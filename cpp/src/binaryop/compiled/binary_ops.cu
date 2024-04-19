@@ -27,6 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/functional.h>
@@ -50,7 +51,7 @@ struct scalar_as_column_view {
   template <typename T, CUDF_ENABLE_IF(is_fixed_width<T>())>
   return_type operator()(scalar const& s,
                          rmm::cuda_stream_view stream,
-                         rmm::mr::device_memory_resource*)
+                         rmm::device_async_resource_ref)
   {
     auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
     auto col_v               = column_view(s.type(),
@@ -61,7 +62,7 @@ struct scalar_as_column_view {
     return std::pair{col_v, std::unique_ptr<column>(nullptr)};
   }
   template <typename T, CUDF_ENABLE_IF(!is_fixed_width<T>())>
-  return_type operator()(scalar const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+  return_type operator()(scalar const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
   {
     CUDF_FAIL("Unsupported type");
   }
@@ -69,7 +70,7 @@ struct scalar_as_column_view {
 // specialization for cudf::string_view
 template <>
 scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::string_view>(
-  scalar const& s, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  scalar const& s, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   using T                  = cudf::string_view;
   auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
@@ -96,7 +97,7 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
 // specializing for struct column
 template <>
 scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::struct_view>(
-  scalar const& s, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  scalar const& s, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   auto col = make_column_from_scalar(s, 1, stream, mr);
   return std::pair{col->view(), std::move(col)};
@@ -114,7 +115,7 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::struc
 auto scalar_to_column_view(
   scalar const& scal,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   return type_dispatcher(scal.type(), scalar_as_column_view{}, scal, stream, mr);
 }
@@ -216,7 +217,7 @@ struct null_considering_binop {
                                      data_type output_type,
                                      cudf::size_type col_size,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+                                     rmm::device_async_resource_ref mr) const
   {
     // Create device views for inputs
     auto const lhs_dev_view = get_device_view(lhs);
@@ -263,7 +264,7 @@ std::unique_ptr<column> string_null_min_max(scalar const& lhs,
                                             binary_operator op,
                                             data_type output_type,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported lhs datatype");
@@ -280,7 +281,7 @@ std::unique_ptr<column> string_null_min_max(column_view const& lhs,
                                             binary_operator op,
                                             data_type output_type,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported lhs datatype");
@@ -297,7 +298,7 @@ std::unique_ptr<column> string_null_min_max(column_view const& lhs,
                                             binary_operator op,
                                             data_type output_type,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported lhs datatype");

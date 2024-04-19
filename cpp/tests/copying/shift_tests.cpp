@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,16 +26,18 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <limits>
 #include <memory>
+#include <stdexcept>
 
 using TestTypes = cudf::test::Types<int32_t>;
 
 template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   auto s = new ScalarType(cudf::test::make_type_param_scalar<T>(0), false, stream, mr);
   return std::unique_ptr<cudf::scalar>(s);
@@ -44,8 +46,8 @@ std::unique_ptr<cudf::scalar> make_scalar(
 template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
   T value,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   auto s = new ScalarType(value, true, stream, mr);
   return std::unique_ptr<cudf::scalar>(s);
@@ -192,7 +194,7 @@ TYPED_TEST(ShiftTestsTyped, MismatchFillValueDtypes)
 
   auto fill = cudf::string_scalar("");
 
-  EXPECT_THROW(cudf::shift(input, 5, fill), cudf::logic_error);
+  EXPECT_THROW(cudf::shift(input, 5, fill), cudf::data_type_error);
 }
 
 struct ShiftTests : public cudf::test::BaseFixture {};
