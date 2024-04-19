@@ -34,6 +34,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -93,7 +94,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   null_equality compare_nulls,
   join_kind join_type,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS((join_type != join_kind::INNER_JOIN) && (join_type != join_kind::LEFT_JOIN) &&
                  (join_type != join_kind::FULL_JOIN),
@@ -279,7 +280,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::mixed_join_semi(left_equality,
@@ -300,7 +301,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::mixed_join_semi(left_equality,
