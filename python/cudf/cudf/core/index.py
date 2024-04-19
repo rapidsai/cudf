@@ -206,7 +206,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         if not cudf.api.types.is_hashable(name):
             raise ValueError("Name must be a hashable value.")
         self._name = name
-        if dtype is not None and not cudf.dtype(dtype).kind != "i":
+        if dtype is not None and cudf.dtype(dtype).kind != "i":
             raise ValueError(f"{dtype=} must be a signed integer type")
 
         if isinstance(start, range):
