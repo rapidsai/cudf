@@ -168,10 +168,9 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
     cudf::detail::sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets, stream);
 
   auto const threshold = get_offset64_threshold();
-  if (!is_large_strings_enabled()) {
-    CUDF_EXPECTS(
-      total_bytes < threshold, "Size of output exceeds the column size limit", std::overflow_error);
-  }
+  CUDF_EXPECTS(is_large_strings_enabled() || (total_bytes < threshold),
+               "Size of output exceeds the column size limit",
+               std::overflow_error);
   if (total_bytes >= get_offset64_threshold()) {
     // recompute as int64 offsets when above the threshold
     offsets_column = make_numeric_column(
