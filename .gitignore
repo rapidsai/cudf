@@ -78,6 +78,7 @@ CMakeFiles/
 Debug
 build/
 cpp/build/
+cpp/examples/*/install/
 cpp/include/cudf/ipc_generated/*.h
 cpp/thirdparty/googletest/
 
