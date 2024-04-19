@@ -4320,7 +4320,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
 
-        See pandas.DataFrame.query.
+        See :meth:`pandas.DataFrame.query`.
 
         Parameters
         ----------
