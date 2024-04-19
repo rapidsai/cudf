@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -14,22 +14,15 @@
 
 include(${CMAKE_CURRENT_LIST_DIR}/versions.cmake)
 
-set(CPM_DOWNLOAD_VERSION v0.38.5)
-file(
-  DOWNLOAD
-  https://github.com/cpm-cmake/CPM.cmake/releases/download/${CPM_DOWNLOAD_VERSION}/get_cpm.cmake
-  ${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake
-)
-include(${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake)
+if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/libcudf_cpp_examples_RAPIDS.cmake)
+  file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/${CUDF_TAG}/RAPIDS.cmake
+       ${CMAKE_CURRENT_BINARY_DIR}/libcudf_cpp_examples_RAPIDS.cmake
+  )
+endif()
+include(${CMAKE_CURRENT_BINARY_DIR}/libcudf_cpp_examples_RAPIDS.cmake)
 
-# find or build it via CPM
-CPMFindPackage(
-  NAME cudf
-  FIND_PACKAGE_ARGUMENTS "PATHS ${cudf_ROOT} ${cudf_ROOT}/latest" GIT_REPOSITORY
-                         https://github.com/rapidsai/cudf
-  GIT_TAG ${CUDF_TAG}
-  GIT_SHALLOW
-    TRUE
-    SOURCE_SUBDIR
-    cpp
-)
+include(rapids-cmake)
+include(rapids-cpm)
+include(rapids-cuda)
+include(rapids-export)
+include(rapids-find)
