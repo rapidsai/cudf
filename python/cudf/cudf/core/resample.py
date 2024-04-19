@@ -30,7 +30,6 @@ from cudf.core.groupby.groupby import (
     SeriesGroupBy,
     _Grouping,
 )
-from cudf.core.tools.datetimes import _offset_alias_to_code, _unit_dtype_map
 
 
 class _Resampler(GroupBy):
@@ -247,47 +246,46 @@ class _ResampleGrouping(_Grouping):
         # column to have the same dtype, so we compute a `result_type`
         # and cast them both to that type.
         try:
-            result_type = np.dtype(
-                _unit_dtype_map[_offset_alias_to_code[offset.name]]
-            )
-        except KeyError:
+            result_type = np.dtype(f"datetime64[{offset.rule_code}]")
+            # TODO: Ideally, we can avoid one cast by having `date_range`
+            # generate timestamps of a given dtype.  Currently, it can
+            # only generate timestamps with 'ns' precision
+            cast_key_column = key_column.astype(result_type)
+            cast_bin_labels = bin_labels.astype(result_type)
+        except TypeError:
             # unsupported resolution (we don't support resolutions >s)
             # fall back to using datetime64[s]
             result_type = np.dtype("datetime64[s]")
-
-        # TODO: Ideally, we can avoid one cast by having `date_range`
-        # generate timestamps of a given dtype.  Currently, it can
-        # only generate timestamps with 'ns' precision
-        key_column = key_column.astype(result_type)
-        bin_labels = bin_labels.astype(result_type)
+            cast_key_column = key_column.astype(result_type)
+            cast_bin_labels = bin_labels.astype(result_type)
 
         # bin the key column:
         bin_numbers = cudf._lib.labeling.label_bins(
-            key_column,
-            left_edges=bin_labels[:-1]._column,
+            cast_key_column,
+            left_edges=cast_bin_labels[:-1]._column,
             left_inclusive=(closed == "left"),
-            right_edges=bin_labels[1:]._column,
+            right_edges=cast_bin_labels[1:]._column,
             right_inclusive=(closed == "right"),
         )
 
         if label == "right":
-            bin_labels = bin_labels[1:]
+            cast_bin_labels = cast_bin_labels[1:]
         else:
-            bin_labels = bin_labels[:-1]
+            cast_bin_labels = cast_bin_labels[:-1]
 
         # if we have more labels than bins, remove the extras labels:
         nbins = bin_numbers.max() + 1
-        if len(bin_labels) > nbins:
-            bin_labels = bin_labels[:nbins]
+        if len(cast_bin_labels) > nbins:
+            cast_bin_labels = cast_bin_labels[:nbins]
 
-        bin_labels.name = self.names[0]
-        self.bin_labels = bin_labels
+        cast_bin_labels.name = self.names[0]
+        self.bin_labels = cast_bin_labels
 
         # replace self._key_columns with the binned key column:
         self._key_columns = [
-            bin_labels._gather(bin_numbers, check_bounds=False)._column.astype(
-                result_type
-            )
+            cast_bin_labels._gather(
+                bin_numbers, check_bounds=False
+            )._column.astype(result_type)
         ]
 
 
