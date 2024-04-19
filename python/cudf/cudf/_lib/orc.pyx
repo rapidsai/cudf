@@ -3,7 +3,6 @@
 import cudf
 from cudf.core.buffer import acquire_spill_lock
 
-from cython.operator cimport dereference
 from libc.stdint cimport int64_t
 from libcpp cimport bool, int
 from libcpp.map cimport map
@@ -64,7 +63,7 @@ from cudf._lib.io.utils cimport (
     make_source_info,
     update_column_struct_field_names,
 )
-from cudf._lib.variant cimport get_if, holds_alternative
+from cudf._lib.variant cimport get_if as std_get_if, holds_alternative
 
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
@@ -99,105 +98,96 @@ cdef _parse_column_type_statistics(column_statistics stats):
 
     if holds_alternative[no_statistics](type_specific_stats):
         return column_stats
-    elif int_stats := get_if[integer_statistics](&type_specific_stats):
-        if dereference(int_stats).minimum.has_value():
-            column_stats["minimum"] = dereference(int_stats).minimum.value()
+    elif int_stats := std_get_if[integer_statistics](&type_specific_stats):
+        if int_stats.minimum.has_value():
+            column_stats["minimum"] = int_stats.minimum.value()
         else:
             column_stats["minimum"] = None
-        if dereference(int_stats).maximum.has_value():
-            column_stats["maximum"] = dereference(int_stats).maximum.value()
+        if int_stats.maximum.has_value():
+            column_stats["maximum"] = int_stats.maximum.value()
         else:
             column_stats["maximum"] = None
-        if dereference(int_stats).sum.has_value():
-            column_stats["sum"] = dereference(int_stats).sum.value()
+        if int_stats.sum.has_value():
+            column_stats["sum"] = int_stats.sum.value()
         else:
             column_stats["sum"] = None
-    elif dbl_stats := get_if[double_statistics](&type_specific_stats):
-        if dereference(dbl_stats).minimum.has_value():
-            column_stats["minimum"] = dereference(dbl_stats).minimum.value()
+    elif dbl_stats := std_get_if[double_statistics](&type_specific_stats):
+        if dbl_stats.minimum.has_value():
+            column_stats["minimum"] = dbl_stats.minimum.value()
         else:
             column_stats["minimum"] = None
-        if dereference(dbl_stats).maximum.has_value():
-            column_stats["maximum"] = dereference(dbl_stats).maximum.value()
+        if dbl_stats.maximum.has_value():
+            column_stats["maximum"] = dbl_stats.maximum.value()
         else:
             column_stats["maximum"] = None
-        if dereference(dbl_stats).sum.has_value():
-            column_stats["sum"] = dereference(dbl_stats).sum.value()
+        if dbl_stats.sum.has_value():
+            column_stats["sum"] = dbl_stats.sum.value()
         else:
             column_stats["sum"] = None
-    elif str_stats := get_if[string_statistics](&type_specific_stats):
-        if dereference(str_stats).minimum.has_value():
-            column_stats["minimum"] = dereference(
-                str_stats).minimum.value().decode("utf-8")
+    elif str_stats := std_get_if[string_statistics](&type_specific_stats):
+        if str_stats.minimum.has_value():
+            column_stats["minimum"] = str_stats.minimum.value().decode("utf-8")
         else:
             column_stats["minimum"] = None
-        if dereference(str_stats).maximum.has_value():
-            column_stats["maximum"] = dereference(
-                str_stats).maximum.value().decode("utf-8")
+        if str_stats.maximum.has_value():
+            column_stats["maximum"] = str_stats.maximum.value().decode("utf-8")
         else:
             column_stats["maximum"] = None
-        if dereference(str_stats).sum.has_value():
-            column_stats["sum"] = dereference(str_stats).sum.value()
+        if str_stats.sum.has_value():
+            column_stats["sum"] = str_stats.sum.value()
         else:
             column_stats["sum"] = None
-    elif bucket_stats := get_if[bucket_statistics](&type_specific_stats):
-        column_stats["true_count"] = dereference(bucket_stats).count[0]
+    elif bucket_stats := std_get_if[bucket_statistics](&type_specific_stats):
+        column_stats["true_count"] = bucket_stats.count[0]
         column_stats["false_count"] = (
             column_stats["number_of_values"]
             - column_stats["true_count"]
         )
-    elif dec_stats := get_if[decimal_statistics](&type_specific_stats):
-        if dereference(dec_stats).minimum.has_value():
-            column_stats["minimum"] = dereference(
-                dec_stats).minimum.value().decode("utf-8")
+    elif dec_stats := std_get_if[decimal_statistics](&type_specific_stats):
+        if dec_stats.minimum.has_value():
+            column_stats["minimum"] = dec_stats.minimum.value().decode("utf-8")
         else:
             column_stats["minimum"] = None
-        if dereference(dec_stats).maximum.has_value():
-            column_stats["maximum"] = dereference(
-                dec_stats).maximum.value().decode("utf-8")
+        if dec_stats.maximum.has_value():
+            column_stats["maximum"] = dec_stats.maximum.value().decode("utf-8")
         else:
             column_stats["maximum"] = None
-        if dereference(dec_stats).sum.has_value():
-            column_stats["sum"] = dereference(dec_stats).sum.value().decode("utf-8")
+        if dec_stats.sum.has_value():
+            column_stats["sum"] = dec_stats.sum.value().decode("utf-8")
         else:
             column_stats["sum"] = None
-    elif date_stats := get_if[date_statistics](&type_specific_stats):
-        if dereference(date_stats).minimum.has_value():
+    elif date_stats := std_get_if[date_statistics](&type_specific_stats):
+        if date_stats.minimum.has_value():
             column_stats["minimum"] = datetime.datetime.fromtimestamp(
-                datetime.timedelta(
-                    dereference(date_stats).minimum.value()
-                ).total_seconds(),
+                datetime.timedelta(date_stats.minimum.value()).total_seconds(),
                 datetime.timezone.utc,
             )
         else:
             column_stats["minimum"] = None
-        if dereference(date_stats).maximum.has_value():
+        if date_stats.maximum.has_value():
             column_stats["maximum"] = datetime.datetime.fromtimestamp(
-                datetime.timedelta(
-                    dereference(date_stats).maximum.value()
-                ).total_seconds(),
+                datetime.timedelta(date_stats.maximum.value()).total_seconds(),
                 datetime.timezone.utc,
             )
         else:
             column_stats["maximum"] = None
-    elif bin_stats := get_if[binary_statistics](&type_specific_stats):
-        if dereference(bin_stats).sum.has_value():
-            column_stats["sum"] = dereference(bin_stats).sum.value()
+    elif bin_stats := std_get_if[binary_statistics](&type_specific_stats):
+        if bin_stats.sum.has_value():
+            column_stats["sum"] = bin_stats.sum.value()
         else:
             column_stats["sum"] = None
-    elif ts_stats := get_if[timestamp_statistics](&type_specific_stats):
+    elif ts_stats := std_get_if[timestamp_statistics](&type_specific_stats):
         # Before ORC-135, the local timezone offset was included and they were
         # stored as minimum and maximum. After ORC-135, the timestamp is
         # adjusted to UTC before being converted to milliseconds and stored
         # in minimumUtc and maximumUtc.
         # TODO: Support minimum and maximum by reading writer's local timezone
-        if dereference(ts_stats).minimum_utc.has_value() and \
-                dereference(ts_stats).maximum_utc.has_value():
+        if ts_stats.minimum_utc.has_value() and ts_stats.maximum_utc.has_value():
             column_stats["minimum"] = datetime.datetime.fromtimestamp(
-                dereference(ts_stats).minimum_utc.value() / 1000, datetime.timezone.utc
+                ts_stats.minimum_utc.value() / 1000, datetime.timezone.utc
             )
             column_stats["maximum"] = datetime.datetime.fromtimestamp(
-                dereference(ts_stats).maximum_utc.value() / 1000, datetime.timezone.utc
+                ts_stats.maximum_utc.value() / 1000, datetime.timezone.utc
             )
     else:
         raise ValueError("Unsupported statistics type")

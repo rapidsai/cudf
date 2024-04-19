@@ -13,8 +13,7 @@ from cudf._lib.variant cimport monostate, variant
 cdef extern from "cudf/io/orc_metadata.hpp" \
         namespace "cudf::io" nogil:
 
-    cdef cppclass no_statistics(monostate):
-        pass
+    ctypedef monostate no_statistics
 
     cdef cppclass minmax_statistics[T]:
         optional[T] minimum
@@ -46,11 +45,9 @@ cdef extern from "cudf/io/orc_metadata.hpp" \
     ):
         pass
 
-    cdef cppclass date_statistics(minmax_statistics[int32_t]):
-        pass
+    ctypedef minmax_statistics[int32_t] date_statistics
 
-    cdef cppclass binary_statistics(sum_statistics[int64_t]):
-        pass
+    ctypedef sum_statistics[int64_t] binary_statistics
 
     cdef cppclass timestamp_statistics(minmax_statistics[int64_t]):
         optional[int64_t] minimum_utc
@@ -58,9 +55,8 @@ cdef extern from "cudf/io/orc_metadata.hpp" \
         optional[uint32_t] minimum_nanos
         optional[uint32_t] maximum_nanos
 
-    cdef cppclass statistics_type(variant):
-        # This is a std::variant of all the statistics types
-        pass
+    # This is a std::variant of all the statistics types
+    ctypedef variant statistics_type
 
     cdef cppclass column_statistics:
         optional[uint64_t] number_of_values
