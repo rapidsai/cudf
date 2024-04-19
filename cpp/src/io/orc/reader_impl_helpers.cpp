@@ -16,6 +16,8 @@
 
 #include "reader_impl_helpers.hpp"
 
+#include <rmm/resource_ref.hpp>
+
 namespace cudf::io::orc::detail {
 
 std::unique_ptr<column> create_empty_column(size_type orc_col_id,
@@ -111,7 +113,7 @@ column_buffer assemble_buffer(size_type orc_col_id,
                               column_hierarchy const& selected_columns,
                               std::vector<std::vector<column_buffer>>& col_buffers,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   auto const col_id = col_meta.orc_col_map[level][orc_col_id];
   auto& col_buffer  = col_buffers[level][col_id];

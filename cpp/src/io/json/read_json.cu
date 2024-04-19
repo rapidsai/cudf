@@ -25,6 +25,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/scatter.h>
@@ -205,13 +206,17 @@ auto get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& reader_opts,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
+  // TODO remove this if-statement once legacy is removed
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   if (reader_opts.is_enabled_legacy()) {
     return legacy::read_json(sources, reader_opts, stream, mr);
   }
+#pragma GCC diagnostic pop
 
   if (reader_opts.get_byte_range_offset() != 0 or reader_opts.get_byte_range_size() != 0) {
     CUDF_EXPECTS(reader_opts.is_enabled_lines(),

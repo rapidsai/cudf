@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf::detail {
 /**
@@ -35,7 +36,7 @@ std::unique_ptr<column> lower_bound(table_view const& haystack,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr);
+                                    rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::upper_bound
@@ -47,24 +48,24 @@ std::unique_ptr<column> upper_bound(table_view const& haystack,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr);
+                                    rmm::device_async_resource_ref mr);
 
 /**
- * @copydoc cudf::contains(column_view const&, scalar const&, rmm::mr::device_memory_resource*)
+ * @copydoc cudf::contains(column_view const&, scalar const&, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 bool contains(column_view const& haystack, scalar const& needle, rmm::cuda_stream_view stream);
 
 /**
- * @copydoc cudf::contains(column_view const&, column_view const&, rmm::mr::device_memory_resource*)
+ * @copydoc cudf::contains(column_view const&, column_view const&, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr);
+                                 rmm::device_async_resource_ref mr);
 
 /**
  * @brief Check if rows in the given `needles` table exist in the `haystack` table.
@@ -96,6 +97,6 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                    null_equality compare_nulls,
                                    nan_equality compare_nans,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr);
+                                   rmm::device_async_resource_ref mr);
 
 }  // namespace cudf::detail

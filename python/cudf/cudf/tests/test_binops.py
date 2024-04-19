@@ -1710,12 +1710,17 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
     ],
 )
 @pytest.mark.parametrize(
-    "dtype",
-    ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
+    "dtype, components",
+    [
+        ["datetime64[ns]", "00.012345678"],
+        ["datetime64[us]", "00.012345"],
+        ["datetime64[ms]", "00.012"],
+        ["datetime64[s]", "00"],
+    ],
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
 def test_datetime_dateoffset_binaryop(
-    request, n_periods, frequency, dtype, op
+    request, n_periods, frequency, dtype, components, op
 ):
     request.applymarker(
         pytest.mark.xfail(
@@ -1728,9 +1733,9 @@ def test_datetime_dateoffset_binaryop(
     )
 
     date_col = [
-        "2000-01-01 00:00:00.012345678",
-        "2000-01-31 00:00:00.012345678",
-        "2000-02-29 00:00:00.012345678",
+        f"2000-01-01 00:00:{components}",
+        f"2000-01-31 00:00:{components}",
+        f"2000-02-29 00:00:{components}",
     ]
     gsr = cudf.Series(date_col, dtype=dtype)
     psr = gsr.to_pandas()
@@ -1807,14 +1812,21 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
     ],
 )
 @pytest.mark.parametrize(
-    "dtype",
-    ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
+    "dtype, components",
+    [
+        ["datetime64[ns]", "00.012345678"],
+        ["datetime64[us]", "00.012345"],
+        ["datetime64[ms]", "00.012"],
+        ["datetime64[s]", "00"],
+    ],
 )
-def test_datetime_dateoffset_binaryop_reflected(n_periods, frequency, dtype):
+def test_datetime_dateoffset_binaryop_reflected(
+    n_periods, frequency, dtype, components
+):
     date_col = [
-        "2000-01-01 00:00:00.012345678",
-        "2000-01-31 00:00:00.012345678",
-        "2000-02-29 00:00:00.012345678",
+        f"2000-01-01 00:00:{components}",
+        f"2000-01-31 00:00:{components}",
+        f"2000-02-29 00:00:{components}",
     ]
     gsr = cudf.Series(date_col, dtype=dtype)
     psr = gsr.to_pandas()  # converts to nanos

@@ -31,6 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/atomic>
 #include <cuda/functional>
@@ -76,16 +77,16 @@ void print_tree(host_span<SymbolT const> input,
                 tree_meta_t const& d_gpu_tree,
                 rmm::cuda_stream_view stream)
 {
-  print_vec(cudf::detail::make_std_vector_async(d_gpu_tree.node_categories, stream),
+  print_vec(cudf::detail::make_std_vector_sync(d_gpu_tree.node_categories, stream),
             "node_categories",
             to_cat);
-  print_vec(cudf::detail::make_std_vector_async(d_gpu_tree.parent_node_ids, stream),
+  print_vec(cudf::detail::make_std_vector_sync(d_gpu_tree.parent_node_ids, stream),
             "parent_node_ids",
             to_int);
   print_vec(
-    cudf::detail::make_std_vector_async(d_gpu_tree.node_levels, stream), "node_levels", to_int);
-  auto node_range_begin = cudf::detail::make_std_vector_async(d_gpu_tree.node_range_begin, stream);
-  auto node_range_end   = cudf::detail::make_std_vector_async(d_gpu_tree.node_range_end, stream);
+    cudf::detail::make_std_vector_sync(d_gpu_tree.node_levels, stream), "node_levels", to_int);
+  auto node_range_begin = cudf::detail::make_std_vector_sync(d_gpu_tree.node_range_begin, stream);
+  auto node_range_end   = cudf::detail::make_std_vector_sync(d_gpu_tree.node_range_end, stream);
   print_vec(node_range_begin, "node_range_begin", to_int);
   print_vec(node_range_end, "node_range_end", to_int);
   for (int i = 0; i < int(node_range_begin.size()); i++) {
@@ -333,10 +334,11 @@ rmm::device_uvector<NodeIndexT> get_values_column_indices(TreeDepthT const row_a
  * @param stream CUDA stream
  * @return Vector of strings
  */
-std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
-                                              device_span<SymbolOffsetT const> node_range_begin,
-                                              device_span<SymbolOffsetT const> node_range_end,
-                                              rmm::cuda_stream_view stream)
+std::vector<std::string> copy_strings_to_host_sync(
+  device_span<SymbolT const> input,
+  device_span<SymbolOffsetT const> node_range_begin,
+  device_span<SymbolOffsetT const> node_range_end,
+  rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   auto const num_strings = node_range_begin.size();
@@ -371,12 +373,13 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
   auto to_host        = [stream](auto const& col) {
     if (col.is_empty()) return std::vector<std::string>{};
     auto const scv     = cudf::strings_column_view(col);
-    auto const h_chars = cudf::detail::make_std_vector_sync<char>(
+    auto const h_chars = cudf::detail::make_std_vector_async<char>(
       cudf::device_span<char const>(scv.chars_begin(stream), scv.chars_size(stream)), stream);
-    auto const h_offsets = cudf::detail::make_std_vector_sync(
+    auto const h_offsets = cudf::detail::make_std_vector_async(
       cudf::device_span<cudf::size_type const>(scv.offsets().data<cudf::size_type>() + scv.offset(),
                                                scv.size() + 1),
       stream);
+    stream.synchronize();
 
     // build std::string vector from chars and offsets
     std::vector<std::string> host_data;
@@ -479,7 +482,7 @@ void make_device_json_column(device_span<SymbolT const> input,
                              bool is_array_of_arrays,
                              cudf::io::json_reader_options const& options,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -528,8 +531,9 @@ void make_device_json_column(device_span<SymbolT const> input,
   auto column_range_beg =
     cudf::detail::make_std_vector_async(d_column_tree.node_range_begin, stream);
   auto max_row_offsets = cudf::detail::make_std_vector_async(d_max_row_offsets, stream);
-  std::vector<std::string> column_names = copy_strings_to_host(
+  std::vector<std::string> column_names = copy_strings_to_host_sync(
     input, d_column_tree.node_range_begin, d_column_tree.node_range_end, stream);
+  stream.synchronize();
   // array of arrays column names
   if (is_array_of_arrays) {
     TreeDepthT const row_array_children_level = is_enabled_lines ? 1 : 2;
@@ -537,6 +541,7 @@ void make_device_json_column(device_span<SymbolT const> input,
       get_values_column_indices(row_array_children_level, tree, col_ids, num_columns, stream);
     auto h_values_column_indices =
       cudf::detail::make_std_vector_async(values_column_indices, stream);
+    stream.synchronize();
     std::transform(unique_col_ids.begin(),
                    unique_col_ids.end(),
                    column_names.begin(),
@@ -609,7 +614,7 @@ void make_device_json_column(device_span<SymbolT const> input,
 
   std::vector<uint8_t> is_str_column_all_nulls{};
   if (is_enabled_mixed_types_as_string) {
-    is_str_column_all_nulls = cudf::detail::make_std_vector_async(
+    is_str_column_all_nulls = cudf::detail::make_std_vector_sync(
       is_all_nulls_each_column(input, d_column_tree, tree, col_ids, options, stream), stream);
   }
 
@@ -906,7 +911,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
   bool use_dtypes_as_filter,
   std::optional<schema_element> schema,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto validity_size_check = [](device_json_column& json_col) {
@@ -1070,7 +1075,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
 table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
