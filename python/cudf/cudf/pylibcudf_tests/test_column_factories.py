@@ -58,23 +58,7 @@ def pa_type_to_plc_type(pa_type):
     return plc.interop.from_arrow(pa.array([], type=pa_type)).type()
 
 
-@pytest.fixture(
-    scope="module",
-    params=NUMERIC_TYPES,
-    ids=[
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "bool",
-    ],
-)
+@pytest.fixture(scope="module", params=NUMERIC_TYPES, ids=repr)
 def numeric_pa_type(request):
     return request.param
 
@@ -82,7 +66,7 @@ def numeric_pa_type(request):
 @pytest.fixture(
     scope="module",
     params=DECIMAL_TYPES,
-    ids=["decimal128"],
+    ids=repr,
 )
 def fixed_point_pa_type(request):
     return request.param
@@ -91,7 +75,7 @@ def fixed_point_pa_type(request):
 @pytest.fixture(
     scope="module",
     params=TIMESTAMP_TYPES,
-    ids=["s", "ms", "us", "ns"],
+    ids=repr,
 )
 def timestamp_pa_type(request):
     return request.param
@@ -100,7 +84,7 @@ def timestamp_pa_type(request):
 @pytest.fixture(
     scope="module",
     params=DURATION_TYPES,
-    ids=["s", "ms", "us", "ns"],
+    ids=repr,
 )
 def duration_pa_type(request):
     return request.param
