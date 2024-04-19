@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -32,31 +33,54 @@ namespace detail {
 namespace experimental {
 
 /**
+ * @brief Kernel used by make_strings_children for calling the given functor
+ *
+ * @tparam SizeAndExecuteFunction Functor type to call in each thread
+ *
+ * @param fn Functor to call in each thread
+ * @param exec_size Total number of threads to be processed by this kernel
+ * @param d_sizes Output sizes array passed to the functor
+ * @param d_chars Output char buffer passed to the functor
+ * @param d_offsets Offsets to address specific sections of d_chars
+ */
+template <typename SizeAndExecuteFunction>
+CUDF_KERNEL __global__ void strings_children_kernel(SizeAndExecuteFunction fn,
+                                                    size_type exec_size,
+                                                    size_type* d_sizes,
+                                                    char* d_chars,
+                                                    cudf::detail::input_offsetalator d_offsets)
+{
+  auto tid = cudf::detail::grid_1d::global_thread_id();
+  if (tid < exec_size) { fn(tid, d_sizes, d_chars, d_offsets); }
+}
+
+/**
  * @brief Creates child offsets and chars data by applying the template function that
  * can be used for computing the output size of each string as well as create the output
  *
- * The `size_and_exec_fn` is expected to be functor with 3 settable member variables.
+ * The `size_and_exec_fn` is expected declare an operator() function with 4 parameters.
  * @code{.cpp}
  * struct size_and_exec_fn {
- *   size_type* d_sizes;
- *   char* d_chars{};
- *   cudf::detail::input_offsetalator d_offsets;
- *   __device__ void operator()(size_type thread_idx) {
- *      // functor-specific logic to resolve out_idx from thread_idx
- *      if( !d_chars ) {
- *         d_sizes[out_idx] = output_size;
- *      } else {
- *         auto d_output = d_chars + d_offsets[out_idx];
- *         // write characters to d_output
- *      }
+ *   __device__ void operator()(size_type thread_idx,
+ *                              size_type* d_sizes,
+ *                              char* d_chars,
+ *                              input_offsetalator d_offsets)
+ *   {
+ *     // functor-specific logic to resolve out_idx from thread_idx
+ *     if( !d_chars ) {
+ *       d_sizes[out_idx] = output_size;
+ *     } else {
+ *       auto d_output = d_chars + d_offsets[out_idx];
+ *       // write characters to d_output
+ *     }
  *   }
  * };
  * @endcode
  *
- * @tparam SizeAndExecuteFunction Function must accept a row index.
- *         It must also have member `d_sizes` to hold computed row output sizes on the 1st pass
- *         and members `d_offsets` and `d_chars` for the 2nd pass to resolve the output memory
- *         location for each row.
+ * @tparam SizeAndExecuteFunction Functor type with an operator() function accepting 4 parameters:
+ *         `size_type` index of the current thread, `size_type*` to hold computed row
+ *         output sizes on the 1st pass and `char*` and `input_offsetalator`
+ *         for the 2nd pass to resolve the output memory location for each row.
  *
  * @param size_and_exec_fn This is called twice. Once for the output size of each string
  *        and once again to fill in the memory pointed to by d_chars.
@@ -73,35 +97,32 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr)
 {
-  auto output_sizes        = rmm::device_uvector<size_type>(strings_count, stream);
-  size_and_exec_fn.d_sizes = output_sizes.data();
-
   // This is called twice -- once for computing sizes and once for writing chars.
   // Reducing the number of places size_and_exec_fn is inlined speeds up compile time.
-  auto for_each_fn = [exec_size, stream](SizeAndExecuteFunction& size_and_exec_fn) {
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       exec_size,
-                       size_and_exec_fn);
+  auto for_each_fn = [exec_size, stream](SizeAndExecuteFunction& size_and_exec_fn,
+                                         size_type* d_sizes,
+                                         char* d_chars,
+                                         cudf::detail::input_offsetalator d_offsets) {
+    auto constexpr block_size = 256;
+    auto grid                 = cudf::detail::grid_1d{exec_size, block_size};
+    strings_children_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
+      size_and_exec_fn, exec_size, d_sizes, d_chars, d_offsets);
   };
 
   // Compute the output sizes
-  for_each_fn(size_and_exec_fn);
+  auto output_sizes = rmm::device_uvector<size_type>(strings_count, stream);
+  for_each_fn(size_and_exec_fn, output_sizes.data(), nullptr, cudf::detail::input_offsetalator{});
 
   // Convert the sizes to offsets
   auto [offsets_column, bytes] = cudf::strings::detail::make_offsets_child_column(
     output_sizes.begin(), output_sizes.end(), stream, mr);
-  size_and_exec_fn.d_offsets =
-    cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
+  auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
 
   // Now build the chars column
   rmm::device_uvector<char> chars(bytes, stream, mr);
 
   // Execute the function fn again to fill in the chars data.
-  if (bytes > 0) {
-    size_and_exec_fn.d_chars = chars.data();
-    for_each_fn(size_and_exec_fn);
-  }
+  if (bytes > 0) { for_each_fn(size_and_exec_fn, output_sizes.data(), chars.data(), d_offsets); }
 
   return std::pair(std::move(offsets_column), std::move(chars));
 }
@@ -113,24 +134,25 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
  * The `size_and_exec_fn` is expected to be functor with 3 settable member variables.
  * @code{.cpp}
  * struct size_and_exec_fn {
- *   size_type* d_sizes;
- *   char* d_chars{};
- *   cudf::detail::input_offsetalator d_offsets;
- *   __device__ void operator()(size_type idx) {
- *      if( !d_chars ) {
- *         d_sizes[idx] = output_size;
- *      } else {
- *         auto d_output = d_chars + d_offsets[idx];
- *         // write characters to d_output
- *      }
+ *   __device__ void operator()(size_type idx,
+ *                              size_type* d_sizes,
+ *                              char* d_chars,
+ *                              input_offsetalator d_offsets)
+ *   {
+ *     if( !d_chars ) {
+ *       d_sizes[idx] = output_size;
+ *     } else {
+ *       auto d_output = d_chars + d_offsets[idx];
+ *       // write characters to d_output
+ *     }
  *   }
  * };
  * @endcode
  *
- * @tparam SizeAndExecuteFunction Function must accept a row index.
- *         It must also have member `d_sizes` to hold computed row output sizes on the 1st pass
- *         and members `d_offsets` and `d_chars` for the 2nd pass to resolve the output memory
- *         location for each row.
+ * @tparam SizeAndExecuteFunction Functor type with an operator() function accepting 4 parameters:
+ *         `size_type` index of the current thread, `size_type*` to hold computed row
+ *         output sizes on the 1st pass and `char*` and `input_offsetalator`
+ *         for the 2nd pass to resolve the output memory location for each row.
  *
  * @param size_and_exec_fn This is called twice. Once for the output size of each string
  *        and once again to fill in the memory pointed to by d_chars.
