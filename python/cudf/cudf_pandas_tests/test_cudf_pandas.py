@@ -1240,3 +1240,15 @@ def test_super_attribute_lookup():
 
     s = Foo([1, 2, 3])
     assert s.max_times_two() == 6
+
+
+def test_apply_slow_path_udf_references_global_module():
+    def my_apply(df, unused):
+        # `datetime` Raised `KeyError: __import__`
+        datetime.datetime.strptime(df["Minute"], "%H:%M:%S")
+        return pd.to_numeric(1)
+
+    df = xpd.DataFrame({"Minute": ["09:00:00"]})
+    result = df.apply(my_apply, axis=1, unused=True)
+    expected = xpd.Series([1])
+    tm.assert_series_equal(result, expected)
