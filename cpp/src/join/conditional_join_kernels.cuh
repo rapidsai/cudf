@@ -293,10 +293,8 @@ CUDF_KERNEL void conditional_join_anti_semi(
 
   int const warp_id                            = threadIdx.x / detail::warp_size;
   int const lane_id                            = threadIdx.x % detail::warp_size;
-  cudf::thread_index_type const left_num_rows  = left_table.num_rows();
-  cudf::thread_index_type const right_num_rows = right_table.num_rows();
-  cudf::thread_index_type const outer_num_rows = left_num_rows;
-  cudf::thread_index_type const inner_num_rows = right_num_rows;
+  cudf::thread_index_type const outer_num_rows = left_table.num_rows();
+  cudf::thread_index_type const inner_num_rows = right_table.num_rows();
   auto const stride                            = cudf::detail::grid_1d::grid_stride();
   auto const start_idx                         = cudf::detail::grid_1d::global_thread_id();
 
