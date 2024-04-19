@@ -514,7 +514,7 @@ dependencies:
         packages:
           - fsspec>=0.6.0
           - numpy>=1.23,<2.0a0
-          - pandas>=2.0,<2.2.2dev0
+          - pandas>=2.0,<2.2.3dev0
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]

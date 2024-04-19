@@ -251,9 +251,11 @@ class json_reader_options {
   /**
    * @brief Whether the legacy reader should be used.
    *
+   * @deprecated Since 24.06
+   *
    * @returns true if the legacy reader will be used, false otherwise
    */
-  bool is_enabled_legacy() const { return _legacy; }
+  [[deprecated]] bool is_enabled_legacy() const { return _legacy; }
 
   /**
    * @brief Whether the reader should keep quotes of string values.
@@ -350,9 +352,11 @@ class json_reader_options {
   /**
    * @brief Set whether to use the legacy reader.
    *
+   * @deprecated Since 24.06
+   *
    * @param val Boolean value to enable/disable the legacy reader
    */
-  void enable_legacy(bool val) { _legacy = val; }
+  [[deprecated]] void enable_legacy(bool val) { _legacy = val; }
 
   /**
    * @brief Set whether the reader should keep quotes of string values.
@@ -519,10 +523,12 @@ class json_reader_options_builder {
   /**
    * @brief Set whether to use the legacy reader.
    *
+   * @deprecated Since 24.06
+   *
    * @param val Boolean value to enable/disable legacy parsing
    * @return this for chaining
    */
-  json_reader_options_builder& legacy(bool val)
+  [[deprecated]] json_reader_options_builder& legacy(bool val)
   {
     options._legacy = val;
     return *this;
