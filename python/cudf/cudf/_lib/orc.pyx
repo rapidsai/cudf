@@ -213,21 +213,17 @@ cpdef read_parsed_orc_statistics(filepath_or_buffer):
 
     cdef vector[column_statistics] file_stats = parsed.file_stats
     cdef vector[vector[column_statistics]] stripes_stats = parsed.stripes_stats
-    parsed_file_stats = []
-    parsed_stripes_stats = []
 
-    for column_index in range(file_stats.size()):
-        parsed_file_stats.append(
-            _parse_column_type_statistics(file_stats[column_index])
-        )
+    parsed_file_stats = [
+        _parse_column_type_statistics(file_stats[column_index])
+        for column_index in range(file_stats.size())
+    ]
 
-    for stripe_index in range(stripes_stats.size()):
-        stripe_stats = []
-        for column_index in range(stripes_stats[stripe_index].size()):
-            stripe_stats.append(
-                _parse_column_type_statistics(stripes_stats[stripe_index][column_index])
-            )
-        parsed_stripes_stats.append(stripe_stats)
+    parsed_stripes_stats = [
+        [_parse_column_type_statistics(stripes_stats[stripe_index][column_index])
+         for column_index in range(stripes_stats[stripe_index].size())]
+        for stripe_index in range(stripes_stats.size())
+    ]
 
     return parsed.column_names, parsed_file_stats, parsed_stripes_stats
 
