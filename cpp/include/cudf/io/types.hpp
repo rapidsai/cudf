@@ -602,6 +602,7 @@ class column_in_metadata {
   bool _list_column_is_map  = false;
   bool _use_int96_timestamp = false;
   bool _output_as_binary    = false;
+  bool _skip_compression    = false;
   std::optional<uint8_t> _decimal_precision;
   std::optional<int32_t> _parquet_field_id;
   std::vector<column_in_metadata> children;
@@ -719,6 +720,19 @@ class column_in_metadata {
     } else if (!_output_as_binary and children.size() == 2) {
       children.pop_back();
     }
+    return *this;
+  }
+
+  /**
+   * @brief Specifies whether this column should not be compressed regardless of the compression
+   * codec specified for the file.
+   *
+   * @param skip If `true` do not compress this column
+   * @return this for chaining
+   */
+  column_in_metadata& set_skip_compression(bool skip) noexcept
+  {
+    _skip_compression = skip;
     return *this;
   }
 
@@ -843,6 +857,13 @@ class column_in_metadata {
    * @return Boolean indicating whether to encode this column as binary data
    */
   [[nodiscard]] bool is_enabled_output_as_binary() const noexcept { return _output_as_binary; }
+
+  /**
+   * @brief Get whether to skip compressing this column
+   *
+   * @return Boolean indicating whether to skip compression of this column
+   */
+  [[nodiscard]] bool is_enabled_skip_compression() const noexcept { return _skip_compression; }
 
   /**
    * @brief Get the encoding that was set for this column.
