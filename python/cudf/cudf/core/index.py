@@ -1714,7 +1714,15 @@ class DatetimeIndex(Index):
             raise TypeError("dtype must be a datetime type")
 
         name = _setdefault_name(data, name=name)["name"]
-        data = column.as_column(data, dtype=dtype)
+        data = column.as_column(data)
+
+        # TODO: Remove this if statement and fix tests now that
+        # there's timezone support
+        if isinstance(data.dtype, pd.DatetimeTZDtype):
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
+        data = data.astype(dtype)
 
         if copy:
             data = data.copy()
@@ -2624,9 +2632,9 @@ class CategoricalIndex(Index):
         elif isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
             data = data.set_categories(dtype.categories, ordered=ordered)
         elif ordered is True and data.ordered is False:
-            data = data.as_ordered()
+            data = data.as_ordered(ordered=True)
         elif ordered is False and data.ordered is True:
-            data = data.as_unordered()
+            data = data.as_ordered(ordered=False)
         super().__init__(data, **kwargs)
 
     @property  # type: ignore
@@ -2643,7 +2651,7 @@ class CategoricalIndex(Index):
         """
         The categories of this categorical.
         """
-        return as_index(self._values.categories)
+        return self.dtype.categories
 
     def _is_boolean(self):
         return False

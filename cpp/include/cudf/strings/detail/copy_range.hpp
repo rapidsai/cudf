@@ -19,6 +19,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -53,7 +54,7 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
                                    size_type source_end,
                                    size_type target_begin,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr);
+                                   rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace strings
