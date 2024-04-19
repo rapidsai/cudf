@@ -170,14 +170,14 @@ struct JsonReaderTest : public cudf::test::BaseFixture {};
  */
 enum class json_test_t {
   // Run test with the nested JSON lines reader using record-orient input data
-  json_experimental_record_orient,
+  json_record_orient,
   // Run test with the nested JSON lines reader using row-orient input data
-  json_experimental_row_orient
+  json_row_orient
 };
 
 constexpr bool is_row_orient_test(json_test_t test_opt)
 {
-  return test_opt == json_test_t::json_experimental_row_orient;
+  return test_opt == json_test_t::json_row_orient;
 }
 
 /**
@@ -267,13 +267,13 @@ TYPED_TEST_SUITE(JsonValidFixedPointReaderTest, cudf::test::FixedPointTypes);
 // Parametrize qualifying JSON tests for executing both nested reader and legacy JSON lines reader
 INSTANTIATE_TEST_CASE_P(JsonReaderParamTest,
                         JsonReaderParamTest,
-                        ::testing::Values(json_test_t::json_experimental_record_orient,
-                                          json_test_t::json_experimental_row_orient));
+                        ::testing::Values(json_test_t::json_record_orient,
+                                          json_test_t::json_row_orient));
 
 // Parametrize qualifying JSON tests for executing both nested reader and legacy JSON lines reader
 INSTANTIATE_TEST_CASE_P(JsonReaderRecordTest,
                         JsonReaderRecordTest,
-                        ::testing::Values(json_test_t::json_experimental_record_orient));
+                        ::testing::Values(json_test_t::json_record_orient));
 
 TEST_P(JsonReaderParamTest, BasicJsonLines)
 {
@@ -1223,9 +1223,9 @@ TEST_F(JsonReaderTest, DISABLED_BadDtypeParams)
   EXPECT_THROW(cudf::io::read_json(options_map), cudf::logic_error);
 }
 
-TEST_F(JsonReaderTest, JsonExperimentalBasic)
+TEST_F(JsonReaderTest, JsonBasic)
 {
-  std::string const fname = temp_env->get_temp_dir() + "JsonExperimentalBasic.json";
+  std::string const fname = temp_env->get_temp_dir() + "JsonBasic.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << R"([{"a":"11", "b":"1.1"},{"a":"22", "b":"2.2"}])";
   outfile.close();
@@ -1249,7 +1249,7 @@ TEST_F(JsonReaderTest, JsonExperimentalBasic)
                                  cudf::test::strings_column_wrapper({"1.1", "2.2"}));
 }
 
-TEST_F(JsonReaderTest, JsonExperimentalLines)
+TEST_F(JsonReaderTest, JsonLines)
 {
   std::string const json_string =
     R"({"a":"a0"}
@@ -1416,7 +1416,7 @@ TEST_F(JsonReaderTest, TokenAllocation)
   }
 }
 
-TEST_F(JsonReaderTest, ExperimentalLinesNoOmissions)
+TEST_F(JsonReaderTest, LinesNoOmissions)
 {
   std::array<std::string const, 4> const json_inputs
     // single column
