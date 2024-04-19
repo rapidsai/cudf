@@ -849,7 +849,23 @@ class _FastSlowAttribute:
                 fast_attr = getattr(
                     owner._fsproxy_fast, self._name, _Unusable()
                 )
-            slow_attr = getattr(owner._fsproxy_slow, self._name)
+
+            # if self._name in {"_data", "_mask", "storage", "css", "ctx"}:
+            #     return _maybe_wrap_result(
+            #             getattr(instance._fsproxy_slow, self._name),
+            #             None,  # type: ignore
+            #         )
+            # else:
+            try:
+                slow_attr = getattr(owner._fsproxy_slow, self._name)
+            except AttributeError as e:
+                if instance is not None:
+                    return _maybe_wrap_result(
+                        getattr(instance._fsproxy_slow, self._name),
+                        None,  # type: ignore
+                    )
+                else:
+                    raise e
 
             if _is_function_or_method(slow_attr):
                 self._attr = _MethodProxy(fast_attr, slow_attr)

@@ -221,6 +221,8 @@ Index = make_final_proxy_type(
         "_constructor": _FastSlowAttribute("_constructor"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_accessors": set(),
+        "_data": _FastSlowAttribute("_data"),
+        "_mask": _FastSlowAttribute("_mask"),
     },
 )
 
@@ -285,7 +287,11 @@ DatetimeIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "_data": _FastSlowAttribute("_data"),
+        "_mask": _FastSlowAttribute("_mask"),
+    },
 )
 
 DatetimeArray = make_final_proxy_type(
@@ -294,6 +300,10 @@ DatetimeArray = make_final_proxy_type(
     pd.arrays.DatetimeArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_data": _FastSlowAttribute("_data"),
+        "_mask": _FastSlowAttribute("_mask"),
+    },
 )
 
 DatetimeTZDtype = make_final_proxy_type(
@@ -312,7 +322,11 @@ TimedeltaIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "_data": _FastSlowAttribute("_data"),
+        "_mask": _FastSlowAttribute("_mask"),
+    },
 )
 
 TimedeltaArray = make_final_proxy_type(
@@ -321,6 +335,10 @@ TimedeltaArray = make_final_proxy_type(
     pd.arrays.TimedeltaArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_data": _FastSlowAttribute("_data"),
+        "_mask": _FastSlowAttribute("_mask"),
+    },
 )
 
 PeriodIndex = make_final_proxy_type(
@@ -330,7 +348,11 @@ PeriodIndex = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "_data": _FastSlowAttribute("_data"),
+        "_mask": _FastSlowAttribute("_mask"),
+    },
 )
 
 PeriodArray = make_final_proxy_type(
@@ -339,6 +361,10 @@ PeriodArray = make_final_proxy_type(
     pd.arrays.PeriodArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_data": _FastSlowAttribute("_data"),
+        "_mask": _FastSlowAttribute("_mask"),
+    },
 )
 
 PeriodDtype = make_final_proxy_type(
@@ -400,6 +426,10 @@ StringArray = make_final_proxy_type(
     pd.arrays.StringArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_data": _FastSlowAttribute("_data"),
+        "_mask": _FastSlowAttribute("_mask"),
+    },
 )
 
 StringDtype = make_final_proxy_type(
@@ -408,7 +438,10 @@ StringDtype = make_final_proxy_type(
     pd.StringDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "storage": _FastSlowAttribute("storage"),
+    },
 )
 
 BooleanArray = make_final_proxy_type(
@@ -418,7 +451,9 @@ BooleanArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+        "_data": _FastSlowAttribute("_data"),
+        "_mask": _FastSlowAttribute("_mask"),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
 
@@ -438,7 +473,9 @@ IntegerArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "_data": _FastSlowAttribute("_data"),
+        "_mask": _FastSlowAttribute("_mask"),
     },
 )
 
@@ -522,7 +559,11 @@ IntervalIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "_data": _FastSlowAttribute("_data"),
+        "_mask": _FastSlowAttribute("_mask"),
+    },
 )
 
 IntervalArray = make_final_proxy_type(
@@ -531,6 +572,10 @@ IntervalArray = make_final_proxy_type(
     pd.arrays.IntervalArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_data": _FastSlowAttribute("_data"),
+        "_mask": _FastSlowAttribute("_mask"),
+    },
 )
 
 IntervalDtype = make_final_proxy_type(
@@ -558,7 +603,9 @@ FloatingArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "_data": _FastSlowAttribute("_data"),
+        "_mask": _FastSlowAttribute("_mask"),
     },
 )
 
@@ -734,6 +781,11 @@ try:
         pd_Styler,
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
+        additional_attributes={
+            "css": _FastSlowAttribute("css"),
+            "ctx": _FastSlowAttribute("ctx"),
+            "index": _FastSlowAttribute("ctx"),
+        },
     )
 except ImportError:
     # Styler requires Jinja to be installed
