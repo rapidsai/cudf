@@ -302,7 +302,7 @@ CUDF_KERNEL void conditional_join_anti_semi(
 
   __syncwarp();
 
-  unsigned int const activemask = __ballot_sync(0xffff'ffffu, start_idx < left_num_rows);
+  unsigned int const activemask = __ballot_sync(0xffff'ffffu, start_idx < outer_num_rows);
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
