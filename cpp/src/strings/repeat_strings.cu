@@ -108,14 +108,19 @@ struct compute_size_and_repeat_fn {
   column_device_view const strings_dv;
   size_type const repeat_times;
   bool const has_nulls;
-  size_type* d_sizes{};
-  // If d_chars == nullptr: only compute sizes of the output strings.
-  // If d_chars != nullptr: only repeat strings.
-  char* d_chars{};
-  cudf::detail::input_offsetalator d_offsets{};
 
-  // `idx` will be in the range of [0, repeat_times * strings_count).
-  __device__ void operator()(size_type const idx) const noexcept
+  /**
+   * @brief Called by make_strings_children to build output
+   *
+   * @param idx Thread index in the range [0,repeat_times * strings_count)
+   * @param d_sizes Return output size here in 1st call (d_chars==nullptr)
+   * @param d_chars Write output here in 2nd call
+   * @param d_offsets Offsets to address output row within d_chars
+   */
+  __device__ void operator()(size_type idx,
+                             size_type* d_sizes,
+                             char* d_chars,
+                             cudf::detail::input_offsetalator d_offsets) const noexcept
   {
     auto const str_idx    = idx / repeat_times;  // value cycles in [0, string_count)
     auto const repeat_idx = idx % repeat_times;  // value cycles in [0, repeat_times)
@@ -183,13 +188,18 @@ struct compute_sizes_and_repeat_fn {
   bool const strings_has_nulls;
   bool const rtimes_has_nulls;
 
-  size_type* d_sizes{nullptr};
-  // If d_chars == nullptr: only compute sizes of the output strings.
-  // If d_chars != nullptr: only repeat strings.
-  char* d_chars{};
-  cudf::detail::input_offsetalator d_offsets{};
-
-  __device__ void operator()(size_type const idx) const noexcept
+  /**
+   * @brief Called by make_strings_children to build output
+   *
+   * @param idx Row index
+   * @param d_sizes Return output size here in 1st call (d_chars==nullptr)
+   * @param d_chars Write output here in 2nd call
+   * @param d_offsets Offsets to address output row within d_chars
+   */
+  __device__ void operator()(size_type idx,
+                             size_type* d_sizes,
+                             char* d_chars,
+                             cudf::detail::input_offsetalator d_offsets) const noexcept
   {
     auto const string_is_valid = !strings_has_nulls || strings_dv.is_valid_nocheck(idx);
     auto const rtimes_is_valid = !rtimes_has_nulls || repeat_times_dv.is_valid_nocheck(idx);
