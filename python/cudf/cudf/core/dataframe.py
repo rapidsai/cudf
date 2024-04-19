@@ -5535,8 +5535,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 descr = {
                     "kind": "range",
                     "name": index.name,
-                    "start": index._start,
-                    "stop": index._stop,
+                    "start": index.start,
+                    "stop": index.stop,
                     "step": 1,
                 }
             else:
