@@ -274,6 +274,7 @@ struct schema_tree_node : public SchemaElement {
   statistics_dtype stats_dtype;
   int32_t ts_scale;
   column_encoding requested_encoding;
+  bool skip_compression;
 
   // TODO(fut): Think about making schema a class that holds a vector of schema_tree_nodes. The
   // function construct_schema_tree could be its constructor. It can have method to get the per
@@ -698,6 +699,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         set_field_id(col_schema, col_meta);
         set_encoding(col_schema, col_meta);
         col_schema.output_as_byte_array = col_meta.is_enabled_output_as_binary();
+        col_schema.skip_compression     = col_meta.is_enabled_skip_compression();
         schema.push_back(col_schema);
       } else if (col->type().id() == type_id::STRUCT) {
         // if struct, add current and recursively call for all children
@@ -833,6 +835,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         col_schema.leaf_column = col;
         set_field_id(col_schema, col_meta);
         set_encoding(col_schema, col_meta);
+        col_schema.skip_compression = col_meta.is_enabled_skip_compression();
         schema.push_back(col_schema);
       }
     };
@@ -1023,6 +1026,7 @@ parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_stream
   desc.max_def_level      = _max_def_level;
   desc.max_rep_level      = _max_rep_level;
   desc.requested_encoding = schema_node.requested_encoding;
+  desc.skip_compression   = schema_node.skip_compression;
   return desc;
 }
 
