@@ -555,7 +555,7 @@ class parquet_writer_options {
   // Maximum size of min or max values in column index
   int32_t _column_index_truncate_length = default_column_index_truncate_length;
   // When to use dictionary encoding for data
-  dictionary_policy _dictionary_policy = dictionary_policy::ALWAYS;
+  dictionary_policy _dictionary_policy = dictionary_policy::ADAPTIVE;
   // Maximum size of column chunk dictionary (in bytes)
   size_t _max_dictionary_size = default_max_dictionary_size;
   // Maximum number of rows in a page fragment
