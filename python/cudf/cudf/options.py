@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import os
 import textwrap
@@ -152,11 +152,6 @@ def _make_contains_validator(valid_options: Container) -> Callable:
 
 
 def _cow_validator(val):
-    if get_option("spill") and val:
-        raise ValueError(
-            "Copy-on-write is not supported when spilling is enabled. "
-            "Please set `spill` to `False`"
-        )
     if val not in {False, True}:
         raise ValueError(
             f"{val} is not a valid option. Must be one of {{False, True}}."
@@ -164,14 +159,6 @@ def _cow_validator(val):
 
 
 def _spill_validator(val):
-    try:
-        if get_option("copy_on_write") and val:
-            raise ValueError(
-                "Spilling is not supported when copy-on-write is enabled. "
-                "Please set `copy_on_write` to `False`"
-            )
-    except KeyError:
-        pass
     if val not in {False, True}:
         raise ValueError(
             f"{val} is not a valid option. Must be one of {{False, True}}."
