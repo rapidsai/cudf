@@ -155,6 +155,15 @@ def _index_from_columns(
     return _index_from_data(dict(zip(range(len(columns)), columns)), name=name)
 
 
+def validate_range_arg(arg, arg_name: Literal["start", "stop", "step"]) -> int:
+    """Validate start/stop/step argument in RangeIndex.__init__"""
+    if not is_integer(arg):
+        raise TypeError(
+            f"{arg_name} must be an integer, not {type(arg).__name__}"
+        )
+    return int(arg)
+
+
 class RangeIndex(BaseIndex, BinaryOperand):
     """
     Immutable Index implementing a monotonic integer range.
@@ -214,22 +223,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
         else:
             if stop is None:
                 start, stop = 0, start
-            if not is_integer(start):
-                raise TypeError(
-                    f"start must be an integer, not {type(start).__name__}"
-                )
-            start = int(start)
-            if not is_integer(stop):
-                raise TypeError(
-                    f"stop must be an integer, not {type(stop).__name__}"
-                )
-            stop = int(stop)
+            start = validate_range_arg(start, "start")
+            stop = validate_range_arg(stop, "stop")
             if step is not None:
-                if not is_integer(step):
-                    raise TypeError(
-                        f"step must be an integer, not {type(step).__name__}"
-                    )
-                step = int(step)
+                step = validate_range_arg(step, "step")
             else:
                 step = 1
             self._range = range(start, stop, step)
