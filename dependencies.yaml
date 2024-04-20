@@ -286,13 +286,9 @@ dependencies:
       - output_types: conda
         packages:
           - &rmm_conda rmm==24.6.*
-          - &protobuf protobuf>=3.20,<5
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
-      - output_types: [requirements, pyproject]
-        packages:
-          - protoc-wheel
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -525,7 +521,6 @@ dependencies:
           - packaging
           - rich
           - typing_extensions>=4.0.0
-          - *protobuf
       - output_types: conda
         packages:
           - *rmm_conda
