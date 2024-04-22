@@ -621,7 +621,7 @@ TEST_F(JsonTest, TokenStream2)
 }
 
 struct JsonParserTest : public cudf::test::BaseFixture, public testing::WithParamInterface<bool> {};
-INSTANTIATE_TEST_SUITE_P(Experimental, JsonParserTest, testing::Bool());
+INSTANTIATE_TEST_SUITE_P(IsFullGPU, JsonParserTest, testing::Bool());
 
 TEST_P(JsonParserTest, ExtractColumn)
 {
