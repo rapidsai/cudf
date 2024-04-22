@@ -5574,10 +5574,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
 
         out = super(DataFrame, data).to_arrow()
+        # import pdb; pdb.set_trace()
         metadata = pa.pandas_compat.construct_metadata(
             columns_to_convert=[self[col] for col in self._data.names],
             df=self,
-            column_names=list(self.columns),
+            column_names=out.schema.names,
             index_levels=index_levels,
             index_descriptors=index_descr,
             preserve_index=preserve_index,
