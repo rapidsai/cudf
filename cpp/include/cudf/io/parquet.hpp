@@ -1067,7 +1067,7 @@ class parquet_writer_options_builder {
    * dictionary_policy::ALWAYS will allow the use of dictionary encoding even if it will result in
    * the disabling of compression for columns that would otherwise be compressed.
    *
-   * The default value is dictionary_policy::ALWAYS.
+   * The default value is dictionary_policy::ADAPTIVE.
    *
    * @param val policy for dictionary use
    * @return this for chaining
