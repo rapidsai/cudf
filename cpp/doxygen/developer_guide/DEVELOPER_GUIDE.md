@@ -194,7 +194,7 @@ and produce `unique_ptr`s to owning objects as output. For example,
 std::unique_ptr<table> sort(table_view const& input);
 ```
 
-## Memory Resources (`rmm::device_memory_resource`)
+## Memory Resources
 
 libcudf allocates all device memory via RMM memory resources (MR) or CUDA MRs. Either type
 can be passed to libcudf functions via `rmm::device_async_resource_ref` parameters. See the
