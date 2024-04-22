@@ -784,7 +784,8 @@ template <typename SymbolT>
 struct to_string_view_pair {
   SymbolT const* data;
   to_string_view_pair(SymbolT const* _data) : data(_data) {}
-  __device__ thrust::pair<char const*, std::size_t> operator()(thrust::tuple<size_type, size_type> ip)
+  __device__ thrust::pair<char const*, std::size_t> operator()(
+    thrust::tuple<size_type, size_type> ip)
   {
     return thrust::pair<char const*, std::size_t>{data + thrust::get<0>(ip),
                                                   static_cast<std::size_t>(thrust::get<1>(ip))};
