@@ -31,6 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/atomic>
 #include <cuda/functional>
@@ -481,7 +482,7 @@ void make_device_json_column(device_span<SymbolT const> input,
                              bool is_array_of_arrays,
                              cudf::io::json_reader_options const& options,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -893,7 +894,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
   cudf::io::parse_options const& options,
   std::optional<schema_element> schema,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto validity_size_check = [](device_json_column& json_col) {
@@ -1050,7 +1051,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
 table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
