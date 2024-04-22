@@ -50,6 +50,9 @@ struct concat_strings_base {
   table_device_view const d_table;
   string_scalar_device_view const d_narep;
   separator_on_nulls separate_nulls;
+  size_type* d_sizes;
+  char* d_chars;
+  cudf::detail::input_offsetalator d_offsets;
 
   /**
    * @brief Concatenate each table row to a single output string.
@@ -61,11 +64,7 @@ struct concat_strings_base {
    * @param idx The current row to process
    * @param d_separator String to place in between each column's row
    */
-  __device__ void process_row(size_type idx,
-                              string_view const d_separator,
-                              size_type* d_sizes,
-                              char* d_chars,
-                              cudf::detail::input_offsetalator d_offsets)
+  __device__ void process_row(size_type idx, string_view const d_separator)
   {
     if (!d_narep.is_valid() &&
         thrust::any_of(thrust::seq, d_table.begin(), d_table.end(), [idx](auto const& col) {
@@ -116,13 +115,7 @@ struct concat_strings_fn : concat_strings_base {
   {
   }
 
-  __device__ void operator()(std::size_t idx,
-                             size_type* d_sizes,
-                             char* d_chars,
-                             cudf::detail::input_offsetalator d_offsets)
-  {
-    process_row(idx, d_separator, d_sizes, d_chars, d_offsets);
-  }
+  __device__ void operator()(std::size_t idx) { process_row(idx, d_separator); }
 };
 
 }  // namespace
@@ -194,10 +187,7 @@ struct multi_separator_concat_fn : concat_strings_base {
   {
   }
 
-  __device__ void operator()(size_type idx,
-                             size_type* d_sizes,
-                             char* d_chars,
-                             cudf::detail::input_offsetalator d_offsets)
+  __device__ void operator()(size_type idx)
   {
     if (d_separators.is_null(idx) && !d_separator_narep.is_valid()) {
       if (!d_chars) { d_sizes[idx] = 0; }
@@ -207,7 +197,7 @@ struct multi_separator_concat_fn : concat_strings_base {
     auto const d_separator = d_separators.is_valid(idx) ? d_separators.element<string_view>(idx)
                                                         : d_separator_narep.value();
     // base class utility function handles the rest
-    process_row(idx, d_separator, d_sizes, d_chars, d_offsets);
+    process_row(idx, d_separator);
   }
 };
 
