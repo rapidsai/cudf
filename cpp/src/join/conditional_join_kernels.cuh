@@ -361,6 +361,7 @@ CUDF_KERNEL void conditional_join_anti_semi(
                                                        join_shared_l,
                                                        join_output_l);
     }
+    if (found_match) break;
   }
 }
 

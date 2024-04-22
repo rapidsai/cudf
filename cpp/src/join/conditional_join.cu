@@ -46,17 +46,15 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto const right_num_rows{right.num_rows()};
-  auto const left_num_rows{left.num_rows()};
-  if (right_num_rows == 0) {
+  if (right.num_rows() == 0) {
     switch (join_type) {
       case join_kind::LEFT_ANTI_JOIN:
-        return std::make_unique<rmm::device_uvector<size_type>>(left_num_rows, stream, mr);
+        return std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
       case join_kind::LEFT_SEMI_JOIN:
         return std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
       default: CUDF_FAIL("Invalid join kind."); break;
     }
-  } else if (left_num_rows == 0) {
+  } else if (left.num_rows() == 0) {
     switch (join_type) {
       case join_kind::LEFT_ANTI_JOIN: [[fallthrough]];
       case join_kind::LEFT_SEMI_JOIN:
@@ -75,7 +73,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
   auto left_table  = table_device_view::create(left, stream);
   auto right_table = table_device_view::create(right, stream);
 
-  detail::grid_1d const config(left_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
+  detail::grid_1d const config(left.num_rows(), DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
   // TODO: Remove the output_size parameter. It is not needed because the
@@ -98,7 +96,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
     join_size = size.value(stream);
   }
 
-  if (left_num_rows == 0) {
+  if (left.num_rows() == 0) {
     return std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
   }
 
