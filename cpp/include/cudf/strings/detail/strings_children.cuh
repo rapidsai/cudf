@@ -164,22 +164,22 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
     });
   auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
   // Use the sizes-to-offsets iterator to compute the total number of elements
-  auto const total_elements =
+  auto const total_bytes =
     cudf::detail::sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets, stream);
 
-  // TODO: replace exception with if-statement when enabling creating INT64 offsets
-  CUDF_EXPECTS(total_elements <= size_type_max,
-               "Size of output exceeds the character size limit",
+  auto const threshold = get_offset64_threshold();
+  CUDF_EXPECTS(is_large_strings_enabled() || (total_bytes < threshold),
+               "Size of output exceeds the column size limit",
                std::overflow_error);
-  // if (total_elements >= get_offset64_threshold()) {
-  //   // recompute as int64 offsets when above the threshold
-  //   offsets_column = make_numeric_column(
-  //     data_type{type_id::INT64}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
-  //   auto d_offsets64 = offsets_column->mutable_view().template data<int64_t>();
-  //   sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets64, stream);
-  // }
+  if (total_bytes >= get_offset64_threshold()) {
+    // recompute as int64 offsets when above the threshold
+    offsets_column = make_numeric_column(
+      data_type{type_id::INT64}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+    auto d_offsets64 = offsets_column->mutable_view().template data<int64_t>();
+    cudf::detail::sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets64, stream);
+  }
 
-  return std::pair(std::move(offsets_column), total_elements);
+  return std::pair(std::move(offsets_column), total_bytes);
 }
 
 }  // namespace detail

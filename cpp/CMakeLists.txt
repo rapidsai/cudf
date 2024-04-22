@@ -586,6 +586,7 @@ add_library(
   src/strings/filling/fill.cu
   src/strings/filter_chars.cu
   src/strings/like.cu
+  src/strings/merge/merge.cu
   src/strings/padding.cu
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cpp
