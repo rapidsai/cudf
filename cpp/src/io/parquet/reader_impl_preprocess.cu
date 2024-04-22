@@ -452,9 +452,9 @@ std::string encoding_to_string(Encoding encoding)
 [[nodiscard]] std::string list_unsupported_encodings(device_span<PageInfo const> pages,
                                                      rmm::cuda_stream_view stream)
 {
-  auto const to_mask = [] __device__(auto const& page) {
+  auto const to_mask = cuda::proclaim_return_type<uint32_t>([] __device__(auto const& page) {
     return is_supported_encoding(page.encoding) ? 0U : encoding_to_mask(page.encoding);
-  };
+  });
   uint32_t const unsupported = thrust::transform_reduce(
     rmm::exec_policy(stream), pages.begin(), pages.end(), to_mask, 0U, thrust::bit_or<uint32_t>());
   return encoding_bitmask_to_str(unsupported);
