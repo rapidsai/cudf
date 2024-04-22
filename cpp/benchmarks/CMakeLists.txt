@@ -236,7 +236,9 @@ ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
 # ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
 ConfigureBench(MERGE_BENCH merge/merge.cpp)
-ConfigureNVBench(MERGE_NVBENCH merge/merge_structs.cpp merge/merge_lists.cpp)
+ConfigureNVBench(
+  MERGE_NVBENCH merge/merge_lists.cpp merge/merge_structs.cpp merge/merge_strings.cpp
+)
 
 # ##################################################################################################
 # * null_mask benchmark ---------------------------------------------------------------------------
@@ -331,7 +333,7 @@ ConfigureNVBench(
 ConfigureBench(JSON_BENCH json/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
 ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
-ConfigureNVBench(JSON_READER_OPTION io/json/json_reader_option.cpp)
+ConfigureNVBench(JSON_READER_OPTION_NVBENCH io/json/json_reader_option.cpp)
 ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)
 
 # ##################################################################################################
