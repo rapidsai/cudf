@@ -384,18 +384,6 @@ def _cudf_to_table(obj, preserve_index=None, **kwargs):
             "Ignoring the following arguments to "
             f"`to_pyarrow_table_dispatch`: {list(kwargs)}"
         )
-
-    # TODO: Remove this logic when cudf#14159 is resolved
-    # (see: https://github.com/rapidsai/cudf/issues/14159)
-    if preserve_index and isinstance(obj.index, cudf.RangeIndex):
-        obj = obj.copy()
-        obj.index.name = (
-            obj.index.name
-            if obj.index.name is not None
-            else "__index_level_0__"
-        )
-        obj.index = obj.index._as_int_index()
-
     return obj.to_arrow(preserve_index=preserve_index)
 
 
@@ -408,15 +396,7 @@ def _table_to_cudf(obj, table, self_destruct=None, **kwargs):
             f"Ignoring the following arguments to "
             f"`from_pyarrow_table_dispatch`: {list(kwargs)}"
         )
-    result = obj.from_arrow(table)
-
-    # TODO: Remove this logic when cudf#14159 is resolved
-    # (see: https://github.com/rapidsai/cudf/issues/14159)
-    if "__index_level_0__" in result.index.names:
-        assert len(result.index.names) == 1
-        result.index.name = None
-
-    return result
+    return obj.from_arrow(table)
 
 
 @union_categoricals_dispatch.register((cudf.Series, cudf.BaseIndex))
