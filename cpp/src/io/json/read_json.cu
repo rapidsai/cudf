@@ -158,7 +158,6 @@ size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::data
     sources_size(sources, reader_opts.get_byte_range_offset(), reader_opts.get_byte_range_size()) +
     (sources.size() - 1);
   rmm::device_uvector<char> buffer(total_source_size, stream);
-  // auto bufptr          = std::make_unique<rmm::device_uvector<char>>(total_source_size, stream);
   ingest_raw_input(buffer,
                    sources,
                    reader_opts.get_compression(),
@@ -187,7 +186,7 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
   rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  auto geometric_mean = [](double a, double b) { return std::pow(a * b, 0.5); };
+  auto geometric_mean = [](double a, double b) { return std::sqrt(a * b); };
 
   size_t const total_source_size            = sources_size(sources, 0, 0);
   auto constexpr num_delimiter_chars        = 1;
