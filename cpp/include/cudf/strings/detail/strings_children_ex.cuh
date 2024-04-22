@@ -39,12 +39,9 @@ namespace experimental {
  *
  * @param fn Functor to call in each thread
  * @param exec_size Total number of threads to be processed by this kernel
- * @param d_sizes Output sizes array passed to the functor
- * @param d_chars Output char buffer passed to the functor
- * @param d_offsets Offsets to address specific sections of d_chars
  */
 template <typename SizeAndExecuteFunction>
-CUDF_KERNEL __global__ void strings_children_kernel(SizeAndExecuteFunction fn, size_type exec_size)
+CUDF_KERNEL void strings_children_kernel(SizeAndExecuteFunction fn, size_type exec_size)
 {
   auto tid = cudf::detail::grid_1d::global_thread_id();
   if (tid < exec_size) { fn(tid); }
