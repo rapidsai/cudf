@@ -186,6 +186,7 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
   json_reader_options const& reader_opts,
   rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   auto geometric_mean = [](double a, double b) { return std::pow(a * b, 0.5); };
 
   size_t const total_source_size            = sources_size(sources, 0, 0);
@@ -197,7 +198,7 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
 
   CUDF_EXPECTS(total_source_size ? chunk_offset < total_source_size : !chunk_offset,
                "Invalid offsetting");
-  auto should_load_all_sources = !chunk_size || chunk_size > total_source_size - chunk_offset;
+  auto should_load_all_sources = !chunk_size || chunk_size >= total_source_size - chunk_offset;
   chunk_size =
     should_load_all_sources ? total_source_size - chunk_offset + num_extra_delimiters : chunk_size;
 
