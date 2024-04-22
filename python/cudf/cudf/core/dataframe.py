@@ -4379,7 +4379,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1 2018-10-08
 
         .. pandas-compat::
-            :meth:`pandas.DataFrame.query`
+            **DataFrame.query**
 
             One difference from pandas is that ``query`` currently only
             supports numeric, datetime, timedelta, or bool dtypes.
@@ -7543,8 +7543,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         The interleaved columns as a single column
 
         .. pandas-compat::
+            **DataFrame.interleave_columns**
+
             This method does not exist in pandas but it can be run
-            as `pd.Series(np.vstack(df.to_numpy()).reshape((-1,)))`.
+            as ``pd.Series(np.vstack(df.to_numpy()).reshape((-1,)))``.
         """
         if ("category" == self.dtypes).any():
             raise ValueError(
