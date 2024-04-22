@@ -35,7 +35,10 @@ struct JsonWSNormalizationTest : public cudf::test::BaseFixture {};
 
 void run_test(std::string const& host_input, std::string const& expected_host_output)
 {
-  auto stream_view  = cudf::get_default_stream();
+  // Prepare cuda stream for data transfers & kernels
+  rmm::cuda_stream stream{};
+  rmm::cuda_stream_view stream_view(stream);
+
   auto device_input = cudf::detail::make_device_uvector_async(
     host_input, stream_view, rmm::mr::get_current_device_resource());
 
@@ -50,8 +53,9 @@ void run_test(std::string const& host_input, std::string const& expected_host_ou
                                 device_data.data(),
                                 preprocessed_host_output.size(),
                                 cudaMemcpyDeviceToHost,
-                                cudf::test::get_default_stream().value()));
+                                stream_view.value()));
 
+  stream_view.synchronize();
   ASSERT_EQ(preprocessed_host_output.size(), expected_host_output.size());
   CUDF_TEST_EXPECT_VECTOR_EQUAL(
     preprocessed_host_output, expected_host_output, preprocessed_host_output.size());

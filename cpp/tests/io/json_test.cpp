@@ -688,13 +688,8 @@ TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_AcrossFiles)
   outfile1 << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]";
   outfile1.close();
 
-  const std::string file2 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest2.json";
-  std::ofstream outfile2(file2, std::ofstream::out);
-  outfile2 << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]";
-  outfile2.close();
-
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file2}})
+    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file1}})
       .lines(true)
       .byte_range_offset(11)
       .byte_range_size(70);
@@ -719,13 +714,8 @@ TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_ExcessRangeSize)
   outfile1 << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]";
   outfile1.close();
 
-  const std::string file2 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest2.json";
-  std::ofstream outfile2(file2, std::ofstream::out);
-  outfile2 << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]";
-  outfile2.close();
-
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file2}})
+    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file1}})
       .lines(true)
       .byte_range_offset(11)
       .byte_range_size(1000);
@@ -764,15 +754,8 @@ TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_LoadAllFiles)
   outfile1 << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]";
   outfile1.close();
 
-  const std::string file2 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest2.json";
-  std::ofstream outfile2(file2, std::ofstream::out);
-  outfile2 << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]";
-  outfile2.close();
-
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file2}})
-      .lines(true)
-      .legacy(false);
+    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file1}}).lines(true);
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
