@@ -14,16 +14,15 @@
 
 # This function finds nanoarrow and sets any additional necessary environment variables.
 function(find_and_configure_nanoarrow)
-  include(${rapids-cmake-dir}/cpm/package_override.cmake)
-
-  set(cudf_patch_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches")
-  rapids_cpm_package_override("${cudf_patch_dir}/nanoarrow_override.json")
-
-  # The git_repo and git_tag are provided by the nanoarrow_override file
+  # Currently we need to always build nanoarrow so we don't pickup a previous installed version
+  set(CPM_DOWNLOAD_nanoarrow ON)
   rapids_cpm_find(
-    nanoarrow 0.4.0
+    nanoarrow 0.5.0
     GLOBAL_TARGETS nanoarrow
     CPM_ARGS
+    GIT_REPOSITORY https://github.com/apache/arrow-nanoarrow.git
+    GIT_TAG 11e73a8c85b45e3d49c8c541b4e1497a649fe03c
+    GIT_SHALLOW FALSE
     OPTIONS "BUILD_SHARED_LIBS OFF" "NANOARROW_NAMESPACE cudf"
   )
   set_target_properties(nanoarrow PROPERTIES POSITION_INDEPENDENT_CODE ON)

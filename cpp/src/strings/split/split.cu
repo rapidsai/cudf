@@ -31,6 +31,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/fill.h>
@@ -111,7 +112,7 @@ template <typename Tokenizer>
 std::unique_ptr<table> split_fn(strings_column_view const& input,
                                 Tokenizer tokenizer,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   std::vector<std::unique_ptr<column>> results;
   if (input.size() == input.null_count()) {
@@ -329,7 +330,7 @@ template <typename Tokenizer>
 std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
                                            Tokenizer tokenizer,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   // compute the number of tokens per string
   rmm::device_uvector<size_type> token_counts(strings_count, stream);
@@ -386,7 +387,7 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
 std::unique_ptr<column> create_offsets_from_positions(strings_column_view const& input,
                                                       device_span<int64_t const> const& positions,
                                                       rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
+                                                      rmm::device_async_resource_ref mr)
 {
   auto const d_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
@@ -427,7 +428,7 @@ std::unique_ptr<table> split(strings_column_view const& strings_column,
                              string_scalar const& delimiter,
                              size_type maxsplit,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
@@ -450,7 +451,7 @@ std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
                               string_scalar const& delimiter,
                               size_type maxsplit,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
@@ -477,7 +478,7 @@ std::unique_ptr<table> split(strings_column_view const& strings_column,
                              string_scalar const& delimiter,
                              size_type maxsplit,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::split(strings_column, delimiter, maxsplit, stream, mr);
@@ -487,7 +488,7 @@ std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
                               string_scalar const& delimiter,
                               size_type maxsplit,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::rsplit(strings_column, delimiter, maxsplit, stream, mr);

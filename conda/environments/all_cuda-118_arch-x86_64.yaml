@@ -64,11 +64,10 @@ dependencies:
 - nvcomp==3.0.6
 - nvtx>=0.2.1
 - packaging
-- pandas>=2.0,<2.2.2dev0
+- pandas>=2.0,<2.2.3dev0
 - pandoc
 - pip
 - pre-commit
-- protobuf>=3.20,<5
 - ptxcompiler
 - pyarrow==14.0.2.*
 - pydata-sphinx-theme!=0.14.2

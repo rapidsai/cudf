@@ -475,6 +475,7 @@ struct parquet_column_device_view : stats_column_desc {
                                //!< nullability of parent_column. May be different from
                                //!< col.nullable() in case of chunked writing.
   bool output_as_byte_array;   //!< Indicates this list column is being written as a byte array
+  bool skip_compression;       //!< Skip compression for this column
   column_encoding requested_encoding;  //!< User specified encoding for this column.
 };
 

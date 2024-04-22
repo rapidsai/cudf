@@ -23,6 +23,8 @@
 #pragma nv_diag_suppress 611
 #pragma nv_diag_suppress 2810
 #endif
+#include <rmm/resource_ref.hpp>
+
 #include <arrow/api.h>
 #ifdef __CUDACC__
 #pragma nv_diag_default 611
@@ -70,7 +72,7 @@ namespace cudf {
  */
 std::unique_ptr<table> from_dlpack(
   DLManagedTensor const* managed_tensor,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Convert a cudf table into a DLPack DLTensor
@@ -92,7 +94,7 @@ std::unique_ptr<table> from_dlpack(
  */
 DLManagedTensor* to_dlpack(
   table_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 
@@ -224,8 +226,8 @@ unique_schema_t to_arrow_schema(cudf::table_view const& input,
  */
 unique_device_array_t to_arrow_device(
   cudf::table&& table,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create `ArrowDeviceArray` from cudf column and metadata
@@ -253,8 +255,72 @@ unique_device_array_t to_arrow_device(
  */
 unique_device_array_t to_arrow_device(
   cudf::column&& col,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Create `ArrowDeviceArray` from a table view
+ *
+ * Populates the C struct ArrowDeviceArray performing copies only if necessary.
+ * This wraps the data on the GPU device and gives a view of the table data
+ * to the ArrowDeviceArray struct. If the caller frees the data referenced by
+ * the table_view, using the returned object results in undefined behavior.
+ *
+ * After calling this function, the release callback on the returned ArrowDeviceArray
+ * must be called to clean up any memory created during conversion.
+ *
+ * @note For decimals, since the precision is not stored for them in libcudf
+ * it will be converted to an Arrow decimal128 with the widest-precision the cudf decimal type
+ * supports. For example, numeric::decimal32 will be converted to Arrow decimal128 of the precision
+ * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
+ * converted to Arrow decimal128 of the precision 38.
+ *
+ * Copies will be performed in the cases where cudf differs from Arrow:
+ * - BOOL8: Arrow uses a bitmap and cudf uses 1 byte per value
+ * - DECIMAL32 and DECIMAL64: Converted to Arrow decimal128
+ * - STRING: Arrow expects a single value int32 offset child array for empty strings columns
+ *
+ * @param table Input table
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used for any allocations during conversion
+ * @return ArrowDeviceArray which will have ownership of any copied data
+ */
+unique_device_array_t to_arrow_device(
+  cudf::table_view const& table,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Create `ArrowDeviceArray` from a column view
+ *
+ * Populates the C struct ArrowDeviceArray performing copies only if necessary.
+ * This wraps the data on the GPU device and gives a view of the column data
+ * to the ArrowDeviceArray struct. If the caller frees the data referenced by
+ * the column_view, using the returned object results in undefined behavior.
+ *
+ * After calling this function, the release callback on the returned ArrowDeviceArray
+ * must be called to clean up any memory created during conversion.
+ *
+ * @note For decimals, since the precision is not stored for them in libcudf
+ * it will be converted to an Arrow decimal128 with the widest-precision the cudf decimal type
+ * supports. For example, numeric::decimal32 will be converted to Arrow decimal128 of the precision
+ * 9 which is the maximum precision for 32-bit types. Similar, numeric::decimal128 will be
+ * converted to Arrow decimal128 of the precision 38.
+ *
+ * Copies will be performed in the cases where cudf differs from Arrow:
+ * - BOOL8: Arrow uses a bitmap and cudf uses 1 byte per value
+ * - DECIMAL32 and DECIMAL64: Converted to Arrow decimal128
+ * - STRING: Arrow expects a single value int32 offset child array for empty strings columns
+ *
+ * @param col Input column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used for any allocations during conversion
+ * @return ArrowDeviceArray which will have ownership of any copied data
+ */
+unique_device_array_t to_arrow_device(
+  cudf::column_view const& col,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create `cudf::table` from given arrow Table input
@@ -264,11 +330,10 @@ unique_device_array_t to_arrow_device(
  * @param mr    Device memory resource used to allocate `cudf::table`
  * @return cudf table generated from given arrow Table
  */
-
 std::unique_ptr<table> from_arrow(
   arrow::Table const& input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create `cudf::scalar` from given arrow Scalar input
@@ -278,11 +343,10 @@ std::unique_ptr<table> from_arrow(
  * @param mr    Device memory resource used to allocate `cudf::scalar`
  * @return cudf scalar generated from given arrow Scalar
  */
-
 std::unique_ptr<cudf::scalar> from_arrow(
   arrow::Scalar const& input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf
