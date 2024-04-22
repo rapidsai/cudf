@@ -2769,6 +2769,28 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     assert_eq(pdf2, gdf2)
 
 
+@pytest.mark.parametrize(
+    "index", [None, cudf.RangeIndex(3, name="a"), "a", "b", ["a", "b"]]
+)
+@pytest.mark.parametrize("preserve_index", [True, False, None])
+def test_arrow_round_trip(preserve_index, index):
+    data = {"a": [4, 5, 6], "b": ["cat", "dog", "bird"]}
+    if isinstance(index, (list, str)):
+        gdf = cudf.DataFrame(data).set_index(index)
+    else:
+        gdf = cudf.DataFrame(data, index=index)
+
+    table = gdf.to_arrow(preserve_index=preserve_index)
+    table_pd = pa.Table.from_pandas(
+        gdf.to_pandas(), preserve_index=preserve_index
+    )
+
+    gdf_out = cudf.DataFrame.from_arrow(table)
+    pdf_out = table_pd.to_pandas()
+
+    assert_eq(gdf_out, pdf_out)
+
+
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
 def test_cuda_array_interface(dtype):
     np_data = np.arange(10).astype(dtype)
