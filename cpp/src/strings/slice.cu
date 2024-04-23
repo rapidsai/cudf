@@ -28,6 +28,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -156,7 +157,7 @@ std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_c
                                                    IndexIterator starts,
                                                    IndexIterator stops,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+                                                   rmm::device_async_resource_ref mr)
 {
   auto results = rmm::device_uvector<string_view>(d_column.size(), stream);
   thrust::transform(rmm::exec_policy(stream),
@@ -175,7 +176,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       numeric_scalar<size_type> const& stop,
                                       numeric_scalar<size_type> const& step,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
@@ -218,7 +219,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       column_view const& starts_column,
                                       column_view const& stops_column,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);
@@ -249,7 +250,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       numeric_scalar<size_type> const& stop,
                                       numeric_scalar<size_type> const& step,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::slice_strings(strings, start, stop, step, stream, mr);
@@ -259,7 +260,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       column_view const& starts_column,
                                       column_view const& stops_column,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::slice_strings(strings, starts_column, stops_column, stream, mr);

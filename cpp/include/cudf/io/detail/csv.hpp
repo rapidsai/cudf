@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/io/csv.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace io {
@@ -38,7 +39,7 @@ namespace csv {
 table_with_metadata read_csv(std::unique_ptr<cudf::io::datasource>&& source,
                              csv_reader_options const& options,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr);
+                             rmm::device_async_resource_ref mr);
 
 /**
  * @brief Write an entire dataset to CSV format.
@@ -55,7 +56,7 @@ void write_csv(data_sink* sink,
                host_span<std::string const> column_names,
                csv_writer_options const& options,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr);
+               rmm::device_async_resource_ref mr);
 
 }  // namespace csv
 }  // namespace detail

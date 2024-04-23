@@ -23,6 +23,7 @@
 #include <cudf/io/orc.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <vector>
@@ -147,6 +148,6 @@ column_buffer assemble_buffer(size_type orc_col_id,
                               column_hierarchy const& selected_columns,
                               std::vector<std::vector<column_buffer>>& col_buffers,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+                              rmm::device_async_resource_ref mr);
 
 }  // namespace cudf::io::orc::detail

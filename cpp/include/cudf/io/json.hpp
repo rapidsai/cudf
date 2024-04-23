@@ -22,6 +22,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <map>
 #include <string>
@@ -252,9 +253,11 @@ class json_reader_options {
   /**
    * @brief Whether the legacy reader should be used.
    *
+   * @deprecated Since 24.06
+   *
    * @returns true if the legacy reader will be used, false otherwise
    */
-  bool is_enabled_legacy() const { return _legacy; }
+  [[deprecated]] bool is_enabled_legacy() const { return _legacy; }
 
   /**
    * @brief Whether the reader should keep quotes of string values.
@@ -351,9 +354,11 @@ class json_reader_options {
   /**
    * @brief Set whether to use the legacy reader.
    *
+   * @deprecated Since 24.06
+   *
    * @param val Boolean value to enable/disable the legacy reader
    */
-  void enable_legacy(bool val) { _legacy = val; }
+  [[deprecated]] void enable_legacy(bool val) { _legacy = val; }
 
   /**
    * @brief Set whether the reader should keep quotes of string values.
@@ -520,10 +525,12 @@ class json_reader_options_builder {
   /**
    * @brief Set whether to use the legacy reader.
    *
+   * @deprecated Since 24.06
+   *
    * @param val Boolean value to enable/disable legacy parsing
    * @return this for chaining
    */
-  json_reader_options_builder& legacy(bool val)
+  [[deprecated]] json_reader_options_builder& legacy(bool val)
   {
     options._legacy = val;
     return *this;
@@ -614,8 +621,8 @@ class json_reader_options_builder {
  */
 table_with_metadata read_json(
   json_reader_options options,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 
@@ -961,8 +968,8 @@ class json_writer_options_builder {
  * @param mr Device memory resource to use for device memory allocation
  */
 void write_json(json_writer_options const& options,
-                rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace io
