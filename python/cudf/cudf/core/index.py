@@ -870,11 +870,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
     ) -> cupy.ndarray:
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
-
         if (ascending and self._step < 0) or (
             not ascending and self._step > 0
         ):
-            return cupy.arange(len(self), -1, -1)
+            return cupy.arange(len(self) - 1, -1, -1)
         else:
             return cupy.arange(len(self))
 
@@ -892,7 +891,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def to_arrow(self) -> pa.Array:
-        return pa.array(self._range)
+        return pa.array(self._range, type=pa.from_numpy_dtype(self.dtype))
 
     def __array__(self, dtype=None):
         raise TypeError(
