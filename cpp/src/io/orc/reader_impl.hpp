@@ -44,7 +44,7 @@ class reader_impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    *
-   * This constructor will call the other constructor with `output_size_limit` and `data_read_limit`
+   * This constructor will call the other constructor with `chunk_read_limit` and `pass_read_limit`
    * set to `0` and `output_row_granularity` set to `DEFAULT_OUTPUT_ROW_GRANULARITY`.
    *
    * @param sources Dataset sources
@@ -61,8 +61,8 @@ class reader_impl {
    * @copydoc cudf::io::orc::detail::chunked_reader::chunked_reader(std::size_t, std::size_t,
    * orc_reader_options const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
    */
-  explicit reader_impl(std::size_t output_size_limit,
-                       std::size_t data_read_limit,
+  explicit reader_impl(std::size_t chunk_read_limit,
+                       std::size_t pass_read_limit,
                        std::vector<std::unique_ptr<datasource>>&& sources,
                        orc_reader_options const& options,
                        rmm::cuda_stream_view stream,
@@ -72,8 +72,8 @@ class reader_impl {
    * @copydoc cudf::io::orc::detail::chunked_reader::chunked_reader(std::size_t, std::size_t,
    * size_type, orc_reader_options const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
    */
-  explicit reader_impl(std::size_t output_size_limit,
-                       std::size_t data_read_limit,
+  explicit reader_impl(std::size_t chunk_read_limit,
+                       std::size_t pass_read_limit,
                        size_type output_row_granularity,
                        std::vector<std::unique_ptr<datasource>>&& sources,
                        orc_reader_options const& options,

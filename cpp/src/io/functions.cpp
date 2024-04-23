@@ -440,14 +440,14 @@ void write_orc(orc_writer_options const& options, rmm::cuda_stream_view stream)
   writer->write(options.get_table());
 }
 
-chunked_orc_reader::chunked_orc_reader(std::size_t output_size_limit,
-                                       std::size_t data_read_limit,
+chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
+                                       std::size_t pass_read_limit,
                                        size_type output_row_granularity,
                                        orc_reader_options const& options,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
-  : reader{std::make_unique<orc::detail::chunked_reader>(output_size_limit,
-                                                         data_read_limit,
+  : reader{std::make_unique<orc::detail::chunked_reader>(chunk_read_limit,
+                                                         pass_read_limit,
                                                          output_row_granularity,
                                                          make_datasources(options.get_source()),
                                                          options,
@@ -456,13 +456,13 @@ chunked_orc_reader::chunked_orc_reader(std::size_t output_size_limit,
 {
 }
 
-chunked_orc_reader::chunked_orc_reader(std::size_t output_size_limit,
-                                       std::size_t data_read_limit,
+chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
+                                       std::size_t pass_read_limit,
                                        orc_reader_options const& options,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
-  : reader{std::make_unique<orc::detail::chunked_reader>(output_size_limit,
-                                                         data_read_limit,
+  : reader{std::make_unique<orc::detail::chunked_reader>(chunk_read_limit,
+                                                         pass_read_limit,
                                                          make_datasources(options.get_source()),
                                                          options,
                                                          stream,
@@ -470,11 +470,11 @@ chunked_orc_reader::chunked_orc_reader(std::size_t output_size_limit,
 {
 }
 
-chunked_orc_reader::chunked_orc_reader(std::size_t output_size_limit,
+chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
                                        orc_reader_options const& options,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
-  : chunked_orc_reader(output_size_limit, 0UL, options, stream, mr)
+  : chunked_orc_reader(chunk_read_limit, 0UL, options, stream, mr)
 {
 }
 

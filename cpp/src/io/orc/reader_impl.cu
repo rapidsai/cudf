@@ -139,14 +139,14 @@ reader_impl::reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
 {
 }
 
-reader_impl::reader_impl(std::size_t output_size_limit,
-                         std::size_t data_read_limit,
+reader_impl::reader_impl(std::size_t chunk_read_limit,
+                         std::size_t pass_read_limit,
                          std::vector<std::unique_ptr<datasource>>&& sources,
                          orc_reader_options const& options,
                          rmm::cuda_stream_view stream,
                          rmm::device_async_resource_ref mr)
-  : reader_impl::reader_impl(output_size_limit,
-                             data_read_limit,
+  : reader_impl::reader_impl(chunk_read_limit,
+                             pass_read_limit,
                              DEFAULT_OUTPUT_ROW_GRANULARITY,
                              std::move(sources),
                              options,
@@ -155,8 +155,8 @@ reader_impl::reader_impl(std::size_t output_size_limit,
 {
 }
 
-reader_impl::reader_impl(std::size_t output_size_limit,
-                         std::size_t data_read_limit,
+reader_impl::reader_impl(std::size_t chunk_read_limit,
+                         std::size_t pass_read_limit,
                          size_type output_row_granularity,
                          std::vector<std::unique_ptr<datasource>>&& sources,
                          orc_reader_options const& options,
@@ -175,7 +175,7 @@ reader_impl::reader_impl(std::size_t output_size_limit,
     _sources(std::move(sources)),
     _metadata{_sources, stream},
     _selected_columns{_metadata.select_columns(options.get_columns())},
-    _chunk_read_data{output_size_limit, data_read_limit, output_row_granularity}
+    _chunk_read_data{chunk_read_limit, pass_read_limit, output_row_granularity}
 {
   // Selected columns at different levels of nesting are stored in different elements
   // of `selected_columns`; thus, size == 1 means no nested columns.
@@ -201,26 +201,26 @@ table_with_metadata reader_impl::read_chunk()
   return make_output_chunk();
 }
 
-chunked_reader::chunked_reader(std::size_t output_size_limit,
-                               std::size_t data_read_limit,
+chunked_reader::chunked_reader(std::size_t chunk_read_limit,
+                               std::size_t pass_read_limit,
                                std::vector<std::unique_ptr<datasource>>&& sources,
                                orc_reader_options const& options,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
   : _impl{std::make_unique<reader_impl>(
-      output_size_limit, data_read_limit, std::move(sources), options, stream, mr)}
+      chunk_read_limit, pass_read_limit, std::move(sources), options, stream, mr)}
 {
 }
 
-chunked_reader::chunked_reader(std::size_t output_size_limit,
-                               std::size_t data_read_limit,
+chunked_reader::chunked_reader(std::size_t chunk_read_limit,
+                               std::size_t pass_read_limit,
                                size_type output_row_granularity,
                                std::vector<std::unique_ptr<datasource>>&& sources,
                                orc_reader_options const& options,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
-  : _impl{std::make_unique<reader_impl>(output_size_limit,
-                                        data_read_limit,
+  : _impl{std::make_unique<reader_impl>(chunk_read_limit,
+                                        pass_read_limit,
                                         output_row_granularity,
                                         std::move(sources),
                                         options,

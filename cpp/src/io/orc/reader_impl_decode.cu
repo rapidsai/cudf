@@ -1066,12 +1066,12 @@ void reader_impl::decompress_and_decode(read_mode mode)
   // Split the decoded table into ranges that be output into chunks having size within the given
   // output size limit.
   _chunk_read_data.output_table_ranges =
-    _chunk_read_data.output_size_limit == 0
+    _chunk_read_data.chunk_read_limit == 0
       ? std::vector<range>{range{
           0, static_cast<std::size_t>(_chunk_read_data.decoded_table->num_rows())}}
       : find_table_splits(_chunk_read_data.decoded_table->view(),
                           _chunk_read_data.output_row_granularity,
-                          _chunk_read_data.output_size_limit,
+                          _chunk_read_data.chunk_read_limit,
                           _stream);
 }
 

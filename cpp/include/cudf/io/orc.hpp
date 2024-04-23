@@ -407,7 +407,7 @@ table_with_metadata read_orc(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief The chunked orc reader class to read ORC file iteratively into a series of
+ * @brief The chunked orc reader class to read an ORC file iteratively into a series of
  * tables, chunk by chunk.
  *
  * This class is designed to address the reading issue when reading very large ORC files such
@@ -437,28 +437,28 @@ class chunked_orc_reader {
    *
    * ```
    *
-   * If `output_size_limit == 0` (i.e., no output limit) and `data_read_limit == 0` (no temporary
+   * If `chunk_read_limit == 0` (i.e., no output limit) and `pass_read_limit == 0` (no temporary
    * memory size limit), a call to `read_chunk()` will read the whole data source and return a table
    * containing all rows.
    *
-   * The `output_size_limit` parameter controls the size of the output table to be returned per
+   * The `chunk_read_limit` parameter controls the size of the output table to be returned per
    * `read_chunk()` call. If the user specifies a 100 MB limit, the reader will attempt to return
    * tables that have a total bytes size (over all columns) of 100 MB or less.
    * This is a soft limit and the code will not fail if it cannot satisfy the limit.
    *
-   * The `data_read_limit` parameter controls how much temporary memory is used in the entire
+   * The `pass_read_limit` parameter controls how much temporary memory is used in the entire
    * process of loading, decompressing and decoding of data. Again, this is also a soft limit and
    * the reader will try to make the best effort.
    *
    * Finally, the parameter `output_row_granularity` controls the changes in row number of the
-   * output chunk. For each call to `read_chunk()`, with respect to the given `data_read_limit`, a
+   * output chunk. For each call to `read_chunk()`, with respect to the given `pass_read_limit`, a
    * subset of stripes may be loaded, decompressed and decoded into an intermediate table. The
    * reader will then subdivide that table into smaller tables for final output using
    * `output_row_granularity` as the subdivision step.
    *
-   * @param output_size_limit Limit on total number of bytes to be returned per `read_chunk()` call,
+   * @param chunk_read_limit Limit on total number of bytes to be returned per `read_chunk()` call,
    *        or `0` if there is no limit
-   * @param data_read_limit Limit on temporary memory usage for reading the data sources,
+   * @param pass_read_limit Limit on temporary memory usage for reading the data sources,
    *        or `0` if there is no limit
    * @param output_row_granularity The granularity parameter used for subdividing the decoded
    *        table for final output
@@ -469,8 +469,8 @@ class chunked_orc_reader {
    * @throw cudf::logic_error if `output_row_granularity` is non-positive
    */
   explicit chunked_orc_reader(
-    std::size_t output_size_limit,
-    std::size_t data_read_limit,
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
     size_type output_row_granularity,
     orc_reader_options const& options,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -482,37 +482,37 @@ class chunked_orc_reader {
    * This constructor implicitly call the other constructor with `output_row_granularity` set to
    * `DEFAULT_OUTPUT_ROW_GRANULARITY` rows.
    *
-   * @param output_size_limit Limit on total number of bytes to be returned per `read_chunk()` call,
+   * @param chunk_read_limit Limit on total number of bytes to be returned per `read_chunk()` call,
    *        or `0` if there is no limit
-   * @param data_read_limit Limit on temporary memory usage for reading the data sources,
+   * @param pass_read_limit Limit on temporary memory usage for reading the data sources,
    *        or `0` if there is no limit
    * @param options Settings for controlling reading behaviors
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit chunked_orc_reader(
-    std::size_t output_size_limit,
-    std::size_t data_read_limit,
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
     orc_reader_options const& options,
-    rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct the reader from output size limits along with other ORC reader options.
    *
-   * This constructor implicitly call the other constructor with `data_read_limit` set to `0` and
+   * This constructor implicitly call the other constructor with `pass_read_limit` set to `0` and
    * `output_row_granularity` set to `DEFAULT_OUTPUT_ROW_GRANULARITY` rows.
    *
-   * @param output_size_limit Limit on total number of bytes to be returned per `read_chunk()` call,
+   * @param chunk_read_limit Limit on total number of bytes to be returned per `read_chunk()` call,
    *        or `0` if there is no limit
    * @param options Settings for controlling reading behaviors
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit chunked_orc_reader(
-    std::size_t output_size_limit,
+    std::size_t chunk_read_limit,
     orc_reader_options const& options,
-    rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
   /**

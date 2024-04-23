@@ -159,8 +159,8 @@ struct chunk_read_data {
   explicit chunk_read_data(std::size_t output_size_limit_,
                            std::size_t data_read_limit_,
                            size_type output_row_granularity_)
-    : output_size_limit{output_size_limit_},
-      data_read_limit{data_read_limit_},
+    : chunk_read_limit{output_size_limit_},
+      pass_read_limit{data_read_limit_},
       output_row_granularity{output_row_granularity_}
   {
     CUDF_EXPECTS(output_row_granularity > 0,
@@ -168,14 +168,14 @@ struct chunk_read_data {
   }
 
   std::size_t const
-    output_size_limit;  // maximum size (in bytes) of an output chunk, or 0 for no limit
-  std::size_t const data_read_limit;  // approximate maximum size (in bytes) used for store
+    chunk_read_limit;  // maximum size (in bytes) of an output chunk, or 0 for no limit
+  std::size_t const pass_read_limit;  // approximate maximum size (in bytes) used for store
                                       // intermediate data, or 0 for no limit
   size_type const output_row_granularity;
 
   // Memory limits for loading data and decoding are computed as
-  // `load/decode_limit_ratio * data_read_limit`.
-  // This is to maintain the total memory usage to be **around** the given `data_read_limit`.
+  // `load/decode_limit_ratio * pass_read_limit`.
+  // This is to maintain the total memory usage to be **around** the given `pass_read_limit`.
   // Note that sum of these limits may not be `1.0`, and their values are set empirically.
   static double constexpr load_limit_ratio{0.25};
   static double constexpr decode_limit_ratio{0.6};

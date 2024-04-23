@@ -353,7 +353,7 @@ void reader_impl::preprocess_file(read_mode mode)
 
   // Load all stripes if we are in READ_ALL mode or there is no read limit.
   auto const load_all_stripes =
-    mode == read_mode::READ_ALL || _chunk_read_data.data_read_limit == 0;
+    mode == read_mode::READ_ALL || _chunk_read_data.pass_read_limit == 0;
 
   // Accumulate data size for data streams in each stripe.
   // This will be used for CHUNKED_READ mode only.
@@ -449,7 +449,7 @@ void reader_impl::preprocess_file(read_mode mode)
   total_stripe_sizes.device_to_host_sync(_stream);
 
   auto const load_limit = [&] {
-    auto const tmp = static_cast<std::size_t>(_chunk_read_data.data_read_limit *
+    auto const tmp = static_cast<std::size_t>(_chunk_read_data.pass_read_limit *
                                               chunk_read_data::load_limit_ratio);
     // Make sure not to pass 0 byte limit (due to round-off) to `find_splits`.
     return tmp > 0UL ? tmp : 1UL;
@@ -551,7 +551,7 @@ void reader_impl::load_data(read_mode mode)
   // In theory, we should just decode 'enough' stripes for output one table chunk, instead of
   // decoding all stripes like this, for better load-balancing and reduce memory usage.
   // However, we do not have any good way to know how many stripes are 'enough'.
-  if ((mode == read_mode::READ_ALL || _chunk_read_data.data_read_limit == 0) &&
+  if ((mode == read_mode::READ_ALL || _chunk_read_data.pass_read_limit == 0) &&
       // In addition to read limit, we also need to check if the the total number of
       // rows in the loaded stripes exceeds column size limit.
       // If that is the case, we cannot decode all stripes at once.
@@ -577,7 +577,7 @@ void reader_impl::load_data(read_mode mode)
   // Note that the values `max_uncompressed_size` for each stripe are not computed here.
   // Instead, they will be computed on the fly during decoding to avoid the overhead of
   // storing and retrieving from memory.
-  if ((mode == read_mode::READ_ALL || _chunk_read_data.data_read_limit == 0) &&
+  if ((mode == read_mode::READ_ALL || _chunk_read_data.pass_read_limit == 0) &&
       num_loading_rows >= column_size_limit) {
     std::vector<cumulative_size_and_row> cumulative_stripe_rows(stripe_count);
     std::size_t rows{0};
@@ -703,7 +703,7 @@ void reader_impl::load_data(read_mode mode)
   stripe_decomp_sizes.device_to_host_sync(_stream);
 
   auto const decode_limit = [&] {
-    auto const tmp = static_cast<std::size_t>(_chunk_read_data.data_read_limit *
+    auto const tmp = static_cast<std::size_t>(_chunk_read_data.pass_read_limit *
                                               chunk_read_data::decode_limit_ratio);
     // Make sure not to pass 0 byte limit to `find_splits`.
     return tmp > 0UL ? tmp : 1UL;

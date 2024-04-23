@@ -89,8 +89,8 @@ class chunked_reader {
    *
    * @param sources Input `datasource` objects to read the dataset from
    */
-  explicit chunked_reader(std::size_t output_size_limit,
-                          std::size_t data_read_limit,
+  explicit chunked_reader(std::size_t chunk_read_limit,
+                          std::size_t pass_read_limit,
                           size_type output_row_granularity,
                           std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                           orc_reader_options const& options,
@@ -102,8 +102,8 @@ class chunked_reader {
    *
    * @param sources Input `datasource` objects to read the dataset from
    */
-  explicit chunked_reader(std::size_t output_size_limit,
-                          std::size_t data_read_limit,
+  explicit chunked_reader(std::size_t chunk_read_limit,
+                          std::size_t pass_read_limit,
                           std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                           orc_reader_options const& options,
                           rmm::cuda_stream_view stream,
