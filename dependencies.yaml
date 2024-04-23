@@ -247,9 +247,6 @@ dependencies:
       - output_types: conda
         packages:
           - fmt>=10.1.1,<11
-          - &gbench benchmark==1.8.0
-          - &gtest gtest>=1.13.0
-          - &gmock gmock>=1.13.0
           - librmm==24.6.*
           - libkvikio==24.6.*
           - librdkafka>=1.9.0,<1.10.0a0
@@ -585,9 +582,6 @@ dependencies:
       - output_types: conda
         packages:
           - *cmake_ver
-          - *gbench
-          - *gtest
-          - *gmock
     specific:
       - output_types: conda
         matrices:
