@@ -23,8 +23,6 @@ class ExposureTrackedBuffer(Buffer):
         The size of the slice (in bytes)
     """
 
-    _owner: BufferOwner
-
     def __init__(
         self,
         owner: BufferOwner,
@@ -32,11 +30,7 @@ class ExposureTrackedBuffer(Buffer):
         size: Optional[int] = None,
     ) -> None:
         super().__init__(owner=owner, offset=offset, size=size)
-        self._owner._slices.add(self)
-
-    @property
-    def exposed(self) -> bool:
-        return self._owner.exposed
+        self.owner._slices.add(self)
 
     def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
         if mode == "write" and cudf.get_option("copy_on_write"):
@@ -72,7 +66,7 @@ class ExposureTrackedBuffer(Buffer):
             copy-on-write option (see above).
         """
         if cudf.get_option("copy_on_write"):
-            return super().copy(deep=deep or self.exposed)
+            return super().copy(deep=deep or self.owner.exposed)
         return super().copy(deep=deep)
 
     @property
@@ -98,11 +92,11 @@ class ExposureTrackedBuffer(Buffer):
             Buffer representing the same device memory as `data`
         """
 
-        if len(self._owner._slices) > 1:
-            # If this is not the only slice pointing to `self._owner`, we
-            # point to a new deep copy of the owner.
+        if len(self.owner._slices) > 1:
+            # If this is not the only slice pointing to `self.owner`, we
+            # point to a new copy of our slice of `self.owner`.
             t = self.copy(deep=True)
-            self._owner = t._owner
+            self._owner = t.owner
             self._offset = t._offset
             self._size = t._size
             self._owner._slices.add(self)
