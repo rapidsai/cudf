@@ -393,7 +393,6 @@ add_library(
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp
-  src/io/orc/reader.cu
   src/io/orc/reader_impl.cu
   src/io/orc/reader_impl_chunking.cu
   src/io/orc/reader_impl_decode.cu
