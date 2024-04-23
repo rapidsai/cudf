@@ -218,7 +218,7 @@ __device__ __forceinline__ reprog_device reprog_device::load(reprog_device const
 }
 
 __device__ __forceinline__ static string_view::const_iterator find_char(
-  char_utf8 chr, string_view const d_str, string_view::const_iterator itr)
+  cudf::char_utf8 chr, string_view const d_str, string_view::const_iterator itr)
 {
   while (itr.byte_offset() < d_str.size_bytes() && *itr != chr) {
     ++itr;
