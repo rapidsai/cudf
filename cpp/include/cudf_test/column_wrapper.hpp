@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf_test/column_utilities.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/default_stream.hpp>
 
 #include <cudf/column/column.hpp>
