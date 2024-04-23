@@ -801,6 +801,13 @@ parquet_writer_options_builder& parquet_writer_options_builder::write_v2_headers
   return *this;
 }
 
+parquet_writer_options_builder& parquet_writer_options_builder::sorting_columns(
+  std::vector<sorting_column> sorting_columns)
+{
+  options._sorting_columns = std::move(sorting_columns);
+  return *this;
+}
+
 void chunked_parquet_writer_options::set_key_value_metadata(
   std::vector<std::map<std::string, std::string>> metadata)
 {
@@ -886,6 +893,13 @@ chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::
   bool enabled)
 {
   options.enable_write_v2_headers(enabled);
+  return *this;
+}
+
+chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::sorting_columns(
+  std::vector<sorting_column> sorting_columns)
+{
+  options._sorting_columns = std::move(sorting_columns);
   return *this;
 }
 
