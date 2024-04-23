@@ -46,15 +46,17 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  if (right.num_rows() == 0) {
+  auto const right_num_rows{right.num_rows()};
+  auto const left_num_rows{left.num_rows()};
+  if (right_num_rows == 0) {
     switch (join_type) {
       case join_kind::LEFT_ANTI_JOIN:
-        return std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
+        return std::make_unique<rmm::device_uvector<size_type>>(left_num_rows, stream, mr);
       case join_kind::LEFT_SEMI_JOIN:
         return std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
       default: CUDF_FAIL("Invalid join kind."); break;
     }
-  } else if (left.num_rows() == 0) {
+  } else if (left_num_rows == 0) {
     switch (join_type) {
       case join_kind::LEFT_ANTI_JOIN: [[fallthrough]];
       case join_kind::LEFT_SEMI_JOIN:
@@ -73,7 +75,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
   auto left_table  = table_device_view::create(left, stream);
   auto right_table = table_device_view::create(right, stream);
 
-  detail::grid_1d const config(left.num_rows(), DEFAULT_JOIN_BLOCK_SIZE);
+  detail::grid_1d const config(left_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
   // TODO: Remove the output_size parameter. It is not needed because the
@@ -96,7 +98,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
     join_size = size.value(stream);
   }
 
-  if (left.num_rows() == 0) {
+  if (left_num_rows == 0) {
     return std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
   }
 
@@ -303,20 +305,21 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
   // We can immediately filter out cases where one table is empty. In
   // some cases, we return all the rows of the other table with a corresponding
   // null index for the empty table; in others, we return an empty output.
-
-  if (right.num_rows() == 0) {
+  auto const right_num_rows{right.num_rows()};
+  auto const left_num_rows{left.num_rows()};
+  if (right_num_rows == 0) {
     switch (join_type) {
       // Left, left anti, and full all return all the row indices from left
       // with a corresponding NULL from the right.
       case join_kind::LEFT_JOIN:
       case join_kind::LEFT_ANTI_JOIN:
-      case join_kind::FULL_JOIN: return left.num_rows();
+      case join_kind::FULL_JOIN: return left_num_rows;
       // Inner and left semi joins return empty output because no matches can exist.
       case join_kind::INNER_JOIN:
       case join_kind::LEFT_SEMI_JOIN: return 0;
       default: CUDF_FAIL("Invalid join kind."); break;
     }
-  } else if (left.num_rows() == 0) {
+  } else if (left_num_rows == 0) {
     switch (join_type) {
       // Left, left anti, left semi, and inner joins all return empty sets.
       case join_kind::LEFT_JOIN:
@@ -324,7 +327,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
       case join_kind::INNER_JOIN:
       case join_kind::LEFT_SEMI_JOIN: return 0;
       // Full joins need to return the trivial complement.
-      case join_kind::FULL_JOIN: return right.num_rows();
+      case join_kind::FULL_JOIN: return right_num_rows;
       default: CUDF_FAIL("Invalid join kind."); break;
     }
   }
@@ -346,8 +349,8 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
 
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
-  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows());
-  detail::grid_1d const config(swap_tables ? right.num_rows() : left.num_rows(),
+  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
+  detail::grid_1d const config(swap_tables ? right_num_rows : left_num_rows,
                                DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
