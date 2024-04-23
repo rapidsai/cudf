@@ -5466,10 +5466,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             out._data._level_names = col_index_names
         if index_col:
             if isinstance(index_col[0], dict):
+                range_meta = index_col[0]
                 idx = cudf.RangeIndex(
-                    index_col[0]["start"],
-                    index_col[0]["stop"],
-                    name=index_col[0]["name"],
+                    start=range_meta["start"],
+                    stop=range_meta["stop"],
+                    step=range_meta["step"],
+                    name=range_meta["name"],
                 )
                 if len(idx) == len(out):
                     # `idx` is generated from arrow `pandas_metadata`
@@ -5552,7 +5554,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         "name": index.name,
                         "start": index.start,
                         "stop": index.stop,
-                        "step": 1,
+                        "step": index.step,
                     }
                 ]
             else:
@@ -5574,7 +5576,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
 
         out = super(DataFrame, data).to_arrow()
-        # import pdb; pdb.set_trace()
         metadata = pa.pandas_compat.construct_metadata(
             columns_to_convert=[self[col] for col in self._data.names],
             df=self,
