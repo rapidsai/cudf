@@ -32,19 +32,19 @@ void reader_impl::prepare_data(read_mode mode)
   // This will be no-op if it was called before.
   preprocess_file(mode);
 
-  if (!_chunk_read_data.more_table_chunk_to_output()) {
-    if (!_chunk_read_data.more_stripe_to_decode() && _chunk_read_data.more_stripe_to_load()) {
+  if (!_chunk_read_data.more_table_chunks_to_output()) {
+    if (!_chunk_read_data.more_stripes_to_decode() && _chunk_read_data.more_stripes_to_load()) {
       // Only load stripe data if:
       //  - There is more stripe to load, and
       //  - All loaded stripes were decoded, and
       //  - All the decoded results were output.
-      load_data(mode);
+      load_next_stripe_data(mode);
     }
-    if (_chunk_read_data.more_stripe_to_decode()) {
+    if (_chunk_read_data.more_stripes_to_decode()) {
       // Only decompress/decode the loaded stripes if:
       //  - There are loaded stripes that were not decoded yet, and
       //  - All the decoded results were output.
-      decompress_and_decode(mode);
+      decompress_and_decode_stripes(mode);
     }
   }
 }
@@ -55,7 +55,7 @@ table_with_metadata reader_impl::make_output_chunk()
   if (_selected_columns.num_levels() == 0) { return {std::make_unique<table>(), table_metadata{}}; }
 
   // If no rows or stripes to read, return empty columns.
-  if (!_chunk_read_data.more_table_chunk_to_output()) {
+  if (!_chunk_read_data.more_table_chunks_to_output()) {
     std::vector<std::unique_ptr<column>> out_columns;
     auto out_metadata = get_meta_with_user_data();
     std::transform(_selected_columns.levels[0].begin(),
@@ -94,7 +94,7 @@ table_with_metadata reader_impl::make_output_chunk()
     auto output = std::make_unique<table>(out_tview, _stream, _mr);
 
     // If this is the last slice, we also delete the decoded table to free up memory.
-    if (!_chunk_read_data.more_table_chunk_to_output()) {
+    if (!_chunk_read_data.more_table_chunks_to_output()) {
       _chunk_read_data.decoded_table.reset(nullptr);
     }
 

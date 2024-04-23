@@ -459,7 +459,7 @@ void reader_impl::preprocess_file(read_mode mode)
     find_splits<cumulative_size>(total_stripe_sizes, num_total_stripes, load_limit);
 }
 
-void reader_impl::load_data(read_mode mode)
+void reader_impl::load_next_stripe_data(read_mode mode)
 {
   if (_file_itm_data.has_no_data()) { return; }
 

@@ -118,8 +118,8 @@ class reader_impl {
    * In this step, the metadata of all stripes in the data sources is parsed, and information about
    * data streams of the selected columns in all stripes are generated. If the reader has a data
    * read limit, sizes of these streams are used to split the list of all stripes into multiple
-   * subsets, each of which will be read into memory in the `load_data()` step. These subsets are
-   * computed such that memory usage will be kept to be around a fixed size limit.
+   * subsets, each of which will be read into memory in the `load_next_stripe_data()` step. These
+   * subsets are computed such that memory usage will be kept to be around a fixed size limit.
    *
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
@@ -132,23 +132,23 @@ class reader_impl {
    * their total data size does not exceed a fixed size limit. Then, the data is probed to
    * estimate its uncompressed sizes, which are in turn used to split that stripe subset into
    * smaller subsets, each of which to be decompressed and decoded in the next step
-   * `decompress_and_decode()`. This is to ensure that loading data from data sources together with
-   * decompression and decoding will be capped around the given data read limit.
+   * `decompress_and_decode_stripes()`. This is to ensure that loading data from data sources
+   * together with decompression and decoding will be capped around the given data read limit.
    *
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
-  void load_data(read_mode mode);
+  void load_next_stripe_data(read_mode mode);
 
   /**
    * @brief Decompress and decode stripe data in the internal buffers, and store the result into
    * an intermediate table.
    *
    * This function expects that the other preprocessing steps (`global preprocess()` and
-   * `load_data()`) have already been done.
+   * `load_next_stripe_data()`) have already been done.
    *
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
-  void decompress_and_decode(read_mode mode);
+  void decompress_and_decode_stripes(read_mode mode);
 
   /**
    * @brief Create the output table from the intermediate table and return it along with metadata.

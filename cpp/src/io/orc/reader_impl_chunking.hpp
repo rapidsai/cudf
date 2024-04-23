@@ -184,12 +184,12 @@ struct chunk_read_data {
   // limit.
   std::vector<range> load_stripe_ranges;
   std::size_t curr_load_stripe_range{0};
-  bool more_stripe_to_load() const { return curr_load_stripe_range < load_stripe_ranges.size(); }
+  bool more_stripes_to_load() const { return curr_load_stripe_range < load_stripe_ranges.size(); }
 
   // Chunks of stripes such that their decompression size is within a size limit.
   std::vector<range> decode_stripe_ranges;
   std::size_t curr_decode_stripe_range{0};
-  bool more_stripe_to_decode() const
+  bool more_stripes_to_decode() const
   {
     return curr_decode_stripe_range < decode_stripe_ranges.size();
   }
@@ -198,7 +198,7 @@ struct chunk_read_data {
   std::vector<range> output_table_ranges;
   std::size_t curr_output_table_range{0};
   std::unique_ptr<cudf::table> decoded_table;
-  bool more_table_chunk_to_output() const
+  bool more_table_chunks_to_output() const
   {
     return curr_output_table_range < output_table_ranges.size();
   }
@@ -206,7 +206,7 @@ struct chunk_read_data {
   bool has_next() const
   {
     // Only has more chunk to output if:
-    return more_stripe_to_load() || more_stripe_to_decode() || more_table_chunk_to_output();
+    return more_stripes_to_load() || more_stripes_to_decode() || more_table_chunks_to_output();
   }
 };
 

@@ -710,7 +710,7 @@ std::vector<range> find_table_splits(table_view const& input,
 
 }  // namespace
 
-void reader_impl::decompress_and_decode(read_mode mode)
+void reader_impl::decompress_and_decode_stripes(read_mode mode)
 {
   if (_file_itm_data.has_no_data()) { return; }
 
@@ -746,7 +746,7 @@ void reader_impl::decompress_and_decode(read_mode mode)
   _file_itm_data.rows_to_skip = 0;
   _file_itm_data.rows_to_read -= rows_to_decode;
 
-  // Technically, overflow here should never happen because the `load_data()` step
+  // Technically, overflow here should never happen because the `load_next_stripe_data()` step
   // already handled it by splitting the loaded stripe range into multiple decode ranges.
   CUDF_EXPECTS(rows_to_decode <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
                "Number or rows to decode exceeds the column size limit.",
