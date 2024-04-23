@@ -153,6 +153,7 @@ struct interleave_strings_fn {
     auto const col            = d_table.column(source_col_idx);
     if (col.is_null(source_row_idx)) { return string_index_pair{nullptr, 0}; }
     auto const d_str = col.element<string_view>(source_row_idx);
+    // ensures an empty string is not identified as a null row
     return !d_str.empty() ? string_index_pair{d_str.data(), d_str.size_bytes()}
                           : string_index_pair{"", 0};
   }
