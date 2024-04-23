@@ -156,15 +156,16 @@ std::tuple<int64_t, int64_t, std::vector<metadata::orc_stripe_info>>
 aggregate_orc_metadata::select_stripes(
   std::vector<std::vector<size_type>> const& user_specified_stripes,
   int64_t skip_rows,
-  std::optional<size_type> const& num_rows,
+  std::optional<size_type> const& num_read_rows,
   rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS((skip_rows == 0 and not num_rows.has_value()) or user_specified_stripes.empty(),
+  CUDF_EXPECTS((skip_rows == 0 and not num_read_rows.has_value()) or user_specified_stripes.empty(),
                "Can't use both the row selection and the stripe selection");
 
   auto [rows_to_skip, rows_to_read] = [&]() {
     if (not user_specified_stripes.empty()) { return std::pair<int64_t, int64_t>{0, 0}; }
-    return cudf::io::detail::skip_rows_num_rows_from_options(skip_rows, num_rows, get_num_rows());
+    return cudf::io::detail::skip_rows_num_rows_from_options(
+      skip_rows, num_read_rows, get_num_rows());
   }();
 
   struct stripe_source_mapping {

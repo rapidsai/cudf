@@ -118,7 +118,7 @@ class aggregate_orc_metadata {
    *
    * @param user_specified_stripes The specified stripe indices to read
    * @param skip_rows Number of rows to skip from reading
-   * @param num_rows Number of rows to read
+   * @param num_read_rows Number of rows to read
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return A tuple of the corrected skip_rows and num_rows values along with a vector of
    *         stripes' metadata such as footer, data information, and source index
@@ -126,7 +126,7 @@ class aggregate_orc_metadata {
   [[nodiscard]] std::tuple<int64_t, int64_t, std::vector<metadata::orc_stripe_info>> select_stripes(
     std::vector<std::vector<size_type>> const& user_specified_stripes,
     int64_t skip_rows,
-    std::optional<size_type> const& num_rows,
+    std::optional<size_type> const& num_read_rows,
     rmm::cuda_stream_view stream);
 
   /**
