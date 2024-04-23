@@ -51,7 +51,7 @@ void reader_impl::prepare_data(read_mode mode)
 
 table_with_metadata reader_impl::make_output_chunk()
 {
-  // There is no columns in the table.
+  // There are no columns in the table.
   if (_selected_columns.num_levels() == 0) { return {std::make_unique<table>(), table_metadata{}}; }
 
   // If no rows or stripes to read, return empty columns.
@@ -119,7 +119,9 @@ table_metadata reader_impl::get_meta_with_user_data()
                    std::transform(meta.ff.metadata.cbegin(),
                                   meta.ff.metadata.cend(),
                                   std::inserter(kv_map, kv_map.end()),
-                                  [](auto const& kv) { return std::pair{kv.name, kv.value}; });
+                                  [](auto const& kv) {
+                                    return std::pair{kv.name, kv.value};
+                                  });
                    return kv_map;
                  });
   out_metadata.user_data = {out_metadata.per_file_user_data[0].begin(),
