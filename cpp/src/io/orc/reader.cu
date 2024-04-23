@@ -25,7 +25,7 @@ reader::~reader() = default;
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                orc_reader_options const& options,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
+               rmm::device_async_resource_ref mr)
   : _impl{std::make_unique<reader_impl>(std::move(sources), options, stream, mr)}
 {
 }
@@ -37,7 +37,7 @@ chunked_reader::chunked_reader(std::size_t output_size_limit,
                                std::vector<std::unique_ptr<datasource>>&& sources,
                                orc_reader_options const& options,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
   : _impl{std::make_unique<reader_impl>(
       output_size_limit, data_read_limit, std::move(sources), options, stream, mr)}
 {
@@ -49,7 +49,7 @@ chunked_reader::chunked_reader(std::size_t output_size_limit,
                                std::vector<std::unique_ptr<datasource>>&& sources,
                                orc_reader_options const& options,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
   : _impl{std::make_unique<reader_impl>(output_size_limit,
                                         data_read_limit,
                                         output_row_granularity,

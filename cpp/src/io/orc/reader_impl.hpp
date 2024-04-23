@@ -59,18 +59,18 @@ class reader_impl {
 
   /**
    * @copydoc cudf::io::orc::detail::chunked_reader::chunked_reader(std::size_t, std::size_t,
-   * orc_reader_options const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+   * orc_reader_options const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
    */
   explicit reader_impl(std::size_t output_size_limit,
                        std::size_t data_read_limit,
                        std::vector<std::unique_ptr<datasource>>&& sources,
                        orc_reader_options const& options,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr);
+                       rmm::device_async_resource_ref mr);
 
   /**
    * @copydoc cudf::io::orc::detail::chunked_reader::chunked_reader(std::size_t, std::size_t,
-   * size_type, orc_reader_options const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+   * size_type, orc_reader_options const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
    */
   explicit reader_impl(std::size_t output_size_limit,
                        std::size_t data_read_limit,
@@ -78,7 +78,7 @@ class reader_impl {
                        std::vector<std::unique_ptr<datasource>>&& sources,
                        orc_reader_options const& options,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr);
+                       rmm::device_async_resource_ref mr);
 
   /**
    * @copydoc cudf::io::orc::detail::reader::read

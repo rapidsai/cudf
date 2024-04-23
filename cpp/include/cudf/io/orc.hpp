@@ -473,8 +473,8 @@ class chunked_orc_reader {
     std::size_t data_read_limit,
     size_type output_row_granularity,
     orc_reader_options const& options,
-    rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct the reader from input/output size limits along with other ORC reader options.
@@ -495,7 +495,7 @@ class chunked_orc_reader {
     std::size_t data_read_limit,
     orc_reader_options const& options,
     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct the reader from output size limits along with other ORC reader options.
@@ -513,7 +513,7 @@ class chunked_orc_reader {
     std::size_t output_size_limit,
     orc_reader_options const& options,
     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Destructor, destroying the internal reader instance.
