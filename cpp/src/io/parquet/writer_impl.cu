@@ -51,6 +51,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iterator>
 #include <numeric>
 #include <utility>
 
@@ -2139,6 +2140,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         }
 
         row_group.total_byte_size += ck.bfr_size;
+        row_group.total_compressed_size =
+          row_group.total_compressed_size.value_or(0) + ck.compressed_size;
         column_chunk_meta.total_uncompressed_size = ck.bfr_size;
         column_chunk_meta.total_compressed_size   = ck.compressed_size;
       }
@@ -2236,6 +2239,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
     _single_write_mode(mode),
@@ -2265,6 +2269,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
     _single_write_mode(mode),
@@ -2408,12 +2413,15 @@ void writer::impl::write_parquet_data_to_sink(
           _out_sink[p]->host_write(bounce_buffer.data(), ck.compressed_size);
         }
 
+        auto const chunk_offset = _current_chunk_offset[p];
         auto& column_chunk_meta = row_group.columns[i].meta_data;
         column_chunk_meta.data_page_offset =
-          _current_chunk_offset[p] + ((ck.use_dictionary) ? ck.dictionary_size : 0);
-        column_chunk_meta.dictionary_page_offset =
-          (ck.use_dictionary) ? _current_chunk_offset[p] : 0;
+          chunk_offset + ((ck.use_dictionary) ? ck.dictionary_size : 0);
+        column_chunk_meta.dictionary_page_offset = (ck.use_dictionary) ? chunk_offset : 0;
         _current_chunk_offset[p] += ck.compressed_size;
+
+        // save location of first page in row group
+        if (i == 0) { row_group.file_offset = chunk_offset; }
       }
     }
     for (auto const& task : write_tasks) {
@@ -2488,10 +2496,9 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     std::vector<uint8_t> buffer;
     CompactProtocolWriter cpw(&buffer);
     file_ender_s fendr;
+    auto& fmd = _agg_meta->file(p);
 
     if (_stats_granularity == statistics_freq::STATISTICS_COLUMN) {
-      auto& fmd = _agg_meta->file(p);
-
       // write column indices, updating column metadata along the way
       int chunkidx = 0;
       for (auto& r : fmd.row_groups) {
@@ -2517,6 +2524,26 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
       }
     }
 
+    // set row group ordinals
+    auto iter        = thrust::make_counting_iterator(0);
+    auto& row_groups = fmd.row_groups;
+    std::for_each(
+      iter, iter + row_groups.size(), [&row_groups](auto idx) { row_groups[idx].ordinal = idx; });
+
+    // set sorting_columns on row groups
+    if (_sorting_columns.has_value()) {
+      // convert `sorting_column` to `SortingColumn`
+      auto const& sorting_cols = _sorting_columns.value();
+      std::vector<SortingColumn> scols;
+      std::transform(
+        sorting_cols.begin(), sorting_cols.end(), std::back_inserter(scols), [](auto const& sc) {
+          return SortingColumn{sc.column_idx, sc.is_descending, sc.is_nulls_first};
+        });
+      // and copy to each row group
+      std::for_each(iter, iter + row_groups.size(), [&row_groups, &scols](auto idx) {
+        row_groups[idx].sorting_columns = scols;
+      });
+    }
     buffer.resize(0);
     fendr.footer_len = static_cast<uint32_t>(cpw.write(_agg_meta->get_metadata(p)));
     fendr.magic      = parquet_magic;

@@ -359,6 +359,7 @@ add_library(
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
   src/interop/to_arrow_device.cu
+  src/interop/from_arrow_device.cu
   src/interop/to_arrow_schema.cpp
   src/interop/to_arrow_utilities.cpp
   src/interop/detail/arrow_allocator.cpp
