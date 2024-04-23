@@ -332,6 +332,15 @@ struct PageEncodingStats {
 };
 
 /**
+ * @brief Thrift-derived struct describing column sort order
+ */
+struct SortingColumn {
+  int32_t column_idx;  // The column index (in this row group)
+  bool descending;     // If true, indicates this column is sorted in descending order
+  bool nulls_first;    // If true, nulls will come before non-null values
+};
+
+/**
  * @brief Thrift-derived struct describing a column chunk
  */
 struct ColumnChunkMetaData {
@@ -398,9 +407,21 @@ struct ColumnChunk {
  * consisting of a column chunk for each column.
  */
 struct RowGroup {
-  int64_t total_byte_size = 0;
+  // Metadata for each column chunk in this row group.
   std::vector<ColumnChunk> columns;
+  // Total byte size of all the uncompressed column data in this row group
+  int64_t total_byte_size = 0;
+  // Number of rows in this row group
   int64_t num_rows = 0;
+  // If set, specifies a sort ordering of the rows in this RowGroup.
+  // The sorting columns can be a subset of all the columns.
+  thrust::optional<std::vector<SortingColumn>> sorting_columns;
+  // Byte offset from beginning of file to first page (data or dictionary) in this row group
+  thrust::optional<int64_t> file_offset;
+  // Total byte size of all compressed (and potentially encrypted) column data in this row group
+  thrust::optional<int64_t> total_compressed_size;
+  // Row group ordinal in the file
+  thrust::optional<int16_t> ordinal;
 };
 
 /**

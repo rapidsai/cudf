@@ -121,6 +121,7 @@ class CompactProtocolReader {
   void read(Statistics* s);
   void read(ColumnOrder* c);
   void read(PageEncodingStats* s);
+  void read(SortingColumn* s);
 
  public:
   static int NumRequiredBits(uint32_t max_level) noexcept

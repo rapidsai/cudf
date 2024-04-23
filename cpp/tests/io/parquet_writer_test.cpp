@@ -27,6 +27,7 @@
 #include <cudf/io/types.hpp>
 #include <cudf/unary.hpp>
 
+#include <src/io/parquet/parquet.hpp>
 #include <src/io/parquet/parquet_common.hpp>
 
 #include <fstream>
@@ -1513,6 +1514,7 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
   cudf::io::parquet_writer_options opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table)
       .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .sorting_columns({{0, false, false}})
       .compression(cudf::io::compression_type::ZSTD);
   cudf::io::write_parquet(opts);
 
@@ -1524,6 +1526,24 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
   ASSERT_GT(fmd.row_groups.size(), 0);
   EXPECT_GE(fmd.row_groups[0].total_byte_size,
             static_cast<int64_t>(num_rows * sizeof(column_type)));
+
+  // row group file offset should be first page location
+  EXPECT_EQ(fmd.row_groups[0].file_offset, fmd.row_groups[0].columns[0].meta_data.data_page_offset);
+
+  // ordinal should be set to 0
+  ASSERT_TRUE(fmd.row_groups[0].ordinal.has_value());
+  EXPECT_EQ(fmd.row_groups[0].ordinal.value(), 0);
+
+  // only one column, so total_compressed_size should equal compressed size of first chunk
+  ASSERT_TRUE(fmd.row_groups[0].total_compressed_size.has_value());
+  EXPECT_EQ(fmd.row_groups[0].total_compressed_size.value(),
+            fmd.row_groups[0].columns[0].meta_data.total_compressed_size);
+
+  // test that sorting order was written correctly
+  ASSERT_TRUE(fmd.row_groups[0].sorting_columns.has_value());
+  EXPECT_EQ(fmd.row_groups[0].sorting_columns.value()[0].column_idx, 0);
+  EXPECT_FALSE(fmd.row_groups[0].sorting_columns.value()[0].descending);
+  EXPECT_FALSE(fmd.row_groups[0].sorting_columns.value()[0].nulls_first);
 }
 
 TEST_F(ParquetWriterTest, UserRequestedDictFallback)
