@@ -230,7 +230,7 @@ range get_range(host_span<range const> input_ranges, range const& selected_range
   return {first_range.begin, last_range.end};
 }
 
-void reader_impl::global_preprocess(read_mode mode)
+void reader_impl::preprocess_file(read_mode mode)
 {
   if (_file_itm_data.global_preprocessed) { return; }
   _file_itm_data.global_preprocessed = true;

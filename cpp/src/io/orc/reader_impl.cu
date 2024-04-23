@@ -30,7 +30,7 @@ void reader_impl::prepare_data(read_mode mode)
   if (_selected_columns.num_levels() == 0) { return; }
 
   // This will be no-op if it was called before.
-  global_preprocess(mode);
+  preprocess_file(mode);
 
   if (!_chunk_read_data.more_table_chunk_to_output()) {
     if (!_chunk_read_data.more_stripe_to_decode() && _chunk_read_data.more_stripe_to_load()) {

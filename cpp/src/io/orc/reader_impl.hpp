@@ -112,8 +112,8 @@ class reader_impl {
   void prepare_data(read_mode mode);
 
   /**
-   * @brief Perform a global preprocessing step that executes exactly once for the entire duration
-   * of the reader.
+   * @brief Perform a preprocessing step on the input data sources that executes exactly once
+   * for the entire duration of the reader.
    *
    * In this step, the metadata of all stripes in the data sources is parsed, and information about
    * data streams of the selected columns in all stripes are generated. If the reader has a data
@@ -123,7 +123,7 @@ class reader_impl {
    *
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
-  void global_preprocess(read_mode mode);
+  void preprocess_file(read_mode mode);
 
   /**
    * @brief Load stripes from the input data sources into memory.
