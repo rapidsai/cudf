@@ -106,8 +106,25 @@ class BufferOwner(Serializable):
     been accessed outside of BufferOwner. In this case, we have no control
     over knowing if the data is being modified by a third party.
 
-    Use `_from_device_memory` and `_from_host_memory` to create
+    Use `from_device_memory` and `from_host_memory` to create
     a new instance from either device or host memory respectively.
+
+    Parameters
+    ----------
+    ptr
+        An integer representing a pointer to memory.
+    size
+        The size of the memory in nbytes
+    owner
+        Python object to which the lifetime of the memory allocation is tied.
+        This buffer will keep a reference to `owner`.
+    exposed
+        Pointer to the underlying memory
+
+    Raises
+    ------
+    ValueError
+        If size is negative
     """
 
     _ptr: int
@@ -117,14 +134,25 @@ class BufferOwner(Serializable):
     # The set of buffers that point to this owner.
     _slices: weakref.WeakSet[Buffer]
 
-    def __init__(self):
-        raise ValueError(
-            f"do not create a {self.__class__} directly, please "
-            "use the factory function `cudf.core.buffer.as_buffer`"
-        )
+    def __init__(
+        self,
+        *,
+        ptr: int,
+        size: int,
+        owner: object,
+        exposed: bool,
+    ):
+        if size < 0:
+            raise ValueError("size cannot be negative")
+
+        self._ptr = ptr
+        self._size = size
+        self._owner = owner
+        self._exposed = exposed
+        self._slices = weakref.WeakSet()
 
     @classmethod
-    def _from_device_memory(cls, data: Any, exposed: bool) -> Self:
+    def from_device_memory(cls, data: Any, exposed: bool) -> Self:
         """Create from an object providing a `__cuda_array_interface__`.
 
         No data is being copied.
@@ -151,24 +179,15 @@ class BufferOwner(Serializable):
             If the resulting buffer has negative size
         """
 
-        # Bypass `__init__` and initialize attributes manually
-        ret = cls.__new__(cls)
-        ret._owner = data
-        ret._exposed = exposed
-        ret._slices = weakref.WeakSet()
         if isinstance(data, rmm.DeviceBuffer):  # Common case shortcut
-            ret._ptr = data.ptr
-            ret._size = data.size
+            ptr = data.ptr
+            size = data.size
         else:
-            ret._ptr, ret._size = get_ptr_and_size(
-                data.__cuda_array_interface__
-            )
-        if ret.size < 0:
-            raise ValueError("size cannot be negative")
-        return ret
+            ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
+        return cls(ptr=ptr, size=size, owner=data, exposed=exposed)
 
     @classmethod
-    def _from_host_memory(cls, data: Any) -> Self:
+    def from_host_memory(cls, data: Any) -> Self:
         """Create an owner from a buffer or array like object
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
@@ -196,7 +215,7 @@ class BufferOwner(Serializable):
         # Copy to device memory
         buf = rmm.DeviceBuffer(ptr=ptr, size=size)
         # Create from device memory
-        return cls._from_device_memory(buf, exposed=False)
+        return cls.from_device_memory(buf, exposed=False)
 
     @property
     def size(self) -> int:
@@ -375,7 +394,7 @@ class Buffer(Serializable):
             )
 
         # Otherwise, we create a new copy of the memory
-        owner = self._owner._from_device_memory(
+        owner = self._owner.from_device_memory(
             rmm.DeviceBuffer(
                 ptr=self._owner.get_ptr(mode="read") + self._offset,
                 size=self.size,
@@ -439,9 +458,9 @@ class Buffer(Serializable):
 
         owner_type: BufferOwner = pickle.loads(header["owner-type-serialized"])
         if hasattr(frame, "__cuda_array_interface__"):
-            owner = owner_type._from_device_memory(frame, exposed=False)
+            owner = owner_type.from_device_memory(frame, exposed=False)
         else:
-            owner = owner_type._from_host_memory(frame)
+            owner = owner_type.from_host_memory(frame)
         return cls(
             owner=owner,
             offset=0,

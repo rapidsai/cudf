@@ -149,13 +149,6 @@ def _index_from_data(data: MutableMapping, name: Any = no_default):
     return index_class_type._from_data(data, name)
 
 
-def _index_from_columns(
-    columns: List[cudf.core.column.ColumnBase], name: Any = no_default
-):
-    """Construct an index from ``columns``, with levels named 0, 1, 2..."""
-    return _index_from_data(dict(zip(range(len(columns)), columns)), name=name)
-
-
 class RangeIndex(BaseIndex, BinaryOperand):
     """
     Immutable Index implementing a monotonic integer range.
@@ -988,8 +981,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @_cudf_nvtx_annotate
     def __init__(self, data, **kwargs):
-        kwargs = _setdefault_name(data, **kwargs)
-        name = kwargs.get("name")
+        name = _getdefault_name(data, name=kwargs.get("name"))
         super().__init__({name: data})
 
     @_cudf_nvtx_annotate
@@ -1397,8 +1389,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def __getitem__(self, index):
         res = self._get_elements_from_column(index)
         if isinstance(res, ColumnBase):
-            res = as_index(res)
-            res.name = self.name
+            res = as_index(res, name=self.name)
         return res
 
     @property  # type: ignore
@@ -1713,7 +1704,7 @@ class DatetimeIndex(Index):
         if dtype.kind != "M":
             raise TypeError("dtype must be a datetime type")
 
-        name = _setdefault_name(data, name=name)["name"]
+        name = _getdefault_name(data, name=name)
         data = column.as_column(data)
 
         # TODO: Remove this if statement and fix tests now that
@@ -2432,7 +2423,7 @@ class TimedeltaIndex(Index):
         if dtype.kind != "m":
             raise TypeError("dtype must be a timedelta type")
 
-        name = _setdefault_name(data, name=name)["name"]
+        name = _getdefault_name(data, name=name)
         data = column.as_column(data, dtype=dtype)
 
         if copy:
@@ -2601,7 +2592,7 @@ class CategoricalIndex(Index):
                 )
         if copy:
             data = column.as_column(data, dtype=dtype).copy(deep=True)
-        kwargs = _setdefault_name(data, name=name)
+        name = _getdefault_name(data, name=name)
         if isinstance(data, CategoricalColumn):
             data = data
         elif isinstance(data, pd.Series) and (
@@ -2635,7 +2626,7 @@ class CategoricalIndex(Index):
             data = data.as_ordered(ordered=True)
         elif ordered is False and data.ordered is True:
             data = data.as_ordered(ordered=False)
-        super().__init__(data, **kwargs)
+        super().__init__(data, name=name)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2821,7 +2812,7 @@ class IntervalIndex(Index):
         copy: bool = False,
         name=None,
     ):
-        name = _setdefault_name(data, name=name)["name"]
+        name = _getdefault_name(data, name=name)
 
         if dtype is not None:
             dtype = cudf.dtype(dtype)
@@ -3053,10 +3044,10 @@ def as_index(
     return idx
 
 
-def _setdefault_name(values, **kwargs):
-    if kwargs.get("name") is None:
-        kwargs["name"] = getattr(values, "name", None)
-    return kwargs
+def _getdefault_name(values, name):
+    if name is None:
+        return getattr(values, "name", None)
+    return name
 
 
 @_cudf_nvtx_annotate
