@@ -75,6 +75,7 @@ struct clamp_strings_fn {
       return element;
     }();
 
+    // ensures an empty string is not converted to a null row
     return !d_str.empty() ? string_index_pair{d_str.data(), d_str.size_bytes()}
                           : string_index_pair{"", 0};
   }
