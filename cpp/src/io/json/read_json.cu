@@ -56,7 +56,7 @@ size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
  * @param sources Array of data sources
  * @param compression Compression format of source
  * @param range_offset Number of bytes to skip from source start
- * @param remaining_bytes_to_read Number of bytes to read from source
+ * @param range_size Number of bytes to read from source
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @returns A subspan of the input device span containing data read
  */
@@ -64,7 +64,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                                    host_span<std::unique_ptr<datasource>> sources,
                                    compression_type compression,
                                    size_t range_offset,
-                                   size_t remaining_bytes_to_read,
+                                   size_t range_size,
                                    rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -90,8 +90,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
       std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
     size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
 
-    remaining_bytes_to_read =
-      std::min(remaining_bytes_to_read, prefsum_source_sizes.back() - range_offset);
+    auto remaining_bytes_to_read = std::min(range_size, prefsum_source_sizes.back() - range_offset);
     range_offset -= start_source ? prefsum_source_sizes[start_source - 1] : 0;
     for (size_t i = start_source; i < sources.size() && remaining_bytes_to_read; i++) {
       if (sources[i]->is_empty()) continue;
