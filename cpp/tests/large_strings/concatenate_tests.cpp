@@ -17,21 +17,16 @@
 #include "large_strings_tests.hpp"
 
 #include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/debug_utilities.hpp>
-#include <cudf_test/testing_main.hpp>
 
-#include <cudf/column/column.hpp>
-#include <cudf/strings/combine.hpp>
+#include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <map>
-#include <memory>
 #include <vector>
 
 struct ConcatenateTest : public cudf::test::StringsLargeTest {};
 
-TEST_F(ConcatenateTest, ConcatenateVertical2)
+TEST_F(ConcatenateTest, ConcatenateVertical)
 {
   auto input = this->long_column();
   auto view  = cudf::column_view(input);
