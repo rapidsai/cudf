@@ -593,10 +593,6 @@ dependencies:
               cuda: "11.8"
             packages:
               - cuda-sanitizer-api=11.8.86
-          - matrix:
-              cuda: "11.4"
-            packages:
-              - cuda-sanitizer-api=11.4.120
           - matrix:  # Fallback for CUDA 11 or no matrix
             packages:
   test_java:
