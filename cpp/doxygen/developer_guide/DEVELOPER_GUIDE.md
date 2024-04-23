@@ -217,7 +217,7 @@ in the `cuda::mr` namespace of libcu++, but RMM provides some convenience wrappe
     of device-accessible memory.
  - `rmm::device_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
     of device-accessible memory.
- - `rmm::host_resource_ref` accepts a memory resource that provides synchronous allocation of host- 
+ - `rmm::host_resource_ref` accepts a memory resource that provides synchronous allocation of host-
     accessible memory.
  - `rmm::host_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
     of host-accessible memory.
