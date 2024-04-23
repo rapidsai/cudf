@@ -174,6 +174,18 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadNoData)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
 }
 
+TEST_F(OrcChunkedReaderTest, TestChunkedReadInvalidParameter)
+{
+  std::vector<std::unique_ptr<cudf::column>> input_columns;
+  input_columns.emplace_back(int32s_col{}.release());
+  input_columns.emplace_back(int64s_col{}.release());
+
+  auto const [expected, filepath] = write_file(input_columns, "chunked_read_invalid");
+  EXPECT_THROW(
+    chunked_read(filepath, output_limit{1'000}, output_row_granularity{-1} /*invalid value*/),
+    cudf::logic_error);
+}
+
 TEST_F(OrcChunkedReaderTest, TestChunkedReadSimpleData)
 {
   auto constexpr num_rows = 40'000;
