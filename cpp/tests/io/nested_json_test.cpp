@@ -148,6 +148,7 @@ TEST_F(JsonTest, StackContext)
   auto const stream = cudf::get_default_stream();
 
   // Test input
+  SymbolT delimiter       = '\n';
   std::string const input = R"(  [{)"
                             R"("category": "reference",)"
                             R"("index:": [4,12,42],)"
@@ -171,7 +172,8 @@ TEST_F(JsonTest, StackContext)
 
   // Run algorithm
   constexpr auto stack_behavior = cuio_json::stack_behavior_t::PushPopWithoutReset;
-  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stack_behavior, stream);
+  cuio_json::detail::get_stack_context(
+    d_input, stack_context.device_ptr(), stack_behavior, delimiter, stream);
 
   // Copy back the results
   stack_context.device_to_host_async(stream);
@@ -210,6 +212,7 @@ TEST_F(JsonTest, StackContextUtf8)
   auto const stream = cudf::get_default_stream();
 
   // Test input
+  SymbolT delimiter       = '\n';
   std::string const input = R"([{"a":{"year":1882,"author": "Bharathi"}, {"a":"filip ʒakotɛ"}}])";
 
   // Prepare input & output buffers
@@ -220,7 +223,8 @@ TEST_F(JsonTest, StackContextUtf8)
 
   // Run algorithm
   constexpr auto stack_behavior = cuio_json::stack_behavior_t::PushPopWithoutReset;
-  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stack_behavior, stream);
+  cuio_json::detail::get_stack_context(
+    d_input, stack_context.device_ptr(), stack_behavior, delimiter, stream);
 
   // Copy back the results
   stack_context.device_to_host_async(stream);
@@ -248,6 +252,7 @@ TEST_F(JsonTest, StackContextRecovering)
   auto const stream = cudf::get_default_stream();
 
   // JSON lines input that recovers on invalid lines
+  SymbolT delimiter       = '\n';
   std::string const input = R"({"a":-2},
   {"a":
   {"a":{"a":[321
@@ -274,7 +279,8 @@ TEST_F(JsonTest, StackContextRecovering)
 
   // Run algorithm
   constexpr auto stack_behavior = cuio_json::stack_behavior_t::ResetOnDelimiter;
-  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stack_behavior, stream);
+  cuio_json::detail::get_stack_context(
+    d_input, stack_context.device_ptr(), stack_behavior, delimiter, stream);
 
   // Copy back the results
   stack_context.device_to_host_async(stream);
@@ -297,6 +303,7 @@ TEST_F(JsonTest, StackContextRecoveringFuzz)
   std::mt19937 gen(42);
   std::uniform_int_distribution<int> distribution(0, 4);
   constexpr std::size_t input_length = 1024 * 1024;
+  SymbolT delimiter                  = '\n';
   std::string input{};
   input.reserve(input_length);
 
@@ -392,7 +399,8 @@ TEST_F(JsonTest, StackContextRecoveringFuzz)
 
   // Run algorithm
   constexpr auto stack_behavior = cuio_json::stack_behavior_t::ResetOnDelimiter;
-  cuio_json::detail::get_stack_context(d_input, stack_context.device_ptr(), stack_behavior, stream);
+  cuio_json::detail::get_stack_context(
+    d_input, stack_context.device_ptr(), stack_behavior, delimiter, stream);
 
   // Copy back the results
   stack_context.device_to_host_async(stream);

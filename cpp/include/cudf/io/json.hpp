@@ -230,6 +230,13 @@ class json_reader_options {
   }
 
   /**
+   * @brief Returns delimiter separating records in JSON lines
+   *
+   * @return Delimiter separating records in JSON lines
+   */
+  char get_delimiter() const { return _delimiter; }
+
+  /**
    * @brief Whether to read the file as a json object per line.
    *
    * @return `true` if reading the file as a json object per line
@@ -328,6 +335,13 @@ class json_reader_options {
    * @param size Number of bytes to read
    */
   void set_byte_range_size(size_type size) { _byte_range_size = size; }
+
+  /**
+   * @brief Set delimiter separating records in JSON lines
+   *
+   * @param delimiter Delimiter separating records in JSON lines
+   */
+  void set_delimiter(char delimiter) { _delimiter = delimiter; }
 
   /**
    * @brief Set whether to read the file as a json object per line.
@@ -482,6 +496,18 @@ class json_reader_options_builder {
   json_reader_options_builder& byte_range_size(size_type size)
   {
     options._byte_range_size = size;
+    return *this;
+  }
+
+  /**
+   * @brief Set delimiter separating records in JSON lines
+   *
+   * @param delimiter Delimiter separating records in JSON lines
+   * @return this for chaining
+   */
+  json_reader_options_builder& delimiter(char delimiter)
+  {
+    options._delimiter = delimiter;
     return *this;
   }
 

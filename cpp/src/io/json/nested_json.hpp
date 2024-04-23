@@ -204,6 +204,7 @@ namespace detail {
 void get_stack_context(device_span<SymbolT const> json_in,
                        SymbolT* d_top_of_stack,
                        stack_behavior_t stack_behavior,
+                       SymbolT delimiter,
                        rmm::cuda_stream_view stream);
 
 /**
