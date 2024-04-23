@@ -351,11 +351,15 @@ void reader_impl::preprocess_file(read_mode mode)
   // Collect all data streams' information:
   //
 
+  // Load all stripes if we are in READ_ALL mode or there is no read limit.
+  auto const load_all_stripes =
+    mode == read_mode::READ_ALL || _chunk_read_data.data_read_limit == 0;
+
   // Accumulate data size for data streams in each stripe.
   // This will be used for CHUNKED_READ mode only.
   // If we are in READ_ALL mode, we do not need this since we just load all stripes.
   cudf::detail::hostdevice_vector<cumulative_size> total_stripe_sizes(
-    mode == read_mode::CHUNKED_READ ? num_total_stripes : std::size_t{0}, _stream);
+    load_all_stripes ? std::size_t{0} : num_total_stripes, _stream);
 
   for (std::size_t stripe_global_idx = 0; stripe_global_idx < num_total_stripes;
        ++stripe_global_idx) {
@@ -416,9 +420,7 @@ void reader_impl::preprocess_file(read_mode mode)
       }
     }  // end loop level
 
-    if (mode == read_mode::CHUNKED_READ) {
-      total_stripe_sizes[stripe_global_idx] = {1, this_stripe_size};
-    }
+    if (!load_all_stripes) { total_stripe_sizes[stripe_global_idx] = {1, this_stripe_size}; }
 
     // Range of all stream reads in `read_info` corresponding to this stripe, in all levels.
     stripe_data_read_ranges[stripe_global_idx] = range{last_read_size, read_info.size()};
@@ -432,8 +434,7 @@ void reader_impl::preprocess_file(read_mode mode)
   // Load range is reset to start from the first position in `load_stripe_ranges`.
   _chunk_read_data.curr_load_stripe_range = 0;
 
-  // Load all stripes if there is no read limit or if we are in READ_ALL mode.
-  if (mode == read_mode::READ_ALL || _chunk_read_data.data_read_limit == 0) {
+  if (load_all_stripes) {
     _chunk_read_data.load_stripe_ranges = {range{0UL, num_total_stripes}};
     return;
   }
