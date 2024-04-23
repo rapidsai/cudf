@@ -56,7 +56,7 @@ size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
  * @param sources Array of data sources
  * @param compression Compression format of source
  * @param range_offset Number of bytes to skip from source start
- * @param range_size Number of bytes to read from source
+ * @param remaining_bytes_to_read Number of bytes to read from source
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @returns A subspan of the input device span containing data read
  */
