@@ -39,6 +39,10 @@ class cuio_source_sink_pair {
     // delete the temporary file
     std::remove(file_name.c_str());
   }
+  // move constructor
+  cuio_source_sink_pair(cuio_source_sink_pair&& ss)            = default;
+  cuio_source_sink_pair& operator=(cuio_source_sink_pair&& ss) = default;
+
   /**
    * @brief Created a source info of the set type
    *
