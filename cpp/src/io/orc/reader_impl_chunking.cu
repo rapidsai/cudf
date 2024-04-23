@@ -544,6 +544,9 @@ void reader_impl::load_data(read_mode mode)
   // Decoding range is reset to start from the first position in `decode_stripe_ranges`.
   _chunk_read_data.curr_decode_stripe_range = 0;
 
+  auto constexpr column_size_limit =
+    static_cast<std::size_t>(std::numeric_limits<size_type>::max());
+
   // Decode all loaded stripes if there is no read limit, or if we are in READ_ALL mode.
   // In theory, we should just decode 'enough' stripes for output one table chunk, instead of
   // decoding all stripes like this, for better load-balancing and reduce memory usage.
@@ -552,32 +555,9 @@ void reader_impl::load_data(read_mode mode)
       // In addition to read limit, we also need to check if the the total number of
       // rows in the loaded stripes exceeds column size limit.
       // If that is the case, we cannot decode all stripes at once.
-      num_loading_rows < static_cast<std::size_t>(std::numeric_limits<size_type>::max())) {
+      num_loading_rows < column_size_limit) {
     _chunk_read_data.decode_stripe_ranges = {load_stripe_range};
     return;
-  }
-
-  // For estimating the decompressed sizes of the loaded stripes.
-  // Only used in CHUNKED_READ mode.
-  cudf::detail::hostdevice_vector<cumulative_size_and_row> stripe_decomp_sizes(
-    mode == read_mode::CHUNKED_READ ? stripe_count : std::size_t{0}, _stream);
-
-  // For mapping stripe to the number of rows in it.
-  // Only used in READ_ALL mode.
-  // This is to store exactly the same data as for `stripe_decomp_size` above but here we do not
-  // need to allocate device memory.
-  std::vector<cumulative_size_and_row> stripe_rows(mode == read_mode::READ_ALL ? stripe_count
-                                                                               : std::size_t{0});
-
-  // Fill up the `cumulative_size_and_row` array.
-  // Note: `hostdevice_vector::begin()` mirrors `std::vector::data()` using incorrect name.
-  auto const stripe_sizes_rows_ptr =
-    mode == read_mode::CHUNKED_READ ? stripe_decomp_sizes.begin() : stripe_rows.data();
-  for (std::size_t idx = 0; idx < stripe_count; ++idx) {
-    auto const& stripe     = _file_itm_data.selected_stripes[idx + stripe_start];
-    auto const stripe_info = stripe.stripe_info;
-    stripe_sizes_rows_ptr[idx] =
-      cumulative_size_and_row{1UL /*count*/, 0UL /*size_bytes*/, stripe_info->numberOfRows};
   }
 
   // This is the post-processing step after we've done with splitting `load_stripe_range` into
@@ -593,19 +573,29 @@ void reader_impl::load_data(read_mode mode)
   };
 
   // Optimized code path when we do not have any read limit but the number of rows in the
-  // loaded stripes exceeds column size limit.
+  // loaded stripes exceeds cudf's column size limit.
   // Note that the values `max_uncompressed_size` for each stripe are not computed here.
   // Instead, they will be computed on the fly during decoding to avoid the overhead of
   // storing and retrieving from memory.
   if ((mode == read_mode::READ_ALL || _chunk_read_data.data_read_limit == 0) &&
-      num_loading_rows >= static_cast<std::size_t>(std::numeric_limits<size_type>::max())) {
-    // Here we will split stripe ranges based on stripes' number of rows, not their data size.
-    // Thus, we use a maximum possible value for data size limit.
-    // The function `find_splits` will automatically handle row count limit.
-    _chunk_read_data.decode_stripe_ranges = find_splits<cumulative_size_and_row>(
-      cudf::host_span<cumulative_size_and_row>(stripe_sizes_rows_ptr, stripe_count),
-      stripe_count,
-      std::numeric_limits<std::size_t>::max());
+      num_loading_rows >= column_size_limit) {
+    std::vector<cumulative_size_and_row> cumulative_stripe_rows(stripe_count);
+    std::size_t rows{0};
+
+    for (std::size_t idx = 0; idx < stripe_count; ++idx) {
+      auto const& stripe     = _file_itm_data.selected_stripes[idx + stripe_start];
+      auto const stripe_info = stripe.stripe_info;
+      rows += stripe_info->numberOfRows;
+
+      // Here we will split stripe ranges based only on stripes' number of rows, not data size.
+      // Thus, we override the cumulative `size_bytes` using the prefix sum of rows in stripe and
+      // will use the column size limit (`std::numeric_limits<size_type>::max()`) as split limit.
+      cumulative_stripe_rows[idx] =
+        cumulative_size_and_row{idx + 1UL /*count*/, rows /*size_bytes*/, rows};
+    }
+
+    _chunk_read_data.decode_stripe_ranges =
+      find_splits<cumulative_size_and_row>(cumulative_stripe_rows, stripe_count, column_size_limit);
     add_range_offset(_chunk_read_data.decode_stripe_ranges);
     return;
   }
@@ -614,6 +604,19 @@ void reader_impl::load_data(read_mode mode)
   // Split range of loaded stripes into subranges that can be decoded separately without blowing up
   // memory:
   //
+
+  // For estimating the decompressed sizes of the loaded stripes.
+  cudf::detail::hostdevice_vector<cumulative_size_and_row> stripe_decomp_sizes(stripe_count,
+                                                                               _stream);
+
+  // Fill up the `cumulative_size_and_row` array with initial values.
+  // Note: `hostdevice_vector::begin()` mirrors `std::vector::data()` using incorrect name.
+  for (std::size_t idx = 0; idx < stripe_count; ++idx) {
+    auto const& stripe     = _file_itm_data.selected_stripes[idx + stripe_start];
+    auto const stripe_info = stripe.stripe_info;
+    stripe_decomp_sizes[idx] =
+      cumulative_size_and_row{1UL /*count*/, 0UL /*size_bytes*/, stripe_info->numberOfRows};
+  }
 
   auto& compinfo_map = _file_itm_data.compinfo_map;
   compinfo_map.clear();  // clear cache of the last load
