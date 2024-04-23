@@ -387,8 +387,8 @@ CUDF_KERNEL void multi_contains_warp_parallel_fn(column_device_view const d_stri
   if (idx >= (num_rows * cudf::detail::warp_size * num_targets)) { return; }
 
   auto const lane_idx   = idx % cudf::detail::warp_size;
-  auto const str_idx    = (idx / cudf::detail::warp_size) % num_rows;
-  auto const target_idx = (idx / cudf::detail::warp_size) / num_rows;
+  auto const str_idx    = (idx / cudf::detail::warp_size) / num_targets;
+  auto const target_idx = (idx / cudf::detail::warp_size) % num_targets;
 
   if (d_strings.is_null(str_idx)) { return; }
 
