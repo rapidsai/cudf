@@ -2770,7 +2770,15 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
 
 
 @pytest.mark.parametrize(
-    "index", [None, cudf.RangeIndex(3, name="a"), "a", "b", ["a", "b"]]
+    "index",
+    [
+        None,
+        cudf.RangeIndex(3, name="a"),
+        "a",
+        "b",
+        ["a", "b"],
+        cudf.RangeIndex(0, 5, 2, name="a"),
+    ],
 )
 @pytest.mark.parametrize("preserve_index", [True, False, None])
 def test_arrow_round_trip(preserve_index, index):
