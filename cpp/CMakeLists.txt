@@ -346,7 +346,6 @@ add_library(
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
   src/groupby/sort/sort_helper.cu
-  src/hash/hashing.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
   src/hash/murmurhash3_x64_128.cu
@@ -355,12 +354,13 @@ add_library(
   src/hash/sha256_hash.cu
   src/hash/sha384_hash.cu
   src/hash/sha512_hash.cu
-  src/hash/spark_murmurhash3_x86_32.cu
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
   src/interop/to_arrow_device.cu
+  src/interop/to_arrow_schema.cpp
+  src/interop/to_arrow_utilities.cpp
   src/interop/detail/arrow_allocator.cpp
   src/io/avro/avro.cpp
   src/io/avro/avro_gpu.cu
@@ -455,7 +455,6 @@ add_library(
   src/join/mixed_join_semi.cu
   src/join/mixed_join_size_kernel.cu
   src/join/mixed_join_size_kernel_nulls.cu
-  src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
@@ -589,6 +588,7 @@ add_library(
   src/strings/filling/fill.cu
   src/strings/filter_chars.cu
   src/strings/like.cu
+  src/strings/merge/merge.cu
   src/strings/padding.cu
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cpp

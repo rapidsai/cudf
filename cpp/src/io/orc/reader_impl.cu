@@ -119,9 +119,7 @@ table_metadata reader_impl::get_meta_with_user_data()
                    std::transform(meta.ff.metadata.cbegin(),
                                   meta.ff.metadata.cend(),
                                   std::inserter(kv_map, kv_map.end()),
-                                  [](auto const& kv) {
-                                    return std::pair{kv.name, kv.value};
-                                  });
+                                  [](auto const& kv) { return std::pair{kv.name, kv.value}; });
                    return kv_map;
                  });
   out_metadata.user_data = {out_metadata.per_file_user_data[0].begin(),
@@ -136,7 +134,7 @@ table_metadata reader_impl::get_meta_with_user_data()
 reader_impl::reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
                          orc_reader_options const& options,
                          rmm::cuda_stream_view stream,
-                         rmm::mr::device_memory_resource* mr)
+                         rmm::device_async_resource_ref mr)
   : reader_impl::reader_impl(0UL, 0UL, std::move(sources), options, stream, mr)
 {
 }

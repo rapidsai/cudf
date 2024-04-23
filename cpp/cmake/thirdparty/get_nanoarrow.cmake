@@ -14,23 +14,19 @@
 
 # This function finds nanoarrow and sets any additional necessary environment variables.
 function(find_and_configure_nanoarrow)
-  set(oneValueArgs VERSION FORK PINNED_TAG)
-  cmake_parse_arguments(PKG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-
+  # Currently we need to always build nanoarrow so we don't pickup a previous installed version
+  set(CPM_DOWNLOAD_nanoarrow ON)
   rapids_cpm_find(
-    nanoarrow ${PKG_VERSION}
+    nanoarrow 0.5.0
     GLOBAL_TARGETS nanoarrow
     CPM_ARGS
-    GIT_REPOSITORY https://github.com/${PKG_FORK}/arrow-nanoarrow.git
-    GIT_TAG ${PKG_PINNED_TAG}
-    # TODO: Commit hashes are not supported with shallow clones. Can switch this if and when we pin
-    # to an actual tag.
+    GIT_REPOSITORY https://github.com/apache/arrow-nanoarrow.git
+    GIT_TAG 11e73a8c85b45e3d49c8c541b4e1497a649fe03c
     GIT_SHALLOW FALSE
     OPTIONS "BUILD_SHARED_LIBS OFF" "NANOARROW_NAMESPACE cudf"
   )
   set_target_properties(nanoarrow PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  rapids_export_find_package_root(BUILD nanoarrow "${nanoarrow_BINARY_DIR}" EXPORT_SET cudf-exports)
 endfunction()
 
-find_and_configure_nanoarrow(
-  VERSION 0.4.0 FORK apache PINNED_TAG c97720003ff863b81805bcdb9f7c91306ab6b6a8
-)
+find_and_configure_nanoarrow()

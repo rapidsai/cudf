@@ -34,6 +34,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/gather.h>
 
@@ -100,7 +101,7 @@ struct dispatch_to_cudf_column {
    */
   std::unique_ptr<rmm::device_buffer> get_mask_buffer(arrow::Array const& array,
                                                       rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
+                                                      rmm::device_async_resource_ref mr)
   {
     if (array.null_bitmap_data() == nullptr) {
       return std::make_unique<rmm::device_buffer>(0, stream, mr);
@@ -126,7 +127,7 @@ struct dispatch_to_cudf_column {
 
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
   std::unique_ptr<column> operator()(
-    arrow::Array const&, data_type, bool, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+    arrow::Array const&, data_type, bool, rmm::cuda_stream_view, rmm::device_async_resource_ref)
   {
     CUDF_FAIL("Unsupported type in from_arrow.");
   }
@@ -136,7 +137,7 @@ struct dispatch_to_cudf_column {
                                      data_type type,
                                      bool skip_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     auto data_buffer         = array.data()->buffers[1];
     size_type const num_rows = array.length();
@@ -186,7 +187,7 @@ std::unique_ptr<column> get_column(arrow::Array const& array,
                                    data_type type,
                                    bool skip_mask,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr);
+                                   rmm::device_async_resource_ref mr);
 
 template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal128>(
@@ -194,7 +195,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal128>
   data_type type,
   bool skip_mask,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   using DeviceType = __int128_t;
 
@@ -230,12 +231,11 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal128>
 }
 
 template <>
-std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
-  arrow::Array const& array,
-  data_type,
-  bool skip_mask,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(arrow::Array const& array,
+                                                                  data_type,
+                                                                  bool skip_mask,
+                                                                  rmm::cuda_stream_view stream,
+                                                                  rmm::device_async_resource_ref mr)
 {
   auto data_buffer = array.data()->buffers[1];
   // mask-to-bools expects the mask to be bitmask_type aligned/padded
@@ -273,7 +273,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
   data_type,
   bool,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   if (array.length() == 0) { return make_empty_column(type_id::STRING); }
   auto str_array    = static_cast<arrow::StringArray const*>(&array);
@@ -311,7 +311,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::dictionary32>(
   data_type,
   bool,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto dict_array  = static_cast<arrow::DictionaryArray const*>(&array);
   auto dict_type   = arrow_to_cudf_type(*(dict_array->dictionary()->type()));
@@ -344,7 +344,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::struct_view>(
   data_type,
   bool,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto struct_array = static_cast<arrow::StructArray const*>(&array);
   std::vector<std::unique_ptr<column>> child_columns;
@@ -377,7 +377,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::list_view>(
   data_type,
   bool,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto list_array   = static_cast<arrow::ListArray const*>(&array);
   auto offset_array = std::make_unique<arrow::Int32Array>(
@@ -412,7 +412,7 @@ std::unique_ptr<column> get_column(arrow::Array const& array,
                                    data_type type,
                                    bool skip_mask,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   return type.id() != type_id::EMPTY
            ? type_dispatcher(type, dispatch_to_cudf_column{}, array, type, skip_mask, stream, mr)
@@ -423,7 +423,7 @@ std::unique_ptr<column> get_column(arrow::Array const& array,
 
 std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   if (input_table.num_columns() == 0) { return std::make_unique<table>(); }
   std::vector<std::unique_ptr<column>> columns;
@@ -464,7 +464,7 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
 
 std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   auto maybe_array = arrow::MakeArrayFromScalar(input, 1);
   if (!maybe_array.ok()) { CUDF_FAIL("Failed to create array"); }
@@ -484,7 +484,7 @@ std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
 
 std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -493,7 +493,7 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
 
 std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 

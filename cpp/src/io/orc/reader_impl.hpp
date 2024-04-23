@@ -24,6 +24,7 @@
 #include <cudf/io/orc.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <io/utilities/column_buffer.hpp>
 
@@ -54,7 +55,7 @@ class reader_impl {
   explicit reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
                        orc_reader_options const& options,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr);
+                       rmm::device_async_resource_ref mr);
 
   /**
    * @copydoc cudf::io::orc::detail::chunked_reader::chunked_reader(std::size_t, std::size_t,
@@ -164,7 +165,7 @@ class reader_impl {
   table_metadata get_meta_with_user_data();
 
   rmm::cuda_stream_view const _stream;
-  rmm::mr::device_memory_resource* const _mr;
+  rmm::device_async_resource_ref const _mr;
 
   // Reader configs.
   struct {

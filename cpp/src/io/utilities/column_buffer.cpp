@@ -26,6 +26,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <iomanip>
 #include <sstream>
@@ -102,7 +103,7 @@ void copy_buffer_data(string_policy const& buff, string_policy& new_buff)
 template <class string_policy>
 void column_buffer_base<string_policy>::create(size_type _size,
                                                rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+                                               rmm::device_async_resource_ref mr)
 {
   size = _size;
   _mr  = mr;
@@ -286,7 +287,7 @@ template <class string_policy>
 std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
                                    column_name_info* schema_info,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   if (schema_info != nullptr) { schema_info->name = buffer.name; }
 
@@ -357,12 +358,12 @@ template std::unique_ptr<column> make_column<pointer_type>(
 template std::unique_ptr<column> empty_like<string_type>(string_column_buffer& buffer,
                                                          column_name_info* schema_info,
                                                          rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr);
+                                                         rmm::device_async_resource_ref mr);
 
 template std::unique_ptr<column> empty_like<pointer_type>(pointer_column_buffer& buffer,
                                                           column_name_info* schema_info,
                                                           rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
+                                                          rmm::device_async_resource_ref mr);
 
 template std::string type_to_name<string_type>(string_column_buffer const& buffer);
 template std::string type_to_name<pointer_type>(pointer_column_buffer const& buffer);
