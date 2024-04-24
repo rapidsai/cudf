@@ -405,9 +405,9 @@ reader::impl::impl(std::size_t chunk_read_limit,
   if (options.get_filter().has_value() and options.get_columns().has_value()) {
     // list, struct, dictionary are not supported by AST filter yet.
     // extract columns not present in get_columns() & keep count to remove at end.
-    auto extractor       = names_from_expression(options.get_filter(), *(options.get_columns()));
-    filter_columns_names = extractor.get_column_names();
-    _num_filter_columns  = filter_columns_names->size();
+    filter_columns_names =
+      get_column_names_in_expression(options.get_filter(), *(options.get_columns()));
+    _num_filter_only_columns = filter_columns_names->size();
   }
   std::tie(_input_columns, _output_buffers, _output_column_schemas) =
     _metadata->select_columns(options.get_columns(),
@@ -546,10 +546,10 @@ table_with_metadata reader::impl::finalize_output(
                  "Predicate filter should return a boolean");
     // Exclude columns present in filter only in output
     auto counting_it        = thrust::make_counting_iterator<std::size_t>(0);
-    auto const output_count = read_table->num_columns() - _num_filter_columns;
+    auto const output_count = read_table->num_columns() - _num_filter_only_columns;
     auto only_output        = read_table->select(counting_it, counting_it + output_count);
     auto output_table = cudf::detail::apply_boolean_mask(only_output, *predicate, _stream, _mr);
-    if (_num_filter_columns > 0) { out_metadata.schema_info.resize(output_count); }
+    if (_num_filter_only_columns > 0) { out_metadata.schema_info.resize(output_count); }
     return {std::move(output_table), std::move(out_metadata)};
   }
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};

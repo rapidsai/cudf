@@ -367,7 +367,7 @@ class reader::impl {
   std::unique_ptr<table_metadata> _output_metadata;
 
   // number of extra filter columns
-  std::size_t _num_filter_columns{0};
+  std::size_t _num_filter_only_columns{0};
 
   bool _strings_to_categorical = false;
 

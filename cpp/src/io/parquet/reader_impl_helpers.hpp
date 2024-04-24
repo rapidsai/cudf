@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "compact_protocol_reader.hpp"
 #include "parquet_gpu.hpp"
 
 #include <cudf/ast/detail/expression_transformer.hpp>
@@ -25,12 +24,8 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/zip_iterator.h>
-
 #include <list>
 #include <tuple>
-#include <unordered_set>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
@@ -295,38 +290,11 @@ class aggregate_reader_metadata {
 class named_to_reference_converter : public ast::detail::expression_transformer {
  public:
   named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
-                               table_metadata const& metadata)
-  {
-    if (!expr.has_value()) return;
-    // create map for column name.
-    auto it_name_id = thrust::make_zip_iterator(metadata.schema_info.cbegin(),
-                                                thrust::counting_iterator<size_t>(0));
-    std::transform(it_name_id,
-                   it_name_id + metadata.schema_info.size(),
-                   std::inserter(column_name_to_index, column_name_to_index.end()),
-                   [](auto const& name_index) {
-                     return std::make_pair(thrust::get<0>(name_index).name,
-                                           thrust::get<1>(name_index));
-                   });
-
-    expr.value().get().accept(*this);
-  }
+                               table_metadata const& metadata);
 
   named_to_reference_converter(std::reference_wrapper<ast::expression const> expr,
-                               host_span<std::string const> root_column_names)
-  {
-    // create map for column name.
-    std::transform(
-      thrust::make_zip_iterator(root_column_names.begin(), thrust::counting_iterator<size_t>(0)),
-      thrust::make_zip_iterator(root_column_names.end(),
-                                thrust::counting_iterator(root_column_names.size())),
-      std::inserter(column_name_to_index, column_name_to_index.end()),
-      [](auto const& name_index) {
-        return std::make_pair(thrust::get<0>(name_index), thrust::get<1>(name_index));
-      });
+                               host_span<std::string const> root_column_names);
 
-    expr.get().accept(*this);
-  }
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
    */
@@ -368,52 +336,14 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
 };
 
 /**
- * @brief Converts named columns to index reference columns
+ * @brief Get the column names in expression object
  *
+ * @param expr The optional expression object to get the column names from
+ * @param skip_names The names of column names to skip in returned column names
+ * @return The column names present in expression object except the skip_names
  */
-class names_from_expression : public ast::detail::expression_transformer {
- public:
-  names_from_expression(std::optional<std::reference_wrapper<ast::expression const>> expr,
-                        std::vector<std::string> const& skip_names)
-    : _skip_names(skip_names.cbegin(), skip_names.cend())
-  {
-    if (!expr.has_value()) return;
-    expr.value().get().accept(*this);
-  }
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(
-    ast::column_name_reference const& expr) override;
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
-
-  /**
-   * @brief Returns the column names in AST.
-   *
-   * @return AST operation expression
-   */
-  [[nodiscard]] std::vector<std::string> get_column_names() const
-  {
-    return {_column_names.begin(), _column_names.end()};
-  }
-
- private:
-  void visit_operands(std::vector<std::reference_wrapper<ast::expression const>> operands);
-
-  std::unordered_set<std::string> _column_names;
-  std::unordered_set<std::string> _skip_names;
-};
+[[nodiscard]] std::vector<std::string> get_column_names_in_expression(
+  std::optional<std::reference_wrapper<ast::expression const>> expr,
+  std::vector<std::string> const& skip_names);
 
 }  // namespace cudf::io::parquet::detail

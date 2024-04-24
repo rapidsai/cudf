@@ -205,7 +205,7 @@ class parquet_reader_options {
    * use_columns({"A", "X", "Z"})
    * .filter(operation(ast_operator::LESS, column_name_reference{"C"}, literal{100}));
    * @endcode
-   * Column "C" need not be present in output column.
+   * Column "C" need not be present in output table.
    * Example 2: without column projection
    * @code
    * filter(operation(ast_operator::LESS, column_reference{1}, literal{100}));
