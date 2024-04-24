@@ -1591,7 +1591,9 @@ __device__ void finish_page_encode(state_buf* s,
     }
     pages[blockIdx.x] = s->page;
     if (not comp_results.empty()) {
-      comp_results[blockIdx.x]   = {0, compression_status::FAILURE};
+      auto const status =
+        s->col.skip_compression ? compression_status::SKIPPED : compression_status::FAILURE;
+      comp_results[blockIdx.x]   = {0, status};
       pages[blockIdx.x].comp_res = &comp_results[blockIdx.x];
     }
   }
@@ -1896,6 +1898,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
       s->rle_out     = dst + RLE_LENGTH_FIELD_LEN;
       s->rle_len_pos = dst;
     }
+    s->cur             = s->rle_out;
     s->page_start_val  = row_to_value_idx(s->page.start_row, s->col);
     s->chunk_start_val = row_to_value_idx(s->ck.start_row, s->col);
   }
@@ -2494,6 +2497,7 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
     if (auto comp_res = curr_page.comp_res; comp_res != nullptr) {
       auto const lvl_bytes = curr_page.is_v2() ? curr_page.level_bytes() : 0;
       compressed_data_size += comp_res->bytes_written + lvl_bytes;
+      // TODO: would this be better as a ballot?
       if (comp_res->status != compression_status::SUCCESS) {
         atomicOr(&compression_error[warp_id], 1);
       }

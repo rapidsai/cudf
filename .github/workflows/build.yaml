@@ -108,3 +108,21 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       package-name: dask_cudf
+  trigger-pandas-tests:
+    if: inputs.build_type == 'nightly'
+    needs: wheel-build-cudf
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+          persist-credentials: false
+      - name: Trigger pandas-tests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run pandas-tests.yaml \
+            -f branch=${{ inputs.branch }} \
+            -f sha=${{ inputs.sha }} \
+            -f date=${{ inputs.date }}

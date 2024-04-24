@@ -247,9 +247,6 @@ dependencies:
       - output_types: conda
         packages:
           - fmt>=10.1.1,<11
-          - &gbench benchmark==1.8.0
-          - &gtest gtest>=1.13.0
-          - &gmock gmock>=1.13.0
           - librmm==24.6.*
           - libkvikio==24.6.*
           - librdkafka>=1.9.0,<1.10.0a0
@@ -286,13 +283,9 @@ dependencies:
       - output_types: conda
         packages:
           - &rmm_conda rmm==24.6.*
-          - &protobuf protobuf>=4.21,<5
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
-      - output_types: [requirements, pyproject]
-        packages:
-          - protoc-wheel
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -514,7 +507,7 @@ dependencies:
         packages:
           - fsspec>=0.6.0
           - numpy>=1.23,<2.0a0
-          - pandas>=2.0,<2.2.2dev0
+          - pandas>=2.0,<2.2.3dev0
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -525,7 +518,6 @@ dependencies:
           - packaging
           - rich
           - typing_extensions>=4.0.0
-          - *protobuf
       - output_types: conda
         packages:
           - *rmm_conda
@@ -590,9 +582,6 @@ dependencies:
       - output_types: conda
         packages:
           - *cmake_ver
-          - *gbench
-          - *gtest
-          - *gmock
     specific:
       - output_types: conda
         matrices:

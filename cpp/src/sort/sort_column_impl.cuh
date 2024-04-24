@@ -25,6 +25,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
@@ -52,7 +53,7 @@ std::unique_ptr<column> sorted_order(column_view const& input,
                                      order column_order,
                                      null_order null_precedence,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr);
+                                     rmm::device_async_resource_ref mr);
 
 /**
  * @brief Comparator functor needed for single column sort.

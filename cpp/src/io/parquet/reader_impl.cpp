@@ -24,6 +24,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
+#include <rmm/resource_ref.hpp>
 
 #include <bitset>
 #include <numeric>
@@ -364,7 +365,7 @@ void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_row
 reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    parquet_reader_options const& options,
                    rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
+                   rmm::device_async_resource_ref mr)
   : impl(0 /*chunk_read_limit*/,
          0 /*input_pass_read_limit*/,
          std::forward<std::vector<std::unique_ptr<cudf::io::datasource>>>(sources),
@@ -379,7 +380,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
                    std::vector<std::unique_ptr<datasource>>&& sources,
                    parquet_reader_options const& options,
                    rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
+                   rmm::device_async_resource_ref mr)
   : _stream{stream},
     _mr{mr},
     _sources{std::move(sources)},
@@ -626,7 +627,8 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
   return parquet_metadata{parquet_schema{walk_schema(&metadata, 0)},
                           metadata.get_num_rows(),
                           metadata.get_num_row_groups(),
-                          metadata.get_key_value_metadata()[0]};
+                          metadata.get_key_value_metadata()[0],
+                          metadata.get_rowgroup_metadata()};
 }
 
 }  // namespace cudf::io::parquet::detail

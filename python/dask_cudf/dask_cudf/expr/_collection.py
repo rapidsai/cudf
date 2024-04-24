@@ -81,6 +81,18 @@ class DataFrame(VarMixin, DXDataFrame):
             **kwargs,
         )
 
+    def to_orc(self, *args, **kwargs):
+        return self.to_legacy_dataframe().to_orc(*args, **kwargs)
+
+    @staticmethod
+    def read_text(*args, **kwargs):
+        from dask_expr import from_legacy_dataframe
+
+        from dask_cudf.io.text import read_text as legacy_read_text
+
+        ddf = legacy_read_text(*args, **kwargs)
+        return from_legacy_dataframe(ddf)
+
 
 class Series(VarMixin, DXSeries):
     def groupby(self, by, **kwargs):

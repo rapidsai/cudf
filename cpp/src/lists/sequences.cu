@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
@@ -88,7 +89,7 @@ struct sequences_dispatcher {
                                      std::optional<column_view> const& steps,
                                      size_type const* offsets,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return sequences_functor<T>::invoke(n_lists, n_elements, starts, steps, offsets, stream, mr);
   }
@@ -108,7 +109,7 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
                                         std::optional<column_view> const& steps,
                                         size_type const* offsets,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     auto result =
       make_fixed_width_column(starts.type(), n_elements, mask_state::UNALLOCATED, stream, mr);
@@ -132,7 +133,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   std::optional<column_view> const& steps,
                                   column_view const& sizes,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!starts.has_nulls() && !sizes.has_nulls(),
                "starts and sizes input columns must not have nulls.");
@@ -190,7 +191,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
 std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& sizes,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   return sequences(starts, std::nullopt, sizes, stream, mr);
 }
@@ -199,7 +200,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& steps,
                                   column_view const& sizes,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   return sequences(starts, std::optional<column_view>{steps}, sizes, stream, mr);
 }
@@ -209,7 +210,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
 std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& sizes,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::sequences(starts, sizes, stream, mr);
@@ -219,7 +220,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& steps,
                                   column_view const& sizes,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::sequences(starts, steps, sizes, stream, mr);
