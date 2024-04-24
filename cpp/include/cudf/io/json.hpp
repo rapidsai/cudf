@@ -245,6 +245,7 @@ class json_reader_options {
 
   /**
    * @brief Whether to use dtypes as filter instead of type inference suggestion.
+   * This option is useful for parsing only a subset of columns.
    *
    * @return `true` if dtypes is used as filter
    */
@@ -353,6 +354,7 @@ class json_reader_options {
 
   /**
    * @brief Set whether to use dtypes as filter instead of type inference suggestion.
+   * This option is useful for parsing only a subset of columns.
    *
    * @param val Boolean value to enable/disable dtypes use as filter
    */
@@ -526,6 +528,7 @@ class json_reader_options_builder {
 
   /**
    * @brief Set whether to use dtypes as filter instead of type inference suggestion.
+   * This option is useful for parsing only a subset of columns.
    *
    * @param val Boolean value to enable/disable dtypes use as filter
    * @return this for chaining

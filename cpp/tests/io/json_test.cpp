@@ -2329,12 +2329,10 @@ TEST_F(JsonReaderTest, MapTypes)
           {type_id::LIST, type_id::STRING, type_id::STRING});
 }
 
-// Test case for dtype filter
-// all path, only one.
-// one present, another not present
-// nothing present
+// Test case for dtype filter:
+// all paths, only one.
+// one present, another not present, nothing present
 // nested, flat, not-jsonlines
-
 TEST_F(JsonReaderTest, JsonNestedDtypeFilter)
 {
   std::string json_stringl = R"(
