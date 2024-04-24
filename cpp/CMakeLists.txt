@@ -359,6 +359,7 @@ add_library(
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
   src/interop/to_arrow_device.cu
+  src/interop/from_arrow_device.cu
   src/interop/to_arrow_schema.cpp
   src/interop/to_arrow_utilities.cpp
   src/interop/detail/arrow_allocator.cpp
@@ -848,14 +849,12 @@ if(CUDF_BUILD_TESTUTIL)
 
   add_library(cudf::cudftest_default_stream ALIAS cudftest_default_stream)
 
-  # Needs to be static so that we support usage of static builds of gtest which doesn't compile with
-  # fPIC enabled and therefore can't be embedded into shared libraries.
   add_library(
-    cudftestutil STATIC
+    cudftestutil SHARED
     tests/io/metadata_utilities.cpp
-    tests/utilities/base_fixture.cpp
     tests/utilities/column_utilities.cu
     tests/utilities/debug_utilities.cu
+    tests/utilities/random_seed.cpp
     tests/utilities/table_utilities.cu
     tests/utilities/tdigest_utilities.cu
   )
@@ -880,8 +879,8 @@ if(CUDF_BUILD_TESTUTIL)
 
   target_link_libraries(
     cudftestutil
-    PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf cudftest_default_stream
-    PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+    PUBLIC Threads::Threads cudf cudftest_default_stream
+    PRIVATE GTest::gmock GTest::gtest $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
   target_include_directories(
@@ -960,7 +959,7 @@ endif()
 if(CUDF_BUILD_BENCHMARKS)
   # Find or install GoogleBench
   include(${rapids-cmake-dir}/cpm/gbench.cmake)
-  rapids_cpm_gbench()
+  rapids_cpm_gbench(BUILD_STATIC)
 
   # Find or install nvbench
   include(cmake/thirdparty/get_nvbench.cmake)
