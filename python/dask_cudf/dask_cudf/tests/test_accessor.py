@@ -111,7 +111,8 @@ def test_categorical_accessor_initialization2(data):
         dsr.cat
 
 
-@xfail_dask_expr("clear_known_categories needs to be generalize")
+# TODO: Remove this once we are pinned to dask>=2024.5.0
+@xfail_dask_expr("Requires: https://github.com/dask/dask/pull/11059")
 @pytest.mark.parametrize("data", [data_cat_1()])
 def test_categorical_basic(data):
     cat = data.copy()
@@ -273,7 +274,6 @@ def test_categorical_categories():
     )
 
 
-@xfail_dask_expr("Categories are ordered differently in cudf")
 def test_categorical_as_known():
     df = dask_cudf.from_cudf(DataFrame({"col_1": [0, 1, 2, 3]}), npartitions=2)
     df["col_1"] = df["col_1"].astype("category")
@@ -282,7 +282,19 @@ def test_categorical_as_known():
     pdf = dd.from_pandas(pd.DataFrame({"col_1": [0, 1, 2, 3]}), npartitions=2)
     pdf["col_1"] = pdf["col_1"].astype("category")
     expected = pdf["col_1"].cat.as_known()
-    dd.assert_eq(expected, actual)
+
+    # Note: Categories may be ordered differently in
+    # cudf and pandas. Therefore, we need to compare
+    # the global set of categories (before and after
+    # calling `compute`), then we need to check that
+    # the initial order of rows was preserved.
+    assert set(expected.cat.categories) == set(
+        actual.cat.categories.values_host
+    )
+    assert set(expected.compute().cat.categories) == set(
+        actual.compute().cat.categories.values_host
+    )
+    dd.assert_eq(expected, actual.astype(expected.dtype))
 
 
 def test_str_slice():
