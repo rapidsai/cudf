@@ -133,8 +133,8 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   }
   /* TODO: allow byte range reading from multiple compressed files.
    */
-  remaining_bytes_to_read = std::min(remaining_bytes_to_read, sources[0]->size() - range_offset);
-  auto hbuffer            = std::vector<uint8_t>(remaining_bytes_to_read);
+  auto remaining_bytes_to_read = std::min(range_size, sources[0]->size() - range_offset);
+  auto hbuffer                 = std::vector<uint8_t>(remaining_bytes_to_read);
   // Single read because only a single compressed source is supported
   // Reading to host because decompression of a single block is much faster on the CPU
   sources[0]->host_read(range_offset, remaining_bytes_to_read, hbuffer.data());
