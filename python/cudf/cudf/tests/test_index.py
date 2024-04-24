@@ -3176,3 +3176,26 @@ def test_index_to_pandas_arrow_type(scalar):
     result = idx.to_pandas(arrow_type=True)
     expected = pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
     pd.testing.assert_index_equal(result, expected)
+
+
+@pytest.mark.parametrize("data", [range(-3, 3), range(1, 3), range(0)])
+def test_rangeindex_all(data):
+    result = cudf.RangeIndex(data).all()
+    expected = cudf.Index(list(data)).all()
+    assert result == expected
+
+
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("data", [range(2), range(2, -1, -1)])
+def test_rangeindex_factorize(sort, data):
+    res_codes, res_uniques = cudf.RangeIndex(data).factorize(sort=sort)
+    exp_codes, exp_uniques = cudf.Index(list(data)).factorize(sort=sort)
+    assert_eq(res_codes, exp_codes)
+    assert_eq(res_uniques, exp_uniques)
+
+
+def test_rangeindex_dropna():
+    ri = cudf.RangeIndex(range(2))
+    result = ri.dropna()
+    expected = ri.copy()
+    assert_eq(result, expected)
