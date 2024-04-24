@@ -95,6 +95,14 @@ cudf::column_view StringsLargeTest::long_column()
   return g_ls_data->get_column(name);
 }
 
+std::unique_ptr<LargeStringsData> StringsLargeTest::get_ls_data()
+{
+  CUDF_EXPECTS(g_ls_data == nullptr, "invalid call to get_ls_data");
+  auto lsd_data = std::make_unique<LargeStringsData>();
+  g_ls_data     = lsd_data.get();
+  return lsd_data;
+}
+
 LargeStringsData* StringsLargeTest::g_ls_data = nullptr;
 }  // namespace cudf::test
 
@@ -108,9 +116,7 @@ int main(int argc, char** argv)
   auto adaptor = make_stream_mode_adaptor(cmd_opts);
 
   // create object to automatically be destroyed at the end of main()
-  auto lsd = cudf::test::LargeStringsData();
-  // set object pointer into static variable
-  cudf::test::StringsLargeTest::g_ls_data = &lsd;
+  auto lsd = cudf::test::StringsLargeTest::get_ls_data();
 
   return RUN_ALL_TESTS();
 }

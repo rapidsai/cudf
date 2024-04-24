@@ -43,5 +43,7 @@ struct StringsLargeTest : public cudf::test::BaseFixture {
 
   large_strings_enabler g_ls_enabler;
   static LargeStringsData* g_ls_data;
+
+  static std::unique_ptr<LargeStringsData> get_ls_data();
 };
 }  // namespace cudf::test
