@@ -102,8 +102,10 @@ int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
   auto const cmd_opts = parse_cudf_test_opts(argc, argv);
-  auto mr             = make_memory_resource_adaptor(cmd_opts);
-  auto adaptor        = make_stream_mode_adaptor(cmd_opts);
+  // hardcoding the CUDA memory resource to keep from exceeding the pool
+  auto mr = cudf::test::make_cuda();
+  rmm::mr::set_current_device_resource(mr.get());
+  auto adaptor = make_stream_mode_adaptor(cmd_opts);
 
   // create object to automatically be destroyed at the end of main()
   auto lsd = cudf::test::LargeStringsData();
