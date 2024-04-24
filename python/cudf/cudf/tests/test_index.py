@@ -1606,7 +1606,7 @@ def test_rangeindex_name_not_hashable():
 def test_index_rangeindex_search_range():
     # step > 0
     ridx = RangeIndex(-13, 17, 4)
-    ri = ridx.as_range
+    ri = ridx._range
     for i in range(len(ridx)):
         assert i == search_range(ridx[i], ri, side="left")
         assert i + 1 == search_range(ridx[i], ri, side="right")
