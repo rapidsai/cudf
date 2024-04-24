@@ -17,6 +17,15 @@ from dask.dataframe.core import is_dataframe_like
 
 import cudf
 
+_LEGACY_WORKAROUND = (
+    "To disable query planning, set the global "
+    "'dataframe.query-planning' config to `False` "
+    "before dask is imported. This can also be done "
+    "by setting an environment variable: "
+    "`DASK_DATAFRAME__QUERY_PLANNING=False` "
+)
+
+
 ##
 ## Custom collection classes
 ##
@@ -62,6 +71,7 @@ class DataFrame(VarMixin, DXDataFrame):
         sort=None,
         observed=None,
         dropna=None,
+        as_index=True,
         **kwargs,
     ):
         from dask_cudf.expr._groupby import GroupBy
@@ -69,6 +79,13 @@ class DataFrame(VarMixin, DXDataFrame):
         if isinstance(by, FrameBase) and not isinstance(by, DXSeries):
             raise ValueError(
                 f"`by` must be a column name or list of columns, got {by}."
+            )
+
+        if as_index is not True:
+            raise NotImplementedError(
+                f"`as_index` is not supported by dask-expr. Please disable "
+                "query planning, or reset the index after aggregating.\n"
+                f"{_LEGACY_WORKAROUND}"
             )
 
         return GroupBy(
@@ -151,3 +168,18 @@ except ImportError:
     # Older version of dask-expr.
     # Implicit conversion to array wont work.
     pass
+
+
+##
+## Helper functions
+##
+
+
+def _legacy_instructions():
+    return (
+        "To disable query-planning, set the global "
+        "'dataframe.query-planning' config to `False` "
+        "before importing dask. This can also be done "
+        "by setting an environment variable: "
+        "`DASK_DATAFRAME__QUERY_PLANNING=False` "
+    )

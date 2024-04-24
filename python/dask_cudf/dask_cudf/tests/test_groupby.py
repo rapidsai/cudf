@@ -14,16 +14,6 @@ import dask_cudf
 from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
 from dask_cudf.tests.utils import QUERY_PLANNING_ON, xfail_dask_expr
 
-# XFAIL "collect" tests for now
-agg_params = [agg for agg in OPTIMIZED_AGGS if agg != "collect"]
-if QUERY_PLANNING_ON:
-    agg_params.append(
-        # TODO: "collect" not supported with dask-expr yet
-        pytest.param("collect", marks=pytest.mark.xfail)
-    )
-else:
-    agg_params.append("collect")
-
 
 def assert_cudf_groupby_layers(ddf):
     for prefix in ("cudf-aggregate-chunk", "cudf-aggregate-agg"):
@@ -57,7 +47,7 @@ def pdf(request):
     return pdf
 
 
-@pytest.mark.parametrize("aggregation", agg_params)
+@pytest.mark.parametrize("aggregation", OPTIMIZED_AGGS)
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation, pdf):
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -110,7 +100,7 @@ def test_groupby_cumulative(aggregation, pdf, series):
     dd.assert_eq(a, b)
 
 
-@pytest.mark.parametrize("aggregation", agg_params)
+@pytest.mark.parametrize("aggregation", OPTIMIZED_AGGS)
 @pytest.mark.parametrize(
     "func",
     [
@@ -579,8 +569,16 @@ def test_groupby_categorical_key():
     dd.assert_eq(expect, got)
 
 
-@xfail_dask_expr("as_index not supported in dask-expr")
-@pytest.mark.parametrize("as_index", [True, False])
+@pytest.mark.parametrize(
+    "as_index",
+    [
+        True,
+        pytest.param(
+            False,
+            marks=xfail_dask_expr("as_index not supported in dask-expr"),
+        ),
+    ],
+)
 @pytest.mark.parametrize("split_out", ["use_dask_default", 1, 2])
 @pytest.mark.parametrize("split_every", [False, 4])
 @pytest.mark.parametrize("npartitions", [1, 10])

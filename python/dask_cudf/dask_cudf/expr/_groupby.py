@@ -3,12 +3,30 @@
 from dask_expr._groupby import (
     GroupBy as DXGroupBy,
     SeriesGroupBy as DXSeriesGroupBy,
+    SingleAggregation,
 )
 from dask_expr._util import is_scalar
 
 ##
 ## Custom groupby classes
 ##
+
+
+class Collect(SingleAggregation):
+    @staticmethod
+    def groupby_chunk(*args, **kwargs):
+        return args[0].agg("collect")
+
+    @staticmethod
+    def groupby_aggregate(*args, **kwargs):
+        gb = args[0].agg("collect")
+        if gb.ndim > 1:
+            for col in gb.columns:
+                gb[col] = gb[col].list.concat()
+            return gb
+        else:
+            return gb.list.concat()
+
 
 # TODO: These classes are mostly a work-around for missing
 # `observed=False` support.
@@ -41,8 +59,14 @@ class GroupBy(DXGroupBy):
         )
         return g
 
+    def collect(self, **kwargs):
+        return self._single_agg(Collect, **kwargs)
+
 
 class SeriesGroupBy(DXSeriesGroupBy):
     def __init__(self, *args, observed=None, **kwargs):
         observed = observed if observed is not None else True
         super().__init__(*args, observed=observed, **kwargs)
+
+    def collect(self, **kwargs):
+        return self._single_agg(Collect, **kwargs)
