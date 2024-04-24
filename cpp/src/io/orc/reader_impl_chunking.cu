@@ -704,7 +704,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
 
   auto const decode_limit = [&] {
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.pass_read_limit *
-                                              chunk_read_data::decode_limit_ratio);
+                                              chunk_read_data::decompress_and_decode_limit_ratio);
     // Make sure not to pass 0 byte limit to `find_splits`.
     return tmp > 0UL ? tmp : 1UL;
   }();

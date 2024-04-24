@@ -57,7 +57,7 @@ struct stripe_level_comp_info {
 };
 
 /**
- * @brief Struct that store source information of an ORC streams.
+ * @brief Struct that stores source information of an ORC streams.
  */
 struct stream_source_info {
   std::size_t stripe_idx;  // global stripe id throughout all data sources
@@ -91,7 +91,7 @@ using stream_source_map =
   std::unordered_map<stream_source_info, T, stream_source_info::hash, stream_source_info::equal_to>;
 
 /**
- * @brief Struct that store information of an ORC stream.
+ * @brief Struct that stores information of an ORC stream.
  */
 struct orc_stream_info {
   // Data info:
@@ -114,8 +114,8 @@ struct file_intermediate_data {
   // Return true if no rows or stripes to read.
   bool has_no_data() const { return rows_to_read == 0 || selected_stripes.empty(); }
 
-  // For each stripe, we perform a number of read for its streams.
-  // Those reads are identified by a chunk of consecutive read info, stored in data_read_info.
+  // For each stripe, we perform a number of reads for its streams.
+  // Those reads are identified by a chunk of consecutive read info stored in `data_read_info`.
   std::vector<range> stripe_data_read_ranges;
 
   // Identify what data to read from source.
@@ -174,19 +174,19 @@ struct chunk_read_data {
   size_type const output_row_granularity;
 
   // Memory limits for loading data and decoding are computed as
-  // `load/decode_limit_ratio * pass_read_limit`.
+  // `*_limit_ratio * pass_read_limit`.
   // This is to maintain the total memory usage to be **around** the given `pass_read_limit`.
   // Note that sum of these limits may not be `1.0`, and their values are set empirically.
   static double constexpr load_limit_ratio{0.25};
-  static double constexpr decode_limit_ratio{0.6};
+  static double constexpr decompress_and_decode_limit_ratio{0.6};
 
-  // Chunks of stripes that can be load into memory such that their data size is within a size
-  // limit.
+  // Chunks of stripes that can be loaded into memory such that their data size is within the user
+  // specified limit.
   std::vector<range> load_stripe_ranges;
   std::size_t curr_load_stripe_range{0};
   bool more_stripes_to_load() const { return curr_load_stripe_range < load_stripe_ranges.size(); }
 
-  // Chunks of stripes such that their decompression size is within a size limit.
+  // Chunks of stripes such that their decompression size is within the user specified size limit.
   std::vector<range> decode_stripe_ranges;
   std::size_t curr_decode_stripe_range{0};
   bool more_stripes_to_decode() const
