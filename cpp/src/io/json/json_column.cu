@@ -625,13 +625,14 @@ void make_device_json_column(device_span<SymbolT const> input,
   // find column_ids which are values, but should be ignored in validity
   std::vector<uint8_t> ignore_vals(num_columns, 0);
   std::vector<uint8_t> is_mixed_type_column(num_columns, 0);
+  std::vector<uint8_t> is_filtered(num_columns, 0);
   columns.try_emplace(parent_node_sentinel, std::ref(root));
 
-  for (auto const this_col_id : unique_col_ids) {
-    if (column_categories[this_col_id] == NC_ERR || column_categories[this_col_id] == NC_FN) {
-      continue;
-    }
-    // Struct, List, String, Value
+  auto name_and_parent_index = [&is_array_of_arrays,
+                                &row_array_parent_col_id,
+                                &column_parent_ids,
+                                &column_categories,
+                                &column_names](auto this_col_id) {
     std::string name   = "";
     auto parent_col_id = column_parent_ids[this_col_id];
     if (parent_col_id == parent_node_sentinel || column_categories[parent_col_id] == NC_LIST) {
@@ -647,11 +648,46 @@ void make_device_json_column(device_span<SymbolT const> input,
     } else {
       CUDF_FAIL("Unexpected parent column category");
     }
+    return std::pair{name, parent_col_id};
+  };
 
-    if (parent_col_id != parent_node_sentinel && is_mixed_type_column[parent_col_id] == 1) {
-      // if parent is mixed type column, ignore this column.
-      is_mixed_type_column[this_col_id] = 1;
-      ignore_vals[this_col_id]          = 1;
+  if (options.is_enabled_use_dtypes_as_filter()) {
+    for (auto const this_col_id : unique_col_ids) {
+      if (column_categories[this_col_id] == NC_ERR || column_categories[this_col_id] == NC_FN) {
+        continue;
+      }
+      // Struct, List, String, Value
+      auto [name, parent_col_id] = name_and_parent_index(this_col_id);
+      // get path of this column, and get its dtype if present in options
+      auto nt                             = tree_path.get_path(this_col_id);
+      std::optional<data_type> user_dtype = get_path_data_type(nt, options);
+      if (!user_dtype.has_value() and parent_col_id != parent_node_sentinel) {
+        is_filtered[this_col_id] = 1;
+        continue;
+      } else {
+        // make sure all its parents are not filtered.
+        auto col_id = this_col_id;
+        while (parent_col_id != parent_node_sentinel and is_filtered[parent_col_id] == 1) {
+          is_filtered[parent_col_id] = 0;
+          col_id                     = parent_col_id;
+          parent_col_id              = column_parent_ids[col_id];
+        }
+      }
+    }
+  }
+
+  for (auto const this_col_id : unique_col_ids) {
+    if (column_categories[this_col_id] == NC_ERR || column_categories[this_col_id] == NC_FN) {
+      continue;
+    }
+    // Struct, List, String, Value
+    auto [name, parent_col_id] = name_and_parent_index(this_col_id);
+
+    // if parent is mixed type column or this column is filtered, ignore this column.
+    if (parent_col_id != parent_node_sentinel &&
+        (is_mixed_type_column[parent_col_id] || is_filtered[this_col_id])) {
+      ignore_vals[this_col_id] = 1;
+      if (is_mixed_type_column[parent_col_id]) { is_mixed_type_column[this_col_id] = 1; }
       continue;
     }
 
@@ -715,23 +751,9 @@ void make_device_json_column(device_span<SymbolT const> input,
       }
     }
 
-    std::optional<data_type> user_dtype = [&]() -> std::optional<data_type> {
-      // get path of this column, and get its dtype if present in options
-      if (options.is_enabled_use_dtypes_as_filter() or is_enabled_mixed_types_as_string) {
-        auto nt = tree_path.get_path(this_col_id);
-        return get_path_data_type(nt, options);
-      }
-      return {};
-    }();
-    // if dtype is used as filter, don't extract non-mentioned columns
-    if (options.is_enabled_use_dtypes_as_filter()) {
-      if (!user_dtype.has_value()) {
-        is_mixed_type_column[this_col_id] = 1;  // a hack to ignore children
-        ignore_vals[this_col_id]          = 1;
-        continue;
-      }
-    }
     if (is_enabled_mixed_types_as_string) {
+      auto nt               = tree_path.get_path(this_col_id);
+      auto const user_dtype = get_path_data_type(nt, options);
       // check if it is a struct forced as string, and enforce it
       if (column_categories[this_col_id] == NC_STRUCT and user_dtype.has_value() and
           user_dtype.value().id() == type_id::STRING) {

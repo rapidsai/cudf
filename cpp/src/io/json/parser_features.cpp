@@ -88,6 +88,7 @@ std::optional<data_type> get_path_data_type(
   std::optional<schema_element> col_schema = child_schema_element(path.back().first, options);
   // check if it has value, then do recursive call and return.
   if (col_schema.has_value()) {
+    // std::cout<<path.back().first<<".";
     return get_path_data_type(path, col_schema.value());
   } else {
     return {};
