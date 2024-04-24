@@ -785,6 +785,9 @@ try:
             "css": _FastSlowAttribute("css"),
             "ctx": _FastSlowAttribute("ctx"),
             "index": _FastSlowAttribute("ctx"),
+            "data": _FastSlowAttribute("data"),
+            "_display_funcs": _FastSlowAttribute("_display_funcs"),
+            "table_styles": _FastSlowAttribute("table_styles"),
         },
     )
 except ImportError:

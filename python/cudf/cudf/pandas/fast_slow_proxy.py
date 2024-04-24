@@ -333,6 +333,14 @@ def make_intermediate_proxy_type(
                 slow_name, private=slow_name.startswith("_")
             )
 
+    for slow_name in getattr(slow_type, "_attributes", []):
+        if slow_name in cls_dict:
+            continue
+        else:
+            cls_dict[slow_name] = _FastSlowAttribute(
+                slow_name, private=slow_name.startswith("_")
+            )
+
     cls = types.new_class(
         name,
         (_IntermediateProxy,),
@@ -825,6 +833,14 @@ class _FunctionProxy(_CallableProxyMixin):
         self._fsproxy_slow = unpickled_slow
 
 
+def is_bound_method(obj):
+    return inspect.ismethod(obj) and not inspect.isfunction(obj)
+
+
+def is_function(obj):
+    return inspect.isfunction(obj) or isinstance(obj, types.FunctionType)
+
+
 class _FastSlowAttribute:
     """
     A descriptor type used to define attributes of fast-slow proxies.
@@ -858,6 +874,8 @@ class _FastSlowAttribute:
             # else:
             try:
                 slow_attr = getattr(owner._fsproxy_slow, self._name)
+                # if is_bound_method(slow_attr) and instance is not None:
+                #     slow_attr = getattr(slow_attr, "__func__", slow_attr)
             except AttributeError as e:
                 if instance is not None:
                     return _maybe_wrap_result(
@@ -883,7 +901,10 @@ class _FastSlowAttribute:
 
         if instance is not None:
             if isinstance(self._attr, _MethodProxy):
-                return types.MethodType(self._attr, instance)
+                if is_bound_method(self._attr._fsproxy_slow):
+                    return self._attr
+                else:
+                    return types.MethodType(self._attr, instance)
             else:
                 if self._private:
                     return _maybe_wrap_result(
