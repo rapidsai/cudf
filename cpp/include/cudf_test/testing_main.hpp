@@ -200,12 +200,12 @@ inline auto make_stream_mode_adaptor(cxxopts::ParseResult const& cmd_opts)
  * function parses the command line to customize test behavior, like the
  * allocation mode used for creating the default memory resource.
  */
-#define CUDF_TEST_PROGRAM_MAIN()                                  \
-  int main(int argc, char** argv)                                 \
-  {                                                               \
-    ::testing::InitGoogleTest(&argc, argv);                       \
-    auto const cmd_opts = parse_cudf_test_opts(argc, argv);       \
-    auto mr             = make_memory_resource_adaptor(cmd_opts); \
-    auto adaptor        = make_stream_mode_adaptor(cmd_opts);     \
-    return RUN_ALL_TESTS();                                       \
+#define CUDF_TEST_PROGRAM_MAIN()                                            \
+  int main(int argc, char** argv)                                           \
+  {                                                                         \
+    ::testing::InitGoogleTest(&argc, argv);                                 \
+    auto const cmd_opts           = parse_cudf_test_opts(argc, argv);       \
+    [[maybe_unused]] auto mr      = make_memory_resource_adaptor(cmd_opts); \
+    [[maybe_unused]] auto adaptor = make_stream_mode_adaptor(cmd_opts);     \
+    return RUN_ALL_TESTS();                                                 \
   }

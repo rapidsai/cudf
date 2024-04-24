@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "large_strings_tests.hpp"
+#include "large_strings_fixture.hpp"
 
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -34,7 +34,7 @@ class LargeStringsData {
  public:
   using DataPointer = std::unique_ptr<cudf::table>;
 
-  ~LargeStringsData() {}
+  virtual ~LargeStringsData() {}
 
   void add_table(std::string_view name, std::unique_ptr<cudf::table>&& data)
   {
@@ -60,7 +60,7 @@ class LargeStringsData {
     return _data.find(key) != _data.end() ? _data.at(key)->view().column(0) : cudf::column_view{};
   }
 
-  bool has_key(std::string_view name) { return _data.find(std::string(name)) != _data.end(); }
+  bool has_key(std::string_view name) const { return _data.find(std::string(name)) != _data.end(); }
 
  protected:
   std::map<std::string, DataPointer> _data;

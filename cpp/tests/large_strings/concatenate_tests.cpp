@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "large_strings_tests.hpp"
+#include "large_strings_fixture.hpp"
 
 #include <cudf_test/column_utilities.hpp>
 

@@ -571,7 +571,7 @@ ConfigureTest(
 # ##################################################################################################
 # * large strings test ----------------------------------------------------------------------------
 ConfigureTest(
-  LARGE_STRINGS_TEST large_strings/large_strings_tests.cpp large_strings/merge_tests.cpp
+  LARGE_STRINGS_TEST large_strings/large_strings_fixture.cpp large_strings/merge_tests.cpp
   large_strings/concatenate_tests.cpp
   GPUS 1
   PERCENT 100
