@@ -131,12 +131,13 @@ constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NU
  * @brief Function object to map (input_symbol,stack_context) tuples to a symbol group.
  */
 struct SymbolPairToSymbolGroupId {
+  SymbolT delimiter = '\n';
   CUDF_HOST_DEVICE SymbolGroupT operator()(thrust::tuple<SymbolT, StackSymbolT> symbol) const
   {
     auto const input_symbol = thrust::get<0>(symbol);
     auto const stack_symbol = thrust::get<1>(symbol);
     return static_cast<SymbolGroupT>(
-      input_symbol == '\n'
+      input_symbol == delimiter
         ? dfa_symbol_group_id::DELIMITER
         : (stack_symbol == '_' ? dfa_symbol_group_id::ROOT : dfa_symbol_group_id::OTHER));
   }
@@ -1592,9 +1593,10 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   // fixes the stack context for those excess characters. That is, that all those excess characters
   // will be interpreted in the root stack context
   if (recover_from_error) {
+    auto symbol_groups = fix_stack_of_excess_chars::SymbolPairToSymbolGroupId{};
+    symbol_groups.delimiter = delimiter;
     auto fix_stack_of_excess_chars = fst::detail::make_fst(
-      fst::detail::make_symbol_group_lookup_op(
-        fix_stack_of_excess_chars::SymbolPairToSymbolGroupId{}),
+      fst::detail::make_symbol_group_lookup_op(symbol_groups),
       fst::detail::make_transition_table(fix_stack_of_excess_chars::transition_table),
       fst::detail::make_translation_functor(fix_stack_of_excess_chars::TransduceInputOp{}),
       stream);
