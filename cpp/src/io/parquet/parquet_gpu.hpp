@@ -54,7 +54,13 @@ constexpr int LEVEL_DECODE_BUF_SIZE = 2048;
 template <int rolling_size>
 constexpr int rolling_index(int index)
 {
-  return index % rolling_size;
+  // Cannot divide by 0. But `rolling_size` will be 0 for unused arrays, so this case will never
+  // actual be executed.
+  if constexpr (rolling_size == 0) {
+    return index;
+  } else {
+    return index % rolling_size;
+  }
 }
 
 // PARQUET-2261 allows for not writing the level histograms in certain cases.
@@ -81,7 +87,8 @@ constexpr bool is_supported_encoding(Encoding enc)
     case Encoding::RLE_DICTIONARY:
     case Encoding::DELTA_BINARY_PACKED:
     case Encoding::DELTA_LENGTH_BYTE_ARRAY:
-    case Encoding::DELTA_BYTE_ARRAY: return true;
+    case Encoding::DELTA_BYTE_ARRAY:
+    case Encoding::BYTE_STREAM_SPLIT: return true;
     default: return false;
   }
 }
@@ -199,14 +206,16 @@ enum level_type {
  * Used to control which decode kernels to run.
  */
 enum class decode_kernel_mask {
-  NONE                = 0,
-  GENERAL             = (1 << 0),  // Run catch-all decode kernel
-  STRING              = (1 << 1),  // Run decode kernel for string data
-  DELTA_BINARY        = (1 << 2),  // Run decode kernel for DELTA_BINARY_PACKED data
-  DELTA_BYTE_ARRAY    = (1 << 3),  // Run decode kernel for DELTA_BYTE_ARRAY encoded data
-  DELTA_LENGTH_BA     = (1 << 4),  // Run decode kernel for DELTA_LENGTH_BYTE_ARRAY encoded data
-  FIXED_WIDTH_NO_DICT = (1 << 5),  // Run decode kernel for fixed width non-dictionary pages
-  FIXED_WIDTH_DICT    = (1 << 6)   // Run decode kernel for fixed width dictionary pages
+  NONE                   = 0,
+  GENERAL                = (1 << 0),  // Run catch-all decode kernel
+  STRING                 = (1 << 1),  // Run decode kernel for string data
+  DELTA_BINARY           = (1 << 2),  // Run decode kernel for DELTA_BINARY_PACKED data
+  DELTA_BYTE_ARRAY       = (1 << 3),  // Run decode kernel for DELTA_BYTE_ARRAY encoded data
+  DELTA_LENGTH_BA        = (1 << 4),  // Run decode kernel for DELTA_LENGTH_BYTE_ARRAY encoded data
+  FIXED_WIDTH_NO_DICT    = (1 << 5),  // Run decode kernel for fixed width non-dictionary pages
+  FIXED_WIDTH_DICT       = (1 << 6),  // Run decode kernel for fixed width dictionary pages
+  BYTE_STREAM_SPLIT      = (1 << 7),  // Run decode kernel for BYTE_STREAM_SPLIT encoded data
+  BYTE_STREAM_SPLIT_FLAT = (1 << 8),  // Same as above but with a flat schema
 };
 
 // mask representing all the ways in which a string can be encoded
@@ -517,11 +526,12 @@ constexpr uint32_t encoding_to_mask(Encoding encoding)
  * Used to control which encode kernels to run.
  */
 enum class encode_kernel_mask {
-  PLAIN            = (1 << 0),  // Run plain encoding kernel
-  DICTIONARY       = (1 << 1),  // Run dictionary encoding kernel
-  DELTA_BINARY     = (1 << 2),  // Run DELTA_BINARY_PACKED encoding kernel
-  DELTA_LENGTH_BA  = (1 << 3),  // Run DELTA_LENGTH_BYTE_ARRAY encoding kernel
-  DELTA_BYTE_ARRAY = (1 << 4),  // Run DELTA_BYtE_ARRAY encoding kernel
+  PLAIN             = (1 << 0),  // Run plain encoding kernel
+  DICTIONARY        = (1 << 1),  // Run dictionary encoding kernel
+  DELTA_BINARY      = (1 << 2),  // Run DELTA_BINARY_PACKED encoding kernel
+  DELTA_LENGTH_BA   = (1 << 3),  // Run DELTA_LENGTH_BYTE_ARRAY encoding kernel
+  DELTA_BYTE_ARRAY  = (1 << 4),  // Run DELTA_BYtE_ARRAY encoding kernel
+  BYTE_STREAM_SPLIT = (1 << 5),  // Run plain encoding kernel, but split streams
 };
 
 /**
@@ -760,6 +770,28 @@ void DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                     rmm::cuda_stream_view stream);
 
 /**
+ * @brief Launches kernel for reading the BYTE_STREAM_SPLIT column data stored in the pages
+ *
+ * The page data will be written to the output pointed to in the page's
+ * associated column chunk.
+ *
+ * @param[in,out] pages All pages to be decoded
+ * @param[in] chunks All chunks to be decoded
+ * @param[in] num_rows Total number of rows to read
+ * @param[in] min_row Minimum number of rows to read
+ * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] error_code Error code for kernel failures
+ * @param[in] stream CUDA stream to use
+ */
+void DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
+                         cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                         size_t num_rows,
+                         size_t min_row,
+                         int level_type_size,
+                         kernel_error::pointer error_code,
+                         rmm::cuda_stream_view stream);
+
+/**
  * @brief Launches kernel for reading the string column data stored in the pages
  *
  * The page data will be written to the output pointed to in the page's
@@ -884,6 +916,28 @@ void DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] stream CUDA stream to use
  */
 void DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,
+                             cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                             std::size_t num_rows,
+                             size_t min_row,
+                             int level_type_size,
+                             kernel_error::pointer error_code,
+                             rmm::cuda_stream_view stream);
+
+/**
+ * @brief Launches kernel for reading dictionary fixed width column data stored in the pages
+ *
+ * The page data will be written to the output pointed to in the page's
+ * associated column chunk.
+ *
+ * @param[in,out] pages All pages to be decoded
+ * @param[in] chunks All chunks to be decoded
+ * @param[in] num_rows Total number of rows to read
+ * @param[in] min_row Minimum number of rows to read
+ * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] error_code Error code for kernel failures
+ * @param[in] stream CUDA stream to use
+ */
+void DecodeSplitPageDataFlat(cudf::detail::hostdevice_span<PageInfo> pages,
                              cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                              std::size_t num_rows,
                              size_t min_row,
