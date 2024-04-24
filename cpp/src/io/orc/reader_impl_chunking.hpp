@@ -36,6 +36,23 @@ struct range {
   std::size_t end{0};
 };
 
+/**
+ * @brief Expand a range of ranges into a simple range of data.
+ *
+ * @param input_ranges The list of all data ranges
+ * @param selected_ranges A range of ranges from `input_ranges`
+ * @return The range of data span by the selected range of ranges
+ */
+inline range get_range(host_span<range const> input_ranges, range const& selected_ranges)
+{
+  // The first and last range.
+  auto const& first_range = input_ranges[selected_ranges.begin];
+  auto const& last_range  = input_ranges[selected_ranges.end - 1];
+
+  // The range of data covered from the first to the last range.
+  return {first_range.begin, last_range.end};
+}
+
 // Store information to identify where to read a chunk of data from source.
 // Each read corresponds to one or more consecutive streams combined.
 struct stream_data_read_info {
@@ -260,15 +277,6 @@ template <typename T>
 std::vector<range> find_splits(host_span<T const> cumulative_sizes,
                                std::size_t total_count,
                                std::size_t size_limit);
-
-/**
- * @brief Expand a range of ranges into a simple range of data.
- *
- * @param input_ranges The list of all data ranges
- * @param selected_ranges A range of ranges from `input_ranges`
- * @return The range of data span by the selected range of ranges
- */
-range get_range(host_span<range const> input_ranges, range const& selected_ranges);
 
 /**
  * @brief Function that populates descriptors for either individual streams or chunks of column

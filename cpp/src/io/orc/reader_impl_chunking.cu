@@ -220,16 +220,6 @@ template std::vector<range> find_splits<cumulative_size>(host_span<cumulative_si
 template std::vector<range> find_splits<cumulative_size_and_row>(
   host_span<cumulative_size_and_row const> sizes, std::size_t total_count, std::size_t size_limit);
 
-inline range get_range(host_span<range const> input_ranges, range const& selected_ranges)
-{
-  // The first and last range.
-  auto const& first_range = input_ranges[selected_ranges.begin];
-  auto const& last_range  = input_ranges[selected_ranges.end - 1];
-
-  // The range of data covered from the first to the last range.
-  return {first_range.begin, last_range.end};
-}
-
 // In this step, the metadata of all stripes in the data sources is parsed, and information about
 // data streams of the selected columns in all stripes are generated. If the reader has a data
 // read limit, sizes of these streams are used to split the list of all stripes into multiple
