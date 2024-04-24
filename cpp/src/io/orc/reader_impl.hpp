@@ -118,7 +118,7 @@ class reader_impl {
    * In this step, the metadata of all stripes in the data sources is parsed, and information about
    * data streams of the selected columns in all stripes are generated. If the reader has a data
    * read limit, sizes of these streams are used to split the list of all stripes into multiple
-   * subsets, each of which will be read into memory in the `load_next_stripe_data()` step. These
+   * subsets, each of which will be loaded into memory in the `load_next_stripe_data()` step. These
    * subsets are computed such that memory usage will be kept to be around a fixed size limit.
    *
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
