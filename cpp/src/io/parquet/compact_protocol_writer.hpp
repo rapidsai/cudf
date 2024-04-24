@@ -53,6 +53,7 @@ class CompactProtocolWriter {
   size_t write(OffsetIndex const&);
   size_t write(SizeStatistics const&);
   size_t write(ColumnOrder const&);
+  size_t write(SortingColumn const&);
 
  protected:
   std::vector<uint8_t>& m_buf;
@@ -90,6 +91,8 @@ class CompactProtocolFieldWriter {
   inline void field_bool(int field, bool b);
 
   inline void field_int8(int field, int8_t val);
+
+  inline void field_int16(int field, int16_t val);
 
   inline void field_int(int field, int32_t val);
 

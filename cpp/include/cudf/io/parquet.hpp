@@ -516,6 +516,15 @@ class chunked_parquet_reader {
  * @file
  */
 
+/**
+ * @brief Struct used to describe column sorting metadata
+ */
+struct sorting_column {
+  int column_idx{};           //!< leaf column index within the row group
+  bool is_descending{false};  //!< true if sort order is descending
+  bool is_nulls_first{true};  //!< true if nulls come before non-null values
+};
+
 class parquet_writer_options_builder;
 
 /**
@@ -564,6 +573,8 @@ class parquet_writer_options {
   std::shared_ptr<writer_compression_statistics> _compression_stats;
   // write V2 page headers?
   bool _v2_page_headers = false;
+  // Which columns in _table are used for sorting
+  std::optional<std::vector<sorting_column>> _sorting_columns;
 
   /**
    * @brief Constructor from sink and table.
@@ -763,6 +774,13 @@ class parquet_writer_options {
   [[nodiscard]] auto is_enabled_write_v2_headers() const { return _v2_page_headers; }
 
   /**
+   * @brief Returns the sorting_columns.
+   *
+   * @return Column sort order metadata
+   */
+  [[nodiscard]] auto const& get_sorting_columns() const { return _sorting_columns; }
+
+  /**
    * @brief Sets partitions.
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
@@ -893,6 +911,16 @@ class parquet_writer_options {
    * @param val Boolean value to enable/disable writing of V2 page headers.
    */
   void enable_write_v2_headers(bool val) { _v2_page_headers = val; }
+
+  /**
+   * @brief Sets sorting columns.
+   *
+   * @param sorting_columns Column sort order metadata
+   */
+  void set_sorting_columns(std::vector<sorting_column> sorting_columns)
+  {
+    _sorting_columns = std::move(sorting_columns);
+  }
 };
 
 /**
@@ -1145,6 +1173,14 @@ class parquet_writer_options_builder {
   parquet_writer_options_builder& write_v2_headers(bool enabled);
 
   /**
+   * @brief Sets column sorting metadata to chunked_parquet_writer_options.
+   *
+   * @param sorting_columns Column sort order metadata
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& sorting_columns(std::vector<sorting_column> sorting_columns);
+
+  /**
    * @brief move parquet_writer_options member once it's built.
    */
   operator parquet_writer_options&&() { return std::move(options); }
@@ -1231,6 +1267,8 @@ class chunked_parquet_writer_options {
   std::shared_ptr<writer_compression_statistics> _compression_stats;
   // write V2 page headers?
   bool _v2_page_headers = false;
+  // Which columns in _table are used for sorting
+  std::optional<std::vector<sorting_column>> _sorting_columns;
 
   /**
    * @brief Constructor from sink.
@@ -1386,6 +1424,13 @@ class chunked_parquet_writer_options {
   [[nodiscard]] auto is_enabled_write_v2_headers() const { return _v2_page_headers; }
 
   /**
+   * @brief Returns the sorting_columns.
+   *
+   * @return Column sort order metadata
+   */
+  [[nodiscard]] auto const& get_sorting_columns() const { return _sorting_columns; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata
@@ -1501,6 +1546,16 @@ class chunked_parquet_writer_options {
    * @param val Boolean value to enable/disable writing of V2 page headers.
    */
   void enable_write_v2_headers(bool val) { _v2_page_headers = val; }
+
+  /**
+   * @brief Sets sorting columns.
+   *
+   * @param sorting_columns Column sort order metadata
+   */
+  void set_sorting_columns(std::vector<sorting_column> sorting_columns)
+  {
+    _sorting_columns = std::move(sorting_columns);
+  }
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
@@ -1740,6 +1795,15 @@ class chunked_parquet_writer_options_builder {
     options._compression_stats = comp_stats;
     return *this;
   }
+
+  /**
+   * @brief Sets column sorting metadata to chunked_parquet_writer_options.
+   *
+   * @param sorting_columns Column sort order metadata
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& sorting_columns(
+    std::vector<sorting_column> sorting_columns);
 
   /**
    * @brief move chunked_parquet_writer_options member once it's built.
