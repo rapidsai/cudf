@@ -268,8 +268,14 @@ ConfigureTest(
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
-  INTEROP_TEST interop/to_arrow_device_test.cpp interop/to_arrow_test.cpp
-  interop/from_arrow_test.cpp interop/dlpack_test.cpp EXTRA_LIB nanoarrow
+  INTEROP_TEST
+  interop/to_arrow_device_test.cpp
+  interop/to_arrow_test.cpp
+  interop/from_arrow_test.cpp
+  interop/from_arrow_device_test.cpp
+  interop/dlpack_test.cpp
+  EXTRA_LIB
+  nanoarrow
 )
 
 # ##################################################################################################
@@ -560,6 +566,15 @@ ConfigureTest(
   strings/strip_tests.cpp
   strings/translate_tests.cpp
   strings/urls_tests.cpp
+)
+
+# ##################################################################################################
+# * large strings test ----------------------------------------------------------------------------
+ConfigureTest(
+  LARGE_STRINGS_TEST large_strings/large_strings_fixture.cpp large_strings/merge_tests.cpp
+  large_strings/concatenate_tests.cpp
+  GPUS 1
+  PERCENT 100
 )
 
 # ##################################################################################################
