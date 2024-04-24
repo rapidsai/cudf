@@ -198,7 +198,7 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
 
   // If the last range has size smaller than `merge_threshold` the size of the second last one,
   // merge it with the second last one.
-  // This is to prevent having too small trailing range.
+  // This is to prevent having the last range too small.
   if (splits.size() > 1) {
     double constexpr merge_threshold = 0.15;
     if (auto const last = splits.back(), second_last = splits[splits.size() - 2];
@@ -427,8 +427,8 @@ void reader_impl::preprocess_file(read_mode mode)
   }
 
   //
-  // Split range of all stripes into subranges that can be loaded separately without blowing up
-  // memory:
+  // Split range of all stripes into subranges that can be loaded separately while maintaining
+  // the memory usage under the given pass limit:
   //
 
   // Load range is reset to start from the first position in `load_stripe_ranges`.
@@ -588,7 +588,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
       rows += stripe_info->numberOfRows;
 
       // Here we will split stripe ranges based only on stripes' number of rows, not data size.
-      // Thus, we override the cumulative `size_bytes` using the prefix sum of rows in stripe and
+      // Thus, we override the cumulative `size_bytes` using the prefix sum of rows in stripes and
       // will use the column size limit (`std::numeric_limits<size_type>::max()`) as split limit.
       cumulative_stripe_rows[idx] =
         cumulative_size_and_row{idx + 1UL /*count*/, rows /*size_bytes*/, rows};
