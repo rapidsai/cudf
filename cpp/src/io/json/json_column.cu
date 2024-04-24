@@ -755,8 +755,8 @@ void make_device_json_column(device_span<SymbolT const> input,
 
     if (is_enabled_mixed_types_as_string) {
       // get path of this column, check if it is a struct forced as string, and enforce it
-      auto nt                          = tree_path.get_path(this_col_id);
-      std::optional<data_type> user_dt = get_path_data_type(nt, options);
+      auto nt                             = tree_path.get_path(this_col_id);
+      std::optional<data_type> user_dtype = get_path_data_type(nt, options);
       if (column_categories[this_col_id] == NC_STRUCT and user_dtype.has_value() and
           user_dtype.value().id() == type_id::STRING) {
         is_mixed_type_column[this_col_id] = 1;
