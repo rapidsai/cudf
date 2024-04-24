@@ -113,6 +113,7 @@ enum class column_encoding {
                             ///< valid for BYTE_ARRAY columns)
   DELTA_BYTE_ARRAY,         ///< Use DELTA_BYTE_ARRAY encoding (only valid for
                             ///< BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY columns)
+  BYTE_STREAM_SPLIT,        ///< Use BYTE_STREAM_SPLIT encoding (valid for all fixed width types)
   // ORC encodings:
   DIRECT,         ///< Use DIRECT encoding
   DIRECT_V2,      ///< Use DIRECT_V2 encoding
