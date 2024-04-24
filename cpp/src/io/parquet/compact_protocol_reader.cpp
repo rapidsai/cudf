@@ -16,6 +16,8 @@
 
 #include "compact_protocol_reader.hpp"
 
+#include "parquet.hpp"
+
 #include <cudf/utilities/error.hpp>
 
 #include <algorithm>
@@ -171,6 +173,7 @@ class parquet_field_int : public parquet_field {
 };
 
 using parquet_field_int8  = parquet_field_int<int8_t, FieldType::I8>;
+using parquet_field_int16 = parquet_field_int<int16_t, FieldType::I16>;
 using parquet_field_int32 = parquet_field_int<int32_t, FieldType::I32>;
 using parquet_field_int64 = parquet_field_int<int64_t, FieldType::I64>;
 
@@ -618,9 +621,18 @@ void CompactProtocolReader::read(IntType* i)
 
 void CompactProtocolReader::read(RowGroup* r)
 {
+  using optional_i16 = parquet_field_optional<int16_t, parquet_field_int16>;
+  using optional_i64 = parquet_field_optional<int64_t, parquet_field_int64>;
+  using optional_list_sorting_column =
+    parquet_field_optional<std::vector<SortingColumn>, parquet_field_struct_list<SortingColumn>>;
+
   auto op = std::make_tuple(parquet_field_struct_list(1, r->columns),
                             parquet_field_int64(2, r->total_byte_size),
-                            parquet_field_int64(3, r->num_rows));
+                            parquet_field_int64(3, r->num_rows),
+                            optional_list_sorting_column(4, r->sorting_columns),
+                            optional_i64(5, r->file_offset),
+                            optional_i64(6, r->total_compressed_size),
+                            optional_i16(7, r->ordinal));
   function_builder(this, op);
 }
 
@@ -759,6 +771,14 @@ void CompactProtocolReader::read(Statistics* s)
 void CompactProtocolReader::read(ColumnOrder* c)
 {
   auto op = std::make_tuple(parquet_field_union_enumerator<ColumnOrder::Type>(1, c->type));
+  function_builder(this, op);
+}
+
+void CompactProtocolReader::read(SortingColumn* s)
+{
+  auto op = std::make_tuple(parquet_field_int32(1, s->column_idx),
+                            parquet_field_bool(2, s->descending),
+                            parquet_field_bool(3, s->nulls_first));
   function_builder(this, op);
 }
 

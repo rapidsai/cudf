@@ -156,6 +156,25 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
  * @param cmd_opts Command line options returned by parse_cudf_test_opts
  * @return Memory resource adaptor
  */
+inline auto make_memory_resource_adaptor(cxxopts::ParseResult const& cmd_opts)
+{
+  auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();
+  auto resource       = cudf::test::create_memory_resource(rmm_mode);
+  rmm::mr::set_current_device_resource(resource.get());
+  return resource;
+}
+
+/**
+ * @brief Sets up stream mode memory resource adaptor
+ *
+ * The resource adaptor is only set as the current device resource if the
+ * stream mode is enabled.
+ *
+ * The caller must keep the return object alive for the life of the test runs.
+ *
+ * @param cmd_opts Command line options returned by parse_cudf_test_opts
+ * @return Memory resource adaptor
+ */
 inline auto make_stream_mode_adaptor(cxxopts::ParseResult const& cmd_opts)
 {
   auto resource                      = rmm::mr::get_current_device_resource();
@@ -181,14 +200,12 @@ inline auto make_stream_mode_adaptor(cxxopts::ParseResult const& cmd_opts)
  * function parses the command line to customize test behavior, like the
  * allocation mode used for creating the default memory resource.
  */
-#define CUDF_TEST_PROGRAM_MAIN()                                        \
-  int main(int argc, char** argv)                                       \
-  {                                                                     \
-    ::testing::InitGoogleTest(&argc, argv);                             \
-    auto const cmd_opts = parse_cudf_test_opts(argc, argv);             \
-    auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();       \
-    auto resource       = cudf::test::create_memory_resource(rmm_mode); \
-    rmm::mr::set_current_device_resource(resource.get());               \
-    auto adaptor = make_stream_mode_adaptor(cmd_opts);                  \
-    return RUN_ALL_TESTS();                                             \
+#define CUDF_TEST_PROGRAM_MAIN()                                            \
+  int main(int argc, char** argv)                                           \
+  {                                                                         \
+    ::testing::InitGoogleTest(&argc, argv);                                 \
+    auto const cmd_opts           = parse_cudf_test_opts(argc, argv);       \
+    [[maybe_unused]] auto mr      = make_memory_resource_adaptor(cmd_opts); \
+    [[maybe_unused]] auto adaptor = make_stream_mode_adaptor(cmd_opts);     \
+    return RUN_ALL_TESTS();                                                 \
   }
