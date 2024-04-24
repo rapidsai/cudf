@@ -339,11 +339,9 @@ enum class dfa_symbol_group_id : uint8_t {
 constexpr auto TT_NUM_STATES     = static_cast<StateT>(dfa_states::TT_NUM_STATES);
 constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
 
-SymbolT delimiter = '\n';
-
 // The i-th string representing all the characters of a symbol group
 std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> symbol_groups{
-  {{'{'}, {'['}, {'}'}, {']'}, {'"'}, {'\\'}, {delimiter}}};
+  {{'{'}, {'['}, {'}'}, {']'}, {'"'}, {'\\'}, {'\n'}}};
 
 // Transition table for the default JSON and JSON lines formats
 std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const transition_table{
@@ -371,21 +369,39 @@ std::array<std::array<std::vector<char>, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> cons
 std::array<std::array<std::vector<char>, NUM_SYMBOL_GROUPS>, TT_NUM_STATES>
   resetting_translation_table{
     {/* IN_STATE         {      [      }      ]      "      \     \n    OTHER */
-     /* TT_OOS    */ {{{'{'}, {'['}, {'}'}, {']'}, {}, {}, {delimiter}, {}}},
-     /* TT_STR    */ {{{}, {}, {}, {}, {}, {}, {delimiter}, {}}},
-     /* TT_ESC    */ {{{}, {}, {}, {}, {}, {}, {delimiter}, {}}}}};
+     /* TT_OOS    */ {{{'{'}, {'['}, {'}'}, {']'}, {}, {}, {'\n'}, {}}},
+     /* TT_STR    */ {{{}, {}, {}, {}, {}, {}, {'\n'}, {}}},
+     /* TT_ESC    */ {{{}, {}, {}, {}, {}, {}, {'\n'}, {}}}}};
 
 // The DFA's starting state
 constexpr auto start_state = static_cast<StateT>(TT_OOS);
 
 template <typename SymbolT>
-void update_delimiter(SymbolT delim)
+auto get_sgid_lut(SymbolT delim)
 {
-  delimiter                                                                     = delim;
   symbol_groups[static_cast<std::uint8_t>(dfa_symbol_group_id::DELIMITER_CHAR)] = {delim};
-  resetting_translation_table[0][6]                                             = {delim};
-  resetting_translation_table[1][6]                                             = {delim};
-  resetting_translation_table[2][6]                                             = {delim};
+  return symbol_groups;
+}
+
+auto get_transition_table(stack_behavior_t stack_behavior)
+{
+  // Transition table specialized on the choice of whether to reset on newlines
+  return (stack_behavior == stack_behavior_t::ResetOnDelimiter)
+           ? to_stack_op::resetting_transition_table
+           : to_stack_op::transition_table;
+}
+
+template <typename SymbolT>
+auto get_translation_table(SymbolT delim, stack_behavior_t stack_behavior)
+{
+  // Translation table specialized on the choice of whether to reset on newlines
+  if (stack_behavior == stack_behavior_t::ResetOnDelimiter) {
+    resetting_translation_table[0][6] = {delim};
+    resetting_translation_table[1][6] = {delim};
+    resetting_translation_table[2][6] = {delim};
+    return resetting_translation_table;
+  }
+  return translation_table;
 }
 
 }  // namespace to_stack_op
@@ -1437,22 +1453,11 @@ void get_stack_context(device_span<SymbolT const> json_in,
   constexpr auto max_translation_table_size =
     to_stack_op::NUM_SYMBOL_GROUPS * to_stack_op::TT_NUM_STATES;
 
-  if (delimiter != to_stack_op::delimiter) to_stack_op::update_delimiter(delimiter);
-
-  // Transition table specialized on the choice of whether to reset on newlines
-  const auto transition_table = (stack_behavior == stack_behavior_t::ResetOnDelimiter)
-                                  ? to_stack_op::resetting_transition_table
-                                  : to_stack_op::transition_table;
-
-  // Translation table specialized on the choice of whether to reset on newlines
-  const auto translation_table = (stack_behavior == stack_behavior_t::ResetOnDelimiter)
-                                   ? to_stack_op::resetting_translation_table
-                                   : to_stack_op::translation_table;
-
   auto json_to_stack_ops_fst = fst::detail::make_fst(
-    fst::detail::make_symbol_group_lut(to_stack_op::symbol_groups),
-    fst::detail::make_transition_table(transition_table),
-    fst::detail::make_translation_table<max_translation_table_size>(translation_table),
+    fst::detail::make_symbol_group_lut(to_stack_op::get_sgid_lut(delimiter)),
+    fst::detail::make_transition_table(to_stack_op::get_transition_table(stack_behavior)),
+    fst::detail::make_translation_table<max_translation_table_size>(
+      to_stack_op::get_translation_table(delimiter, stack_behavior)),
     stream);
 
   // "Search" for relevant occurrence of brackets and braces that indicate the beginning/end
