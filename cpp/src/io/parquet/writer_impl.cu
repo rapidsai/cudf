@@ -613,8 +613,7 @@ std::vector<schema_tree_node> construct_schema_tree(
                                                 column_in_metadata const& col_meta) {
         s.requested_encoding = column_encoding::USE_DEFAULT;
 
-        if (schema[parent_idx].name != "list" and
-            col_meta.get_encoding() != column_encoding::USE_DEFAULT) {
+        if (s.name != "list" and col_meta.get_encoding() != column_encoding::USE_DEFAULT) {
           // do some validation
           switch (col_meta.get_encoding()) {
             case column_encoding::DELTA_BINARY_PACKED:
@@ -654,6 +653,21 @@ std::vector<schema_tree_node> construct_schema_tree(
               if (s.converted_type.value_or(ConvertedType::UNKNOWN) == ConvertedType::DECIMAL) {
                 CUDF_LOG_WARN(
                   "Decimal types cannot yet be encoded as DELTA_BYTE_ARRAY; the "
+                  "requested encoding will be ignored");
+                return;
+              }
+              break;
+
+            case column_encoding::BYTE_STREAM_SPLIT:
+              if (s.type == Type::BYTE_ARRAY) {
+                CUDF_LOG_WARN(
+                  "BYTE_STREAM_SPLIT encoding is only supported for fixed width columns; the "
+                  "requested encoding will be ignored");
+                return;
+              }
+              if (s.type == Type::INT96) {
+                CUDF_LOG_WARN(
+                  "BYTE_STREAM_SPLIT encoding is not supported for INT96 columns; the "
                   "requested encoding will be ignored");
                 return;
               }
