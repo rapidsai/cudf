@@ -1,4 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
-./cpp/examples/build.sh
+# build and install libcudf examples
+./cpp/examples/build.sh --install

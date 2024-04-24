@@ -24,7 +24,11 @@
 
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/types.hpp>
 #include <cudf/unary.hpp>
+
+#include <src/io/parquet/parquet.hpp>
+#include <src/io/parquet/parquet_common.hpp>
 
 #include <fstream>
 
@@ -1321,6 +1325,45 @@ TEST_F(ParquetWriterTest, CompStatsEmptyTable)
   expect_compression_stats_empty(stats);
 }
 
+TEST_F(ParquetWriterTest, SkipCompression)
+{
+  constexpr auto page_rows      = 1000;
+  constexpr auto row_group_rows = 2 * page_rows;
+  constexpr auto num_rows       = 2 * row_group_rows;
+
+  auto sequence = thrust::make_counting_iterator(0);
+  column_wrapper<int> col(sequence, sequence + num_rows, no_nulls());
+
+  auto expected          = table_view{{col, col}};
+  auto expected_metadata = cudf::io::table_input_metadata{expected};
+  expected_metadata.column_metadata[0].set_skip_compression(true);
+
+  auto const filepath = temp_env->get_temp_filepath("SkipCompression.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .compression(cudf::io::compression_type::ZSTD)
+      .max_page_size_rows(page_rows)
+      .row_group_size_rows(row_group_rows)
+      .max_page_fragment_size(page_rows)
+      .metadata(std::move(expected_metadata));
+
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, expected);
+
+  // check metadata to make sure column 0 is not compressed and column 1 is
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::detail::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  EXPECT_EQ(fmd.row_groups[0].columns[0].meta_data.codec, cudf::io::parquet::detail::UNCOMPRESSED);
+  EXPECT_EQ(fmd.row_groups[0].columns[1].meta_data.codec, cudf::io::parquet::detail::ZSTD);
+}
+
 TEST_F(ParquetWriterTest, NoNullsAsNonNullable)
 {
   column_wrapper<int32_t> col{{1, 2, 3}, no_nulls()};
@@ -1471,6 +1514,7 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
   cudf::io::parquet_writer_options opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table)
       .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .sorting_columns({{0, false, false}})
       .compression(cudf::io::compression_type::ZSTD);
   cudf::io::write_parquet(opts);
 
@@ -1482,6 +1526,24 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
   ASSERT_GT(fmd.row_groups.size(), 0);
   EXPECT_GE(fmd.row_groups[0].total_byte_size,
             static_cast<int64_t>(num_rows * sizeof(column_type)));
+
+  // row group file offset should be first page location
+  EXPECT_EQ(fmd.row_groups[0].file_offset, fmd.row_groups[0].columns[0].meta_data.data_page_offset);
+
+  // ordinal should be set to 0
+  ASSERT_TRUE(fmd.row_groups[0].ordinal.has_value());
+  EXPECT_EQ(fmd.row_groups[0].ordinal.value(), 0);
+
+  // only one column, so total_compressed_size should equal compressed size of first chunk
+  ASSERT_TRUE(fmd.row_groups[0].total_compressed_size.has_value());
+  EXPECT_EQ(fmd.row_groups[0].total_compressed_size.value(),
+            fmd.row_groups[0].columns[0].meta_data.total_compressed_size);
+
+  // test that sorting order was written correctly
+  ASSERT_TRUE(fmd.row_groups[0].sorting_columns.has_value());
+  EXPECT_EQ(fmd.row_groups[0].sorting_columns.value()[0].column_idx, 0);
+  EXPECT_FALSE(fmd.row_groups[0].sorting_columns.value()[0].descending);
+  EXPECT_FALSE(fmd.row_groups[0].sorting_columns.value()[0].nulls_first);
 }
 
 TEST_F(ParquetWriterTest, UserRequestedDictFallback)
