@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
@@ -39,7 +40,7 @@ namespace detail {
 std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            lists_column_view const& boolean_mask,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(boolean_mask.child().type().id() == type_id::BOOL8, "Mask must be of type BOOL8.");
   CUDF_EXPECTS(input.size() == boolean_mask.size(),
@@ -102,7 +103,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
 std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            lists_column_view const& boolean_mask,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::apply_boolean_mask(input, boolean_mask, stream, mr);

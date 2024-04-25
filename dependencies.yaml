@@ -6,6 +6,7 @@ files:
       cuda: ["11.8", "12.2"]
       arch: [x86_64]
     includes:
+      - build_base
       - build_all
       - build_cpp
       - build_wheels
@@ -27,6 +28,10 @@ files:
       - test_python_cudf
       - test_python_dask_cudf
       - depends_on_cupy
+  test_static_build:
+    output: none
+    includes:
+      - build_base
   test_cpp:
     output: none
     includes:
@@ -45,6 +50,7 @@ files:
   test_java:
     output: none
     includes:
+      - build_base
       - build_all
       - cuda
       - cuda_version
@@ -75,6 +81,7 @@ files:
     extras:
       table: build-system
     includes:
+      - build_base
       - build_python_common
       - build_python_cudf
   py_run_cudf:
@@ -144,6 +151,7 @@ files:
     extras:
       table: build-system
     includes:
+      - build_base
       - build_python_common
   py_run_cudf_kafka:
     output: pyproject
@@ -191,12 +199,16 @@ channels:
   - conda-forge
   - nvidia
 dependencies:
+  build_base:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - &cmake_ver cmake>=3.26.4
+          - &ninja ninja
   build_all:
     common:
       - output_types: conda
         packages:
-          - &cmake_ver cmake>=3.26.4
-          - &ninja ninja
           - c-compiler
           - cxx-compiler
           - dlpack>=0.8,<1.0
@@ -235,9 +247,6 @@ dependencies:
       - output_types: conda
         packages:
           - fmt>=10.1.1,<11
-          - &gbench benchmark==1.8.0
-          - &gtest gtest>=1.13.0
-          - &gmock gmock>=1.13.0
           - librmm==24.6.*
           - libkvikio==24.6.*
           - librdkafka>=1.9.0,<1.10.0a0
@@ -254,9 +263,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - *cmake_ver
           - cython>=3.0.3
-          - *ninja
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - pyarrow==14.0.2.*
@@ -276,13 +283,9 @@ dependencies:
       - output_types: conda
         packages:
           - &rmm_conda rmm==24.6.*
-          - &protobuf protobuf>=4.21,<5
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
-      - output_types: [requirements, pyproject]
-        packages:
-          - protoc-wheel
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -504,7 +507,7 @@ dependencies:
         packages:
           - fsspec>=0.6.0
           - numpy>=1.23,<2.0a0
-          - pandas>=2.0,<2.2.2dev0
+          - pandas>=2.0,<2.2.3dev0
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -515,7 +518,6 @@ dependencies:
           - packaging
           - rich
           - typing_extensions>=4.0.0
-          - *protobuf
       - output_types: conda
         packages:
           - *rmm_conda
@@ -580,9 +582,6 @@ dependencies:
       - output_types: conda
         packages:
           - *cmake_ver
-          - *gbench
-          - *gtest
-          - *gmock
     specific:
       - output_types: conda
         matrices:

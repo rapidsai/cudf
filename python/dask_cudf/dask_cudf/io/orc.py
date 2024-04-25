@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from io import BufferedWriter, IOBase
 
@@ -100,7 +100,7 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
             **kwargs,
         )
 
-    name = "read-orc-" + tokenize(fs_token, path, columns, **kwargs)
+    name = "read-orc-" + tokenize(fs_token, path, columns, filters, **kwargs)
     dsk = {}
     N = 0
     for path, n in zip(paths, nstripes_per_file):

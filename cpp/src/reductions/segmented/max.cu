@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 
 #include <cudf/reduction/detail/reduction_functions.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 namespace cudf {
 namespace reduction {
 namespace detail {
@@ -29,7 +31,7 @@ std::unique_ptr<cudf::column> segmented_max(
   null_policy null_handling,
   std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(col.type() == output_dtype,
                "segmented_max() operation requires matching output type");

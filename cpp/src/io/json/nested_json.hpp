@@ -22,6 +22,8 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <map>
 #include <vector>
 
@@ -172,7 +174,7 @@ struct device_json_column {
    * @param stream The CUDA stream to which kernels are dispatched
    * @param mr Optional, resource with which to allocate
    */
-  device_json_column(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  device_json_column(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
     : string_offsets(0, stream),
       string_lengths(0, stream),
       child_offsets(0, stream, mr),
@@ -232,7 +234,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                     device_span<SymbolOffsetT const> token_indices,
                                     bool is_strict_nested_boundaries,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr);
+                                    rmm::device_async_resource_ref mr);
 
 /**
  * @brief Traverse the tree representation of the JSON input in records orient format and populate
@@ -253,7 +255,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                               bool is_array_of_arrays,
                               bool is_enabled_lines,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+                              rmm::device_async_resource_ref mr);
 
 /**
  * @brief Searches for and selects nodes at level `row_array_children_level`. For each selected
@@ -307,7 +309,7 @@ cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& opt
 table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr);
+                                             rmm::device_async_resource_ref mr);
 
 /**
  * @brief Get the path data type of a column by path if present in input schema
@@ -347,7 +349,7 @@ struct path_from_tree {
 table_with_metadata host_parse_nested_json(device_span<SymbolT const> input,
                                            cudf::io::json_reader_options const& options,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr);
+                                           rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 

@@ -25,6 +25,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/distance.h>
 
@@ -90,7 +91,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
                                                   InputIterator end,
                                                   Predicate p,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(begin <= end, "Invalid range.");
 

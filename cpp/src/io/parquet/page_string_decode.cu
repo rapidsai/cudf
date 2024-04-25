@@ -689,7 +689,7 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPage
   auto const start_value = pp->start_val;
 
   // if data size is known, can short circuit here
-  if ((chunks[pp->chunk_idx].data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
+  if (chunks[pp->chunk_idx].physical_type == FIXED_LEN_BYTE_ARRAY) {
     if (t == 0) {
       pp->str_bytes = pp->num_valids * s->dtype_len_in;
 
@@ -881,7 +881,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputePageStringSi
   auto const& col  = s->col;
   size_t str_bytes = 0;
   // short circuit for FIXED_LEN_BYTE_ARRAY
-  if ((col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
+  if (col.physical_type == FIXED_LEN_BYTE_ARRAY) {
     str_bytes = pp->num_valids * s->dtype_len_in;
   } else {
     // now process string info in the range [start_value, end_value)
@@ -1039,7 +1039,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       // - the row values we get from nz_idx will be
       //   0, 1, 2, 3, 4 ....
       // - by shifting these values by first_row, the sequence becomes
-      //   -1, -2, 0, 1, 2 ...
+      //   -2, -1, 0, 1, 2 ...
       // - so we will end up ignoring the first two input rows, and input rows 2..n will
       //   get written to the output starting at position 0.
       //
@@ -1062,7 +1062,19 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
           // choose a character parallel string copy when the average string is longer than a warp
           auto const use_char_ll = warp_total / warp_size >= warp_size;
 
-          if (use_char_ll) {
+          if (s->page.encoding == Encoding::BYTE_STREAM_SPLIT) {
+            if (src_pos + i < target_pos && dst_pos >= 0) {
+              auto const stride = s->page.str_bytes / s->dtype_len_in;
+              auto offptr =
+                reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out) + dst_pos;
+              *offptr      = len;
+              auto str_ptr = nesting_info_base[leaf_level_index].string_out + offset;
+              for (int ii = 0; ii < s->dtype_len_in; ii++) {
+                str_ptr[ii] = s->data_start[src_pos + i + ii * stride];
+              }
+            }
+            __syncwarp();
+          } else if (use_char_ll) {
             __shared__ __align__(8) uint8_t const* pointers[warp_size];
             __shared__ __align__(4) size_type offsets[warp_size];
             __shared__ __align__(4) int dsts[warp_size];

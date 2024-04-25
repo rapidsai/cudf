@@ -34,8 +34,7 @@ template <typename state_buf>
 inline __device__ void gpuOutputString(page_state_s* s, state_buf* sb, int src_pos, void* dstv)
 {
   auto [ptr, len] = gpuGetStringData(s, sb, src_pos);
-  // make sure to only hash `BYTE_ARRAY` when specified with the output type size
-  if (s->dtype_len == 4 and (s->col.data_type & 7) == BYTE_ARRAY) {
+  if (s->col.is_strings_to_cat and s->col.physical_type == BYTE_ARRAY) {
     // Output hash. This hash value is used if the option to convert strings to
     // categoricals is enabled. The seed value is chosen arbitrarily.
     uint32_t constexpr hash_seed = 33;
@@ -397,4 +396,80 @@ inline __device__ void gpuOutputGeneric(
     }
   }
 }
+
+/**
+ * Output a BYTE_STREAM_SPLIT value of type `T`.
+ *
+ * Data is encoded as N == sizeof(T) streams of length M, forming an NxM sized matrix.
+ * Rows are streams, columns are individual values.
+ *
+ * @param dst pointer to output data
+ * @param src pointer to first byte of input data in stream 0
+ * @param stride number of bytes per input stream (M)
+ */
+template <typename T>
+__device__ inline void gpuOutputByteStreamSplit(uint8_t* dst, uint8_t const* src, size_type stride)
+{
+  for (int i = 0; i < sizeof(T); i++) {
+    dst[i] = src[i * stride];
+  }
+}
+
+/**
+ * Output a 64-bit BYTE_STREAM_SPLIT encoded timestamp.
+ *
+ * Data is encoded as N streams of length M, forming an NxM sized matrix. Rows are streams,
+ * columns are individual values.
+ *
+ * @param dst pointer to output data
+ * @param src pointer to first byte of input data in stream 0
+ * @param stride number of bytes per input stream (M)
+ * @param ts_scale timestamp scale
+ */
+inline __device__ void gpuOutputSplitInt64Timestamp(int64_t* dst,
+                                                    uint8_t const* src,
+                                                    size_type stride,
+                                                    int32_t ts_scale)
+{
+  gpuOutputByteStreamSplit<int64_t>(reinterpret_cast<uint8_t*>(dst), src, stride);
+  if (ts_scale < 0) {
+    // round towards negative infinity
+    int sign = (*dst < 0);
+    *dst     = ((*dst + sign) / -ts_scale) + sign;
+  } else {
+    *dst = *dst * ts_scale;
+  }
+}
+
+/**
+ * Output a BYTE_STREAM_SPLIT encoded decimal as an integer type.
+ *
+ * Data is encoded as N streams of length M, forming an NxM sized matrix. Rows are streams,
+ * columns are individual values.
+ *
+ * @param dst pointer to output data
+ * @param src pointer to first byte of input data in stream 0
+ * @param stride number of bytes per input stream (M)
+ * @param dtype_len_in length of the `FIXED_LEN_BYTE_ARRAY` used to represent the decimal
+ */
+template <typename T>
+__device__ void gpuOutputSplitFixedLenByteArrayAsInt(T* dst,
+                                                     uint8_t const* src,
+                                                     size_type stride,
+                                                     uint32_t dtype_len_in)
+{
+  T unscaled = 0;
+  // fixed_len_byte_array decimals are big endian
+  for (unsigned int i = 0; i < dtype_len_in; i++) {
+    unscaled = (unscaled << 8) | src[i * stride];
+  }
+  // Shift the unscaled value up and back down when it isn't all 8 bytes,
+  // which sign extend the value for correctly representing negative numbers.
+  if (dtype_len_in < sizeof(T)) {
+    unscaled <<= (sizeof(T) - dtype_len_in) * 8;
+    unscaled >>= (sizeof(T) - dtype_len_in) * 8;
+  }
+  *dst = unscaled;
+}
+
 }  // namespace cudf::io::parquet::detail

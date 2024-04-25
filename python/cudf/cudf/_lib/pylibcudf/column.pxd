@@ -43,6 +43,7 @@ cdef class Column:
     cpdef gpumemoryview data(self)
     cpdef gpumemoryview null_mask(self)
     cpdef list children(self)
+    cpdef Column copy(self)
 
     cpdef ListColumnView list_view(self)
 

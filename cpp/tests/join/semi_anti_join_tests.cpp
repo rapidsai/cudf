@@ -29,6 +29,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <thrust/iterator/transform_iterator.h>
 
 template <typename T>
@@ -50,14 +52,14 @@ template <std::unique_ptr<rmm::device_uvector<cudf::size_type>> (*join_impl)(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   cudf::null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr)>
+  rmm::device_async_resource_ref mr)>
 std::unique_ptr<cudf::table> join_and_gather(
   cudf::table_view const& left_input,
   cudf::table_view const& right_input,
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   auto left_selected      = left_input.select(left_on);
   auto right_selected     = right_input.select(right_on);
