@@ -517,7 +517,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def factorize(self, sort=False, na_sentinel=None, use_na_sentinel=None):
+    def factorize(self, sort: bool = False, use_na_sentinel: bool = True):
         raise NotImplementedError
 
     def union(self, other, sort=None):
@@ -2061,7 +2061,13 @@ class BaseIndex(Serializable):
             one null value. "all" drops only rows containing
             *all* null values.
         """
-
+        if how not in {"any", "all"}:
+            raise ValueError(f"{how=} must be 'any' or 'all'")
+        try:
+            if not self.hasnans:
+                return self.copy()
+        except NotImplementedError:
+            pass
         # This is to be consistent with IndexedFrame.dropna to handle nans
         # as nulls by default
         data_columns = [
