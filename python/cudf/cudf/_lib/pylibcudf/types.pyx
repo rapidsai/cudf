@@ -14,6 +14,19 @@ from cudf._lib.cpp.types import null_order as NullOrder  # no-cython-lint, isort
 from cudf._lib.cpp.types import order as Order  # no-cython-lint, isort:skip
 from cudf._lib.cpp.types import sorted as Sorted  # no-cython-lint, isort:skip
 
+CAI_TYPE_TO_LIBCUDF_TYPE = {
+    'u1': TypeId.UINT8,
+    'u2': TypeId.UINT16,
+    'u4': TypeId.UINT32,
+    'u8': TypeId.UINT64,
+    'i1': TypeId.INT8,
+    'i2': TypeId.INT16,
+    'i4': TypeId.INT32,
+    'i8': TypeId.INT64,
+    'f4': TypeId.FLOAT32,
+    'f8': TypeId.FLOAT64,
+    'b1': TypeId.BOOL8,
+}
 
 cdef class DataType:
     """Indicator for the logical data type of an element in a column.
