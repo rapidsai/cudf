@@ -117,7 +117,7 @@ TEST_F(FromArrowDeviceTest, DateTimeTable)
   ArrowArrayBuffer(input_array->children[0], 1)->data =
     const_cast<uint8_t*>(cudf::column_view(col).data<uint8_t>());
   NANOARROW_THROW_NOT_OK(
-    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
 
   ArrowDeviceArray input_device_array;
   input_device_array.device_id   = rmm::get_current_cuda_device().value();
@@ -175,7 +175,7 @@ TYPED_TEST(FromArrowDeviceTestDurationsTest, DurationTable)
     ArrowBufferSetAllocator(ArrowArrayBuffer(input_array->children[0], 1), noop_alloc));
   ArrowArrayBuffer(input_array->children[0], 1)->data = const_cast<uint8_t*>(data_ptr);
   NANOARROW_THROW_NOT_OK(
-    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
 
   ArrowDeviceArray input_device_array;
   input_device_array.device_id   = rmm::get_current_cuda_device().value();
