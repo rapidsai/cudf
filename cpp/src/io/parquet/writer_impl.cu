@@ -704,7 +704,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         }
 
         schema_tree_node col_schema{};
-        // test if this should this be output as FIXED_LEN_BYTE_ARRAY
+        // test if this should be output as FIXED_LEN_BYTE_ARRAY
         if (col_meta.is_type_length_set()) {
           col_schema.type        = Type::FIXED_LEN_BYTE_ARRAY;
           col_schema.type_length = col_meta.get_type_length();

@@ -1859,22 +1859,22 @@ TEST_F(ParquetWriterTest, DurationByteStreamSplit)
 
 TEST_F(ParquetWriterTest, WriteFixedLenByteArray)
 {
+  srand(31337);
   using cudf::io::parquet::detail::Encoding;
   constexpr int fixed_width          = 16;
-  constexpr cudf::size_type num_rows = fixed_width * fixed_width;
-  std::vector<uint8_t> data(num_rows * fixed_width, 0);
+  constexpr cudf::size_type num_rows = 200;
+  std::vector<uint8_t> data(num_rows * fixed_width);
   std::vector<cudf::size_type> offsets(num_rows + 1);
 
-  for (int i = 0; i < fixed_width; i++) {
-    for (int j = 0; j < fixed_width; j++) {
-      auto const rowid            = i * fixed_width + j;
-      auto const off              = rowid * fixed_width;
-      offsets[rowid]              = off;
-      data[off + fixed_width - 2] = i;
-      data[off + fixed_width - 1] = j;
+  // fill a num_rows X fixed_width array with random numbers and populate offsets array
+  int cur_offset = 0;
+  for (int i = 0; i < num_rows; i++) {
+    offsets[i] = cur_offset;
+    for (int j = 0; j < fixed_width; j++, cur_offset++) {
+      data[cur_offset] = rand() & 0xff;
     }
   }
-  offsets[num_rows] = num_rows * fixed_width;
+  offsets[num_rows] = cur_offset;
 
   auto data_child = cudf::test::fixed_width_column_wrapper<uint8_t>(data.begin(), data.end());
   auto off_child  = cudf::test::fixed_width_column_wrapper<int32_t>(offsets.begin(), offsets.end());
