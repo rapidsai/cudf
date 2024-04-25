@@ -2332,4 +2332,53 @@ TEST_F(JsonReaderTest, MapTypes)
           {type_id::LIST, type_id::STRING, type_id::STRING});
 }
 
+TEST_F(JsonReaderTest, JsonLinesRandomDelimiter)
+{
+  using SymbolT = char;
+
+  std::array<SymbolT, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distrib(0, delimiter_chars.size());
+  SymbolT random_delimiter = delimiter_chars[distrib(gen)];
+
+  // Test input
+  std::string input             = R"({"col1":100, "col2":1.1, "col3":"aaa"})";
+  std::size_t const string_size = 400;
+  std::size_t const log_repetitions =
+    static_cast<std::size_t>(std::ceil(std::log2(string_size / input.size())));
+  std::size_t const repetitions = 1UL << log_repetitions;
+  for (std::size_t i = 0; i < log_repetitions; i++)
+    input = input + random_delimiter + input;
+
+  cudf::io::json_reader_options json_parser_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{input.c_str(), input.size()})
+      .lines(true)
+      .delimiter(random_delimiter);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(json_parser_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 3);
+  EXPECT_EQ(result.tbl->num_rows(), repetitions);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::STRING);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "col1");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "col2");
+  EXPECT_EQ(result.metadata.schema_info[2].name, "col3");
+
+  auto col1_iterator = thrust::constant_iterator<int64_t>(100);
+  auto col2_iterator = thrust::constant_iterator<double>(1.1);
+  auto col3_iterator = thrust::constant_iterator<std::string>("aaa");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper(col1_iterator, col1_iterator + repetitions));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                 float64_wrapper(col2_iterator, col2_iterator + repetitions));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(2),
+    cudf::test::strings_column_wrapper(col3_iterator, col3_iterator + repetitions));
+}
+
 CUDF_TEST_PROGRAM_MAIN()
