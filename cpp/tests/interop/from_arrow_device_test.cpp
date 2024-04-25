@@ -116,8 +116,10 @@ TEST_F(FromArrowDeviceTest, DateTimeTable)
     ArrowBufferSetAllocator(ArrowArrayBuffer(input_array->children[0], 1), noop_alloc));
   ArrowArrayBuffer(input_array->children[0], 1)->data =
     const_cast<uint8_t*>(cudf::column_view(col).data<uint8_t>());
+  ArrowArrayBuffer(input_array->children[0], 1)->size_bytes =
+    sizeof(int64_t) * cudf::column_view(col).size();
   NANOARROW_THROW_NOT_OK(
-    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
+    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
 
   ArrowDeviceArray input_device_array;
   input_device_array.device_id   = rmm::get_current_cuda_device().value();
@@ -164,7 +166,8 @@ TYPED_TEST(FromArrowDeviceTestDurationsTest, DurationTable)
     input_schema->children[0], NANOARROW_TYPE_DURATION, time_unit, nullptr));
   NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
 
-  auto data_ptr = expected_table_view.column(0).data<uint8_t>();
+  auto data_ptr  = expected_table_view.column(0).data<uint8_t>();
+  auto data_size = expected_table_view.column(0).size();
   nanoarrow::UniqueArray input_array;
   NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
   input_array->length                  = expected_table_view.num_rows();
@@ -173,9 +176,10 @@ TYPED_TEST(FromArrowDeviceTestDurationsTest, DurationTable)
   input_array->children[0]->null_count = 0;
   NANOARROW_THROW_NOT_OK(
     ArrowBufferSetAllocator(ArrowArrayBuffer(input_array->children[0], 1), noop_alloc));
-  ArrowArrayBuffer(input_array->children[0], 1)->data = const_cast<uint8_t*>(data_ptr);
+  ArrowArrayBuffer(input_array->children[0], 1)->data       = const_cast<uint8_t*>(data_ptr);
+  ArrowArrayBuffer(input_array->children[0], 1)->size_bytes = sizeof(T) * data_size;
   NANOARROW_THROW_NOT_OK(
-    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
+    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
 
   ArrowDeviceArray input_device_array;
   input_device_array.device_id   = rmm::get_current_cuda_device().value();
