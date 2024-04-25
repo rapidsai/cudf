@@ -479,7 +479,7 @@ static __constant__ PdaSymbolGroupIdT tos_sg_to_pda_sgid[] = {
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::WHITE_SPACE),
-  static_cast<PdaSymbolGroupIdT>(symbol_group_id::LINE_BREAK),
+  static_cast<PdaSymbolGroupIdT>(symbol_group_id::LINE_BREAK),  //\n delimiter
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::WHITE_SPACE),
@@ -602,6 +602,13 @@ static __constant__ PdaSymbolGroupIdT tos_sg_to_pda_sgid[] = {
  * visibly pushdown automaton (DVPA)
  */
 struct PdaSymbolToSymbolGroupId {
+  SymbolT line_break = '\n';
+  void set_line_break(SymbolT delim)
+  {
+    std::swap(tos_sg_to_pda_sgid[static_cast<int32_t>(delim)],
+              tos_sg_to_pda_sgid[static_cast<int32_t>(line_break)]);
+    line_break = delim;
+  }
   template <typename SymbolT, typename StackSymbolT>
   __device__ __forceinline__ PdaSymbolGroupIdT
   operator()(thrust::tuple<SymbolT, StackSymbolT> symbol_pair) const
@@ -1318,17 +1325,14 @@ struct JSONToStackOp {
  * operations
  */
 struct JSONWithRecoveryToStackOp {
+  StackSymbolT delimiter = '\n';
   template <typename StackSymbolT>
   constexpr CUDF_HOST_DEVICE fst::stack_op_type operator()(StackSymbolT const& stack_symbol) const
   {
-    switch (stack_symbol) {
-      case '{':
-      case '[': return fst::stack_op_type::PUSH;
-      case '}':
-      case ']': return fst::stack_op_type::POP;
-      case '\n': return fst::stack_op_type::RESET;
-      default: return fst::stack_op_type::READ;
-    }
+    if (stack_symbol == '{' || stack_symbol == '[') return fst::stack_op_type::PUSH;
+    if (stack_symbol == '}' || stack_symbol == ']') return fst::stack_op_type::POP;
+    if (stack_symbol == delimiter) return fst::stack_op_type::RESET;
+    return fst::stack_op_type::READ;
   }
 };
 
@@ -1476,10 +1480,12 @@ void get_stack_context(device_span<SymbolT const> json_in,
 
   // Stack operations with indices are converted to top of the stack for each character in the input
   if (stack_behavior == stack_behavior_t::ResetOnDelimiter) {
+    auto stackop      = JSONWithRecoveryToStackOp{};
+    stackop.delimiter = delimiter;
     fst::sparse_stack_op_to_top_of_stack<fst::stack_op_support::WITH_RESET_SUPPORT, StackLevelT>(
       stack_ops.data(),
       device_span<SymbolOffsetT>{stack_op_indices.data(), num_stack_ops},
-      JSONWithRecoveryToStackOp{},
+      stackop,
       d_top_of_stack,
       root_symbol,
       read_symbol,
@@ -1615,8 +1621,10 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   constexpr auto max_translation_table_size =
     tokenizer_pda::NUM_PDA_SGIDS *
     static_cast<tokenizer_pda::StateT>(tokenizer_pda::pda_state_t::PD_NUM_STATES);
+  auto symbol_groups = tokenizer_pda::PdaSymbolToSymbolGroupId{};
+  symbol_groups.set_line_break(delimiter);
   auto json_to_tokens_fst = fst::detail::make_fst(
-    fst::detail::make_symbol_group_lookup_op(tokenizer_pda::PdaSymbolToSymbolGroupId{}),
+    fst::detail::make_symbol_group_lookup_op(symbol_groups),
     fst::detail::make_transition_table(tokenizer_pda::get_transition_table(format)),
     fst::detail::make_translation_table<max_translation_table_size>(
       tokenizer_pda::get_translation_table(recover_from_error)),
