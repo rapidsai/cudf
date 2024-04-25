@@ -36,7 +36,6 @@ from cudf.api.types import (
     is_integer,
     is_list_like,
     is_scalar,
-    is_signed_integer_dtype,
 )
 from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
@@ -149,6 +148,15 @@ def _index_from_data(data: MutableMapping, name: Any = no_default):
     return index_class_type._from_data(data, name)
 
 
+def validate_range_arg(arg, arg_name: Literal["start", "stop", "step"]) -> int:
+    """Validate start/stop/step argument in RangeIndex.__init__"""
+    if not is_integer(arg):
+        raise TypeError(
+            f"{arg_name} must be an integer, not {type(arg).__name__}"
+        )
+    return int(arg)
+
+
 class RangeIndex(BaseIndex, BinaryOperand):
     """
     Immutable Index implementing a monotonic integer range.
@@ -197,44 +205,29 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def __init__(
         self, start, stop=None, step=1, dtype=None, copy=False, name=None
     ):
-        if step == 0:
-            raise ValueError("Step must not be zero.")
         if not cudf.api.types.is_hashable(name):
             raise ValueError("Name must be a hashable value.")
-        if dtype is not None and not is_signed_integer_dtype(dtype):
+        self._name = name
+        if dtype is not None and cudf.dtype(dtype).kind != "i":
             raise ValueError(f"{dtype=} must be a signed integer type")
 
         if isinstance(start, range):
-            therange = start
-            start = therange.start
-            stop = therange.stop
-            step = therange.step
-        if stop is None:
-            start, stop = 0, start
-        if not is_integer(start):
-            raise TypeError(
-                f"start must be an integer, not {type(start).__name__}"
-            )
-        self._start = int(start)
-        if not is_integer(stop):
-            raise TypeError(
-                f"stop must be an integer, not {type(stop).__name__}"
-            )
-        self._stop = int(stop)
-        if step is not None:
-            if not is_integer(step):
-                raise TypeError(
-                    f"step must be an integer, not {type(step).__name__}"
-                )
-            self._step = int(step)
+            self._range = start
         else:
-            self._step = 1
-        self._index = None
-        self._name = name
-        self._range = range(self._start, self._stop, self._step)
-        # _end is the actual last element of RangeIndex,
-        # whereas _stop is an upper bound.
-        self._end = self._start + self._step * (len(self._range) - 1)
+            if stop is None:
+                start, stop = 0, start
+            start = validate_range_arg(start, "start")
+            stop = validate_range_arg(stop, "stop")
+            if step is not None:
+                step = validate_range_arg(step, "step")
+            else:
+                step = 1
+            try:
+                self._range = range(start, stop, step)
+            except ValueError as err:
+                if step == 0:
+                    raise ValueError("Step must not be zero.") from err
+                raise
 
     def _copy_type_metadata(
         self, other: RangeIndex, *, override_dtypes=None
@@ -251,9 +244,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         na_position: Literal["first", "last"] = "last",
     ):
         assert (len(self) <= 1) or (
-            ascending == (self._step > 0)
+            ascending == (self.step > 0)
         ), "Invalid ascending flag"
-        return search_range(value, self.as_range, side=side)
+        return search_range(value, self._range, side=side)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -271,7 +264,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         """
         The value of the `start` parameter (0 if this was not supplied).
         """
-        return self._start
+        return self._range.start
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -279,7 +272,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         """
         The value of the stop parameter.
         """
-        return self._stop
+        return self._range.stop
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -287,7 +280,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         """
         The value of the step parameter.
         """
-        return self._step
+        return self._range.step
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -368,9 +361,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
         name = self.name if name is None else name
 
-        return RangeIndex(
-            start=self._start, stop=self._stop, step=self._step, name=name
-        )
+        return RangeIndex(self._range, name=name)
 
     @_cudf_nvtx_annotate
     def astype(self, dtype, copy: bool = True):
@@ -389,8 +380,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def __repr__(self):
         return (
-            f"{self.__class__.__name__}(start={self._start}, stop={self._stop}"
-            f", step={self._step}"
+            f"{self.__class__.__name__}(start={self.start}, stop={self.stop}"
+            f", step={self.step}"
             + (
                 f", name={pd.io.formats.printing.default_pprint(self.name)}"
                 if self.name is not None
@@ -401,16 +392,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def __len__(self):
-        return len(range(self._start, self._stop, self._step))
+        return len(self._range)
 
     @_cudf_nvtx_annotate
     def __getitem__(self, index):
         if isinstance(index, slice):
             sl_start, sl_stop, sl_step = index.indices(len(self))
 
-            lo = self._start + sl_start * self._step
-            hi = self._start + sl_stop * self._step
-            st = self._step * sl_step
+            lo = self.start + sl_start * self.step
+            hi = self.start + sl_stop * self.step
+            st = self.step * sl_step
             return RangeIndex(start=lo, stop=hi, step=st, name=self._name)
 
         elif isinstance(index, Number):
@@ -419,18 +410,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
                 index += len_self
             if not (0 <= index < len_self):
                 raise IndexError("Index out of bounds")
-            return self._start + index * self._step
+            return self.start + index * self.step
         return self._as_int_index()[index]
 
     @_cudf_nvtx_annotate
     def equals(self, other):
         if isinstance(other, RangeIndex):
-            if (self._start, self._stop, self._step) == (
-                other._start,
-                other._stop,
-                other._step,
-            ):
-                return True
+            return self._range == other._range
         return self._as_int_index().equals(other)
 
     @_cudf_nvtx_annotate
@@ -442,9 +428,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # We don't need to store the GPU buffer for RangeIndexes
         # cuDF only needs to store start/stop and rehydrate
         # during de-serialization
-        header["index_column"]["start"] = self._start
-        header["index_column"]["stop"] = self._stop
-        header["index_column"]["step"] = self._step
+        header["index_column"]["start"] = self.start
+        header["index_column"]["stop"] = self.stop
+        header["index_column"]["step"] = self.step
         frames = []
 
         header["name"] = pickle.dumps(self.name)
@@ -484,9 +470,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         elif arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
         return pd.RangeIndex(
-            start=self._start,
-            stop=self._stop,
-            step=self._step,
+            start=self.start,
+            stop=self.stop,
+            step=self.step,
             dtype=self.dtype,
             name=self.name,
         )
@@ -495,19 +481,15 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def is_unique(self):
         return True
 
-    @cached_property
-    def as_range(self):
-        return range(self._start, self._stop, self._step)
-
     @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_increasing(self):
-        return self._step > 0 or len(self) <= 1
+        return self.step > 0 or len(self) <= 1
 
     @cached_property  # type: ignore
     @_cudf_nvtx_annotate
     def is_monotonic_decreasing(self):
-        return self._step < 0 or len(self) <= 1
+        return self.step < 0 or len(self) <= 1
 
     @_cudf_nvtx_annotate
     def memory_usage(self, deep=False):
@@ -590,12 +572,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def get_loc(self, key):
         if not is_scalar(key):
             raise TypeError("Should be a scalar-like")
-        idx = (key - self._start) / self._step
-        idx_int_upper_bound = (self._stop - self._start) // self._step
+        idx = (key - self.start) / self.step
+        idx_int_upper_bound = (self.stop - self.start) // self.step
         if idx > idx_int_upper_bound or idx < 0:
             raise KeyError(key)
 
-        idx_int = (key - self._start) // self._step
+        idx_int = (key - self.start) // self.step
         if idx_int != idx:
             raise KeyError(key)
         return idx_int
@@ -607,9 +589,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
             # following notation: *_o -> other, *_s -> self,
             # and *_r -> result
             start_s, step_s = self.start, self.step
-            end_s = self._end
+            end_s = self.start + self.step * (len(self) - 1)
             start_o, step_o = other.start, other.step
-            end_o = other._end
+            end_o = other.start + other.step * (len(other) - 1)
             if self.step < 0:
                 start_s, step_s, end_s = end_s, -step_s, start_s
             if other.step < 0:
@@ -854,9 +836,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             raise ValueError(f"invalid na_position: {na_position}")
 
         indices = cupy.arange(0, len(self))
-        if (ascending and self._step < 0) or (
-            not ascending and self._step > 0
-        ):
+        if (ascending and self.step < 0) or (not ascending and self.step > 0):
             indices = indices[::-1]
         return indices
 
