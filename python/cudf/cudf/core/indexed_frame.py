@@ -6309,6 +6309,11 @@ class IndexedFrame(Frame):
         return [
             type(self),
             str(self._dtypes),
+            *[
+                normalize_token(cat.categories)
+                for cat in self._dtypes.values()
+                if cat == "category"
+            ],
             normalize_token(self.index),
             normalize_token(self.hash_values().values_host),
         ]

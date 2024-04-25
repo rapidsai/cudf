@@ -1947,6 +1947,11 @@ class Frame(BinaryOperand, Scannable):
         return [
             type(self),
             str(self._dtypes),
+            *[
+                normalize_token(cat.categories)
+                for cat in self._dtypes.values()
+                if cat == "category"
+            ],
             normalize_token(self.to_pandas()),
         ]
 
