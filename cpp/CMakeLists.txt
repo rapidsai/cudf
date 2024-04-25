@@ -345,6 +345,7 @@ add_library(
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
+  src/groupby/sort/group_topk.cu
   src/groupby/sort/sort_helper.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu

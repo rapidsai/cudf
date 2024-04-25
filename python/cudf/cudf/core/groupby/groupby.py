@@ -948,6 +948,20 @@ class GroupBy(Serializable, Reducible, Scannable):
         return result
 
     @_cudf_nvtx_annotate
+    def topk(self, k, bottom=False):
+        """
+        Return the top-k values from each group
+
+        Parameters
+        ----------
+        k : int
+           Number of values to obtain
+        bottom : bool
+           Should one return the bottom-k values?
+        """
+        return self.agg(lambda x: x.top_k(k, descending=not bottom))
+
+    @_cudf_nvtx_annotate
     def ngroup(self, ascending=True):
         """
         Number each group from 0 to the number of groups - 1.
