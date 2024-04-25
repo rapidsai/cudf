@@ -217,7 +217,8 @@ get_nanoarrow_tables(cudf::size_type length)
   populate_from_col<cudf::string_view>(arrow->children[5]->children[1], struct_view.child(1));
   arrow->children[5]->length     = struct_view.size();
   arrow->children[5]->null_count = struct_view.null_count();
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arrow->children[5], 0), noop_alloc);
+  NANOARROW_THROW_NOT_OK(
+    ArrowBufferSetAllocator(ArrowArrayBuffer(arrow->children[5], 0), noop_alloc));
   ArrowArrayValidityBitmap(arrow->children[5])->buffer.size_bytes =
     cudf::bitmask_allocation_size_bytes(struct_view.size());
   ArrowArrayValidityBitmap(arrow->children[5])->buffer.data =
@@ -241,13 +242,13 @@ void populate_list_from_col(ArrowArray* arr, cudf::lists_column_view view)
   arr->length     = view.size();
   arr->null_count = view.null_count();
 
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc));
   ArrowArrayValidityBitmap(arr)->buffer.size_bytes =
     cudf::bitmask_allocation_size_bytes(view.size());
   ArrowArrayValidityBitmap(arr)->buffer.data =
     const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view.null_mask()));
 
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc));
   ArrowArrayBuffer(arr, 1)->size_bytes = sizeof(int32_t) * view.offsets().size();
   ArrowArrayBuffer(arr, 1)->data       = const_cast<uint8_t*>(view.offsets().data<uint8_t>());
 }
