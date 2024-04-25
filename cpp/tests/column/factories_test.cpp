@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -163,7 +163,7 @@ TEST_P(NonNumericFactoryTest, NonNumericThrow)
     auto column = cudf::make_numeric_column(
       cudf::data_type{GetParam()}, this->size(), cudf::mask_state::UNALLOCATED);
   };
-  EXPECT_THROW(construct(), cudf::logic_error);
+  EXPECT_THROW(construct(), cudf::data_type_error);
 }
 
 INSTANTIATE_TEST_CASE_P(NonNumeric,
@@ -306,7 +306,7 @@ TEST_P(NonFixedWidthFactoryTest, NonFixedWidthThrow)
     auto column = cudf::make_fixed_width_column(
       cudf::data_type{GetParam()}, this->size(), cudf::mask_state::UNALLOCATED);
   };
-  EXPECT_THROW(construct(), cudf::logic_error);
+  EXPECT_THROW(construct(), cudf::data_type_error);
 }
 
 INSTANTIATE_TEST_CASE_P(NonFixedWidth,
