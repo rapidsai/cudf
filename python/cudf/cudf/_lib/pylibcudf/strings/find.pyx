@@ -41,7 +41,7 @@ cpdef Column find(
     Returns
     -------
     pylibcudf.Column
-        New integer olumn with character position values
+        New integer column with character position values
     """
     cdef unique_ptr[column] result
     if ColumnOrScalar is Column:
