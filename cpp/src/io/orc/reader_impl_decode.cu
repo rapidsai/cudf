@@ -757,7 +757,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
   // Column descriptors ('chunks').
   // Each 'chunk' of data here corresponds to an orc column, in a stripe, at a nested level.
   // Unfortunately we cannot create one hostdevice_vector to use for all levels because
-  // currently we do not have hostdevice_2dspan exists.
+  // currently we do not have a hostdevice_2dspan class.
   std::vector<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>> lvl_chunks(num_levels);
 
   // For computing null count.
