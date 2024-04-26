@@ -148,7 +148,11 @@ TEST_F(JsonTest, StackContext)
   auto const stream = cudf::get_default_stream();
 
   // Test input
-  SymbolT delimiter       = '\n';
+  std::array<char, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distrib(0, delimiter_chars.size());
+  char delimiter          = delimiter_chars[distrib(gen)];
   std::string const input = R"(  [{)"
                             R"("category": "reference",)"
                             R"("index:": [4,12,42],)"
@@ -212,7 +216,11 @@ TEST_F(JsonTest, StackContextUtf8)
   auto const stream = cudf::get_default_stream();
 
   // Test input
-  SymbolT delimiter       = '\n';
+  std::array<char, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distrib(0, delimiter_chars.size());
+  char delimiter          = delimiter_chars[distrib(gen)];
   std::string const input = R"([{"a":{"year":1882,"author": "Bharathi"}, {"a":"filip ʒakotɛ"}}])";
 
   // Prepare input & output buffers
@@ -252,14 +260,15 @@ TEST_F(JsonTest, StackContextRecovering)
   auto const stream = cudf::get_default_stream();
 
   // JSON lines input that recovers on invalid lines
-  SymbolT delimiter       = '\n';
-  std::string const input = R"({"a":-2},
+  char delimiter    = 'h';
+  std::string input = R"({"a":-2},
   {"a":
   {"a":{"a":[321
   {"a":[1]}
 
   {"b":123}
   )";
+  std::replace(input.begin(), input.end(), '\n', delimiter);
 
   // Expected stack context (including stack context of the newline characters)
   std::string const golden_stack_context =
@@ -303,7 +312,7 @@ TEST_F(JsonTest, StackContextRecoveringFuzz)
   std::mt19937 gen(42);
   std::uniform_int_distribution<int> distribution(0, 4);
   constexpr std::size_t input_length = 1024 * 1024;
-  SymbolT delimiter                  = '\n';
+  char delimiter                     = '\n';
   std::string input{};
   input.reserve(input_length);
 
@@ -668,25 +677,31 @@ TEST_F(JsonTest, RecoveringTokenStream)
 {
   // Test input. Inline comments used to indicate character indexes
   //                           012345678 <= line 0
-  std::string const input = R"({"a":2 {})"
-                            // 9
-                            "\n"
-                            // 01234 <= line 1
-                            R"({"a":)"
-                            // 5
-                            "\n"
-                            // 67890123456789 <= line 2
-                            R"({"a":{"a":[321)"
-                            // 0
-                            "\n"
-                            // 123456789 <= line 3
-                            R"({"a":[1]})"
-                            // 0
-                            "\n"
-                            // 1  <= line 4
-                            "\n"
-                            // 23456789 <= line 5
-                            R"({"b":123})";
+  std::array<char, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distrib(0, delimiter_chars.size());
+  char delimiter    = delimiter_chars[distrib(gen)];
+  std::string input = R"({"a":2 {})"
+                      // 9
+                      "\n"
+                      // 01234 <= line 1
+                      R"({"a":)"
+                      // 5
+                      "\n"
+                      // 67890123456789 <= line 2
+                      R"({"a":{"a":[321)"
+                      // 0
+                      "\n"
+                      // 123456789 <= line 3
+                      R"({"a":[1]})"
+                      // 0
+                      "\n"
+                      // 1  <= line 4
+                      "\n"
+                      // 23456789 <= line 5
+                      R"({"b":123})";
+  std::replace(input.begin(), input.end(), '\n', delimiter);
 
   // Golden token stream sample
   using token_t = cuio_json::token_t;
@@ -728,6 +743,7 @@ TEST_F(JsonTest, RecoveringTokenStream)
   cudf::io::json_reader_options default_options{};
   default_options.set_recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
   default_options.enable_lines(true);
+  default_options.set_delimiter(delimiter);
 
   // Prepare input & output buffers
   cudf::string_scalar const d_scalar(input, true, stream);
@@ -741,6 +757,7 @@ TEST_F(JsonTest, RecoveringTokenStream)
   auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
   auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
 
+  stream.synchronize();
   // Verify the number of tokens matches
   ASSERT_EQ(golden_token_stream.size(), tokens_gpu.size());
   ASSERT_EQ(golden_token_stream.size(), token_indices_gpu.size());

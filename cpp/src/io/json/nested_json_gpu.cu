@@ -467,8 +467,9 @@ constexpr auto NUM_STACK_SGS =
 /// Total number of symbol groups to differentiate amongst (stack alphabet * input alphabet)
 constexpr PdaSymbolGroupIdT NUM_PDA_SGIDS = NUM_PDA_INPUT_SGS * NUM_STACK_SGS;
 
+constexpr int alphabet_size = 127;
 /// Mapping a input symbol to the symbol group id
-static __constant__ PdaSymbolGroupIdT tos_sg_to_pda_sgid[] = {
+static PdaSymbolGroupIdT tos_sg_to_pda_sgid_h[] = {
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER),
@@ -597,18 +598,26 @@ static __constant__ PdaSymbolGroupIdT tos_sg_to_pda_sgid[] = {
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::CLOSING_BRACE),
   static_cast<PdaSymbolGroupIdT>(symbol_group_id::OTHER)};
 
+static __constant__ PdaSymbolGroupIdT tos_sg_to_pda_sgid[alphabet_size];
+
+SymbolT line_break = '\n';
+void set_line_break(SymbolT delim, rmm::cuda_stream_view stream)
+{
+  std::swap(tos_sg_to_pda_sgid_h[static_cast<int32_t>(delim)],
+            tos_sg_to_pda_sgid_h[static_cast<int32_t>(line_break)]);
+  CUDF_CUDA_TRY(cudaMemcpyToSymbolAsync(tos_sg_to_pda_sgid,
+                                        tos_sg_to_pda_sgid_h,
+                                        alphabet_size,
+                                        0,
+                                        cudaMemcpyHostToDevice,
+                                        stream.value()));
+  line_break = delim;
+}
 /**
  * @brief Maps a (top-of-stack symbol, input symbol)-pair to a symbol group id of the deterministic
  * visibly pushdown automaton (DVPA)
  */
 struct PdaSymbolToSymbolGroupId {
-  SymbolT line_break = '\n';
-  void set_line_break(SymbolT delim)
-  {
-    std::swap(tos_sg_to_pda_sgid[static_cast<int32_t>(delim)],
-              tos_sg_to_pda_sgid[static_cast<int32_t>(line_break)]);
-    line_break = delim;
-  }
   template <typename SymbolT, typename StackSymbolT>
   __device__ __forceinline__ PdaSymbolGroupIdT
   operator()(thrust::tuple<SymbolT, StackSymbolT> symbol_pair) const
@@ -1621,8 +1630,9 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   constexpr auto max_translation_table_size =
     tokenizer_pda::NUM_PDA_SGIDS *
     static_cast<tokenizer_pda::StateT>(tokenizer_pda::pda_state_t::PD_NUM_STATES);
+
   auto symbol_groups = tokenizer_pda::PdaSymbolToSymbolGroupId{};
-  symbol_groups.set_line_break(delimiter);
+  tokenizer_pda::set_line_break(delimiter, stream);
   auto json_to_tokens_fst = fst::detail::make_fst(
     fst::detail::make_symbol_group_lookup_op(symbol_groups),
     fst::detail::make_transition_table(tokenizer_pda::get_transition_table(format)),
