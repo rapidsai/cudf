@@ -11,13 +11,15 @@ ctypedef fused ColumnOrScalar:
 cpdef Column find(
     Column input,
     ColumnOrScalar target,
-    size_type start,
-    size_type stop
+    size_type start=*,
+    size_type stop=*
 )
 
 cpdef Column rfind(
     Column input,
-    Scalar target
+    Scalar target,
+    size_type start=*,
+    size_type stop=*
 )
 
 cpdef Column contains(
