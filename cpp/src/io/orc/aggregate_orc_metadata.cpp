@@ -183,6 +183,7 @@ aggregate_orc_metadata::select_stripes(
     // user_defined_stripes to get from that source file
     for (size_t src_file_idx = 0; src_file_idx < user_specified_stripes.size(); ++src_file_idx) {
       std::vector<metadata::orc_stripe_info> stripe_infos;
+      stripe_infos.reserve(user_specified_stripes[src_file_idx].size());
 
       // Coalesce stripe info at the source file later since that makes downstream processing much
       // easier in impl::read
@@ -213,6 +214,7 @@ aggregate_orc_metadata::select_stripes(
          src_file_idx < per_file_metadata.size() && count < rows_to_skip + rows_to_read;
          ++src_file_idx) {
       std::vector<metadata::orc_stripe_info> stripe_infos;
+      stripe_infos.reserve(per_file_metadata[src_file_idx].ff.stripes.size());
 
       for (size_t stripe_idx = 0; stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size() &&
                                   count < rows_to_skip + rows_to_read;
