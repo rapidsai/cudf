@@ -46,7 +46,6 @@ function(jit_preprocess_files)
         ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files -i -m -std=c++17
         -remove-unused-globals -D_FILE_OFFSET_BITS=64 -D__CUDACC_RTC__ -I${CUDF_SOURCE_DIR}/include
         -I${CUDF_SOURCE_DIR}/src ${includes} --no-preinclude-workarounds --no-replace-pragma-once
-        --device-int128
       COMMENT "Custom command to JIT-compile files."
     )
   endforeach()
