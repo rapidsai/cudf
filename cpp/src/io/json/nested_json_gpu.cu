@@ -267,7 +267,7 @@ struct TransduceToken {
     const bool is_delimiter = match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER);
 
     // If state is either invalid or we're entering an invalid state, we discard tokens
-    const bool is_part_of_invalid_line =
+    const bool is_part_of_valid_line =
       (match_id != static_cast<SymbolGroupT>(dfa_symbol_group_id::ERROR) &&
        state_id == static_cast<StateT>(TT_VLD));
 
@@ -275,7 +275,54 @@ struct TransduceToken {
     const bool is_end_of_invalid_line = (state_id == static_cast<StateT>(TT_INV) && is_delimiter);
 
     int32_t const emit_count =
-      is_end_of_invalid_line ? num_inv_tokens : (is_part_of_invalid_line && !is_delimiter ? 1 : 0);
+      is_end_of_invalid_line ? num_inv_tokens : (is_part_of_valid_line && !is_delimiter ? 1 : 0);
+    return emit_count;
+  }
+};
+
+struct TransduceTokenKeepLineEnd {
+  template <typename RelativeOffsetT, typename SymbolT>
+  constexpr CUDF_HOST_DEVICE SymbolT operator()(StateT const state_id,
+                                                SymbolGroupT const match_id,
+                                                RelativeOffsetT const relative_offset,
+                                                SymbolT const read_symbol) const
+  {
+    const bool is_end_of_invalid_line =
+      (state_id == static_cast<StateT>(TT_INV) &&
+       match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER));
+
+    if (is_end_of_invalid_line) {
+      switch (relative_offset) {
+        case 0 : return SymbolT{token_t::StructEnd, 0};
+        case 1 : return SymbolT{token_t::StructBegin, 0};
+        case 2 : return SymbolT{token_t::LineEnd, 0};
+      }
+    } else {
+      return read_symbol;
+    }
+
+  }
+
+  template <typename SymbolT>
+  constexpr CUDF_HOST_DEVICE int32_t operator()(StateT const state_id,
+                                                SymbolGroupT const match_id,
+                                                SymbolT const read_symbol) const
+  {
+    // Number of tokens emitted on invalid lines
+    constexpr int32_t num_inv_tokens = 3;
+
+    const bool is_delimiter = match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER);
+
+    // If state is either invalid or we're entering an invalid state, we discard tokens
+    const bool is_part_of_valid_line =
+      (match_id != static_cast<SymbolGroupT>(dfa_symbol_group_id::ERROR) &&
+       state_id == static_cast<StateT>(TT_VLD));
+
+    // Indicates whether we transition from an invalid line to a potentially valid line
+    const bool is_end_of_invalid_line = (state_id == static_cast<StateT>(TT_INV) && is_delimiter);
+
+    int32_t const emit_count =
+      is_end_of_invalid_line ? num_inv_tokens : (is_part_of_valid_line || is_delimiter ? 1 : 0);
     return emit_count;
   }
 };
@@ -1479,7 +1526,8 @@ void get_stack_context(device_span<SymbolT const> json_in,
 std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> process_token_stream(
   device_span<PdaTokenT const> tokens,
   device_span<SymbolOffsetT const> token_indices,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream,
+  bool remove_line_end_token)
 {
   // Instantiate FST for post-processing the token stream to remove all tokens that belong to an
   // invalid JSON line
@@ -1487,7 +1535,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   auto filter_fst =
     fst::detail::make_fst(fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
                           fst::detail::make_transition_table(token_filter::transition_table),
-                          fst::detail::make_translation_functor(token_filter::TransduceToken{}),
+                          fst::detail::make_translation_functor(token_filter::TransduceTokenKeepLineEnd{}),
                           stream);
 
   auto const mr = rmm::mr::get_current_device_resource();
@@ -1532,7 +1580,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   device_span<SymbolT const> json_in,
   cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::device_async_resource_ref mr,
+  bool remove_line_end_token)
 {
   check_input_size(json_in.size());
 
@@ -1632,7 +1681,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   if (delimiter_offset == 1) {
     tokens.set_element(0, token_t::LineEnd, stream);
     auto [filtered_tokens, filtered_tokens_indices] =
-      process_token_stream(tokens, tokens_indices, stream);
+      process_token_stream(tokens, tokens_indices, stream, remove_line_end_token);
     tokens         = std::move(filtered_tokens);
     tokens_indices = std::move(filtered_tokens_indices);
   }

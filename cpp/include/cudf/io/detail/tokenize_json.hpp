@@ -134,7 +134,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   device_span<SymbolT const> json_in,
   cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  rmm::device_async_resource_ref mr,
+  bool remove_line_end_token = true);
 
 }  // namespace detail
 

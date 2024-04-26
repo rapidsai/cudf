@@ -217,7 +217,8 @@ void get_stack_context(device_span<SymbolT const> json_in,
 std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> process_token_stream(
   device_span<PdaTokenT const> tokens,
   device_span<SymbolOffsetT const> token_indices,
-  rmm::cuda_stream_view stream);
+  rmm::cuda_stream_view stream,
+  bool remove_line_end_token = true);
 
 /**
  * @brief Parses the given JSON string and generates a tree representation of the given input.
