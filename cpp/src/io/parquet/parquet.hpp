@@ -323,6 +323,15 @@ struct ColumnIndex {
 };
 
 /**
+ * @brief Thrift-derived struct describing page encoding statistics
+ */
+struct PageEncodingStats {
+  PageType page_type;  // The page type (data/dic/...)
+  Encoding encoding;   // Encoding of the page
+  int32_t count;       // Number of pages of this type with this encoding
+};
+
+/**
  * @brief Thrift-derived struct describing column sort order
  */
 struct SortingColumn {
@@ -335,21 +344,36 @@ struct SortingColumn {
  * @brief Thrift-derived struct describing a column chunk
  */
 struct ColumnChunkMetaData {
+  // Type of this column
   Type type = BOOLEAN;
+  // Set of all encodings used for this column. The purpose is to validate
+  // whether we can decode those pages.
   std::vector<Encoding> encodings;
+  // Path in schema
   std::vector<std::string> path_in_schema;
-  Compression codec  = UNCOMPRESSED;
+  // Compression codec
+  Compression codec = UNCOMPRESSED;
+  // Number of values in this column
   int64_t num_values = 0;
-  int64_t total_uncompressed_size =
-    0;  // total byte size of all uncompressed pages in this column chunk (including the headers)
-  int64_t total_compressed_size =
-    0;  // total byte size of all compressed pages in this column chunk (including the headers)
-  int64_t data_page_offset  = 0;  // Byte offset from beginning of file to first data page
-  int64_t index_page_offset = 0;  // Byte offset from beginning of file to root index page
-  int64_t dictionary_page_offset =
-    0;                    // Byte offset from the beginning of file to first (only) dictionary page
-  Statistics statistics;  // Encoded chunk-level statistics
-  thrust::optional<SizeStatistics> size_statistics;  // Size statistics for the chunk
+  // Total byte size of all uncompressed pages in this column chunk (including the headers)
+  int64_t total_uncompressed_size = 0;
+  // Total byte size of all compressed pages in this column chunk (including the headers)
+  int64_t total_compressed_size = 0;
+  // Byte offset from beginning of file to first data page
+  int64_t data_page_offset = 0;
+  // Byte offset from beginning of file to root index page
+  int64_t index_page_offset = 0;
+  // Byte offset from the beginning of file to first (only) dictionary page
+  int64_t dictionary_page_offset = 0;
+  // Optional statistics for this column chunk
+  Statistics statistics;
+  // Set of all encodings used for pages in this column chunk. This information can be used to
+  // determine if all data pages are dictionary encoded for example.
+  thrust::optional<std::vector<PageEncodingStats>> encoding_stats;
+  // Optional statistics to help estimate total memory when converted to in-memory representations.
+  // The histograms contained in these statistics can also be useful in some cases for more
+  // fine-grained nullability/list length filter pushdown.
+  thrust::optional<SizeStatistics> size_statistics;
 };
 
 /**

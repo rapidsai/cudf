@@ -1674,7 +1674,18 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   // no nulls and no repetition, so the only encoding used should be for the data.
   // since we're writing v1, both dict and data pages should use PLAIN_DICTIONARY.
   auto const expect_enc = [&fmd](int idx, cudf::io::parquet::detail::Encoding enc) {
-    EXPECT_EQ(fmd.row_groups[0].columns[idx].meta_data.encodings[0], enc);
+    auto const& col_meta = fmd.row_groups[0].columns[idx].meta_data;
+    EXPECT_EQ(col_meta.encodings[0], enc);
+
+    // also check encoding stats are written properly
+    ASSERT_TRUE(col_meta.encoding_stats.has_value());
+    auto const& enc_stats = col_meta.encoding_stats.value();
+    for (auto const& ec : enc_stats) {
+      if (ec.page_type == cudf::io::parquet::detail::PageType::DATA_PAGE) {
+        EXPECT_EQ(ec.encoding, enc);
+        EXPECT_EQ(ec.count, 1);
+      }
+    }
   };
 
   // requested plain
