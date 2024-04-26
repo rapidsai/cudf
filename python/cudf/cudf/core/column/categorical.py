@@ -1045,8 +1045,9 @@ class CategoricalColumn(column.ColumnBase):
         """
         Fill null values with *fill_value*
         """
-        if not self.nullable:
-            return self
+
+        # if not self.nullable:
+        #     return self
 
         if fill_value is not None:
             fill_is_scalar = np.isscalar(fill_value)

@@ -762,10 +762,17 @@ class Frame(BinaryOperand, Scannable):
             else:
                 replace_val = None
             should_fill = (
-                col_name in value
-                and col.has_nulls(include_nan=True)
-                and not libcudf.scalar._is_null_host_scalar(replace_val)
-            ) or method is not None
+                (
+                    col_name in value
+                    and col.has_nulls(include_nan=True)
+                    and not libcudf.scalar._is_null_host_scalar(replace_val)
+                )
+                or method is not None
+                or (
+                    isinstance(col, cudf.core.column.CategoricalColumn)
+                    and not libcudf.scalar._is_null_host_scalar(replace_val)
+                )
+            )
             if should_fill:
                 filled_data[col_name] = col.fillna(replace_val, method)
             else:
