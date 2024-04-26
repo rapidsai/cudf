@@ -39,9 +39,9 @@ collect_aggregation = Aggregation(
 
 def _translate_arg(arg):
     # Helper function to translate args so that
-    # they cab be processed correctly by upstream
+    # they can be processed correctly by upstream
     # dask & dask-expr. Right now, the only necessary
-    # translation is list ("collect") aggregations.
+    # translation is "collect" aggregations.
     if isinstance(arg, dict):
         return {k: _translate_arg(v) for k, v in arg.items()}
     elif isinstance(arg, list):

@@ -168,18 +168,3 @@ except ImportError:
     # Older version of dask-expr.
     # Implicit conversion to array wont work.
     pass
-
-
-##
-## Helper functions
-##
-
-
-def _legacy_instructions():
-    return (
-        "To disable query-planning, set the global "
-        "'dataframe.query-planning' config to `False` "
-        "before importing dask. This can also be done "
-        "by setting an environment variable: "
-        "`DASK_DATAFRAME__QUERY_PLANNING=False` "
-    )
