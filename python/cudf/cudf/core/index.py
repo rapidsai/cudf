@@ -60,6 +60,7 @@ from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    _NUMPY_SCTYPES,
     _maybe_convert_to_default_type,
     find_common_type,
     is_mixed_with_object_dtype,
@@ -344,7 +345,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def __contains__(self, item):
         if isinstance(item, bool) or not isinstance(
-            item, tuple(np.sctypes["int"] + np.sctypes["float"] + [int, float])
+            item,
+            tuple(
+                _NUMPY_SCTYPES["int"] + _NUMPY_SCTYPES["float"] + [int, float]
+            ),
         ):
             return False
         try:
