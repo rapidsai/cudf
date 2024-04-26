@@ -22,7 +22,8 @@ function(find_and_configure_spdlog)
   rapids_cpm_spdlog(
     FMT_OPTION "EXTERNAL_FMT_HO"
     INSTALL_EXPORT_SET cudf-exports
-    BUILD_EXPORT_SET cudf-exports)
+    BUILD_EXPORT_SET cudf-exports
+  )
 endfunction()
 
 find_and_configure_spdlog()
