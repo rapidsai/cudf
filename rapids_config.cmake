@@ -27,6 +27,11 @@ else()
 endif()
 
 if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS-${RAPIDS_VERSION_MAJOR_MINOR}.cmake")
+  include(FetchContent)
+  FetchContent_Declare(
+    rapids-cmake
+    GIT_REPOSITORY https://github.com/jameslamb/rapids-cmake.git
+    GIT_TAG fmt-version)
   file(
     DOWNLOAD
     "https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-${RAPIDS_VERSION_MAJOR_MINOR}/RAPIDS.cmake"
