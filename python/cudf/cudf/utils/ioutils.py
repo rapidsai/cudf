@@ -301,6 +301,16 @@ force_nullable_schema : bool, default False.
     If True, writes all columns as `null` in schema.
     If False, columns are written as `null` if they contain null values,
     otherwise as `not null`.
+skip_compression : dict, default None
+    Dictionary of `column_name: bool` pairs indicating whether the named
+    column is to be compressed.
+column_encoding : dict, default None
+    Dictionary of `column_name: str` pairs specifying that a particular
+    encoding be used for the named column. Valid values include:...
+column_type_length : dict, default None
+    Dictionary of `column_name: int` pairs. If the named column is to
+    be written as FIXED_LEN_BYTE_ARRAY, the value specifies the size of
+    the data in bytes.
 **kwargs
     Additional parameters will be passed to execution engines other
     than ``cudf``.

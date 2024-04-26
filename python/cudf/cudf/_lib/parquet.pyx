@@ -403,6 +403,9 @@ def write_parquet(
     object force_nullable_schema=False,
     header_version="1.0",
     use_dictionary=True,
+    object skip_compression=None,
+    object column_encoding=None,
+    object column_type_length=None,
 ):
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -453,7 +456,11 @@ def write_parquet(
         _set_col_metadata(
             table[name]._column,
             tbl_meta.column_metadata[i],
-            force_nullable_schema
+            force_nullable_schema,
+            None,
+            skip_compression,
+            column_encoding,
+            column_type_length
         )
 
     cdef map[string, string] tmp_user_data
@@ -784,19 +791,59 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
         raise ValueError("Unsupported `compression` type")
 
 
+cdef cudf_io_types.column_encoding _get_encoding_type(object encoding):
+    if encoding is None:
+        return cudf_io_types.column_encoding.USE_DEFAULT
+
+    enc = str(encoding).upper()
+    if enc == "PLAIN":
+        return cudf_io_types.column_encoding.PLAIN
+    elif enc == "DICTIONARY":
+        return cudf_io_types.column_encoding.DICTIONARY
+    elif enc == "DELTA_BINARY_PACKED":
+        return cudf_io_types.column_encoding.DELTA_BINARY_PACKED
+    elif enc == "DELTA_LENGTH_BYTE_ARRAY":
+        return cudf_io_types.column_encoding.DELTA_LENGTH_BYTE_ARRAY
+    elif enc == "DELTA_BYTE_ARRAY":
+        return cudf_io_types.column_encoding.DELTA_BYTE_ARRAY
+    elif enc == "BYTE_STREAM_SPLIT":
+        return cudf_io_types.column_encoding.BYTE_STREAM_SPLIT
+    elif enc == "DIRECT":
+        return cudf_io_types.column_encoding.DIRECT
+    elif enc == "DIRECT_V2":
+        return cudf_io_types.column_encoding.DIRECT_V2
+    elif enc == "DICTIONARY_V2":
+        return cudf_io_types.column_encoding.DICTIONARY_V2
+    else:
+        raise ValueError("Unsupported `column_encoding` type")
+
+
 cdef _set_col_metadata(
     Column col,
     column_in_metadata& col_meta,
     bool force_nullable_schema=False,
     str path=None,
+    object skip_compression=None,
+    object column_encoding=None,
+    object column_type_length=None,
 ):
     name = col_meta.get_name().decode('UTF-8')
     full_path = path + "." + name if path is not None else name
-    print(full_path)
+    # print(full_path)
     if force_nullable_schema:
         # Only set nullability if `force_nullable_schema`
         # is true.
         col_meta.set_nullability(True)
+
+    if skip_compression is not None and full_path in skip_compression:
+        col_meta.set_skip_compression(skip_compression[full_path])
+
+    if column_encoding is not None and full_path in column_encoding:
+        col_meta.set_encoding(_get_encoding_type(column_encoding[full_path]))
+
+    if column_type_length is not None and full_path in column_type_length:
+        col_meta.set_output_as_binary(True)
+        col_meta.set_type_length(column_type_length[full_path])
 
     if isinstance(col.dtype, cudf.StructDtype):
         for i, (child_col, name) in enumerate(
@@ -807,7 +854,10 @@ cdef _set_col_metadata(
                 child_col,
                 col_meta.child(i),
                 force_nullable_schema,
-                full_path
+                full_path,
+                skip_compression,
+                column_encoding,
+                column_type_length
             )
     elif isinstance(col.dtype, cudf.ListDtype):
         full_path = full_path + ".list"
@@ -816,7 +866,10 @@ cdef _set_col_metadata(
             col.children[1],
             col_meta.child(1),
             force_nullable_schema,
-            full_path
+            full_path,
+            skip_compression,
+            column_encoding,
+            column_type_length
         )
     elif isinstance(col.dtype, cudf.core.dtypes.DecimalDtype):
         col_meta.set_decimal_precision(col.dtype.precision)
