@@ -788,7 +788,11 @@ cdef _set_col_metadata(
     Column col,
     column_in_metadata& col_meta,
     bool force_nullable_schema=False,
+    str path=None,
 ):
+    name = col_meta.get_name().decode('UTF-8')
+    full_path = path + "." + name if path is not None else name
+    print(full_path)
     if force_nullable_schema:
         # Only set nullability if `force_nullable_schema`
         # is true.
@@ -802,13 +806,17 @@ cdef _set_col_metadata(
             _set_col_metadata(
                 child_col,
                 col_meta.child(i),
-                force_nullable_schema
+                force_nullable_schema,
+                full_path
             )
     elif isinstance(col.dtype, cudf.ListDtype):
+        full_path = full_path + ".list"
+        col_meta.child(1).set_name("element".encode())
         _set_col_metadata(
             col.children[1],
             col_meta.child(1),
-            force_nullable_schema
+            force_nullable_schema,
+            full_path
         )
     elif isinstance(col.dtype, cudf.core.dtypes.DecimalDtype):
         col_meta.set_decimal_precision(col.dtype.precision)
