@@ -15,7 +15,6 @@
  */
 
 #include "error.hpp"
-#include "io/parquet/parquet_common.hpp"
 #include "reader_impl.hpp"
 
 #include <cudf/detail/iterator.cuh>

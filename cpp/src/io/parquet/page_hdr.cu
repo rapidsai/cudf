@@ -539,7 +539,7 @@ CUDF_KERNEL void __launch_bounds__(128)
     for (int i = 0; i < num_entries; i++) {
       int len = 0;
       if (ck->physical_type == FIXED_LEN_BYTE_ARRAY) {
-        if (cur < dict_size) {
+        if (cur + ck->type_length <= dict_size) {
           len = ck->type_length;
           pos = cur;
           cur += len;

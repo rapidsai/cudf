@@ -17,9 +17,7 @@
 #pragma once
 
 #include "error.hpp"
-#include "io/parquet/parquet.hpp"
 #include "io/utilities/block_utils.cuh"
-#include "parquet_common.hpp"
 #include "parquet_gpu.hpp"
 #include "rle_stream.cuh"
 
