@@ -28,8 +28,8 @@ namespace {
 
 // Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
-constexpr int64_t data_size        = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
+constexpr std::size_t data_size    = 512 << 20;
 constexpr std::size_t Mbytes       = 1024 * 1024;
 
 template <bool is_chunked_read>
