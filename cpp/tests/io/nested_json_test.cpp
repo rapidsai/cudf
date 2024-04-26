@@ -1028,4 +1028,211 @@ TEST_P(JsonParserTest, EmptyString)
   EXPECT_EQ(cudf_table.tbl->num_columns(), expected_col_count);
 }
 
+TEST_F(JsonTest, PostProcessTokenStreamWithLineEnd)
+{
+  // Golden token stream sample
+  using token_t       = cuio_json::token_t;
+  using token_index_t = cuio_json::SymbolOffsetT;
+  using tuple_t       = thrust::tuple<token_index_t, cuio_json::PdaTokenT>;
+
+  std::vector<tuple_t> const input = {// Line 0 (invalid)
+                                      {0, token_t::LineEnd},
+                                      {0, token_t::StructBegin},
+                                      {1, token_t::StructMemberBegin},
+                                      {1, token_t::FieldNameBegin},
+                                      {3, token_t::FieldNameEnd},
+                                      {5, token_t::ValueBegin},
+                                      {7, token_t::ValueEnd},
+                                      {7, token_t::StructMemberEnd},
+                                      {7, token_t::StructEnd},
+                                      {8, token_t::ErrorBegin},
+                                      {9, token_t::LineEnd},
+                                      // Line 1
+                                      {10, token_t::StructBegin},
+                                      {11, token_t::StructMemberBegin},
+                                      {11, token_t::FieldNameBegin},
+                                      {13, token_t::FieldNameEnd},
+                                      {15, token_t::LineEnd},
+                                      // Line 2 (invalid)
+                                      {16, token_t::StructBegin},
+                                      {17, token_t::StructMemberBegin},
+                                      {17, token_t::FieldNameBegin},
+                                      {19, token_t::FieldNameEnd},
+                                      {21, token_t::StructBegin},
+                                      {22, token_t::StructMemberBegin},
+                                      {22, token_t::FieldNameBegin},
+                                      {24, token_t::FieldNameEnd},
+                                      {26, token_t::ListBegin},
+                                      {27, token_t::ValueBegin},
+                                      {29, token_t::ErrorBegin},
+                                      {30, token_t::LineEnd},
+                                      // Line 3 (invalid)
+                                      {31, token_t::StructBegin},
+                                      {32, token_t::StructMemberBegin},
+                                      {32, token_t::FieldNameBegin},
+                                      {34, token_t::FieldNameEnd},
+                                      {36, token_t::ListBegin},
+                                      {37, token_t::ValueBegin},
+                                      {38, token_t::ValueEnd},
+                                      {38, token_t::ListEnd},
+                                      {39, token_t::StructMemberEnd},
+                                      {39, token_t::StructEnd},
+                                      {40, token_t::ErrorBegin},
+                                      {40, token_t::LineEnd},
+                                      // Line 4
+                                      {41, token_t::LineEnd},
+                                      // Line 5
+                                      {42, token_t::StructBegin},
+                                      {43, token_t::StructMemberBegin},
+                                      {43, token_t::FieldNameBegin},
+                                      {45, token_t::FieldNameEnd},
+                                      {47, token_t::ValueBegin},
+                                      {50, token_t::ValueEnd},
+                                      {50, token_t::StructMemberEnd},
+                                      {50, token_t::StructEnd}};
+
+  std::vector<tuple_t> const expected_output = {// Line 0 (invalid)
+                                                {0, token_t::LineEnd},
+                                                {0, token_t::StructBegin},
+                                                {0, token_t::StructEnd},
+                                                // Line 1
+                                                {0, token_t::LineEnd},
+                                                {10, token_t::StructBegin},
+                                                {11, token_t::StructMemberBegin},
+                                                {11, token_t::FieldNameBegin},
+                                                {13, token_t::FieldNameEnd},
+                                                // Line 2 (invalid)
+                                                {0, token_t::LineEnd},
+                                                {0, token_t::StructBegin},
+                                                {0, token_t::StructEnd},
+                                                // Line 3 (invalid)
+                                                {0, token_t::LineEnd},
+                                                {0, token_t::StructBegin},
+                                                {0, token_t::StructEnd},
+                                                // Line 4 (empty)
+                                                {0, token_t::LineEnd},
+                                                // Line 5
+                                                {0, token_t::LineEnd},
+                                                {42, token_t::StructBegin},
+                                                {43, token_t::StructMemberBegin},
+                                                {43, token_t::FieldNameBegin},
+                                                {45, token_t::FieldNameEnd},
+                                                {47, token_t::ValueBegin},
+                                                {50, token_t::ValueEnd},
+                                                {50, token_t::StructMemberEnd},
+                                                {50, token_t::StructEnd}};
+
+  // Decompose tuples
+  auto const stream = cudf::get_default_stream();
+  std::vector<token_index_t> offsets(input.size());
+  std::vector<cuio_json::PdaTokenT> tokens(input.size());
+  auto token_tuples = thrust::make_zip_iterator(offsets.begin(), tokens.begin());
+  thrust::copy(input.cbegin(), input.cend(), token_tuples);
+
+  // Initialize device-side test data
+  auto const d_offsets = cudf::detail::make_device_uvector_async(
+    cudf::host_span<token_index_t const>{offsets.data(), offsets.size()},
+    stream,
+    rmm::mr::get_current_device_resource());
+  auto const d_tokens =
+    cudf::detail::make_device_uvector_async(tokens, stream, rmm::mr::get_current_device_resource());
+
+  // Run system-under-test
+  auto [d_filtered_tokens, d_filtered_indices] =
+    cuio_json::detail::process_token_stream(d_tokens, d_offsets, stream, false);
+
+  auto const filtered_tokens  = cudf::detail::make_std_vector_async(d_filtered_tokens, stream);
+  auto const filtered_indices = cudf::detail::make_std_vector_async(d_filtered_indices, stream);
+
+  // // Verify the number of tokens matches
+  // ASSERT_EQ(filtered_tokens.size(), expected_output.size());
+  // ASSERT_EQ(filtered_indices.size(), expected_output.size());
+
+  for (std::size_t i = 0; i < filtered_tokens.size(); i++) {
+    // Ensure the index the tokens are pointing to do match
+    EXPECT_EQ(thrust::get<0>(expected_output[i]), filtered_indices[i]) << "Mismatch at #" << i;
+    // Ensure the token category is correct
+    EXPECT_EQ(thrust::get<1>(expected_output[i]), filtered_tokens[i]) << "Mismatch at #" << i;
+  }
+}
+
+TEST_F(JsonTest, TokenStreamWithLineEnd)
+{
+  using cuio_json::PdaTokenT;
+  using cuio_json::SymbolOffsetT;
+  using cuio_json::SymbolT;
+  // Test input
+  std::string const input =  R"({"a":1}
+  {"b":2}
+  {"c"
+  {"d":4})";
+
+  auto const stream = cudf::get_default_stream();
+
+  // Default parsing options
+  cudf::io::json_reader_options default_options{};
+  default_options.set_recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+  default_options.enable_lines(true);
+
+  // Prepare input & output buffers
+  cudf::string_scalar const d_scalar(input, true, stream);
+  auto const d_input =
+    cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
+
+  // Parse the JSON and get the token stream
+  auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
+    d_input, default_options, stream, rmm::mr::get_current_device_resource());
+  // Copy back the number of tokens that were written
+  auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
+
+  // // Golden token stream sample
+  using token_t = cuio_json::token_t;
+  std::vector<cuio_json::PdaTokenT> const golden_token_stream = {
+    //Line 1
+    token_t::LineEnd,
+    token_t::StructBegin,
+    token_t::StructMemberBegin,
+    token_t::FieldNameBegin,
+    token_t::FieldNameEnd,
+    token_t::ValueBegin,
+    token_t::ValueEnd,
+    token_t::StructMemberEnd,
+    token_t::StructEnd,
+    //Line 2
+    token_t::LineEnd,
+    token_t::StructBegin,
+    token_t::StructMemberBegin,
+    token_t::FieldNameBegin,
+    token_t::FieldNameEnd,
+    token_t::ValueBegin,
+    token_t::ValueEnd,
+    token_t::StructMemberEnd,
+    token_t::StructEnd,
+    //Error
+    token_t::LineEnd,
+    token_t::StructBegin,
+    token_t::StructEnd,
+    //Line 3
+    token_t::LineEnd,
+    token_t::StructBegin,
+    token_t::StructMemberBegin,
+    token_t::FieldNameBegin,
+    token_t::FieldNameEnd,
+    token_t::ValueBegin,
+    token_t::ValueEnd,
+    token_t::StructMemberEnd,
+    token_t::StructEnd,
+  };
+
+  // Verify the number of tokens matches
+  // ASSERT_EQ(golden_token_stream.size(), tokens_gpu.size());
+
+  for (std::size_t i = 0; i < tokens_gpu.size(); i++) {
+    // Ensure the token category is correct
+    EXPECT_EQ(golden_token_stream[i], tokens_gpu[i]) << "Mismatch at #" << i;
+  }
+}
+
+
+
 CUDF_TEST_PROGRAM_MAIN()

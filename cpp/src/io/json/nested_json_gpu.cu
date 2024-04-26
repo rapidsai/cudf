@@ -291,12 +291,19 @@ struct TransduceTokenKeepLineEnd {
       (state_id == static_cast<StateT>(TT_INV) &&
        match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER));
 
+    const bool is_end_of_valid_line =
+      (state_id == static_cast<StateT>(TT_VLD) &&
+       match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER));
+
     if (is_end_of_invalid_line) {
       switch (relative_offset) {
         case 0 : return SymbolT{token_t::StructEnd, 0};
         case 1 : return SymbolT{token_t::StructBegin, 0};
         case 2 : return SymbolT{token_t::LineEnd, 0};
+        default: return SymbolT{token_t::LineEnd, 0}; // doesn't appear
       }
+    } else if (is_end_of_valid_line) {
+      return SymbolT{token_t::LineEnd, 0};
     } else {
       return read_symbol;
     }
