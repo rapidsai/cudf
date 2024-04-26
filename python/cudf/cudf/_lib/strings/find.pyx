@@ -31,8 +31,8 @@ def contains_multiple(Column source_strings, Column target_strings):
         plc.strings.find.contains(
             source_strings.to_pylibcudf(mode="read"),
             target_strings.to_pylibcudf(mode="read")
-            )
         )
+    )
 
 
 @acquire_spill_lock()
@@ -46,8 +46,8 @@ def endswith(Column source_strings, object py_target):
         plc.strings.find.ends_with(
             source_strings.to_pylibcudf(mode="read"),
             py_target.device_value.c_value
-            )
         )
+    )
 
 
 @acquire_spill_lock()
@@ -61,8 +61,8 @@ def endswith_multiple(Column source_strings, Column target_strings):
         plc.strings.find.ends_with(
             source_strings.to_pylibcudf(mode="read"),
             target_strings.to_pylibcudf(mode="read")
-            )
         )
+    )
 
 
 @acquire_spill_lock()
