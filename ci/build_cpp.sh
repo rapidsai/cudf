@@ -13,7 +13,7 @@ export CMAKE_GENERATOR=Ninja
 
 rapids-print-env
 
-LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1374 cpp)
+LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1544 cpp)
 
 version=$(rapids-generate-version)
 

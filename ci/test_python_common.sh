@@ -26,8 +26,8 @@ set -u
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
-LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1374 cpp)
-RMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1374 python)
+LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1544 cpp)
+RMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1544 python)
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/

@@ -25,8 +25,8 @@ done
 rapids-logger "Begin py build"
 
 CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
-LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1374 cpp)
-RMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1374 python)
+LIBRMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1544 cpp)
+RMM_CHANNEL=$(rapids-get-pr-conda-artifact rmm 1544 python)
 
 # TODO: Remove `--no-test` flag once importing on a CPU
 # node works correctly
