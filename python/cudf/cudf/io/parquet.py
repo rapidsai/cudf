@@ -213,6 +213,11 @@ def write_to_dataset(
         If True, writes all columns as `null` in schema.
         If False, columns are written as `null` if they contain null values,
         otherwise as `not null`.
+    header_version:
+    use_dictionary:
+    skip_compression:
+    column_encoding:
+    column_type_length:
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
