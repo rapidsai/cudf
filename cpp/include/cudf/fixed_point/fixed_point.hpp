@@ -193,12 +193,7 @@ CUDF_HOST_DEVICE inline T divide_power10_64bit(T value, int exp10)
  * @return Returns value / 10^exp10.
  */
 template <typename T>
-// clang-format off
-//! @cond Suppress doxygen for noinline attribute as it doesn't know how to handle it
-__attribute__((noinline))
-//! @endcond
-CUDF_HOST_DEVICE constexpr T divide_power10_128bit(T value, int exp10)
-// clang-format on
+CUDF_HOST_DEVICE inline constexpr T divide_power10_128bit(T value, int exp10)
 {
   // See comments in divide_power10_32bit() for an introduction.
 
@@ -323,12 +318,7 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10_64bit(T value, int exp10)
  * @return Returns value * 10^exp10.
  */
 template <typename T>
-// clang-format off
-//! @cond Suppress doxygen for noinline attribute as it doesn't know how to handle it
-__attribute__((noinline))
-//! @endcond
-CUDF_HOST_DEVICE constexpr T multiply_power10_128bit(T value, int exp10)
-// clang-format on
+CUDF_HOST_DEVICE inline constexpr T multiply_power10_128bit(T value, int exp10)
 {
   // See comments in divide_power10_128bit() for discussion.
   switch (exp10) {
@@ -477,18 +467,7 @@ CUDF_HOST_DEVICE inline Rep ipow(T exponent)
 template <typename Rep, Radix Rad, typename T>
 CUDF_HOST_DEVICE inline constexpr T right_shift(T const& val, scale_type const& scale)
 {
-  auto int_scale = static_cast<int32_t>(scale);
-  if constexpr (!cuda::std::is_integral_v<T>) {
-    // Note: diverting to the base-10 bit-size-specific functions based on size-of rep
-    // slows down the NOT_EQUAL binary-op benchmark.
-    return val / ipow<Rep, Rad>(int_scale);
-  } else if constexpr (Rad == Radix::BASE_10) {
-    return divide_power10<Rep>(val, int_scale);
-  } else if constexpr (Rad == Radix::BASE_2) {
-    return val >> int_scale;
-  } else {
-    return val / ipow<Rep, Rad>(int_scale);
-  }
+  return val / ipow<Rep, Rad>(static_cast<int32_t>(scale));
 }
 
 /** @brief Function that performs a `left shift` scale "times" on the `val`
@@ -505,18 +484,7 @@ CUDF_HOST_DEVICE inline constexpr T right_shift(T const& val, scale_type const& 
 template <typename Rep, Radix Rad, typename T>
 CUDF_HOST_DEVICE inline constexpr T left_shift(T const& val, scale_type const& scale)
 {
-  auto int_scale = -static_cast<int32_t>(scale);
-  if constexpr (!cuda::std::is_integral_v<T>) {
-    // Note: diverting to the base-10 bit-size-specific functions based on size-of rep
-    // slows down the NOT_EQUAL binary-op benchmark.
-    return val * ipow<Rep, Rad>(int_scale);
-  } else if constexpr (Rad == Radix::BASE_10) {
-    return multiply_power10<Rep>(val, int_scale);
-  } else if constexpr (Rad == Radix::BASE_2) {
-    return val << int_scale;
-  } else {
-    return val * ipow<Rep, Rad>(int_scale);
-  }
+  return val * ipow<Rep, Rad>(static_cast<int32_t>(-scale));
 }
 
 /** @brief Function that performs a `right` or `left shift`
