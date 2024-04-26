@@ -552,7 +552,7 @@ CUDF_KERNEL void __launch_bounds__(128)
             dict[cur + 0] | (dict[cur + 1] << 8) | (dict[cur + 2] << 16) | (dict[cur + 3] << 24);
           if (len >= 0 && cur + 4 + len <= dict_size) {
             pos = cur + 4;
-            cur = cur + 4 + len;
+            cur = pos + len;
           } else {
             cur = dict_size;
           }
