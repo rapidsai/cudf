@@ -18,6 +18,31 @@ cpdef Column find(
     size_type start=0,
     size_type stop=-1
 ):
+    """Perform a string find operation.
+
+    ``target`` may be a
+    :py:class:`~cudf._lib.pylibcudf.column.Column` or a
+    :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
+
+    For details, see :cpp:func:`find`.
+
+    Parameters
+    ----------
+    input : Column
+        The input strings
+    target : Union[Column, Scalar]
+        String to search for in each string
+    start : size_type
+        First character position to include in the search
+    stop : size_type
+        Last position (exclusive) to include in the search. Default of -1 will
+        search to the end of the string.
+
+    Returns
+    -------
+    pylibcudf.Column
+        New integer olumn with character position values
+    """
     cdef unique_ptr[column] result
     if ColumnOrScalar is Column:
         with nogil:
@@ -50,6 +75,29 @@ cpdef Column rfind(
     size_type start=0,
     size_type stop=-1
 ):
+    """
+    Perform a string rfind operation.
+
+    For details, see :cpp:func:`rfind`.
+
+    Parameters
+    ----------
+    input : Column
+        The input strings
+    target : Scalar
+        String to search for in each string
+    start : size_type
+        First character position to include in the search
+    stop : size_type
+        Last position (exclusive) to include in the search. Default of -1 will
+        search to the end of the string.
+
+    Returns
+    -------
+    pylibcudf.Column
+        New integer column with character position values
+
+    """
     cdef unique_ptr[column] result
     with nogil:
         result = move(
@@ -67,6 +115,23 @@ cpdef Column contains(
     Column input,
     ColumnOrScalar target,
 ):
+    """
+    Perform a string contains operation.
+
+    For details, see :cpp:func:`contains`.
+
+    Parameters
+    ----------
+    input : Column
+        The input strings
+    target : Union[Column, Scalar]
+        String to search for in each string
+
+    Returns
+    -------
+    pylibcudf.Column
+        New boolean column with True for each string that contains the target
+    """
     cdef unique_ptr[column] result
     if ColumnOrScalar is Column:
         with nogil:
@@ -94,6 +159,23 @@ cpdef Column starts_with(
     Column input,
     ColumnOrScalar target,
 ):
+    """
+    Perform a string starts_with operation.
+
+    For details, see :cpp:func:`starts_with`.
+
+    Parameters
+    ----------
+    input : Column
+        The input strings
+    target : Union[Column, Scalar]
+        String to search for at the beginning of each string
+
+    Returns
+    -------
+    pylibcudf.Column
+        New boolean column with True for each string that starts with the target
+    """
     cdef unique_ptr[column] result
 
     if ColumnOrScalar is Column:
@@ -121,6 +203,23 @@ cpdef Column ends_with(
     Column input,
     ColumnOrScalar target,
 ):
+    """
+    Perform a string ends_with operation.
+
+    For details, see :cpp:func:`ends_with`.
+
+    Parameters
+    ----------
+    input : Column
+        The input strings
+    target : Union[Column, Scalar]
+        String to search for at the end of each string
+
+    Returns
+    -------
+    pylibcudf.Column
+        New boolean column with True for each string that ends with the target
+    """
     cdef unique_ptr[column] result
     if ColumnOrScalar is Column:
         with nogil:
