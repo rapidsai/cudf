@@ -118,6 +118,10 @@ cpdef Column contains(
     """
     Perform a string contains operation.
 
+    ``target`` may be a
+    :py:class:`~cudf._lib.pylibcudf.column.Column` or a
+    :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
+
     For details, see :cpp:func:`contains`.
 
     Parameters
@@ -162,6 +166,10 @@ cpdef Column starts_with(
     """
     Perform a string starts_with operation.
 
+    ``target`` may be a
+    :py:class:`~cudf._lib.pylibcudf.column.Column` or a
+    :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
+
     For details, see :cpp:func:`starts_with`.
 
     Parameters
@@ -205,6 +213,10 @@ cpdef Column ends_with(
 ):
     """
     Perform a string ends_with operation.
+
+    ``target`` may be a
+    :py:class:`~cudf._lib.pylibcudf.column.Column` or a
+    :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
 
     For details, see :cpp:func:`ends_with`.
 
