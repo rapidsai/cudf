@@ -903,6 +903,12 @@ TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
       ASSERT_TRUE(stats.min_value.has_value());
       ASSERT_TRUE(stats.max_value.has_value());
 
+      // check that min and max for the column chunk are exact (i.e. not truncated)
+      ASSERT_TRUE(stats.is_max_value_exact.has_value());
+      EXPECT_TRUE(stats.is_max_value_exact.value());
+      ASSERT_TRUE(stats.is_min_value_exact.has_value());
+      EXPECT_TRUE(stats.is_min_value_exact.value());
+
       // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
       auto const ptype = fmd.schema[c + 1].type;
       auto const ctype = fmd.schema[c + 1].converted_type;

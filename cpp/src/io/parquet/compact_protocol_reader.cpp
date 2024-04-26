@@ -763,13 +763,16 @@ void CompactProtocolReader::read(Statistics* s)
 {
   using optional_binary = parquet_field_optional<std::vector<uint8_t>, parquet_field_binary>;
   using optional_int64  = parquet_field_optional<int64_t, parquet_field_int64>;
+  using optional_bool   = parquet_field_optional<bool, parquet_field_bool>;
 
   auto op = std::make_tuple(optional_binary(1, s->max),
                             optional_binary(2, s->min),
                             optional_int64(3, s->null_count),
                             optional_int64(4, s->distinct_count),
                             optional_binary(5, s->max_value),
-                            optional_binary(6, s->min_value));
+                            optional_binary(6, s->min_value),
+                            optional_bool(7, s->is_max_value_exact),
+                            optional_bool(8, s->is_min_value_exact));
   function_builder(this, op);
 }
 
