@@ -1225,7 +1225,7 @@ TEST_F(JsonTest, TokenStreamWithLineEnd)
   };
 
   // Verify the number of tokens matches
-  // ASSERT_EQ(golden_token_stream.size(), tokens_gpu.size());
+  ASSERT_EQ(golden_token_stream.size(), tokens_gpu.size());
 
   for (std::size_t i = 0; i < tokens_gpu.size(); i++) {
     // Ensure the token category is correct
