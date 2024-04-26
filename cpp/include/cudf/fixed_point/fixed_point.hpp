@@ -73,7 +73,7 @@ constexpr inline auto is_supported_representation_type()
 namespace detail {
 
 /**
- * @brief Recursively calculate a signed large power of 10 (>= 10^18) that can only be stored in an
+ * @brief Recursively calculate a signed large power of 10 (>= 10^19) that can only be stored in an
  * 128bit integer
  *
  * @note Intended to be run at compile time.
@@ -82,14 +82,14 @@ namespace detail {
  * @return Returns 10^Exp10
  */
 template <int Exp10>
-constexpr __int128_t large_power_of_10()
+constexpr __uint128_t large_power_of_10()
 {
-  // Stop at 10^18 to speed up compilation; literals can be used for smaller powers of 10.
-  static_assert(Exp10 >= 18);
-  if constexpr (Exp10 == 18)
-    return __int128_t(1000000000000000000LL);
+  // Stop at 10^19 to speed up compilation; literals can be used for smaller powers of 10.
+  static_assert(Exp10 >= 19);
+  if constexpr (Exp10 == 19)
+    return __uint128_t(10000000000000000000ULL);
   else
-    return large_power_of_10<Exp10 - 1>() * __int128_t(10);
+    return large_power_of_10<Exp10 - 1>() * __uint128_t(10);
 }
 
 /**
@@ -100,7 +100,7 @@ constexpr __int128_t large_power_of_10()
  * @param exp10 The power-of-10 of the denominator, from 0 to 9 inclusive.
  * @return Returns value / 10^exp10
  */
-template <typename T>
+template <typename T, typename cuda::std::enable_if_t<cuda::std::is_unsigned_v<T>>* = nullptr>
 CUDF_HOST_DEVICE inline T divide_power10_32bit(T value, int exp10)
 {
   // Computing division this way is much faster than the alternatives.
@@ -125,24 +125,19 @@ CUDF_HOST_DEVICE inline T divide_power10_32bit(T value, int exp10)
   // That way we limit the templated, inlined code generation to the exponents that are
   // capable of being represented. Combining them together into a single function again
   // introduces too much pressure on the kernels that use this code, slowing down their benchmarks.
-
-  // Also note that these divisors are hardcoded here in place, rather than in the PowersOf10
-  // struct. This is because the NotEqual benchmark is slower when doing that; I guess the compiler
-  // is getting confused by all of the templating and inlining and can't optimize it as well?
-
-  // Note: Using signed powers of 10 (where possible) to avoid unintended integer conversion
+  // It also dramatically slows down the compile time.
 
   switch (exp10) {
     case 0: return value;
-    case 1: return value / 10;
-    case 2: return value / 100;
-    case 3: return value / 1000;
-    case 4: return value / 10000;
-    case 5: return value / 100000;
-    case 6: return value / 1000000;
-    case 7: return value / 10000000;
-    case 8: return value / 100000000;
-    case 9: return value / 1000000000;
+    case 1: return value / 10U;
+    case 2: return value / 100U;
+    case 3: return value / 1000U;
+    case 4: return value / 10000U;
+    case 5: return value / 100000U;
+    case 6: return value / 1000000U;
+    case 7: return value / 10000000U;
+    case 8: return value / 100000000U;
+    case 9: return value / 1000000000U;
     default: return 0;
   }
 }
@@ -155,31 +150,31 @@ CUDF_HOST_DEVICE inline T divide_power10_32bit(T value, int exp10)
  * @param exp10 The power-of-10 of the denominator, from 0 to 19 inclusive.
  * @return Returns value / 10^exp10
  */
-template <typename T>
+template <typename T, typename cuda::std::enable_if_t<cuda::std::is_unsigned_v<T>>* = nullptr>
 CUDF_HOST_DEVICE inline T divide_power10_64bit(T value, int exp10)
 {
   // See comments in divide_power10_32bit() for discussion.
   switch (exp10) {
     case 0: return value;
-    case 1: return value / 10;
-    case 2: return value / 100;
-    case 3: return value / 1000;
-    case 4: return value / 10000;
-    case 5: return value / 100000;
-    case 6: return value / 1000000;
-    case 7: return value / 10000000;
-    case 8: return value / 100000000;
-    case 9: return value / 1000000000;
-    case 10: return value / 10000000000LL;
-    case 11: return value / 100000000000LL;
-    case 12: return value / 1000000000000LL;
-    case 13: return value / 10000000000000LL;
-    case 14: return value / 100000000000000LL;
-    case 15: return value / 1000000000000000LL;
-    case 16: return value / 10000000000000000LL;
-    case 17: return value / 100000000000000000LL;
-    case 18: return value / 1000000000000000000LL;
-    case 19: return value / 10000000000000000000ULL;  // 10^19 only fits if unsigned!
+    case 1: return value / 10U;
+    case 2: return value / 100U;
+    case 3: return value / 1000U;
+    case 4: return value / 10000U;
+    case 5: return value / 100000U;
+    case 6: return value / 1000000U;
+    case 7: return value / 10000000U;
+    case 8: return value / 100000000U;
+    case 9: return value / 1000000000U;
+    case 10: return value / 10000000000ULL;
+    case 11: return value / 100000000000ULL;
+    case 12: return value / 1000000000000ULL;
+    case 13: return value / 10000000000000ULL;
+    case 14: return value / 100000000000000ULL;
+    case 15: return value / 1000000000000000ULL;
+    case 16: return value / 10000000000000000ULL;
+    case 17: return value / 100000000000000000ULL;
+    case 18: return value / 1000000000000000000ULL;
+    case 19: return value / 10000000000000000000ULL;
     default: return 0;
   }
 }
@@ -192,36 +187,31 @@ CUDF_HOST_DEVICE inline T divide_power10_64bit(T value, int exp10)
  * @param exp10 The power-of-10 of the denominator, from 0 to 38 inclusive.
  * @return Returns value / 10^exp10.
  */
-template <typename T>
+template <typename T, typename cuda::std::enable_if_t<cuda::std::is_unsigned_v<T>>* = nullptr>
 CUDF_HOST_DEVICE inline constexpr T divide_power10_128bit(T value, int exp10)
 {
   // See comments in divide_power10_32bit() for an introduction.
-
-  // However, the code generated by this function is so large that it cannot be inlined.
-  // If inlined it slows down the join benchmarks, perhaps because the code itself becomes too
-  // large?
-
   switch (exp10) {
     case 0: return value;
-    case 1: return value / 10;
-    case 2: return value / 100;
-    case 3: return value / 1000;
-    case 4: return value / 10000;
-    case 5: return value / 100000;
-    case 6: return value / 1000000;
-    case 7: return value / 10000000;
-    case 8: return value / 100000000;
-    case 9: return value / 1000000000;
-    case 10: return value / 10000000000LL;
-    case 11: return value / 100000000000LL;
-    case 12: return value / 1000000000000LL;
-    case 13: return value / 10000000000000LL;
-    case 14: return value / 100000000000000LL;
-    case 15: return value / 1000000000000000LL;
-    case 16: return value / 10000000000000000LL;
-    case 17: return value / 100000000000000000LL;
-    case 18: return value / 1000000000000000000LL;
-    case 19: return value / large_power_of_10<19>();
+    case 1: return value / 10U;
+    case 2: return value / 100U;
+    case 3: return value / 1000U;
+    case 4: return value / 10000U;
+    case 5: return value / 100000U;
+    case 6: return value / 1000000U;
+    case 7: return value / 10000000U;
+    case 8: return value / 100000000U;
+    case 9: return value / 1000000000U;
+    case 10: return value / 10000000000ULL;
+    case 11: return value / 100000000000ULL;
+    case 12: return value / 1000000000000ULL;
+    case 13: return value / 10000000000000ULL;
+    case 14: return value / 100000000000000ULL;
+    case 15: return value / 1000000000000000ULL;
+    case 16: return value / 10000000000000000ULL;
+    case 17: return value / 100000000000000000ULL;
+    case 18: return value / 1000000000000000000ULL;
+    case 19: return value / 10000000000000000000ULL;
     case 20: return value / large_power_of_10<20>();
     case 21: return value / large_power_of_10<21>();
     case 22: return value / large_power_of_10<22>();
@@ -253,21 +243,21 @@ CUDF_HOST_DEVICE inline constexpr T divide_power10_128bit(T value, int exp10)
  * @param exp10 The power-of-10 of the multiplier, from 0 to 9 inclusive.
  * @return Returns value * 10^exp10
  */
-template <typename T>
+template <typename T, typename cuda::std::enable_if_t<cuda::std::is_unsigned_v<T>>* = nullptr>
 CUDF_HOST_DEVICE inline constexpr T multiply_power10_32bit(T value, int exp10)
 {
   // See comments in divide_power10_32bit() for discussion.
   switch (exp10) {
     case 0: return value;
-    case 1: return value * 10;
-    case 2: return value * 100;
-    case 3: return value * 1000;
-    case 4: return value * 10000;
-    case 5: return value * 100000;
-    case 6: return value * 1000000;
-    case 7: return value * 10000000;
-    case 8: return value * 100000000;
-    case 9: return value * 1000000000;
+    case 1: return value * 10U;
+    case 2: return value * 100U;
+    case 3: return value * 1000U;
+    case 4: return value * 10000U;
+    case 5: return value * 100000U;
+    case 6: return value * 1000000U;
+    case 7: return value * 10000000U;
+    case 8: return value * 100000000U;
+    case 9: return value * 1000000000U;
     default: return 0;
   }
 }
@@ -280,31 +270,31 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10_32bit(T value, int exp10)
  * @param exp10 The power-of-10 of the multiplier, from 0 to 19 inclusive.
  * @return Returns value * 10^exp10
  */
-template <typename T>
+template <typename T, typename cuda::std::enable_if_t<cuda::std::is_unsigned_v<T>>* = nullptr>
 CUDF_HOST_DEVICE inline constexpr T multiply_power10_64bit(T value, int exp10)
 {
   // See comments in divide_power10_32bit() for discussion.
   switch (exp10) {
     case 0: return value;
-    case 1: return value * 10;
-    case 2: return value * 100;
-    case 3: return value * 1000;
-    case 4: return value * 10000;
-    case 5: return value * 100000;
-    case 6: return value * 1000000;
-    case 7: return value * 10000000;
-    case 8: return value * 100000000;
-    case 9: return value * 1000000000;
-    case 10: return value * 10000000000LL;
-    case 11: return value * 100000000000LL;
-    case 12: return value * 1000000000000LL;
-    case 13: return value * 10000000000000LL;
-    case 14: return value * 100000000000000LL;
-    case 15: return value * 1000000000000000LL;
-    case 16: return value * 10000000000000000LL;
-    case 17: return value * 100000000000000000LL;
-    case 18: return value * 1000000000000000000LL;
-    case 19: return value * 10000000000000000000ULL;  // 10^19 only fits if unsigned!
+    case 1: return value * 10U;
+    case 2: return value * 100U;
+    case 3: return value * 1000U;
+    case 4: return value * 10000U;
+    case 5: return value * 100000U;
+    case 6: return value * 1000000U;
+    case 7: return value * 10000000U;
+    case 8: return value * 100000000U;
+    case 9: return value * 1000000000U;
+    case 10: return value * 10000000000ULL;
+    case 11: return value * 100000000000ULL;
+    case 12: return value * 1000000000000ULL;
+    case 13: return value * 10000000000000ULL;
+    case 14: return value * 100000000000000ULL;
+    case 15: return value * 1000000000000000ULL;
+    case 16: return value * 10000000000000000ULL;
+    case 17: return value * 100000000000000000ULL;
+    case 18: return value * 1000000000000000000ULL;
+    case 19: return value * 10000000000000000000ULL;
     default: return 0;
   }
 }
@@ -317,31 +307,31 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10_64bit(T value, int exp10)
  * @param exp10 The power-of-10 of the multiplier, from 0 to 38 inclusive.
  * @return Returns value * 10^exp10.
  */
-template <typename T>
+template <typename T, typename cuda::std::enable_if_t<cuda::std::is_unsigned_v<T>>* = nullptr>
 CUDF_HOST_DEVICE inline constexpr T multiply_power10_128bit(T value, int exp10)
 {
   // See comments in divide_power10_128bit() for discussion.
   switch (exp10) {
     case 0: return value;
-    case 1: return value * 10;
-    case 2: return value * 100;
-    case 3: return value * 1000;
-    case 4: return value * 10000;
-    case 5: return value * 100000;
-    case 6: return value * 1000000;
-    case 7: return value * 10000000;
-    case 8: return value * 100000000;
-    case 9: return value * 1000000000;
-    case 10: return value * 10000000000LL;
-    case 11: return value * 100000000000LL;
-    case 12: return value * 1000000000000LL;
-    case 13: return value * 10000000000000LL;
-    case 14: return value * 100000000000000LL;
-    case 15: return value * 1000000000000000LL;
-    case 16: return value * 10000000000000000LL;
-    case 17: return value * 100000000000000000LL;
-    case 18: return value * 1000000000000000000LL;
-    case 19: return value * large_power_of_10<19>();
+    case 1: return value * 10U;
+    case 2: return value * 100U;
+    case 3: return value * 1000U;
+    case 4: return value * 10000U;
+    case 5: return value * 100000U;
+    case 6: return value * 1000000U;
+    case 7: return value * 10000000U;
+    case 8: return value * 100000000U;
+    case 9: return value * 1000000000U;
+    case 10: return value * 10000000000ULL;
+    case 11: return value * 100000000000ULL;
+    case 12: return value * 1000000000000ULL;
+    case 13: return value * 10000000000000ULL;
+    case 14: return value * 100000000000000ULL;
+    case 15: return value * 1000000000000000ULL;
+    case 16: return value * 10000000000000000ULL;
+    case 17: return value * 100000000000000000ULL;
+    case 18: return value * 1000000000000000000ULL;
+    case 19: return value * 10000000000000000000ULL;
     case 20: return value * large_power_of_10<20>();
     case 21: return value * large_power_of_10<21>();
     case 22: return value * large_power_of_10<22>();
@@ -379,7 +369,7 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10_128bit(T value, int exp10)
  */
 template <typename Rep,
           typename T,
-          typename cuda::std::enable_if_t<(cuda::std::is_integral_v<T>)>* = nullptr>
+          typename cuda::std::enable_if_t<(cuda::std::is_unsigned_v<T>)>* = nullptr>
 CUDF_HOST_DEVICE inline constexpr T multiply_power10(T value, int exp10)
 {
   // Use this function if you have no knowledge of what exp10 might be
@@ -407,9 +397,11 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10(T value, int exp10)
  */
 template <typename Rep,
           typename T,
-          typename cuda::std::enable_if_t<(cuda::std::is_integral_v<T>)>* = nullptr>
+          typename cuda::std::enable_if_t<(cuda::std::is_unsigned_v<T>)>* = nullptr>
 CUDF_HOST_DEVICE inline constexpr T divide_power10(T value, int exp10)
 {
+  // Use this function if you have no knowledge of what exp10 might be
+  // If you do, prefer calling the bit-size-specific versions
   if constexpr (sizeof(Rep) <= 4) {
     return divide_power10_32bit(value, exp10);
   } else if constexpr (sizeof(Rep) <= 8) {
