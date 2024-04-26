@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@
 #include <cudf/strings/detail/fill.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -75,7 +77,7 @@ std::unique_ptr<column> make_numeric_column(data_type type,
                                             size_type size,
                                             mask_state state,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
@@ -95,7 +97,7 @@ std::unique_ptr<column> make_fixed_point_column(data_type type,
                                                 size_type size,
                                                 mask_state state,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_fixed_point(type), "Invalid, non-fixed_point type.");
@@ -115,7 +117,7 @@ std::unique_ptr<column> make_timestamp_column(data_type type,
                                               size_type size,
                                               mask_state state,
                                               rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+                                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
@@ -135,7 +137,7 @@ std::unique_ptr<column> make_duration_column(data_type type,
                                              size_type size,
                                              mask_state state,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_duration(type), "Invalid, non-duration type.");
@@ -155,7 +157,7 @@ std::unique_ptr<column> make_fixed_width_column(data_type type,
                                                 size_type size,
                                                 mask_state state,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_fixed_width(type), "Invalid, non-fixed-width type.");
@@ -171,7 +173,7 @@ std::unique_ptr<column> make_fixed_width_column(data_type type,
 std::unique_ptr<column> make_dictionary_from_scalar(scalar const& s,
                                                     size_type size,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+                                                    rmm::device_async_resource_ref mr)
 {
   if (size == 0) return make_empty_column(type_id::DICTIONARY32);
   CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");

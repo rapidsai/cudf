@@ -23,6 +23,8 @@
 #pragma nv_diag_suppress 611
 #pragma nv_diag_suppress 2810
 #endif
+#include <rmm/resource_ref.hpp>
+
 #include <arrow/api.h>
 #ifdef __CUDACC__
 #pragma nv_diag_default 611
@@ -47,7 +49,7 @@ namespace detail {
  */
 std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr);
+                                   rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::to_dlpack
@@ -56,7 +58,7 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
  */
 DLManagedTensor* to_dlpack(table_view const& input,
                            rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr);
+                           rmm::device_async_resource_ref mr);
 
 // Creating arrow as per given type_id and buffer arguments
 template <typename... Ts>
@@ -127,19 +129,19 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
                                         arrow::MemoryPool* ar_mr);
 /**
  * @copydoc cudf::from_arrow(arrow::Table const& input_table, rmm::cuda_stream_view stream,
- * rmm::mr::device_memory_resource* mr)
+ * rmm::device_async_resource_ref mr)
  */
 std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr);
+                                  rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::from_arrow(arrow::Scalar const& input, rmm::cuda_stream_view stream,
- * rmm::mr::device_memory_resource* mr)
+ * rmm::device_async_resource_ref mr)
  */
 std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr);
+                                         rmm::device_async_resource_ref mr);
 
 /**
  * @brief Return a maximum precision for a given type.
