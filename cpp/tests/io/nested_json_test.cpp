@@ -1162,7 +1162,7 @@ TEST_F(JsonTest, TokenStreamWithLineEnd)
   using cuio_json::SymbolOffsetT;
   using cuio_json::SymbolT;
   // Test input
-  std::string const input =  R"({"a":1}
+  std::string const input = R"({"a":1}
   {"b":2}
   {"c"
   {"d":4})";
@@ -1181,14 +1181,14 @@ TEST_F(JsonTest, TokenStreamWithLineEnd)
 
   // Parse the JSON and get the token stream
   auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
-    d_input, default_options, stream, rmm::mr::get_current_device_resource());
+    d_input, default_options, stream, rmm::mr::get_current_device_resource(), false);
   // Copy back the number of tokens that were written
-  auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
+  auto const tokens_gpu = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
 
   // // Golden token stream sample
-  using token_t = cuio_json::token_t;
+  using token_t                                               = cuio_json::token_t;
   std::vector<cuio_json::PdaTokenT> const golden_token_stream = {
-    //Line 1
+    // Line 1
     token_t::LineEnd,
     token_t::StructBegin,
     token_t::StructMemberBegin,
@@ -1198,7 +1198,7 @@ TEST_F(JsonTest, TokenStreamWithLineEnd)
     token_t::ValueEnd,
     token_t::StructMemberEnd,
     token_t::StructEnd,
-    //Line 2
+    // Line 2
     token_t::LineEnd,
     token_t::StructBegin,
     token_t::StructMemberBegin,
@@ -1208,11 +1208,11 @@ TEST_F(JsonTest, TokenStreamWithLineEnd)
     token_t::ValueEnd,
     token_t::StructMemberEnd,
     token_t::StructEnd,
-    //Error
+    // Error
     token_t::LineEnd,
     token_t::StructBegin,
     token_t::StructEnd,
-    //Line 3
+    // Line 3
     token_t::LineEnd,
     token_t::StructBegin,
     token_t::StructMemberBegin,
@@ -1232,7 +1232,5 @@ TEST_F(JsonTest, TokenStreamWithLineEnd)
     EXPECT_EQ(golden_token_stream[i], tokens_gpu[i]) << "Mismatch at #" << i;
   }
 }
-
-
 
 CUDF_TEST_PROGRAM_MAIN()

@@ -297,17 +297,16 @@ struct TransduceTokenKeepLineEnd {
 
     if (is_end_of_invalid_line) {
       switch (relative_offset) {
-        case 0 : return SymbolT{token_t::StructEnd, 0};
-        case 1 : return SymbolT{token_t::StructBegin, 0};
-        case 2 : return SymbolT{token_t::LineEnd, 0};
-        default: return SymbolT{token_t::LineEnd, 0}; // doesn't appear
+        case 0: return SymbolT{token_t::StructEnd, 0};
+        case 1: return SymbolT{token_t::StructBegin, 0};
+        case 2: return SymbolT{token_t::LineEnd, 0};
+        default: return SymbolT{token_t::LineEnd, 0};  // doesn't appear
       }
     } else if (is_end_of_valid_line) {
       return SymbolT{token_t::LineEnd, 0};
     } else {
       return read_symbol;
     }
-
   }
 
   template <typename SymbolT>
@@ -1539,34 +1538,63 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   // Instantiate FST for post-processing the token stream to remove all tokens that belong to an
   // invalid JSON line
   token_filter::UnwrapTokenFromSymbolOp sgid_op{};
-  auto filter_fst =
-    fst::detail::make_fst(fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
-                          fst::detail::make_transition_table(token_filter::transition_table),
-                          fst::detail::make_translation_functor(token_filter::TransduceTokenKeepLineEnd{}),
-                          stream);
 
   auto const mr = rmm::mr::get_current_device_resource();
   rmm::device_scalar<SymbolOffsetT> d_num_selected_tokens(stream, mr);
   rmm::device_uvector<PdaTokenT> filtered_tokens_out{tokens.size(), stream, mr};
   rmm::device_uvector<SymbolOffsetT> filtered_token_indices_out{tokens.size(), stream, mr};
 
-  // The FST is run on the reverse token stream, discarding all tokens between ErrorBegin and the
-  // next LineEnd (LineEnd, inv_token_0, inv_token_1, ..., inv_token_n, ErrorBegin, LineEnd, ...),
-  // emitting a [StructBegin, StructEnd] pair on the end of such an invalid line. In that example,
-  // inv_token_i for i in [0, n] together with the ErrorBegin are removed and replaced with
-  // StructBegin, StructEnd. Also, all LineEnd are removed as well, as these are not relevant after
-  // this stage anymore
-  filter_fst.Transduce(
-    thrust::make_reverse_iterator(thrust::make_zip_iterator(tokens.data(), token_indices.data()) +
-                                  tokens.size()),
-    static_cast<SymbolOffsetT>(tokens.size()),
-    thrust::make_reverse_iterator(
-      thrust::make_zip_iterator(filtered_tokens_out.data(), filtered_token_indices_out.data()) +
-      tokens.size()),
-    thrust::make_discard_iterator(),
-    d_num_selected_tokens.data(),
-    token_filter::start_state,
-    stream);
+  if (remove_line_end_token) {
+    // The FST is run on the reverse token stream, discarding all tokens between ErrorBegin and the
+    // next LineEnd (LineEnd, inv_token_0, inv_token_1, ..., inv_token_n, ErrorBegin, LineEnd, ...),
+    // emitting a [StructBegin, StructEnd] pair on the end of such an invalid line. In that example,
+    // inv_token_i for i in [0, n] together with the ErrorBegin are removed and replaced with
+    // StructBegin, StructEnd. Also, all LineEnd are removed as well, as these are not relevant
+    // after this stage anymore
+
+    auto filter_fst = fst::detail::make_fst(
+      fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
+      fst::detail::make_transition_table(token_filter::transition_table),
+      fst::detail::make_translation_functor(token_filter::TransduceToken{}),
+      stream);
+
+    filter_fst.Transduce(
+      thrust::make_reverse_iterator(thrust::make_zip_iterator(tokens.data(), token_indices.data()) +
+                                    tokens.size()),
+      static_cast<SymbolOffsetT>(tokens.size()),
+      thrust::make_reverse_iterator(
+        thrust::make_zip_iterator(filtered_tokens_out.data(), filtered_token_indices_out.data()) +
+        tokens.size()),
+      thrust::make_discard_iterator(),
+      d_num_selected_tokens.data(),
+      token_filter::start_state,
+      stream);
+  } else {
+    // The FST is run on the reverse token stream, discarding all tokens between ErrorBegin and the
+    // next LineEnd (LineEnd, inv_token_0, inv_token_1, ..., inv_token_n, ErrorBegin, LineEnd, ...),
+    // emitting a [LineEnd, StructBegin, StructEnd] on the end of such an invalid line. In that
+    // example, inv_token_i for i in [0, n] together with the ErrorBegin are removed and replaced
+    // with LineEnd, StructBegin, StructEnd. Unlike the previous case, LineEnd tokens are retained
+    // however, the corresponding token index is written as 0.
+
+    auto filter_fst = fst::detail::make_fst(
+      fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
+      fst::detail::make_transition_table(token_filter::transition_table),
+      fst::detail::make_translation_functor(token_filter::TransduceTokenKeepLineEnd{}),
+      stream);
+
+    filter_fst.Transduce(
+      thrust::make_reverse_iterator(thrust::make_zip_iterator(tokens.data(), token_indices.data()) +
+                                    tokens.size()),
+      static_cast<SymbolOffsetT>(tokens.size()),
+      thrust::make_reverse_iterator(
+        thrust::make_zip_iterator(filtered_tokens_out.data(), filtered_token_indices_out.data()) +
+        tokens.size()),
+      thrust::make_discard_iterator(),
+      d_num_selected_tokens.data(),
+      token_filter::start_state,
+      stream);
+  }
 
   auto const num_total_tokens = d_num_selected_tokens.value(stream);
   rmm::device_uvector<PdaTokenT> tokens_out{num_total_tokens, stream, mr};
