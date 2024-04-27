@@ -836,7 +836,7 @@ cdef _set_col_metadata(
         col_meta.set_nullability(True)
 
     if skip_compression is not None and full_path in skip_compression:
-        col_meta.set_skip_compression(skip_compression[full_path])
+        col_meta.set_skip_compression(True)
 
     if column_encoding is not None and full_path in column_encoding:
         col_meta.set_encoding(_get_encoding_type(column_encoding[full_path]))
