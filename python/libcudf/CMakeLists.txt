@@ -16,6 +16,9 @@ cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
 include(../../rapids_config.cmake)
 
+set(rapids-cmake-repo "vyasr")
+set(rapids-cmake-branch "fix/nvcomp_lib_dir")
+
 project(
   libcudf-python
   VERSION "${RAPIDS_VERSION}"
