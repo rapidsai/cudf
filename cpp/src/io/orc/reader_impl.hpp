@@ -194,6 +194,9 @@ class reader_impl {
   std::vector<std::vector<cudf::io::detail::column_buffer>> _out_buffers;
 
   // The default value used for subdividing the decoded table for final output.
+  // Larger values will reduce the computation time but will make the output table less granular.
+  // Smaller values (minimum is `1`) will increase the computation time but the output table will
+  // have size closer to the given `chunk_read_limit`.
   static inline constexpr size_type DEFAULT_OUTPUT_ROW_GRANULARITY = 10'000;
 };
 
