@@ -216,12 +216,29 @@ def write_to_dataset(
         If True, writes all columns as `null` in schema.
         If False, columns are written as `null` if they contain null values,
         otherwise as `not null`.
-    header_version:
-    use_dictionary:
-    skip_compression:
-    column_encoding:
-    column_type_length:
-    output_as_binary:
+    header_version : {{'1.0', '2.0'}}, default "1.0"
+        Controls whether to use version 1.0 or version 2.0 page headers when
+        encoding. Version 1.0 is more portable, but version 2.0 enables the
+        use of newer encoding schemes.
+    force_nullable_schema : bool, default False.
+        If True, writes all columns as `null` in schema.
+        If False, columns are written as `null` if they contain null values,
+        otherwise as `not null`.
+    skip_compression : set, optional, default None
+        If a column name is present in the set, that column will not be compressed,
+        regardless of the ``compression`` setting.
+    column_encoding : dict, optional, default None
+        Sets the page encoding to use on a per-column basis. The key is a column
+        name, and the value is one of: 'PLAIN', 'DICTIONARY', 'DELTA_BINARY_PACKED',
+        'DELTA_LENGTH_BYTE_ARRAY', 'DELTA_BYTE_ARRAY', or 'BYTE_STREAM_SPLIT'.
+    column_type_length : dict, optional, default None
+        Specifies the width in bytes of ``FIXED_LEN_BYTE_ARRAY`` column elements.
+        The key is a column name and the value is an integer. The named column
+        will be output as unannotated binary (i.e. the column will behave as if
+        ``output_as_binary`` was set).
+    output_as_binary : set, optional, default None
+        If a column name is present in the set, that column will be output as
+        unannotated binary, rather than the default 'UTF-8'.
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
