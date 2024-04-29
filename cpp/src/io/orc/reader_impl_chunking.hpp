@@ -242,9 +242,7 @@ struct cumulative_size {
  * @brief Struct to accumulate counts, sizes, and number of rows of some types such as stripes or
  * rows in tables.
  */
-struct cumulative_size_and_row {
-  std::size_t count{0};
-  std::size_t size_bytes{0};
+struct cumulative_size_and_row : public cumulative_size {
   std::size_t num_rows{0};
 };
 
