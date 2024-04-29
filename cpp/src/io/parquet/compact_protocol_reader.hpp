@@ -120,6 +120,7 @@ class CompactProtocolReader {
   void read(ColumnIndex* c);
   void read(Statistics* s);
   void read(ColumnOrder* c);
+  void read(PageEncodingStats* s);
   void read(SortingColumn* s);
 
  public:
