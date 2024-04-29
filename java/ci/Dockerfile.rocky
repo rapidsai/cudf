@@ -15,7 +15,7 @@
 #
 
 ###
-# Build the image for cudf development environment. 
+# Build the image for cudf development environment.
 #
 # Arguments: CUDA_VERSION=[11.X.Y, 12.X.Y], OS_RELEASE=[8, 9], TARGETPLATFORM=[linux/amd64, linux/amd64]
 #

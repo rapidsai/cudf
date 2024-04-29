@@ -49,5 +49,5 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           push: true
-          file: java/ci/Dockerfile.centos7
+          file: java/ci/Dockerfile.rocky
           tags: "${{ env.IMAGE_NAME }}:${{ env.IMAGE_REF }}"
