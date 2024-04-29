@@ -29,7 +29,7 @@
 namespace cudf::io::orc::detail {
 
 /**
- * @brief Struct representing a range of data.
+ * @brief Struct representing a range of of data offsets.
  */
 struct range {
   std::size_t begin{0};
