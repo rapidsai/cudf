@@ -34,6 +34,8 @@ namespace cudf::io::orc::detail {
 struct range {
   std::size_t begin{0};
   std::size_t end{0};
+
+  [[nodiscard]] auto size() const { return end - begin; }
 };
 
 /**
@@ -243,7 +245,7 @@ struct cumulative_size {
 struct cumulative_size_and_row {
   std::size_t count{0};
   std::size_t size_bytes{0};
-  std::size_t rows{0};
+  std::size_t num_rows{0};
 };
 
 /**
@@ -258,7 +260,8 @@ struct cumulative_size_plus {
   __device__ cumulative_size_and_row operator()(cumulative_size_and_row const& a,
                                                 cumulative_size_and_row const& b) const
   {
-    return cumulative_size_and_row{a.count + b.count, a.size_bytes + b.size_bytes, a.rows + b.rows};
+    return cumulative_size_and_row{
+      a.count + b.count, a.size_bytes + b.size_bytes, a.num_rows + b.num_rows};
   }
 };
 

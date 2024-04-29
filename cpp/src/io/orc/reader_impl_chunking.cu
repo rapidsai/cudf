@@ -170,7 +170,7 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
     if constexpr (std::is_same_v<T, cumulative_size_and_row>) {
       // Similarly, while the returned range has total number of rows exceeds column size limit,
       // move back one position.
-      while (split_pos > 0 && cumulative_sizes[split_pos].rows >
+      while (split_pos > 0 && cumulative_sizes[split_pos].num_rows >
                                 cur_cumulative_rows +
                                   static_cast<std::size_t>(std::numeric_limits<size_type>::max())) {
         split_pos--;
@@ -192,7 +192,7 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
     cur_cumulative_size = cumulative_sizes[split_pos].size_bytes;
 
     if constexpr (std::is_same_v<T, cumulative_size_and_row>) {
-      cur_cumulative_rows = cumulative_sizes[split_pos].rows;
+      cur_cumulative_rows = cumulative_sizes[split_pos].num_rows;
     }
   }
 
