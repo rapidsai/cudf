@@ -43,7 +43,8 @@ struct range {
  * @param selected_ranges A range of ranges from `input_ranges`
  * @return The range of data span by the selected range of ranges
  */
-inline range get_range(host_span<range const> input_ranges, range const& selected_ranges)
+inline range merge_selected_ranges(host_span<range const> input_ranges,
+                                   range const& selected_ranges)
 {
   // The first and last range.
   auto const& first_range = input_ranges[selected_ranges.begin];
@@ -128,8 +129,8 @@ struct file_intermediate_data {
   int64_t rows_to_read;
   std::vector<metadata::orc_stripe_info> selected_stripes;
 
-  // Return true if no rows or stripes to read.
-  bool has_no_data() const { return rows_to_read == 0 || selected_stripes.empty(); }
+  // Check if there is data to read.
+  bool has_data() const { return rows_to_read > 0 && !selected_stripes.empty(); }
 
   // For each stripe, we perform a number of reads for its streams.
   // Those reads are identified by a chunk of consecutive read info stored in `data_read_info`.

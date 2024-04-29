@@ -783,7 +783,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
       // Find the maximum number of streams in all levels of the decoding stripes.
       for (std::size_t level = 0; level < num_levels; ++level) {
         auto const stream_range =
-          get_range(_file_itm_data.lvl_stripe_stream_ranges[level], stripe_range);
+          merge_selected_ranges(_file_itm_data.lvl_stripe_stream_ranges[level], stripe_range);
         auto const num_streams = stream_range.end - stream_range.begin;
         max_num_streams        = std::max(max_num_streams, num_streams);
       }
@@ -794,7 +794,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
   auto& col_meta = *_col_meta;
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     auto const& stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges[level];
-    auto const stream_range          = get_range(stripe_stream_ranges, stripe_range);
+    auto const stream_range          = merge_selected_ranges(stripe_stream_ranges, stripe_range);
     auto const num_streams           = stream_range.end - stream_range.begin;
 
     auto const& columns_level = _selected_columns.levels[level];

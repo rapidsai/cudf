@@ -498,7 +498,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
 
   // Range of the read info (offset, length) to read for the current being loaded stripes.
   auto const [read_begin, read_end] =
-    get_range(_file_itm_data.stripe_data_read_ranges, load_stripe_range);
+    merge_selected_ranges(_file_itm_data.stripe_data_read_ranges, load_stripe_range);
 
   for (auto read_idx = read_begin; read_idx < read_end; ++read_idx) {
     auto const& read_info = _file_itm_data.data_read_info[read_idx];
@@ -637,7 +637,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
       // Find the maximum number of streams in all levels of the loaded stripes.
       for (std::size_t level = 0; level < num_levels; ++level) {
         auto const stream_range =
-          get_range(_file_itm_data.lvl_stripe_stream_ranges[level], load_stripe_range);
+          merge_selected_ranges(_file_itm_data.lvl_stripe_stream_ranges[level], load_stripe_range);
         auto const num_streams = stream_range.end - stream_range.begin;
         max_num_streams        = std::max(max_num_streams, num_streams);
       }
@@ -654,7 +654,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
 
     // Range of all streams in the loaded stripes.
     auto const stream_range =
-      get_range(_file_itm_data.lvl_stripe_stream_ranges[level], load_stripe_range);
+      merge_selected_ranges(_file_itm_data.lvl_stripe_stream_ranges[level], load_stripe_range);
     auto const num_streams = stream_range.end - stream_range.begin;
 
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
