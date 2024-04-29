@@ -6689,6 +6689,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         skip_compression=None,
         column_encoding=None,
         column_type_length=None,
+        output_as_binary=None,
         *args,
         **kwargs,
     ):
@@ -6718,6 +6719,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             skip_compression=skip_compression,
             column_encoding=column_encoding,
             column_type_length=column_type_length,
+            output_as_binary=output_as_binary,
             *args,
             **kwargs,
         )

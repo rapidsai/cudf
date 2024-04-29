@@ -311,6 +311,9 @@ column_encoding : dict, optional, default None
 column_type_length : dict, optional, default None
     Specifies the width in bytes of ``FIXED_LEN_BYTE_ARRAY`` column elements.
     The key is a column name and the value is an integer.
+output_as_binary : set, optional, default None
+    If a column name is present in the set, that column will be output as
+    unannotated binary, rather than the default 'UTF-8'.
 **kwargs
     Additional parameters will be passed to execution engines other
     than ``cudf``.

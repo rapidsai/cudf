@@ -406,6 +406,7 @@ def write_parquet(
     object skip_compression=None,
     object column_encoding=None,
     object column_type_length=None,
+    object output_as_binary=None,
 ):
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -460,7 +461,8 @@ def write_parquet(
             None,
             skip_compression,
             column_encoding,
-            column_type_length
+            column_type_length,
+            output_as_binary
         )
 
     cdef map[string, string] tmp_user_data
@@ -826,9 +828,10 @@ cdef _set_col_metadata(
     object skip_compression=None,
     object column_encoding=None,
     object column_type_length=None,
+    object output_as_binary=None,
 ):
     need_path = (skip_compression is not None or column_encoding is not None or
-                 column_type_length is not None)
+                 column_type_length is not None or output_as_binary is not None)
     name = col_meta.get_name().decode('UTF-8') if need_path else None
     full_path = path + "." + name if path is not None else name
 
@@ -847,6 +850,9 @@ cdef _set_col_metadata(
         col_meta.set_output_as_binary(True)
         col_meta.set_type_length(column_type_length[full_path])
 
+    if output_as_binary is not None and full_path in output_as_binary:
+        col_meta.set_output_as_binary(True)
+
     if isinstance(col.dtype, cudf.StructDtype):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
@@ -859,7 +865,8 @@ cdef _set_col_metadata(
                 full_path,
                 skip_compression,
                 column_encoding,
-                column_type_length
+                column_type_length,
+                output_as_binary
             )
     elif isinstance(col.dtype, cudf.ListDtype):
         if full_path is not None:
@@ -872,7 +879,8 @@ cdef _set_col_metadata(
             full_path,
             skip_compression,
             column_encoding,
-            column_type_length
+            column_type_length,
+            output_as_binary
         )
     elif isinstance(col.dtype, cudf.core.dtypes.DecimalDtype):
         col_meta.set_decimal_precision(col.dtype.precision)
