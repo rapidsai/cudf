@@ -2,6 +2,7 @@
 
 import datetime
 import glob
+import hashlib
 import math
 import os
 import pathlib
@@ -2805,6 +2806,33 @@ def test_parquet_reader_fixed_bin(datadir):
     got = cudf.read_parquet(fname)
 
     assert_eq(expect, got)
+
+
+def test_parquet_flba_round_trip(tmpdir):
+    def flba(i):
+        hasher = hashlib.sha256()
+        hasher.update(i.to_bytes(4, "little"))
+        return hasher.digest()
+
+    # use pyarrow to write table of fixed_len_byte_array
+    num_rows = 200
+    data = pa.array([flba(i) for i in range(num_rows)], type=pa.binary(32))
+    padf = pa.Table.from_arrays([data], names=["flba"])
+    padf_fname = tmpdir.join("padf.parquet")
+    # TODO: cudf cannot read fixed_len_byte_array that is dictionary encoded
+    # remove after merge of #15601
+    pq.write_table(padf, padf_fname, use_dictionary=False)
+
+    # round trip data with cudf
+    cdf = cudf.read_parquet(padf_fname)
+    cdf_fname = tmpdir.join("cdf.parquet")
+    cdf.to_parquet(cdf_fname, column_type_length={"flba": 32})
+
+    # now read back in with pyarrow to test it was written properly by cudf
+    padf2 = pq.read_table(padf_fname)
+    padf3 = pq.read_table(cdf_fname)
+    assert_eq(padf2, padf3)
+    assert_eq(padf2.schema[0].type, padf3.schema[0].type)
 
 
 def test_parquet_reader_rle_boolean(datadir):
