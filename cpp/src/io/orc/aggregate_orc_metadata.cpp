@@ -267,7 +267,9 @@ aggregate_orc_metadata::select_stripes(
       if (stripe->indexLength == 0) { row_grp_idx_present = false; }
     }
 
-    output.insert(output.end(), mapping.stripe_info.begin(), mapping.stripe_info.end());
+    output.insert(output.end(),
+                  std::make_move_iterator(mapping.stripe_info.begin()),
+                  std::make_move_iterator(mapping.stripe_info.end()));
   }
 
   return {rows_to_skip, rows_to_read, std::move(output)};
