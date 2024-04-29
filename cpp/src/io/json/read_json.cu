@@ -80,12 +80,11 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     std::vector<std::unique_ptr<datasource::buffer>> h_buffers;
     delimiter_map.reserve(sources.size());
     size_t bytes_read = 0;
-    std::transform(sources.begin(),
-                   sources.end(),
-                   prefsum_source_sizes.begin(),
-                   [](const std::unique_ptr<datasource>& s) { return s->size(); });
-    std::inclusive_scan(
-      prefsum_source_sizes.begin(), prefsum_source_sizes.end(), prefsum_source_sizes.begin());
+    std::transform_inclusive_scan(sources.begin(),
+                                  sources.end(),
+                                  prefsum_source_sizes.begin(),
+                                  std::plus<int>{},
+                                  [](const std::unique_ptr<datasource>& s) { return s->size(); });
     auto upper =
       std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
     size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
@@ -131,8 +130,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     stream.synchronize();
     return buffer.first(bytes_read);
   }
-  /* TODO: allow byte range reading from multiple compressed files.
-   */
+  // TODO: allow byte range reading from multiple compressed files.
   auto remaining_bytes_to_read = std::min(range_size, sources[0]->size() - range_offset);
   auto hbuffer                 = std::vector<uint8_t>(remaining_bytes_to_read);
   // Single read because only a single compressed source is supported
@@ -206,10 +204,9 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
   const int num_subchunks_prealloced = should_load_all_sources ? 0 : 3;
   constexpr int compression_ratio    = 4;
 
-  /*
-   * NOTE: heuristic for choosing subchunk size: geometric mean of minimum subchunk size (set to
-   * 10kb) and the byte range size
-   */
+  // NOTE: heuristic for choosing subchunk size: geometric mean of minimum subchunk size (set to
+  // 10kb) and the byte range size
+
   size_t size_per_subchunk =
     geometric_mean(std::ceil((double)chunk_size / num_subchunks), min_subchunk_size);
 
