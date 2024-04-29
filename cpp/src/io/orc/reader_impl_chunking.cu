@@ -202,8 +202,7 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
   if (splits.size() > 1) {
     double constexpr merge_threshold = 0.15;
     if (auto const last = splits.back(), second_last = splits[splits.size() - 2];
-        (last.end - last.begin) <=
-        static_cast<std::size_t>(merge_threshold * (second_last.end - second_last.begin))) {
+        last.size() <= static_cast<std::size_t>(merge_threshold * second_last.size())) {
       splits.pop_back();
       splits.back().end = last.end;
     }
@@ -466,8 +465,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
   auto const load_stripe_range =
     _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range++];
   auto const stripe_start = load_stripe_range.begin;
-  auto const stripe_end   = load_stripe_range.end;
-  auto const stripe_count = stripe_end - stripe_start;
+  auto const stripe_count = load_stripe_range.size();
 
   auto& lvl_stripe_data = _file_itm_data.lvl_stripe_data;
   auto const num_levels = _selected_columns.num_levels();
@@ -638,8 +636,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
       for (std::size_t level = 0; level < num_levels; ++level) {
         auto const stream_range =
           merge_selected_ranges(_file_itm_data.lvl_stripe_stream_ranges[level], load_stripe_range);
-        auto const num_streams = stream_range.end - stream_range.begin;
-        max_num_streams        = std::max(max_num_streams, num_streams);
+        max_num_streams = std::max(max_num_streams, stream_range.size());
       }
     }
     return cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo>(max_num_streams, _stream);
@@ -655,13 +652,12 @@ void reader_impl::load_next_stripe_data(read_mode mode)
     // Range of all streams in the loaded stripes.
     auto const stream_range =
       merge_selected_ranges(_file_itm_data.lvl_stripe_stream_ranges[level], load_stripe_range);
-    auto const num_streams = stream_range.end - stream_range.begin;
 
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       auto const& decompressor = *_metadata.per_file_metadata[0].decompressor;
 
       auto compinfo = cudf::detail::hostdevice_span<gpu::CompressedStreamInfo>(
-        hd_compinfo.begin(), hd_compinfo.d_begin(), num_streams);
+        hd_compinfo.begin(), hd_compinfo.d_begin(), stream_range.size());
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
         auto const dst_base =

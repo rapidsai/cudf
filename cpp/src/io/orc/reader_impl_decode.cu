@@ -718,7 +718,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
     _chunk_read_data.decode_stripe_ranges[_chunk_read_data.curr_decode_stripe_range++];
   auto const stripe_start = stripe_range.begin;
   auto const stripe_end   = stripe_range.end;
-  auto const stripe_count = stripe_range.end - stripe_range.begin;
+  auto const stripe_count = stripe_range.size();
 
   // The start index of loaded stripes. They are different from decoding stripes.
   auto const load_stripe_range =
@@ -784,8 +784,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
       for (std::size_t level = 0; level < num_levels; ++level) {
         auto const stream_range =
           merge_selected_ranges(_file_itm_data.lvl_stripe_stream_ranges[level], stripe_range);
-        auto const num_streams = stream_range.end - stream_range.begin;
-        max_num_streams        = std::max(max_num_streams, num_streams);
+        max_num_streams = std::max(max_num_streams, stream_range.size());
       }
     }
     return cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo>{max_num_streams, _stream};
@@ -795,7 +794,6 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     auto const& stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges[level];
     auto const stream_range          = merge_selected_ranges(stripe_stream_ranges, stripe_range);
-    auto const num_streams           = stream_range.end - stream_range.begin;
 
     auto const& columns_level = _selected_columns.levels[level];
     auto const& stream_info   = _file_itm_data.lvl_stream_info[level];
@@ -946,7 +944,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
     // Setup row group descriptors if using indexes.
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       auto compinfo = cudf::detail::hostdevice_span<gpu::CompressedStreamInfo>(
-        hd_compinfo.begin(), hd_compinfo.d_begin(), num_streams);
+        hd_compinfo.begin(), hd_compinfo.d_begin(), stream_range.size());
       auto decomp_data = decompress_stripe_data(load_stripe_range,
                                                 stream_range,
                                                 stripe_count,
