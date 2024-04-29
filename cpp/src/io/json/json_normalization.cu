@@ -298,7 +298,7 @@ struct TransduceToNormalizedWS {
 
 namespace detail {
 
-void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<char>>& indata,
+void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<SymbolT>>& indata,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
@@ -319,11 +319,11 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<char>
                    stream);
 
   outbuf.resize(outbuf_size.value(stream), stream);
-  datasource::owning_buffer<rmm::device_uvector<char>> outdata(std::move(outbuf));
+  datasource::owning_buffer<rmm::device_uvector<SymbolT>> outdata(std::move(outbuf));
   std::swap(indata, outdata);
 }
 
-void normalize_whitespace(datasource::owning_buffer<rmm::device_uvector<char>>& indata,
+void normalize_whitespace(datasource::owning_buffer<rmm::device_uvector<SymbolT>>& indata,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
 {
@@ -344,7 +344,7 @@ void normalize_whitespace(datasource::owning_buffer<rmm::device_uvector<char>>& 
                    stream);
 
   outbuf.resize(outbuf_size.value(stream), stream);
-  datasource::owning_buffer<rmm::device_uvector<char>> outdata(std::move(outbuf));
+  datasource::owning_buffer<rmm::device_uvector<SymbolT>> outdata(std::move(outbuf));
   std::swap(indata, outdata);
 }
 

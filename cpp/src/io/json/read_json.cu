@@ -199,10 +199,10 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
     should_load_all_sources ? total_source_size - chunk_offset + num_extra_delimiters : chunk_size;
 
   // Some magic numbers
-  constexpr int num_subchunks        = 10;  // per chunk_size
-  constexpr size_t min_subchunk_size = 10000;
-  const int num_subchunks_prealloced = should_load_all_sources ? 0 : 3;
-  constexpr int compression_ratio    = 4;
+  constexpr int num_subchunks               = 10;  // per chunk_size
+  constexpr size_t min_subchunk_size        = 10000;
+  const int num_subchunks_prealloced        = should_load_all_sources ? 0 : 3;
+  constexpr int estimated_compression_ratio = 4;
 
   // NOTE: heuristic for choosing subchunk size: geometric mean of minimum subchunk size (set to
   // 10kb) and the byte range size
@@ -215,7 +215,7 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
   // of subchunks.
   size_t buffer_size =
     reader_compression != compression_type::NONE
-      ? total_source_size * compression_ratio + 4096
+      ? total_source_size * estimated_compression_ratio + 4096
       : std::min(total_source_size, chunk_size + num_subchunks_prealloced * size_per_subchunk);
   rmm::device_uvector<char> buffer(buffer_size, stream);
   device_span<char> bufspan(buffer);
@@ -225,7 +225,7 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
   auto readbufspan =
     ingest_raw_input(bufspan, sources, reader_compression, chunk_offset, chunk_size, stream);
 
-  std::int64_t shift_for_nonzero_offset = std::min<std::int64_t>(chunk_offset, 1);
+  auto shift_for_nonzero_offset = std::min<std::int64_t>(chunk_offset, 1);
   auto first_delim_pos = chunk_offset == 0 ? 0 : find_first_delimiter(readbufspan, '\n', stream);
   if (first_delim_pos == -1) {
     // return empty owning datasource buffer
