@@ -827,7 +827,8 @@ cdef _set_col_metadata(
     object column_encoding=None,
     object column_type_length=None,
 ):
-    need_path = skip_compression is not None or column_encoding is not None or column_type_length is not None
+    need_path = (skip_compression is not None or column_encoding is not None or
+                 column_type_length is not None)
     name = col_meta.get_name().decode('UTF-8') if need_path else None
     full_path = path + "." + name if path is not None else name
 
