@@ -217,6 +217,15 @@ __device__ __forceinline__ reprog_device reprog_device::load(reprog_device const
                                             : reinterpret_cast<reprog_device*>(buffer)[0];
 }
 
+__device__ __forceinline__ static string_view::const_iterator find_char(
+  cudf::char_utf8 chr, string_view const d_str, string_view::const_iterator itr)
+{
+  while (itr.byte_offset() < d_str.size_bytes() && *itr != chr) {
+    ++itr;
+  }
+  return itr;
+}
+
 /**
  * @brief Evaluate a specific string against regex pattern compiled to this instance.
  *
@@ -253,16 +262,16 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
         case BOL:
           if (pos == 0) break;
           if (jnk.startchar != '^') { return thrust::nullopt; }
-          --pos;
+          --itr;
           startchar = static_cast<char_utf8>('\n');
         case CHAR: {
-          auto const fidx = dstr.find(startchar, pos);
-          if (fidx == string_view::npos) { return thrust::nullopt; }
-          pos = fidx + (jnk.starttype == BOL);
+          auto const find_itr = find_char(startchar, dstr, itr);
+          if (find_itr.byte_offset() >= dstr.size_bytes()) { return thrust::nullopt; }
+          itr = find_itr + (jnk.starttype == BOL);
+          pos = itr.position();
           break;
         }
       }
-      itr += (pos - itr.position());  // faster to increment position
     }
 
     if (((eos < 0) || (pos < eos)) && match == 0) {
