@@ -827,9 +827,10 @@ cdef _set_col_metadata(
     object column_encoding=None,
     object column_type_length=None,
 ):
-    name = col_meta.get_name().decode('UTF-8')
+    need_path = skip_compression is not None or column_encoding is not None or column_type_length is not None
+    name = col_meta.get_name().decode('UTF-8') if need_path else None
     full_path = path + "." + name if path is not None else name
-    # print(full_path)
+
     if force_nullable_schema:
         # Only set nullability if `force_nullable_schema`
         # is true.
@@ -860,7 +861,7 @@ cdef _set_col_metadata(
                 column_type_length
             )
     elif isinstance(col.dtype, cudf.ListDtype):
-        full_path = full_path + ".list"
+        full_path = full_path + ".list" if full_path is not None else None
         col_meta.child(1).set_name("element".encode())
         _set_col_metadata(
             col.children[1],
