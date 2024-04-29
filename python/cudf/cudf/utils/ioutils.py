@@ -310,7 +310,9 @@ column_encoding : dict, optional, default None
     'DELTA_LENGTH_BYTE_ARRAY', 'DELTA_BYTE_ARRAY', or 'BYTE_STREAM_SPLIT'.
 column_type_length : dict, optional, default None
     Specifies the width in bytes of ``FIXED_LEN_BYTE_ARRAY`` column elements.
-    The key is a column name and the value is an integer.
+    The key is a column name and the value is an integer. The named column
+    will be output as unannotated binary (i.e. the column will behave as if
+    ``output_as_binary`` was set).
 output_as_binary : set, optional, default None
     If a column name is present in the set, that column will be output as
     unannotated binary, rather than the default 'UTF-8'.
