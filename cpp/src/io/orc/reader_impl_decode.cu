@@ -710,7 +710,7 @@ std::vector<range> find_table_splits(table_view const& input,
 
 void reader_impl::decompress_and_decode_stripes(read_mode mode)
 {
-  if (_file_itm_data.has_no_data()) { return; }
+  if (!_file_itm_data.has_data()) { return; }
 
   CUDF_EXPECTS(_chunk_read_data.curr_load_stripe_range > 0, "There is not any stripe loaded.");
 

@@ -237,7 +237,7 @@ void reader_impl::preprocess_file(read_mode mode)
     _file_itm_data.rows_to_skip, _file_itm_data.rows_to_read, _file_itm_data.selected_stripes) =
     _metadata.select_stripes(
       _config.selected_stripes, _config.skip_rows, _config.num_read_rows, _stream);
-  if (_file_itm_data.has_no_data()) { return; }
+  if (!_file_itm_data.has_data()) { return; }
 
   CUDF_EXPECTS(
     mode == read_mode::CHUNKED_READ ||
@@ -461,7 +461,7 @@ void reader_impl::preprocess_file(read_mode mode)
 // together with decompression and decoding will be capped around the given data read limit.
 void reader_impl::load_next_stripe_data(read_mode mode)
 {
-  if (_file_itm_data.has_no_data()) { return; }
+  if (!_file_itm_data.has_data()) { return; }
 
   auto const load_stripe_range =
     _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range++];
