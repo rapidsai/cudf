@@ -759,8 +759,8 @@ def from_dask_dataframe(df):
     """
 
     warnings.warn(
-        "The `to_dask_dataframe` API is now deprecated. "
-        "Please use `*.to_backend('pandas')` instead.",
+        "The `from_dask_dataframe` API is now deprecated. "
+        "Please use `*.to_backend('cudf')` instead.",
         FutureWarning,
     )
 
