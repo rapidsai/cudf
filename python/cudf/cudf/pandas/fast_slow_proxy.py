@@ -526,88 +526,144 @@ class _FastSlowProxy:
         )
 
     def __add__(self, other):
-        return _fast_slow_function_call(operator.add, self, other)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__add__(y), self, other
+        )[0]
 
     def __radd__(self, other):
-        return _fast_slow_function_call(operator.add, other, self)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__radd__(y), self, other
+        )[0]
 
     def __sub__(self, other):
-        return _fast_slow_function_call(operator.sub, self, other)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__sub__(y), self, other
+        )[0]
 
     def __rsub__(self, other):
-        return _fast_slow_function_call(operator.sub, other, self)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__rsub__(y), self, other
+        )[0]
 
     def __mul__(self, other):
-        return _fast_slow_function_call(operator.mul, self, other)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__mul__(y), self, other
+        )[0]
 
     def __rmul__(self, other):
-        return _fast_slow_function_call(operator.mul, other, self)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__rmul__(y), self, other
+        )[0]
 
     def __truediv__(self, other):
-        return _fast_slow_function_call(operator.truediv, self, other)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__truediv__(y), self, other
+        )[0]
 
     def __rtruediv__(self, other):
-        return _fast_slow_function_call(operator.truediv, other, self)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__rtruediv__(y), self, other
+        )[0]
 
     def __floordiv__(self, other):
-        return _fast_slow_function_call(operator.floordiv, self, other)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__floordiv__(y), self, other
+        )[0]
 
     def __rfloordiv__(self, other):
-        return _fast_slow_function_call(operator.floordiv, other, self)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__rfloordiv__(y), self, other
+        )[0]
 
     def __mod__(self, other):
-        return _fast_slow_function_call(operator.mod, self, other)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__mod__(y), self, other
+        )[0]
 
     def __rmod__(self, other):
-        return _fast_slow_function_call(operator.mod, other, self)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__rmod__(y), self, other
+        )[0]
 
     def __divmod__(self, other):
-        return _fast_slow_function_call(divmod, self, other)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__divmod__(y), self, other
+        )[0]
 
     def __rdivmod__(self, other):
-        return _fast_slow_function_call(divmod, other, self)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__rdivmod__(y), self, other
+        )[0]
 
     def __pow__(self, other):
-        return _fast_slow_function_call(operator.pow, self, other)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__pow__(y), self, other
+        )[0]
 
     def __rpow__(self, other):
-        return _fast_slow_function_call(operator.pow, other, self)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__rpow__(y), self, other
+        )[0]
 
     def __lshift__(self, other):
-        return _fast_slow_function_call(operator.lshift, self, other)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__lshift__(y), self, other
+        )[0]
 
     def __rlshift__(self, other):
-        return _fast_slow_function_call(operator.lshift, other, self)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__rlshift__(y), self, other
+        )[0]
 
     def __rshift__(self, other):
-        return _fast_slow_function_call(operator.rshift, self, other)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__rshift__(y), self, other
+        )[0]
 
     def __rrshift__(self, other):
-        return _fast_slow_function_call(operator.rshift, other, self)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__rrshift__(y), self, other
+        )[0]
 
     def __and__(self, other):
-        return _fast_slow_function_call(operator.and_, self, other)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__and__(y), self, other
+        )[0]
 
     def __rand__(self, other):
-        return _fast_slow_function_call(operator.and_, other, self)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__rand__(y), self, other
+        )[0]
 
     def __xor__(self, other):
-        return _fast_slow_function_call(operator.xor, self, other)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__xor__(y), self, other
+        )[0]
 
     def __rxor__(self, other):
-        return _fast_slow_function_call(operator.xor, other, self)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__rxor__(y), self, other
+        )[0]
 
     def __or__(self, other):
-        return _fast_slow_function_call(operator.or_, self, other)[0]
+        return _fast_slow_function_call(lambda x, y: x.__or__(y), self, other)[
+            0
+        ]
 
     def __ror__(self, other):
-        return _fast_slow_function_call(operator.or_, other, self)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__ror__(y), self, other
+        )[0]
 
     def __matmul__(self, other):
-        return _fast_slow_function_call(operator.matmul, self, other)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__matmul__(y), self, other
+        )[0]
 
     def __rmatmul__(self, other):
-        return _fast_slow_function_call(operator.matmul, other, self)[0]
+        return _fast_slow_function_call(
+            lambda x, y: x.__rmatmul__(y), self, other
+        )[0]
 
 
 class _FinalProxy(_FastSlowProxy):
