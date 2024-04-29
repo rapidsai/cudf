@@ -5199,20 +5199,20 @@ def test_df_constructor_dtype(dtype):
         cudf.DataFrame(
             {
                 "a": [1, 2, 3, 4],
-                "b": [7, np.NaN, 9, 10],
+                "b": [7, np.nan, 9, 10],
                 "c": cudf.Series(
-                    [np.NaN, np.NaN, np.NaN, np.NaN], nan_as_null=False
+                    [np.nan, np.nan, np.nan, np.nan], nan_as_null=False
                 ),
                 "d": cudf.Series([None, None, None, None], dtype="int64"),
                 "e": [100, None, 200, None],
-                "f": cudf.Series([10, None, np.NaN, 11], nan_as_null=False),
+                "f": cudf.Series([10, None, np.nan, 11], nan_as_null=False),
             }
         ),
         cudf.DataFrame(
             {
                 "a": [10, 11, 12, 13, 14, 15],
                 "b": cudf.Series(
-                    [10, None, np.NaN, 2234, None, np.NaN], nan_as_null=False
+                    [10, None, np.nan, 2234, None, np.nan], nan_as_null=False
                 ),
             }
         ),
@@ -5264,11 +5264,11 @@ def test_rowwise_ops_nullable_dtypes_all_null(op):
     gdf = cudf.DataFrame(
         {
             "a": [1, 2, 3, 4],
-            "b": [7, np.NaN, 9, 10],
-            "c": cudf.Series([np.NaN, np.NaN, np.NaN, np.NaN], dtype=float),
+            "b": [7, np.nan, 9, 10],
+            "c": cudf.Series([np.nan, np.nan, np.nan, np.nan], dtype=float),
             "d": cudf.Series([None, None, None, None], dtype="int64"),
             "e": [100, None, 200, None],
-            "f": cudf.Series([10, None, np.NaN, 11], nan_as_null=False),
+            "f": cudf.Series([10, None, np.nan, 11], nan_as_null=False),
         }
     )
 
@@ -5300,7 +5300,7 @@ def test_rowwise_ops_nullable_dtypes_partial_null(op):
         {
             "a": [10, 11, 12, 13, 14, 15],
             "b": cudf.Series(
-                [10, None, np.NaN, 2234, None, np.NaN],
+                [10, None, np.nan, 2234, None, np.nan],
                 nan_as_null=False,
             ),
         }
