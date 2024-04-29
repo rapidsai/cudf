@@ -2944,6 +2944,9 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
     auto const [min_ptr, min_size] =
       get_extremum(&s->min_value, dtype, scratch, true, NO_TRUNC_STATS);
     encoder.field_binary(6, min_ptr, min_size);
+    // cudf min/max statistics are always exact (i.e. not truncated)
+    encoder.field_bool(7, true);
+    encoder.field_bool(8, true);
   }
   encoder.end(&end);
   return end;
