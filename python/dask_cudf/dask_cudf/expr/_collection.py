@@ -1,5 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+import warnings
 from functools import cached_property
 
 from dask_expr import (
@@ -71,7 +72,6 @@ class DataFrame(VarMixin, DXDataFrame):
         sort=None,
         observed=None,
         dropna=None,
-        as_index=True,
         **kwargs,
     ):
         from dask_cudf.expr._groupby import GroupBy
@@ -81,9 +81,16 @@ class DataFrame(VarMixin, DXDataFrame):
                 f"`by` must be a column name or list of columns, got {by}."
             )
 
-        if as_index is not True:
+        if "as_index" in kwargs:
+            warnings.warn(
+                "The `as_index` argument is no longer supported in "
+                "dask-cudf when query-planning is enabled.",
+                FutureWarning,
+            )
+
+        if kwargs.pop("as_index", True) is not True:
             raise NotImplementedError(
-                f"`as_index` is not supported by dask-expr. Please disable "
+                f"`as_index=False` is not supported. Please disable "
                 "query planning, or reset the index after aggregating.\n"
                 f"{_LEGACY_WORKAROUND}"
             )

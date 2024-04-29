@@ -16,12 +16,12 @@ from dask.dataframe.groupby import Aggregation
 
 class Collect(SingleAggregation):
     @staticmethod
-    def groupby_chunk(*args, **kwargs):
-        return args[0].agg("collect")
+    def groupby_chunk(arg):
+        return arg.agg("collect")
 
     @staticmethod
-    def groupby_aggregate(*args, **kwargs):
-        gb = args[0].agg("collect")
+    def groupby_aggregate(arg):
+        gb = arg.agg("collect")
         if gb.ndim > 1:
             for col in gb.columns:
                 gb[col] = gb[col].list.concat()
