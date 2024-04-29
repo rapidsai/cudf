@@ -110,7 +110,7 @@ function buildAll {
 
 function buildLibCudfJniInDocker {
     local cudaVersion="11.5.0"
-    local imageName="cudf-build:${cudaVersion}-devel-rockey8"
+    local imageName="cudf-build:${cudaVersion}-devel-rocky8"
     local CMAKE_GENERATOR="${CMAKE_GENERATOR:-Ninja}"
     local workspaceDir="/rapids"
     local localMavenRepo=${LOCAL_MAVEN_REPO:-"$HOME/.m2/repository"}
