@@ -32,7 +32,6 @@ def test_from_dict_backend_dispatch():
     dd.assert_eq(expect, ddf)
 
 
-@xfail_dask_expr("API collision with dask-expr")
 def test_to_dask_dataframe_deprecated():
     gdf = cudf.DataFrame({"a": range(100)})
     ddf = dd.from_pandas(gdf, npartitions=2)
@@ -45,7 +44,6 @@ def test_to_dask_dataframe_deprecated():
         )
 
 
-@xfail_dask_expr("API collision with dask-expr")
 def test_from_dask_dataframe_deprecated():
     gdf = pd.DataFrame({"a": range(100)})
     ddf = dd.from_pandas(gdf, npartitions=2)

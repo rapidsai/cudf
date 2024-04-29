@@ -1,5 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+import warnings
 from functools import cached_property
 
 from dask_expr import (
@@ -49,7 +50,25 @@ class VarMixin:
         )
 
 
-class DataFrame(VarMixin, DXDataFrame):
+class CommonMixin:
+    def to_dask_dataframe(self, **kwargs):
+        """Create a dask.dataframe object from a dask_cudf object
+
+        WARNING: This API is deprecated, and may not work properly.
+        Please use `*.to_backend("pandas")` to convert the
+        underlying data to pandas.
+        """
+
+        warnings.warn(
+            "The `to_dask_dataframe` API is now deprecated. "
+            "Please use `*.to_backend('pandas')` instead.",
+            FutureWarning,
+        )
+
+        return self.to_backend("pandas", **kwargs)
+
+
+class DataFrame(VarMixin, CommonMixin, DXDataFrame):
     @classmethod
     def from_dict(cls, *args, **kwargs):
         with config.set({"dataframe.backend": "cudf"}):
@@ -94,7 +113,7 @@ class DataFrame(VarMixin, DXDataFrame):
         return from_legacy_dataframe(ddf)
 
 
-class Series(VarMixin, DXSeries):
+class Series(VarMixin, CommonMixin, DXSeries):
     def groupby(self, by, **kwargs):
         from dask_cudf.expr._groupby import SeriesGroupBy
 
@@ -113,7 +132,7 @@ class Series(VarMixin, DXSeries):
         return StructMethods(self)
 
 
-class Index(DXIndex):
+class Index(CommonMixin, DXIndex):
     pass  # Same as pandas (for now)
 
 
