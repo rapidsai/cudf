@@ -862,8 +862,9 @@ cdef _set_col_metadata(
                 column_type_length
             )
     elif isinstance(col.dtype, cudf.ListDtype):
-        full_path = full_path + ".list" if full_path is not None else None
-        col_meta.child(1).set_name("element".encode())
+        if full_path is not None:
+            full_path = full_path + ".list"
+            col_meta.child(1).set_name("element".encode())
         _set_col_metadata(
             col.children[1],
             col_meta.child(1),
