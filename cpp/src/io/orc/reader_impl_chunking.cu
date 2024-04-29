@@ -235,7 +235,7 @@ void reader_impl::preprocess_file(read_mode mode)
   std::tie(
     _file_itm_data.rows_to_skip, _file_itm_data.rows_to_read, _file_itm_data.selected_stripes) =
     _metadata.select_stripes(
-      _config.selected_stripes, _config.skip_rows, _config.num_read_rows, _stream);
+      _options.selected_stripes, _options.skip_rows, _options.num_read_rows, _stream);
   if (!_file_itm_data.has_data()) { return; }
 
   CUDF_EXPECTS(
@@ -305,9 +305,9 @@ void reader_impl::preprocess_file(read_mode mode)
 
       auto const col_type =
         to_cudf_type(_metadata.get_col_type(col.id).kind,
-                     _config.use_np_dtypes,
-                     _config.timestamp_type.id(),
-                     to_cudf_decimal_type(_config.decimal128_columns, _metadata, col.id));
+                     _options.use_np_dtypes,
+                     _options.timestamp_type.id(),
+                     to_cudf_decimal_type(_options.decimal128_columns, _metadata, col.id));
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
 
       auto& column_types = lvl_column_types[level];

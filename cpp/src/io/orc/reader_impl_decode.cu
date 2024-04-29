@@ -809,7 +809,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
 
     const bool use_index =
-      _config.use_index &&
+      _options.use_index &&
       // Do stripes have row group index
       _metadata.is_row_grp_idx_present() &&
       // Only use if we don't have much work with complete columns & stripes
@@ -905,7 +905,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
         chunk.num_rowgroups = stripe_num_rowgroups;
 
         if (chunk.type_kind == orc::TIMESTAMP) {
-          chunk.timestamp_type_id = _config.timestamp_type.id();
+          chunk.timestamp_type_id = _options.timestamp_type.id();
         }
         if (not is_stripe_data_empty) {
           for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {

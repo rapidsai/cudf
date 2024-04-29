@@ -178,7 +178,7 @@ class reader_impl {
     int64_t const skip_rows;
     std::optional<int64_t> num_read_rows;
     std::vector<std::vector<size_type>> const selected_stripes;
-  } const _config;
+  } const _options;
 
   // Intermediate data for reading.
   std::unique_ptr<reader_column_meta> const _col_meta;  // Track of orc mapping and child details

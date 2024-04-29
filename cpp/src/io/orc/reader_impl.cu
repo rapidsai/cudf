@@ -66,9 +66,9 @@ table_with_metadata reader_impl::make_output_chunk()
                      out_metadata.schema_info.emplace_back("");
                      return create_empty_column(col_meta.id,
                                                 _metadata,
-                                                _config.decimal128_columns,
-                                                _config.use_np_dtypes,
-                                                _config.timestamp_type,
+                                                _options.decimal128_columns,
+                                                _options.use_np_dtypes,
+                                                _options.timestamp_type,
                                                 out_metadata.schema_info.back(),
                                                 _stream);
                    });
@@ -167,13 +167,13 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
                          rmm::device_async_resource_ref mr)
   : _stream(stream),
     _mr(mr),
-    _config{options.get_timestamp_type(),
-            options.is_enabled_use_index(),
-            options.is_enabled_use_np_dtypes(),
-            options.get_decimal128_columns(),
-            options.get_skip_rows(),
-            options.get_num_rows(),
-            options.get_stripes()},
+    _options{options.get_timestamp_type(),
+             options.is_enabled_use_index(),
+             options.is_enabled_use_np_dtypes(),
+             options.get_decimal128_columns(),
+             options.get_skip_rows(),
+             options.get_num_rows(),
+             options.get_stripes()},
     _col_meta{std::make_unique<reader_column_meta>()},
     _sources(std::move(sources)),
     _metadata{_sources, stream},
@@ -182,7 +182,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
 {
   // Selected columns at different levels of nesting are stored in different elements
   // of `selected_columns`; thus, size == 1 means no nested columns.
-  CUDF_EXPECTS(_config.skip_rows == 0 or _selected_columns.num_levels() == 1,
+  CUDF_EXPECTS(_options.skip_rows == 0 or _selected_columns.num_levels() == 1,
                "skip_rows is not supported by nested column");
 }
 
