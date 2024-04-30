@@ -53,6 +53,7 @@ class CompactProtocolWriter {
   size_t write(OffsetIndex const&);
   size_t write(SizeStatistics const&);
   size_t write(ColumnOrder const&);
+  size_t write(PageEncodingStats const&);
   size_t write(SortingColumn const&);
 
  protected:
