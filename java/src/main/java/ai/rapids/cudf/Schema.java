@@ -20,6 +20,7 @@ package ai.rapids.cudf;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * The schema of data to be read in.
@@ -221,6 +222,13 @@ public class Schema {
     return ret;
   }
 
+  public int getNumChildren() {
+    if (childSchemas == null) {
+      return 0;
+    }
+    return childSchemas.size();
+  }
+
   int[] getFlattenedNumChildren() {
     flattenIfNeeded();
     return flattenedCounts;
@@ -243,7 +251,25 @@ public class Schema {
     return false;
   }
 
-  public static class Builder {
+  public HostColumnVector.DataType asHostDataType() {
+    if (topLevelType == DType.LIST) {
+      assert(childSchemas != null && childSchemas.size() == 1);
+      HostColumnVector.DataType element = childSchemas.get(0).asHostDataType();
+      return new HostColumnVector.ListType(true, element);
+    } else if (topLevelType == DType.STRUCT) {
+      if (childSchemas == null) {
+        return new HostColumnVector.StructType(true);
+      } else {
+        List<HostColumnVector.DataType> childTypes =
+                childSchemas.stream().map(Schema::asHostDataType).collect(Collectors.toList());
+        return new HostColumnVector.StructType(true, childTypes);
+      }
+    } else {
+      return new HostColumnVector.BasicType(true, topLevelType);
+    }
+  }
+
+    public static class Builder {
     private final DType topLevelType;
     private final List<String> names;
     private final List<Builder> types;
