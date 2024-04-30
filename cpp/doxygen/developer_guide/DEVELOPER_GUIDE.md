@@ -84,7 +84,7 @@ prefixed with an underscore.
 
 ```c++
 template <typename IteratorType>
-void algorithm_function(int x, rmm::cuda_stream_view s, rmm::device_memory_resource* mr)
+void algorithm_function(int x, rmm::cuda_stream_view s, rmm::device_async_resource_ref mr)
 {
   ...
 }
@@ -194,9 +194,10 @@ and produce `unique_ptr`s to owning objects as output. For example,
 std::unique_ptr<table> sort(table_view const& input);
 ```
 
-## rmm::device_memory_resource
+## Memory Resources
 
-libcudf allocates all device memory via RMM memory resources (MR). See the
+libcudf allocates all device memory via RMM memory resources (MR) or CUDA MRs. Either type
+can be passed to libcudf functions via `rmm::device_async_resource_ref` parameters. See the
 [RMM documentation](https://github.com/rapidsai/rmm/blob/main/README.md) for details.
 
 ### Current Device Memory Resource
@@ -205,6 +206,27 @@ RMM provides a "default" memory resource for each device that can be accessed an
 `rmm::mr::get_current_device_resource()` and `rmm::mr::set_current_device_resource(...)` functions,
 respectively. All memory resource parameters should be defaulted to use the return value of
 `rmm::mr::get_current_device_resource()`.
+
+### Resource Refs
+
+Memory resources are passed via resource ref parameters. A resource ref is a memory resource wrapper
+that enables consumers to specify properties of resources that they expect. These are defined
+in the `cuda::mr` namespace of libcu++, but RMM provides some convenience wrappers in
+`rmm/resource_ref.hpp`:
+ - `rmm::device_resource_ref` accepts a memory resource that provides synchronous allocation
+    of device-accessible memory.
+ - `rmm::device_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
+    of device-accessible memory.
+ - `rmm::host_resource_ref` accepts a memory resource that provides synchronous allocation of host-
+    accessible memory.
+ - `rmm::host_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
+    of host-accessible memory.
+ - `rmm::host_device_resource_ref` accepts a memory resource that provides synchronous allocation of
+    host- and device-accessible memory.
+ - `rmm::host_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
+    of host- and device-accessible memory.
+
+See the libcu++ [docs on `resource_ref`](https://nvidia.github.io/cccl/libcudacxx/extended_api/memory_resource/resource_ref.html) for more information.
 
 ## cudf::column
 
@@ -519,23 +541,23 @@ how device memory is allocated.
 
 ### Output Memory
 
-Any libcudf API that allocates memory that is *returned* to a user must accept a pointer to a
-`device_memory_resource` as the last parameter. Inside the API, this memory resource must be used
-to allocate any memory for returned objects. It should therefore be passed into functions whose
-outputs will be returned. Example:
+Any libcudf API that allocates memory that is *returned* to a user must accept a
+`rmm::device_async_resource_ref` as the last parameter. Inside the API, this memory resource must
+be used to allocate any memory for returned objects. It should therefore be passed into functions
+whose outputs will be returned. Example:
 
 ```c++
 // Returned `column` contains newly allocated memory,
 // therefore the API must accept a memory resource pointer
 std::unique_ptr<column> returns_output_memory(
-  ..., rmm::device_memory_resource * mr = rmm::mr::get_current_device_resource());
+  ..., rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 // This API does not allocate any new *output* memory, therefore
 // a memory resource is unnecessary
 void does_not_allocate_output_memory(...);
 ```
 
-This rule automatically applies to all detail APIs that allocates memory. Any detail API may be
+This rule automatically applies to all detail APIs that allocate memory. Any detail API may be
 called by any public API, and therefore could be allocating memory that is returned to the user.
 To support such uses cases, all detail APIs allocating memory resources should accept an `mr`
 parameter. Callers are responsible for either passing through a provided `mr` or
@@ -549,7 +571,7 @@ obtained from `rmm::mr::get_current_device_resource()` for temporary memory allo
 
 ```c++
 rmm::device_buffer some_function(
-  ..., rmm::mr::device_memory_resource mr * = rmm::mr::get_current_device_resource()) {
+  ..., rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) {
     rmm::device_buffer returned_buffer(..., mr); // Returned buffer uses the passed in MR
     ...
     rmm::device_buffer temporary_buffer(...); // Temporary buffer uses default MR
@@ -561,11 +583,11 @@ rmm::device_buffer some_function(
 ### Memory Management
 
 libcudf code generally eschews raw pointers and direct memory allocation. Use RMM classes built to
-use `device_memory_resource`s for device memory allocation with automated lifetime management.
+use memory resources for device memory allocation with automated lifetime management.
 
 #### rmm::device_buffer
 Allocates a specified number of bytes of untyped, uninitialized device memory using a
-`device_memory_resource`. If no resource is explicitly provided, uses
+memory resource. If no `rmm::device_async_resource_ref` is explicitly provided, it uses
 `rmm::mr::get_current_device_resource()`.
 
 `rmm::device_buffer` is movable and copyable on a stream. A copy performs a deep copy of the

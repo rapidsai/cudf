@@ -21,7 +21,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/slice.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -30,6 +30,7 @@
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -80,19 +81,20 @@ struct substring_fn {
   numeric_scalar_device_view<size_type> const d_start;
   numeric_scalar_device_view<size_type> const d_stop;
   numeric_scalar_device_view<size_type> const d_step;
-  int32_t* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type idx)
   {
     if (d_column.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     auto const d_str  = d_column.template element<string_view>(idx);
     auto const length = d_str.length();
     if (length == 0) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     size_type const step = d_step.is_valid() ? d_step.value() : 1;
@@ -132,7 +134,7 @@ struct substring_fn {
       }
       itr += step;
     }
-    if (!d_chars) d_offsets[idx] = bytes;
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 
@@ -158,7 +160,7 @@ std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_c
                                                    IndexIterator starts,
                                                    IndexIterator stops,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+                                                   rmm::device_async_resource_ref mr)
 {
   auto results = rmm::device_uvector<string_view>(d_column.size(), stream);
   thrust::transform(rmm::exec_policy(stream),
@@ -177,7 +179,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       numeric_scalar<size_type> const& stop,
                                       numeric_scalar<size_type> const& step,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
@@ -206,7 +208,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
   auto const d_stop  = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(stop));
   auto const d_step  = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(step));
 
-  auto [offsets, chars] = make_strings_children(
+  auto [offsets, chars] = experimental::make_strings_children(
     substring_fn{*d_column, d_start, d_stop, d_step}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
@@ -220,7 +222,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       column_view const& starts_column,
                                       column_view const& stops_column,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);
@@ -255,7 +257,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       numeric_scalar<size_type> const& stop,
                                       numeric_scalar<size_type> const& step,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::slice_strings(strings, start, stop, step, stream, mr);
@@ -265,7 +267,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       column_view const& starts_column,
                                       column_view const& stops_column,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::slice_strings(strings, starts_column, stops_column, stream, mr);

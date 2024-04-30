@@ -31,6 +31,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -52,7 +53,7 @@ std::pair<rmm::device_buffer, size_type> create_null_mask(column_device_view con
                                                           size_type offset,
                                                           scalar const& fill_value,
                                                           rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr)
+                                                          rmm::device_async_resource_ref mr)
 {
   auto const size = input.size();
   auto func_validity =
@@ -82,7 +83,7 @@ struct shift_functor {
     size_type offset,
     scalar const& fill_value,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+    rmm::device_async_resource_ref mr)
   {
     auto output = cudf::strings::detail::shift(
       cudf::strings_column_view(input), offset, fill_value, stream, mr);
@@ -102,7 +103,7 @@ struct shift_functor {
     size_type offset,
     scalar const& fill_value,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+    rmm::device_async_resource_ref mr)
   {
     using ScalarType = cudf::scalar_type_t<T>;
     auto& scalar     = static_cast<ScalarType const&>(fill_value);
@@ -156,7 +157,7 @@ std::unique_ptr<column> shift(column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(cudf::have_same_types(input, fill_value),
                "shift requires each fill value type to match the corresponding column type.",
@@ -174,7 +175,7 @@ std::unique_ptr<column> shift(column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::shift(input, offset, fill_value, stream, mr);

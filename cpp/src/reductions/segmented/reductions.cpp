@@ -25,6 +25,7 @@
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace reduction {
@@ -36,7 +37,7 @@ struct segmented_reduce_dispatch_functor {
   null_policy null_handling;
   std::optional<std::reference_wrapper<scalar const>> init;
   rmm::cuda_stream_view stream;
-  rmm::mr::device_memory_resource* mr;
+  rmm::device_async_resource_ref mr;
 
   segmented_reduce_dispatch_functor(column_view const& segmented_values,
                                     device_span<size_type const> offsets,
@@ -44,7 +45,7 @@ struct segmented_reduce_dispatch_functor {
                                     null_policy null_handling,
                                     std::optional<std::reference_wrapper<scalar const>> init,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
     : col(segmented_values),
       offsets(offsets),
       output_dtype(output_dtype),
@@ -60,7 +61,7 @@ struct segmented_reduce_dispatch_functor {
                                     data_type output_dtype,
                                     null_policy null_handling,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
     : segmented_reduce_dispatch_functor(
         segmented_values, offsets, output_dtype, null_handling, std::nullopt, stream, mr)
   {
@@ -110,7 +111,7 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          null_policy null_handling,
                                          std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!init.has_value() || cudf::have_same_types(segmented_values, init.value().get()),
                "column and initial value must be the same type",
@@ -137,7 +138,7 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          segmented_reduce_aggregation const& agg,
                                          data_type output_dtype,
                                          null_policy null_handling,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return reduction::detail::segmented_reduce(segmented_values,
@@ -156,7 +157,7 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          data_type output_dtype,
                                          null_policy null_handling,
                                          std::optional<std::reference_wrapper<scalar const>> init,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return reduction::detail::segmented_reduce(segmented_values,
