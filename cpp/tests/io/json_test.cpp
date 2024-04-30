@@ -2355,179 +2355,180 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilter)
         .lines(lines);
 
     // include all columns
-    {// schema
-     {std::map<std::string, cudf::io::schema_element> dtype_schema{
-       {"b",
-        {data_type{cudf::type_id::STRUCT},
-         {{"0", {data_type{cudf::type_id::STRING}}},
-          {"1", {data_type{cudf::type_id::LIST}, {{"element", {dtype<float>()}}}}}}}},
-       {"a", {dtype<int32_t>()}},
-       {"c", {dtype<bool>()}},
-     };
-    in_options.set_dtypes(dtype_schema);
-    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-    // Make sure we have columns "a", "b" and "c"
-    ASSERT_EQ(result.tbl->num_columns(), 3);
-    ASSERT_EQ(result.metadata.schema_info.size(), 3);
-    EXPECT_EQ(result.metadata.schema_info[0].name, "a");
-    EXPECT_EQ(result.metadata.schema_info[1].name, "b");
-    EXPECT_EQ(result.metadata.schema_info[2].name, "c");
-    // "b" children checks
-    ASSERT_EQ(result.metadata.schema_info[1].children.size(), 2);
-    EXPECT_EQ(result.metadata.schema_info[1].children[0].name, "0");
-    EXPECT_EQ(result.metadata.schema_info[1].children[1].name, "1");
-    ASSERT_EQ(result.metadata.schema_info[1].children[1].children.size(), 2);
-    EXPECT_EQ(result.metadata.schema_info[1].children[1].children[0].name, "offsets");
-    EXPECT_EQ(result.metadata.schema_info[1].children[1].children[1].name, "element");
-    // types
-    EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT32);
-    EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRUCT);
-    EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::BOOL8);
-    EXPECT_EQ(result.tbl->get_column(1).child(0).type().id(), cudf::type_id::STRING);
-    EXPECT_EQ(result.tbl->get_column(1).child(1).type().id(), cudf::type_id::LIST);
-    EXPECT_EQ(result.tbl->get_column(1).child(1).child(0).type().id(), cudf::type_id::INT32);
-    EXPECT_EQ(result.tbl->get_column(1).child(1).child(1).type().id(), cudf::type_id::FLOAT32);
-  }
-  // vector
-  {
-    std::vector<data_type> types{
-      {dtype<int32_t>()}, data_type{cudf::type_id::STRUCT}, {dtype<bool>()}};
-    in_options.set_dtypes(types);
-    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-    // Make sure we have columns "a", "b" and "c"
-    ASSERT_EQ(result.tbl->num_columns(), 3);
-    ASSERT_EQ(result.metadata.schema_info.size(), 3);
-    EXPECT_EQ(result.metadata.schema_info[0].name, "a");
-    EXPECT_EQ(result.metadata.schema_info[1].name, "b");
-    EXPECT_EQ(result.metadata.schema_info[2].name, "c");
-  }
-  // map
-  {
-    std::map<std::string, data_type> dtype_map{
-      {"b",
-       {
-         data_type{cudf::type_id::STRUCT},
-       }},
-      {"a", {dtype<int32_t>()}},
-      {"c", {dtype<bool>()}},
-    };
-    in_options.set_dtypes(dtype_map);
-    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-    // Make sure we have columns "a", "b" and "c"
-    ASSERT_EQ(result.tbl->num_columns(), 3);
-    ASSERT_EQ(result.metadata.schema_info.size(), 3);
-    EXPECT_EQ(result.metadata.schema_info[0].name, "a");
-    EXPECT_EQ(result.metadata.schema_info[1].name, "b");
-    EXPECT_EQ(result.metadata.schema_info[2].name, "c");
-  }
-}
+    //// schema
+    {
+      std::map<std::string, cudf::io::schema_element> dtype_schema{
+        {"b",
+         {data_type{cudf::type_id::STRUCT},
+          {{"0", {data_type{cudf::type_id::STRING}}},
+           {"1", {data_type{cudf::type_id::LIST}, {{"element", {dtype<float>()}}}}}}}},
+        {"a", {dtype<int32_t>()}},
+        {"c", {dtype<bool>()}},
+      };
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have columns "a", "b" and "c"
+      ASSERT_EQ(result.tbl->num_columns(), 3);
+      ASSERT_EQ(result.metadata.schema_info.size(), 3);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+      EXPECT_EQ(result.metadata.schema_info[1].name, "b");
+      EXPECT_EQ(result.metadata.schema_info[2].name, "c");
+      // "b" children checks
+      ASSERT_EQ(result.metadata.schema_info[1].children.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[1].children[0].name, "0");
+      EXPECT_EQ(result.metadata.schema_info[1].children[1].name, "1");
+      ASSERT_EQ(result.metadata.schema_info[1].children[1].children.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[1].children[1].children[0].name, "offsets");
+      EXPECT_EQ(result.metadata.schema_info[1].children[1].children[1].name, "element");
+      // types
+      EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT32);
+      EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRUCT);
+      EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::BOOL8);
+      EXPECT_EQ(result.tbl->get_column(1).child(0).type().id(), cudf::type_id::STRING);
+      EXPECT_EQ(result.tbl->get_column(1).child(1).type().id(), cudf::type_id::LIST);
+      EXPECT_EQ(result.tbl->get_column(1).child(1).child(0).type().id(), cudf::type_id::INT32);
+      EXPECT_EQ(result.tbl->get_column(1).child(1).child(1).type().id(), cudf::type_id::FLOAT32);
+    }
+    //// vector
+    {
+      std::vector<data_type> types{
+        {dtype<int32_t>()}, data_type{cudf::type_id::STRUCT}, {dtype<bool>()}};
+      in_options.set_dtypes(types);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have columns "a", "b" and "c"
+      ASSERT_EQ(result.tbl->num_columns(), 3);
+      ASSERT_EQ(result.metadata.schema_info.size(), 3);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+      EXPECT_EQ(result.metadata.schema_info[1].name, "b");
+      EXPECT_EQ(result.metadata.schema_info[2].name, "c");
+    }
+    //// map
+    {
+      std::map<std::string, data_type> dtype_map{
+        {"b",
+         {
+           data_type{cudf::type_id::STRUCT},
+         }},
+        {"a", {dtype<int32_t>()}},
+        {"c", {dtype<bool>()}},
+      };
+      in_options.set_dtypes(dtype_map);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have columns "a", "b" and "c"
+      ASSERT_EQ(result.tbl->num_columns(), 3);
+      ASSERT_EQ(result.metadata.schema_info.size(), 3);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+      EXPECT_EQ(result.metadata.schema_info[1].name, "b");
+      EXPECT_EQ(result.metadata.schema_info[2].name, "c");
+    }
 
-// include only one column
-{// schema
- {std::map<std::string, cudf::io::schema_element> dtype_schema{
-   {"a", {dtype<int32_t>()}},
- };
-in_options.set_dtypes(dtype_schema);
-cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-// Make sure we have column "a"
-ASSERT_EQ(result.tbl->num_columns(), 1);
-ASSERT_EQ(result.metadata.schema_info.size(), 1);
-EXPECT_EQ(result.metadata.schema_info[0].name, "a");
-}
-// vector
-{
-  std::vector<data_type> types{{dtype<int32_t>()}};
-  in_options.set_dtypes(types);
-  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-  // Make sure we have column "a"
-  ASSERT_EQ(result.tbl->num_columns(), 1);
-  ASSERT_EQ(result.metadata.schema_info.size(), 1);
-  EXPECT_EQ(result.metadata.schema_info[0].name, "a");
-}
-// map
-{
-  std::map<std::string, data_type> dtype_map{
-    {"a", {dtype<int32_t>()}},
-  };
-  in_options.set_dtypes(dtype_map);
-  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-  // Make sure we have column "a"
-  ASSERT_EQ(result.tbl->num_columns(), 1);
-  ASSERT_EQ(result.metadata.schema_info.size(), 1);
-  EXPECT_EQ(result.metadata.schema_info[0].name, "a");
-}
-}
-// include only one column (nested)
-{
-  std::map<std::string, cudf::io::schema_element> dtype_schema{
-    {"b",
-     {data_type{cudf::type_id::STRUCT},
-      {{"1", {data_type{cudf::type_id::LIST}, {{"element", {dtype<float>()}}}}}}}},
-  };
-  in_options.set_dtypes(dtype_schema);
-  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-  // Make sure we have column "b":"1":[float]
-  ASSERT_EQ(result.tbl->num_columns(), 1);
-  ASSERT_EQ(result.metadata.schema_info.size(), 1);
-  EXPECT_EQ(result.metadata.schema_info[0].name, "b");
-  ASSERT_EQ(result.metadata.schema_info[0].children.size(), 1);
-  EXPECT_EQ(result.metadata.schema_info[0].children[0].name, "1");
-  ASSERT_EQ(result.metadata.schema_info[0].children[0].children.size(), 2);
-  EXPECT_EQ(result.metadata.schema_info[0].children[0].children[0].name, "offsets");
-  EXPECT_EQ(result.metadata.schema_info[0].children[0].children[1].name, "element");
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRUCT);
-  EXPECT_EQ(result.tbl->get_column(0).child(0).type().id(), cudf::type_id::LIST);
-  EXPECT_EQ(result.tbl->get_column(0).child(0).child(0).type().id(), cudf::type_id::INT32);
-  EXPECT_EQ(result.tbl->get_column(0).child(0).child(1).type().id(), cudf::type_id::FLOAT32);
-}
-// multiple - all present
-{
-  std::map<std::string, cudf::io::schema_element> dtype_schema{
-    {"a", {dtype<int32_t>()}},
-    {"c", {dtype<bool>()}},
-  };
-  in_options.set_dtypes(dtype_schema);
-  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-  // Make sure we have columns "a", and "c"
-  ASSERT_EQ(result.tbl->num_columns(), 2);
-  ASSERT_EQ(result.metadata.schema_info.size(), 2);
-  EXPECT_EQ(result.metadata.schema_info[0].name, "a");
-  EXPECT_EQ(result.metadata.schema_info[1].name, "c");
-}
-// multiple - not all present
-{
-  std::map<std::string, cudf::io::schema_element> dtype_schema{
-    {"a", {dtype<int32_t>()}},
-    {"d", {dtype<bool>()}},
-  };
-  in_options.set_dtypes(dtype_schema);
-  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-  // Make sure we have column "a"
-  ASSERT_EQ(result.tbl->num_columns(), 1);
-  ASSERT_EQ(result.metadata.schema_info.size(), 1);
-  EXPECT_EQ(result.metadata.schema_info[0].name, "a");
-}
-// multiple - not all present nested
-{
-  std::map<std::string, cudf::io::schema_element> dtype_schema{
+    // include only one column
+    //// schema
+    {
+      std::map<std::string, cudf::io::schema_element> dtype_schema{
+        {"a", {dtype<int32_t>()}},
+      };
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have column "a"
+      ASSERT_EQ(result.tbl->num_columns(), 1);
+      ASSERT_EQ(result.metadata.schema_info.size(), 1);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+    }
+    //// vector
+    {
+      std::vector<data_type> types{{dtype<int32_t>()}};
+      in_options.set_dtypes(types);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have column "a"
+      ASSERT_EQ(result.tbl->num_columns(), 1);
+      ASSERT_EQ(result.metadata.schema_info.size(), 1);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+    }
+    //// map
+    {
+      std::map<std::string, data_type> dtype_map{
+        {"a", {dtype<int32_t>()}},
+      };
+      in_options.set_dtypes(dtype_map);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have column "a"
+      ASSERT_EQ(result.tbl->num_columns(), 1);
+      ASSERT_EQ(result.metadata.schema_info.size(), 1);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+    }
 
-    {"b",
-     {data_type{cudf::type_id::STRUCT},
-      {
-        {"2", {data_type{cudf::type_id::STRING}}},
-      }}},
-    {"c", {dtype<bool>()}},
-  };
-  in_options.set_dtypes(dtype_schema);
-  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-  // Make sure we have columns "b" (empty struct) and "c"
-  ASSERT_EQ(result.tbl->num_columns(), 2);
-  ASSERT_EQ(result.metadata.schema_info.size(), 2);
-  EXPECT_EQ(result.metadata.schema_info[0].name, "b");
-  ASSERT_EQ(result.metadata.schema_info[0].children.size(), 0);
-  EXPECT_EQ(result.metadata.schema_info[1].name, "c");
-}
-}
+    // include only one column (nested)
+    {
+      std::map<std::string, cudf::io::schema_element> dtype_schema{
+        {"b",
+         {data_type{cudf::type_id::STRUCT},
+          {{"1", {data_type{cudf::type_id::LIST}, {{"element", {dtype<float>()}}}}}}}},
+      };
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have column "b":"1":[float]
+      ASSERT_EQ(result.tbl->num_columns(), 1);
+      ASSERT_EQ(result.metadata.schema_info.size(), 1);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "b");
+      ASSERT_EQ(result.metadata.schema_info[0].children.size(), 1);
+      EXPECT_EQ(result.metadata.schema_info[0].children[0].name, "1");
+      ASSERT_EQ(result.metadata.schema_info[0].children[0].children.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[0].children[0].children[0].name, "offsets");
+      EXPECT_EQ(result.metadata.schema_info[0].children[0].children[1].name, "element");
+      EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRUCT);
+      EXPECT_EQ(result.tbl->get_column(0).child(0).type().id(), cudf::type_id::LIST);
+      EXPECT_EQ(result.tbl->get_column(0).child(0).child(0).type().id(), cudf::type_id::INT32);
+      EXPECT_EQ(result.tbl->get_column(0).child(0).child(1).type().id(), cudf::type_id::FLOAT32);
+    }
+    // multiple - all present
+    {
+      std::map<std::string, cudf::io::schema_element> dtype_schema{
+        {"a", {dtype<int32_t>()}},
+        {"c", {dtype<bool>()}},
+      };
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have columns "a", and "c"
+      ASSERT_EQ(result.tbl->num_columns(), 2);
+      ASSERT_EQ(result.metadata.schema_info.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+      EXPECT_EQ(result.metadata.schema_info[1].name, "c");
+    }
+    // multiple - not all present
+    {
+      std::map<std::string, cudf::io::schema_element> dtype_schema{
+        {"a", {dtype<int32_t>()}},
+        {"d", {dtype<bool>()}},
+      };
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have column "a"
+      ASSERT_EQ(result.tbl->num_columns(), 1);
+      ASSERT_EQ(result.metadata.schema_info.size(), 1);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+    }
+    // multiple - not all present nested
+    {
+      std::map<std::string, cudf::io::schema_element> dtype_schema{
+
+        {"b",
+         {data_type{cudf::type_id::STRUCT},
+          {
+            {"2", {data_type{cudf::type_id::STRING}}},
+          }}},
+        {"c", {dtype<bool>()}},
+      };
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have columns "b" (empty struct) and "c"
+      ASSERT_EQ(result.tbl->num_columns(), 2);
+      ASSERT_EQ(result.metadata.schema_info.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "b");
+      ASSERT_EQ(result.metadata.schema_info[0].children.size(), 0);
+      EXPECT_EQ(result.metadata.schema_info[1].name, "c");
+    }
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()
