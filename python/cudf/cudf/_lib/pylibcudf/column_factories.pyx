@@ -83,6 +83,8 @@ cpdef Column make_numeric_column(
                         state
                     )
                 )
+        else:
+            raise TypeError("Invalid mask argument")
     elif MaskArg is tuple:
         mask_buf, null_count = mstate
         mask = move(mask_buf.c_release())
@@ -124,6 +126,8 @@ cpdef Column make_fixed_point_column(
                         state
                     )
                 )
+        else:
+            raise TypeError("Invalid mask argument")
     elif MaskArg is tuple:
         mask_buf, null_count = mstate
         mask = move(mask_buf.c_release())
@@ -165,6 +169,8 @@ cpdef Column make_timestamp_column(
                         state
                     )
                 )
+        else:
+            raise TypeError("Invalid mask argument")
     elif MaskArg is tuple:
         mask_buf, null_count = mstate
         mask = move(mask_buf.c_release())
@@ -206,6 +212,8 @@ cpdef Column make_duration_column(
                         state
                     )
                 )
+        else:
+            raise TypeError("Invalid mask argument")
     elif MaskArg is tuple:
         mask_buf, null_count = mstate
         mask = move(mask_buf.c_release())
@@ -247,6 +255,8 @@ cpdef Column make_fixed_width_column(
                         state
                     )
                 )
+        else:
+            raise TypeError("Invalid mask argument")
     elif MaskArg is tuple:
         mask_buf, null_count = mstate
         mask = move(mask_buf.c_release())
