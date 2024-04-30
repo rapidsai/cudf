@@ -3,16 +3,7 @@
 from __future__ import annotations
 
 import functools
-from typing import (
-    Any,
-    Callable,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-    cast,
-)
+from typing import Any, Callable, Optional, Sequence, Tuple, Union, cast
 
 import cupy as cp
 import numpy as np
@@ -37,7 +28,7 @@ from cudf.api.types import (
     is_integer_dtype,
     is_scalar,
 )
-from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
+from cudf.core.buffer import Buffer
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -193,30 +184,6 @@ class NumericalColumn(NumericalBaseColumn):
 
         if out:
             self._mimic_inplace(out, inplace=True)
-
-    @property
-    def __cuda_array_interface__(self) -> Mapping[str, Any]:
-        output = {
-            "shape": (len(self),),
-            "strides": (self.dtype.itemsize,),
-            "typestr": self.dtype.str,
-            "data": (self.data_ptr, False),
-            "version": 1,
-        }
-
-        if self.nullable and self.has_nulls():
-            # Create a simple Python object that exposes the
-            # `__cuda_array_interface__` attribute here since we need to modify
-            # some of the attributes from the numba device array
-            output["mask"] = cuda_array_interface_wrapper(
-                ptr=self.mask_ptr,
-                size=len(self),
-                owner=self.mask,
-                readonly=True,
-                typestr="<t1",
-            )
-
-        return output
 
     def unary_operator(self, unaryop: Union[str, Callable]) -> ColumnBase:
         if callable(unaryop):
