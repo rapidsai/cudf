@@ -30,12 +30,12 @@ VALID_TYPES = [
 ]
 
 
-@pytest.fixture(scope="module", params=VALID_TYPES, ids=repr)
+@pytest.fixture(params=VALID_TYPES, ids=repr)
 def valid_type(request):
     return request.param
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def valid_column(valid_type):
     if valid_type == pa.bool_():
         return pa.array([True, False, True], type=valid_type)
