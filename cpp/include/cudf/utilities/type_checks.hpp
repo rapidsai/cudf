@@ -122,7 +122,8 @@ bool have_same_types(scalar const& lhs, scalar const& rhs);
 /**
  * @brief Compare the types of a range of `column_view` or `scalar` objects
  *
- * This function returns true if all objects in the range have the same type, in the sense of cudf::have_same_types.
+ * This function returns true if all objects in the range have the same type, in the sense of
+ * cudf::have_same_types.
  *
  * @tparam ForwardIt Forward iterator
  * @param first The first iterator
