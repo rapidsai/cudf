@@ -162,7 +162,7 @@ inline const char* EnumNameMetadataVersion(MetadataVersion e)
 ///      forward compatibility guarantees).
 ///  2.  A means of negotiating between a client and server
 ///      what features a stream is allowed to use. The enums
-///      values here are intented to represent higher level
+///      values here are intended to represent higher level
 ///      features, additional details maybe negotiated
 ///      with key-value pairs specific to the protocol.
 ///

@@ -60,7 +60,7 @@ enum MetadataVersion:short {
 ///      forward compatibility guarantees).
 ///  2.  A means of negotiating between a client and server
 ///      what features a stream is allowed to use. The enums
-///      values here are intented to represent higher level
+///      values here are intended to represent higher level
 ///      features, additional details maybe negotiated
 ///      with key-value pairs specific to the protocol.
 ///
@@ -215,7 +215,7 @@ table Bool {
 
 /// Contains two child arrays, run_ends and values.
 /// The run_ends child array must be a 16/32/64-bit integer array
-/// which encodes the indices at which the run with the value in 
+/// which encodes the indices at which the run with the value in
 /// each corresponding index in the values child array ends.
 /// Like list/struct types, the value array can be of any type.
 table RunEndEncoded {
