@@ -32,6 +32,30 @@ def test_from_dict_backend_dispatch():
     dd.assert_eq(expect, ddf)
 
 
+def test_to_dask_dataframe_deprecated():
+    gdf = cudf.DataFrame({"a": range(100)})
+    ddf = dd.from_pandas(gdf, npartitions=2)
+    assert isinstance(ddf._meta, cudf.DataFrame)
+
+    with pytest.warns(FutureWarning, match="API is now deprecated"):
+        assert isinstance(
+            ddf.to_dask_dataframe()._meta,
+            pd.DataFrame,
+        )
+
+
+def test_from_dask_dataframe_deprecated():
+    gdf = pd.DataFrame({"a": range(100)})
+    ddf = dd.from_pandas(gdf, npartitions=2)
+    assert isinstance(ddf._meta, pd.DataFrame)
+
+    with pytest.warns(FutureWarning, match="API is now deprecated"):
+        assert isinstance(
+            dask_cudf.from_dask_dataframe(ddf)._meta,
+            cudf.DataFrame,
+        )
+
+
 def test_to_backend():
     np.random.seed(0)
     data = {

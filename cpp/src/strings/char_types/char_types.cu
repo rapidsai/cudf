@@ -21,7 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -130,8 +130,9 @@ struct filter_chars_fn {
   string_character_types const types_to_remove;
   string_character_types const types_to_keep;
   string_view const d_replacement;  ///< optional replacement for removed characters
-  int32_t* d_offsets{};             ///< size of the output string stored here during first pass
-  char* d_chars{};                  ///< this is null only during the first pass
+  size_type* d_sizes{};
+  char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   /**
    * @brief Returns true if the given character should be replaced.
@@ -150,7 +151,7 @@ struct filter_chars_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_column.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     auto const d_str  = d_column.element<string_view>(idx);
@@ -165,7 +166,7 @@ struct filter_chars_fn {
       nbytes += d_newchar.size_bytes() - char_size;
       if (out_ptr) out_ptr = cudf::strings::detail::copy_string(out_ptr, d_newchar);
     }
-    if (!out_ptr) d_offsets[idx] = nbytes;
+    if (!out_ptr) { d_sizes[idx] = nbytes; }
   }
 };
 
@@ -202,7 +203,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
 
   // this utility calls filterer to build the offsets and chars columns
   auto [offsets_column, chars] =
-    cudf::strings::detail::make_strings_children(filterer, strings_count, stream, mr);
+    cudf::strings::detail::experimental::make_strings_children(filterer, strings_count, stream, mr);
 
   // return new strings column
   return make_strings_column(strings_count,
