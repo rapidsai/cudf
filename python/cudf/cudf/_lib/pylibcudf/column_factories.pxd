@@ -31,23 +31,23 @@ cpdef Column make_numeric_column(
 cpdef Column make_fixed_point_column(
     DataType type_,
     size_type size,
-    MaskArg mstate,
+    MaskArg mask,
 )
 
 cpdef Column make_timestamp_column(
     DataType type_,
     size_type size,
-    MaskArg mstate,
+    MaskArg mask,
 )
 
 cpdef Column make_duration_column(
     DataType type_,
     size_type size,
-    MaskArg mstate,
+    MaskArg mask,
 )
 
 cpdef Column make_fixed_width_column(
     DataType type_,
     size_type size,
-    MaskArg mstate,
+    MaskArg mask,
 )
