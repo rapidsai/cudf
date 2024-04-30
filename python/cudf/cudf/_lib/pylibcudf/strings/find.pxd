@@ -26,10 +26,12 @@ cpdef Column contains(
     Column input,
     ColumnOrScalar target,
 )
+
 cpdef Column starts_with(
     Column input,
     ColumnOrScalar target,
 )
+
 cpdef Column ends_with(
     Column input,
     ColumnOrScalar target,

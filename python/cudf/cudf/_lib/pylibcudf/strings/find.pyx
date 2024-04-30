@@ -2,7 +2,7 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-cimport cudf._lib.cpp.strings.find as cpp_find
+from cudf._lib.cpp.strings cimport find as cpp_find
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.pylibcudf.column cimport Column
 from cudf._lib.pylibcudf.scalar cimport Scalar
@@ -96,7 +96,6 @@ cpdef Column rfind(
     -------
     pylibcudf.Column
         New integer column with character position values
-
     """
     cdef unique_ptr[column] result
     with nogil:
