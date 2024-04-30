@@ -181,7 +181,7 @@ type_id to_type_id(SchemaElement const& schema,
     case BOOLEAN: return type_id::BOOL8;
     case INT32: return type_id::INT32;
     case INT64:
-      return (duration_type.id() == cudf::type_id::EMPTY) ? type_id::INT64 : duration_type.id();
+      return (duration_type.id() == type_id::EMPTY) ? type_id::INT64 : duration_type.id();
     case FLOAT: return type_id::FLOAT32;
     case DOUBLE: return type_id::FLOAT64;
     case BYTE_ARRAY:
