@@ -23,9 +23,25 @@ import cudf
 ##
 
 
-# VarMixin can be removed if cudf#15179 is addressed.
-# See: https://github.com/rapidsai/cudf/issues/15179
-class VarMixin:
+class CudfFrameBase(FrameBase):
+    def to_dask_dataframe(self, **kwargs):
+        """Create a dask.dataframe object from a dask_cudf object
+
+        WARNING: This API is deprecated, and may not work properly.
+        Please use `*.to_backend("pandas")` to convert the
+        underlying data to pandas.
+        """
+
+        warnings.warn(
+            "The `to_dask_dataframe` API is now deprecated. "
+            "Please use `*.to_backend('pandas')` instead.",
+            FutureWarning,
+        )
+
+        return self.to_backend("pandas", **kwargs)
+
+    # var can be removed if cudf#15179 is addressed.
+    # See: https://github.com/rapidsai/cudf/issues/15179
     def var(
         self,
         axis=0,
@@ -50,25 +66,7 @@ class VarMixin:
         )
 
 
-class CommonMixin:
-    def to_dask_dataframe(self, **kwargs):
-        """Create a dask.dataframe object from a dask_cudf object
-
-        WARNING: This API is deprecated, and may not work properly.
-        Please use `*.to_backend("pandas")` to convert the
-        underlying data to pandas.
-        """
-
-        warnings.warn(
-            "The `to_dask_dataframe` API is now deprecated. "
-            "Please use `*.to_backend('pandas')` instead.",
-            FutureWarning,
-        )
-
-        return self.to_backend("pandas", **kwargs)
-
-
-class DataFrame(VarMixin, CommonMixin, DXDataFrame):
+class DataFrame(CudfFrameBase, DXDataFrame):
     @classmethod
     def from_dict(cls, *args, **kwargs):
         with config.set({"dataframe.backend": "cudf"}):
@@ -113,7 +111,7 @@ class DataFrame(VarMixin, CommonMixin, DXDataFrame):
         return from_legacy_dataframe(ddf)
 
 
-class Series(VarMixin, CommonMixin, DXSeries):
+class Series(CudfFrameBase, DXSeries):
     def groupby(self, by, **kwargs):
         from dask_cudf.expr._groupby import SeriesGroupBy
 
@@ -132,7 +130,7 @@ class Series(VarMixin, CommonMixin, DXSeries):
         return StructMethods(self)
 
 
-class Index(CommonMixin, DXIndex):
+class Index(CudfFrameBase, DXIndex):
     pass  # Same as pandas (for now)
 
 
