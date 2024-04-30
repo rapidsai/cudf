@@ -122,13 +122,13 @@ void populate_dict_from_col(ArrowArray* arr, cudf::dictionary_column_view dview)
 {
   arr->length     = dview.size();
   arr->null_count = dview.null_count();
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc));
   ArrowArrayValidityBitmap(arr)->buffer.size_bytes =
     cudf::bitmask_allocation_size_bytes(dview.size());
   ArrowArrayValidityBitmap(arr)->buffer.data =
     const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(dview.null_mask()));
 
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc));
   ArrowArrayBuffer(arr, 1)->size_bytes = sizeof(IND_TYPE) * dview.indices().size();
   ArrowArrayBuffer(arr, 1)->data       = const_cast<uint8_t*>(dview.indices().data<uint8_t>());
 
