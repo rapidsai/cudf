@@ -113,7 +113,7 @@ def test_roundtrip_from_dask_none_index_false(tmpdir):
 @pytest.mark.parametrize("write_meta", [True, False])
 def test_roundtrip_from_dask_cudf(tmpdir, write_meta):
     tmpdir = str(tmpdir)
-    gddf = dask_cudf.from_dask_dataframe(ddf)
+    gddf = ddf.to_backend("cudf")
     gddf.to_parquet(tmpdir, write_metadata_file=write_meta)
 
     gddf2 = dask_cudf.read_parquet(tmpdir, calculate_divisions=True)
