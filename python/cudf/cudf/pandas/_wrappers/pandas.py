@@ -1170,6 +1170,15 @@ Minute = make_final_proxy_type(
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
+Timedelta = make_final_proxy_type(
+    "Timedelta",
+    _Unusable,
+    pd.Timedelta,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
 MonthBegin = make_final_proxy_type(
     "MonthBegin",
     _Unusable,

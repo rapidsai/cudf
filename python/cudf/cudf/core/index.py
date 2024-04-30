@@ -111,10 +111,16 @@ def _lexsorted_equal_range(
         sort_inds = None
         sort_vals = idx
     lower_bound = search_sorted(
-        [*sort_vals._data.columns], [*key_as_table._columns], side="left"
+        [*sort_vals._data.columns],
+        [*key_as_table._columns],
+        side="left",
+        ascending=sort_vals.is_monotonic_increasing,
     ).element_indexing(0)
     upper_bound = search_sorted(
-        [*sort_vals._data.columns], [*key_as_table._columns], side="right"
+        [*sort_vals._data.columns],
+        [*key_as_table._columns],
+        side="right",
+        ascending=sort_vals.is_monotonic_increasing,
     ).element_indexing(0)
 
     return lower_bound, upper_bound, sort_inds
@@ -1292,6 +1298,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         )
 
         if lower_bound == upper_bound:
+            if is_sorted:
+                return lower_bound
             raise KeyError(key)
 
         if lower_bound + 1 == upper_bound:
@@ -1494,9 +1502,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         )
 
     def repeat(self, repeats, axis=None):
-        return self._from_columns_like_self(
+        res = self._from_columns_like_self(
             Frame._repeat([*self._columns], repeats, axis), self._column_names
         )
+        if isinstance(res, DatetimeIndex):
+            res._freq = None
+        return res
 
     @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):

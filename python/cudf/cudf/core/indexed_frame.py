@@ -200,7 +200,7 @@ def _get_label_range_or_mask(index, start, stop, step):
         start = pd.to_datetime(start)
         stop = pd.to_datetime(stop)
         if start is not None and stop is not None:
-            if start > stop:
+            if start > stop and not index.is_monotonic_decreasing:
                 return slice(0, 0, None)
             if (start in index) and (stop in index):
                 # when we have a non-monotonic datetime index, return
@@ -215,9 +215,15 @@ def _get_label_range_or_mask(index, start, stop, step):
                     "DatetimeIndexes with non-existing keys is not allowed.",
                 )
         elif start is not None:
-            boolean_mask = index >= start
+            if index.is_monotonic_decreasing:
+                boolean_mask = index <= start
+            else:
+                boolean_mask = index >= start
         else:
-            boolean_mask = index <= stop
+            if index.is_monotonic_decreasing:
+                boolean_mask = index >= stop
+            else:
+                boolean_mask = index <= stop
         return boolean_mask
     else:
         return index.find_label_range(slice(start, stop, step))
@@ -334,6 +340,7 @@ class IndexedFrame(Frame):
             index = _index_from_data(
                 dict(enumerate(columns[:n_index_columns]))
             )
+
             if isinstance(index, cudf.MultiIndex):
                 index.names = index_names
             else:
@@ -344,11 +351,14 @@ class IndexedFrame(Frame):
 
         if index is not None:
             frame._index = index
-        return frame._copy_type_metadata(
+        res = frame._copy_type_metadata(
             self,
             include_index=bool(index_names),
             override_dtypes=override_dtypes,
         )
+        if isinstance(res.index, cudf.DatetimeIndex):
+            res.index._freq = None
+        return res
 
     def __round__(self, digits=0):
         # Shouldn't be added to BinaryOperand
