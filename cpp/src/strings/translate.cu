@@ -20,7 +20,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
@@ -52,13 +52,14 @@ struct translate_fn {
   column_device_view const d_strings;
   rmm::device_uvector<translate_table>::iterator table_begin;
   rmm::device_uvector<translate_table>::iterator table_end;
-  int32_t* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     string_view const d_str = d_strings.element<string_view>(idx);
@@ -80,7 +81,7 @@ struct translate_fn {
       }
       if (chr && out_ptr) out_ptr += from_char_utf8(chr, out_ptr);
     }
-    if (!d_chars) d_offsets[idx] = bytes;
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 
@@ -111,7 +112,7 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
-  auto [offsets_column, chars] = make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
     translate_fn{*d_strings, table.begin(), table.end()}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),

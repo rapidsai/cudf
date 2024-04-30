@@ -681,6 +681,111 @@ TEST_F(JsonReaderTest, JsonLinesByteRange)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{3000, 4000, 5000}});
 }
 
+TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_AcrossFiles)
+{
+  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest1.json";
+  std::ofstream outfile1(file1, std::ofstream::out);
+  outfile1 << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]";
+  outfile1.close();
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file1}})
+      .lines(true)
+      .byte_range_offset(11)
+      .byte_range_size(70);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->num_rows(), 10);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(0),
+    int64_wrapper{{3000, 4000, 5000, 6000, 7000, 8000, 9000, 1000, 2000, 3000}});
+}
+
+TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_ExcessRangeSize)
+{
+  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest1.json";
+  std::ofstream outfile1(file1, std::ofstream::out);
+  outfile1 << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]";
+  outfile1.close();
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file1}})
+      .lines(true)
+      .byte_range_offset(11)
+      .byte_range_size(1000);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->num_rows(), 16);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{3000,
+                                                4000,
+                                                5000,
+                                                6000,
+                                                7000,
+                                                8000,
+                                                9000,
+                                                1000,
+                                                2000,
+                                                3000,
+                                                4000,
+                                                5000,
+                                                6000,
+                                                7000,
+                                                8000,
+                                                9000}});
+}
+
+TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_LoadAllFiles)
+{
+  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest1.json";
+  std::ofstream outfile1(file1, std::ofstream::out);
+  outfile1 << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]";
+  outfile1.close();
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file1}}).lines(true);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->num_rows(), 18);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{1000,
+                                                2000,
+                                                3000,
+                                                4000,
+                                                5000,
+                                                6000,
+                                                7000,
+                                                8000,
+                                                9000,
+                                                1000,
+                                                2000,
+                                                3000,
+                                                4000,
+                                                5000,
+                                                6000,
+                                                7000,
+                                                8000,
+                                                9000}});
+}
+
 TEST_P(JsonReaderRecordTest, JsonLinesObjects)
 {
   const std::string fname = temp_env->get_temp_dir() + "JsonLinesObjectsTest.json";

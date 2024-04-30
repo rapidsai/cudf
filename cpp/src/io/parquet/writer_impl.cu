@@ -22,6 +22,8 @@
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
+#include "io/parquet/parquet.hpp"
+#include "io/parquet/parquet_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "io/utilities/column_utils.cuh"
 #include "io/utilities/config_utils.hpp"
@@ -212,6 +214,53 @@ void update_chunk_encodings(std::vector<Encoding>& encodings, uint32_t enc_mask)
     auto const enc_enum = static_cast<Encoding>(enc);
     if ((enc_mask & encoding_to_mask(enc_enum)) != 0) { encodings.push_back(enc_enum); }
   }
+}
+
+/**
+ * @brief Update the encoding_stats field in the column chunk metadata.
+ *
+ * @param chunk_meta The `ColumnChunkMetaData` struct for the column chunk
+ * @param ck The column chunk to summarize stats for
+ * @param is_v2 True if V2 page headers are used
+ */
+void update_chunk_encoding_stats(ColumnChunkMetaData& chunk_meta,
+                                 EncColumnChunk const& ck,
+                                 bool is_v2)
+{
+  // don't set encoding stats if there are no pages
+  if (ck.num_pages == 0) { return; }
+
+  // NOTE: since cudf doesn't use mixed encodings for a chunk, we really only need to account
+  // for the dictionary page (if there is one), and the encoding used for the data pages. We can
+  // examine the chunk's encodings field to figure out the encodings without having to examine
+  // the page data.
+  auto const num_data_pages = static_cast<int32_t>(ck.num_data_pages());
+  auto const data_page_type = is_v2 ? PageType::DATA_PAGE_V2 : PageType::DATA_PAGE;
+
+  std::vector<PageEncodingStats> result;
+  if (ck.use_dictionary) {
+    // For dictionary encoding, if V1 then both data and dictionary use PLAIN_DICTIONARY. For V2
+    // the dictionary uses PLAIN and the data RLE_DICTIONARY.
+    auto const dict_enc = is_v2 ? Encoding::PLAIN : Encoding::PLAIN_DICTIONARY;
+    auto const data_enc = is_v2 ? Encoding::RLE_DICTIONARY : Encoding::PLAIN_DICTIONARY;
+    result.push_back({PageType::DICTIONARY_PAGE, dict_enc, 1});
+    if (num_data_pages > 0) { result.push_back({data_page_type, data_enc, num_data_pages}); }
+  } else {
+    // No dictionary page, the pages are encoded with something other than RLE (unless it's a
+    // boolean column).
+    for (auto const enc : chunk_meta.encodings) {
+      if (enc != Encoding::RLE) {
+        result.push_back({data_page_type, enc, num_data_pages});
+        break;
+      }
+    }
+    // if result is empty and we're using V2 headers, then assume the data is RLE as well
+    if (result.empty() and is_v2 and (ck.encodings & encoding_to_mask(Encoding::RLE)) != 0) {
+      result.push_back({data_page_type, Encoding::RLE, num_data_pages});
+    }
+  }
+
+  if (not result.empty()) { chunk_meta.encoding_stats = std::move(result); }
 }
 
 /**
@@ -2144,6 +2193,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         max_write_size = std::max(max_write_size, ck.compressed_size);
 
         update_chunk_encodings(column_chunk_meta.encodings, ck.encodings);
+        update_chunk_encoding_stats(column_chunk_meta, ck, write_v2_headers);
 
         if (ck.ck_stat_size != 0) {
           std::vector<uint8_t> const stats_blob = cudf::detail::make_std_vector_sync(
