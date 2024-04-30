@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace detail {
@@ -144,7 +145,7 @@ void build_column_metadata(metadata_builder& mb,
  */
 packed_columns pack(cudf::table_view const& input,
                     rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr)
+                    rmm::device_async_resource_ref mr)
 {
   // do a contiguous_split with no splits to get the memory for the table
   // arranged as we want it
@@ -260,7 +261,7 @@ void metadata_builder::clear() { return impl->clear(); }
 /**
  * @copydoc cudf::pack
  */
-packed_columns pack(cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
+packed_columns pack(cudf::table_view const& input, rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::pack(input, cudf::get_default_stream(), mr);
