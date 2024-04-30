@@ -1077,7 +1077,7 @@ class Frame(BinaryOperand, Scannable):
         >>> import cudf
         >>> import numpy as np
         >>> import pandas as pd
-        >>> df = cudf.DataFrame({'age': [5, 6, np.NaN],
+        >>> df = cudf.DataFrame({'age': [5, 6, np.nan],
         ...                    'born': [pd.NaT, pd.Timestamp('1939-05-27'),
         ...                             pd.Timestamp('1940-04-25')],
         ...                    'name': ['Alfred', 'Batman', ''],
@@ -1095,7 +1095,7 @@ class Frame(BinaryOperand, Scannable):
 
         Show which entries in a Series are NA.
 
-        >>> ser = cudf.Series([5, 6, np.NaN, np.inf, -np.inf])
+        >>> ser = cudf.Series([5, 6, np.nan, np.inf, -np.inf])
         >>> ser
         0     5.0
         1     6.0
@@ -1113,7 +1113,7 @@ class Frame(BinaryOperand, Scannable):
 
         Show which entries in an Index are NA.
 
-        >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
+        >>> idx = cudf.Index([1, 2, None, np.nan, 0.32, np.inf])
         >>> idx
         Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
         >>> idx.isna()
@@ -1156,7 +1156,7 @@ class Frame(BinaryOperand, Scannable):
         >>> import cudf
         >>> import numpy as np
         >>> import pandas as pd
-        >>> df = cudf.DataFrame({'age': [5, 6, np.NaN],
+        >>> df = cudf.DataFrame({'age': [5, 6, np.nan],
         ...                    'born': [pd.NaT, pd.Timestamp('1939-05-27'),
         ...                             pd.Timestamp('1940-04-25')],
         ...                    'name': ['Alfred', 'Batman', ''],
@@ -1174,7 +1174,7 @@ class Frame(BinaryOperand, Scannable):
 
         Show which entries in a Series are NA.
 
-        >>> ser = cudf.Series([5, 6, np.NaN, np.inf, -np.inf])
+        >>> ser = cudf.Series([5, 6, np.nan, np.inf, -np.inf])
         >>> ser
         0     5.0
         1     6.0
@@ -1192,7 +1192,7 @@ class Frame(BinaryOperand, Scannable):
 
         Show which entries in an Index are NA.
 
-        >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
+        >>> idx = cudf.Index([1, 2, None, np.nan, 0.32, np.inf])
         >>> idx
         Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
         >>> idx.notna()
@@ -1813,12 +1813,6 @@ class Frame(BinaryOperand, Scannable):
 
             Parameters currently not supported are `axis`, `bool_only`,
             `level`.
-
-        .. pandas-compat::
-            **DataFrame.all, Series.all**
-
-            Parameters currently not supported are `axis`, `bool_only`,
-            `level`.
         """
         return self._reduce(
             "all",
@@ -1866,12 +1860,6 @@ class Frame(BinaryOperand, Scannable):
         a    True
         b    True
         dtype: bool
-
-        .. pandas-compat::
-            **DataFrame.any, Series.any**
-
-            Parameters currently not supported are `axis`, `bool_only`,
-            `level`.
 
         .. pandas-compat::
             **DataFrame.any, Series.any**

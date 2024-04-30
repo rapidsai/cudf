@@ -27,6 +27,7 @@
 
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
@@ -94,7 +95,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                                                     FollowingIter following,
                                                     size_type row_offset,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+                                                    rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(op == aggregation::LEAD || op == aggregation::LAG,
                "Unexpected aggregation type in compute_lead_lag_for_nested");

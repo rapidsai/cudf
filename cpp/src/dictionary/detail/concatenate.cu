@@ -31,6 +31,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
@@ -140,7 +141,7 @@ struct dispatch_compute_indices {
              offsets_pair const* d_offsets,
              size_type const* d_map_to_keys,
              rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+             rmm::device_async_resource_ref mr)
   {
     auto keys_view     = column_device_view::create(all_keys, stream);
     auto indices_view  = column_device_view::create(all_indices, stream);
@@ -206,7 +207,7 @@ struct dispatch_compute_indices {
 
 std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   // exception here is the same behavior as in cudf::concatenate
   CUDF_EXPECTS(not columns.empty(), "Unexpected empty list of columns to concatenate.");

@@ -36,6 +36,7 @@
 #include <nvtext/normalize.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -174,7 +175,7 @@ struct codepoint_to_utf8_fn {
 // detail API
 std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& strings,
                                                rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+                                               rmm::device_async_resource_ref mr)
 {
   if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
@@ -198,7 +199,7 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
 std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& strings,
                                                    bool do_lower_case,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+                                                   rmm::device_async_resource_ref mr)
 {
   if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
@@ -240,7 +241,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
 std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& input,
                                                rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::normalize_spaces(input, stream, mr);
@@ -252,7 +253,7 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
 std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& input,
                                                    bool do_lower_case,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+                                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::normalize_characters(input, do_lower_case, stream, mr);
