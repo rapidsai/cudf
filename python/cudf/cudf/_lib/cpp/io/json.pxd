@@ -28,7 +28,7 @@ cdef extern from "cudf/io/json.hpp" \
         size_type get_byte_range_size() except +
         bool is_enabled_lines() except +
         bool is_enabled_mixed_types_as_string() except +
-        bool is_enabled_use_dtypes_as_filter() except +
+        bool is_enabled_use_dtypes_as_prune() except +
         bool is_enabled_dayfirst() except +
         bool is_enabled_experimental() except +
 
@@ -42,7 +42,7 @@ cdef extern from "cudf/io/json.hpp" \
         void set_byte_range_size(size_type size) except +
         void enable_lines(bool val) except +
         void enable_mixed_types_as_string(bool val) except +
-        void enable_use_dtypes_as_filter(bool val) except +
+        void enable_use_dtypes_as_prune(bool val) except +
         void enable_dayfirst(bool val) except +
         void enable_experimental(bool val) except +
         void enable_keep_quotes(bool val) except +
@@ -81,7 +81,7 @@ cdef extern from "cudf/io/json.hpp" \
         json_reader_options_builder& mixed_types_as_string(
             bool val
         ) except +
-        json_reader_options_builder& use_dtypes_as_filter(
+        json_reader_options_builder& use_dtypes_as_prune(
             bool val
         ) except +
         json_reader_options_builder& dayfirst(

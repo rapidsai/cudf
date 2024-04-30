@@ -651,7 +651,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     return std::pair{name, parent_col_id};
   };
 
-  // Filter columns that are not required to be parsed.
+  // Prune columns that are not required to be parsed.
   if (options.is_enabled_prune_columns()) {
     for (auto const this_col_id : unique_col_ids) {
       if (column_categories[this_col_id] == NC_ERR || column_categories[this_col_id] == NC_FN) {
@@ -666,7 +666,7 @@ void make_device_json_column(device_span<SymbolT const> input,
         is_pruned[this_col_id] = 1;
         continue;
       } else {
-        // make sure all its parents are not filtered.
+        // make sure all its parents are not pruned.
         while (parent_col_id != parent_node_sentinel and is_pruned[parent_col_id] == 1) {
           is_pruned[parent_col_id] = 0;
           parent_col_id            = column_parent_ids[parent_col_id];
@@ -683,7 +683,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     // Struct, List, String, Value
     auto [name, parent_col_id] = name_and_parent_index(this_col_id);
 
-    // if parent is mixed type column or this column is filtered, ignore this column.
+    // if parent is mixed type column or this column is pruned, ignore this column.
     if (parent_col_id != parent_node_sentinel &&
         (is_mixed_type_column[parent_col_id] || is_pruned[this_col_id])) {
       ignore_vals[this_col_id] = 1;
@@ -1237,7 +1237,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                           child_schema_element,
                                           stream,
                                           mr);
-      // Insert this columns name into the schema
+      // Insert this column's name into the schema
       out_column_names.emplace_back(col_name);
       // TODO: RangeIndex as DataFrame.columns names for array of arrays
       // if (is_array_of_arrays) {

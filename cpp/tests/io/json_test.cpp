@@ -2329,7 +2329,7 @@ TEST_F(JsonReaderTest, MapTypes)
           {type_id::LIST, type_id::STRING, type_id::STRING});
 }
 
-// Test case for dtype filter:
+// Test case for dtype prune:
 // all paths, only one.
 // one present, another not present, nothing present
 // nested, flat, not-jsonlines
