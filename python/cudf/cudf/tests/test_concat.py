@@ -218,7 +218,8 @@ def test_concat_columns(axis):
     assert_eq(expect, got, check_index_type=True)
 
 
-def test_concat_multiindex_dataframe():
+@pytest.mark.parametrize("axis", [0, 1])
+def test_concat_multiindex_dataframe(axis):
     gdf = cudf.DataFrame(
         {
             "w": np.arange(4),
@@ -233,14 +234,11 @@ def test_concat_multiindex_dataframe():
     pdg2 = pdg.iloc[:, 1:]
     gdg1 = cudf.from_pandas(pdg1)
     gdg2 = cudf.from_pandas(pdg2)
+    expected = pd.concat([pdg1, pdg2], axis=axis)
+    result = cudf.concat([gdg1, gdg2], axis=axis)
     assert_eq(
-        cudf.concat([gdg1, gdg2]).astype("float64"),
-        pd.concat([pdg1, pdg2]),
-        check_index_type=True,
-    )
-    assert_eq(
-        cudf.concat([gdg1, gdg2], axis=1),
-        pd.concat([pdg1, pdg2], axis=1),
+        expected,
+        result,
         check_index_type=True,
     )
 
