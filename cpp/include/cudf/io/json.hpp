@@ -101,8 +101,8 @@ class json_reader_options {
   bool _lines = false;
   // Parse mixed types as a string column
   bool _mixed_types_as_string = false;
-  // Use dtypes as filter instead of type inference suggestion
-  bool _use_dtypes_as_filter = false;
+  // Prune only the columns to be read, using dtypes as input columns
+  bool _prune_columns = false;
 
   // Bytes to skip from the start
   size_t _byte_range_offset = 0;
@@ -244,12 +244,12 @@ class json_reader_options {
   bool is_enabled_mixed_types_as_string() const { return _mixed_types_as_string; }
 
   /**
-   * @brief Whether to use dtypes as filter instead of type inference suggestion.
+   * @brief Whether to prune columns only to be read using dtypes as input columns.
    * This option is useful for parsing only a subset of columns.
    *
-   * @return `true` if dtypes is used as filter
+   * @return `true` if column pruning is enabled
    */
-  bool is_enabled_use_dtypes_as_filter() const { return _use_dtypes_as_filter; }
+  bool is_enabled_prune_columns() const { return _prune_columns; }
 
   /**
    * @brief Whether to parse dates as DD/MM versus MM/DD.
@@ -353,12 +353,12 @@ class json_reader_options {
   void enable_mixed_types_as_string(bool val) { _mixed_types_as_string = val; }
 
   /**
-   * @brief Set whether to use dtypes as filter instead of type inference suggestion.
+   * @brief Set whether to prune columns only to be read using dtypes as input columns.
    * This option is useful for parsing only a subset of columns.
    *
-   * @param val Boolean value to enable/disable dtypes use as filter
+   * @param val Boolean value to enable/disable column pruning
    */
-  void enable_use_dtypes_as_filter(bool val) { _use_dtypes_as_filter = val; }
+  void enable_prune_columns(bool val) { _prune_columns = val; }
 
   /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
@@ -527,15 +527,15 @@ class json_reader_options_builder {
   }
 
   /**
-   * @brief Set whether to use dtypes as filter instead of type inference suggestion.
+   * @brief Set whether to prune columns only to be read using dtypes as input columns.
    * This option is useful for parsing only a subset of columns.
    *
-   * @param val Boolean value to enable/disable dtypes use as filter
+   * @param val Boolean value to enable/disable column pruning
    * @return this for chaining
    */
-  json_reader_options_builder& use_dtypes_as_filter(bool val)
+  json_reader_options_builder& prune_columns(bool val)
   {
-    options._use_dtypes_as_filter = val;
+    options._prune_columns = val;
     return *this;
   }
 

@@ -319,7 +319,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
  * @return data type of the column if present
  */
 std::optional<data_type> get_path_data_type(
-  host_span<std::pair<std::string, cudf::io::json::NodeT>> path,
+  host_span<std::pair<std::string, cudf::io::json::NodeT> const> path,
   cudf::io::json_reader_options const& options);
 
 /**

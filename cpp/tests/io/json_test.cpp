@@ -2351,7 +2351,7 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilter)
     cudf::io::json_reader_options in_options =
       cudf::io::json_reader_options::builder(
         cudf::io::source_info{json_string.data(), json_string.size()})
-        .use_dtypes_as_filter(true)
+        .prune_columns(true)
         .lines(lines);
 
     // include all columns
