@@ -2835,6 +2835,22 @@ def test_parquet_flba_round_trip(tmpdir):
     assert_eq(padf2.schema[0].type, padf3.schema[0].type)
 
 
+def test_per_column_options(tmpdir):
+    pdf = pd.DataFrame({"ilist": [[1, 2, 3]], "i1": [1]})
+    cdf = cudf.from_pandas(pdf)
+    fname = tmpdir.join("ilist.parquet")
+    cdf.to_parquet(
+        fname,
+        column_encoding={"ilist.list.element": "DELTA_BINARY_PACKED"},
+        compression="SNAPPY",
+        skip_compression={"ilist.list.element"},
+    )
+    pf = pq.ParquetFile(fname)
+    fmd = pf.metadata
+    assert "DELTA_BINARY_PACKED" in fmd.row_group(0).column(0).encodings
+    assert fmd.row_group(0).column(0).compression == "UNCOMPRESSED"
+
+
 def test_parquet_reader_rle_boolean(datadir):
     fname = datadir / "rle_boolean_encoding.parquet"
 
