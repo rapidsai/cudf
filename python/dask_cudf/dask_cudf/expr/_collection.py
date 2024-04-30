@@ -66,7 +66,7 @@ class CudfFrameBase(FrameBase):
         )
 
 
-class DataFrame(CudfFrameBase, DXDataFrame):
+class DataFrame(DXDataFrame, CudfFrameBase):
     @classmethod
     def from_dict(cls, *args, **kwargs):
         with config.set({"dataframe.backend": "cudf"}):
@@ -111,7 +111,7 @@ class DataFrame(CudfFrameBase, DXDataFrame):
         return from_legacy_dataframe(ddf)
 
 
-class Series(CudfFrameBase, DXSeries):
+class Series(DXSeries, CudfFrameBase):
     def groupby(self, by, **kwargs):
         from dask_cudf.expr._groupby import SeriesGroupBy
 
@@ -130,7 +130,7 @@ class Series(CudfFrameBase, DXSeries):
         return StructMethods(self)
 
 
-class Index(CudfFrameBase, DXIndex):
+class Index(DXIndex, CudfFrameBase):
     pass  # Same as pandas (for now)
 
 
