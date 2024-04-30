@@ -37,13 +37,13 @@ def load_library():
             _loaded_lib = ctypes.CDLL(
                 # TODO: Do we always know it will be lib64? Should we consider
                 # finding a way for CMake to export the path for us to find here?
-                os.path.join(os.path.dirname(__file__), "lib", nvcomp_lib),
+                os.path.join(os.path.dirname(__file__), "lib64", nvcomp_lib),
                 ctypes.RTLD_GLOBAL,
             )
         libcudf_lib = ctypes.CDLL(
             # TODO: Do we always know it will be lib64? Should we consider
             # finding a way for CMake to export the path for us to find here?
-            os.path.join(os.path.dirname(__file__), "lib", "libcudf.so"),
+            os.path.join(os.path.dirname(__file__), "lib64", "libcudf.so"),
             ctypes.RTLD_GLOBAL,
         )
 
