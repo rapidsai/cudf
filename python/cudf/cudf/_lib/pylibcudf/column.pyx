@@ -16,6 +16,8 @@ from .scalar cimport Scalar
 from .types cimport DataType, type_id
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
+import functools
+
 
 cdef class Column:
     """A container of nullable device data as a column of elements.
@@ -335,8 +337,8 @@ cdef class ListColumnView:
         return self._column.child(1)
 
 
-def _data_type_from_iface(iface):
-    typestr = iface['typestr'][1:]
+@functools.cache
+def _datatype_from_dtype_desc(desc):
     mapping = {
         'u1': type_id.UINT8,
         'u2': type_id.UINT16,
@@ -358,4 +360,11 @@ def _data_type_from_iface(iface):
         'm8[us]': type_id.DURATION_MICROSECONDS,
         'm8[ns]': type_id.DURATION_NANOSECONDS,
     }
-    return DataType(mapping.get(typestr, None))
+    if desc not in mapping:
+        raise ValueError(f"Unsupported dtype: {desc}")
+    return DataType(mapping[desc])
+
+
+def _data_type_from_iface(iface):
+    typestr = iface['typestr'][1:]
+    return _datatype_from_dtype_desc(typestr)
