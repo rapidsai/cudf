@@ -237,10 +237,11 @@ cdef class Column:
         Column
             A Column containing the data from the CUDA array interface.
 
-        Note that data is not copied when creating the column. The caller is
+        Notes
+        -----
+        Data is not copied when creating the column. The caller is
         responsible for ensuring the data is not mutated unexpectedly while the
         column is in use.
-
         """
         if not hasattr(obj, '__cuda_array_interface__'):
             raise ValueError("Object does not have a CUDA array interface")
