@@ -100,22 +100,26 @@ TEST_F(FromArrowDeviceTest, DateTimeTable)
 
   nanoarrow::UniqueSchema input_schema;
   ArrowSchemaInit(input_schema.get());
-  ArrowSchemaSetTypeStruct(input_schema.get(), 1);
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
   ArrowSchemaInit(input_schema->children[0]);
-  ArrowSchemaSetTypeDateTime(
-    input_schema->children[0], NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_MILLI, nullptr);
-  ArrowSchemaSetName(input_schema->children[0], "a");
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDateTime(
+    input_schema->children[0], NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_MILLI, nullptr));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
 
   nanoarrow::UniqueArray input_array;
-  ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr);
+  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
   input_array->length                  = 6;
   input_array->null_count              = 0;
   input_array->children[0]->length     = 6;
   input_array->children[0]->null_count = 0;
-  ArrowBufferSetAllocator(ArrowArrayBuffer(input_array->children[0], 1), noop_alloc);
+  NANOARROW_THROW_NOT_OK(
+    ArrowBufferSetAllocator(ArrowArrayBuffer(input_array->children[0], 1), noop_alloc));
   ArrowArrayBuffer(input_array->children[0], 1)->data =
     const_cast<uint8_t*>(cudf::column_view(col).data<uint8_t>());
-  ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr);
+  ArrowArrayBuffer(input_array->children[0], 1)->size_bytes =
+    sizeof(int64_t) * cudf::column_view(col).size();
+  NANOARROW_THROW_NOT_OK(
+    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
 
   ArrowDeviceArray input_device_array;
   input_device_array.device_id   = rmm::get_current_cuda_device().value();
@@ -155,23 +159,27 @@ TYPED_TEST(FromArrowDeviceTestDurationsTest, DurationTable)
 
   nanoarrow::UniqueSchema input_schema;
   ArrowSchemaInit(input_schema.get());
-  ArrowSchemaSetTypeStruct(input_schema.get(), 1);
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
 
   ArrowSchemaInit(input_schema->children[0]);
-  ArrowSchemaSetTypeDateTime(
-    input_schema->children[0], NANOARROW_TYPE_DURATION, time_unit, nullptr);
-  ArrowSchemaSetName(input_schema->children[0], "a");
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDateTime(
+    input_schema->children[0], NANOARROW_TYPE_DURATION, time_unit, nullptr));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
 
-  auto data_ptr = expected_table_view.column(0).data<uint8_t>();
+  auto data_ptr  = expected_table_view.column(0).data<uint8_t>();
+  auto data_size = expected_table_view.column(0).size();
   nanoarrow::UniqueArray input_array;
-  ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr);
+  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
   input_array->length                  = expected_table_view.num_rows();
   input_array->null_count              = 0;
   input_array->children[0]->length     = expected_table_view.num_rows();
   input_array->children[0]->null_count = 0;
-  ArrowBufferSetAllocator(ArrowArrayBuffer(input_array->children[0], 1), noop_alloc);
-  ArrowArrayBuffer(input_array->children[0], 1)->data = const_cast<uint8_t*>(data_ptr);
-  ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr);
+  NANOARROW_THROW_NOT_OK(
+    ArrowBufferSetAllocator(ArrowArrayBuffer(input_array->children[0], 1), noop_alloc));
+  ArrowArrayBuffer(input_array->children[0], 1)->data       = const_cast<uint8_t*>(data_ptr);
+  ArrowArrayBuffer(input_array->children[0], 1)->size_bytes = sizeof(T) * data_size;
+  NANOARROW_THROW_NOT_OK(
+    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
 
   ArrowDeviceArray input_device_array;
   input_device_array.device_id   = rmm::get_current_cuda_device().value();
@@ -199,19 +207,21 @@ TEST_F(FromArrowDeviceTest, NestedList)
 
   nanoarrow::UniqueSchema input_schema;
   ArrowSchemaInit(input_schema.get());
-  ArrowSchemaSetTypeStruct(input_schema.get(), 1);
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
 
-  ArrowSchemaInitFromType(input_schema->children[0], NANOARROW_TYPE_LIST);
-  ArrowSchemaSetName(input_schema->children[0], "a");
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(input_schema->children[0], NANOARROW_TYPE_LIST));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
   input_schema->children[0]->flags = ARROW_FLAG_NULLABLE;
 
-  ArrowSchemaInitFromType(input_schema->children[0]->children[0], NANOARROW_TYPE_LIST);
-  ArrowSchemaSetName(input_schema->children[0]->children[0], "element");
+  NANOARROW_THROW_NOT_OK(
+    ArrowSchemaInitFromType(input_schema->children[0]->children[0], NANOARROW_TYPE_LIST));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0]->children[0], "element"));
   input_schema->children[0]->children[0]->flags = 0;
 
-  ArrowSchemaInitFromType(input_schema->children[0]->children[0]->children[0],
-                          NANOARROW_TYPE_INT64);
-  ArrowSchemaSetName(input_schema->children[0]->children[0]->children[0], "element");
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(
+    input_schema->children[0]->children[0]->children[0], NANOARROW_TYPE_INT64));
+  NANOARROW_THROW_NOT_OK(
+    ArrowSchemaSetName(input_schema->children[0]->children[0]->children[0], "element"));
   input_schema->children[0]->children[0]->children[0]->flags = ARROW_FLAG_NULLABLE;
 
   nanoarrow::UniqueArray input_array;
@@ -223,7 +233,8 @@ TEST_F(FromArrowDeviceTest, NestedList)
   cudf::lists_column_view nested_view{lview.child()};
   populate_list_from_col(top_list->children[0], nested_view);
   populate_from_col<int64_t>(top_list->children[0]->children[0], nested_view.child());
-  ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
+  NANOARROW_THROW_NOT_OK(
+    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
 
   ArrowDeviceArray input_device_array;
   input_device_array.device_id   = rmm::get_current_cuda_device().value();
@@ -287,47 +298,52 @@ TEST_F(FromArrowDeviceTest, StructColumn)
 
   nanoarrow::UniqueSchema input_schema;
   ArrowSchemaInit(input_schema.get());
-  ArrowSchemaSetTypeStruct(input_schema.get(), 1);
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
 
   ArrowSchemaInit(input_schema->children[0]);
-  ArrowSchemaSetTypeStruct(input_schema->children[0], 5);
-  ArrowSchemaSetName(input_schema->children[0], "a");
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema->children[0], 5));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
   input_schema->children[0]->flags = 0;
 
   auto child = input_schema->children[0];
-  ArrowSchemaInitFromType(child->children[0], NANOARROW_TYPE_STRING);
-  ArrowSchemaSetName(child->children[0], "string");
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(child->children[0], NANOARROW_TYPE_STRING));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(child->children[0], "string"));
   child->children[0]->flags = 0;
 
-  ArrowSchemaInitFromType(child->children[1], NANOARROW_TYPE_INT32);
-  ArrowSchemaSetName(child->children[1], "integral");
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(child->children[1], NANOARROW_TYPE_INT32));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(child->children[1], "integral"));
   child->children[1]->flags = 0;
 
-  ArrowSchemaInitFromType(child->children[2], NANOARROW_TYPE_BOOL);
-  ArrowSchemaSetName(child->children[2], "bool");
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(child->children[2], NANOARROW_TYPE_BOOL));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(child->children[2], "bool"));
   child->children[2]->flags = 0;
 
-  ArrowSchemaInitFromType(child->children[3], NANOARROW_TYPE_LIST);
-  ArrowSchemaSetName(child->children[3], "nested_list");
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(child->children[3], NANOARROW_TYPE_LIST));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(child->children[3], "nested_list"));
   child->children[3]->flags = 0;
-  ArrowSchemaInitFromType(child->children[3]->children[0], NANOARROW_TYPE_LIST);
-  ArrowSchemaSetName(child->children[3]->children[0], "element");
+  NANOARROW_THROW_NOT_OK(
+    ArrowSchemaInitFromType(child->children[3]->children[0], NANOARROW_TYPE_LIST));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(child->children[3]->children[0], "element"));
   child->children[3]->children[0]->flags = 0;
-  ArrowSchemaInitFromType(child->children[3]->children[0]->children[0], NANOARROW_TYPE_INT64);
-  ArrowSchemaSetName(child->children[3]->children[0]->children[0], "element");
+  NANOARROW_THROW_NOT_OK(
+    ArrowSchemaInitFromType(child->children[3]->children[0]->children[0], NANOARROW_TYPE_INT64));
+  NANOARROW_THROW_NOT_OK(
+    ArrowSchemaSetName(child->children[3]->children[0]->children[0], "element"));
   child->children[3]->children[0]->children[0]->flags = 0;
 
   ArrowSchemaInit(child->children[4]);
-  ArrowSchemaSetTypeStruct(child->children[4], 2);
-  ArrowSchemaSetName(child->children[4], "struct");
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(child->children[4], 2));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(child->children[4], "struct"));
 
-  ArrowSchemaInitFromType(child->children[4]->children[0], NANOARROW_TYPE_STRING);
-  ArrowSchemaSetName(child->children[4]->children[0], "string2");
-  ArrowSchemaInitFromType(child->children[4]->children[1], NANOARROW_TYPE_INT32);
-  ArrowSchemaSetName(child->children[4]->children[1], "integral2");
+  NANOARROW_THROW_NOT_OK(
+    ArrowSchemaInitFromType(child->children[4]->children[0], NANOARROW_TYPE_STRING));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(child->children[4]->children[0], "string2"));
+  NANOARROW_THROW_NOT_OK(
+    ArrowSchemaInitFromType(child->children[4]->children[1], NANOARROW_TYPE_INT32));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(child->children[4]->children[1], "integral2"));
 
   nanoarrow::UniqueArray input_array;
-  ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr);
+  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
 
   input_array->length = expected_table_view.num_rows();
 
@@ -336,7 +352,7 @@ TEST_F(FromArrowDeviceTest, StructColumn)
   array_a->length     = view_a.size();
   array_a->null_count = view_a.null_count();
 
-  ArrowBufferSetAllocator(ArrowArrayBuffer(array_a, 0), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(array_a, 0), noop_alloc));
   ArrowArrayValidityBitmap(array_a)->buffer.data =
     const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view_a.null_mask()));
 
@@ -354,14 +370,15 @@ TEST_F(FromArrowDeviceTest, StructColumn)
   array_struct->length     = view_struct.size();
   array_struct->null_count = view_struct.null_count();
 
-  ArrowBufferSetAllocator(ArrowArrayBuffer(array_struct, 0), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(array_struct, 0), noop_alloc));
   ArrowArrayValidityBitmap(array_struct)->buffer.data =
     const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view_struct.null_mask()));
 
   populate_from_col<cudf::string_view>(array_struct->children[0], view_struct.child(0));
   populate_from_col<int32_t>(array_struct->children[1], view_struct.child(1));
 
-  ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
+  NANOARROW_THROW_NOT_OK(
+    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
 
   ArrowDeviceArray input_device_array;
   input_device_array.device_id   = rmm::get_current_cuda_device().value();
@@ -406,25 +423,28 @@ TEST_F(FromArrowDeviceTest, DictionaryIndicesType)
 
   nanoarrow::UniqueSchema input_schema;
   ArrowSchemaInit(input_schema.get());
-  ArrowSchemaSetTypeStruct(input_schema.get(), 3);
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 3));
 
-  ArrowSchemaInitFromType(input_schema->children[0], NANOARROW_TYPE_INT8);
-  ArrowSchemaSetName(input_schema->children[0], "a");
-  ArrowSchemaAllocateDictionary(input_schema->children[0]);
-  ArrowSchemaInitFromType(input_schema->children[0]->dictionary, NANOARROW_TYPE_INT64);
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(input_schema->children[0], NANOARROW_TYPE_INT8));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaAllocateDictionary(input_schema->children[0]));
+  NANOARROW_THROW_NOT_OK(
+    ArrowSchemaInitFromType(input_schema->children[0]->dictionary, NANOARROW_TYPE_INT64));
 
-  ArrowSchemaInitFromType(input_schema->children[1], NANOARROW_TYPE_INT16);
-  ArrowSchemaSetName(input_schema->children[1], "b");
-  ArrowSchemaAllocateDictionary(input_schema->children[1]);
-  ArrowSchemaInitFromType(input_schema->children[1]->dictionary, NANOARROW_TYPE_INT64);
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(input_schema->children[1], NANOARROW_TYPE_INT16));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[1], "b"));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaAllocateDictionary(input_schema->children[1]));
+  NANOARROW_THROW_NOT_OK(
+    ArrowSchemaInitFromType(input_schema->children[1]->dictionary, NANOARROW_TYPE_INT64));
 
-  ArrowSchemaInitFromType(input_schema->children[2], NANOARROW_TYPE_INT64);
-  ArrowSchemaSetName(input_schema->children[2], "c");
-  ArrowSchemaAllocateDictionary(input_schema->children[2]);
-  ArrowSchemaInitFromType(input_schema->children[2]->dictionary, NANOARROW_TYPE_INT64);
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(input_schema->children[2], NANOARROW_TYPE_INT64));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[2], "c"));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaAllocateDictionary(input_schema->children[2]));
+  NANOARROW_THROW_NOT_OK(
+    ArrowSchemaInitFromType(input_schema->children[2]->dictionary, NANOARROW_TYPE_INT64));
 
   nanoarrow::UniqueArray input_array;
-  ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr);
+  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
   input_array->length     = expected_table.num_rows();
   input_array->null_count = 0;
 
@@ -446,7 +466,8 @@ TEST_F(FromArrowDeviceTest, DictionaryIndicesType)
   populate_from_col<int64_t>(input_array->children[2]->dictionary,
                              cudf::dictionary_column_view{expected_table_view.column(2)}.keys());
 
-  ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
+  NANOARROW_THROW_NOT_OK(
+    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
 
   ArrowDeviceArray input_device_array;
   input_device_array.device_id   = rmm::get_current_cuda_device().value();
@@ -562,20 +583,22 @@ TEST_F(FromArrowDeviceTest, FixedPoint128Table)
 
     nanoarrow::UniqueSchema input_schema;
     ArrowSchemaInit(input_schema.get());
-    ArrowSchemaSetTypeStruct(input_schema.get(), 1);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
     ArrowSchemaInit(input_schema->children[0]);
-    ArrowSchemaSetTypeDecimal(input_schema->children[0],
-                              NANOARROW_TYPE_DECIMAL128,
-                              cudf::detail::max_precision<__int128_t>(),
-                              -scale);
-    ArrowSchemaSetName(input_schema->children[0], "a");
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(input_schema->children[0],
+                                                     NANOARROW_TYPE_DECIMAL128,
+                                                     cudf::detail::max_precision<__int128_t>(),
+                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
 
     nanoarrow::UniqueArray input_array;
-    ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr);
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
     input_array->length = expected.num_rows();
 
     populate_from_col<__int128_t>(input_array->children[0], expected.column(0));
-    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
 
     ArrowDeviceArray input_device_array;
     input_device_array.device_id   = rmm::get_current_cuda_device().value();
@@ -607,20 +630,22 @@ TEST_F(FromArrowDeviceTest, FixedPoint128TableLarge)
 
     nanoarrow::UniqueSchema input_schema;
     ArrowSchemaInit(input_schema.get());
-    ArrowSchemaSetTypeStruct(input_schema.get(), 1);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
     ArrowSchemaInit(input_schema->children[0]);
-    ArrowSchemaSetTypeDecimal(input_schema->children[0],
-                              NANOARROW_TYPE_DECIMAL128,
-                              cudf::detail::max_precision<__int128_t>(),
-                              -scale);
-    ArrowSchemaSetName(input_schema->children[0], "a");
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(input_schema->children[0],
+                                                     NANOARROW_TYPE_DECIMAL128,
+                                                     cudf::detail::max_precision<__int128_t>(),
+                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
 
     nanoarrow::UniqueArray input_array;
-    ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr);
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
     input_array->length = expected.num_rows();
 
     populate_from_col<__int128_t>(input_array->children[0], expected.column(0));
-    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
 
     ArrowDeviceArray input_device_array;
     input_device_array.device_id   = rmm::get_current_cuda_device().value();
@@ -652,20 +677,22 @@ TEST_F(FromArrowDeviceTest, FixedPoint128TableNulls)
 
     nanoarrow::UniqueSchema input_schema;
     ArrowSchemaInit(input_schema.get());
-    ArrowSchemaSetTypeStruct(input_schema.get(), 1);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
     ArrowSchemaInit(input_schema->children[0]);
-    ArrowSchemaSetTypeDecimal(input_schema->children[0],
-                              NANOARROW_TYPE_DECIMAL128,
-                              cudf::detail::max_precision<__int128_t>(),
-                              -scale);
-    ArrowSchemaSetName(input_schema->children[0], "a");
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(input_schema->children[0],
+                                                     NANOARROW_TYPE_DECIMAL128,
+                                                     cudf::detail::max_precision<__int128_t>(),
+                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
 
     nanoarrow::UniqueArray input_array;
-    ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr);
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
     input_array->length = expected.num_rows();
 
     populate_from_col<__int128_t>(input_array->children[0], expected.column(0));
-    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
 
     ArrowDeviceArray input_device_array;
     input_device_array.device_id   = rmm::get_current_cuda_device().value();
@@ -699,20 +726,22 @@ TEST_F(FromArrowDeviceTest, FixedPoint128TableNullsLarge)
 
     nanoarrow::UniqueSchema input_schema;
     ArrowSchemaInit(input_schema.get());
-    ArrowSchemaSetTypeStruct(input_schema.get(), 1);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
     ArrowSchemaInit(input_schema->children[0]);
-    ArrowSchemaSetTypeDecimal(input_schema->children[0],
-                              NANOARROW_TYPE_DECIMAL128,
-                              cudf::detail::max_precision<__int128_t>(),
-                              -scale);
-    ArrowSchemaSetName(input_schema->children[0], "a");
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(input_schema->children[0],
+                                                     NANOARROW_TYPE_DECIMAL128,
+                                                     cudf::detail::max_precision<__int128_t>(),
+                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
 
     nanoarrow::UniqueArray input_array;
-    ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr);
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
     input_array->length = expected.num_rows();
 
     populate_from_col<__int128_t>(input_array->children[0], expected.column(0));
-    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
 
     ArrowDeviceArray input_device_array;
     input_device_array.device_id   = rmm::get_current_cuda_device().value();
