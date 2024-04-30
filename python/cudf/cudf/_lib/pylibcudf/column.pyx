@@ -245,11 +245,11 @@ cdef class Column:
         responsible for ensuring the data is not mutated unexpectedly while the
         column is in use.
         """
-        if not hasattr(obj, '__cuda_array_interface__'):
-            raise ValueError("Object does not have a CUDA array interface")
-
         data = gpumemoryview(obj)
         iface = data.__cuda_array_interface__()
+        if iface.get('mask') is not None:
+            raise ValueError("mask not yet supported.")
+
         data_type = _data_type_from_iface(iface)
         size = iface['shape'][0]
         return Column(
