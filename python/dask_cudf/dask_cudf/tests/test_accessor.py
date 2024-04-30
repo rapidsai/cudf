@@ -111,8 +111,7 @@ def test_categorical_accessor_initialization2(data):
         dsr.cat
 
 
-# TODO: Remove this once we are pinned to dask>=2024.5.0
-@xfail_dask_expr("Requires: https://github.com/dask/dask/pull/11059")
+@xfail_dask_expr(lt_version="2024.5.0")
 @pytest.mark.parametrize("data", [data_cat_1()])
 def test_categorical_basic(data):
     cat = data.copy()
