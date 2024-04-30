@@ -26,7 +26,7 @@ from .column import Column
 from .gpumemoryview import gpumemoryview
 from .scalar import Scalar
 from .table import Table
-from .types import DataType, TypeId
+from .types import DataType, MaskState, TypeId
 
 __all__ = [
     "Column",

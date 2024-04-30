@@ -93,10 +93,10 @@ def duration_pa_type(request):
 @pytest.fixture(
     scope="module",
     params=[
-        plc.column_factories.MaskState.UNALLOCATED,
-        plc.column_factories.MaskState.ALL_VALID,
-        plc.column_factories.MaskState.ALL_NULL,
-        plc.column_factories.MaskState.UNINITIALIZED,
+        plc.MaskState.UNALLOCATED,
+        plc.MaskState.ALL_VALID,
+        plc.MaskState.ALL_NULL,
+        plc.MaskState.UNINITIALIZED,
     ],
     ids=["unallocated", "all_valid", "all_null", "uninitialized"],
 )

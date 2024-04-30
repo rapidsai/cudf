@@ -2,6 +2,8 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_factories cimport (
     make_duration_column as cpp_make_duration_column,
@@ -13,13 +15,9 @@ from cudf._lib.cpp.column.column_factories cimport (
 )
 from cudf._lib.cpp.types cimport mask_state, size_type
 
-from cudf._lib.cpp.types import mask_state as MaskState
-
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
-
 from .types cimport DataType, type_id
 
-from .types import TypeId
+from .types import MaskState, TypeId
 
 
 cpdef Column make_empty_column(MakeEmptyColumnOperand type_or_id):
