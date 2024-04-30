@@ -37,6 +37,8 @@ def valid_type(request):
 
 @pytest.fixture(scope="module")
 def valid_column(valid_type):
+    if valid_type == pa.bool_():
+        return pa.array([True, False, True], type=valid_type)
     return pa.array([1, 2, 3], type=valid_type)
 
 
