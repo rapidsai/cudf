@@ -2,8 +2,8 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp.strings cimport find as cpp_find
 from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.strings cimport find as cpp_find
 from cudf._lib.pylibcudf.column cimport Column
 from cudf._lib.pylibcudf.scalar cimport Scalar
 
@@ -18,11 +18,16 @@ cpdef Column find(
     size_type start=0,
     size_type stop=-1
 ):
-    """Perform a string find operation.
+    """Returns a column of character position values where the target string is
+    first found in each string of the provided column.
 
     ``target`` may be a
     :py:class:`~cudf._lib.pylibcudf.column.Column` or a
     :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
+
+    If ``target`` is a scalar, the scalar will be searched for in each string.
+    If ``target`` is a column, the corresponding string in the column will be
+    searched for in each string.
 
     For details, see :cpp:func:`find`.
 
@@ -76,7 +81,8 @@ cpdef Column rfind(
     size_type stop=-1
 ):
     """
-    Perform a string rfind operation.
+    Returns a column of character position values where the target string is
+    first found searching from the end of each string.
 
     For details, see :cpp:func:`rfind`.
 
@@ -115,11 +121,17 @@ cpdef Column contains(
     ColumnOrScalar target,
 ):
     """
-    Perform a string contains operation.
+    Returns a column of boolean values for each string where true indicates the
+    corresponding target string was found within that string in the provided
+    column.
 
     ``target`` may be a
     :py:class:`~cudf._lib.pylibcudf.column.Column` or a
     :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
+
+    If ``target`` is a scalar, the scalar will be searched for in each string.
+    If ``target`` is a column, the corresponding string in the column will be
+    searched for in each string.
 
     For details, see :cpp:func:`contains`.
 
@@ -163,11 +175,17 @@ cpdef Column starts_with(
     ColumnOrScalar target,
 ):
     """
-    Perform a string starts_with operation.
+    Returns a column of boolean values for each string where true indicates the
+    target string was found at the beginning of the string in the provided
+    column.
 
     ``target`` may be a
     :py:class:`~cudf._lib.pylibcudf.column.Column` or a
     :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
+
+    If ``target`` is a scalar, the scalar will be searched for in each string.
+    If ``target`` is a column, the corresponding string in the column will be
+    searched for in each string.
 
     For details, see :cpp:func:`starts_with`.
 
@@ -211,11 +229,16 @@ cpdef Column ends_with(
     ColumnOrScalar target,
 ):
     """
-    Perform a string ends_with operation.
+    Returns a column of boolean values for each string where true indicates the
+    target string was found at the end of the string in the provided column.
 
     ``target`` may be a
     :py:class:`~cudf._lib.pylibcudf.column.Column` or a
     :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
+
+    If ``target`` is a scalar, the scalar will be searched for in each string.
+    If ``target`` is a column, the corresponding string in the column will be
+    searched for in each string.
 
     For details, see :cpp:func:`ends_with`.
 
