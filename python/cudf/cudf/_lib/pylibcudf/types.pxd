@@ -4,7 +4,6 @@ from libc.stdint cimport int32_t
 from libcpp cimport bool as cbool
 
 from cudf._lib.cpp.types cimport (
-    MaskAndNullCnt,
     data_type,
     interpolation,
     mask_state,
