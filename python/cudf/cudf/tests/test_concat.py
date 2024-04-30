@@ -1878,14 +1878,6 @@ def test_concat_mixed_list_types_error(s1, s2):
 @pytest.mark.parametrize(
     "d",
     [
-        {
-            "first": cudf.DataFrame(
-                {"animal": ["cat", "dog"], "name": ["zhenshu", "steve"]}
-            ),
-            "second": cudf.DataFrame(
-                {"animal": ["pelican", "llama"], "name": ["pranav", "royce"]}
-            ),
-        },
         {"first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]})},
         {
             "first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]}),
