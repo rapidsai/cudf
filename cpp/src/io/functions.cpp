@@ -484,12 +484,15 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
+  // MH: This is where the reader starts
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
+  // MH: reader object is made here
   auto reader =
     std::make_unique<detail_parquet::reader>(std::move(datasources), options, stream, mr);
 
+  // MH: read function called
   return reader->read(options);
 }
 

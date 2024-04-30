@@ -28,6 +28,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
+#include <arrow/type_fwd.h>
+
 #include <list>
 #include <tuple>
 #include <vector>
@@ -101,7 +103,8 @@ struct row_group_info {
  */
 [[nodiscard]] type_id to_type_id(SchemaElement const& schema,
                                  bool strings_to_categorical,
-                                 type_id timestamp_type_id);
+                                 type_id timestamp_type_id,
+                                 cudf::data_type duration_type = cudf::data_type{});
 
 /**
  * @brief Converts cuDF type enum to column logical type
@@ -121,9 +124,13 @@ struct metadata : public FileMetaData {
   void sanitize_schema();
 };
 
+using arrow_schema_t = std::unordered_map<std::string, cudf::data_type>;
+
 class aggregate_reader_metadata {
   std::vector<metadata> per_file_metadata;
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
+  std::optional<arrow_schema_t> arrow_schema;
+
   int64_t num_rows;
   size_type num_row_groups;
 
@@ -138,6 +145,17 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] std::vector<std::unordered_map<std::string, std::string>> collect_keyval_metadata()
     const;
+
+  /**
+   * @brief Walks over an "ARROW:schema" flatbuffer and collects type information for DurationType
+   * columns into an unordered map.
+   */
+  [[nodiscard]] std::optional<arrow_schema_t> collect_arrow_schema() const;
+
+  /**
+   * @brief Decode an arrow:IPC message and returns a const void pointer to its metadata header
+   */
+  [[nodiscard]] const void* decode_ipc_message(std::string& serialized_message) const;
 
   /**
    * @brief Sums up the number of rows of each source
@@ -183,7 +201,7 @@ class aggregate_reader_metadata {
   }
 
   [[nodiscard]] auto const& get_key_value_metadata() const& { return keyval_maps; }
-
+  [[nodiscard]] auto const& get_arrow_schema() const& { return arrow_schema; }
   [[nodiscard]] auto&& get_key_value_metadata() && { return std::move(keyval_maps); }
 
   /**
