@@ -610,7 +610,7 @@ class FlatBufferBuilderImpl {
     return CreateString<OffsetT>(str.c_str(), str.length());
   }
 
-// clang-format off
+  // clang-format off
   #ifdef FLATBUFFERS_HAS_STRING_VIEW
   /// @brief Store a string in the buffer, which can contain any binary data.
   /// @param[in] str A const string_view to copy in to the buffer.
@@ -805,7 +805,7 @@ class FlatBufferBuilderImpl {
     AssertScalarT<T>();
     StartVector<T, OffsetT, LenT>(len);
     if (len > 0) {
-      // clang-format off
+// clang-format off
       #if FLATBUFFERS_LITTLEENDIAN
         PushBytes(reinterpret_cast<const uint8_t *>(v), len * sizeof(T));
       #else

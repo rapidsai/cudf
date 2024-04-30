@@ -28,7 +28,7 @@ struct String : public Vector<char> {
   const char* c_str() const { return reinterpret_cast<const char*>(Data()); }
   std::string str() const { return std::string(c_str(), size()); }
 
-// clang-format off
+  // clang-format off
   #ifdef FLATBUFFERS_HAS_STRING_VIEW
   flatbuffers::string_view string_view() const {
     return flatbuffers::string_view(c_str(), size());

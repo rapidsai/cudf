@@ -67,7 +67,7 @@ inline void EndianCheck()
 template <typename T>
 FLATBUFFERS_CONSTEXPR size_t AlignOf()
 {
-  // clang-format off
+// clang-format off
   #ifdef _MSC_VER
     return __alignof(T);
   #else

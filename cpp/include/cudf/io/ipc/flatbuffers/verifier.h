@@ -68,7 +68,7 @@ class VerifierTemplate FLATBUFFERS_FINAL_CLASS {
   // Central location where any verification failures register.
   bool Check(const bool ok) const
   {
-// clang-format off
+    // clang-format off
     #ifdef FLATBUFFERS_DEBUG_VERIFICATION_FAILURE
       if (opts_.assert) { FLATBUFFERS_ASSERT(ok); }
     #endif
