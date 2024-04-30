@@ -1865,3 +1865,65 @@ def test_concat_mixed_list_types_error(s1, s2):
 
     with pytest.raises(NotImplementedError):
         cudf.concat([s1, s2], ignore_index=True)
+
+
+@pytest.mark.parametrize(
+    "axis",
+    [
+        # todo: implement 0 axis
+        # 0,
+        1
+    ],
+)
+@pytest.mark.parametrize(
+    "d",
+    [
+        {
+            "first": cudf.DataFrame(
+                {"animal": ["cat", "dog"], "name": ["zhenshu", "steve"]}
+            ),
+            "second": cudf.DataFrame(
+                {"animal": ["pelican", "llama"], "name": ["pranav", "royce"]}
+            ),
+        },
+        {"first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]})},
+        {
+            "first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]}),
+            "second": cudf.DataFrame({"A": [5, 6], "B": [7, 8]}),
+            "third": cudf.DataFrame({"C": [1, 2, 3]}),
+        },
+        {
+            "first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]}),
+            "second": cudf.DataFrame({"C": [1, 2, 3]}),
+            "third": cudf.DataFrame({"A": [5, 6], "B": [7, 8]}),
+        },
+        {
+            "first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]}),
+            "second": cudf.DataFrame({"C": [1, 2, 3]}),
+            "third": cudf.DataFrame({"A": [5, 6], "C": [7, 8]}),
+            "fourth": cudf.DataFrame({"B": [9, 10]}),
+        },
+        {"first": cudf.Series([1, 2, 3]), "second": cudf.Series([4, 5, 6])},
+        {
+            "first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]}),
+            "second": cudf.Series([5, 6], name="C"),
+        },
+    ],
+)
+def test_concat_dictionary(d, axis):
+    result = cudf.concat(d, axis=axis)
+    expected = cudf.from_pandas(
+        pd.concat({k: df.to_pandas() for k, df in d.items()}, axis=axis)
+    )
+    assert_eq(expected, result)
+
+
+def test_concat_dict_incorrect_type():
+    d = {
+        "first": cudf.Index([1, 2, 3]),
+    }
+    with pytest.raises(
+        TypeError,
+        match=f"cannot concatenate object of type {type(d['first'])}",
+    ):
+        cudf.concat(d, axis=1)
