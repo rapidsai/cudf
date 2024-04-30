@@ -69,10 +69,10 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
         device_buffer mask,
         size_type null_count) except +
 
-    cdef unique_ptr[column] make_column_from_scalar (const scalar & s,
+    cdef unique_ptr[column] make_column_from_scalar (const scalar& s,
                                                      size_type size) except +
 
-    cdef unique_ptr[column] make_dictionary_from_scalar(const scalar & s,
+    cdef unique_ptr[column] make_dictionary_from_scalar(const scalar& s,
                                                         size_type size) except +
 
     cdef unique_ptr[column] make_empty_column(type_id id) except +

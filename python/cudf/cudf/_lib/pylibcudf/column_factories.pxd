@@ -25,7 +25,7 @@ cpdef Column make_empty_column(
 cpdef Column make_numeric_column(
     DataType type_,
     size_type size,
-    MaskArg mstate,
+    MaskArg mask,
 )
 
 cpdef Column make_fixed_point_column(
