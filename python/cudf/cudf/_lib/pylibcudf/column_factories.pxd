@@ -2,12 +2,7 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp.types cimport (
-    MaskAndNullCnt,
-    bitmask_type,
-    mask_state,
-    size_type,
-)
+from cudf._lib.cpp.types cimport bitmask_type, mask_state, size_type
 
 from .column cimport Column
 from .types cimport DataType, type_id

@@ -97,7 +97,3 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         HIGHER
         MIDPOINT
         NEAREST
-
-cdef struct MaskAndNullCnt:
-    const bitmask_type* mask
-    size_type null_count
