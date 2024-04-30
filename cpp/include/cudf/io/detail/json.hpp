@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -56,22 +57,22 @@ void write_json(data_sink* sink,
 /**
  * @brief Normalize single quotes to double quotes using FST
  *
- * @param inbuf Input device buffer
+ * @param indata Input device buffer
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  */
-rmm::device_uvector<char> normalize_single_quotes(rmm::device_uvector<char>&& inbuf,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr);
+void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<char>>& indata,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr);
 
 /**
  * @brief Normalize unquoted whitespace (space and tab characters) using FST
  *
- * @param inbuf Input device buffer
+ * @param indata Input device buffer
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  */
-rmm::device_uvector<char> normalize_whitespace(rmm::device_uvector<char>&& inbuf,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr);
+void normalize_whitespace(datasource::owning_buffer<rmm::device_uvector<char>>& indata,
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr);
 }  // namespace cudf::io::json::detail
