@@ -271,20 +271,20 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     # Retrieve the base types of `objs`. In order to support sub-types
     # and object wrappers, we use `isinstance()` instead of comparing
     # types directly
-    typs = set()
+    typs, allowed_typs = (
+        set(),
+        {cudf.Series, cudf.DataFrame, cudf.BaseIndex, cudf.MultiIndex},
+    )
     for o in objs:
-        if isinstance(o, cudf.MultiIndex):
-            typs.add(cudf.MultiIndex)
-        elif isinstance(o, cudf.BaseIndex):
+        if isinstance(o, tuple(allowed_typs)):
             typs.add(type(o))
-        elif isinstance(o, cudf.DataFrame):
-            typs.add(cudf.DataFrame)
-        elif isinstance(o, cudf.Series):
-            typs.add(cudf.Series)
         else:
             raise TypeError(f"cannot concatenate object of type {type(o)}")
 
-    allowed_typs = {cudf.Series, cudf.DataFrame}
+    if any([isinstance(t, (cudf.BaseIndex, cudf.MultiIndex)) for t in typs]):
+        assert all(
+            [isinstance(t, (cudf.BaseIndex, cudf.MultiIndex)) for t in typs]
+        ), "when concatenating indices you must provide ONLY indices"
 
     # Return for single object
     if len(objs) == 1:
@@ -456,7 +456,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     # If we get here, we are always concatenating along axis 0 (the rows).
     typ = list(typs)[0]
     if len(typs) > 1:
-        if allowed_typs == typs:
+        if typs.issubset(allowed_typs):
             # This block of code will run when `objs` has
             # both Series & DataFrame kind of inputs.
             _normalize_series_and_dataframe(objs, axis=axis)
