@@ -127,11 +127,7 @@ bool scalars_equal_fn::operator()<struct_view>(scalar const& lhs, scalar const& 
   if (rhs.type().id() != type_id::STRUCT) { return false; }
   auto const tbl_lhs = static_cast<struct_scalar const*>(&lhs)->view();
   auto const tbl_rhs = static_cast<struct_scalar const*>(&rhs)->view();
-  return std::equal(tbl_lhs.begin(),
-                    tbl_lhs.end(),
-                    tbl_rhs.begin(),
-                    tbl_rhs.end(),
-                    [](auto const& lhs, auto const& rhs) { return have_same_types(lhs, rhs); });
+  return have_same_types(tbl_lhs, tbl_rhs);
 }
 
 };  // namespace
@@ -155,7 +151,7 @@ bool have_same_types(column_view const& lhs, scalar const& rhs)
 
 bool have_same_types(scalar const& lhs, column_view const& rhs)
 {
-  return type_dispatcher(rhs.type(), column_scalar_equal_fn{}, rhs, lhs);
+  return have_same_types(rhs, lhs);
 }
 
 bool have_same_types(scalar const& lhs, scalar const& rhs)
