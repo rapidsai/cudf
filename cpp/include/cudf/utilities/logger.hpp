@@ -41,6 +41,7 @@ namespace cudf {
  *
  * @return spdlog::logger& The logger.
  */
+__attribute__((visibility("default")))
 spdlog::logger& logger();
 
 }  // namespace cudf

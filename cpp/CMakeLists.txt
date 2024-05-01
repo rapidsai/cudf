@@ -678,6 +678,11 @@ set_source_files_properties(
   src/transform/transform.cpp
   PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
+set_source_files_properties(
+  src/utilities/logger.cpp
+  PROPERTIES COMPILE_OPTIONS "-fvisibility=hidden;-fvisibility-inlines-hidden"
+)
+
 
 set_property(
   SOURCE src/io/parquet/writer_impl.cu
