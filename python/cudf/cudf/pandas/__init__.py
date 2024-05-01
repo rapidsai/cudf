@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -18,6 +18,25 @@ def install():
     loader = ModuleAccelerator.install("pandas", "cudf", "pandas")
     global LOADED
     LOADED = loader is not None
+    import os
+
+    cudf_pandas_mr = os.getenv("CUDF_PANDAS_MEMORY_RESOURCE", None)
+    if cudf_pandas_mr is not None:
+        import rmm
+        import rmm.mr
+
+        cudf_pandas_mr = getattr(rmm.mr, cudf_pandas_mr, None)
+        if cudf_pandas_mr is not None:
+            from rmm.mr import PoolMemoryResource
+
+            mr = PoolMemoryResource(
+                cudf_pandas_mr(),
+                initial_pool_size=os.getenv(
+                    "CUDF_PANDAS_INITIAL_POOL_SIZE", None
+                ),
+                maximum_pool_size=os.getenv("CUDF_PANDAS_MAX_POOL_SIZE", None),
+            )
+            rmm.mr.set_current_device_resource(mr)
 
 
 def pytest_load_initial_conftests(early_config, parser, args):
