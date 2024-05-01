@@ -1912,12 +1912,22 @@ def test_concat_dictionary(d, axis):
     assert_eq(expected, result)
 
 
-def test_concat_dict_incorrect_type():
-    d = {
-        "first": cudf.Index([1, 2, 3]),
-    }
+@pytest.mark.parametrize(
+    "d",
+    [
+        {"first": cudf.Index([1, 2, 3])},
+        {
+            "first": cudf.MultiIndex(
+                levels=[[1, 2], ["blue", "red"]],
+                codes=[[0, 0, 1, 1], [1, 0, 1, 0]],
+            )
+        },
+        {"first": cudf.CategoricalIndex([1, 2, 3])},
+    ],
+)
+def test_concat_dict_incorrect_type_index(d):
     with pytest.raises(
         TypeError,
-        match=f"cannot concatenate object of type {type(d['first'])}",
+        match="cannot concatenate a dictionary containing indices",
     ):
         cudf.concat(d, axis=1)

@@ -261,6 +261,10 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         objs = {k: obj for k, obj in objs.items() if obj is not None}
         keys = list(objs)
         objs = list(objs.values())
+        if any([isinstance(o, cudf.BaseIndex) for o in objs]):
+            raise TypeError(
+                "cannot concatenate a dictionary containing indices"
+            )
     else:
         objs = [obj for obj in objs if obj is not None]
         keys = None
@@ -325,11 +329,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             if axis == 0:
                 result = obj.copy()
             else:
-                o_typ = typs.pop()
-                if o_typ not in allowed_typs:
-                    raise TypeError(
-                        f"cannot concatenate object of type {o_typ}"
-                    )
                 data = obj._data.copy(deep=True)
                 if isinstance(obj, cudf.Series) and obj.name is None:
                     # If the Series has no name, pandas renames it to 0.
@@ -355,7 +354,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
-        if not typs.issubset(allowed_typs):
+        if not typs.issubset({cudf.Series, cudf.DataFrame}):
             raise TypeError(
                 "Can only concatenate Series and DataFrame objects when axis=1"
             )
@@ -461,16 +460,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     # If we get here, we are always concatenating along axis 0 (the rows).
     typ = list(typs)[0]
     if len(typs) > 1:
-        if typs.issubset(allowed_typs):
-            # This block of code will run when `objs` has
-            # both Series & DataFrame kind of inputs.
-            _normalize_series_and_dataframe(objs, axis=axis)
-            typ = cudf.DataFrame
-        else:
-            raise TypeError(
-                f"`concat` cannot concatenate objects of "
-                f"types: {sorted([t.__name__ for t in typs])}."
-            )
+        _normalize_series_and_dataframe(objs, axis=axis)
+        typ = cudf.DataFrame
 
     if typ is cudf.DataFrame:
         old_objs = objs
