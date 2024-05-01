@@ -138,7 +138,7 @@ enum class LineEndTokenOption { Keep, Discard };
 std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> get_token_stream(
   device_span<SymbolT const> json_in,
   cudf::io::json_reader_options const& options,
-  cudf::io::json::detail::LineEndTokenOption option,
+  cudf::io::json::detail::LineEndTokenOption line_end_option,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
