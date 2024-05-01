@@ -715,7 +715,7 @@ void aggregate_reader_metadata::consume_arrow_schema()
 
   // check if total number of fields are equal
   if (num_fields != num_schema_elems) {
-    CUDF_LOG_ERROR("Parquet reader encountered a mismatch between Parquet and arrow schema.",
+    CUDF_LOG_DEBUG("Parquet reader encountered a mismatch between Parquet and arrow schema.",
                    "arrow:schema not processed.");
     return;
   }
@@ -729,8 +729,8 @@ void aggregate_reader_metadata::consume_arrow_schema()
         co_walk_schemas(arrow_schema.children[idx], schema_elem.children_idx[idx]);
       }
 
-      if (arrow_schema.type.id() != type_id::EMPTY and schema_elem.type == Type::INT64 and
-          not schema_elem.logical_type.has_value() and not schema_elem.converted_type.has_value()) {
+      // true for DurationType columns only for now.
+      if (arrow_schema.type.id() != type_id::EMPTY) {
         schema_elem.arrow_type = arrow_schema.type.id();
       }
     };
