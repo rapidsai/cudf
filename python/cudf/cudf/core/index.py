@@ -1119,14 +1119,26 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             assert (
                 PANDAS_LT_300
             ), "Need to drop after pandas-3.0 support is added."
-            warnings.warn(
+            warning_msg = (
                 "The behavior of array concatenation with empty entries is "
                 "deprecated. In a future version, this will no longer exclude "
                 "empty items when determining the result dtype. "
                 "To retain the old behavior, exclude the empty entries before "
-                "the concat operation.",
-                FutureWarning,
+                "the concat operation."
             )
+            # Warn only if the type might _actually_ change
+            if len(non_empties) == 0:
+                if not all(objs[0].dtype == index.dtype for index in objs[1:]):
+                    warnings.warn(warning_msg, FutureWarning)
+            else:
+                common_all_type = find_common_type(
+                    [index.dtype for index in objs]
+                )
+                common_non_empty_type = find_common_type(
+                    [index.dtype for index in non_empties]
+                )
+                if common_all_type != common_non_empty_type:
+                    warnings.warn(warning_msg, FutureWarning)
         if all(isinstance(obj, RangeIndex) for obj in non_empties):
             result = _concat_range_index(non_empties)
         else:
