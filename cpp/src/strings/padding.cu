@@ -19,7 +19,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/pad_impl.cuh>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -47,8 +47,9 @@ struct base_fn {
   column_device_view const d_column;
   size_type const width;
   size_type const fill_char_size;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   base_fn(column_device_view const& d_column, size_type width, size_type fill_char_size)
     : d_column(d_column), width(width), fill_char_size(fill_char_size)
@@ -58,7 +59,7 @@ struct base_fn {
   __device__ void operator()(size_type idx) const
   {
     if (d_column.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -67,7 +68,7 @@ struct base_fn {
     if (d_chars) {
       derived.pad(d_str, d_chars + d_offsets[idx]);
     } else {
-      d_offsets[idx] = compute_padded_size(d_str, width, fill_char_size);
+      d_sizes[idx] = compute_padded_size(d_str, width, fill_char_size);
     }
   };
 };
@@ -116,13 +117,13 @@ std::unique_ptr<column> pad(strings_column_view const& input,
   auto [offsets_column, chars] = [&] {
     if (side == side_type::LEFT) {
       auto fn = pad_fn<side_type::LEFT>{*d_strings, width, fill_char_size, d_fill_char};
-      return make_strings_children(fn, input.size(), stream, mr);
+      return experimental::make_strings_children(fn, input.size(), stream, mr);
     } else if (side == side_type::RIGHT) {
       auto fn = pad_fn<side_type::RIGHT>{*d_strings, width, fill_char_size, d_fill_char};
-      return make_strings_children(fn, input.size(), stream, mr);
+      return experimental::make_strings_children(fn, input.size(), stream, mr);
     }
     auto fn = pad_fn<side_type::BOTH>{*d_strings, width, fill_char_size, d_fill_char};
-    return make_strings_children(fn, input.size(), stream, mr);
+    return experimental::make_strings_children(fn, input.size(), stream, mr);
   }();
 
   return make_strings_column(input.size(),
@@ -153,7 +154,7 @@ std::unique_ptr<column> zfill(strings_column_view const& input,
 
   auto d_strings = column_device_view::create(input.parent(), stream);
   auto [offsets_column, chars] =
-    make_strings_children(zfill_fn{*d_strings, width}, input.size(), stream, mr);
+    experimental::make_strings_children(zfill_fn{*d_strings, width}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
