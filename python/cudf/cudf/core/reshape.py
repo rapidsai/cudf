@@ -271,20 +271,25 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     # Retrieve the base types of `objs`. In order to support sub-types
     # and object wrappers, we use `isinstance()` instead of comparing
     # types directly
-    typs, allowed_typs = (
-        set(),
-        {cudf.Series, cudf.DataFrame, cudf.BaseIndex, cudf.MultiIndex},
-    )
-    for o in objs:
-        if isinstance(o, tuple(allowed_typs)):
-            typs.add(type(o))
-        else:
-            raise TypeError(f"cannot concatenate object of type {type(o)}")
+    allowed_typs = {
+        cudf.Series,
+        cudf.DataFrame,
+        cudf.BaseIndex,
+        cudf.MultiIndex,
+    }
+    typs = {type(o) for o in objs}
+    if not all([isinstance(t, tuple(allowed_typs)) for t in typs]):
+        raise TypeError(
+            f"can only concatenate objects which are instances of {allowed_typs}"
+        )
 
     if any([isinstance(t, (cudf.BaseIndex, cudf.MultiIndex)) for t in typs]):
-        assert all(
+        if not all(
             [isinstance(t, (cudf.BaseIndex, cudf.MultiIndex)) for t in typs]
-        ), "when concatenating indices you must provide ONLY indices"
+        ):
+            raise TypeError(
+                "when concatenating indices you must provide ONLY indices"
+            )
 
     # Return for single object
     if len(objs) == 1:
