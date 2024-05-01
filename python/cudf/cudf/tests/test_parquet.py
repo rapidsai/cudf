@@ -3180,3 +3180,24 @@ def test_parquet_reader_zstd_huff_tables(datadir):
     expected = pa.parquet.read_table(fname).to_pandas()
     actual = cudf.read_parquet(fname)
     assert_eq(actual, expected)
+
+
+def test_parquet_reader_duration_types():
+    pdf = pd.DataFrame(
+        {
+            "s": pd.Series([1234, 3456, 32442], dtype="timedelta64[s]"),
+            "ms": pd.Series([1234, 3456, 32442], dtype="timedelta64[ms]"),
+            "us": pd.Series([1234, 3456, 32442], dtype="timedelta64[us]"),
+            "ns": pd.Series([1234, 3456, 32442], dtype="timedelta64[ns]"),
+            "i64": pd.Series([1234, 3456, 32442], dtype="int64"),
+        }
+    )
+
+    # Write parquet with arrow for now (to write arrow:schema)
+    buffer = BytesIO()
+    pdf.to_parquet(buffer, engine="pyarrow")
+
+    # Check results
+    got = cudf.read_parquet(buffer)
+    assert_eq(pdf.dtypes, got.dtypes)
+    assert_eq(pdf, got)
