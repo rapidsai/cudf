@@ -247,7 +247,17 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     if not objs:
         raise ValueError("No objects to concatenate")
 
+    axis = _AXIS_MAP.get(axis, None)
+    if axis is None:
+        raise ValueError(
+            f'`axis` must be 0 / "index" or 1 / "columns", got: {axis}'
+        )
+
     if isinstance(objs, dict):
+        if axis != 1:
+            raise NotImplementedError(
+                f"Can only concatenate dictionary input along axis=1, not {axis}"
+            )
         objs = {k: obj for k, obj in objs.items() if obj is not None}
         keys = list(objs)
         objs = list(objs.values())
@@ -257,12 +267,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
     if not objs:
         raise ValueError("All objects passed were None")
-
-    axis = _AXIS_MAP.get(axis, None)
-    if axis is None:
-        raise ValueError(
-            f'`axis` must be 0 / "index" or 1 / "columns", got: {axis}'
-        )
 
     # Retrieve the base types of `objs`. In order to support sub-types
     # and object wrappers, we use `isinstance()` instead of comparing
@@ -387,8 +391,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             objs = _align_objs(objs, how=join, sort=sort)
             df.index = objs[0].index
 
-        # if the dictionary consists of only dictionaries
-        # it must be handled differently
         only_series = len(typs) == 1 and cudf.Series in typs
 
         if keys is None:
@@ -441,11 +443,11 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         if keys is None:
             df.columns = result_columns.unique()
             if ignore_index:
-                df.columns = pd.RangeIndex(len(result_columns.unique()))
+                df.columns = cudf.RangeIndex(len(result_columns.unique()))
         else:
             if ignore_index:
                 # with ignore_index the column names change to numbers
-                df.columns = pd.RangeIndex(len(result_columns))
+                df.columns = cudf.RangeIndex(len(result_columns))
             elif not only_series:
                 df.columns = cudf.MultiIndex.from_tuples(df._column_names)
 
@@ -457,12 +459,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         return df
 
     # If we get here, we are always concatenating along axis 0 (the rows).
-    if keys is not None:
-        raise NotImplementedError(
-            "Concatenation along axis = 0 "
-            "when passing a dictionary is not supported yet."
-        )
-
     typ = list(typs)[0]
     if len(typs) > 1:
         if allowed_typs == typs:

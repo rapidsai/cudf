@@ -1893,6 +1893,10 @@ def test_concat_mixed_list_types_error(s1, s2):
             "third": cudf.DataFrame({"A": [5, 6], "C": [7, 8]}),
             "fourth": cudf.DataFrame({"B": [9, 10]}),
         },
+        {
+            "first": cudf.DataFrame({2.0: [1, 1]}),
+            "second": cudf.DataFrame({"test": ["abc", "def"]}),
+        },
         {"first": cudf.Series([1, 2, 3]), "second": cudf.Series([4, 5, 6])},
         {
             "first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]}),
