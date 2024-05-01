@@ -22,7 +22,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -60,11 +60,12 @@ struct compute_size_and_concatenate_fn {
   separator_on_nulls const separate_nulls;
   output_if_empty_list const empty_list_policy;
 
-  size_type* d_offsets{nullptr};
+  size_type* d_sizes{nullptr};
 
   // If d_chars == nullptr: only compute sizes and validities of the output strings.
   // If d_chars != nullptr: only concatenate strings.
   char* d_chars{nullptr};
+  cudf::detail::input_offsetalator d_offsets;
 
   [[nodiscard]] __device__ bool output_is_null(size_type const idx,
                                                size_type const start_idx,
@@ -84,7 +85,7 @@ struct compute_size_and_concatenate_fn {
     auto const end_idx   = list_offsets[idx + 1];
 
     if (!d_chars && output_is_null(idx, start_idx, end_idx)) {
-      d_offsets[idx] = 0;
+      d_sizes[idx] = 0;
       return;
     }
 
@@ -120,7 +121,7 @@ struct compute_size_and_concatenate_fn {
 
     // If there are all null elements, the output should be the same as having an empty list input:
     // a null or an empty string
-    if (!d_chars) { d_offsets[idx] = has_valid_element ? size_bytes : 0; }
+    if (!d_chars) { d_sizes[idx] = has_valid_element ? size_bytes : 0; }
   }
 };
 
@@ -208,7 +209,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                                     separate_nulls,
                                                     empty_list_policy};
 
-  auto [offsets_column, chars] = make_strings_children(comp_fn, num_rows, stream, mr);
+  auto [offsets_column, chars] = experimental::make_strings_children(comp_fn, num_rows, stream, mr);
   auto [null_mask, null_count] =
     cudf::detail::valid_if(thrust::counting_iterator<size_type>(0),
                            thrust::counting_iterator<size_type>(num_rows),
@@ -283,7 +284,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                                     separate_nulls,
                                                     empty_list_policy};
 
-  auto [offsets_column, chars] = make_strings_children(comp_fn, num_rows, stream, mr);
+  auto [offsets_column, chars] = experimental::make_strings_children(comp_fn, num_rows, stream, mr);
   auto [null_mask, null_count] =
     cudf::detail::valid_if(thrust::counting_iterator<size_type>(0),
                            thrust::counting_iterator<size_type>(num_rows),
