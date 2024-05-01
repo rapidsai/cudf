@@ -1656,6 +1656,15 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   return std::make_pair(std::move(tokens), std::move(tokens_indices));
 }
 
+std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> get_token_stream(
+  device_span<SymbolT const> json_in,
+  cudf::io::json_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  return get_token_stream(json_in, options, LineEndTokenOption::Discard, stream, mr);
+}
+
 /**
  * @brief Parses the given JSON string and generates a tree representation of the given input.
  *
