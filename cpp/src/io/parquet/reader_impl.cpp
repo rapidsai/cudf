@@ -461,8 +461,7 @@ table_with_metadata reader::impl::read_chunk_internal(
   auto out_columns = std::vector<std::unique_ptr<column>>{};
   out_columns.reserve(_output_buffers.size());
 
-  // no work to do (this can happen on the first pass if
-  // we have no rows to read)
+  // no work to do (this can happen on the first pass if we have no rows to read)
   if (!has_more_work()) { return finalize_output(out_metadata, out_columns, filter); }
 
   auto& pass            = *_pass_itm_data;
@@ -486,8 +485,7 @@ table_with_metadata reader::impl::read_chunk_internal(
       metadata = std::make_optional<reader_column_schema>();
       metadata->set_convert_binary_to_strings(false);
     }
-    // Only construct `out_metadata` if
-    // `_output_metadata` has not been cached.
+    // Only construct `out_metadata` if `_output_metadata` has not been cached.
     if (!_output_metadata) {
       column_name_info& col_name = out_metadata.schema_info[i];
       out_columns.emplace_back(make_column(_output_buffers[i], &col_name, metadata, _stream));
@@ -496,8 +494,7 @@ table_with_metadata reader::impl::read_chunk_internal(
     }
   }
 
-  // Add empty columns if needed. Filter output columns
-  // based on filter.
+  // Add empty columns if needed. Filter output columns based on filter.
   return finalize_output(out_metadata, out_columns, filter);
 }
 
@@ -506,8 +503,7 @@ table_with_metadata reader::impl::finalize_output(
   std::vector<std::unique_ptr<column>>& out_columns,
   std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
-  // Create empty columns as needed (this can happen if
-  // we've ended up with no actual data to read)
+  // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
   for (size_t i = out_columns.size(); i < _output_buffers.size(); ++i) {
     if (!_output_metadata) {
       column_name_info& col_name = out_metadata.schema_info[i];
@@ -519,8 +515,7 @@ table_with_metadata reader::impl::finalize_output(
 
   if (!_output_metadata) {
     populate_metadata(out_metadata);
-    // Finally, save the output table metadata into
-    // `_output_metadata` for reuse next time.
+    // Finally, save the output table metadata into `_output_metadata` for reuse next time.
     _output_metadata = std::make_unique<table_metadata>(out_metadata);
   }
 
@@ -552,8 +547,7 @@ table_with_metadata reader::impl::read(
   std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
   CUDF_EXPECTS(_output_chunk_read_limit == 0,
-               "Reading the whole file must not have "
-               "non-zero byte_limit.");
+               "Reading the whole file must not have non-zero byte_limit.");
   table_metadata metadata;
   populate_metadata(metadata);
   auto expr_conv     = named_to_reference_converter(filter, metadata);
@@ -565,9 +559,8 @@ table_with_metadata reader::impl::read(
 
 table_with_metadata reader::impl::read_chunk()
 {
-  // Reset the output buffers to their original states
-  // (right after reader construction). Don't need to do
-  // it if we read the file all at once.
+  // Reset the output buffers to their original states (right after reader construction).
+  // Don't need to do it if we read the file all at once.
   if (_file_itm_data._output_chunk_count > 0) {
     _output_buffers.resize(0);
     for (auto const& buff : _output_buffers_template) {
@@ -578,9 +571,7 @@ table_with_metadata reader::impl::read_chunk()
   prepare_data(0 /*skip_rows*/,
                std::nullopt /*num_rows, `nullopt` means unlimited*/,
                true /*uses_custom_row_bounds*/,
-               {} /*row_group_indices, empty means read all row
-                     groups*/
-               ,
+               {} /*row_group_indices, empty means read all row groups*/,
                std::nullopt /*filter*/);
   return read_chunk_internal(true, std::nullopt);
 }
@@ -590,14 +581,11 @@ bool reader::impl::has_next()
   prepare_data(0 /*skip_rows*/,
                std::nullopt /*num_rows, `nullopt` means unlimited*/,
                true /*uses_custom_row_bounds*/,
-               {} /*row_group_indices, empty means read all row
-                     groups*/
-               ,
+               {} /*row_group_indices, empty means read all row groups*/,
                std::nullopt /*filter*/);
 
-  // current_input_pass will only be incremented to be ==
-  // num_passes after the last chunk in the last subpass
-  // in the last pass has been returned
+  // current_input_pass will only be incremented to be == num_passes after
+  // the last chunk in the last subpass in the last pass has been returned
   return has_more_work();
 }
 
