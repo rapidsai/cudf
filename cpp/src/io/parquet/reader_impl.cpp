@@ -456,8 +456,7 @@ table_with_metadata reader::impl::read_chunk_internal(
   auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
   out_metadata.schema_info.resize(_output_buffers.size());
 
-  // output cudf columns as determined by the top level
-  // schema
+  // output cudf columns as determined by the top level schema
   auto out_columns = std::vector<std::unique_ptr<column>>{};
   out_columns.reserve(_output_buffers.size());
 

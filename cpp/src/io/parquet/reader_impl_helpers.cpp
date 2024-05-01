@@ -75,6 +75,7 @@ type_id to_type_id(SchemaElement const& schema,
   auto const physical = schema.type;
   auto const arrow    = schema.arrow_type;
   auto logical_type   = schema.logical_type;
+
   // sanity check, but not worth failing over
   if (schema.converted_type.has_value() and not logical_type.has_value()) {
     CUDF_LOG_WARN("ConvertedType is specified but not LogicalType");
