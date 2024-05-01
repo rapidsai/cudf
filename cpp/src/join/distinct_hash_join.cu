@@ -185,7 +185,6 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
     iter, iter + probe_table_num_rows, probe_indices_begin, build_indices_begin, stream.value());
 
   auto const actual_size = std::distance(probe_indices_begin, probe_indices_end);
-
   build_indices->resize(actual_size, stream);
   probe_indices->resize(actual_size, stream);
 
