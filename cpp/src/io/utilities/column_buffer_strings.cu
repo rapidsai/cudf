@@ -34,8 +34,11 @@ std::unique_ptr<column> cudf::io::detail::inline_column_buffer::make_string_colu
     }
     // create new offsets
     auto const offsets_ptr = static_cast<size_type*>(_data.data());
-    auto [offsets_col, len] =
-      strings::detail::make_offsets_child_column(offsets_ptr, offsets_ptr + size, stream, _mr);
+    auto offsets_col       = make_numeric_column(
+      data_type{type_id::INT64}, size + 1, mask_state::UNALLOCATED, stream, _mr);
+    auto d_offsets64 = offsets_col->mutable_view().template data<int64_t>();
+    // it's safe to call with size + 1 because _data is also sized that large
+    cudf::detail::sizes_to_offsets(offsets_ptr, offsets_ptr + size + 1, d_offsets64, stream);
     return make_strings_column(
       size, std::move(offsets_col), std::move(_string_data), null_count(), std::move(_null_mask));
   } else {
