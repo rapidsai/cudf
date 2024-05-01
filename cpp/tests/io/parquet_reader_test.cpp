@@ -17,6 +17,7 @@
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
@@ -2185,6 +2186,52 @@ TEST_F(ParquetReaderTest, StringsWithPageStats)
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), expected[0]);
   }
+}
+
+TEST_F(ParquetReaderTest, ReadLargeStrings)
+{
+  // need to create a > 2GB string column
+  constexpr int string_width   = 1'024;
+  constexpr size_t column_size = 512 * 1'024 * 1'024U;
+  constexpr size_t threshold   = column_size - 1;
+  constexpr int nrows          = column_size / string_width;
+
+  char buf[string_width + 1];
+  memset(buf, 'a', string_width);
+  buf[string_width] = 0;
+
+  auto elements =
+    cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) { return std::string(buf); });
+  auto const col0     = cudf::test::strings_column_wrapper(elements, elements + nrows);
+  auto const expected = table_view{{col0, col0, col0}};
+
+  auto expected_metadata = cudf::io::table_input_metadata{expected};
+  expected_metadata.column_metadata[1].set_encoding(
+    cudf::io::column_encoding::DELTA_LENGTH_BYTE_ARRAY);
+  expected_metadata.column_metadata[2].set_encoding(cudf::io::column_encoding::DELTA_BYTE_ARRAY);
+
+  // enable large strings
+  cudf::test::large_strings_enabler lse(true);
+  setenv("LIBCUDF_LARGE_STRINGS_THRESHOLD", std::to_string(threshold).c_str(), 1);
+
+  auto const filepath = temp_env->get_temp_filepath("ReadLargeStrings.parquet");
+  // set row group size so that there will be only one row group
+  // no compression so we can easily read page data
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .compression(cudf::io::compression_type::ZSTD)
+      .stats_level(cudf::io::STATISTICS_NONE)
+      .metadata(expected_metadata);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options default_in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto const result = cudf::io::read_parquet(default_in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), expected);
+
+  // disble large strings...large_strings_enabler uses RAII
+  unsetenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
 }
 
 ///////////////////
