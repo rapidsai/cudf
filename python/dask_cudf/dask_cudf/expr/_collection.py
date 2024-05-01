@@ -19,10 +19,10 @@ from dask.dataframe.core import is_dataframe_like
 import cudf
 
 _LEGACY_WORKAROUND = (
-    "To disable query planning, set the global "
-    "'dataframe.query-planning' config to `False` "
-    "before dask is imported. This can also be done "
-    "by setting an environment variable: "
+    "To enable the 'legacy' dask-cudf API, set the "
+    "global 'dataframe.query-planning' config to "
+    "`False` before dask is imported. This can also "
+    "be done by setting an environment variable: "
     "`DASK_DATAFRAME__QUERY_PLANNING=False` "
 )
 
@@ -98,18 +98,19 @@ class DataFrame(DXDataFrame, CudfFrameBase):
             )
 
         if "as_index" in kwargs:
-            warnings.warn(
-                "The `as_index` argument is no longer supported in "
-                "dask-cudf when query-planning is enabled.",
-                FutureWarning,
+            msg = (
+                "The `as_index` argument is now deprecated. All groupby "
+                "results will be consistent with `as_index=True`.",
             )
 
-        if kwargs.pop("as_index", True) is not True:
-            raise NotImplementedError(
-                f"`as_index=False` is not supported. Please disable "
-                "query planning, or reset the index after aggregating.\n"
-                f"{_LEGACY_WORKAROUND}"
-            )
+            if kwargs.pop("as_index") is not True:
+                raise NotImplementedError(
+                    f"{msg} Please reset the index after aggregating, or "
+                    "use the legacy API if `as_index=False` is required.\n"
+                    f"{_LEGACY_WORKAROUND}"
+                )
+            else:
+                warnings.warn(msg, FutureWarning)
 
         return GroupBy(
             self,
