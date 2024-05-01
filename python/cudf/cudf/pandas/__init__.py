@@ -20,13 +20,10 @@ def install():
     LOADED = loader is not None
     import os
 
-    cudf_pandas_mr = os.getenv("CUDF_PANDAS_MEMORY_RESOURCE", None)
-    if cudf_pandas_mr is not None:
-        import rmm
+    if cudf_pandas_mr := os.getenv("CUDF_PANDAS_MEMORY_RESOURCE", None) is not None:
         import rmm.mr
 
-        cudf_pandas_mr = getattr(rmm.mr, cudf_pandas_mr, None)
-        if cudf_pandas_mr is not None:
+        if cudf_pandas_mr := getattr(rmm.mr, cudf_pandas_mr, None) is not None:
             from rmm.mr import PoolMemoryResource
 
             mr = PoolMemoryResource(
