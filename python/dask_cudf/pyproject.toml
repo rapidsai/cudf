@@ -107,3 +107,11 @@ skip = [
     "build",
     "dist",
 ]
+
+[tool.pytest.ini_options]
+xfail_strict = true
+filterwarnings = [
+    "error::FutureWarning",
+    "error::DeprecationWarning",
+    "ignore:create_block_manager_from_blocks is deprecated and will be removed in a future version. Use public APIs instead.:DeprecationWarning:partd",
+]
