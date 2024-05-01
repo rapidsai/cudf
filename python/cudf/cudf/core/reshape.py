@@ -319,11 +319,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         else:
             if axis == 0:
                 result = obj.copy()
-                if keys is not None:
-                    raise NotImplementedError(
-                        "Concatenation along axis = 0 "
-                        "when passing a dictionary is not supported yet."
-                    )
             else:
                 o_typ = typs.pop()
                 if o_typ not in allowed_typs:
