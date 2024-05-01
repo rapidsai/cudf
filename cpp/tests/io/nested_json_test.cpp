@@ -436,8 +436,12 @@ TEST_F(JsonTest, TokenStream)
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
-  auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
-    d_input, default_options, stream, rmm::mr::get_current_device_resource());
+  auto [d_tokens_gpu, d_token_indices_gpu] =
+    cuio_json::detail::get_token_stream(d_input,
+                                        default_options,
+                                        cuio_json::detail::LineEndTokenOption::Discard,
+                                        stream,
+                                        rmm::mr::get_current_device_resource());
   // Copy back the number of tokens that were written
   auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
   auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
@@ -570,8 +574,12 @@ TEST_F(JsonTest, TokenStream2)
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
-  auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
-    d_input, default_options, stream, rmm::mr::get_current_device_resource());
+  auto [d_tokens_gpu, d_token_indices_gpu] =
+    cuio_json::detail::get_token_stream(d_input,
+                                        default_options,
+                                        cuio_json::detail::LineEndTokenOption::Discard,
+                                        stream,
+                                        rmm::mr::get_current_device_resource());
   // Copy back the number of tokens that were written
   auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
   auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
@@ -727,8 +735,12 @@ TEST_F(JsonTest, RecoveringTokenStream)
     d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
-  auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
-    d_input, default_options, stream, rmm::mr::get_current_device_resource());
+  auto [d_tokens_gpu, d_token_indices_gpu] =
+    cuio_json::detail::get_token_stream(d_input,
+                                        default_options,
+                                        cuio_json::detail::LineEndTokenOption::Discard,
+                                        stream,
+                                        rmm::mr::get_current_device_resource());
   // Copy back the number of tokens that were written
   auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
   auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
@@ -849,8 +861,8 @@ TEST_F(JsonTest, PostProcessTokenStream)
     cudf::detail::make_device_uvector_async(tokens, stream, rmm::mr::get_current_device_resource());
 
   // Run system-under-test
-  auto [d_filtered_tokens, d_filtered_indices] =
-    cuio_json::detail::process_token_stream(d_tokens, d_offsets, stream);
+  auto [d_filtered_tokens, d_filtered_indices] = cuio_json::detail::process_token_stream(
+    d_tokens, d_offsets, cudf::io::json::detail::LineEndTokenOption::Discard, stream);
 
   auto const filtered_tokens  = cudf::detail::make_std_vector_async(d_filtered_tokens, stream);
   auto const filtered_indices = cudf::detail::make_std_vector_async(d_filtered_indices, stream);
@@ -1096,7 +1108,7 @@ TEST_F(JsonTest, PostProcessTokenStreamWithLineEnd)
                                                 {0, token_t::StructBegin},
                                                 {0, token_t::StructEnd},
                                                 // Line 1
-                                                {0, token_t::LineEnd},
+                                                {9, token_t::LineEnd},
                                                 {10, token_t::StructBegin},
                                                 {11, token_t::StructMemberBegin},
                                                 {11, token_t::FieldNameBegin},
@@ -1110,9 +1122,9 @@ TEST_F(JsonTest, PostProcessTokenStreamWithLineEnd)
                                                 {0, token_t::StructBegin},
                                                 {0, token_t::StructEnd},
                                                 // Line 4 (empty)
-                                                {0, token_t::LineEnd},
+                                                {40, token_t::LineEnd},
                                                 // Line 5
-                                                {0, token_t::LineEnd},
+                                                {41, token_t::LineEnd},
                                                 {42, token_t::StructBegin},
                                                 {43, token_t::StructMemberBegin},
                                                 {43, token_t::FieldNameBegin},
@@ -1138,15 +1150,15 @@ TEST_F(JsonTest, PostProcessTokenStreamWithLineEnd)
     cudf::detail::make_device_uvector_async(tokens, stream, rmm::mr::get_current_device_resource());
 
   // Run system-under-test
-  auto [d_filtered_tokens, d_filtered_indices] =
-    cuio_json::detail::process_token_stream(d_tokens, d_offsets, stream, false);
+  auto [d_filtered_tokens, d_filtered_indices] = cuio_json::detail::process_token_stream(
+    d_tokens, d_offsets, cudf::io::json::detail::LineEndTokenOption::Keep, stream);
 
   auto const filtered_tokens  = cudf::detail::make_std_vector_async(d_filtered_tokens, stream);
   auto const filtered_indices = cudf::detail::make_std_vector_async(d_filtered_indices, stream);
 
-  // // Verify the number of tokens matches
-  // ASSERT_EQ(filtered_tokens.size(), expected_output.size());
-  // ASSERT_EQ(filtered_indices.size(), expected_output.size());
+  // Verify the number of tokens matches
+  ASSERT_EQ(filtered_tokens.size(), expected_output.size());
+  ASSERT_EQ(filtered_indices.size(), expected_output.size());
 
   for (std::size_t i = 0; i < filtered_tokens.size(); i++) {
     // Ensure the index the tokens are pointing to do match
@@ -1180,8 +1192,12 @@ TEST_F(JsonTest, TokenStreamWithLineEnd)
     cudf::device_span<SymbolT const>{d_scalar.data(), static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
-  auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
-    d_input, default_options, stream, rmm::mr::get_current_device_resource(), false);
+  auto [d_tokens_gpu, d_token_indices_gpu] =
+    cuio_json::detail::get_token_stream(d_input,
+                                        default_options,
+                                        cuio_json::detail::LineEndTokenOption::Keep,
+                                        stream,
+                                        rmm::mr::get_current_device_resource());
   // Copy back the number of tokens that were written
   auto const tokens_gpu = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
 

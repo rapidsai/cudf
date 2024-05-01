@@ -120,6 +120,11 @@ enum token_t : PdaTokenT {
 namespace detail {
 
 /**
+ * @brief Decision to keep or discard LineEnd tokens in the output token stream
+ */
+enum class LineEndTokenOption { Keep, Discard };
+
+/**
  * @brief Parses the given JSON string and emits a sequence of tokens that demarcate relevant
  * sections from the input.
  *
@@ -133,9 +138,9 @@ namespace detail {
 std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> get_token_stream(
   device_span<SymbolT const> json_in,
   cudf::io::json_reader_options const& options,
+  cudf::io::json::detail::LineEndTokenOption option,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr,
-  bool remove_line_end_token = true);
+  rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 
