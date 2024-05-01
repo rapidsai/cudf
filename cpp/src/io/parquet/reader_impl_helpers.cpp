@@ -631,11 +631,15 @@ aggregate_reader_metadata::collect_arrow_schema() const
     return cudf::data_type{};
   };
 
+  // variable that tracks if an arrow_type specific column is seen
+  // in the walk
+  bool arrow_type_col_seen = false;
+
   // Lambda function to walk a field and its children in DFS manner and
   // return boolean walk success status
   std::function<bool(const flatbuf::Field*, arrow_schema_data_types&)> walk_field =
-    [&walk_field, &duration_from_flatbuffer](const flatbuf::Field* field,
-                                             arrow_schema_data_types& schema_elem) {
+    [&walk_field, &duration_from_flatbuffer, &arrow_type_col_seen](
+      const flatbuf::Field* field, arrow_schema_data_types& schema_elem) {
       // DFS: recursively walk over the children first
       auto const& field_children = field->children();
 
@@ -657,6 +661,7 @@ aggregate_reader_metadata::collect_arrow_schema() const
           auto name = (field->name()) ? field->name()->str() : "";
           // set the schema_elem type to duration type
           schema_elem.type = duration_from_flatbuffer(type_data);
+          arrow_type_col_seen |= (schema_elem.type.id() != type_id::EMPTY);
         } else {
           CUDF_LOG_ERROR("Parquet reader encountered an invalid type_data pointer.",
                          "arrow:schema not processed.");
@@ -677,6 +682,9 @@ aggregate_reader_metadata::collect_arrow_schema() const
     for (uint32_t idx = 0; idx < fields->size(); idx++) {
       if (not walk_field(*(fields->begin() + idx), schema.children[idx])) { return std::nullopt; }
     }
+
+    // if no arrow type column seen, return nullopt.
+    if (not arrow_type_col_seen) { return std::nullopt; }
   }
 
   return std::make_optional(std::move(schema));
