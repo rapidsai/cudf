@@ -601,10 +601,19 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     if split_out == "use_dask_default":
         split_kwargs.pop("split_out")
 
+    # Avoid using as_index when query-planning is enabled
+    if QUERY_PLANNING_ON:
+        with pytest.warns(FutureWarning, match="argument is now deprecated"):
+            # Should warn when `as_index` is used
+            ddf.groupby(["name", "a"], sort=False, as_index=as_index)
+        maybe_as_index = {"as_index": as_index} if as_index is False else {}
+    else:
+        maybe_as_index = {"as_index": as_index}
+
     # Check `sort=True` behavior
     if split_out == 1:
         gf = (
-            ddf.groupby(["name", "a"], sort=True, as_index=as_index)
+            ddf.groupby(["name", "a"], sort=True, **maybe_as_index)
             .aggregate(
                 agg_dict,
                 **split_kwargs,
@@ -626,7 +635,7 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
             )
 
     # Full check (`sort=False`)
-    gr = ddf.groupby(["name", "a"], sort=False, as_index=as_index).aggregate(
+    gr = ddf.groupby(["name", "a"], sort=False, **maybe_as_index).aggregate(
         agg_dict,
         **split_kwargs,
     )
