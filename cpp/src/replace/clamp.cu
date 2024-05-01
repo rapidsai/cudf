@@ -200,8 +200,9 @@ struct dispatch_clamp {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
   {
-    CUDF_EXPECTS(
-      have_same_types(input, lo), "mismatching types of scalar and input", cudf::data_type_error);
+    CUDF_EXPECTS(cudf::have_same_types(input, lo),
+                 "mismatching types of scalar and input",
+                 cudf::data_type_error);
 
     auto lo_itr         = make_optional_iterator<T>(lo, nullate::YES{});
     auto hi_itr         = make_optional_iterator<T>(hi, nullate::YES{});

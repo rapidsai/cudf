@@ -315,7 +315,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
                "Mismatch number of fill_values and columns.");
   CUDF_EXPECTS(std::equal(values.begin(),
                           values.end(),
-                          fill_values.begin(),
+                          fill_values.cbegin(),
+                          fill_values.cend(),
                           [](auto const& col, auto const& scalar) {
                             return cudf::have_same_types(col, scalar.get());
                           }),
