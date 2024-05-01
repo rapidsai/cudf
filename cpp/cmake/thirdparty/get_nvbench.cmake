@@ -19,7 +19,6 @@ function(find_and_configure_nvbench)
   include(${rapids-cmake-dir}/cpm/package_override.cmake)
 
   set(cudf_patch_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches")
-  rapids_cpm_package_override("${cudf_patch_dir}/nvbench_override.json")
 
   rapids_cpm_nvbench(BUILD_STATIC)
 
