@@ -41,6 +41,8 @@ namespace cudf {
  *
  * @return spdlog::logger& The logger.
  */
+/// \cond DOXYGEN_IGNORE
 __attribute__((visibility("default"))) spdlog::logger& logger();
+/// \endcond
 
 }  // namespace cudf
