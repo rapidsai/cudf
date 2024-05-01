@@ -22,6 +22,7 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/combine.hpp>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -84,8 +85,9 @@ struct join_base_fn {
  * This functor is suitable for make_strings_children
  */
 struct join_fn : public join_base_fn {
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   join_fn(column_device_view const d_strings,
           string_view d_separator,
@@ -106,7 +108,7 @@ struct join_fn : public join_base_fn {
     } else {
       bytes += d_str.size_bytes() + d_sep.size_bytes();
     }
-    if (!d_chars) { d_offsets[idx] = bytes; }
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 
@@ -148,7 +150,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
     if ((input.size() == input.null_count()) ||
         ((input.chars_size(stream) / (input.size() - input.null_count())) <=
          AVG_CHAR_BYTES_THRESHOLD)) {
-      return std::get<1>(make_strings_children(
+      return std::get<1>(experimental::make_strings_children(
                            join_fn{*d_strings, d_separator, d_narep}, input.size(), stream, mr))
         .release();
     }
