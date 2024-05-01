@@ -2190,7 +2190,7 @@ TEST_F(ParquetReaderTest, StringsWithPageStats)
 
 TEST_F(ParquetReaderTest, ReadLargeStrings)
 {
-  // need to create a > 2GB string column
+  // need to create a string column larger than `threshold`
   constexpr int string_width   = 1'024;
   constexpr size_t column_size = 512 * 1'024 * 1'024U;
   constexpr size_t threshold   = column_size - 1;
