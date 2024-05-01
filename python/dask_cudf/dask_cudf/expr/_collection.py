@@ -100,7 +100,7 @@ class DataFrame(DXDataFrame, CudfFrameBase):
         if "as_index" in kwargs:
             msg = (
                 "The `as_index` argument is now deprecated. All groupby "
-                "results will be consistent with `as_index=True`.",
+                "results will be consistent with `as_index=True`."
             )
 
             if kwargs.pop("as_index") is not True:
