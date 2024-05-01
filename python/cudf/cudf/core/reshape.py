@@ -277,19 +277,19 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         cudf.BaseIndex,
         cudf.MultiIndex,
     }
-    typs = {type(o) for o in objs}
-    if not all([isinstance(t, tuple(allowed_typs)) for t in typs]):
+    if not all([isinstance(o, tuple(allowed_typs)) for o in objs]):
         raise TypeError(
-            f"can only concatenate objects which are instances of {allowed_typs}"
+            f"can only concatenate objects which are instances of {allowed_typs}, instead received {[type(o) for o in objs]}"
         )
 
-    if any([isinstance(t, (cudf.BaseIndex, cudf.MultiIndex)) for t in typs]):
+    if any([isinstance(o, (cudf.BaseIndex, cudf.MultiIndex)) for o in objs]):
         if not all(
-            [isinstance(t, (cudf.BaseIndex, cudf.MultiIndex)) for t in typs]
+            [isinstance(o, (cudf.BaseIndex, cudf.MultiIndex)) for o in objs]
         ):
             raise TypeError(
                 "when concatenating indices you must provide ONLY indices"
             )
+    typs = {type(o) for o in objs}
 
     # Return for single object
     if len(objs) == 1:
