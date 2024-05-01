@@ -452,8 +452,7 @@ void reader::impl::populate_metadata(table_metadata& out_metadata)
 table_with_metadata reader::impl::read_chunk_internal(
   bool uses_custom_row_bounds, std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
-  // If `_output_metadata` has been constructed, just
-  // copy it over.
+  // If `_output_metadata` has been constructed, just copy it over.
   auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
   out_metadata.schema_info.resize(_output_buffers.size());
 

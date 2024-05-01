@@ -103,8 +103,7 @@ struct row_group_info {
  */
 [[nodiscard]] type_id to_type_id(SchemaElement const& schema,
                                  bool strings_to_categorical,
-                                 type_id timestamp_type_id,
-                                 cudf::data_type duration_type = cudf::data_type{});
+                                 type_id timestamp_type_id);
 
 /**
  * @brief Converts cuDF type enum to column logical type
@@ -124,12 +123,15 @@ struct metadata : public FileMetaData {
   void sanitize_schema();
 };
 
-using arrow_schema_t = std::unordered_map<std::string, cudf::data_type>;
+struct arrow_schema_data_types {
+  std::vector<arrow_schema_data_types> children;
+  data_type type{type_id::EMPTY};
+};
 
 class aggregate_reader_metadata {
   std::vector<metadata> per_file_metadata;
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
-  std::optional<arrow_schema_t> arrow_schema;
+  std::optional<arrow_schema_data_types> arrow_schema;
 
   int64_t num_rows;
   size_type num_row_groups;
@@ -147,13 +149,16 @@ class aggregate_reader_metadata {
     const;
 
   /**
-   * @brief Walks over an "ARROW:schema" flatbuffer and collects type information for DurationType
-   * columns into an unordered map.
+   * @brief Decodes and walks over "ARROW:schema"  from Parquet key value
+   * metadata section and return it.
    */
-  [[nodiscard]] std::optional<arrow_schema_t> collect_arrow_schema() const;
+  [[nodiscard]] std::optional<arrow_schema_data_types> collect_arrow_schema() const;
+
+  void consume_arrow_schema();
 
   /**
-   * @brief Decode an arrow:IPC message and returns a const void pointer to its metadata header
+   * @brief Decode an arrow:IPC message and returns a const void pointer
+   * to its metadata header
    */
   [[nodiscard]] const void* decode_ipc_message(std::string& serialized_message) const;
 
