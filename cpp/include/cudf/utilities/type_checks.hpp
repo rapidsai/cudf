@@ -120,6 +120,15 @@ bool have_same_types(scalar const& lhs, column_view const& rhs);
 bool have_same_types(scalar const& lhs, scalar const& rhs);
 
 /**
+ * @brief Checks if two `table_view`s have columns of same types
+ *
+ * @param lhs left-side table_view operand
+ * @param rhs right-side table_view operand
+ * @return boolean comparison result
+ */
+bool have_same_types(table_view const& lhs, table_view const& rhs);
+
+/**
  * @brief Compare the types of a range of `column_view` or `scalar` objects
  *
  * This function returns true if all objects in the range have the same type, in the sense of

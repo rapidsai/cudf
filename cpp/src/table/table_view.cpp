@@ -145,28 +145,19 @@ bool has_nested_nullable_columns(table_view const& input)
   });
 }
 
-bool have_same_types(table_view const& lhs, table_view const& rhs)
+namespace detail {
+
+template <typename TableView>
+bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
 {
   return std::equal(lhs.begin(),
                     lhs.end(),
                     rhs.begin(),
                     rhs.end(),
                     [](column_view const& lcol, column_view const& rcol) {
-                      return cudf::have_same_types(lcol, rcol);
+                      return cudf::is_relationally_comparable(lcol.type()) and
+                             cudf::have_same_types(lcol, rcol);
                     });
-}
-
-namespace detail {
-
-template <typename TableView>
-bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
-{
-  return std::all_of(thrust::counting_iterator<size_type>(0),
-                     thrust::counting_iterator<size_type>(lhs.num_columns()),
-                     [lhs, rhs](auto const i) {
-                       return cudf::have_same_types(lhs.column(i), rhs.column(i)) and
-                              cudf::is_relationally_comparable(lhs.column(i).type());
-                     });
 }
 
 // Explicit template instantiation for a table of immutable views
