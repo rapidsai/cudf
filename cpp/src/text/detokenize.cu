@@ -48,13 +48,13 @@ namespace {
  * the same row. The `d_separator` is appended between each token.
  */
 struct detokenizer_fn {
-  cudf::column_device_view const d_strings;  // these are the tokens
-  cudf::size_type const* d_row_map;          // indices sorted by output row
-  cudf::size_type const* d_token_offsets;    // to each input token array
-  cudf::string_view const d_separator;       // append after each token
-  cudf::size_type* d_sizes{};                // output sizes
-  char* d_chars{};                           // output buffer for characters
-  cudf::detail::input_offsetalator d_offsets;
+  cudf::column_device_view const d_strings;    // these are the tokens
+  cudf::size_type const* d_row_map;            // indices sorted by output row
+  cudf::size_type const* d_token_offsets;      // to each input token array
+  cudf::string_view const d_separator;         // append after each token
+  cudf::size_type* d_sizes{};                  // output sizes
+  char* d_chars{};                             // output buffer for characters
+  cudf::detail::input_offsetalator d_offsets;  // for addressing output row data in d_chars
 
   __device__ void operator()(cudf::size_type idx)
   {
