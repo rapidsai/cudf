@@ -55,8 +55,6 @@ TEST_F(ParquetStringsTest, ReadLargeStrings)
   setenv("LIBCUDF_LARGE_STRINGS_THRESHOLD", std::to_string(threshold).c_str(), 1);
 
   auto const filepath = g_temp_env->get_temp_filepath("ReadLargeStrings.parquet");
-  // set row group size so that there will be only one row group
-  // no compression so we can easily read page data
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .compression(cudf::io::compression_type::ZSTD)
