@@ -3193,21 +3193,21 @@ def test_parquet_reader_duration_types():
         }
     )
 
+    # Convert all pdf dtypes to int64
+    pdf2 = pdf.astype("int64")
+
     # Write parquet with arrow for now (to write arrow:schema)
     buffer = BytesIO()
     pdf.to_parquet(buffer, engine="pyarrow")
 
-    # Check results
+    # Read parquet with and without arrow schema
     got = cudf.read_parquet(buffer)
+    got2 = cudf.read_parquet(buffer, use_arrow_schema=False)
+
+    # Check results for reader with schema
     assert_eq(pdf.dtypes, got.dtypes)
     assert_eq(pdf, got)
 
-    # Convert all pdf dtypes to int64
-    pdf2 = pdf.astype("int64")
-
-    # Read parquet without arrow schema
-    got2 = cudf.read_parquet(buffer, use_arrow_schema=False)
-
-    # Check results
+    # Check results for reader without schema
     assert_eq(pdf2.dtypes, got2.dtypes)
     assert_eq(pdf2, got2)
