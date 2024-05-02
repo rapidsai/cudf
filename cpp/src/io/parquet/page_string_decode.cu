@@ -955,7 +955,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 {
   using cudf::detail::warp_size;
   __shared__ __align__(16) page_state_s state_g;
-  __shared__ __align__(8) size_t last_offset;
+  __shared__ size_t last_offset;
   __shared__ __align__(16)
     page_state_buffers_s<rolling_buf_size, rolling_buf_size, rolling_buf_size>
       state_buffers;
@@ -1075,10 +1075,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
             }
             __syncwarp();
           } else if (use_char_ll) {
-            __shared__ __align__(8) uint8_t const* pointers[warp_size];
-            __shared__ __align__(8) size_t offsets[warp_size];
-            __shared__ __align__(4) int dsts[warp_size];
-            __shared__ __align__(4) int lengths[warp_size];
+            __shared__ uint8_t const* pointers[warp_size];
+            __shared__ size_t offsets[warp_size];
+            __shared__ int dsts[warp_size];
+            __shared__ int lengths[warp_size];
 
             offsets[me]  = offset;
             pointers[me] = reinterpret_cast<uint8_t const*>(ptr);
