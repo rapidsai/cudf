@@ -125,11 +125,16 @@ def _patched_var(
 Expr.var = _patched_var
 
 
-# Add custom code path for RepartitionQuantiles
-# (Upstream logic fails when null values are present)
+# Add custom code path for RepartitionQuantiles, because
+# upstream logic fails when null values are present. Note
+# that the cudf-specific code path can also be used for
+# multi-column divisions in the future.
 
 
 def _quantile(a, q):
+    if a.empty:
+        # Avoid calling `quantile` on empty data
+        return None, 0
     a = a.to_frame() if a.ndim == 1 else a
     return (
         a.quantile(q=q.tolist(), interpolation="nearest", method="table"),
