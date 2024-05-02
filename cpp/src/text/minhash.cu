@@ -35,6 +35,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/atomic>
 #include <thrust/execution_policy.h>
@@ -129,7 +130,7 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
                                          cudf::device_span<hash_value_type const> seeds,
                                          cudf::size_type width,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!seeds.empty(), "Parameter seeds cannot be empty", std::invalid_argument);
   CUDF_EXPECTS(width >= 2,
@@ -258,7 +259,7 @@ std::unique_ptr<cudf::column> build_list_result(cudf::column_view const& input,
                                                 std::unique_ptr<cudf::column>&& hashes,
                                                 cudf::size_type seeds_size,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::device_async_resource_ref mr)
 {
   // build the offsets for the output lists column
   auto const zero = cudf::numeric_scalar<cudf::size_type>(0, true, stream);
@@ -286,7 +287,7 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                                       cudf::numeric_scalar<uint32_t> const& seed,
                                       cudf::size_type width,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   using HashFunction = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
   auto const seeds   = cudf::device_span<uint32_t const>{seed.data(), 1};
@@ -299,7 +300,7 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                                       cudf::device_span<uint32_t const> seeds,
                                       cudf::size_type width,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   using HashFunction = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
   auto hashes        = detail::minhash_fn<HashFunction>(input, seeds, width, stream, mr);
@@ -310,7 +311,7 @@ std::unique_ptr<cudf::column> minhash64(cudf::strings_column_view const& input,
                                         cudf::numeric_scalar<uint64_t> const& seed,
                                         cudf::size_type width,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
 {
   using HashFunction = cudf::hashing::detail::MurmurHash3_x64_128<cudf::string_view>;
   auto const seeds   = cudf::device_span<uint64_t const>{seed.data(), 1};
@@ -323,7 +324,7 @@ std::unique_ptr<cudf::column> minhash64(cudf::strings_column_view const& input,
                                         cudf::device_span<uint64_t const> seeds,
                                         cudf::size_type width,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
 {
   using HashFunction = cudf::hashing::detail::MurmurHash3_x64_128<cudf::string_view>;
   auto hashes        = detail::minhash_fn<HashFunction>(input, seeds, width, stream, mr);
@@ -355,7 +356,7 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                                       cudf::numeric_scalar<uint32_t> seed,
                                       cudf::size_type width,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::minhash(input, seed, width, stream, mr);
@@ -365,7 +366,7 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
                                       cudf::device_span<uint32_t const> seeds,
                                       cudf::size_type width,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::minhash(input, seeds, width, stream, mr);
@@ -375,7 +376,7 @@ std::unique_ptr<cudf::column> minhash64(cudf::strings_column_view const& input,
                                         cudf::numeric_scalar<uint64_t> seed,
                                         cudf::size_type width,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::minhash64(input, seed, width, stream, mr);
@@ -385,7 +386,7 @@ std::unique_ptr<cudf::column> minhash64(cudf::strings_column_view const& input,
                                         cudf::device_span<uint64_t const> seeds,
                                         cudf::size_type width,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::minhash64(input, seeds, width, stream, mr);

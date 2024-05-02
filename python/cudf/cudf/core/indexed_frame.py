@@ -56,7 +56,7 @@ from cudf.core.copy_types import BooleanMask, GatherMap
 from cudf.core.dtypes import ListDtype
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import GroupBy
-from cudf.core.index import Index, RangeIndex, _index_from_columns
+from cudf.core.index import Index, RangeIndex, _index_from_data
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
@@ -331,7 +331,9 @@ class IndexedFrame(Frame):
         if index_names is not None:
             n_index_columns = len(index_names)
             data_columns = columns[n_index_columns:]
-            index = _index_from_columns(columns[:n_index_columns])
+            index = _index_from_data(
+                dict(enumerate(columns[:n_index_columns]))
+            )
             if isinstance(index, cudf.MultiIndex):
                 index.names = index_names
             else:
@@ -1529,11 +1531,6 @@ class IndexedFrame(Frame):
         dtype: int64
         >>> ser.median()
         17.0
-
-        .. pandas-compat::
-            **DataFrame.median, Series.median**
-
-            Parameters currently not supported are `level` and `numeric_only`.
 
         .. pandas-compat::
             **DataFrame.median, Series.median**
@@ -4353,8 +4350,8 @@ class IndexedFrame(Frame):
             index_names,
         ) = self._index._split_columns_by_levels(level)
         if index_columns:
-            index = _index_from_columns(
-                index_columns,
+            index = _index_from_data(
+                dict(enumerate(index_columns)),
                 name=self._index.name,
             )
             if isinstance(index, MultiIndex):
@@ -6311,7 +6308,12 @@ class IndexedFrame(Frame):
 
         return [
             type(self),
-            normalize_token(self._dtypes),
+            str(self._dtypes),
+            *[
+                normalize_token(cat.categories)
+                for cat in self._dtypes.values()
+                if cat == "category"
+            ],
             normalize_token(self.index),
             normalize_token(self.hash_values().values_host),
         ]

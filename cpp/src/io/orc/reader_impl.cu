@@ -18,12 +18,14 @@
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
 
+#include <rmm/resource_ref.hpp>
+
 namespace cudf::io::orc::detail {
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    orc_reader_options const& options,
                    rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
+                   rmm::device_async_resource_ref mr)
   : _stream(stream),
     _mr(mr),
     _timestamp_type{options.get_timestamp_type()},
@@ -119,7 +121,7 @@ table_with_metadata reader::impl::read_chunk_internal()
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                orc_reader_options const& options,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
+               rmm::device_async_resource_ref mr)
   : _impl{std::make_unique<impl>(std::move(sources), options, stream, mr)}
 {
 }
