@@ -156,6 +156,7 @@ class writer::impl {
   bool const _int96_timestamps;
   bool const _utc_timestamps;
   bool const _write_v2_headers;
+  std::optional<std::vector<sorting_column>> _sorting_columns;
   int32_t const _column_index_truncate_length;
   std::vector<std::map<std::string, std::string>> const _kv_meta;  // Optional user metadata.
   cudf::io::detail::single_write_mode const

@@ -4320,7 +4320,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
 
-        See pandas.DataFrame.query.
+        See :meth:`pandas.DataFrame.query`.
 
         Parameters
         ----------
@@ -5450,9 +5450,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         index_col = None
         col_index_names = None
+        physical_column_md = []
         if isinstance(table, pa.Table) and isinstance(
             table.schema.pandas_metadata, dict
         ):
+            physical_column_md = table.schema.pandas_metadata["columns"]
             index_col = table.schema.pandas_metadata["index_columns"]
             if "column_indexes" in table.schema.pandas_metadata:
                 col_index_names = []
@@ -5464,10 +5466,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             out._data._level_names = col_index_names
         if index_col:
             if isinstance(index_col[0], dict):
+                range_meta = index_col[0]
                 idx = cudf.RangeIndex(
-                    index_col[0]["start"],
-                    index_col[0]["stop"],
-                    name=index_col[0]["name"],
+                    start=range_meta["start"],
+                    stop=range_meta["stop"],
+                    step=range_meta["step"],
+                    name=range_meta["name"],
                 )
                 if len(idx) == len(out):
                     # `idx` is generated from arrow `pandas_metadata`
@@ -5480,7 +5484,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     # https://github.com/apache/arrow/issues/15178
                     out = out.set_index(idx)
             else:
-                out = out.set_index(index_col[0])
+                out = out.set_index(index_col)
+
+        if (
+            "__index_level_0__" in out.index.names
+            and len(out.index.names) == 1
+        ):
+            real_index_name = None
+            for md in physical_column_md:
+                if md["field_name"] == "__index_level_0__":
+                    real_index_name = md["name"]
+                    break
+            out.index.name = real_index_name
 
         return out
 
@@ -5530,42 +5545,42 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         write_index = preserve_index is not False
         keep_range_index = write_index and preserve_index is None
         index = self.index
+        index_levels = [self.index]
         if write_index:
             if isinstance(index, cudf.RangeIndex) and keep_range_index:
-                descr = {
-                    "kind": "range",
-                    "name": index.name,
-                    "start": index._start,
-                    "stop": index._stop,
-                    "step": 1,
-                }
+                index_descr = [
+                    {
+                        "kind": "range",
+                        "name": index.name,
+                        "start": index.start,
+                        "stop": index.stop,
+                        "step": index.step,
+                    }
+                ]
             else:
                 if isinstance(index, cudf.RangeIndex):
                     index = index._as_int_index()
                     index.name = "__index_level_0__"
                 if isinstance(index, MultiIndex):
-                    gen_names = tuple(
-                        f"level_{i}" for i, _ in enumerate(index._data.names)
-                    )
+                    index_descr = list(index._data.names)
+                    index_levels = index.levels
                 else:
-                    gen_names = (
+                    index_descr = (
                         index.names if index.name is not None else ("index",)
                     )
-                for gen_name, col_name in zip(gen_names, index._data.names):
+                for gen_name, col_name in zip(index_descr, index._data.names):
                     data._insert(
                         data.shape[1],
                         gen_name,
                         index._data[col_name],
                     )
-                descr = gen_names[0]
-            index_descr.append(descr)
 
         out = super(DataFrame, data).to_arrow()
         metadata = pa.pandas_compat.construct_metadata(
             columns_to_convert=[self[col] for col in self._data.names],
             df=self,
             column_names=out.schema.names,
-            index_levels=[index],
+            index_levels=index_levels,
             index_descriptors=index_descr,
             preserve_index=preserve_index,
             types=out.schema.types,
@@ -7541,6 +7556,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Returns
         -------
         The interleaved columns as a single column
+
+        .. pandas-compat::
+            **DataFrame.interleave_columns**
+
+            This method does not exist in pandas but it can be run
+            as ``pd.Series(np.vstack(df.to_numpy()).reshape((-1,)))``.
         """
         if ("category" == self.dtypes).any():
             raise ValueError(

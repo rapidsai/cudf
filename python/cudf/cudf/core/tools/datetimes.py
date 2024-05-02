@@ -55,21 +55,6 @@ _unit_dtype_map = {
     "D": "datetime64[s]",
 }
 
-_offset_alias_to_code = {
-    "W": "W",
-    "D": "D",
-    "H": "h",
-    "h": "h",
-    "T": "m",
-    "min": "m",
-    "s": "s",
-    "S": "s",
-    "U": "us",
-    "us": "us",
-    "N": "ns",
-    "ns": "ns",
-}
-
 
 def to_datetime(
     arg,

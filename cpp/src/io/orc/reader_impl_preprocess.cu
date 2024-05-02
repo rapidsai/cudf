@@ -34,6 +34,7 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/fill.h>
@@ -401,7 +402,7 @@ rmm::device_buffer decompress_stripe_data(
 void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
                       host_span<column_buffer> out_buffers,
                       rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr)
+                      rmm::device_async_resource_ref mr)
 {
   auto const num_stripes = chunks.size().first;
   auto const num_columns = chunks.size().second;
@@ -492,7 +493,7 @@ void decode_stream_data(std::size_t num_dicts,
                         cudf::detail::device_2dspan<gpu::RowGroup> row_groups,
                         std::vector<column_buffer>& out_buffers,
                         rmm::cuda_stream_view stream,
-                        rmm::mr::device_memory_resource* mr)
+                        rmm::device_async_resource_ref mr)
 {
   auto const num_stripes = chunks.size().first;
   auto const num_columns = chunks.size().second;

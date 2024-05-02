@@ -32,8 +32,10 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -98,7 +100,7 @@ struct out_of_place_copy_range_dispatch {
     cudf::size_type source_end,
     cudf::size_type target_begin,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
   {
     auto p_ret = std::make_unique<cudf::column>(target, stream, mr);
     if ((!p_ret->nullable()) && source.has_nulls(source_begin, source_end)) {
@@ -129,7 +131,7 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   cudf::size_type source_end,
   cudf::size_type target_begin,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   return cudf::strings::detail::copy_range(
     source, target, source_begin, source_end, target_begin, stream, mr);
@@ -141,13 +143,14 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   cudf::size_type source_end,
   cudf::size_type target_begin,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   // check the keys in the source and target
   cudf::dictionary_column_view const dict_source(source);
   cudf::dictionary_column_view const dict_target(target);
-  CUDF_EXPECTS(dict_source.keys().type() == dict_target.keys().type(),
-               "dictionary keys must be the same type");
+  CUDF_EXPECTS(cudf::have_same_types(dict_source.keys(), dict_target.keys()),
+               "dictionary keys must be the same type",
+               cudf::data_type_error);
 
   // combine keys so both dictionaries have the same set
   auto target_matched =
@@ -210,7 +213,7 @@ void copy_range_in_place(column_view const& source,
                  (target_begin <= target.size() - (source_end - source_begin)),
                "Range is out of bounds.",
                std::out_of_range);
-  CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.", cudf::data_type_error);
+  CUDF_EXPECTS(cudf::have_same_types(target, source), "Data type mismatch.", cudf::data_type_error);
   CUDF_EXPECTS(target.nullable() || not source.has_nulls(),
                "target should be nullable if source has null values.",
                std::invalid_argument);
@@ -231,14 +234,14 @@ std::unique_ptr<column> copy_range(column_view const& source,
                                    size_type source_end,
                                    size_type target_begin,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS((source_begin >= 0) && (source_end <= source.size()) &&
                  (source_begin <= source_end) && (target_begin >= 0) &&
                  (target_begin <= target.size() - (source_end - source_begin)),
                "Range is out of bounds.",
                std::out_of_range);
-  CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.", cudf::data_type_error);
+  CUDF_EXPECTS(cudf::have_same_types(target, source), "Data type mismatch.", cudf::data_type_error);
 
   return cudf::type_dispatcher<dispatch_storage_type>(
     target.type(),
@@ -270,7 +273,7 @@ std::unique_ptr<column> copy_range(column_view const& source,
                                    size_type source_end,
                                    size_type target_begin,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::copy_range(source, target, source_begin, source_end, target_begin, stream, mr);
