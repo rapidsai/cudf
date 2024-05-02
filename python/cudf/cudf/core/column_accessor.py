@@ -180,6 +180,13 @@ class ColumnAccessor(abc.MutableMapping):
     ):
         """
         Return a new ColumnAccessor with columns and the properties of self.
+
+        Parameters
+        ----------
+        columns : iterable of Columns
+            New columns for the ColumnAccessor.
+        verify : bool, optional
+            Whether to verify column length and type.
         """
         if sys.version_info.major >= 3 and sys.version_info.minor >= 10:
             data = zip(self.names, columns, strict=True)
