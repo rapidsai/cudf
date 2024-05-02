@@ -88,7 +88,7 @@ rmm::device_buffer decompress_stripe_data(
   rmm::cuda_stream_view stream)
 {
   // Whether we have the comppression info precomputed.
-  auto const compinfo_ready = compinfo_map.size() > 0;
+  auto const compinfo_ready = not compinfo_map.empty();
 
   // Count the exact number of compressed blocks
   std::size_t num_compressed_blocks   = 0;
@@ -667,8 +667,11 @@ std::vector<range> find_table_splits(table_view const& input,
                                      std::size_t size_limit,
                                      rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(size_limit > 0, "Invalid size limit");
-  CUDF_EXPECTS(segment_length > 0, "Invalid segment_length");
+  if (size_limit == 0) {
+    return std::vector<range>{range{0, static_cast<std::size_t>(input.num_rows())}};
+  }
+
+  CUDF_EXPECTS(segment_length > 0, "Invalid segment_length", std::invalid_argument);
 
   // `segmented_row_bit_count` requires that `segment_length` is not larger than number of rows.
   segment_length = std::min(segment_length, input.num_rows());
@@ -1070,14 +1073,10 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
 
   // Split the decoded table into ranges that be output into chunks having size within the given
   // output size limit.
-  _chunk_read_data.output_table_ranges =
-    _chunk_read_data.chunk_read_limit == 0
-      ? std::vector<range>{range{
-          0, static_cast<std::size_t>(_chunk_read_data.decoded_table->num_rows())}}
-      : find_table_splits(_chunk_read_data.decoded_table->view(),
-                          _chunk_read_data.output_row_granularity,
-                          _chunk_read_data.chunk_read_limit,
-                          _stream);
+  _chunk_read_data.output_table_ranges = find_table_splits(_chunk_read_data.decoded_table->view(),
+                                                           _chunk_read_data.output_row_granularity,
+                                                           _chunk_read_data.chunk_read_limit,
+                                                           _stream);
 }
 
 }  // namespace cudf::io::orc::detail

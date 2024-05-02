@@ -142,7 +142,7 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
                                std::size_t total_count,
                                std::size_t size_limit)
 {
-  CUDF_EXPECTS(size_limit > 0, "Invalid size limit");
+  CUDF_EXPECTS(size_limit > 0, "Invalid size limit", std::invalid_argument);
 
   std::vector<range> splits;
   std::size_t cur_count{0};
@@ -445,7 +445,7 @@ void reader_impl::preprocess_file(read_mode mode)
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.pass_read_limit *
                                               chunk_read_data::load_limit_ratio);
     // Make sure not to pass 0 byte limit (due to round-off) to `find_splits`.
-    return tmp > 0UL ? tmp : 1UL;
+    return std::max(tmp, 1UL);
   }();
 
   _chunk_read_data.load_stripe_ranges =
@@ -531,13 +531,11 @@ void reader_impl::load_next_stripe_data(read_mode mode)
   }
 
   // Compute number of rows in the loading stripes.
-  auto const num_loading_rows = [&] {
-    std::size_t count{0};
-    for (std::size_t idx = 0; idx < stripe_count; ++idx) {
-      count += _file_itm_data.selected_stripes[idx + stripe_start].stripe_info->numberOfRows;
-    }
-    return count;
-  }();
+  auto const num_loading_rows = std::accumulate(
+    _file_itm_data.selected_stripes.begin() + stripe_start,
+    _file_itm_data.selected_stripes.begin() + stripe_start + stripe_count,
+    std::size_t{0},
+    [](std::size_t count, const auto& stripe) { return count + stripe.stripe_info->numberOfRows; });
 
   // Decoding range needs to be reset to start from the first position in `decode_stripe_ranges`.
   _chunk_read_data.curr_decode_stripe_range = 0;
@@ -709,7 +707,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.pass_read_limit *
                                               chunk_read_data::decompress_and_decode_limit_ratio);
     // Make sure not to pass 0 byte limit to `find_splits`.
-    return tmp > 0UL ? tmp : 1UL;
+    return std::max(tmp, 1UL);
   }();
 
   _chunk_read_data.decode_stripe_ranges =

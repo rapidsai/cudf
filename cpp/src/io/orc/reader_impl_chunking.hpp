@@ -272,7 +272,7 @@ struct cumulative_size_plus {
  *
  * @param cumulative_sizes The input cumulative sizes to compute split ranges
  * @param total_count The total count in the entire input
- * @param size_limit The given soft limit to compute splits
+ * @param size_limit The given soft limit to compute splits; must be positive
  * @return A vector of ranges as splits of the input
  */
 template <typename T>
