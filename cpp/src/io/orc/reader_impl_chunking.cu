@@ -241,7 +241,8 @@ void reader_impl::preprocess_file(read_mode mode)
   CUDF_EXPECTS(
     mode == read_mode::CHUNKED_READ ||
       _file_itm_data.rows_to_read <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-    "READ_ALL mode does not support reading number of rows more than cudf's column size limit.",
+    "READ_ALL mode does not support reading number of rows more than cudf's column size limit. "
+    "For reading large number of rows, please use chunked_reader.",
     std::overflow_error);
 
   auto const& selected_stripes = _file_itm_data.selected_stripes;
@@ -553,15 +554,19 @@ void reader_impl::load_next_stripe_data(read_mode mode)
       // In addition to read limit, we also need to check if the total number of
       // rows in the loaded stripes exceeds the column size limit.
       // If that is the case, we cannot decode all stripes at once into a cudf table.
-      num_loading_rows < column_size_limit) {
+      num_loading_rows <= column_size_limit) {
     _chunk_read_data.decode_stripe_ranges = {load_stripe_range};
     return;
   }
 
   // From here, we have reading mode that is either:
-  // - READ_ALL but the number of reading rows exceeds column size limit, or
   // - CHUNKED_READ without read limit but the number of reading rows exceeds column size limit, or
   // - CHUNKED_READ with a pass read limit.
+  // READ_ALL mode with number of rows more than cudf's column size limit should be handled early in
+  // `preprocess_file`. We just check again to make sure such situations never happen here.
+  CUDF_EXPECTS(
+    mode != read_mode::READ_ALL,
+    "READ_ALL mode does not support reading number of rows more than cudf's column size limit.");
 
   // This is the post-processing step after we've done with splitting `load_stripe_range` into
   // `decode_stripe_ranges`.
@@ -580,8 +585,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
   // Note that the values `max_uncompressed_size` for each stripe are not computed here.
   // Instead, they will be computed on the fly during decoding to avoid the overhead of
   // storing and retrieving from memory.
-  if ((mode == read_mode::READ_ALL || _chunk_read_data.pass_read_limit == 0) &&
-      num_loading_rows >= column_size_limit) {
+  if (_chunk_read_data.pass_read_limit == 0 && num_loading_rows > column_size_limit) {
     std::vector<cumulative_size_and_row> cumulative_stripe_rows(stripe_count);
     std::size_t rows{0};
 
