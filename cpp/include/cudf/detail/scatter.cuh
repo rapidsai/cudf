@@ -29,7 +29,9 @@
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -213,8 +215,9 @@ struct column_scatterer_impl<dictionary32> {
     // check the keys match
     dictionary_column_view const source(source_in);
     dictionary_column_view const target(target_in);
-    CUDF_EXPECTS(source.keys().type() == target.keys().type(),
-                 "scatter dictionary keys must be the same type");
+    CUDF_EXPECTS(cudf::have_same_types(source.keys(), target.keys()),
+                 "scatter dictionary keys must be the same type",
+                 cudf::data_type_error);
 
     // first combine keys so both dictionaries have the same set
     auto target_matched    = dictionary::detail::add_keys(target, source.keys(), stream, mr);
