@@ -1076,7 +1076,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
             __syncwarp();
           } else if (use_char_ll) {
             __shared__ __align__(8) uint8_t const* pointers[warp_size];
-            __shared__ __align__(4) size_t offsets[warp_size];
+            __shared__ __align__(8) size_t offsets[warp_size];
             __shared__ __align__(4) int dsts[warp_size];
             __shared__ __align__(4) int lengths[warp_size];
 
