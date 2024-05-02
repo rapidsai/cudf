@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -66,12 +67,12 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               out_of_bounds_policy bounds_policy,
                               negative_index_policy neg_indices,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+                              rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::detail::gather(table_view const&,column_view const&,table_view
  * const&,cudf::out_of_bounds_policy,cudf::detail::negative_index_policy,rmm::cuda_stream_view,
- * rmm::mr::device_memory_resource*)
+ * rmm::device_async_resource_ref)
  *
  * @throws cudf::logic_error if `gather_map` span size is larger than max of `size_type`.
  */
@@ -80,7 +81,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               out_of_bounds_policy bounds_policy,
                               negative_index_policy neg_indices,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+                              rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace cudf

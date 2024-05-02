@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -59,8 +60,8 @@ namespace strings {
 std::unique_ptr<string_scalar> repeat_string(
   string_scalar const& input,
   size_type repeat_times,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Repeat each string in the given strings column a given number of times
@@ -90,8 +91,8 @@ std::unique_ptr<string_scalar> repeat_string(
 std::unique_ptr<column> repeat_strings(
   strings_column_view const& input,
   size_type repeat_times,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Repeat each string in the given strings column by the numbers of times given in another
@@ -127,8 +128,8 @@ std::unique_ptr<column> repeat_strings(
 std::unique_ptr<column> repeat_strings(
   strings_column_view const& input,
   column_view const& repeat_times,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

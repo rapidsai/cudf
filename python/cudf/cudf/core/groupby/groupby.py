@@ -1201,7 +1201,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         offsets, grouped_key_cols, grouped_value_cols = self._groupby.groups(
             [*self.obj._index._columns, *self.obj._columns]
         )
-        grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)
+        grouped_keys = cudf.core.index._index_from_data(
+            dict(enumerate(grouped_key_cols))
+        )
         if isinstance(self.grouping.keys, cudf.MultiIndex):
             grouped_keys.names = self.grouping.keys.names
             to_drop = self.grouping.keys.names
@@ -1767,13 +1769,23 @@ class GroupBy(Serializable, Reducible, Scannable):
         --------
         agg
         """
+        if not (isinstance(function, str) or callable(function)):
+            raise TypeError(
+                "Aggregation must be a named aggregation or a callable"
+            )
         try:
             result = self.agg(function)
         except TypeError as e:
             raise NotImplementedError(
                 "Currently, `transform()` supports only aggregations."
             ) from e
-
+        # If the aggregation is a scan, don't broadcast
+        if libgroupby._is_all_scan_aggregate([[function]]):
+            if len(result) != len(self.obj):
+                raise AssertionError(
+                    "Unexpected result length for scan transform"
+                )
+            return result
         return self._broadcast(result)
 
     def rolling(self, *args, **kwargs):

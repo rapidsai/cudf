@@ -29,6 +29,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -95,7 +96,7 @@ template <typename device_execute_functor>
 std::unique_ptr<column> wrap(strings_column_view const& strings,
                              size_type width,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(width > 0, "Positive wrap width required");
 
@@ -139,7 +140,7 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
 std::unique_ptr<column> wrap(strings_column_view const& strings,
                              size_type width,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::wrap<detail::execute_wrap>(strings, width, stream, mr);

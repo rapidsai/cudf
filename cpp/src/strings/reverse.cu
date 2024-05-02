@@ -27,6 +27,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -58,7 +59,7 @@ struct reverse_characters_fn {
 
 std::unique_ptr<column> reverse(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
 
@@ -81,7 +82,7 @@ std::unique_ptr<column> reverse(strings_column_view const& input,
 
 std::unique_ptr<column> reverse(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::reverse(input, stream, mr);

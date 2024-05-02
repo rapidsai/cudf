@@ -30,6 +30,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -116,7 +117,7 @@ struct group_reduction_dispatcher {
                                      size_type num_groups,
                                      cudf::device_span<cudf::size_type const> group_labels,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return group_reduction_functor<K, T>::invoke(values, num_groups, group_labels, stream, mr);
   }
@@ -149,7 +150,7 @@ struct group_reduction_functor<
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
 
   {
     using SourceDType = device_storage_type_t<T>;
@@ -218,7 +219,7 @@ struct group_reduction_functor<
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     // This is be expected to be size_type.
     using ResultType = cudf::detail::target_type_t<T, K>;
