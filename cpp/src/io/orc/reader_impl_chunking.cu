@@ -37,7 +37,7 @@
 namespace cudf::io::orc::detail {
 
 std::size_t gather_stream_info_and_column_desc(
-  std::size_t stripe_order,
+  std::size_t stripe_id,
   std::size_t level,
   orc::StripeInformation const* stripeinfo,
   orc::StripeFooter const* stripefooter,
@@ -93,7 +93,7 @@ std::size_t gather_stream_info_and_column_desc(
           if (child_idx >= 0) {
             col = child_idx;
             if (chunks) {
-              auto& chunk                     = (*chunks)[stripe_order][col];
+              auto& chunk                     = (*chunks)[stripe_id][col];
               chunk.strm_id[gpu::CI_PRESENT]  = *local_stream_order;
               chunk.strm_len[gpu::CI_PRESENT] = stream.length;
             }
@@ -105,7 +105,7 @@ std::size_t gather_stream_info_and_column_desc(
         if (src_offset >= stripeinfo->indexLength || use_index) {
           auto const index_type = get_stream_index_type(stream.kind);
           if (index_type < gpu::CI_NUM_STREAMS) {
-            auto& chunk                = (*chunks)[stripe_order][col];
+            auto& chunk                = (*chunks)[stripe_id][col];
             chunk.strm_id[index_type]  = *local_stream_order;
             chunk.strm_len[index_type] = stream.length;
             // NOTE: skip_count field is temporarily used to track the presence of index streams
@@ -126,7 +126,7 @@ std::size_t gather_stream_info_and_column_desc(
           orc_stream_info{stripeinfo->offset + src_offset,
                           dst_offset,
                           stream.length,
-                          stream_source_info{stripe_order, level, column_id, stream.kind}});
+                          stream_source_info{stripe_id, level, column_id, stream.kind}});
       }
 
       dst_offset += stream.length;

@@ -290,7 +290,7 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
  * steps share most of the execution path thus this function takes mutually exclusive parameters
  * `stream_info` or `chunks` depending on each use case.
  *
- * @param stripe_order The index of the current stripe, can be global index or local decoding index
+ * @param stripe_id The index of the current stripe, can be global index or local decoding index
  * @param level The current processing nested level
  * @param stripeinfo The pointer to current stripe's information
  * @param stripefooter The pointer to current stripe's footer
@@ -305,7 +305,7 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
  * @return The number of bytes in the gathered streams
  */
 std::size_t gather_stream_info_and_column_desc(
-  std::size_t stripe_order,
+  std::size_t stripe_id,
   std::size_t level,
   orc::StripeInformation const* stripeinfo,
   orc::StripeFooter const* stripefooter,
