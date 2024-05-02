@@ -7556,6 +7556,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Returns
         -------
         The interleaved columns as a single column
+
+        .. pandas-compat::
+            **DataFrame.interleave_columns**
+
+            This method does not exist in pandas but it can be run
+            as ``pd.Series(np.vstack(df.to_numpy()).reshape((-1,)))``.
         """
         if ("category" == self.dtypes).any():
             raise ValueError(
