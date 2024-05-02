@@ -18,6 +18,8 @@ from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 import functools
 
+import numpy as np
+
 
 cdef class Column:
     """A container of nullable device data as a column of elements.
@@ -250,7 +252,15 @@ cdef class Column:
         if iface.get('mask') is not None:
             raise ValueError("mask not yet supported.")
 
-        data_type = _data_type_from_iface(iface)
+        typestr = iface['typestr'][1:]
+        if not is_c_contiguous(
+            iface['shape'],
+            iface['strides'],
+            np.dtype(typestr).itemsize
+        ):
+            raise ValueError("Data must be C-contiguous")
+
+        data_type = _datatype_from_dtype_desc(typestr)
         size = iface['shape'][0]
         return Column(
             data_type,
@@ -365,6 +375,31 @@ def _datatype_from_dtype_desc(desc):
     return DataType(mapping[desc])
 
 
-def _data_type_from_iface(iface):
-    typestr = iface['typestr'][1:]
-    return _datatype_from_dtype_desc(typestr)
+def is_c_contiguous(
+    shape: Sequence[int], strides: Sequence[int], itemsize: int
+) -> bool:
+    """Determine if shape and strides are C-contiguous
+
+    Parameters
+    ----------
+    shape : Sequence[int]
+        Number of elements in each dimension.
+    strides : Sequence[int]
+        The stride of each dimension in bytes.
+    itemsize : int
+        Size of an element in bytes.
+
+    Return
+    ------
+    bool
+        The boolean answer.
+    """
+
+    if any(dim == 0 for dim in shape):
+        return True
+    cumulative_stride = itemsize
+    for dim, stride in zip(reversed(shape), reversed(strides)):
+        if dim > 1 and stride != cumulative_stride:
+            return False
+        cumulative_stride *= dim
+    return True
