@@ -388,7 +388,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             objs = _align_objs(objs, how=join, sort=sort)
             df.index = objs[0].index
 
-        only_series = len(typs) == 1 and cudf.Series in typs
+        only_series = typs == {cudf.Series}
 
         if keys is None:
             for o in objs:
