@@ -431,8 +431,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 for name, col in o._data.items():
                     # if only series, then only keep keys as column labels
                     # if the existing column is multiindex, prepend it
-                    # to handle cases where dfs and srs are concatenated,
-                    # explicitly cast int column labels into str
+                    # to handle cases where dfs and srs are concatenated
                     if only_series:
                         col_label = k
                     elif isinstance(name, tuple):
