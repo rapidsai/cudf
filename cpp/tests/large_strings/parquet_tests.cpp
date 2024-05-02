@@ -37,13 +37,10 @@ struct ParquetStringsTest : public cudf::test::StringsLargeTest {};
 TEST_F(ParquetStringsTest, ReadLargeStrings)
 {
   // need to create a string column larger than `threshold`
-  constexpr int string_width   = 1'024;
-  constexpr size_t column_size = 512 * 1'024 * 1'024U;
-  constexpr size_t threshold   = column_size - 1;
-  constexpr int nrows          = column_size / string_width;
-
-  auto elements       = thrust::constant_iterator<std::string_view>(std::string(string_width, 'a'));
-  auto const col0     = cudf::test::strings_column_wrapper(elements, elements + nrows);
+  auto const col0        = this->long_column();
+  auto const column_size = cudf::strings_column_view(col0).chars_size(cudf::get_default_stream());
+  auto const threshold   = column_size - 1;
+  auto const expected    = cudf::table_view{{col0, col0, col0}};
   auto const expected = cudf::table_view{{col0, col0, col0}};
 
   auto expected_metadata = cudf::io::table_input_metadata{expected};
@@ -64,9 +61,12 @@ TEST_F(ParquetStringsTest, ReadLargeStrings)
 
   cudf::io::parquet_reader_options default_in_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
-  auto const result = cudf::io::read_parquet(default_in_opts);
-
-  CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), expected);
+  auto const result_view = result.tbl->view();
+  for (auto cv : result_view) {
+    auto const offsets = cudf::strings_column_view(cv).offsets();
+    EXPECT_EQ(offsets.type(), cudf::data_type{cudf::type_id::INT64});
+  }
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result_view, expected);
 
   // go back to normal threshold
   unsetenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
