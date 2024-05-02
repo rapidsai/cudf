@@ -213,8 +213,19 @@ class NumericalColumn(NumericalBaseColumn):
                 return self.astype(truediv_type)._binaryop(other, op)
 
         reflect, op = self._check_reflected_op(op)
-        if (other := self._wrap_binop_normalization(other)) is NotImplemented:
+        normalized_other = self._wrap_binop_normalization(other)
+        if normalized_other is NotImplemented:
+            # Non-numerical columns cannot be compared to numerical columns,
+            # but are expected to return all False values for equality and all
+            # True values for inequality.
+            if op in {"__eq__", "__ne__"} and not isinstance(
+                other, NumericalBaseColumn
+            ):
+                return as_column(
+                    op != "__eq__", length=len(self), dtype="bool"
+                )
             return NotImplemented
+        other = normalized_other
         out_dtype = self.dtype
         if other is not None:
             out_dtype = np.result_type(self.dtype, other.dtype)

@@ -3046,6 +3046,28 @@ def test_equality_ops_index_mismatch(fn):
     utils.assert_eq(expected, actual)
 
 
+TYPE_MISMATCH_INPUTS = [
+    [1, 2, 3],
+    ["a", "b", "c"],
+    [0.0, 3.14, np.nan],
+]
+
+
+@pytest.mark.parametrize("left", TYPE_MISMATCH_INPUTS)
+@pytest.mark.parametrize("right", TYPE_MISMATCH_INPUTS)
+@pytest.mark.parametrize("fn", ["eq", "ne"])
+def test_equality_ops_type_mismatch(left, right, fn):
+    a = cudf.Series(left, nan_as_null=False)
+    b = cudf.Series(right, nan_as_null=False)
+
+    pa = a.to_pandas()
+    pb = b.to_pandas()
+    expected = getattr(operator, fn)(pa, pb)
+    actual = getattr(operator, fn)(a, b)
+
+    utils.assert_eq(expected, actual)
+
+
 def generate_test_null_equals_columnops_data():
     # Generate tuples of:
     # (left_data, right_data, compare_bool
