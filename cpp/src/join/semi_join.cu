@@ -29,6 +29,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/distance.h>
@@ -47,7 +48,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   cudf::table_view const& right_keys,
   null_equality compare_nulls,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(0 != left_keys.num_columns(), "Left table is empty");
   CUDF_EXPECTS(0 != right_keys.num_columns(), "Right table is empty");
@@ -97,7 +98,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
   null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join(
@@ -108,7 +109,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_anti_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
   null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join(

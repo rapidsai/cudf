@@ -205,7 +205,6 @@ void metadata::sanitize_schema()
   // This code attempts to make this less messy for the code that follows.
 
   std::function<void(size_t)> process = [&](size_t schema_idx) -> void {
-    if (schema_idx < 0) { return; }
     auto& schema_elem = schema[schema_idx];
     if (schema_idx != 0 && schema_elem.type == UNDEFINED_TYPE) {
       auto const parent_type = schema[schema_elem.parent_idx].converted_type;
@@ -560,6 +559,26 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
   return col->meta_data;
 }
 
+std::vector<std::unordered_map<std::string, int64_t>>
+aggregate_reader_metadata::get_rowgroup_metadata() const
+{
+  std::vector<std::unordered_map<std::string, int64_t>> rg_metadata;
+
+  std::for_each(
+    per_file_metadata.cbegin(), per_file_metadata.cend(), [&rg_metadata](auto const& pfm) {
+      std::transform(pfm.row_groups.cbegin(),
+                     pfm.row_groups.cend(),
+                     std::back_inserter(rg_metadata),
+                     [](auto const& rg) {
+                       std::unordered_map<std::string, int64_t> rg_meta_map;
+                       rg_meta_map["num_rows"]        = rg.num_rows;
+                       rg_meta_map["total_byte_size"] = rg.total_byte_size;
+                       return rg_meta_map;
+                     });
+    });
+  return rg_metadata;
+}
+
 std::string aggregate_reader_metadata::get_pandas_index() const
 {
   // Assumes that all input files have the same metadata
@@ -703,7 +722,6 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
                        int schema_idx,
                        std::vector<cudf::io::detail::inline_column_buffer>& out_col_array,
                        bool has_list_parent) {
-      if (schema_idx < 0) { return false; }
       auto const& schema_elem = get_schema(schema_idx);
 
       // if schema_elem is a stub then it does not exist in the column_name_info and column_buffer

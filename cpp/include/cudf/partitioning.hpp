@@ -21,6 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <vector>
@@ -78,7 +79,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,
   column_view const& partition_map,
   size_type num_partitions,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Partitions rows from the input table into multiple output tables.
@@ -104,10 +105,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
-  hash_id hash_function               = hash_id::HASH_MURMUR3,
-  uint32_t seed                       = DEFAULT_HASH_SEED,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  hash_id hash_function             = hash_id::HASH_MURMUR3,
+  uint32_t seed                     = DEFAULT_HASH_SEED,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Round-robin partition.
@@ -249,8 +250,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robin_partition(
   table_view const& input,
   cudf::size_type num_partitions,
-  cudf::size_type start_partition     = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  cudf::size_type start_partition   = 0,
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

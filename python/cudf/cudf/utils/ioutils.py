@@ -101,11 +101,13 @@ Returns
 Total number of rows
 Number of row groups
 List of column names
+Number of columns
+List of metadata of row groups
 
 Examples
 --------
 >>> import cudf
->>> num_rows, num_row_groups, names = cudf.io.read_parquet_metadata(filename)
+>>> num_rows, num_row_groups, names, num_columns, row_group_metadata = cudf.io.read_parquet_metadata(filename)
 >>> df = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
 >>> df = cudf.concat(df)
 >>> df
@@ -543,7 +545,7 @@ path_or_buf : list, str, path object, or file-like object
     function or `StringIO`). Multiple inputs may be provided as a list. If a
     list is specified each list entry may be of a different input type as long
     as each input is of a valid type and all input JSON schema(s) match.
-engine : {{ 'auto', 'cudf', 'cudf_legacy', 'pandas' }}, default 'auto'
+engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the engine will be
     automatically selected based on the other parameters. See notes below.
 orient : string
@@ -690,7 +692,6 @@ keep_quotes : bool, default False
 
        This parameter is only supported with ``engine='cudf'``.
 
-    This parameter is only supported in ``cudf`` engine.
     If `True`, any string values are read literally (and wrapped in an
     additional set of quotes).
     If `False` string values are parsed into Python strings.
@@ -701,7 +702,22 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+mixed_types_as_string : bool, default False
 
+    .. admonition:: GPU-accelerated feature
+
+       This parameter is only supported with ``engine='cudf'``.
+
+    If True, mixed type columns are returned as string columns.
+    If `False` parsing mixed type columns will thrown an error.
+prune_columns : bool, default False
+
+    .. admonition:: GPU-accelerated feature
+
+       This parameter is only supported with ``engine='cudf'``.
+
+    If True, only return those columns mentioned in the dtype argument.
+    If `False` dtype argument is used a type inference suggestion.
 Returns
 -------
 result : Series or DataFrame, depending on the value of `typ`.

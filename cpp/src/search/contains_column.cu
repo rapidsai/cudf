@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace detail {
@@ -33,7 +34,7 @@ struct contains_column_dispatch {
   std::unique_ptr<column> operator()(column_view const& haystack,
                                      column_view const& needles,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+                                     rmm::device_async_resource_ref mr) const
   {
     auto result_v = detail::contains(table_view{{haystack}},
                                      table_view{{needles}},
@@ -51,7 +52,7 @@ std::unique_ptr<column> contains_column_dispatch::operator()<dictionary32>(
   column_view const& haystack_in,
   column_view const& needles_in,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
+  rmm::device_async_resource_ref mr) const
 {
   dictionary_column_view const haystack(haystack_in);
   dictionary_column_view const needles(needles_in);
@@ -79,7 +80,7 @@ std::unique_ptr<column> contains_column_dispatch::operator()<dictionary32>(
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   return cudf::type_dispatcher(
     haystack.type(), contains_column_dispatch{}, haystack, needles, stream, mr);
@@ -90,7 +91,7 @@ std::unique_ptr<column> contains(column_view const& haystack,
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::contains(haystack, needles, stream, mr);

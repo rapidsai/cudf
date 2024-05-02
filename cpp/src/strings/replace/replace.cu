@@ -22,7 +22,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/strings/detail/replace.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/replace.hpp>
@@ -32,6 +32,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
@@ -242,7 +243,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
                                                    string_view const& d_replacement,
                                                    cudf::size_type maxrepl,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+                                                   rmm::device_async_resource_ref mr)
 {
   auto d_strings = column_device_view::create(input.parent(), stream);
 
@@ -344,13 +345,14 @@ struct replace_fn {
   string_view d_target;
   string_view d_replacement;
   cudf::size_type maxrepl;
-  cudf::size_type* d_offsets{};
+  cudf::size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) {
-      if (!d_chars) { d_offsets[idx] = 0; }
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     auto const d_str   = d_strings.element<string_view>(idx);
@@ -383,7 +385,7 @@ struct replace_fn {
     if (out_ptr) {  // copy remainder
       memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
     } else {
-      d_offsets[idx] = bytes;
+      d_sizes[idx] = bytes;
     }
   }
 };
@@ -393,11 +395,11 @@ std::unique_ptr<column> replace_string_parallel(strings_column_view const& input
                                                 string_view const& d_replacement,
                                                 cudf::size_type maxrepl,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::device_async_resource_ref mr)
 {
   auto d_strings = column_device_view::create(input.parent(), stream);
 
-  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
     replace_fn{*d_strings, d_target, d_replacement, maxrepl}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
@@ -414,7 +416,7 @@ std::unique_ptr<column> replace(strings_column_view const& input,
                                 string_scalar const& repl,
                                 cudf::size_type maxrepl,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   if (maxrepl == 0) { return std::make_unique<cudf::column>(input.parent(), stream, mr); }
@@ -441,7 +443,7 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                                 string_scalar const& repl,
                                 cudf::size_type maxrepl,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::replace(strings, target, repl, maxrepl, stream, mr);
