@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 //
@@ -32,36 +35,21 @@ column_view strings_column_view::offsets() const
   return child(offsets_column_index);
 }
 
-strings_column_view::offset_iterator strings_column_view::offsets_begin() const
+int64_t strings_column_view::chars_size(rmm::cuda_stream_view stream) const noexcept
 {
-  return offsets().begin<offset_type>() + offset();
+  if (size() == 0) { return 0L; }
+  return cudf::strings::detail::get_offset_value(offsets(), offsets().size() - 1, stream);
 }
 
-strings_column_view::offset_iterator strings_column_view::offsets_end() const
+strings_column_view::chars_iterator strings_column_view::chars_begin(rmm::cuda_stream_view) const
 {
-  return offsets_begin() + size() + 1;
+  return head<char>();
 }
 
-column_view strings_column_view::chars() const
+strings_column_view::chars_iterator strings_column_view::chars_end(
+  rmm::cuda_stream_view stream) const
 {
-  CUDF_EXPECTS(num_children() > 0, "strings column has no children");
-  return child(chars_column_index);
-}
-
-size_type strings_column_view::chars_size() const noexcept
-{
-  if (size() == 0) return 0;
-  return chars().size();
-}
-
-strings_column_view::chars_iterator strings_column_view::chars_begin() const
-{
-  return chars().begin<char>();
-}
-
-strings_column_view::chars_iterator strings_column_view::chars_end() const
-{
-  return chars_begin() + chars_size();
+  return chars_begin(stream) + chars_size(stream);
 }
 
 }  // namespace cudf

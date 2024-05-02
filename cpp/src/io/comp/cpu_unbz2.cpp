@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,9 +122,9 @@ using huff_s = struct {
 // Decoder state
 using unbz_state_s = struct {
   // Input
-  const uint8_t* cur;
-  const uint8_t* end;
-  const uint8_t* base;
+  uint8_t const* cur;
+  uint8_t const* end;
+  uint8_t const* base;
   uint64_t bitbuf;
   uint32_t bitpos;
 
@@ -157,13 +157,13 @@ using unbz_state_s = struct {
 };
 
 // return next 32 bits
-static inline uint32_t next32bits(const unbz_state_s* s)
+static inline uint32_t next32bits(unbz_state_s const* s)
 {
   return (uint32_t)((s->bitbuf << s->bitpos) >> 32);
 }
 
 // return next n bits
-static inline uint32_t showbits(const unbz_state_s* s, uint32_t n)
+static inline uint32_t showbits(unbz_state_s const* s, uint32_t n)
 {
   return (uint32_t)((s->bitbuf << s->bitpos) >> (64 - n));
 }
@@ -173,9 +173,9 @@ static void skipbits(unbz_state_s* s, uint32_t n)
 {
   uint32_t bitpos = s->bitpos + n;
   if (bitpos >= 32) {
-    const uint8_t* cur = s->cur + 4;
+    uint8_t const* cur = s->cur + 4;
     uint32_t next32 =
-      (cur + 4 < s->end) ? __builtin_bswap32(*reinterpret_cast<const uint32_t*>(cur + 4)) : 0;
+      (cur + 4 < s->end) ? __builtin_bswap32(*reinterpret_cast<uint32_t const*>(cur + 4)) : 0;
     s->cur    = cur;
     s->bitbuf = (s->bitbuf << 32) | next32;
     bitpos &= 0x1f;
@@ -205,7 +205,7 @@ int32_t bz2_decompress_block(unbz_state_s* s)
   int32_t groupNo;
   int32_t groupPos;
   uint32_t nblock, nblockMAX;
-  const huff_s* gSel = nullptr;
+  huff_s const* gSel = nullptr;
   uint32_t inUse16;
   uint32_t sig0, sig1;
 
@@ -221,7 +221,7 @@ int32_t bz2_decompress_block(unbz_state_s* s)
   if (getbits(s, 1)) return BZ_DATA_ERROR;  // blockRandomized not supported (old bzip versions)
 
   s->origPtr = getbits(s, 24);
-  if (s->origPtr < 0 || s->origPtr > 10 + 100000 * s->blockSize100k) return BZ_DATA_ERROR;
+  if (s->origPtr > 10 + 100000 * s->blockSize100k) return BZ_DATA_ERROR;
 
   // Receive the mapping table
   inUse16 = getbits(s, 16);
@@ -436,7 +436,7 @@ int32_t bz2_decompress_block(unbz_state_s* s)
   }
 
   // Now we know what nblock is, we can do a better sanity check on s->origPtr.
-  if (s->origPtr < 0 || s->origPtr >= nblock) return BZ_DATA_ERROR;
+  if (s->origPtr >= nblock) return BZ_DATA_ERROR;
 
   // compute the T^(-1) vector
   {
@@ -460,7 +460,7 @@ int32_t bz2_decompress_block(unbz_state_s* s)
   // Verify the end-of-block signature: should be followed by another block or an end-of-stream
   // signature
   {
-    const uint8_t* save_cur = s->cur;
+    uint8_t const* save_cur = s->cur;
     uint64_t save_bitbuf    = s->bitbuf;
     uint32_t save_bitpos    = s->bitpos;
     sig0                    = getbits(s, 24);
@@ -524,7 +524,7 @@ static void bzUnRLE(unbz_state_s* s)
 }
 
 int32_t cpu_bz2_uncompress(
-  const uint8_t* source, size_t sourceLen, uint8_t* dest, size_t* destLen, uint64_t* block_start)
+  uint8_t const* source, size_t sourceLen, uint8_t* dest, size_t* destLen, uint64_t* block_start)
 {
   unbz_state_s s{};
   uint32_t v;
@@ -539,7 +539,7 @@ int32_t cpu_bz2_uncompress(
   s.base = source;
   s.end =
     source + sourceLen - 4;  // We will not read the final combined CRC (last 4 bytes of the file)
-  s.bitbuf = __builtin_bswap64(*reinterpret_cast<const uint64_t*>(source));
+  s.bitbuf = __builtin_bswap64(*reinterpret_cast<uint64_t const*>(source));
   s.bitpos = 0;
 
   s.out     = dest;
@@ -565,7 +565,7 @@ int32_t cpu_bz2_uncompress(
       s.cur    = source + (size_t)(bit_offs >> 3);
       s.bitpos = (uint32_t)(bit_offs & 7);
       if (s.cur + 8 > s.end) return BZ_PARAM_ERROR;
-      s.bitbuf = __builtin_bswap64(*reinterpret_cast<const uint64_t*>(s.cur));
+      s.bitbuf = __builtin_bswap64(*reinterpret_cast<uint64_t const*>(s.cur));
     }
   }
 

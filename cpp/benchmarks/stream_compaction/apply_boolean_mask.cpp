@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,11 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <fixture/benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
 
 #include <cudf/stream_compaction.hpp>
+
+#include <fixture/benchmark_fixture.hpp>
+#include <synchronization/synchronization.hpp>
 
 namespace {
 
@@ -65,7 +66,7 @@ void calculate_bandwidth(benchmark::State& state, cudf::size_type num_columns)
     (column_bytes_out + validity_bytes_out) * num_columns;  // writing columns
 
   state.SetItemsProcessed(state.iterations() * column_size * num_columns);
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * bytes_read + bytes_written);
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * (bytes_read + bytes_written));
 }
 
 }  // namespace
@@ -73,8 +74,8 @@ void calculate_bandwidth(benchmark::State& state, cudf::size_type num_columns)
 template <class T>
 void BM_apply_boolean_mask(benchmark::State& state, cudf::size_type num_columns)
 {
-  const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
-  const cudf::size_type percent_true{static_cast<cudf::size_type>(state.range(1))};
+  cudf::size_type const column_size{static_cast<cudf::size_type>(state.range(0))};
+  cudf::size_type const percent_true{static_cast<cudf::size_type>(state.range(1))};
 
   data_profile profile = data_profile_builder().cardinality(0).null_probability(0.0).distribution(
     cudf::type_to_id<T>(), distribution_id::UNIFORM, 0, 100);

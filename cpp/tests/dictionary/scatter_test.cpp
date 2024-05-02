@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-#include <cudf/copying.hpp>
-#include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/dictionary/encode.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/copying.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/dictionary/encode.hpp>
+
 #include <vector>
 
-struct DictionaryScatterTest : public cudf::test::BaseFixture {
-};
+struct DictionaryScatterTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryScatterTest, Scatter)
 {
@@ -141,5 +141,5 @@ TEST_F(DictionaryScatterTest, Error)
   EXPECT_THROW(
     cudf::scatter(
       cudf::table_view{{source->view()}}, scatter_map, cudf::table_view{{target->view()}}),
-    cudf::logic_error);
+    cudf::data_type_error);
 }

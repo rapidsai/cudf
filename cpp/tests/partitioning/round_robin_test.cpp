@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/partitioning.hpp>
@@ -22,11 +28,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/type_lists.hpp>
+#include <gtest/gtest.h>
 
 #include <algorithm>
 #include <cassert>
@@ -36,16 +38,25 @@
 #include <numeric>
 #include <vector>
 
-#include <gtest/gtest.h>
-
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 
 template <typename T>
-class RoundRobinTest : public cudf::test::BaseFixture {
-};
+class RoundRobinTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(RoundRobinTest, cudf::test::FixedWidthTypes);
+
+TYPED_TEST(RoundRobinTest, EmptyInput)
+{
+  auto const empty_column    = fixed_width_column_wrapper<TypeParam>{};
+  auto const num_partitions  = 5;
+  auto const start_partition = 0;
+  auto const [out_table, out_offsets] =
+    cudf::round_robin_partition(cudf::table_view{{empty_column}}, num_partitions, start_partition);
+
+  EXPECT_EQ(out_table->num_rows(), 0);
+  EXPECT_EQ(out_offsets.size(), std::size_t{num_partitions});
+}
 
 TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
 {

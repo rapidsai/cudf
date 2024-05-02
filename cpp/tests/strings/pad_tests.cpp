@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/padding.hpp>
@@ -21,21 +25,15 @@
 #include <cudf/strings/wrap.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <tests/strings/utilities.h>
-
 #include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
-struct StringsPadTest : public cudf::test::BaseFixture {
-};
+struct StringsPadTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsPadTest, Padding)
 {
-  std::vector<const char*> h_strings{"eee ddd", "bb cc", nullptr, "", "aa", "bbb", "ééé", "o"};
+  std::vector<char const*> h_strings{"eee ddd", "bb cc", nullptr, "", "aa", "bbb", "ééé", "o"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -47,7 +45,7 @@ TEST_F(StringsPadTest, Padding)
   {
     auto results = cudf::strings::pad(strings_view, width, cudf::strings::side_type::RIGHT, phil);
 
-    std::vector<const char*> h_expected{
+    std::vector<char const*> h_expected{
       "eee ddd", "bb cc+", nullptr, "++++++", "aa++++", "bbb+++", "ééé+++", "o+++++"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
@@ -58,7 +56,7 @@ TEST_F(StringsPadTest, Padding)
   {
     auto results = cudf::strings::pad(strings_view, width, cudf::strings::side_type::LEFT, phil);
 
-    std::vector<const char*> h_expected{
+    std::vector<char const*> h_expected{
       "eee ddd", "+bb cc", nullptr, "++++++", "++++aa", "+++bbb", "+++ééé", "+++++o"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
@@ -69,7 +67,7 @@ TEST_F(StringsPadTest, Padding)
   {
     auto results = cudf::strings::pad(strings_view, width, cudf::strings::side_type::BOTH, phil);
 
-    std::vector<const char*> h_expected{
+    std::vector<char const*> h_expected{
       "eee ddd", "bb cc+", nullptr, "++++++", "++aa++", "+bbb++", "+ééé++", "++o+++"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
@@ -99,15 +97,14 @@ TEST_F(StringsPadTest, PaddingBoth)
 
 TEST_F(StringsPadTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::pad(strings_view, 5);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
-class PadParameters : public StringsPadTest, public testing::WithParamInterface<cudf::size_type> {
-};
+class PadParameters : public StringsPadTest, public testing::WithParamInterface<cudf::size_type> {};
 
 TEST_P(PadParameters, Padding)
 {
@@ -135,20 +132,28 @@ INSTANTIATE_TEST_CASE_P(StringsPadTest,
 
 TEST_F(StringsPadTest, ZFill)
 {
-  std::vector<const char*> h_strings{
-    "654321", "-12345", nullptr, "", "-5", "0987", "4", "+8.5", "éé"};
-  cudf::test::strings_column_wrapper strings(
+  std::vector<char const*> h_strings{
+    "654321", "-12345", nullptr, "", "-5", "0987", "4", "+8.5", "éé", "+abé", "é+a", "100-"};
+  cudf::test::strings_column_wrapper input(
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::size_type width = 6;
-  std::string phil      = "+";
-  auto strings_view     = cudf::strings_column_view(strings);
+  auto strings_view = cudf::strings_column_view(input);
 
-  auto results = cudf::strings::zfill(strings_view, width);
+  auto results = cudf::strings::zfill(strings_view, 6);
 
-  std::vector<const char*> h_expected{
-    "654321", "-12345", nullptr, "000000", "0000-5", "000987", "000004", "00+8.5", "0000éé"};
+  std::vector<char const*> h_expected{"654321",
+                                      "-12345",
+                                      nullptr,
+                                      "000000",
+                                      "-00005",
+                                      "000987",
+                                      "000004",
+                                      "+008.5",
+                                      "0000éé",
+                                      "+00abé",
+                                      "000é+a",
+                                      "00100-"};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
@@ -158,7 +163,7 @@ TEST_F(StringsPadTest, ZFill)
 
 TEST_F(StringsPadTest, Wrap1)
 {
-  std::vector<const char*> h_strings{"12345", "thesé", nullptr, "ARE THE", "tést strings", ""};
+  std::vector<char const*> h_strings{"12345", "thesé", nullptr, "ARE THE", "tést strings", ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -169,7 +174,7 @@ TEST_F(StringsPadTest, Wrap1)
 
   auto results = cudf::strings::wrap(strings_view, width);
 
-  std::vector<const char*> h_expected{"12345", "thesé", nullptr, "ARE\nTHE", "tést\nstrings", ""};
+  std::vector<char const*> h_expected{"12345", "thesé", nullptr, "ARE\nTHE", "tést\nstrings", ""};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
@@ -179,7 +184,7 @@ TEST_F(StringsPadTest, Wrap1)
 
 TEST_F(StringsPadTest, Wrap2)
 {
-  std::vector<const char*> h_strings{"the quick brown fox jumped over the lazy brown dog",
+  std::vector<char const*> h_strings{"the quick brown fox jumped over the lazy brown dog",
                                      "hello, world"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -191,7 +196,7 @@ TEST_F(StringsPadTest, Wrap2)
 
   auto results = cudf::strings::wrap(strings_view, width);
 
-  std::vector<const char*> h_expected{"the quick\nbrown fox\njumped over\nthe lazy\nbrown dog",
+  std::vector<char const*> h_expected{"the quick\nbrown fox\njumped over\nthe lazy\nbrown dog",
                                       "hello, world"};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
@@ -202,7 +207,7 @@ TEST_F(StringsPadTest, Wrap2)
 
 TEST_F(StringsPadTest, WrapExpectFailure)
 {
-  std::vector<const char*> h_strings{"12345", "thesé", nullptr, "ARE THE", "tést strings", ""};
+  std::vector<char const*> h_strings{"12345", "thesé", nullptr, "ARE THE", "tést strings", ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),

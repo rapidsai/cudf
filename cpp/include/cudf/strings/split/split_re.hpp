@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,13 @@
 #include <cudf/table/table.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
+
+struct regex_program;
+
 /**
  * @addtogroup strings_split
  * @{
@@ -31,7 +35,7 @@ namespace strings {
 
 /**
  * @brief Splits strings elements into a table of strings columns
- * using a regex pattern to delimit each string.
+ * using a regex_program's pattern to delimit each string
  *
  * Each element generates a vector of strings that are stored in corresponding
  * rows in the output table -- `table[col,row] = token[col] of strings[row]`
@@ -48,15 +52,19 @@ namespace strings {
  * corresponding row of the first column.
  * A null row will produce corresponding null rows in the output table.
  *
+ * The regex_program's regex_flags are ignored.
+ *
  * @code{.pseudo}
  * s = ["a_bc def_g", "a__bc", "_ab cd", "ab_cd "]
- * s1 = split_re(s, "[_ ]")
+ * p1 = regex_program::create("[_ ]")
+ * s1 = split_re(s, p1)
  * s1 is a table of strings columns:
  *     [ ["a", "a", "", "ab"],
  *       ["bc", "", "ab", "cd"],
  *       ["def", "bc", "cd", ""],
  *       ["g", null, null, null] ]
- * s2 = split_re(s, "[ _]", 1)
+ * p2 = regex_program::create("[ _]")
+ * s2 = split_re(s, p2, 1)
  * s2 is a table of strings columns:
  *     [ ["a", "a", "", "ab"],
  *       ["bc def_g", "_bc", "ab cd", "cd "] ]
@@ -64,22 +72,24 @@ namespace strings {
  *
  * @throw cudf::logic_error if `pattern` is empty.
  *
- * @param input A column of string elements to be split.
- * @param pattern The regex pattern for delimiting characters within each string.
+ * @param input A column of string elements to be split
+ * @param prog Regex program instance
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return A table of columns of strings.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned result's device memory
+ * @return A table of columns of strings
  */
 std::unique_ptr<table> split_re(
   strings_column_view const& input,
-  std::string_view pattern,
-  size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  regex_program const& prog,
+  size_type maxsplit                = -1,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Splits strings elements into a table of strings columns
- * using a regex pattern to delimit each string starting from the end of the string.
+ * @brief Splits strings elements into a table of strings columns using a
+ * regex_program's pattern to delimit each string starting from the end of the string
  *
  * Each element generates a vector of strings that are stored in corresponding
  * rows in the output table -- `table[col,row] = token[col] of string[row]`
@@ -98,15 +108,19 @@ std::unique_ptr<table> split_re(
  * corresponding row of the first column.
  * A null row will produce corresponding null rows in the output table.
  *
+ * The regex_program's regex_flags are ignored.
+ *
  * @code{.pseudo}
  * s = ["a_bc def_g", "a__bc", "_ab cd", "ab_cd "]
- * s1 = rsplit_re(s, "[_ ]")
+ * p1 = regex_program::create("[_ ]")
+ * s1 = rsplit_re(s, p1)
  * s1 is a table of strings columns:
  *     [ ["a", "a", "", "ab"],
  *       ["bc", "", "ab", "cd"],
  *       ["def", "bc", "cd", ""],
  *       ["g", null, null, null] ]
- * s2 = rsplit_re(s, "[ _]", 1)
+ * p2 = regex_program::create("[ _]")
+ * s2 = rsplit_re(s, p2, 1)
  * s2 is a table of strings columns:
  *     [ ["a_bc def", "a_", "_ab", "ab"],
  *       ["g", "bc", "cd", "cd "] ]
@@ -114,22 +128,24 @@ std::unique_ptr<table> split_re(
  *
  * @throw cudf::logic_error if `pattern` is empty.
  *
- * @param input A column of string elements to be split.
- * @param pattern The regex pattern for delimiting characters within each string.
+ * @param input A column of string elements to be split
+ * @param prog Regex program instance
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return A table of columns of strings.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned result's device memory
+ * @return A table of columns of strings
  */
 std::unique_ptr<table> rsplit_re(
   strings_column_view const& input,
-  std::string_view pattern,
-  size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  regex_program const& prog,
+  size_type maxsplit                = -1,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Splits strings elements into a list column of strings
- * using the given regex pattern to delimit each string.
+ * using the given regex_program to delimit each string
  *
  * Each element generates an array of strings that are stored in an output
  * lists column -- `list[row] = [token1, token2, ...] found in input[row]`
@@ -146,15 +162,19 @@ std::unique_ptr<table> rsplit_re(
  * An empty input string will produce a corresponding empty list item output row.
  * A null row will produce a corresponding null output row.
  *
+ * The regex_program's regex_flags are ignored.
+ *
  * @code{.pseudo}
  * s = ["a_bc def_g", "a__bc", "_ab cd", "ab_cd "]
- * s1 = split_record_re(s, "[_ ]")
+ * p1 = regex_program::create("[_ ]")
+ * s1 = split_record_re(s, p1)
  * s1 is a lists column of strings:
  *     [ ["a", "bc", "def", "g"],
  *       ["a", "", "bc"],
  *       ["", "ab", "cd"],
  *       ["ab", "cd", ""] ]
- * s2 = split_record_re(s, "[ _]", 1)
+ * p2 = regex_program::create("[ _]")
+ * s2 = split_record_re(s, p2, 1)
  * s2 is a lists column of strings:
  *     [ ["a", "bc def_g"],
  *       ["a", "_bc"],
@@ -166,22 +186,24 @@ std::unique_ptr<table> rsplit_re(
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @param input A column of string elements to be split.
- * @param pattern The regex pattern for delimiting characters within each string.
+ * @param input A column of string elements to be split
+ * @param prog Regex program instance
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return Lists column of strings.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned result's device memory
+ * @return Lists column of strings
  */
 std::unique_ptr<column> split_record_re(
   strings_column_view const& input,
-  std::string_view pattern,
-  size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  regex_program const& prog,
+  size_type maxsplit                = -1,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Splits strings elements into a list column of strings
- * using the given regex pattern to delimit each string starting from the end of the string.
+ * @brief Splits strings elements into a list column of strings using the given
+ * regex_program to delimit each string starting from the end of the string
  *
  * Each element generates a vector of strings that are stored in an output
  * lists column -- `list[row] = [token1, token2, ...] found in input[row]`
@@ -200,15 +222,19 @@ std::unique_ptr<column> split_record_re(
  * An empty input string will produce a corresponding empty list item output row.
  * A null row will produce a corresponding null output row.
  *
+ * The regex_program's regex_flags are ignored.
+ *
  * @code{.pseudo}
  * s = ["a_bc def_g", "a__bc", "_ab cd", "ab_cd "]
- * s1 = rsplit_record_re(s, "[_ ]")
+ * p1 = regex_program::create("[_ ]")
+ * s1 = rsplit_record_re(s, p1)
  * s1 is a lists column of strings:
  *     [ ["a", "bc", "def", "g"],
  *       ["a", "", "bc"],
  *       ["", "ab", "cd"],
  *       ["ab", "cd", ""] ]
- * s2 = rsplit_record_re(s, "[ _]", 1)
+ * p2 = regex_program::create("[ _]")
+ * s2 = rsplit_record_re(s, p2, 1)
  * s2 is a lists column of strings:
  *     [ ["a_bc def", "g"],
  *       ["a_", "bc"],
@@ -220,18 +246,20 @@ std::unique_ptr<column> split_record_re(
  *
  * @throw cudf::logic_error if `pattern` is empty.
  *
- * @param input A column of string elements to be split.
- * @param pattern The regex pattern for delimiting characters within each string.
+ * @param input A column of string elements to be split
+ * @param prog Regex program instance
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return Lists column of strings.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned result's device memory
+ * @return Lists column of strings
  */
 std::unique_ptr<column> rsplit_record_re(
   strings_column_view const& input,
-  std::string_view pattern,
-  size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  regex_program const& prog,
+  size_type maxsplit                = -1,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

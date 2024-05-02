@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,12 +67,20 @@ class byte_range_info {
    * @return Offset in bytes
    */
   [[nodiscard]] constexpr int64_t offset() { return _offset; }
+
   /**
    * @brief Get the size in bytes
    *
    * @return Size in bytes
    */
   [[nodiscard]] constexpr int64_t size() { return _size; }
+
+  /**
+   * @brief Returns whether the span is empty.
+   *
+   * @return true iff the span is empty, i.e. `size() == 0`
+   */
+  [[nodiscard]] constexpr bool empty() { return size() == 0; }
 };
 
 /**
@@ -90,9 +98,9 @@ std::vector<byte_range_info> create_byte_range_infos_consecutive(int64_t total_b
 
 /**
  * @brief Create a byte_range_info which represents as much of a file as possible. Specifically,
- * `[0, numeric_limit<int64_t>::max())`.
+ * ``[0, numeric_limits<int64_t>:\:max())``.
  *
- * @return `[0, numeric_limit<int64_t>::max())`
+ * @return Byte range info of size ``[0, numeric_limits<int64_t>:\:max())``
  */
 byte_range_info create_byte_range_info_max();
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,32 +14,30 @@
  * limitations under the License.
  */
 
-#include <io/parquet/parquet_gpu.hpp>
+#include "parquet_gpu.cuh"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/atomic>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
+namespace cudf::io::parquet::detail {
+
 namespace {
 constexpr int DEFAULT_BLOCK_SIZE = 256;
 }
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   initialize_chunk_hash_maps_kernel(device_span<EncColumnChunk> chunks)
 {
-  auto chunk = chunks[blockIdx.x];
-  auto t     = threadIdx.x;
+  auto const chunk = chunks[blockIdx.x];
+  auto const t     = threadIdx.x;
   // fut: Now that per-chunk dict is same size as ck.num_values, try to not use one block per chunk
-  for (size_type i = 0; i < chunk.dict_map_size; i += block_size) {
+  for (thread_index_type i = 0; i < chunk.dict_map_size; i += block_size) {
     if (t + i < chunk.dict_map_size) {
       new (&chunk.dict_map_slots[t + i].first) map_type::atomic_key_type{KEY_SENTINEL};
       new (&chunk.dict_map_slots[t + i].second) map_type::atomic_mapped_type{VALUE_SENTINEL};
@@ -53,7 +51,8 @@ struct equality_functor {
   __device__ bool operator()(size_type lhs_idx, size_type rhs_idx)
   {
     // We don't call this for nulls so this is fine
-    return equality_compare(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
+    auto const equal = cudf::experimental::row::equality::nan_equal_physical_equality_comparator{};
+    return equal(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
   }
 };
 
@@ -62,7 +61,7 @@ struct hash_functor {
   column_device_view const& col;
   __device__ auto operator()(size_type idx) const
   {
-    return cudf::detail::MurmurHash3_32<T>{}(col.element<T>(idx));
+    return cudf::hashing::detail::MurmurHash3_x86_32<T>{}(col.element<T>(idx));
   }
 };
 
@@ -99,8 +98,8 @@ struct map_find_fn {
 };
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
-  populate_chunk_hash_maps_kernel(cudf::detail::device_2dspan<gpu::PageFragment const> frags)
+CUDF_KERNEL void __launch_bounds__(block_size)
+  populate_chunk_hash_maps_kernel(cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
@@ -124,14 +123,13 @@ __global__ void __launch_bounds__(block_size)
   column_device_view const& data_col = *col->leaf_column;
 
   // Make a view of the hash map
-  auto hash_map_mutable =
-    map_type::device_mutable_view(chunk->dict_map_slots,
-                                  chunk->dict_map_size,
-                                  cuco::sentinel::empty_key{KEY_SENTINEL},
-                                  cuco::sentinel::empty_value{VALUE_SENTINEL});
+  auto hash_map_mutable = map_type::device_mutable_view(chunk->dict_map_slots,
+                                                        chunk->dict_map_size,
+                                                        cuco::empty_key{KEY_SENTINEL},
+                                                        cuco::empty_value{VALUE_SENTINEL});
 
   __shared__ size_type total_num_dict_entries;
-  size_type val_idx = s_start_value_idx + t;
+  thread_index_type val_idx = s_start_value_idx + t;
   while (val_idx - block_size < end_value_idx) {
     auto const is_valid =
       val_idx < end_value_idx and val_idx < data_col.size() and data_col.is_valid(val_idx);
@@ -191,7 +189,7 @@ __global__ void __launch_bounds__(block_size)
 }
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   collect_map_entries_kernel(device_span<EncColumnChunk> chunks)
 {
   auto& chunk = chunks[blockIdx.x];
@@ -200,8 +198,8 @@ __global__ void __launch_bounds__(block_size)
   auto t   = threadIdx.x;
   auto map = map_type::device_view(chunk.dict_map_slots,
                                    chunk.dict_map_size,
-                                   cuco::sentinel::empty_key{KEY_SENTINEL},
-                                   cuco::sentinel::empty_value{VALUE_SENTINEL});
+                                   cuco::empty_key{KEY_SENTINEL},
+                                   cuco::empty_value{VALUE_SENTINEL});
 
   __shared__ cuda::atomic<size_type, cuda::thread_scope_block> counter;
   using cuda::std::memory_order_relaxed;
@@ -225,8 +223,8 @@ __global__ void __launch_bounds__(block_size)
 }
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
-  get_dictionary_indices_kernel(cudf::detail::device_2dspan<gpu::PageFragment const> frags)
+CUDF_KERNEL void __launch_bounds__(block_size)
+  get_dictionary_indices_kernel(cudf::detail::device_2dspan<PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
@@ -249,14 +247,12 @@ __global__ void __launch_bounds__(block_size)
 
   auto map = map_type::device_view(chunk->dict_map_slots,
                                    chunk->dict_map_size,
-                                   cuco::sentinel::empty_key{KEY_SENTINEL},
-                                   cuco::sentinel::empty_value{VALUE_SENTINEL});
+                                   cuco::empty_key{KEY_SENTINEL},
+                                   cuco::empty_value{VALUE_SENTINEL});
 
-  auto val_idx = s_start_value_idx + t;
+  thread_index_type val_idx = s_start_value_idx + t;
   while (val_idx < end_value_idx) {
-    auto const is_valid = val_idx < data_col.size() and data_col.is_valid(val_idx);
-
-    if (is_valid) {
+    if (data_col.is_valid(val_idx)) {
       auto found_slot = type_dispatcher(data_col.type(), map_find_fn{map}, data_col, val_idx);
       cudf_assert(found_slot != map.end() &&
                   "Unable to find value in map in dictionary index construction");
@@ -278,7 +274,7 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
     <<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
 }
 
-void populate_chunk_hash_maps(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
+void populate_chunk_hash_maps(cudf::detail::device_2dspan<PageFragment const> frags,
                               rmm::cuda_stream_view stream)
 {
   dim3 const dim_grid(frags.size().second, frags.size().first);
@@ -292,14 +288,11 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
   collect_map_entries_kernel<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
 }
 
-void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
+void get_dictionary_indices(cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream)
 {
   dim3 const dim_grid(frags.size().second, frags.size().first);
   get_dictionary_indices_kernel<DEFAULT_BLOCK_SIZE>
     <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(frags);
 }
-}  // namespace gpu
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

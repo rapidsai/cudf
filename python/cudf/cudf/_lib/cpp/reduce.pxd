@@ -1,30 +1,30 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport pair
 
-from cudf._lib.aggregation cimport reduce_aggregation, scan_aggregation
+from cudf._lib.cpp.aggregation cimport reduce_aggregation, scan_aggregation
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport data_type
-from cudf._lib.scalar cimport DeviceScalar
 
 
 cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
     cdef unique_ptr[scalar] cpp_reduce "cudf::reduce" (
         column_view col,
-        const unique_ptr[reduce_aggregation] agg,
+        const reduce_aggregation& agg,
         data_type type
     ) except +
 
-    ctypedef enum scan_type:
+    cpdef enum class scan_type(bool):
         INCLUSIVE "cudf::scan_type::INCLUSIVE",
         EXCLUSIVE "cudf::scan_type::EXCLUSIVE",
 
     cdef unique_ptr[column] cpp_scan "cudf::scan" (
         column_view col,
-        const unique_ptr[scan_aggregation] agg,
+        const scan_aggregation& agg,
         scan_type inclusive
     ) except +
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <reductions/struct_minmax_util.cuh>
+#include "reductions/nested_type_minmax_util.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -26,6 +26,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -33,6 +34,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -59,7 +61,7 @@ struct group_scan_dispatcher {
                                      size_type num_groups,
                                      cudf::device_span<cudf::size_type const> group_labels,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return group_scan_functor<K, T>::invoke(values, num_groups, group_labels, stream, mr);
   }
@@ -73,6 +75,8 @@ static constexpr bool is_group_scan_supported()
 {
   if (K == aggregation::SUM)
     return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
+  else if (K == aggregation::PRODUCT)
+    return cudf::is_numeric<T>();
   else if (K == aggregation::MIN or K == aggregation::MAX)
     return not cudf::is_dictionary<T>() and
            (is_relationally_comparable<T, T>() or std::is_same_v<T, cudf::struct_view>);
@@ -86,7 +90,7 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     using DeviceType       = device_storage_type_t<T>;
     using OpType           = cudf::detail::corresponding_operator_t<K>;
@@ -124,7 +128,7 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
         make_null_replacement_iterator(*values_view, OpType::template identity<DeviceType>()),
         thrust::identity<ResultDeviceType>{});
       do_scan(input, result_view->begin<ResultDeviceType>(), OpType{});
-      result->set_null_mask(cudf::detail::copy_bitmask(values, stream));
+      result->set_null_mask(cudf::detail::copy_bitmask(values, stream, mr), values.null_count());
     } else {
       auto input = thrust::make_transform_iterator(values_view->begin<DeviceType>(),
                                                    thrust::identity<ResultDeviceType>{});
@@ -142,7 +146,7 @@ struct group_scan_functor<K,
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     using OpType = cudf::detail::corresponding_operator_t<K>;
 
@@ -175,7 +179,7 @@ struct group_scan_functor<K,
     // turn the string_view vector into a strings column
     auto results = make_strings_column(results_vector, string_view{}, stream, mr);
     if (values.has_nulls())
-      results->set_null_mask(cudf::detail::copy_bitmask(values, stream), values.null_count());
+      results->set_null_mask(cudf::detail::copy_bitmask(values, stream, mr), values.null_count());
     return results;
   }
 };
@@ -188,7 +192,7 @@ struct group_scan_functor<K,
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     if (values.is_empty()) { return cudf::empty_like(values); }
 
@@ -226,8 +230,8 @@ struct group_scan_functor<K,
     // column to them.
     if (values.has_nulls()) {
       for (std::unique_ptr<column>& child : scanned_children) {
-        structs::detail::superimpose_parent_nulls(
-          values.null_mask(), values.null_count(), *child, stream, mr);
+        child = structs::detail::superimpose_nulls(
+          values.null_mask(), values.null_count(), std::move(child), stream, mr);
       }
     }
 

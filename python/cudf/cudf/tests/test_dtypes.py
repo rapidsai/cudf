@@ -1,12 +1,12 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import cudf
-from cudf.core._compat import PANDAS_GE_130
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -176,16 +176,12 @@ def closed(request):
 
 
 def test_interval_dtype_pyarrow_round_trip(subtype, closed):
-    pa_array = pd.core.arrays._arrow_utils.ArrowIntervalType(subtype, closed)
+    pa_array = ArrowIntervalType(subtype, closed)
     expect = pa_array
     got = IntervalDtype.from_arrow(expect).to_arrow()
     assert expect.equals(got)
 
 
-@pytest.mark.skipif(
-    not PANDAS_GE_130,
-    reason="pandas<1.3.0 doesn't have a closed argument for IntervalDtype",
-)
 def test_interval_dtype_from_pandas(subtype, closed):
     expect = cudf.IntervalDtype(subtype, closed=closed)
     pd_type = pd.IntervalDtype(subtype, closed=closed)

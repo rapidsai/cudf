@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,10 @@
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/tdigest/tdigest_column_view.cuh>
+#include <cudf/tdigest/tdigest_column_view.hpp>
 
 namespace cudf {
 namespace tdigest {
-
-using namespace cudf;
 
 tdigest_column_view::tdigest_column_view(column_view const& col) : column_view(col)
 {
@@ -30,7 +28,7 @@ tdigest_column_view::tdigest_column_view(column_view const& col) : column_view(c
   CUDF_EXPECTS(col.type().id() == type_id::STRUCT, "Encountered invalid tdigest column");
   CUDF_EXPECTS(col.size() > 0, "tdigest columns must have > 0 rows");
   CUDF_EXPECTS(col.offset() == 0, "Encountered a sliced tdigest column");
-  CUDF_EXPECTS(col.nullable() == false, "Encountered nullable tdigest column");
+  CUDF_EXPECTS(not col.nullable(), "Encountered nullable tdigest column");
 
   structs_column_view scv(col);
   CUDF_EXPECTS(scv.num_children() == 3, "Encountered invalid tdigest column");

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,10 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/file_utilities.hpp>
 
 #include <cudf/strings/strings_column_view.hpp>
+
 #include <nvtext/subword_tokenize.hpp>
 
 #include <filesystem>
@@ -27,12 +29,10 @@
 #include <iostream>
 #include <vector>
 
-#define MAX_ROWS_TENSOR 300
-
 static std::string create_hash_vocab_file()
 {
-  std::string dir_template{std::filesystem::temp_directory_path().string()};
-  if (const char* env_p = std::getenv("WORKSPACE")) dir_template = env_p;
+  static temp_directory const subword_tmpdir{"cudf_gbench"};
+  auto dir_template     = subword_tmpdir.path();
   std::string hash_file = dir_template + "/hash_vocab.txt";
   // create a fake hashed vocab text file for this test
   // this only works with words in the strings in the benchmark code below
@@ -57,9 +57,9 @@ static std::string create_hash_vocab_file()
 static void BM_subword_tokenizer(benchmark::State& state)
 {
   auto const nrows = static_cast<cudf::size_type>(state.range(0));
-  std::vector<const char*> h_strings(nrows, "This is a test ");
+  std::vector<char const*> h_strings(nrows, "This is a test ");
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
-  std::string hash_file = create_hash_vocab_file();
+  static std::string hash_file = create_hash_vocab_file();
   std::vector<uint32_t> offsets{14};
   uint32_t max_sequence_length = 64;
   uint32_t stride              = 48;
@@ -74,13 +74,11 @@ static void BM_subword_tokenizer(benchmark::State& state)
                                            max_sequence_length,
                                            stride,
                                            do_lower,
-                                           do_truncate,
-                                           MAX_ROWS_TENSOR);
+                                           do_truncate);
   }
 }
 
-class Subword : public cudf::benchmark {
-};
+class Subword : public cudf::benchmark {};
 
 #define SUBWORD_BM_BENCHMARK_DEFINE(name)                                                        \
   BENCHMARK_DEFINE_F(Subword, name)(::benchmark::State & state) { BM_subword_tokenizer(state); } \

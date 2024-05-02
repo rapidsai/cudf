@@ -1,3 +1,6 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
+
 class Masked:
     """
     Most of the time, MaskedType as defined in typing.py

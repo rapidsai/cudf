@@ -1,13 +1,13 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import pandas as pd
 import pytest
 
-import cudf as gd
+import cudf
 from cudf.testing._utils import assert_eq
 
 
-@gd.api.extensions.register_dataframe_accessor("point")
+@cudf.api.extensions.register_dataframe_accessor("point")
 @pd.api.extensions.register_dataframe_accessor("point")
 class PointsAccessor:
     def __init__(self, obj):
@@ -29,7 +29,7 @@ class PointsAccessor:
 
 
 @pytest.mark.parametrize(
-    "gdf", [gd.datasets.randomdata(nrows=6, dtypes={"x": int, "y": int})]
+    "gdf", [cudf.datasets.randomdata(nrows=6, dtypes={"x": int, "y": int})]
 )
 def test_dataframe_accessor(gdf):
     pdf = gdf.to_pandas()
@@ -38,10 +38,10 @@ def test_dataframe_accessor(gdf):
 
 
 @pytest.mark.parametrize(
-    "gdf1", [gd.datasets.randomdata(nrows=1, dtypes={"x": int, "y": int})]
+    "gdf1", [cudf.datasets.randomdata(nrows=1, dtypes={"x": int, "y": int})]
 )
 @pytest.mark.parametrize(
-    "gdf2", [gd.datasets.randomdata(nrows=1, dtypes={"x": int, "y": int})]
+    "gdf2", [cudf.datasets.randomdata(nrows=1, dtypes={"x": int, "y": int})]
 )
 def test_dataframe_accessor_idendity(gdf1, gdf2):
     """Test for accessor identities
@@ -50,13 +50,13 @@ def test_dataframe_accessor_idendity(gdf1, gdf2):
     """
 
     assert gdf1.point is gdf1.point
-    assert not (gdf1.point is gdf2.point)
+    assert gdf1.point is not gdf2.point
 
 
 @pd.api.extensions.register_index_accessor("odd")
 @pd.api.extensions.register_series_accessor("odd")
-@gd.api.extensions.register_index_accessor("odd")
-@gd.api.extensions.register_series_accessor("odd")
+@cudf.api.extensions.register_index_accessor("odd")
+@cudf.api.extensions.register_series_accessor("odd")
 class OddRowAccessor:
     def __init__(self, obj):
         self._obj = obj
@@ -65,7 +65,7 @@ class OddRowAccessor:
         return self._obj[2 * i - 1]
 
 
-@pytest.mark.parametrize("gidx", [gd.Index(list(range(0, 50)))])
+@pytest.mark.parametrize("gidx", [cudf.Index(list(range(0, 50)))])
 def test_index_accessor(gidx):
     pidx = gidx.to_pandas()
 
@@ -73,7 +73,7 @@ def test_index_accessor(gidx):
         assert_eq(gidx.odd[i], pidx.odd[i])
 
 
-@pytest.mark.parametrize("gs", [gd.Series(list(range(1, 50)))])
+@pytest.mark.parametrize("gs", [cudf.Series(list(range(1, 50)))])
 def test_series_accessor(gs):
     ps = gs.to_pandas()
 
@@ -82,10 +82,10 @@ def test_series_accessor(gs):
 
 
 @pytest.mark.parametrize(
-    "gdf", [gd.datasets.randomdata(nrows=6, dtypes={"x": int, "y": int})]
+    "gdf", [cudf.datasets.randomdata(nrows=6, dtypes={"x": int, "y": int})]
 )
-@pytest.mark.parametrize("gidx", [gd.Index(list(range(1, 50)))])
-@pytest.mark.parametrize("gs", [gd.Series(list(range(1, 50)))])
+@pytest.mark.parametrize("gidx", [cudf.Index(list(range(1, 50)))])
+@pytest.mark.parametrize("gs", [cudf.Series(list(range(1, 50)))])
 def test_accessor_space_separate(gdf, gidx, gs):
     assert not id(gdf._accessors) == id(gidx._accessors)
     assert not id(gidx._accessors) == id(gs._accessors)

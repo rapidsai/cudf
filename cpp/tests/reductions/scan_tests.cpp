@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ struct ScanTest : public BaseScanTest<T> {
 
   void scan_test(cudf::host_span<HostType const> v,
                  cudf::host_span<bool const> b,
-                 std::unique_ptr<scan_aggregation> const& agg,
+                 scan_aggregation const& agg,
                  scan_type inclusive,
                  null_policy null_handling,
                  numeric::scale_type scale)
@@ -57,13 +57,14 @@ struct ScanTest : public BaseScanTest<T> {
       auto expected_col_out = this->make_expected(v, b, agg, inclusive, null_handling, scale);
       auto col_out          = scan(*col_in, agg, inclusive, null_handling);
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_col_out, *col_out);
+      EXPECT_FALSE(cudf::has_nonempty_nulls(col_out->view()));
     }
   }
 
   // Overload to iterate the test over a few different scales for fixed-point tests
   void scan_test(cudf::host_span<HostType const> v,
                  cudf::host_span<bool const> b,
-                 std::unique_ptr<scan_aggregation> const& agg,
+                 scan_aggregation const& agg,
                  scan_type inclusive,
                  null_policy null_handling = null_policy::EXCLUDE)
   {
@@ -76,10 +77,10 @@ struct ScanTest : public BaseScanTest<T> {
     }
   }
 
-  bool params_supported(std::unique_ptr<scan_aggregation> const& agg, scan_type inclusive)
+  bool params_supported(scan_aggregation const& agg, scan_type inclusive)
   {
     bool supported = [&] {
-      switch (agg->kind) {
+      switch (agg.kind) {
         case aggregation::SUM: return std::is_invocable_v<cudf::DeviceSum, T, T>;
         case aggregation::PRODUCT: return std::is_invocable_v<cudf::DeviceProduct, T, T>;
         case aggregation::MIN: return std::is_invocable_v<cudf::DeviceMin, T, T>;
@@ -91,17 +92,16 @@ struct ScanTest : public BaseScanTest<T> {
     }();
 
     // special cases for individual types
-    if constexpr (cudf::is_fixed_point<T>())
-      return supported && (agg->kind != aggregation::PRODUCT);
+    if constexpr (cudf::is_fixed_point<T>()) return supported && (agg.kind != aggregation::PRODUCT);
     if constexpr (std::is_same_v<T, cudf::string_view> || cudf::is_timestamp<T>())
       return supported && (inclusive == scan_type::INCLUSIVE);
     return supported;
   }
 
-  std::function<HostType(HostType, HostType)> make_agg(std::unique_ptr<scan_aggregation> const& agg)
+  std::function<HostType(HostType, HostType)> make_agg(scan_aggregation const& agg)
   {
     if constexpr (std::is_same_v<T, cudf::string_view>) {
-      switch (agg->kind) {
+      switch (agg.kind) {
         case aggregation::MIN: return [](HostType a, HostType b) { return std::min(a, b); };
         case aggregation::MAX: return [](HostType a, HostType b) { return std::max(a, b); };
         default: {
@@ -110,7 +110,7 @@ struct ScanTest : public BaseScanTest<T> {
         }
       }
     } else {
-      switch (agg->kind) {
+      switch (agg.kind) {
         case aggregation::SUM: return std::plus<HostType>{};
         case aggregation::PRODUCT: return std::multiplies<HostType>{};
         case aggregation::MIN: return [](HostType a, HostType b) { return std::min(a, b); };
@@ -123,16 +123,16 @@ struct ScanTest : public BaseScanTest<T> {
     }
   }
 
-  HostType make_identity(std::unique_ptr<scan_aggregation> const& agg)
+  HostType make_identity(scan_aggregation const& agg)
   {
     if constexpr (std::is_same_v<T, cudf::string_view>) {
-      switch (agg->kind) {
+      switch (agg.kind) {
         case aggregation::MIN: return std::string{"\xF7\xBF\xBF\xBF"};
         case aggregation::MAX: return std::string{};
         default: CUDF_FAIL("Unsupported aggregation");
       }
     } else {
-      switch (agg->kind) {
+      switch (agg.kind) {
         case aggregation::SUM: return HostType{0};
         case aggregation::PRODUCT: return HostType{1};
         case aggregation::MIN:
@@ -154,7 +154,7 @@ struct ScanTest : public BaseScanTest<T> {
 
   std::unique_ptr<cudf::column> make_expected(cudf::host_span<HostType const> v,
                                               cudf::host_span<bool const> b,
-                                              std::unique_ptr<scan_aggregation> const& agg,
+                                              scan_aggregation const& agg,
                                               scan_type inclusive,
                                               null_policy null_handling,
                                               numeric::scale_type scale = numeric::scale_type{0})
@@ -220,28 +220,28 @@ TYPED_TEST(ScanTest, Min)
   auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 0, 1, 1, 1, 1, 0, 0, 1});
 
   // no nulls
-  this->scan_test(v, {}, cudf::make_min_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
-  this->scan_test(v, {}, cudf::make_min_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
+  this->scan_test(v, {}, *cudf::make_min_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
+  this->scan_test(v, {}, *cudf::make_min_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
   // skipna = true (default)
   this->scan_test(v,
                   b,
-                  cudf::make_min_aggregation<scan_aggregation>(),
+                  *cudf::make_min_aggregation<scan_aggregation>(),
                   scan_type::INCLUSIVE,
                   null_policy::EXCLUDE);
   this->scan_test(v,
                   b,
-                  cudf::make_min_aggregation<scan_aggregation>(),
+                  *cudf::make_min_aggregation<scan_aggregation>(),
                   scan_type::EXCLUSIVE,
                   null_policy::EXCLUDE);
   // skipna = false
   this->scan_test(v,
                   b,
-                  cudf::make_min_aggregation<scan_aggregation>(),
+                  *cudf::make_min_aggregation<scan_aggregation>(),
                   scan_type::INCLUSIVE,
                   null_policy::INCLUDE);
   this->scan_test(v,
                   b,
-                  cudf::make_min_aggregation<scan_aggregation>(),
+                  *cudf::make_min_aggregation<scan_aggregation>(),
                   scan_type::EXCLUSIVE,
                   null_policy::INCLUDE);
 }
@@ -253,28 +253,28 @@ TYPED_TEST(ScanTest, Max)
 
   // inclusive
   // no nulls
-  this->scan_test(v, {}, cudf::make_max_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
-  this->scan_test(v, {}, cudf::make_max_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
+  this->scan_test(v, {}, *cudf::make_max_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
+  this->scan_test(v, {}, *cudf::make_max_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
   // skipna = true (default)
   this->scan_test(v,
                   b,
-                  cudf::make_max_aggregation<scan_aggregation>(),
+                  *cudf::make_max_aggregation<scan_aggregation>(),
                   scan_type::INCLUSIVE,
                   null_policy::EXCLUDE);
   this->scan_test(v,
                   b,
-                  cudf::make_max_aggregation<scan_aggregation>(),
+                  *cudf::make_max_aggregation<scan_aggregation>(),
                   scan_type::EXCLUSIVE,
                   null_policy::EXCLUDE);
   // skipna = false
   this->scan_test(v,
                   b,
-                  cudf::make_max_aggregation<scan_aggregation>(),
+                  *cudf::make_max_aggregation<scan_aggregation>(),
                   scan_type::INCLUSIVE,
                   null_policy::INCLUDE);
   this->scan_test(v,
                   b,
-                  cudf::make_max_aggregation<scan_aggregation>(),
+                  *cudf::make_max_aggregation<scan_aggregation>(),
                   scan_type::EXCLUSIVE,
                   null_policy::INCLUDE);
 }
@@ -285,28 +285,28 @@ TYPED_TEST(ScanTest, Product)
   auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 1, 1, 0, 1, 1});
 
   // no nulls
-  this->scan_test(v, {}, cudf::make_product_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
-  this->scan_test(v, {}, cudf::make_product_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
+  this->scan_test(v, {}, *cudf::make_product_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
+  this->scan_test(v, {}, *cudf::make_product_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
   // skipna = true (default)
   this->scan_test(v,
                   b,
-                  cudf::make_product_aggregation<scan_aggregation>(),
+                  *cudf::make_product_aggregation<scan_aggregation>(),
                   scan_type::INCLUSIVE,
                   null_policy::EXCLUDE);
   this->scan_test(v,
                   b,
-                  cudf::make_product_aggregation<scan_aggregation>(),
+                  *cudf::make_product_aggregation<scan_aggregation>(),
                   scan_type::EXCLUSIVE,
                   null_policy::EXCLUDE);
   // skipna = false
   this->scan_test(v,
                   b,
-                  cudf::make_product_aggregation<scan_aggregation>(),
+                  *cudf::make_product_aggregation<scan_aggregation>(),
                   scan_type::INCLUSIVE,
                   null_policy::INCLUDE);
   this->scan_test(v,
                   b,
-                  cudf::make_product_aggregation<scan_aggregation>(),
+                  *cudf::make_product_aggregation<scan_aggregation>(),
                   scan_type::EXCLUSIVE,
                   null_policy::INCLUDE);
 }
@@ -321,28 +321,28 @@ TYPED_TEST(ScanTest, Sum)
   auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 0, 1, 1, 0, 0, 1, 1, 1, 1});
 
   // no nulls
-  this->scan_test(v, {}, cudf::make_sum_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
-  this->scan_test(v, {}, cudf::make_sum_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
+  this->scan_test(v, {}, *cudf::make_sum_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
+  this->scan_test(v, {}, *cudf::make_sum_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
   // skipna = true (default)
   this->scan_test(v,
                   b,
-                  cudf::make_sum_aggregation<scan_aggregation>(),
+                  *cudf::make_sum_aggregation<scan_aggregation>(),
                   scan_type::INCLUSIVE,
                   null_policy::EXCLUDE);
   this->scan_test(v,
                   b,
-                  cudf::make_sum_aggregation<scan_aggregation>(),
+                  *cudf::make_sum_aggregation<scan_aggregation>(),
                   scan_type::EXCLUSIVE,
                   null_policy::EXCLUDE);
   // skipna = false
   this->scan_test(v,
                   b,
-                  cudf::make_sum_aggregation<scan_aggregation>(),
+                  *cudf::make_sum_aggregation<scan_aggregation>(),
                   scan_type::INCLUSIVE,
                   null_policy::INCLUDE);
   this->scan_test(v,
                   b,
-                  cudf::make_sum_aggregation<scan_aggregation>(),
+                  *cudf::make_sum_aggregation<scan_aggregation>(),
                   scan_type::EXCLUSIVE,
                   null_policy::INCLUDE);
 }
@@ -355,23 +355,23 @@ TYPED_TEST(ScanTest, EmptyColumn)
   // skipna = true (default)
   this->scan_test(v,
                   b,
-                  cudf::make_min_aggregation<scan_aggregation>(),
+                  *cudf::make_min_aggregation<scan_aggregation>(),
                   scan_type::INCLUSIVE,
                   null_policy::EXCLUDE);
   this->scan_test(v,
                   b,
-                  cudf::make_min_aggregation<scan_aggregation>(),
+                  *cudf::make_min_aggregation<scan_aggregation>(),
                   scan_type::EXCLUSIVE,
                   null_policy::EXCLUDE);
   // skipna = false
   this->scan_test(v,
                   b,
-                  cudf::make_min_aggregation<scan_aggregation>(),
+                  *cudf::make_min_aggregation<scan_aggregation>(),
                   scan_type::INCLUSIVE,
                   null_policy::INCLUDE);
   this->scan_test(v,
                   b,
-                  cudf::make_min_aggregation<scan_aggregation>(),
+                  *cudf::make_min_aggregation<scan_aggregation>(),
                   scan_type::EXCLUSIVE,
                   null_policy::INCLUDE);
 }
@@ -384,29 +384,28 @@ TYPED_TEST(ScanTest, LeadingNulls)
   // skipna = true (default)
   this->scan_test(v,
                   b,
-                  cudf::make_min_aggregation<scan_aggregation>(),
+                  *cudf::make_min_aggregation<scan_aggregation>(),
                   scan_type::INCLUSIVE,
                   null_policy::EXCLUDE);
   this->scan_test(v,
                   b,
-                  cudf::make_min_aggregation<scan_aggregation>(),
+                  *cudf::make_min_aggregation<scan_aggregation>(),
                   scan_type::EXCLUSIVE,
                   null_policy::EXCLUDE);
   // skipna = false
   this->scan_test(v,
                   b,
-                  cudf::make_min_aggregation<scan_aggregation>(),
+                  *cudf::make_min_aggregation<scan_aggregation>(),
                   scan_type::INCLUSIVE,
                   null_policy::INCLUDE);
   this->scan_test(v,
                   b,
-                  cudf::make_min_aggregation<scan_aggregation>(),
+                  *cudf::make_min_aggregation<scan_aggregation>(),
                   scan_type::EXCLUSIVE,
                   null_policy::INCLUDE);
 }
 
-class ScanStringsTest : public ScanTest<cudf::string_view> {
-};
+class ScanStringsTest : public ScanTest<cudf::string_view> {};
 
 TEST_F(ScanStringsTest, MoreStringsMinMax)
 {
@@ -423,42 +422,41 @@ TEST_F(ScanStringsTest, MoreStringsMinMax)
   thrust::host_vector<std::string> v(data_begin, data_begin + row_count);
   thrust::host_vector<bool> b(validity, validity + row_count);
 
-  this->scan_test(v, {}, cudf::make_min_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
-  this->scan_test(v, b, cudf::make_min_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
+  this->scan_test(v, {}, *cudf::make_min_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
+  this->scan_test(v, b, *cudf::make_min_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
   this->scan_test(v,
                   b,
-                  cudf::make_min_aggregation<scan_aggregation>(),
+                  *cudf::make_min_aggregation<scan_aggregation>(),
                   scan_type::INCLUSIVE,
                   null_policy::EXCLUDE);
 
-  this->scan_test(v, {}, cudf::make_min_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
-  this->scan_test(v, b, cudf::make_min_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
+  this->scan_test(v, {}, *cudf::make_min_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
+  this->scan_test(v, b, *cudf::make_min_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
   this->scan_test(v,
                   b,
-                  cudf::make_min_aggregation<scan_aggregation>(),
+                  *cudf::make_min_aggregation<scan_aggregation>(),
                   scan_type::EXCLUSIVE,
                   null_policy::EXCLUDE);
 
-  this->scan_test(v, {}, cudf::make_max_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
-  this->scan_test(v, b, cudf::make_max_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
+  this->scan_test(v, {}, *cudf::make_max_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
+  this->scan_test(v, b, *cudf::make_max_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
   this->scan_test(v,
                   b,
-                  cudf::make_max_aggregation<scan_aggregation>(),
+                  *cudf::make_max_aggregation<scan_aggregation>(),
                   scan_type::INCLUSIVE,
                   null_policy::EXCLUDE);
 
-  this->scan_test(v, {}, cudf::make_max_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
-  this->scan_test(v, b, cudf::make_max_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
+  this->scan_test(v, {}, *cudf::make_max_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
+  this->scan_test(v, b, *cudf::make_max_aggregation<scan_aggregation>(), scan_type::EXCLUSIVE);
   this->scan_test(v,
                   b,
-                  cudf::make_max_aggregation<scan_aggregation>(),
+                  *cudf::make_max_aggregation<scan_aggregation>(),
                   scan_type::EXCLUSIVE,
                   null_policy::EXCLUDE);
 }
 
 template <typename T>
-struct ScanChronoTest : public cudf::test::BaseFixture {
-};
+struct ScanChronoTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ScanChronoTest, cudf::test::ChronoTypes);
 
@@ -470,11 +468,11 @@ TYPED_TEST(ScanChronoTest, ChronoMinMax)
                                                                           {1, 1, 1, 0, 1, 1, 1, 1});
 
   auto result =
-    cudf::scan(col, cudf::make_min_aggregation<scan_aggregation>(), cudf::scan_type::INCLUSIVE);
+    cudf::scan(col, *cudf::make_min_aggregation<scan_aggregation>(), cudf::scan_type::INCLUSIVE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected_min);
 
   result = cudf::scan(col,
-                      cudf::make_min_aggregation<scan_aggregation>(),
+                      *cudf::make_min_aggregation<scan_aggregation>(),
                       cudf::scan_type::INCLUSIVE,
                       cudf::null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected_min);
@@ -482,26 +480,25 @@ TYPED_TEST(ScanChronoTest, ChronoMinMax)
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> expected_max({5, 5, 6, 0, 6, 6, 6, 6},
                                                                           {1, 1, 1, 0, 1, 1, 1, 1});
   result =
-    cudf::scan(col, cudf::make_max_aggregation<scan_aggregation>(), cudf::scan_type::INCLUSIVE);
+    cudf::scan(col, *cudf::make_max_aggregation<scan_aggregation>(), cudf::scan_type::INCLUSIVE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected_max);
 
   result = cudf::scan(col,
-                      cudf::make_max_aggregation<scan_aggregation>(),
+                      *cudf::make_max_aggregation<scan_aggregation>(),
                       cudf::scan_type::INCLUSIVE,
                       cudf::null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected_max);
 
   EXPECT_THROW(
-    cudf::scan(col, cudf::make_max_aggregation<scan_aggregation>(), cudf::scan_type::EXCLUSIVE),
+    cudf::scan(col, *cudf::make_max_aggregation<scan_aggregation>(), cudf::scan_type::EXCLUSIVE),
     cudf::logic_error);
   EXPECT_THROW(
-    cudf::scan(col, cudf::make_min_aggregation<scan_aggregation>(), cudf::scan_type::EXCLUSIVE),
+    cudf::scan(col, *cudf::make_min_aggregation<scan_aggregation>(), cudf::scan_type::EXCLUSIVE),
     cudf::logic_error);
 }
 
 template <typename T>
-struct ScanDurationTest : public cudf::test::BaseFixture {
-};
+struct ScanDurationTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ScanDurationTest, cudf::test::DurationTypes);
 
@@ -513,22 +510,21 @@ TYPED_TEST(ScanDurationTest, Sum)
                                                                       {1, 1, 1, 0, 1, 1, 1, 1});
 
   auto result =
-    cudf::scan(col, cudf::make_sum_aggregation<scan_aggregation>(), cudf::scan_type::INCLUSIVE);
+    cudf::scan(col, *cudf::make_sum_aggregation<scan_aggregation>(), cudf::scan_type::INCLUSIVE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
 
   result = cudf::scan(col,
-                      cudf::make_sum_aggregation<scan_aggregation>(),
+                      *cudf::make_sum_aggregation<scan_aggregation>(),
                       cudf::scan_type::INCLUSIVE,
                       cudf::null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
 
   EXPECT_THROW(
-    cudf::scan(col, cudf::make_sum_aggregation<scan_aggregation>(), cudf::scan_type::EXCLUSIVE),
+    cudf::scan(col, *cudf::make_sum_aggregation<scan_aggregation>(), cudf::scan_type::EXCLUSIVE),
     cudf::logic_error);
 }
 
-struct StructScanTest : public cudf::test::BaseFixture {
-};
+struct StructScanTest : public cudf::test::BaseFixture {};
 
 TEST_F(StructScanTest, StructScanMinMaxNoNull)
 {
@@ -548,8 +544,8 @@ TEST_F(StructScanTest, StructScanMinMaxNoNull)
       auto child2 = INTS_CW{1, 1, 1, 4, 4, 4, 4, 8, 8, 8};
       return STRUCTS_CW{{child1, child2}};
     }();
-    auto const result =
-      cudf::scan(input, cudf::make_min_aggregation<scan_aggregation>(), cudf::scan_type::INCLUSIVE);
+    auto const result = cudf::scan(
+      input, *cudf::make_min_aggregation<scan_aggregation>(), cudf::scan_type::INCLUSIVE);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
 
@@ -559,8 +555,8 @@ TEST_F(StructScanTest, StructScanMinMaxNoNull)
       auto child2 = INTS_CW{1, 2, 3, 3, 3, 3, 3, 3, 3, 3};
       return STRUCTS_CW{{child1, child2}};
     }();
-    auto const result =
-      cudf::scan(input, cudf::make_max_aggregation<scan_aggregation>(), cudf::scan_type::INCLUSIVE);
+    auto const result = cudf::scan(
+      input, *cudf::make_max_aggregation<scan_aggregation>(), cudf::scan_type::INCLUSIVE);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
 }
@@ -598,8 +594,8 @@ TEST_F(StructScanTest, StructScanMinMaxSlicedInput)
       auto child2 = INTS_CW{1, 1, 1, 4, 4, 4, 4, 8, 8, 8};
       return STRUCTS_CW{{child1, child2}};
     }();
-    auto const result =
-      cudf::scan(input, cudf::make_min_aggregation<scan_aggregation>(), cudf::scan_type::INCLUSIVE);
+    auto const result = cudf::scan(
+      input, *cudf::make_min_aggregation<scan_aggregation>(), cudf::scan_type::INCLUSIVE);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
 
@@ -609,8 +605,8 @@ TEST_F(StructScanTest, StructScanMinMaxSlicedInput)
       auto child2 = INTS_CW{1, 2, 3, 3, 3, 3, 3, 3, 3, 3};
       return STRUCTS_CW{{child1, child2}};
     }();
-    auto const result =
-      cudf::scan(input, cudf::make_max_aggregation<scan_aggregation>(), cudf::scan_type::INCLUSIVE);
+    auto const result = cudf::scan(
+      input, *cudf::make_max_aggregation<scan_aggregation>(), cudf::scan_type::INCLUSIVE);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
   }
 }
@@ -670,7 +666,7 @@ TEST_F(StructScanTest, StructScanMinMaxWithNulls)
     }();
 
     auto const result = cudf::scan(input,
-                                   cudf::make_min_aggregation<scan_aggregation>(),
+                                   *cudf::make_min_aggregation<scan_aggregation>(),
                                    cudf::scan_type::INCLUSIVE,
                                    null_policy::EXCLUDE);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -685,7 +681,7 @@ TEST_F(StructScanTest, StructScanMinMaxWithNulls)
     }();
 
     auto const result = cudf::scan(input,
-                                   cudf::make_max_aggregation<scan_aggregation>(),
+                                   *cudf::make_max_aggregation<scan_aggregation>(),
                                    cudf::scan_type::INCLUSIVE,
                                    null_policy::EXCLUDE);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -719,7 +715,7 @@ TEST_F(StructScanTest, StructScanMinMaxWithNulls)
     }();
 
     auto const result = cudf::scan(input,
-                                   cudf::make_min_aggregation<scan_aggregation>(),
+                                   *cudf::make_min_aggregation<scan_aggregation>(),
                                    cudf::scan_type::INCLUSIVE,
                                    null_policy::INCLUDE);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -751,7 +747,7 @@ TEST_F(StructScanTest, StructScanMinMaxWithNulls)
     }();
 
     auto const result = cudf::scan(input,
-                                   cudf::make_max_aggregation<scan_aggregation>(),
+                                   *cudf::make_max_aggregation<scan_aggregation>(),
                                    cudf::scan_type::INCLUSIVE,
                                    null_policy::INCLUDE);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());

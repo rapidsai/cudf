@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,22 +22,21 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
+
 #include <memory>
 #include <string>
 #include <vector>
 
-#include <rmm/cuda_stream_view.hpp>
-
-namespace cudf {
-namespace io {
+namespace cudf::io {
 
 // Forward declaration
 class orc_reader_options;
 class orc_writer_options;
 class chunked_orc_writer_options;
 
-namespace detail {
-namespace orc {
+namespace orc::detail {
 
 /**
  * @brief Class to read ORC dataset data into columns.
@@ -59,7 +58,7 @@ class reader {
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                   orc_reader_options const& options,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  rmm::device_async_resource_ref mr);
 
   /**
    * @brief Destructor explicitly declared to avoid inlining in header
@@ -70,12 +69,9 @@ class reader {
    * @brief Reads the entire dataset.
    *
    * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(orc_reader_options const& options,
-                           rmm::cuda_stream_view stream = cudf::default_stream_value);
+  table_with_metadata read(orc_reader_options const& options);
 };
 
 /**
@@ -94,13 +90,11 @@ class writer {
    * @param options Settings for controlling writing behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   orc_writer_options const& options,
-                  SingleWriteMode mode,
-                  rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  cudf::io::detail::single_write_mode mode,
+                  rmm::cuda_stream_view stream);
 
   /**
    * @brief Constructor with chunked writer options.
@@ -109,13 +103,11 @@ class writer {
    * @param options Settings for controlling writing behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   chunked_orc_writer_options const& options,
-                  SingleWriteMode mode,
-                  rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  cudf::io::detail::single_write_mode mode,
+                  rmm::cuda_stream_view stream);
 
   /**
    * @brief Destructor explicitly declared to avoid inlining in header
@@ -134,7 +126,5 @@ class writer {
    */
   void close();
 };
-}  // namespace orc
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace orc::detail
+}  // namespace cudf::io

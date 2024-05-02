@@ -40,3 +40,8 @@ def bench_min(benchmark, rangeindex):
 def bench_where(benchmark, rangeindex):
     cond = rangeindex % 2 == 0
     benchmark(rangeindex.where, cond, 0)
+
+
+def bench_isin(benchmark, rangeindex):
+    values = [10, 100]
+    benchmark(rangeindex.isin, values)

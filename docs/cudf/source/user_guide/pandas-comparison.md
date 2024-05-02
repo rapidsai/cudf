@@ -1,10 +1,15 @@
 # Comparison of cuDF and Pandas
 
 cuDF is a DataFrame library that closely matches the Pandas API, but
-it is *not* a full drop-in replacement for Pandas.  There are some
+when used directly is *not* a full drop-in replacement for Pandas.  There are some
 differences between cuDF and Pandas, both in terms of API and
 behaviour.  This page documents the similarities and differences
 between cuDF and Pandas.
+
+Starting with the v23.10.01 release, cuDF also provides a pandas
+accelerator mode (`cudf.pandas`) that supports 100% of the pandas API
+and accelerates pandas code on the GPU without requiring any code
+change.  See the [`cudf.pandas` documentation](../cudf_pandas/index).
 
 ## Supported operations
 
@@ -15,7 +20,7 @@ filtering, concatenating, joining, groupby and window operations -
 among many others.
 
 The best way to check if we support a particular Pandas API is to search
-our [API docs](/api_docs/index).
+our [API docs](/user_guide/api_docs/index).
 
 ## Data types
 
@@ -65,6 +70,8 @@ Categories (2, int64): [1, 2]
 
 See the docs on [missing data](missing-data) for details.
 
+(pandas-comparison/iteration)=
+
 ## Iteration
 
 Iterating over a cuDF `Series`, `DataFrame` or `Index` is not
@@ -80,42 +87,67 @@ using `.from_arrow()` or `.from_pandas()`.
 
 ## Result ordering
 
-By default, `join` (or `merge`) and `groupby` operations in cuDF
-do *not* guarantee output ordering.
-Compare the results obtained from Pandas and cuDF below:
+In Pandas, `join` (or `merge`), `value_counts` and `groupby` operations provide
+certain guarantees about the order of rows in the result returned.  In a Pandas
+`join`, the order of join keys is (depending on the particular style of join
+being performed) either preserved or sorted lexicographically by default.
+`groupby` sorts the group keys, and preserves the order of rows within each
+group. In some cases, disabling this option in Pandas can yield better
+performance.
+
+By contrast, cuDF's default behavior is to return rows in a
+non-deterministic order to maximize performance.  Compare the results
+obtained from Pandas and cuDF below:
 
 ```{code} python
- >>> import cupy as cp
- >>> df = cudf.DataFrame({'a': cp.random.randint(0, 1000, 1000), 'b': range(1000)})
- >>> df.groupby("a").mean().head()
-          b
- a
- 742  694.5
- 29   840.0
- 459  525.5
- 442  363.0
- 666    7.0
- >>> df.to_pandas().groupby("a").mean().head()
-          b
- a
- 2   643.75
- 6    48.00
- 7   631.00
- 9   906.00
- 10  640.00
-```
-
-To match Pandas behavior, you must explicitly pass `sort=True`:
-
-```{code} python
->>> df.to_pandas().groupby("a", sort=True).mean().head()
+>>> import cupy as cp
+>>> cp.random.seed(0)
+>>> import cudf
+>>> df = cudf.DataFrame({'a': cp.random.randint(0, 1000, 1000), 'b': range(1000)})
+>>> df.groupby("a").mean().head()
          b
 a
-2   643.75
-6    48.00
-7   631.00
-9   906.00
-10  640.00
+29   193.0
+803  915.0
+5    138.0
+583  300.0
+418  613.0
+>>> df.to_pandas().groupby("a").mean().head()
+            b
+a
+0   70.000000
+1  356.333333
+2  770.000000
+3  838.000000
+4  342.000000
+```
+
+In most cases, the rows of a DataFrame are accessed by index labels
+rather than by position, so the order in which rows are returned
+doesn't matter. However, if you require that results be returned in a
+predictable (sorted) order, you can pass the `sort=True` option
+explicitly or enable the `mode.pandas_compatible` option when trying
+to match Pandas behavior with `sort=False`:
+
+```{code} python
+>>> df.groupby("a", sort=True).mean().head()
+         b
+a
+0   70.000000
+1  356.333333
+2  770.000000
+3  838.000000
+4  342.000000
+
+>>> cudf.set_option("mode.pandas_compatible", True)
+>>> df.groupby("a").mean().head()
+            b
+a
+0   70.000000
+1  356.333333
+2  770.000000
+3  838.000000
+4  342.000000
 ```
 
 ## Floating-point computation
@@ -129,13 +161,34 @@ For example, `s.sum()` is not guaranteed to produce identical results
 to Pandas nor produce identical results from run to run, when `s` is a
 Series of floats.  If you need to compare floating point results, you
 should typically do so using the functions provided in the
-[`cudf.testing`](/api_docs/general_utilities#testing-functions)
+[`cudf.testing`](/user_guide/api_docs/general_utilities)
 module, which allow you to compare values up to a desired precision.
 
 ## Column names
 
 Unlike Pandas, cuDF does not support duplicate column names.
 It is best to use unique strings for column names.
+
+## Writing a DataFrame to Parquet with non-string column names
+
+When there is a DataFrame with non-string column names, pandas casts each
+column name to `str` before writing to a Parquet file. `cudf` raises an
+error by default if this is attempted. However, to achieve similar behavior
+as pandas you can enable the `mode.pandas_compatible` option, which will
+enable `cudf` to cast the column names to `str` just like pandas.
+
+```python
+>>> import cudf
+>>> df = cudf.DataFrame({1: [1, 2, 3], "1": ["a", "b", "c"]})
+>>> df.to_parquet("df.parquet")
+
+Traceback (most recent call last):
+ValueError: Writing a Parquet file requires string column names
+>>> cudf.set_option("mode.pandas_compatible", True)
+>>> df.to_parquet("df.parquet")
+
+UserWarning: The DataFrame has column names of non-string type. They will be converted to strings on write.
+```
 
 ## No true `"object"` data type
 
@@ -152,7 +205,7 @@ can do the following:
 dtype: object
 ```
 
-For compatibilty with Pandas, cuDF reports the data type for strings
+For compatibility with Pandas, cuDF reports the data type for strings
 as `"object"`, but we do *not* support storing or operating on
 collections of arbitrary Python objects.
 

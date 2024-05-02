@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
 
 #include <nvtext/normalize.hpp>
 
@@ -29,12 +29,11 @@
 
 #include <vector>
 
-struct TextNormalizeTest : public cudf::test::BaseFixture {
-};
+struct TextNormalizeTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextNormalizeTest, NormalizeSpaces)
 {
-  std::vector<const char*> h_strings{"the\t fox  jumped over the      dog",
+  std::vector<char const*> h_strings{"the\t fox  jumped over the      dog",
                                      "the dog\f chased  the cat\r",
                                      " the cat  chaséd  the mouse\n",
                                      nullptr,
@@ -49,7 +48,7 @@ TEST_F(TextNormalizeTest, NormalizeSpaces)
 
   cudf::strings_column_view strings_view(strings);
 
-  std::vector<const char*> h_expected{"the fox jumped over the dog",
+  std::vector<char const*> h_expected{"the fox jumped over the dog",
                                       "the dog chased the cat",
                                       "the cat chaséd the mouse",
                                       nullptr,
@@ -100,7 +99,7 @@ TEST_F(TextNormalizeTest, SomeNullStrings)
 TEST_F(TextNormalizeTest, NormalizeCharacters)
 {
   // These include punctuation, accents, whitespace, and CJK characters
-  std::vector<const char*> h_strings{"abc£def",
+  std::vector<char const*> h_strings{"abc£def",
                                      nullptr,
                                      "éè â îô\taeio",
                                      "\tĂĆĖÑ  Ü",

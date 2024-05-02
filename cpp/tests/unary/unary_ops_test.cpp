@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,13 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/unary.hpp>
 
+#include <cuda/std/limits>
 #include <thrust/iterator/counting_iterator.h>
 
 template <typename T>
@@ -34,8 +36,8 @@ cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type s
   if (not nullable) {
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + size);
   } else {
-    auto valids = cudf::detail::make_counting_transform_iterator(
-      0, [](auto i) { return i % 2 == 0 ? true : false; });
+    auto valids =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + size, valids);
   }
 }
@@ -57,8 +59,7 @@ cudf::test::fixed_width_column_wrapper<T> create_expected_columns(cudf::size_typ
 }
 
 template <typename T>
-struct IsNull : public cudf::test::BaseFixture {
-};
+struct IsNull : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(IsNull, cudf::test::NumericTypes);
 
@@ -108,8 +109,7 @@ TYPED_TEST(IsNull, EmptyColumns)
 }
 
 template <typename T>
-struct IsNotNull : public cudf::test::BaseFixture {
-};
+struct IsNotNull : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(IsNotNull, cudf::test::NumericTypes);
 
@@ -159,8 +159,7 @@ TYPED_TEST(IsNotNull, EmptyColumns)
 }
 
 template <typename T>
-struct IsNAN : public cudf::test::BaseFixture {
-};
+struct IsNAN : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(IsNAN, cudf::test::FloatingPointTypes);
 
@@ -212,8 +211,7 @@ TYPED_TEST(IsNAN, NonFloatingColumn)
 }
 
 template <typename T>
-struct IsNotNAN : public cudf::test::BaseFixture {
-};
+struct IsNotNAN : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(IsNotNAN, cudf::test::FloatingPointTypes);
 
@@ -265,8 +263,7 @@ TYPED_TEST(IsNotNAN, NonFloatingColumn)
 }
 
 template <typename T>
-struct FixedPointUnaryTests : public cudf::test::BaseFixture {
-};
+struct FixedPointUnaryTests : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointUnaryTests, cudf::test::FixedPointTypes);
 
@@ -375,6 +372,37 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryFloorLarge)
   auto const result   = cudf::unary_operation(input, cudf::unary_operator::FLOOR);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointUnaryTests, ValidateCeilFloorPrecision)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  // This test is designed to protect against floating point conversion
+  // introducing errors in fixed-point arithmetic. The rounding that occurs
+  // during ceil/floor should only use fixed-precision math. Realistically,
+  // we are only able to show precision failures due to floating conversion in
+  // a few very specific circumstances where dividing by specific powers of 10
+  // works against us.  Some examples: 10^23, 10^25, 10^26, 10^27, 10^30,
+  // 10^32, 10^36. See https://godbolt.org/z/cP1MddP8P for a derivation. For
+  // completeness and to ensure that we are not missing any other cases, we
+  // test all scales representable in the range of each decimal type.
+  constexpr auto min_scale = -cuda::std::numeric_limits<RepType>::digits10;
+  for (int input_scale = 0; input_scale >= min_scale; --input_scale) {
+    RepType input_value = 1;
+    for (int k = 0; k > input_scale; --k) {
+      input_value *= 10;
+    }
+    auto const input       = fp_wrapper{{input_value}, scale_type{input_scale}};
+    auto const expected    = fp_wrapper{{input_value}, scale_type{input_scale}};
+    auto const ceil_result = cudf::unary_operation(input, cudf::unary_operator::CEIL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, ceil_result->view());
+    auto const floor_result = cudf::unary_operation(input, cudf::unary_operator::FLOOR);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, floor_result->view());
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

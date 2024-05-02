@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,17 @@
  * limitations under the License.
  */
 
-#include <cudf/copying.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/strings/strings_column_view.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/random.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -41,15 +43,12 @@ struct ColumnUtilitiesTest : public cudf::test::BaseFixture {
 };
 
 template <typename T>
-struct ColumnUtilitiesTestIntegral : public cudf::test::BaseFixture {
-};
+struct ColumnUtilitiesTestIntegral : public cudf::test::BaseFixture {};
 template <typename T>
-struct ColumnUtilitiesTestFloatingPoint : public cudf::test::BaseFixture {
-};
+struct ColumnUtilitiesTestFloatingPoint : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct ColumnUtilitiesTestFixedPoint : public cudf::test::BaseFixture {
-};
+struct ColumnUtilitiesTestFixedPoint : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
 TYPED_TEST_SUITE(ColumnUtilitiesTestIntegral, cudf::test::IntegralTypes);
@@ -99,7 +98,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset)
   auto split = 2;
   auto size  = this->size();
   auto valid = cudf::detail::make_counting_transform_iterator(
-    0, [&split](auto i) { return (i < (split + 1) or i > 10) ? false : true; });
+    0, [&split](auto i) { return i <= 10 and i > split; });
   std::vector<TypeParam> data(sequence, sequence + size);
   std::vector<TypeParam> expected_data(sequence + split, sequence + size);
   cudf::test::fixed_width_column_wrapper<TypeParam> col(data.begin(), data.end(), valid);
@@ -111,7 +110,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset)
 
   EXPECT_TRUE(std::equal(expected_data.begin(), expected_data.end(), host_data.first.begin()));
 
-  auto masks = cudf::test::detail::make_null_mask_vector(valid + split, valid + size);
+  auto masks = std::get<0>(cudf::test::detail::make_null_mask_vector(valid + split, valid + size));
 
   EXPECT_TRUE(cudf::test::validate_host_masks(masks, host_data.second, expected_data.size()));
 }
@@ -132,13 +131,12 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid)
 
   EXPECT_TRUE(std::equal(data.begin(), data.end(), host_data.first.begin()));
 
-  auto masks = cudf::test::detail::make_null_mask_vector(all_valid, all_valid + size);
+  auto masks = std::get<0>(cudf::test::detail::make_null_mask_vector(all_valid, all_valid + size));
 
   EXPECT_TRUE(cudf::test::validate_host_masks(masks, host_data.second, size));
 }
 
-struct ColumnUtilitiesEquivalenceTest : public cudf::test::BaseFixture {
-};
+struct ColumnUtilitiesEquivalenceTest : public cudf::test::BaseFixture {};
 
 TEST_F(ColumnUtilitiesEquivalenceTest, DoubleTest)
 {
@@ -157,12 +155,11 @@ TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col1, col2);
 }
 
-struct ColumnUtilitiesStringsTest : public cudf::test::BaseFixture {
-};
+struct ColumnUtilitiesStringsTest : public cudf::test::BaseFixture {};
 
 TEST_F(ColumnUtilitiesStringsTest, StringsToHost)
 {
-  std::vector<const char*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
+  std::vector<char const*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -176,7 +173,7 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHost)
 
 TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
 {
-  std::vector<const char*> h_strings{nullptr, nullptr, nullptr};
+  std::vector<char const*> h_strings{nullptr, nullptr, nullptr};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -185,98 +182,6 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
   auto results   = host_data.first;
   EXPECT_EQ(std::size_t{3}, host_data.first.size());
   EXPECT_TRUE(std::all_of(results.begin(), results.end(), [](auto s) { return s.empty(); }));
-}
-
-TEST_F(ColumnUtilitiesStringsTest, PrintColumnDuration)
-{
-  const char* delimiter = ",";
-
-  cudf::test::fixed_width_column_wrapper<cudf::duration_s, int32_t> cudf_col({100, 0, 7, 140000});
-
-  auto expected = "100 seconds,0 seconds,7 seconds,140000 seconds";
-
-  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), expected);
-}
-
-TYPED_TEST(ColumnUtilitiesTestIntegral, PrintColumnNumeric)
-{
-  const char* delimiter = ",";
-
-  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col({1, 2, 3, 4, 5});
-  auto std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
-
-  std::stringstream tmp;
-  auto string_iter =
-    thrust::make_transform_iterator(std::begin(std_col), [](auto e) { return std::to_string(e); });
-
-  std::copy(string_iter,
-            string_iter + std_col.size() - 1,
-            std::ostream_iterator<std::string>(tmp, delimiter));
-
-  tmp << std::to_string(std_col.back());
-
-  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
-}
-
-TYPED_TEST(ColumnUtilitiesTestIntegral, PrintColumnWithInvalids)
-{
-  const char* delimiter = ",";
-
-  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col{{1, 2, 3, 4, 5}, {1, 0, 1, 0, 1}};
-  auto std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
-
-  std::ostringstream tmp;
-  tmp << std::to_string(std_col[0]) << delimiter << "NULL" << delimiter
-      << std::to_string(std_col[2]) << delimiter << "NULL" << delimiter
-      << std::to_string(std_col[4]);
-
-  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
-}
-
-TYPED_TEST(ColumnUtilitiesTestFloatingPoint, PrintColumnNumeric)
-{
-  const char* delimiter = ",";
-
-  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col(
-    {10001523.25, 2.0, 3.75, 0.000000034, 5.3});
-
-  auto expected = std::is_same_v<TypeParam, double>
-                    ? "10001523.25,2,3.75,3.4e-08,5.2999999999999998"
-                    : "10001523,2,3.75,3.39999993e-08,5.30000019";
-
-  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), expected);
-}
-
-TYPED_TEST(ColumnUtilitiesTestFloatingPoint, PrintColumnWithInvalids)
-{
-  const char* delimiter = ",";
-
-  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col(
-    {10001523.25, 2.0, 3.75, 0.000000034, 5.3}, {1, 0, 1, 0, 1});
-
-  auto expected = std::is_same_v<TypeParam, double>
-                    ? "10001523.25,NULL,3.75,NULL,5.2999999999999998"
-                    : "10001523,NULL,3.75,NULL,5.30000019";
-
-  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), expected);
-}
-
-TEST_F(ColumnUtilitiesStringsTest, StringsToString)
-{
-  const char* delimiter = ",";
-
-  std::vector<const char*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-
-  std::ostringstream tmp;
-  tmp << h_strings[0] << delimiter << h_strings[1] << delimiter << "NULL" << delimiter
-      << h_strings[3] << delimiter << h_strings[4] << delimiter << h_strings[5] << delimiter
-      << h_strings[6];
-
-  EXPECT_EQ(cudf::test::to_string(strings, delimiter), tmp.str());
 }
 
 TYPED_TEST(ColumnUtilitiesTestFixedPoint, NonNullableToHost)
@@ -324,8 +229,7 @@ TYPED_TEST(ColumnUtilitiesTestFixedPoint, NonNullableToHostWithOffset)
   EXPECT_TRUE(std::equal(expected.begin(), expected.end(), host_data.first.begin()));
 }
 
-struct ColumnUtilitiesListsTest : public cudf::test::BaseFixture {
-};
+struct ColumnUtilitiesListsTest : public cudf::test::BaseFixture {};
 
 TEST_F(ColumnUtilitiesListsTest, Equivalence)
 {
@@ -336,14 +240,14 @@ TEST_F(ColumnUtilitiesListsTest, Equivalence)
     cudf::test::lists_column_wrapper<int> b{{{1, 2, 3}, {5, 6}, {8, 9}, {10}, {14, 15}}, all_valid};
 
     // properties
-    cudf::test::expect_column_properties_equivalent(a, b);
-    EXPECT_EQ(
-      cudf::test::expect_column_properties_equal(a, b, cudf::test::debug_output_level::QUIET),
-      false);
+    CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(a, b);
+    EXPECT_FALSE(cudf::test::detail::expect_column_properties_equal(
+      a, b, cudf::test::debug_output_level::QUIET));
 
     // values
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(a, b);
-    EXPECT_EQ(cudf::test::expect_columns_equal(a, b, cudf::test::debug_output_level::QUIET), false);
+    EXPECT_FALSE(
+      cudf::test::detail::expect_columns_equal(a, b, cudf::test::debug_output_level::QUIET));
   }
 
   // list<list<int>>, nullable vs. non-nullable
@@ -354,13 +258,13 @@ TEST_F(ColumnUtilitiesListsTest, Equivalence)
                                             all_valid};
 
     // properties
-    cudf::test::expect_column_properties_equivalent(a, b);
-    EXPECT_EQ(
-      cudf::test::expect_column_properties_equal(a, b, cudf::test::debug_output_level::QUIET),
-      false);
+    CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(a, b);
+    EXPECT_FALSE(cudf::test::detail::expect_column_properties_equal(
+      a, b, cudf::test::debug_output_level::QUIET));
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(a, b);
-    EXPECT_EQ(cudf::test::expect_columns_equal(a, b, cudf::test::debug_output_level::QUIET), false);
+    EXPECT_FALSE(
+      cudf::test::detail::expect_columns_equal(a, b, cudf::test::debug_output_level::QUIET));
   }
 }
 
@@ -369,47 +273,17 @@ TEST_F(ColumnUtilitiesListsTest, DifferingRowCounts)
   cudf::test::fixed_width_column_wrapper<int> a{1, 1, 1, 1};
   cudf::test::fixed_width_column_wrapper<int> b{1, 1, 1, 1, 1};
 
-  EXPECT_FALSE(cudf::test::expect_columns_equal(a, b, cudf::test::debug_output_level::QUIET));
   EXPECT_FALSE(
-    cudf::test::expect_column_properties_equal(a, b, cudf::test::debug_output_level::QUIET));
-  EXPECT_FALSE(cudf::test::expect_columns_equivalent(a, b, cudf::test::debug_output_level::QUIET));
+    cudf::test::detail::expect_columns_equal(a, b, cudf::test::debug_output_level::QUIET));
+  EXPECT_FALSE(cudf::test::detail::expect_column_properties_equal(
+    a, b, cudf::test::debug_output_level::QUIET));
   EXPECT_FALSE(
-    cudf::test::expect_column_properties_equivalent(a, b, cudf::test::debug_output_level::QUIET));
+    cudf::test::detail::expect_columns_equivalent(a, b, cudf::test::debug_output_level::QUIET));
+  EXPECT_FALSE(cudf::test::detail::expect_column_properties_equivalent(
+    a, b, cudf::test::debug_output_level::QUIET));
 }
 
-TEST_F(ColumnUtilitiesListsTest, UnsanitaryLists)
-{
-  // unsanitary
-  //
-  // List<int32_t>:
-  //  Length : 1
-  //  Offsets : 0, 3
-  //  Null count: 1
-  //  0
-  //    0, 1, 2
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 3};
-  cudf::test::fixed_width_column_wrapper<int> values{0, 1, 2};
-  auto l0 = cudf::make_lists_column(1,
-                                    offsets.release(),
-                                    values.release(),
-                                    1,
-                                    cudf::create_null_mask(1, cudf::mask_state::ALL_NULL));
-
-  // sanitary
-  //
-  // List<int32_t>:
-  //  Length : 1
-  //  Offsets : 0, 0
-  //  Null count: 1
-  //    0
-  auto l1 = cudf::test::lists_column_wrapper<int>::make_one_empty_row_column(false);
-
-  // equivalent, but not equal
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*l0, l1);
-  EXPECT_FALSE(cudf::test::expect_columns_equal(*l0, l1, cudf::test::debug_output_level::QUIET));
-}
-
-TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructure)
+TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructureBeforeConstruction)
 {
   // list<int>
   {
@@ -418,30 +292,26 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructure)
     cudf::test::fixed_width_column_wrapper<int> c0_offsets{0, 3, 6, 8, 11, 14, 16, 19};
     cudf::test::fixed_width_column_wrapper<int> c0_data{
       1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 7, 7, 7};
-    auto c0 = make_lists_column(7,
-                                c0_offsets.release(),
-                                c0_data.release(),
-                                5,
-                                cudf::test::detail::make_null_mask(valids.begin(), valids.end()));
+
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids.begin(), valids.end());
+
+    auto c0 = make_lists_column(
+      7, c0_offsets.release(), c0_data.release(), null_count, std::move(null_mask));
 
     cudf::test::fixed_width_column_wrapper<int> c1_offsets{0, 0, 0, 2, 2, 5, 5, 5};
     cudf::test::fixed_width_column_wrapper<int> c1_data{3, 3, 5, 5, 5};
-    auto c1 = make_lists_column(7,
-                                c1_offsets.release(),
-                                c1_data.release(),
-                                5,
-                                cudf::test::detail::make_null_mask(valids.begin(), valids.end()));
+    auto c1 = make_lists_column(
+      7,
+      c1_offsets.release(),
+      c1_data.release(),
+      null_count,
+      std::get<0>(cudf::test::detail::make_null_mask(valids.begin(), valids.end())));
 
     // properties
-    cudf::test::expect_column_properties_equivalent(*c0, *c1);
-    EXPECT_EQ(
-      cudf::test::expect_column_properties_equal(*c0, *c1, cudf::test::debug_output_level::QUIET),
-      false);
+    CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*c0, *c1);
 
     // values
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*c0, *c1);
-    EXPECT_EQ(cudf::test::expect_columns_equal(*c0, *c1, cudf::test::debug_output_level::QUIET),
-              false);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*c0, *c1);
   }
 
   // list<list<struct<int, float>>>
@@ -456,18 +326,16 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructure)
       1, 1, 10, 20, 30, 1, 1, 40, 50, 60, 70, 80, 90, 100};
     cudf::test::structs_column_wrapper c0_l2_data({c0_l3_ints, c0_l3_floats});
     std::vector<bool> c0_l2_valids = {1, 1, 1, 0, 0, 1, 1};
-    auto c0_l2                     = make_lists_column(
-      7,
-      c0_l2_offsets.release(),
-      c0_l2_data.release(),
-      0,
-      cudf::test::detail::make_null_mask(c0_l2_valids.begin(), c0_l2_valids.end()));
+
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(c0_l2_valids.begin(), c0_l2_valids.end());
+    auto c0_l2 = make_lists_column(
+      7, c0_l2_offsets.release(), c0_l2_data.release(), null_count, std::move(null_mask));
+
+    std::tie(null_mask, null_count) =
+      cudf::test::detail::make_null_mask(level1_valids.begin(), level1_valids.end());
     auto c0 = make_lists_column(
-      7,
-      c0_l1_offsets.release(),
-      std::move(c0_l2),
-      5,
-      cudf::test::detail::make_null_mask(level1_valids.begin(), level1_valids.end()));
+      7, c0_l1_offsets.release(), std::move(c0_l2), null_count, std::move(null_mask));
 
     cudf::test::fixed_width_column_wrapper<int> c1_l1_offsets{0, 0, 0, 2, 2, 5, 5, 5};
     cudf::test::fixed_width_column_wrapper<int> c1_l2_offsets{0, 3, 3, 3, 6, 10};
@@ -476,34 +344,26 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructure)
       10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
     cudf::test::structs_column_wrapper c1_l2_data({c1_l3_ints, c1_l3_floats});
     std::vector<bool> c1_l2_valids = {1, 0, 0, 1, 1};
-    auto c1_l2                     = make_lists_column(
-      5,
-      c1_l2_offsets.release(),
-      c1_l2_data.release(),
-      2,
-      cudf::test::detail::make_null_mask(c1_l2_valids.begin(), c1_l2_valids.end()));
+
+    std::tie(null_mask, null_count) =
+      cudf::test::detail::make_null_mask(c1_l2_valids.begin(), c1_l2_valids.end());
+    auto c1_l2 = make_lists_column(
+      5, c1_l2_offsets.release(), c1_l2_data.release(), null_count, std::move(null_mask));
+
+    std::tie(null_mask, null_count) =
+      cudf::test::detail::make_null_mask(level1_valids.begin(), level1_valids.end());
     auto c1 = make_lists_column(
-      7,
-      c1_l1_offsets.release(),
-      std::move(c1_l2),
-      5,
-      cudf::test::detail::make_null_mask(level1_valids.begin(), level1_valids.end()));
+      7, c1_l1_offsets.release(), std::move(c1_l2), null_count, std::move(null_mask));
 
     // properties
-    cudf::test::expect_column_properties_equivalent(*c0, *c1);
-    EXPECT_EQ(
-      cudf::test::expect_column_properties_equal(*c0, *c1, cudf::test::debug_output_level::QUIET),
-      false);
+    CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*c0, *c1);
 
     // values
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*c0, *c1);
-    EXPECT_EQ(cudf::test::expect_columns_equal(*c0, *c1, cudf::test::debug_output_level::QUIET),
-              false);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*c0, *c1);
   }
 }
 
-struct ColumnUtilitiesStructsTest : public cudf::test::BaseFixture {
-};
+struct ColumnUtilitiesStructsTest : public cudf::test::BaseFixture {};
 
 TEST_F(ColumnUtilitiesStructsTest, Properties)
 {
@@ -527,13 +387,12 @@ TEST_F(ColumnUtilitiesStructsTest, Properties)
   cudf::test::structs_column_wrapper s_col1({s1_scol0, s1_scol1, s1_scol2});
 
   // equivalent, but not equal
-  cudf::test::expect_column_properties_equivalent(s_col0, s_col1);
-  EXPECT_EQ(cudf::test::expect_column_properties_equal(
-              s_col0, s_col1, cudf::test::debug_output_level::QUIET),
-            false);
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(s_col0, s_col1);
+  EXPECT_FALSE(cudf::test::detail::expect_column_properties_equal(
+    s_col0, s_col1, cudf::test::debug_output_level::QUIET));
 
-  cudf::test::expect_column_properties_equal(s_col0, s_col0);
-  cudf::test::expect_column_properties_equal(s_col1, s_col1);
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(s_col0, s_col0);
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(s_col1, s_col1);
 }
 
 TEST_F(ColumnUtilitiesStructsTest, Values)
@@ -559,8 +418,8 @@ TEST_F(ColumnUtilitiesStructsTest, Values)
 
   // equivalent, but not equal
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(s_col0, s_col1);
-  EXPECT_EQ(cudf::test::expect_columns_equal(s_col0, s_col1, cudf::test::debug_output_level::QUIET),
-            false);
+  EXPECT_FALSE(cudf::test::detail::expect_columns_equal(
+    s_col0, s_col1, cudf::test::debug_output_level::QUIET));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(s_col0, s_col0);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(s_col1, s_col1);

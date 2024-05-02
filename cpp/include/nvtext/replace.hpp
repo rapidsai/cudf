@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <rmm/resource_ref.hpp>
 
 //! NVText APIs
 namespace nvtext {
@@ -73,20 +75,22 @@ namespace nvtext {
  * @throw cudf::logic_error if targets or replacements contain nulls
  * @throw cudf::logic_error if delimiter is invalid
  *
- * @param strings Strings column to replace.
- * @param targets Strings to compare against tokens found in `strings`
+ * @param input Strings column to replace
+ * @param targets Strings to compare against tokens found in `input`
  * @param replacements Replacement strings for each string in `targets`
  * @param delimiter Characters used to separate each string into tokens.
  *                  The default of empty string will identify tokens using whitespace.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings columns of with replaced strings.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings columns of with replaced strings
  */
 std::unique_ptr<cudf::column> replace_tokens(
-  cudf::strings_column_view const& strings,
+  cudf::strings_column_view const& input,
   cudf::strings_column_view const& targets,
   cudf::strings_column_view const& replacements,
   cudf::string_scalar const& delimiter = cudf::string_scalar{""},
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr    = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Removes tokens whose lengths are less than a specified number of characters.
@@ -120,20 +124,22 @@ std::unique_ptr<cudf::column> replace_tokens(
  *
  * @throw cudf::logic_error if `delimiter` or `replacement` is invalid
  *
- * @param strings Strings column to replace.
- * @param min_token_length The minimum number of characters to retain a token in the output string.
- * @param replacement Optional replacement string to be used in place of removed tokens.
+ * @param input Strings column to replace
+ * @param min_token_length The minimum number of characters to retain a token in the output string
+ * @param replacement Optional replacement string to be used in place of removed tokens
  * @param delimiter Characters used to separate each string into tokens.
  *                  The default of empty string will identify tokens using whitespace.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings columns of with replaced strings.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings columns of with replaced strings
  */
 std::unique_ptr<cudf::column> filter_tokens(
-  cudf::strings_column_view const& strings,
+  cudf::strings_column_view const& input,
   cudf::size_type min_token_length,
   cudf::string_scalar const& replacement = cudf::string_scalar{""},
   cudf::string_scalar const& delimiter   = cudf::string_scalar{""},
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr      = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace nvtext

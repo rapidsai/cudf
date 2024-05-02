@@ -1,5 +1,6 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
+import warnings
 from collections import abc
 from io import BytesIO, StringIO
 
@@ -11,52 +12,69 @@ from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
 from cudf.utils import ioutils
 from cudf.utils.dtypes import _maybe_convert_to_default_type
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
 
 @_cudf_nvtx_annotate
 @ioutils.doc_read_csv()
 def read_csv(
     filepath_or_buffer,
-    lineterminator="\n",
-    quotechar='"',
-    quoting=0,
-    doublequote=True,
-    header="infer",
-    mangle_dupe_cols=True,
-    usecols=None,
     sep=",",
     delimiter=None,
-    delim_whitespace=False,
-    skipinitialspace=False,
+    header="infer",
     names=None,
+    index_col=None,
+    usecols=None,
+    prefix=None,
+    mangle_dupe_cols=True,
     dtype=None,
-    skipfooter=0,
+    true_values=None,
+    false_values=None,
+    skipinitialspace=False,
     skiprows=0,
+    skipfooter=0,
+    nrows=None,
+    na_values=None,
+    keep_default_na=True,
+    na_filter=True,
+    skip_blank_lines=True,
+    parse_dates=None,
     dayfirst=False,
     compression="infer",
     thousands=None,
     decimal=".",
-    true_values=None,
-    false_values=None,
-    nrows=None,
-    byte_range=None,
-    skip_blank_lines=True,
-    parse_dates=None,
+    lineterminator="\n",
+    quotechar='"',
+    quoting=0,
+    doublequote=True,
     comment=None,
-    na_values=None,
-    keep_default_na=True,
-    na_filter=True,
-    prefix=None,
-    index_col=None,
+    delim_whitespace=False,
+    byte_range=None,
     use_python_file_object=True,
-    **kwargs,
+    storage_options=None,
+    bytes_per_thread=None,
 ):
     """{docstring}"""
 
+    if delim_whitespace is not False:
+        warnings.warn(
+            "The 'delim_whitespace' keyword in pd.read_csv is deprecated and "
+            "will be removed in a future version. Use ``sep='\\s+'`` instead",
+            FutureWarning,
+        )
+
+    if use_python_file_object and bytes_per_thread is not None:
+        raise ValueError(
+            "bytes_per_thread is only supported when "
+            "`use_python_file_object=False`"
+        )
+
+    if bytes_per_thread is None:
+        bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
+
     is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
-        **kwargs,
+        storage_options=storage_options,
     )
     if not is_single_filepath_or_buffer:
         raise NotImplementedError(
@@ -68,7 +86,8 @@ def read_csv(
         compression=compression,
         iotypes=(BytesIO, StringIO, NativeFile),
         use_python_file_object=use_python_file_object,
-        **kwargs,
+        storage_options=storage_options,
+        bytes_per_thread=bytes_per_thread,
     )
 
     if na_values is not None and is_scalar(na_values):
@@ -112,11 +131,12 @@ def read_csv(
     if dtype is None or isinstance(dtype, abc.Mapping):
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
-        dtype = {} if dtype is None else dtype
+        specified_dtypes = {} if dtype is None else dtype
+        df_dtypes = df._dtypes
         unspecified_dtypes = {
-            name: df._dtypes[name]
+            name: df_dtypes[name]
             for name in df._column_names
-            if name not in dtype
+            if name not in specified_dtypes
         }
         default_dtypes = {}
 
@@ -142,11 +162,11 @@ def to_csv(
     columns=None,
     header=True,
     index=True,
-    line_terminator="\n",
-    chunksize=None,
     encoding=None,
     compression=None,
-    **kwargs,
+    lineterminator="\n",
+    chunksize=None,
+    storage_options=None,
 ):
     """{docstring}"""
 
@@ -172,7 +192,7 @@ def to_csv(
         return_as_string = True
 
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
-        path_or_data=path_or_buf, mode="w", **kwargs
+        path_or_data=path_or_buf, mode="w", storage_options=storage_options
     )
 
     if columns is not None:
@@ -222,7 +242,7 @@ def to_csv(
                 sep=sep,
                 na_rep=na_rep,
                 header=header,
-                line_terminator=line_terminator,
+                lineterminator=lineterminator,
                 rows_per_chunk=rows_per_chunk,
                 index=index,
             )
@@ -233,7 +253,7 @@ def to_csv(
             sep=sep,
             na_rep=na_rep,
             header=header,
-            line_terminator=line_terminator,
+            lineterminator=lineterminator,
             rows_per_chunk=rows_per_chunk,
             index=index,
         )

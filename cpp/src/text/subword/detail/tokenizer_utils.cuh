@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,9 @@
 
 #pragma once
 
-#include <text/subword/detail/cp_data.h>
+#include "text/subword/detail/cp_data.h"
+
+#include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -47,8 +49,9 @@ constexpr int THREADS_PER_BLOCK = 64;
  */
 struct update_strings_lengths_fn {
   uint32_t const* d_chars_up_to_idx;
-  uint32_t* d_offsets;
-  __device__ void operator()(uint32_t idx)
+  int64_t* d_offsets;
+
+  __device__ void operator()(cudf::size_type idx)
   {
     auto const offset = d_offsets[idx];
     d_offsets[idx]    = offset > 0 ? d_chars_up_to_idx[offset - 1] : 0;

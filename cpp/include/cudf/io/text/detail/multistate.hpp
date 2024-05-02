@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,42 +27,6 @@ namespace detail {
  * @brief Represents up to 7 segments
  */
 struct multistate {
- private:
-  /**
-   * @brief represents a (head, tail] segment, stored as a single 8 bit value
-   */
-  struct multistate_segment {
-   public:
-    /**
-     * @brief Creates a segment which represents (0, 0]
-     */
-
-    constexpr multistate_segment() = default;
-    /**
-     * @brief Creates a segment which represents (head, tail]
-     *
-     * @param head the (head, ____] value. Undefined behavior for values >= 16
-     * @param tail the (____, tail] value. Undefined behavior for values >= 16
-     */
-
-    constexpr multistate_segment(uint8_t head, uint8_t tail) : _data((head & 0b1111) | (tail << 4))
-    {
-    }
-
-    /**
-     * @brief Get's the (head, ____] value from the segment.
-     */
-    [[nodiscard]] constexpr uint8_t get_head() const { return _data & 0b1111; }
-
-    /**
-     * @brief Get's the (____, tail] value from the segment.
-     */
-    [[nodiscard]] constexpr uint8_t get_tail() const { return _data >> 4; }
-
-   private:
-    uint8_t _data{0};
-  };
-
  public:
   /**
    * @brief The maximum state (head or tail) this multistate can represent
@@ -81,7 +45,9 @@ struct multistate {
    */
   constexpr void enqueue(uint8_t head, uint8_t tail)
   {
-    _segments[_size++] = multistate_segment(head, tail);
+    _heads |= (head & 0xFu) << (_size * 4);
+    _tails |= (tail & 0xFu) << (_size * 4);
+    _size++;
   }
 
   /**
@@ -106,16 +72,23 @@ struct multistate {
   /**
    * @brief get's the Nth (head, ____] value state this multistate represents
    */
-  [[nodiscard]] constexpr uint8_t get_head(uint8_t idx) const { return _segments[idx].get_head(); }
+  [[nodiscard]] constexpr uint8_t get_head(uint8_t idx) const
+  {
+    return (_heads >> (idx * 4)) & 0xFu;
+  }
 
   /**
    * @brief get's the Nth (____, tail] value state this multistate represents
    */
-  [[nodiscard]] constexpr uint8_t get_tail(uint8_t idx) const { return _segments[idx].get_tail(); }
+  [[nodiscard]] constexpr uint8_t get_tail(uint8_t idx) const
+  {
+    return (_tails >> (idx * 4)) & 0xFu;
+  }
 
  private:
   uint8_t _size = 0;
-  multistate_segment _segments[max_segment_count];
+  uint32_t _heads{};
+  uint32_t _tails{};
 };
 
 /**

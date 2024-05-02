@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,8 +25,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class StringCombine : public cudf::benchmark {
-};
+class StringCombine : public cudf::benchmark {};
 
 static void BM_combine(benchmark::State& state)
 {
@@ -41,11 +40,12 @@ static void BM_combine(benchmark::State& state)
   cudf::string_scalar separator("+");
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     cudf::strings::concatenate(table->view(), separator);
   }
 
-  state.SetBytesProcessed(state.iterations() * (input1.chars_size() + input2.chars_size()));
+  state.SetBytesProcessed(state.iterations() * (input1.chars_size(cudf::get_default_stream()) +
+                                                input2.chars_size(cudf::get_default_stream())));
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)

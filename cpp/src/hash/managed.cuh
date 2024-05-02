@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#ifndef MANAGED_CUH
-#define MANAGED_CUH
+#pragma once
 
+#include <cassert>
 #include <new>
 
 struct managed {
@@ -37,11 +37,5 @@ struct managed {
 
 inline bool isPtrManaged(cudaPointerAttributes attr)
 {
-#if CUDART_VERSION >= 10000
   return (attr.type == cudaMemoryTypeManaged);
-#else
-  return attr.isManaged;
-#endif
 }
-
-#endif  // MANAGED_CUH

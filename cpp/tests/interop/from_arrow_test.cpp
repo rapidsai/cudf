@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,14 @@
  * limitations under the License.
  */
 
+#include <tests/interop/arrow_utils.hpp>
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
@@ -26,15 +34,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
-
 #include <thrust/iterator/counting_iterator.h>
-
-#include <tests/interop/arrow_utils.hpp>
 
 std::unique_ptr<cudf::table> get_cudf_table()
 {
@@ -55,12 +55,10 @@ std::unique_ptr<cudf::table> get_cudf_table()
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-struct FromArrowTest : public cudf::test::BaseFixture {
-};
+struct FromArrowTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct FromArrowTestDurationsTest : public cudf::test::BaseFixture {
-};
+struct FromArrowTestDurationsTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FromArrowTestDurationsTest, cudf::test::DurationTypes);
 
@@ -88,8 +86,8 @@ TEST_F(FromArrowTest, DateTimeTable)
   std::shared_ptr<arrow::Array> arr;
   arrow::TimestampBuilder timestamp_builder(arrow::timestamp(arrow::TimeUnit::type::MILLI),
                                             arrow::default_memory_pool());
-  timestamp_builder.AppendValues(data);
-  CUDF_EXPECTS(timestamp_builder.Finish(&arr).ok(), "Failed to build array");
+  ASSERT_TRUE(timestamp_builder.AppendValues(data).ok());
+  ASSERT_TRUE(timestamp_builder.Finish(&arr).ok());
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
@@ -121,8 +119,8 @@ TYPED_TEST(FromArrowTestDurationsTest, DurationTable)
     default: CUDF_FAIL("Unsupported duration unit in arrow");
   }
   arrow::DurationBuilder duration_builder(duration(arrow_unit), arrow::default_memory_pool());
-  duration_builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6});
-  CUDF_EXPECTS(duration_builder.Finish(&arr).ok(), "Failed to build array");
+  ASSERT_TRUE(duration_builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6}).ok());
+  ASSERT_TRUE(duration_builder.Finish(&arr).ok());
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
@@ -185,10 +183,10 @@ TEST_F(FromArrowTest, StructColumn)
   vector_of_columns cols2;
   cols2.push_back(std::move(str_col2));
   cols2.push_back(std::move(int_col2));
-  auto mask =
+  auto [null_mask, null_count] =
     cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}});
-  auto sub_struct_col = cudf::make_structs_column(
-    num_rows, std::move(cols2), cudf::UNKNOWN_NULL_COUNT, std::move(*(mask.first)));
+  auto sub_struct_col =
+    cudf::make_structs_column(num_rows, std::move(cols2), null_count, std::move(*null_mask));
   vector_of_columns cols;
   cols.push_back(std::move(str_col));
   cols.push_back(std::move(int_col));
@@ -263,7 +261,7 @@ TEST_F(FromArrowTest, DictionaryIndicesType)
   auto arrow_table = arrow::Table::Make(schema, {array1, array2, array3});
 
   std::vector<std::unique_ptr<cudf::column>> columns;
-  auto col = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
+  auto col = cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));
@@ -328,8 +326,7 @@ TEST_F(FromArrowTest, ChunkedArray)
 
 struct FromArrowTestSlice
   : public FromArrowTest,
-    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {
-};
+    public ::testing::WithParamInterface<std::tuple<cudf::size_type, cudf::size_type>> {};
 
 TEST_P(FromArrowTestSlice, SliceTest)
 {
@@ -459,3 +456,98 @@ INSTANTIATE_TEST_CASE_P(FromArrowTest,
                                           std::make_tuple(0, 0),
                                           std::make_tuple(0, 3000),
                                           std::make_tuple(10000, 10000)));
+
+template <typename T>
+struct FromArrowNumericScalarTest : public cudf::test::BaseFixture {};
+
+using NumericTypesNotBool =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+TYPED_TEST_SUITE(FromArrowNumericScalarTest, NumericTypesNotBool);
+
+TYPED_TEST(FromArrowNumericScalarTest, Basic)
+{
+  TypeParam const value{42};
+  auto const arrow_scalar = arrow::MakeScalar(value);
+  auto const cudf_scalar  = cudf::from_arrow(*arrow_scalar);
+  auto const cudf_numeric_scalar =
+    dynamic_cast<cudf::numeric_scalar<TypeParam>*>(cudf_scalar.get());
+  if (cudf_numeric_scalar == nullptr) { CUDF_FAIL("Attempted to test with a non-numeric type."); }
+  EXPECT_EQ(cudf_numeric_scalar->type(), cudf::data_type(cudf::type_to_id<TypeParam>()));
+  EXPECT_EQ(cudf_numeric_scalar->value(), value);
+}
+
+struct FromArrowDecimalScalarTest : public cudf::test::BaseFixture {};
+
+// Only testing Decimal128 because that's the only size cudf and arrow have in common.
+TEST_F(FromArrowDecimalScalarTest, Basic)
+{
+  auto const value{42};
+  auto const precision{8};
+  auto const scale{4};
+  auto arrow_scalar = arrow::Decimal128Scalar(value, arrow::decimal128(precision, -scale));
+  auto cudf_scalar  = cudf::from_arrow(arrow_scalar);
+
+  // Arrow offers a minimum of 128 bits for the Decimal type.
+  auto const cudf_decimal_scalar =
+    dynamic_cast<cudf::fixed_point_scalar<numeric::decimal128>*>(cudf_scalar.get());
+  EXPECT_EQ(cudf_decimal_scalar->type(),
+            cudf::data_type(cudf::type_to_id<numeric::decimal128>(), scale));
+  EXPECT_EQ(cudf_decimal_scalar->value(), value);
+}
+
+struct FromArrowStringScalarTest : public cudf::test::BaseFixture {};
+
+TEST_F(FromArrowStringScalarTest, Basic)
+{
+  auto const value        = std::string("hello world");
+  auto const arrow_scalar = arrow::StringScalar(value);
+  auto const cudf_scalar  = cudf::from_arrow(arrow_scalar);
+
+  auto const cudf_string_scalar = dynamic_cast<cudf::string_scalar*>(cudf_scalar.get());
+  EXPECT_EQ(cudf_string_scalar->type(), cudf::data_type(cudf::type_id::STRING));
+  EXPECT_EQ(cudf_string_scalar->to_string(), value);
+}
+
+struct FromArrowListScalarTest : public cudf::test::BaseFixture {};
+
+TEST_F(FromArrowListScalarTest, Basic)
+{
+  std::vector<int64_t> host_values = {1, 2, 3, 5, 6, 7, 8};
+  std::vector<bool> host_validity  = {true, true, true, false, true, true, true};
+
+  arrow::Int64Builder builder;
+  auto const status      = builder.AppendValues(host_values, host_validity);
+  auto const maybe_array = builder.Finish();
+  auto const array       = *maybe_array;
+
+  auto const arrow_scalar = arrow::ListScalar(array);
+  auto const cudf_scalar  = cudf::from_arrow(arrow_scalar);
+
+  auto const cudf_list_scalar = dynamic_cast<cudf::list_scalar*>(cudf_scalar.get());
+  EXPECT_EQ(cudf_list_scalar->type(), cudf::data_type(cudf::type_id::LIST));
+
+  cudf::test::fixed_width_column_wrapper<int64_t> const lhs(
+    host_values.begin(), host_values.end(), host_validity.begin());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(lhs, cudf_list_scalar->view());
+}
+
+struct FromArrowStructScalarTest : public cudf::test::BaseFixture {};
+
+TEST_F(FromArrowStructScalarTest, Basic)
+{
+  int64_t const value{42};
+  auto const underlying_arrow_scalar = arrow::MakeScalar(value);
+
+  auto const field        = arrow::field("", underlying_arrow_scalar->type);
+  auto const arrow_type   = arrow::struct_({field});
+  auto const arrow_scalar = arrow::StructScalar({underlying_arrow_scalar}, arrow_type);
+  auto const cudf_scalar  = cudf::from_arrow(arrow_scalar);
+
+  auto const cudf_struct_scalar = dynamic_cast<cudf::struct_scalar*>(cudf_scalar.get());
+  EXPECT_EQ(cudf_struct_scalar->type(), cudf::data_type(cudf::type_id::STRUCT));
+
+  cudf::test::fixed_width_column_wrapper<int64_t> const col({value});
+  cudf::table_view const lhs({col});
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(lhs, cudf_struct_scalar->view());
+}

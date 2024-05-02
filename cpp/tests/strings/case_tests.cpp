@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +14,26 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/strings/capitalize.hpp>
 #include <cudf/strings/case.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <tests/strings/utilities.h>
-
 #include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
-struct StringsCaseTest : public cudf::test::BaseFixture {
-};
+struct StringsCaseTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsCaseTest, ToLower)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "Éxamples aBc", "123 456", nullptr, "ARE THE", "tést strings", ""};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "éxamples abc", "123 456", nullptr, "are the", "tést strings", ""};
 
   cudf::test::strings_column_wrapper strings(
@@ -55,9 +53,9 @@ TEST_F(StringsCaseTest, ToLower)
 
 TEST_F(StringsCaseTest, ToUpper)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "Éxamples aBc", "123 456", nullptr, "ARE THE", "tést strings", ""};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "ÉXAMPLES ABC", "123 456", nullptr, "ARE THE", "TÉST STRINGS", ""};
 
   cudf::test::strings_column_wrapper strings(
@@ -77,9 +75,9 @@ TEST_F(StringsCaseTest, ToUpper)
 
 TEST_F(StringsCaseTest, Swapcase)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "Éxamples aBc", "123 456", nullptr, "ARE THE", "tést strings", ""};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "éXAMPLES AbC", "123 456", nullptr, "are the", "TÉST STRINGS", ""};
 
   cudf::test::strings_column_wrapper strings(
@@ -204,26 +202,85 @@ TEST_F(StringsCaseTest, MultiCharLower)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(StringsCaseTest, Ascii)
+{
+  // triggering the ascii code path requires some long-ish strings
+  cudf::test::strings_column_wrapper input{
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto view     = cudf::strings_column_view(input);
+  auto expected = cudf::test::strings_column_wrapper{
+    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto results = cudf::strings::to_lower(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  expected = cudf::test::strings_column_wrapper{
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-"};
+  results = cudf::strings::to_upper(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = cudf::strings::to_upper(cudf::strings_column_view(cudf::slice(input, {1, 3}).front()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, cudf::slice(expected, {1, 3}).front());
+}
+
+TEST_F(StringsCaseTest, LongStrings)
+{
+  // average string length >= AVG_CHAR_BYTES_THRESHOLD as defined in case.cu
+  cudf::test::strings_column_wrapper input{
+    "abcdéfghijklmnopqrstuvwxyzABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto view     = cudf::strings_column_view(input);
+  auto expected = cudf::test::strings_column_wrapper{
+    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto results = cudf::strings::to_lower(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  expected = cudf::test::strings_column_wrapper{
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-"};
+  results = cudf::strings::to_upper(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  view    = cudf::strings_column_view(cudf::slice(input, {1, 3}).front());
+  results = cudf::strings::to_upper(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, cudf::slice(expected, {1, 3}).front());
+}
+
 TEST_F(StringsCaseTest, EmptyStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
 
   auto results = cudf::strings::to_lower(strings_view);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 
   results = cudf::strings::to_upper(strings_view);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 
   results = cudf::strings::swapcase(strings_view);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 
   results = cudf::strings::capitalize(strings_view);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 
   results = cudf::strings::title(strings_view);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsCaseTest, ErrorTest)

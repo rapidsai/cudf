@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,33 +20,34 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/utilities/assert.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <cuda/atomic>
 
 #include <cmath>
 
 namespace cudf {
 namespace detail {
 
-template <typename Map, bool target_has_nulls = true, bool source_has_nulls = true>
+template <typename SetType, bool target_has_nulls = true, bool source_has_nulls = true>
 struct var_hash_functor {
-  Map const map;
+  SetType set;
   bitmask_type const* __restrict__ row_bitmask;
   mutable_column_device_view target;
   column_device_view source;
   column_device_view sum;
   column_device_view count;
   size_type ddof;
-  var_hash_functor(Map const map,
+  var_hash_functor(SetType set,
                    bitmask_type const* row_bitmask,
                    mutable_column_device_view target,
                    column_device_view source,
                    column_device_view sum,
                    column_device_view count,
                    size_type ddof)
-    : map(map),
+    : set(set),
       row_bitmask(row_bitmask),
       target(target),
       source(source),
@@ -86,7 +87,8 @@ struct var_hash_functor {
     auto x        = static_cast<Target>(source.element<Source>(source_index));
     auto mean     = static_cast<Target>(sum.element<SumType>(target_index)) / group_size;
     Target result = (x - mean) * (x - mean) / (group_size - ddof);
-    atomicAdd(&target.element<Target>(target_index), result);
+    cuda::atomic_ref<Target, cuda::thread_scope_device> ref{target.element<Target>(target_index)};
+    ref.fetch_add(result, cuda::std::memory_order_relaxed);
     // STD sqrt is applied in finalize()
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
@@ -94,8 +96,7 @@ struct var_hash_functor {
   __device__ inline void operator()(size_type source_index)
   {
     if (row_bitmask == nullptr or cudf::bit_is_set(row_bitmask, source_index)) {
-      auto result       = map.find(source_index);
-      auto target_index = result->second;
+      auto const target_index = *set.find(source_index);
 
       auto col         = source;
       auto source_type = source.type();

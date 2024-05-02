@@ -399,7 +399,9 @@ public class HostColumnVectorCore implements AutoCloseable {
     int size = end - start;
 
     byte[] result = new byte[size];
-    listData.offHeap.data.getBytes(result, 0, start, size);
+    if (size > 0) {
+      listData.offHeap.data.getBytes(result, 0, start, size);
+    }
     return result;
   }
 

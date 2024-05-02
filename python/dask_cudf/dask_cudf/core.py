@@ -1,20 +1,17 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import math
+import textwrap
 import warnings
-from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
 from tlz import partition_all
 
-import dask
-import dask.dataframe.optimize
 from dask import dataframe as dd
 from dask.base import normalize_token, tokenize
 from dask.dataframe.core import (
     Scalar,
-    finalize,
     handle_out,
     make_meta as dask_make_meta,
     map_partitions,
@@ -25,12 +22,11 @@ from dask.utils import M, OperatorMethodMixin, apply, derived_from, funcname
 
 import cudf
 from cudf import _lib as libcudf
-from cudf.utils.utils import _dask_cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
 
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
-
-DASK_VERSION = LooseVersion(dask.__version__)
+from dask_cudf.sorting import _deprecate_shuffle_kwarg, _get_shuffle_method
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
@@ -50,35 +46,8 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         Values along which we partition our blocks on the index
     """
 
-    __dask_scheduler__ = staticmethod(dask.get)
-
-    def __dask_postcompute__(self):
-        return finalize, ()
-
-    def __dask_postpersist__(self):
-        return type(self), (self._name, self._meta, self.divisions)
-
-    @_dask_cudf_nvtx_annotate
-    def __init__(self, dsk, name, meta, divisions):
-        if not isinstance(dsk, HighLevelGraph):
-            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
-        self.dask = dsk
-        self._name = name
-        meta = dask_make_meta(meta)
-        if not isinstance(meta, self._partition_type):
-            raise TypeError(
-                f"Expected meta to specify type "
-                f"{self._partition_type.__name__}, got type "
-                f"{type(meta).__name__}"
-            )
-        self._meta = meta
-        self.divisions = tuple(divisions)
-
-    def __getstate__(self):
-        return (self.dask, self._name, self._meta, self.divisions)
-
-    def __setstate__(self, state):
-        self.dask, self._name, self._meta, self.divisions = state
+    def _is_partition_type(self, meta):
+        return isinstance(meta, self._partition_type)
 
     def __repr__(self):
         s = "<dask_cudf.%s | %d tasks | %d npartitions>"
@@ -86,11 +55,20 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
 
     @_dask_cudf_nvtx_annotate
     def to_dask_dataframe(self, **kwargs):
-        """Create a dask.dataframe object from a dask_cudf object"""
-        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", False)
-        return self.map_partitions(
-            M.to_pandas, nullable_pd_dtype=nullable_pd_dtype
+        """Create a dask.dataframe object from a dask_cudf object
+
+        WARNING: This API is deprecated, and may not work properly
+        when query-planning is active. Please use `*.to_backend("pandas")`
+        to convert the underlying data to pandas.
+        """
+
+        warnings.warn(
+            "The `to_dask_dataframe` API is now deprecated. "
+            "Please use `*.to_backend('pandas')` instead.",
+            FutureWarning,
         )
+
+        return self.to_backend("pandas", **kwargs)
 
 
 concat = dd.concat
@@ -100,6 +78,18 @@ normalize_token.register(_Frame, lambda a: a._name)
 
 
 class DataFrame(_Frame, dd.core.DataFrame):
+    """
+    A distributed Dask DataFrame where the backing dataframe is a
+    :class:`cuDF DataFrame <cudf:cudf.DataFrame>`.
+
+    Typically you would not construct this object directly, but rather
+    use one of Dask-cuDF's IO routines.
+
+    Most operations on :doc:`Dask DataFrames <dask:dataframe>` are
+    supported, with many of the same caveats.
+
+    """
+
     _partition_type = cudf.DataFrame
 
     @_dask_cudf_nvtx_annotate
@@ -132,26 +122,22 @@ class DataFrame(_Frame, dd.core.DataFrame):
             do_apply_rows, func, incols, outcols, kwargs, meta=meta
         )
 
+    @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
-    def merge(self, other, **kwargs):
-        if kwargs.pop("shuffle", "tasks") != "tasks":
-            raise ValueError(
-                "Dask-cudf only supports task based shuffling, got %s"
-                % kwargs["shuffle"]
-            )
+    def merge(self, other, shuffle_method=None, **kwargs):
         on = kwargs.pop("on", None)
         if isinstance(on, tuple):
             on = list(on)
-        return super().merge(other, on=on, shuffle="tasks", **kwargs)
+        return super().merge(
+            other,
+            on=on,
+            shuffle_method=_get_shuffle_method(shuffle_method),
+            **kwargs,
+        )
 
+    @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
-    def join(self, other, **kwargs):
-        if kwargs.pop("shuffle", "tasks") != "tasks":
-            raise ValueError(
-                "Dask-cudf only supports task based shuffling, got %s"
-                % kwargs["shuffle"]
-            )
-
+    def join(self, other, shuffle_method=None, **kwargs):
         # CuDF doesn't support "right" join yet
         how = kwargs.pop("how", "left")
         if how == "right":
@@ -160,15 +146,24 @@ class DataFrame(_Frame, dd.core.DataFrame):
         on = kwargs.pop("on", None)
         if isinstance(on, tuple):
             on = list(on)
-        return super().join(other, how=how, on=on, shuffle="tasks", **kwargs)
+        return super().join(
+            other,
+            how=how,
+            on=on,
+            shuffle_method=_get_shuffle_method(shuffle_method),
+            **kwargs,
+        )
 
+    @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
-    def set_index(self, other, sorted=False, divisions=None, **kwargs):
-        if kwargs.pop("shuffle", "tasks") != "tasks":
-            raise ValueError(
-                "Dask-cudf only supports task based shuffling, got %s"
-                % kwargs["shuffle"]
-            )
+    def set_index(
+        self,
+        other,
+        sorted=False,
+        divisions=None,
+        shuffle_method=None,
+        **kwargs,
+    ):
         pre_sorted = sorted
         del sorted
 
@@ -180,7 +175,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 and cudf.api.types.is_string_dtype(self[other].dtype)
             )
         ):
-
             # Let upstream-dask handle "pre-sorted" case
             if pre_sorted:
                 return dd.shuffle.set_sorted_index(
@@ -196,13 +190,13 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 divisions = None
 
             # Use dask_cudf's sort_values
-            # TODO: Handle `sorted=True`
             df = self.sort_values(
                 by,
                 max_branch=kwargs.get("max_branch", None),
                 divisions=divisions,
                 set_divisions=True,
                 ignore_index=True,
+                shuffle_method=shuffle_method,
             )
 
             # Ignore divisions if its a dataframe
@@ -229,11 +223,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return super().set_index(
             other,
             sorted=pre_sorted,
-            shuffle="tasks",
+            shuffle_method=_get_shuffle_method(shuffle_method),
             divisions=divisions,
             **kwargs,
         )
 
+    @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
     def sort_values(
         self,
@@ -246,6 +241,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         na_position="last",
         sort_function=None,
         sort_function_kwargs=None,
+        shuffle_method=None,
         **kwargs,
     ):
         if kwargs:
@@ -262,6 +258,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             ignore_index=ignore_index,
             ascending=ascending,
             na_position=na_position,
+            shuffle_method=shuffle_method,
             sort_function=sort_function,
             sort_function_kwargs=sort_function_kwargs,
         )
@@ -295,9 +292,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
         dtype=None,
         out=None,
         naive=False,
+        numeric_only=False,
     ):
         axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.var(axis=axis, skipna=skipna)
+        meta = self._meta_nonempty.var(
+            axis=axis, skipna=skipna, numeric_only=numeric_only
+        )
         if axis == 1:
             result = map_partitions(
                 M.var,
@@ -307,6 +307,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 axis=axis,
                 skipna=skipna,
                 ddof=ddof,
+                numeric_only=numeric_only,
             )
             return handle_out(out, result)
         elif naive:
@@ -314,36 +315,13 @@ class DataFrame(_Frame, dd.core.DataFrame):
         else:
             return _parallel_var(self, meta, skipna, split_every, out)
 
+    @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
-    def repartition(self, *args, **kwargs):
-        """Wraps dask.dataframe DataFrame.repartition method.
-        Uses DataFrame.shuffle if `columns=` is specified.
-        """
-        # TODO: Remove this function in future(0.17 release)
-        columns = kwargs.pop("columns", None)
-        if columns:
-            warnings.warn(
-                "The columns argument will be removed from repartition in "
-                "future versions of dask_cudf. Use DataFrame.shuffle().",
-                FutureWarning,
-            )
-            warnings.warn(
-                "Rearranging data by column hash. Divisions will lost. "
-                "Set ignore_index=False to preserve Index values."
-            )
-            ignore_index = kwargs.pop("ignore_index", True)
-            return self.shuffle(
-                on=columns, ignore_index=ignore_index, **kwargs
-            )
-        return super().repartition(*args, **kwargs)
-
-    @_dask_cudf_nvtx_annotate
-    def shuffle(self, *args, **kwargs):
+    def shuffle(self, *args, shuffle_method=None, **kwargs):
         """Wraps dask.dataframe DataFrame.shuffle method"""
-        shuffle_arg = kwargs.pop("shuffle", None)
-        if shuffle_arg and shuffle_arg != "tasks":
-            raise ValueError("dask_cudf does not support disk-based shuffle.")
-        return super().shuffle(*args, shuffle="tasks", **kwargs)
+        return super().shuffle(
+            *args, shuffle_method=_get_shuffle_method(shuffle_method), **kwargs
+        )
 
     @_dask_cudf_nvtx_annotate
     def groupby(self, by=None, **kwargs):
@@ -471,7 +449,7 @@ def _naive_var(ddf, meta, skipna, ddof, split_every, out):
 def _parallel_var(ddf, meta, skipna, split_every, out):
     def _local_var(x, skipna):
         if skipna:
-            n = x.count(skipna=skipna)
+            n = x.count()
             avg = x.mean(skipna=skipna)
         else:
             # Not skipping nulls, so might as well
@@ -718,32 +696,78 @@ def reduction(
 
 @_dask_cudf_nvtx_annotate
 def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
+    from dask_cudf import QUERY_PLANNING_ON
+
     if isinstance(getattr(data, "index", None), cudf.MultiIndex):
         raise NotImplementedError(
             "dask_cudf does not support MultiIndex Dataframes."
         )
 
-    name = name or ("from_cudf-" + tokenize(data, npartitions or chunksize))
+    # Dask-expr doesn't support the `name` argument
+    name = {}
+    if not QUERY_PLANNING_ON:
+        name = {
+            "name": name
+            or ("from_cudf-" + tokenize(data, npartitions or chunksize))
+        }
+
     return dd.from_pandas(
         data,
         npartitions=npartitions,
         chunksize=chunksize,
         sort=sort,
-        name=name,
+        **name,
     )
 
 
 from_cudf.__doc__ = (
-    "Wraps main-line Dask from_pandas...\n" + dd.from_pandas.__doc__
+    textwrap.dedent(
+        """
+        Create a :class:`.DataFrame` from a :class:`cudf.DataFrame`.
+
+        This function is a thin wrapper around
+        :func:`dask.dataframe.from_pandas`, accepting the same
+        arguments (described below) excepting that it operates on cuDF
+        rather than pandas objects.\n
+        """
+    )
+    # TODO: `dd.from_pandas.__doc__` is empty when
+    # `DASK_DATAFRAME__QUERY_PLANNING=True`
+    # since dask-expr does not provide a docstring for from_pandas.
+    + textwrap.dedent(dd.from_pandas.__doc__ or "")
 )
 
 
 @_dask_cudf_nvtx_annotate
 def from_dask_dataframe(df):
-    return df.map_partitions(cudf.from_pandas)
+    """
+    Convert a Dask :class:`dask.dataframe.DataFrame` to a Dask-cuDF
+    one.
+
+    WARNING: This API is deprecated, and may not work properly
+    when query-planning is active. Please use `*.to_backend("cudf")`
+    to convert the underlying data to cudf.
+
+    Parameters
+    ----------
+    df : dask.dataframe.DataFrame
+        The Dask dataframe to convert
+
+    Returns
+    -------
+    dask_cudf.DataFrame : A new Dask collection backed by cuDF objects
+    """
+
+    warnings.warn(
+        "The `from_dask_dataframe` API is now deprecated. "
+        "Please use `*.to_backend('cudf')` instead.",
+        FutureWarning,
+    )
+
+    return df.to_backend("cudf")
 
 
-for name in [
+for name in (
     "add",
     "sub",
     "mul",
@@ -758,16 +782,13 @@ for name in [
     "rfloordiv",
     "rmod",
     "rpow",
-]:
+):
     meth = getattr(cudf.DataFrame, name)
-    kwargs = {"original": cudf.DataFrame} if DASK_VERSION >= "2.11.1" else {}
-    DataFrame._bind_operator_method(name, meth, **kwargs)
+    DataFrame._bind_operator_method(name, meth, original=cudf.Series)
 
     meth = getattr(cudf.Series, name)
-    kwargs = {"original": cudf.Series} if DASK_VERSION >= "2.11.1" else {}
-    Series._bind_operator_method(name, meth, **kwargs)
+    Series._bind_operator_method(name, meth, original=cudf.Series)
 
-for name in ["lt", "gt", "le", "ge", "ne", "eq"]:
+for name in ("lt", "gt", "le", "ge", "ne", "eq"):
     meth = getattr(cudf.Series, name)
-    kwargs = {"original": cudf.Series} if DASK_VERSION >= "2.11.1" else {}
-    Series._bind_comparison_method(name, meth, **kwargs)
+    Series._bind_comparison_method(name, meth, original=cudf.Series)

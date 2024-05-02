@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_view.hpp>
-#include <cudf/null_mask.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
-#include <cudf/utilities/traits.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/column/column_view.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -39,8 +39,7 @@ std::unique_ptr<cudf::column> example_column()
 }
 
 template <typename T>
-struct ColumnViewDeviceSpanTests : public cudf::test::BaseFixture {
-};
+struct ColumnViewDeviceSpanTests : public cudf::test::BaseFixture {};
 
 using DeviceSpanTypes = cudf::test::FixedWidthTypesWithoutFixedPoint;
 TYPED_TEST_SUITE(ColumnViewDeviceSpanTests, DeviceSpanTypes);
@@ -51,19 +50,18 @@ TYPED_TEST(ColumnViewDeviceSpanTests, conversion_round_trip)
   auto col_view = cudf::column_view{*col};
 
   // Test implicit conversion, round trip
-  cudf::device_span<const TypeParam> device_span_from_col_view = col_view;
+  cudf::device_span<TypeParam const> device_span_from_col_view = col_view;
   cudf::column_view col_view_from_device_span                  = device_span_from_col_view;
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col_view, col_view_from_device_span);
 }
 
-struct ColumnViewDeviceSpanErrorTests : public cudf::test::BaseFixture {
-};
+struct ColumnViewDeviceSpanErrorTests : public cudf::test::BaseFixture {};
 
 TEST_F(ColumnViewDeviceSpanErrorTests, type_mismatch)
 {
   auto col      = example_column<int32_t>();
   auto col_view = cudf::column_view{*col};
-  EXPECT_THROW((void)cudf::device_span<const float>{col_view}, cudf::logic_error);
+  EXPECT_THROW((void)cudf::device_span<float const>{col_view}, cudf::logic_error);
 }
 
 TEST_F(ColumnViewDeviceSpanErrorTests, nullable_column)
@@ -71,5 +69,5 @@ TEST_F(ColumnViewDeviceSpanErrorTests, nullable_column)
   auto col = example_column<int32_t>();
   col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_NULL), col->size());
   auto col_view = cudf::column_view{*col};
-  EXPECT_THROW((void)cudf::device_span<const int32_t>{col_view}, cudf::logic_error);
+  EXPECT_THROW((void)cudf::device_span<int32_t const>{col_view}, cudf::logic_error);
 }

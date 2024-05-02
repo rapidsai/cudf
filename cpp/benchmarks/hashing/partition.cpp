@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,7 @@
 
 #include <algorithm>
 
-class Hashing : public cudf::benchmark {
-};
+class Hashing : public cudf::benchmark {};
 
 template <class T>
 void BM_hash_partition(benchmark::State& state)
@@ -44,6 +43,13 @@ void BM_hash_partition(benchmark::State& state)
     cuda_event_timer timer(state, true);
     auto output = cudf::hash_partition(input, columns_to_hash, num_partitions);
   }
+
+  auto const bytes_read      = num_rows * num_cols * sizeof(T);
+  auto const bytes_written   = num_rows * num_cols * sizeof(T);
+  auto const partition_bytes = num_partitions * sizeof(cudf::size_type);
+
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
+                          (bytes_read + bytes_written + partition_bytes));
 }
 
 BENCHMARK_DEFINE_F(Hashing, hash_partition)

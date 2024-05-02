@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <optional>
@@ -57,10 +58,10 @@ class orc_reader_options {
 
   // List of individual stripes to read (ignored if empty)
   std::vector<std::vector<size_type>> _stripes;
-  // Rows to skip from the start;
-  size_type _skip_rows = 0;
-  // Rows to read; -1 is all
-  size_type _num_rows = -1;
+  // Rows to skip from the start; ORC stores the number of rows as uint64_t
+  uint64_t _skip_rows = 0;
+  // Rows to read; `nullopt` is all
+  std::optional<size_type> _num_rows;
 
   // Whether to use row index to speed-up reading
   bool _use_index = true;
@@ -80,7 +81,7 @@ class orc_reader_options {
    *
    * @param src source information used to read orc file
    */
-  explicit orc_reader_options(source_info const& src) : _source(src) {}
+  explicit orc_reader_options(source_info src) : _source{std::move(src)} {}
 
  public:
   /**
@@ -96,7 +97,7 @@ class orc_reader_options {
    * @param src Source information to read orc file
    * @return Builder to build reader options
    */
-  static orc_reader_options_builder builder(source_info const& src);
+  static orc_reader_options_builder builder(source_info src);
 
   /**
    * @brief Returns source info.
@@ -124,14 +125,15 @@ class orc_reader_options {
    *
    * @return Number of rows to skip from the start
    */
-  size_type get_skip_rows() const { return _skip_rows; }
+  uint64_t get_skip_rows() const { return _skip_rows; }
 
   /**
    * @brief Returns number of row to read.
    *
-   * @return Number of row to read
+   * @return Number of rows to read; `nullopt` if the option hasn't been set (in which case the file
+   * is read until the end)
    */
-  size_type get_num_rows() const { return _num_rows; }
+  std::optional<size_type> const& get_num_rows() const { return _num_rows; }
 
   /**
    * @brief Whether to use row index to speed-up reading.
@@ -174,11 +176,17 @@ class orc_reader_options {
    * @brief Sets list of stripes to read for each input source
    *
    * @param stripes Vector of vectors, mapping stripes to read to input sources
+   *
+   * @throw cudf::logic_error if a non-empty vector is passed, and `skip_rows` has been previously
+   * set
+   * @throw cudf::logic_error if a non-empty vector is passed, and `num_rows` has been previously
+   * set
    */
   void set_stripes(std::vector<std::vector<size_type>> stripes)
   {
     CUDF_EXPECTS(stripes.empty() or (_skip_rows == 0), "Can't set stripes along with skip_rows");
-    CUDF_EXPECTS(stripes.empty() or (_num_rows == -1), "Can't set stripes along with num_rows");
+    CUDF_EXPECTS(stripes.empty() or not _num_rows.has_value(),
+                 "Can't set stripes along with num_rows");
     _stripes = std::move(stripes);
   }
 
@@ -186,10 +194,14 @@ class orc_reader_options {
    * @brief Sets number of rows to skip from the start.
    *
    * @param rows Number of rows
+   *
+   * @throw cudf::logic_error if a negative value is passed
+   * @throw cudf::logic_error if stripes have been previously set
    */
-  void set_skip_rows(size_type rows)
+  void set_skip_rows(uint64_t rows)
   {
     CUDF_EXPECTS(rows == 0 or _stripes.empty(), "Can't set both skip_rows along with stripes");
+    CUDF_EXPECTS(rows <= std::numeric_limits<int64_t>::max(), "skip_rows is too large");
     _skip_rows = rows;
   }
 
@@ -197,10 +209,14 @@ class orc_reader_options {
    * @brief Sets number of row to read.
    *
    * @param nrows Number of rows
+   *
+   * @throw cudf::logic_error if a negative value is passed
+   * @throw cudf::logic_error if stripes have been previously set
    */
   void set_num_rows(size_type nrows)
   {
-    CUDF_EXPECTS(nrows == -1 or _stripes.empty(), "Can't set both num_rows along with stripes");
+    CUDF_EXPECTS(nrows >= 0, "num_rows cannot be negative");
+    CUDF_EXPECTS(_stripes.empty(), "Can't set both num_rows and stripes");
     _num_rows = nrows;
   }
 
@@ -255,7 +271,7 @@ class orc_reader_options_builder {
    *
    * @param src The source information used to read orc file
    */
-  explicit orc_reader_options_builder(source_info const& src) : options{src} {};
+  explicit orc_reader_options_builder(source_info src) : options{std::move(src)} {};
 
   /**
    * @brief Sets names of the column to read.
@@ -287,7 +303,7 @@ class orc_reader_options_builder {
    * @param rows Number of rows
    * @return this for chaining
    */
-  orc_reader_options_builder& skip_rows(size_type rows)
+  orc_reader_options_builder& skip_rows(uint64_t rows)
   {
     options.set_skip_rows(rows);
     return *this;
@@ -378,10 +394,8 @@ class orc_reader_options_builder {
  *  auto result  = cudf::io::read_orc(options);
  * @endcode
  *
- * Note: Support for reading files with struct columns is currently experimental, the output may not
- * be as reliable as reading for other datatypes.
- *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata.
  *
@@ -389,7 +403,8 @@ class orc_reader_options_builder {
  */
 table_with_metadata read_orc(
   orc_reader_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 /**
@@ -434,9 +449,13 @@ class orc_writer_options {
   // Set of columns to output
   table_view _table;
   // Optional associated metadata
-  const table_input_metadata* _metadata = nullptr;
+  std::optional<table_input_metadata> _metadata;
   // Optional footer key_value_metadata
   std::map<std::string, std::string> _user_data;
+  // Optional compression statistics
+  std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // Specify whether string dictionaries should be alphabetically sorted
+  bool _enable_dictionary_sort = true;
 
   friend orc_writer_options_builder;
 
@@ -537,7 +556,7 @@ class orc_writer_options {
    *
    * @return Associated metadata
    */
-  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] auto const& get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
@@ -548,6 +567,23 @@ class orc_writer_options {
   {
     return _user_data;
   }
+
+  /**
+   * @brief Returns a shared pointer to the user-provided compression statistics.
+   *
+   * @return Compression statistics
+   */
+  [[nodiscard]] std::shared_ptr<writer_compression_statistics> get_compression_statistics() const
+  {
+    return _compression_stats;
+  }
+
+  /**
+   * @brief Returns whether string dictionaries should be sorted.
+   *
+   * @return `true` if string dictionaries should be sorted
+   */
+  [[nodiscard]] bool get_enable_dictionary_sort() const { return _enable_dictionary_sort; }
 
   // Setters
 
@@ -574,6 +610,8 @@ class orc_writer_options {
    * @brief Sets the maximum stripe size, in bytes.
    *
    * @param size_bytes Maximum stripe size, in bytes to be set
+   *
+   * @throw cudf::logic_error if a value below the minimal size is passed
    */
   void set_stripe_size_bytes(size_t size_bytes)
   {
@@ -588,6 +626,8 @@ class orc_writer_options {
    * the stripe size.
    *
    * @param size_rows Maximum stripe size, in rows to be set
+   *
+   * @throw cudf::logic_error if a value below the minimal number of rows is passed
    */
   void set_stripe_size_rows(size_type size_rows)
   {
@@ -601,6 +641,8 @@ class orc_writer_options {
    * Rounded down to a multiple of 8.
    *
    * @param stride Row index stride to be set
+   *
+   * @throw cudf::logic_error if a value below the minimal row index stride is passed
    */
   void set_row_index_stride(size_type stride)
   {
@@ -620,7 +662,7 @@ class orc_writer_options {
    *
    * @param meta Associated metadata
    */
-  void set_metadata(table_input_metadata const* meta) { _metadata = meta; }
+  void set_metadata(table_input_metadata meta) { _metadata = std::move(meta); }
 
   /**
    * @brief Sets metadata.
@@ -631,6 +673,23 @@ class orc_writer_options {
   {
     _user_data = std::move(metadata);
   }
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be updated after writing
+   */
+  void set_compression_statistics(std::shared_ptr<writer_compression_statistics> comp_stats)
+  {
+    _compression_stats = std::move(comp_stats);
+  }
+
+  /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   */
+  void set_enable_dictionary_sort(bool val) { _enable_dictionary_sort = val; }
 };
 
 /**
@@ -740,9 +799,9 @@ class orc_writer_options_builder {
    * @param meta Associated metadata
    * @return this for chaining
    */
-  orc_writer_options_builder& metadata(table_input_metadata const* meta)
+  orc_writer_options_builder& metadata(table_input_metadata meta)
   {
-    options._metadata = meta;
+    options._metadata = std::move(meta);
     return *this;
   }
 
@@ -755,6 +814,31 @@ class orc_writer_options_builder {
   orc_writer_options_builder& key_value_metadata(std::map<std::string, std::string> metadata)
   {
     options._user_data = std::move(metadata);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be filled once writer is done
+   * @return this for chaining
+   */
+  orc_writer_options_builder& compression_statistics(
+    std::shared_ptr<writer_compression_statistics> const& comp_stats)
+  {
+    options._compression_stats = comp_stats;
+    return *this;
+  }
+
+  /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   * @return this for chaining
+   */
+  orc_writer_options_builder& enable_dictionary_sort(bool val)
+  {
+    options._enable_dictionary_sort = val;
     return *this;
   }
 
@@ -783,14 +867,11 @@ class orc_writer_options_builder {
  *  cudf::io::write_orc(options);
  * @endcode
  *
- * Note: Support for writing tables with struct columns is currently experimental, the output may
- * not be as reliable as writing for other datatypes.
- *
  * @param options Settings for controlling reading behavior
- * @param mr Device memory resource to use for device memory allocation
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void write_orc(orc_writer_options const& options,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Builds settings to use for `write_orc_chunked()`.
@@ -814,9 +895,13 @@ class chunked_orc_writer_options {
   // Row index stride (maximum number of rows in each row group)
   size_type _row_index_stride = default_row_index_stride;
   // Optional associated metadata
-  const table_input_metadata* _metadata = nullptr;
+  std::optional<table_input_metadata> _metadata;
   // Optional footer key_value_metadata
   std::map<std::string, std::string> _user_data;
+  // Optional compression statistics
+  std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // Specify whether string dictionaries should be alphabetically sorted
+  bool _enable_dictionary_sort = true;
 
   friend chunked_orc_writer_options_builder;
 
@@ -895,7 +980,7 @@ class chunked_orc_writer_options {
    *
    * @return Associated metadata
    */
-  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] auto const& get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
@@ -906,6 +991,23 @@ class chunked_orc_writer_options {
   {
     return _user_data;
   }
+
+  /**
+   * @brief Returns a shared pointer to the user-provided compression statistics.
+   *
+   * @return Compression statistics
+   */
+  [[nodiscard]] std::shared_ptr<writer_compression_statistics> get_compression_statistics() const
+  {
+    return _compression_stats;
+  }
+
+  /**
+   * @brief Returns whether string dictionaries should be sorted.
+   *
+   * @return `true` if string dictionaries should be sorted
+   */
+  [[nodiscard]] bool get_enable_dictionary_sort() const { return _enable_dictionary_sort; }
 
   // Setters
 
@@ -932,6 +1034,8 @@ class chunked_orc_writer_options {
    * @brief Sets the maximum stripe size, in bytes.
    *
    * @param size_bytes Maximum stripe size, in bytes to be set
+   *
+   * @throw cudf::logic_error if a value below the minimal stripe size is passed
    */
   void set_stripe_size_bytes(size_t size_bytes)
   {
@@ -946,6 +1050,8 @@ class chunked_orc_writer_options {
    * the stripe size.
    *
    * @param size_rows Maximum stripe size, in rows to be set
+   *
+   * @throw cudf::logic_error if a value below the minimal number of rows in a stripe is passed
    */
   void set_stripe_size_rows(size_type size_rows)
   {
@@ -959,6 +1065,8 @@ class chunked_orc_writer_options {
    * Rounded down to a multiple of 8.
    *
    * @param stride Row index stride to be set
+   *
+   * @throw cudf::logic_error if a value below the minimal number of rows in a row group is passed
    */
   void set_row_index_stride(size_type stride)
   {
@@ -971,7 +1079,7 @@ class chunked_orc_writer_options {
    *
    * @param meta Associated metadata
    */
-  void metadata(table_input_metadata const* meta) { _metadata = meta; }
+  void metadata(table_input_metadata meta) { _metadata = std::move(meta); }
 
   /**
    * @brief Sets Key-Value footer metadata.
@@ -982,6 +1090,23 @@ class chunked_orc_writer_options {
   {
     _user_data = std::move(metadata);
   }
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be updated after writing
+   */
+  void set_compression_statistics(std::shared_ptr<writer_compression_statistics> comp_stats)
+  {
+    _compression_stats = std::move(comp_stats);
+  }
+
+  /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   */
+  void set_enable_dictionary_sort(bool val) { _enable_dictionary_sort = val; }
 };
 
 /**
@@ -1076,9 +1201,9 @@ class chunked_orc_writer_options_builder {
    * @param meta Associated metadata
    * @return this for chaining
    */
-  chunked_orc_writer_options_builder& metadata(table_input_metadata const* meta)
+  chunked_orc_writer_options_builder& metadata(table_input_metadata meta)
   {
-    options._metadata = meta;
+    options._metadata = std::move(meta);
     return *this;
   }
 
@@ -1092,6 +1217,31 @@ class chunked_orc_writer_options_builder {
     std::map<std::string, std::string> metadata)
   {
     options._user_data = std::move(metadata);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be filled once writer is done
+   * @return this for chaining
+   */
+  chunked_orc_writer_options_builder& compression_statistics(
+    std::shared_ptr<writer_compression_statistics> const& comp_stats)
+  {
+    options._compression_stats = comp_stats;
+    return *this;
+  }
+
+  /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   * @return this for chaining
+   */
+  chunked_orc_writer_options_builder& enable_dictionary_sort(bool val)
+  {
+    options._enable_dictionary_sort = val;
     return *this;
   }
 
@@ -1143,10 +1293,10 @@ class orc_chunked_writer {
    * @brief Constructor with chunked writer options
    *
    * @param[in] options options used to write table
-   * @param[in] mr Device memory resource to use for device memory allocation
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches
    */
   orc_chunked_writer(chunked_orc_writer_options const& options,
-                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                     rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Writes table to output.
@@ -1162,7 +1312,7 @@ class orc_chunked_writer {
   void close();
 
   /// Unique pointer to impl writer class
-  std::unique_ptr<cudf::io::detail::orc::writer> writer;
+  std::unique_ptr<orc::detail::writer> writer;
 };
 
 /** @} */  // end of group

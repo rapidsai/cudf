@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from itertools import product
 from math import floor
@@ -52,7 +52,7 @@ def test_series_map_callable_numeric_random(nelem):
     sr = Series(data)
     pdsr = pd.Series(data)
 
-    # Call applymap
+    # Call map
     got = sr.map(lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x)))
     expect = pdsr.map(
         lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x))
@@ -63,7 +63,7 @@ def test_series_map_callable_numeric_random(nelem):
 
 
 def test_series_map_callable_numeric_random_dtype_change():
-    # Test for changing the out_dtype using applymap
+    # Test for changing the out_dtype using map
 
     data = list(range(10))
 
@@ -92,6 +92,4 @@ def test_series_map_non_unique_index():
         check_exception_type=False,
         lfunc_args_and_kwargs=([pd_map_series],),
         rfunc_args_and_kwargs=([gd_map_series],),
-        expected_error_message="Reindexing only valid with uniquely"
-        " valued Index objects",
     )

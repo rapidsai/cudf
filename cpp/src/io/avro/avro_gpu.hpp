@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,8 @@ namespace gpu {
  * @brief Struct to describe the avro schema
  */
 struct schemadesc_s {
-  uint32_t kind;   // avro type kind
+  cudf::io::avro::type_kind_e kind;                 // avro type kind
+  cudf::io::avro::logicaltype_kind_e logical_kind;  // avro logicaltype kind
   uint32_t count;  // for records/unions: number of following child columns, for nulls: global
                    // null_count, for enums: dictionary ofs
   void* dataptr;   // Ptr to column data, or null if column not selected
@@ -44,8 +45,6 @@ struct schemadesc_s {
  * @param[in] global_dictionary Global dictionary entries
  * @param[in] avro_data Raw block data
  * @param[in] schema_len Number of entries in schema
- * @param[in] max_rows Maximum number of rows to load
- * @param[in] first_row Crop all rows below first_row
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] stream CUDA stream to use
  */
@@ -54,8 +53,6 @@ void DecodeAvroColumnData(cudf::device_span<block_desc_s const> blocks,
                           cudf::device_span<string_index_pair const> global_dictionary,
                           uint8_t const* avro_data,
                           uint32_t schema_len,
-                          size_t max_rows,
-                          size_t first_row,
                           uint32_t min_row_size,
                           rmm::cuda_stream_view stream);
 

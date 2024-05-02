@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import functools
 import operator
@@ -41,6 +41,8 @@ def test_create_list_series(data):
     expect = pd.Series(data)
     got = cudf.Series(data)
     assert_eq(expect, got)
+    assert isinstance(got[0], type(expect[0]))
+    assert isinstance(got.to_pandas()[0], type(expect[0]))
 
 
 @pytest.mark.parametrize(
@@ -90,10 +92,8 @@ def test_leaves(data):
 
 def test_list_to_pandas_nullable_true():
     df = cudf.DataFrame({"a": cudf.Series([[1, 2, 3]])})
-    actual = df.to_pandas(nullable=True)
-    expected = pd.DataFrame({"a": pd.Series([[1, 2, 3]])})
-
-    assert_eq(actual, expected)
+    with pytest.raises(NotImplementedError):
+        df.to_pandas(nullable=True)
 
 
 def test_listdtype_hash():
@@ -105,6 +105,51 @@ def test_listdtype_hash():
     c = cudf.core.dtypes.ListDtype("int32")
 
     assert hash(a) != hash(c)
+
+
+@pytest.fixture(params=["int", "float", "datetime", "timedelta"])
+def leaf_value(request):
+    if request.param == "int":
+        return np.int32(1)
+    elif request.param == "float":
+        return np.float64(1)
+    elif request.param == "datetime":
+        return pd.to_datetime("1900-01-01")
+    elif request.param == "timedelta":
+        return pd.to_timedelta("10d")
+    else:
+        raise ValueError("Unhandled data type")
+
+
+@pytest.fixture(params=["list", "struct"])
+def list_or_struct(request, leaf_value):
+    if request.param == "list":
+        return [[leaf_value], [leaf_value]]
+    elif request.param == "struct":
+        return {"a": leaf_value, "b": [leaf_value], "c": {"d": [leaf_value]}}
+    else:
+        raise ValueError("Unhandled data type")
+
+
+@pytest.fixture(params=["list", "struct"])
+def nested_list(request, list_or_struct, leaf_value):
+    if request.param == "list":
+        return [list_or_struct, list_or_struct]
+    elif request.param == "struct":
+        return [
+            {
+                "a": list_or_struct,
+                "b": leaf_value,
+                "c": {"d": list_or_struct, "e": leaf_value},
+            }
+        ]
+    else:
+        raise ValueError("Unhandled data type")
+
+
+def test_list_dtype_explode(nested_list):
+    sr = cudf.Series([nested_list])
+    assert sr.dtype.element_type == sr.explode().dtype
 
 
 @pytest.mark.parametrize(
@@ -277,6 +322,24 @@ def test_get(data, index, expect):
     got = sr.list.get(index)
 
     assert_eq(expect, got, check_dtype=not expect.isnull().all())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [{"k": "v1"}, {"k": "v2"}],
+        [[{"k": "v1", "b": "v2"}], [{"k": "v3", "b": "v4"}]],
+        [
+            [{"k": "v1", "b": [{"c": 10, "d": "v5"}]}],
+            [{"k": "v3", "b": [{"c": 14, "d": "v6"}]}],
+        ],
+    ],
+)
+@pytest.mark.parametrize("index", [0, 1])
+def test_get_nested_struct_dtype_transfer(data, index):
+    sr = cudf.Series([data])
+    expect = cudf.Series(data[index : index + 1])
+    assert_eq(expect, sr.list.get(index))
 
 
 def test_get_nested_lists():
@@ -634,7 +697,12 @@ def test_list_scalar_host_construction_null(elem_type, nesting_level):
         dtype = cudf.ListDtype(dtype)
 
     slr = cudf.Scalar(None, dtype=dtype)
-    assert slr.value is cudf.NA
+    assert slr.value is (
+        cudf.NaT
+        if cudf.api.types.is_datetime64_dtype(slr.dtype)
+        or cudf.api.types.is_timedelta64_dtype(slr.dtype)
+        else cudf.NA
+    )
 
 
 @pytest.mark.parametrize(
@@ -819,3 +887,46 @@ def test_memory_usage():
     assert s1.memory_usage() == 44
     s2 = cudf.Series([[[[1, 2]]], [[[3, 4]]]])
     assert s2.memory_usage() == 68
+    s3 = cudf.Series([[{"b": 1, "a": 10}, {"b": 2, "a": 100}]])
+    assert s3.memory_usage() == 40
+
+
+@pytest.mark.parametrize(
+    "data, idx",
+    [
+        (
+            [[{"f2": {"a": 100}, "f1": "a"}, {"f1": "sf12", "f2": NA}]],
+            0,
+        ),
+        (
+            [
+                [
+                    {"f2": {"a": 100, "c": 90, "f2": 10}, "f1": "a"},
+                    {"f1": "sf12", "f2": NA},
+                ]
+            ],
+            0,
+        ),
+        (
+            [[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]],
+            0,
+        ),
+        ([[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]], 2),
+        ([[[{"a": 1, "b": 2, "c": 10}]]], 0),
+    ],
+)
+def test_nested_list_extract_host_scalars(data, idx):
+    series = cudf.Series(data)
+
+    assert series[idx] == data[idx]
+
+
+def test_list_iterate_error():
+    s = cudf.Series([[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]])
+    with pytest.raises(TypeError):
+        iter(s.list)
+
+
+def test_list_struct_list_memory_usage():
+    df = cudf.DataFrame({"a": [[{"b": [1]}]]})
+    assert df.memory_usage().sum() == 16

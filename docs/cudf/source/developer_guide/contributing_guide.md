@@ -15,23 +15,20 @@ Developers are strongly recommended to set up `pre-commit` prior to any developm
 The `.pre-commit-config.yaml` file at the root of the repo is the primary source of truth linting.
 Specifically, cuDF uses the following tools:
 
-- [`flake8`](https://github.com/pycqa/flake8) checks for general code formatting compliance. 
-- [`black`](https://github.com/psf/black) is an automatic code formatter.
+- [`ruff`](https://beta.ruff.rs/) checks for general code formatting compliance.
 - [`isort`](https://pycqa.github.io/isort/) ensures imports are sorted consistently.
 - [`mypy`](http://mypy-lang.org/) performs static type checking.
   In conjunction with [type hints](https://docs.python.org/3/library/typing.html),
   `mypy` can help catch various bugs that are otherwise difficult to find.
-- [`pydocstyle`](https://github.com/PyCQA/pydocstyle/) lints docstring style.
+- [`codespell`](https://github.com/codespell-project/codespell) finds spelling errors.
 
 Linter config data is stored in a number of files.
-We generally use `pyproject.toml` over `setup.cfg` and avoid project-specific files (e.g. `setup.cfg` > `python/cudf/setup.cfg`).
+We generally use `pyproject.toml` over `setup.cfg` and avoid project-specific files (e.g. `pyproject.toml` > `python/cudf/pyproject.toml`).
 However, differences between tools and the different packages in the repo result in the following caveats:
 
-- `flake8` has no plans to support `pyproject.toml`, so it must live in `setup.cfg`.
 - `isort` must be configured per project to set which project is the "first party" project.
 
-Additionally, our use of `versioneer` means that each project must have a `setup.cfg`.
-As a result, we currently maintain both root and project-level `pyproject.toml` and `setup.cfg` files.
+As a result, we currently maintain both root and project-level `pyproject.toml` files.
 
 For more information on how to use pre-commit hooks, see the code formatting section of the
 [overall contributing guide](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#python--pre-commit-hooks).
@@ -41,6 +38,8 @@ For more information on how to use pre-commit hooks, see the code formatting sec
 cuDF follows the policy of deprecating code for one release prior to removal.
 For example, if we decide to remove an API during the 22.08 release cycle,
 it will be marked as deprecated in the 22.08 release and removed in the 22.10 release.
+Note that if it is explicitly mentioned in a comment (like `# Do not remove until..`),
+do not enforce the deprecation by removing the affected code until the condition in the comment is met.
 All internal usage of deprecated APIs in cuDF should be removed when the API is deprecated.
 This prevents users from encountering unexpected deprecation warnings when using other (non-deprecated) APIs.
 The documentation for the API should also be updated to reflect its deprecation.
@@ -65,6 +64,14 @@ warnings.warn(
 ```{warning}
 Deprecations should be signaled using a `FutureWarning` **not a `DeprecationWarning`**!
 `DeprecationWarning` is hidden by default except in code run in the `__main__` module.
+```
+
+Deprecations should also be specified in the respective public API docstring using a
+`deprecated` admonition:
+
+```
+.. deprecated:: 23.08
+    `foo` is deprecated and will be removed in a future version of cudf.
 ```
 
 ## `pandas` compatibility
@@ -123,16 +130,29 @@ There is no need to mention when the argument will be supported in the future.
 
 ### Handling libcudf Exceptions
 
-Currently libcudf raises `cudf::logic_error` and `cudf::cuda_error`.
-These error types are mapped to `RuntimeError` in python.
-Several APIs use the exception payload `what()` message to determine the exception type raised by libcudf.
-
-Determining error type based on exception payload is brittle since libcudf does not maintain API stability on exception messages.
-This is a compromise due to libcudf only raising a limited number of error types.
-Only adopt this strategy when necessary.
-
-The projected roadmap is to diversify the exception types raised by libcudf.
 Standard C++ natively supports various [exception types](https://en.cppreference.com/w/cpp/error/exception),
 which Cython maps to [these Python exception types](https://docs.cython.org/en/latest/src/userguide/wrapping_CPlusPlus.html#exceptions).
-In the future, libcudf may employ custom C++ exception types.
-If that occurs, this section will be updated to reflect how these may be mapped to desired Python exception types.
+In addition to built-in exceptions, libcudf also raises a few additional types of exceptions.
+cuDF extends Cython's default mapping to account for these exception types.
+When a new libcudf exception type is added, a suitable except clause should be added to cuDF's
+[exception handler](https://github.com/rapidsai/cudf/blob/main/python/cudf/cudf/_lib/cpp/exception_handler.hpp).
+If no built-in Python exception seems like a good match, a new Python exception should be created.
+
+### Raising warnings
+
+Where appropriate, cuDF should throw the same warnings as pandas.
+For instance, API deprecations in cuDF should track pandas as closely as possible.
+However, not all pandas warnings are appropriate for cuDF.
+Common exceptional cases include
+[implementation-dependent performance warnings](https://pandas.pydata.org/docs/reference/api/pandas.errors.PerformanceWarning.html)
+that do not apply to cuDF's internals.
+The decision of whether or not to match pandas must be made on a case-by-case
+basis and is left to the best judgment of developers and PR reviewers.
+
+### Catching warnings from dependencies
+
+cuDF developers should avoid using deprecated APIs from package dependencies.
+However, there may be cases where such uses cannot be avoided, at least in the short term.
+If such cases arise, developers should
+[catch the warnings](https://docs.python.org/3/library/warnings.html#warnings.catch_warnings)
+within cuDF so that they are not visible to the user.

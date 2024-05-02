@@ -2,10 +2,11 @@
 coverage:
   status:
     project: off
-    patch: on
+    patch:
       default:
         target: auto
-        threshold: 0%
+        threshold: 5%
+        informational: true  # The coverage will always pass
 
 github_checks:
     annotations: true

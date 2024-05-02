@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -53,15 +54,17 @@ namespace strings {
  *
  * @throw cudf::logic_error if `output_type` is not a fixed-point decimal type.
  *
- * @param input Strings instance for this operation.
- * @param output_type Type of fixed-point column to return including the scale value.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column of `output_type`.
+ * @param input Strings instance for this operation
+ * @param output_type Type of fixed-point column to return including the scale value
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column of `output_type`
  */
 std::unique_ptr<column> to_fixed_point(
   strings_column_view const& input,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new strings column converting the fixed-point values
@@ -83,13 +86,15 @@ std::unique_ptr<column> to_fixed_point(
  *
  * @throw cudf::logic_error if the `input` column is not a fixed-point decimal type.
  *
- * @param input Fixed-point column to convert.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column.
+ * @param input Fixed-point column to convert
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column
  */
 std::unique_ptr<column> from_fixed_point(
   column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a boolean column identifying strings in which all
@@ -111,15 +116,17 @@ std::unique_ptr<column> from_fixed_point(
  *
  * @throw cudf::logic_error if the `decimal_type` is not a fixed-point decimal type.
  *
- * @param input Strings instance for this operation.
- * @param decimal_type Fixed-point type (with scale) used only for checking overflow.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column of boolean results for each string.
+ * @param input Strings instance for this operation
+ * @param decimal_type Fixed-point type (with scale) used only for checking overflow
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column of boolean results for each string
  */
 std::unique_ptr<column> is_fixed_point(
   strings_column_view const& input,
-  data_type decimal_type              = data_type{type_id::DECIMAL64},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  data_type decimal_type            = data_type{type_id::DECIMAL64},
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

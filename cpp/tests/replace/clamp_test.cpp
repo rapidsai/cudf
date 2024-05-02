@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,24 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/iterator.cuh>
-#include <cudf/dictionary/encode.hpp>
-#include <cudf/replace.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <gtest/gtest.h>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/dictionary/encode.hpp>
+#include <cudf/replace.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
-struct ClampErrorTest : public cudf::test::BaseFixture {
-};
+#include <gtest/gtest.h>
+
+struct ClampErrorTest : public cudf::test::BaseFixture {};
 
 TEST_F(ClampErrorTest, MisMatchingScalarTypes)
 {
@@ -41,7 +42,7 @@ TEST_F(ClampErrorTest, MisMatchingScalarTypes)
 
   cudf::test::fixed_width_column_wrapper<int32_t> input({1, 2, 3, 4, 5, 6});
 
-  EXPECT_THROW(cudf::clamp(input, *lo, *hi), cudf::logic_error);
+  EXPECT_THROW(cudf::clamp(input, *lo, *hi), cudf::data_type_error);
 }
 
 TEST_F(ClampErrorTest, MisMatchingInputAndScalarTypes)
@@ -53,7 +54,7 @@ TEST_F(ClampErrorTest, MisMatchingInputAndScalarTypes)
 
   cudf::test::fixed_width_column_wrapper<int64_t> input({1, 2, 3, 4, 5, 6});
 
-  EXPECT_THROW(cudf::clamp(input, *lo, *hi), cudf::logic_error);
+  EXPECT_THROW(cudf::clamp(input, *lo, *hi), cudf::data_type_error);
 }
 
 TEST_F(ClampErrorTest, MisMatchingReplaceScalarTypes)
@@ -69,7 +70,7 @@ TEST_F(ClampErrorTest, MisMatchingReplaceScalarTypes)
 
   cudf::test::fixed_width_column_wrapper<int64_t> input({1, 2, 3, 4, 5, 6});
 
-  EXPECT_THROW(cudf::clamp(input, *lo, *lo_replace, *hi, *hi_replace), cudf::logic_error);
+  EXPECT_THROW(cudf::clamp(input, *lo, *lo_replace, *hi, *hi_replace), cudf::data_type_error);
 }
 
 TEST_F(ClampErrorTest, InValidCase1)
@@ -104,8 +105,7 @@ TEST_F(ClampErrorTest, InValidCase2)
   EXPECT_THROW(cudf::clamp(input, *lo, *lo_replace, *hi, *hi_replace), cudf::logic_error);
 }
 
-struct ClampEmptyCaseTest : public cudf::test::BaseFixture {
-};
+struct ClampEmptyCaseTest : public cudf::test::BaseFixture {};
 
 TEST_F(ClampEmptyCaseTest, BothScalarEmptyInvalid)
 {
@@ -291,8 +291,7 @@ TYPED_TEST(ClampTestNumeric, InputNulliWithReplace)
 }
 
 template <typename T>
-struct ClampFloatTest : public cudf::test::BaseFixture {
-};
+struct ClampFloatTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ClampFloatTest, cudf::test::FloatingPointTypes);
 
@@ -380,12 +379,11 @@ TYPED_TEST(ClampFloatTest, SignOfAFloat)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
-struct ClampStringTest : public cudf::test::BaseFixture {
-};
+struct ClampStringTest : public cudf::test::BaseFixture {};
 
 TEST_F(ClampStringTest, WithNullableColumn)
 {
-  std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
+  std::vector<std::string> strings{"A", "b", "c", "", "e", "F", "G", "H", "", "j", "B"};
   std::vector<bool> valids{1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
 
   cudf::test::strings_column_wrapper input(strings.begin(), strings.end(), valids.begin());
@@ -395,7 +393,7 @@ TEST_F(ClampStringTest, WithNullableColumn)
   lo->set_valid_async(true);
   hi->set_valid_async(true);
 
-  std::vector<std::string> expected_strings{"B", "b", "c", "D", "e", "F", "G", "H", "i", "e", "B"};
+  std::vector<std::string> expected_strings{"B", "b", "c", "", "e", "F", "G", "H", "", "e", "B"};
 
   cudf::test::strings_column_wrapper expected(
     expected_strings.begin(), expected_strings.end(), valids.begin());
@@ -427,7 +425,7 @@ TEST_F(ClampStringTest, WithNonNullableColumn)
 
 TEST_F(ClampStringTest, WithNullableColumnNullLow)
 {
-  std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
+  std::vector<std::string> strings{"A", "b", "c", "", "e", "F", "G", "H", "", "j", "B"};
   std::vector<bool> valids{1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
 
   cudf::test::strings_column_wrapper input(strings.begin(), strings.end(), valids.begin());
@@ -437,7 +435,7 @@ TEST_F(ClampStringTest, WithNullableColumnNullLow)
   lo->set_valid_async(false);
   hi->set_valid_async(true);
 
-  std::vector<std::string> expected_strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "e", "B"};
+  std::vector<std::string> expected_strings{"A", "b", "c", "", "e", "F", "G", "H", "", "e", "B"};
 
   cudf::test::strings_column_wrapper expected(
     expected_strings.begin(), expected_strings.end(), valids.begin());
@@ -449,7 +447,7 @@ TEST_F(ClampStringTest, WithNullableColumnNullLow)
 
 TEST_F(ClampStringTest, WithNullableColumnNullHigh)
 {
-  std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
+  std::vector<std::string> strings{"A", "b", "c", "", "e", "F", "G", "H", "", "j", "B"};
   std::vector<bool> valids{1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
 
   cudf::test::strings_column_wrapper input(strings.begin(), strings.end(), valids.begin());
@@ -459,7 +457,7 @@ TEST_F(ClampStringTest, WithNullableColumnNullHigh)
   lo->set_valid_async(true);
   hi->set_valid_async(false);
 
-  std::vector<std::string> expected_strings{"B", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
+  std::vector<std::string> expected_strings{"B", "b", "c", "", "e", "F", "G", "H", "", "j", "B"};
 
   cudf::test::strings_column_wrapper expected(
     expected_strings.begin(), expected_strings.end(), valids.begin());
@@ -471,7 +469,7 @@ TEST_F(ClampStringTest, WithNullableColumnNullHigh)
 
 TEST_F(ClampStringTest, WithNullableColumnBothLoAndHiNull)
 {
-  std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
+  std::vector<std::string> strings{"A", "b", "c", "", "e", "F", "G", "H", "", "j", "B"};
   std::vector<bool> valids{1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
 
   cudf::test::strings_column_wrapper input(strings.begin(), strings.end(), valids.begin());
@@ -488,7 +486,7 @@ TEST_F(ClampStringTest, WithNullableColumnBothLoAndHiNull)
 
 TEST_F(ClampStringTest, WithReplaceString)
 {
-  std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
+  std::vector<std::string> strings{"A", "b", "c", "", "e", "F", "G", "H", "", "j", "B"};
   std::vector<bool> valids{1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
 
   cudf::test::strings_column_wrapper input(strings.begin(), strings.end(), valids.begin());
@@ -502,7 +500,7 @@ TEST_F(ClampStringTest, WithReplaceString)
   hi->set_valid_async(true);
   hi_replace->set_valid_async(true);
 
-  std::vector<std::string> expected_strings{"Z", "b", "c", "D", "e", "F", "G", "H", "z", "z", "B"};
+  std::vector<std::string> expected_strings{"Z", "b", "c", "", "e", "F", "G", "H", "", "z", "B"};
 
   cudf::test::strings_column_wrapper expected(
     expected_strings.begin(), expected_strings.end(), valids.begin());
@@ -512,8 +510,7 @@ TEST_F(ClampStringTest, WithReplaceString)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
-struct ClampDictionaryTest : public cudf::test::BaseFixture {
-};
+struct ClampDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(ClampDictionaryTest, WithNullableColumn)
 {
@@ -590,8 +587,7 @@ TEST_F(ClampDictionaryTest, WithReplace)
 }
 
 template <typename T>
-struct FixedPointTest : public cudf::test::BaseFixture {
-};
+struct FixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTest, cudf::test::FixedPointTypes);
 
@@ -645,7 +641,7 @@ TYPED_TEST(FixedPointTest, MismatchedScalarScales)
   auto const hi    = cudf::make_fixed_point_scalar<decimalXX>(8, scale);
   auto const input = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, scale};
 
-  EXPECT_THROW(cudf::clamp(input, *lo, *hi), cudf::logic_error);
+  EXPECT_THROW(cudf::clamp(input, *lo, *hi), cudf::data_type_error);
 }
 
 TYPED_TEST(FixedPointTest, MismatchedColumnScalarScale)
@@ -660,7 +656,7 @@ TYPED_TEST(FixedPointTest, MismatchedColumnScalarScale)
   auto const hi    = cudf::make_fixed_point_scalar<decimalXX>(8, scale);
   auto const input = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, scale_type{-4}};
 
-  EXPECT_THROW(cudf::clamp(input, *lo, *hi), cudf::logic_error);
+  EXPECT_THROW(cudf::clamp(input, *lo, *hi), cudf::data_type_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

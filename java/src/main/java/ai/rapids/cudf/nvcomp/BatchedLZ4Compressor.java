@@ -19,16 +19,18 @@ package ai.rapids.cudf.nvcomp;
 import ai.rapids.cudf.BaseDeviceMemoryBuffer;
 import ai.rapids.cudf.CloseableArray;
 import ai.rapids.cudf.Cuda;
+import ai.rapids.cudf.DefaultHostMemoryAllocator;
 import ai.rapids.cudf.DeviceMemoryBuffer;
+import ai.rapids.cudf.HostMemoryAllocator;
 import ai.rapids.cudf.HostMemoryBuffer;
 import ai.rapids.cudf.MemoryBuffer;
 import ai.rapids.cudf.NvtxColor;
 import ai.rapids.cudf.NvtxRange;
 
-import java.util.Arrays;
-
 /** Multi-buffer LZ4 compressor */
 public class BatchedLZ4Compressor {
+  private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
+
   static final long MAX_CHUNK_SIZE = 16777216;  // in bytes
   // each chunk has a 64-bit integer value as metadata containing the compressed size
   static final long METADATA_BYTES_PER_CHUNK = 8;
@@ -207,7 +209,7 @@ public class BatchedLZ4Compressor {
     final long outputAddrsOffset = inputAddrs.length * 8L;
     final long sizesOffset = outputAddrsOffset + inputAddrs.length * 8L;
     try (NvtxRange range = new NvtxRange("putAddrsAndSizesOnDevice", NvtxColor.YELLOW)) {
-      try (HostMemoryBuffer hostbuf = HostMemoryBuffer.allocate(totalSize);
+      try (HostMemoryBuffer hostbuf = hostMemoryAllocator.allocate(totalSize);
            DeviceMemoryBuffer result = DeviceMemoryBuffer.allocate(totalSize)) {
         hostbuf.setLongs(0, inputAddrs, 0, inputAddrs.length);
         hostbuf.setLongs(outputAddrsOffset, outputAddrs, 0, outputAddrs.length);
@@ -224,7 +226,7 @@ public class BatchedLZ4Compressor {
   // Synchronously copy the resulting compressed sizes from device memory to host memory.
   private long[] getOutputChunkSizes(BaseDeviceMemoryBuffer devChunkSizes, Cuda.Stream stream) {
     try (NvtxRange range = new NvtxRange("getOutputChunkSizes", NvtxColor.YELLOW)) {
-      try (HostMemoryBuffer hostbuf = HostMemoryBuffer.allocate(devChunkSizes.getLength())) {
+      try (HostMemoryBuffer hostbuf = hostMemoryAllocator.allocate(devChunkSizes.getLength())) {
         hostbuf.copyFromDeviceBuffer(devChunkSizes, stream);
         int numChunks = (int) (devChunkSizes.getLength() / 8);
         long[] result = new long[numChunks];

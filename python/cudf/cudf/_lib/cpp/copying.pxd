@@ -1,7 +1,8 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, int64_t, uint8_t
 from libcpp cimport bool
+from libcpp.functional cimport reference_wrapper
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
@@ -9,169 +10,144 @@ from rmm._lib.device_buffer cimport device_buffer
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
-from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
+from cudf._lib.exception_handler cimport cudf_exception_handler
 
 ctypedef const scalar constscalar
 
-cdef extern from "cudf/copying.hpp" namespace "cudf::packed_columns" nogil:
-    cdef struct metadata:
-        metadata(vector[uint8_t]&& v)
-        const uint8_t* data () except +
-        size_type size () except +
-
 cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
-    ctypedef enum out_of_bounds_policy:
-        NULLIFY 'cudf::out_of_bounds_policy::NULLIFY'
-        DONT_CHECK 'cudf::out_of_bounds_policy::DONT_CHECK'
+    cpdef enum class out_of_bounds_policy(bool):
+        NULLIFY
+        DONT_CHECK
 
     cdef unique_ptr[table] gather (
         const table_view& source_table,
         const column_view& gather_map,
         out_of_bounds_policy policy
-    ) except +
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[column] shift(
         const column_view& input,
         size_type offset,
         const scalar& fill_values
-    ) except +
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[table] scatter (
-        table_view source_table,
-        column_view scatter_map,
-        table_view target_table,
-        bool bounds_check
-    ) except +
+        const table_view& source_table,
+        const column_view& scatter_map,
+        const table_view& target_table,
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[table] scatter (
-        vector[reference_wrapper[constscalar]] source_scalars,
-        column_view indices,
-        table_view target,
-        bool bounds_check
-    ) except +
+        const vector[reference_wrapper[constscalar]]& source_scalars,
+        const column_view& indices,
+        const table_view& target,
+    ) except +cudf_exception_handler
 
-    ctypedef enum mask_allocation_policy:
-        NEVER 'cudf::mask_allocation_policy::NEVER',
-        RETAIN 'cudf::mask_allocation_policy::RETAIN',
-        ALWAYS 'cudf::mask_allocation_policy::ALWAYS'
+    cpdef enum class mask_allocation_policy(int32_t):
+        NEVER
+        RETAIN
+        ALWAYS
 
     cdef unique_ptr[column] empty_like (
-        column_view input_column
-    ) except +
+        const column_view& input_column
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[column] allocate_like (
-        column_view input_column,
+        const column_view& input_column,
         mask_allocation_policy policy
-    ) except +
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[column] allocate_like (
-        column_view input_column,
+        const column_view& input_column,
         size_type size,
         mask_allocation_policy policy
-    ) except +
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[table] empty_like (
-        table_view input_table
-    ) except +
+        const table_view& input_table
+    ) except +cudf_exception_handler
 
     cdef void copy_range_in_place (
-        column_view input_column,
-        mutable_column_view target_column,
+        const column_view& input_column,
+        mutable_column_view& target_column,
         size_type input_begin,
         size_type input_end,
         size_type target_begin
-    ) except +
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[column] copy_range (
-        column_view input_column,
-        column_view target_column,
+        const column_view& input_column,
+        const column_view& target_column,
         size_type input_begin,
         size_type input_end,
         size_type target_begin
-    ) except +
+    ) except +cudf_exception_handler
 
     cdef vector[column_view] slice (
-        column_view input_column,
+        const column_view& input_column,
         vector[size_type] indices
-    ) except +
+    ) except +cudf_exception_handler
 
     cdef vector[table_view] slice (
-        table_view input_table,
+        const table_view& input_table,
         vector[size_type] indices
-    ) except +
+    ) except +cudf_exception_handler
 
     cdef vector[column_view] split (
-        column_view input_column,
+        const column_view& input_column,
         vector[size_type] splits
-    ) except +
+    ) except +cudf_exception_handler
 
     cdef vector[table_view] split (
-        table_view input_table,
+        const table_view& input_table,
         vector[size_type] splits
-    ) except +
-
-    cdef cppclass packed_columns:
-        unique_ptr[metadata] metadata_
-        unique_ptr[device_buffer] gpu_data
-
-    cdef struct contiguous_split_result:
-        table_view table
-        vector[device_buffer] all_data
-
-    cdef vector[contiguous_split_result] contiguous_split (
-        table_view input_table,
-        vector[size_type] splits
-    ) except +
-
-    cdef packed_columns pack (const table_view& input) except +
-
-    cdef table_view unpack (const packed_columns& input) except +
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[column] copy_if_else (
-        column_view lhs,
-        column_view rhs,
-        column_view boolean_mask
-    ) except +
+        const column_view& lhs,
+        const column_view& rhs,
+        const column_view& boolean_mask
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[column] copy_if_else (
-        scalar lhs,
-        column_view rhs,
-        column_view boolean_mask
-    ) except +
+        const scalar& lhs,
+        const column_view& rhs,
+        const column_view& boolean_mask
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[column] copy_if_else (
-        column_view lhs,
-        scalar rhs,
-        column_view boolean_mask
-    ) except +
+        const column_view& lhs,
+        const scalar& rhs,
+        const column_view boolean_mask
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[column] copy_if_else (
-        scalar lhs,
-        scalar rhs,
-        column_view boolean_mask
-    ) except +
+        const scalar& lhs,
+        const scalar& rhs,
+        const column_view boolean_mask
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[table] boolean_mask_scatter (
-        table_view input,
-        table_view target,
-        column_view boolean_mask
-    ) except +
+        const table_view& input,
+        const table_view& target,
+        const column_view& boolean_mask
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[table] boolean_mask_scatter (
-        vector[reference_wrapper[constscalar]] input,
-        table_view target,
-        column_view boolean_mask
-    ) except +
+        const vector[reference_wrapper[constscalar]]& input,
+        const table_view& target,
+        const column_view& boolean_mask
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[scalar] get_element (
-        column_view input,
+        const column_view& input,
         size_type index
-    ) except +
+    ) except +cudf_exception_handler
 
-    ctypedef enum sample_with_replacement:
-        FALSE 'cudf::sample_with_replacement::FALSE',
-        TRUE 'cudf::sample_with_replacement::TRUE',
+    cpdef enum class sample_with_replacement(bool):
+        FALSE
+        TRUE

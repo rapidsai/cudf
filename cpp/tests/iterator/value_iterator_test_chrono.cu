@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,16 +12,15 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
+#include <tests/iterator/value_iterator_test.cuh>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/type_lists.hpp>
-
-#include <tests/iterator/value_iterator_test.cuh>
 
 using TestingTypes = cudf::test::ChronoTypes;
 
 template <typename T>
-struct ChronoValueIteratorTest : public IteratorTest<T> {
-};
+struct ChronoValueIteratorTest : public IteratorTest<T> {};
 
 TYPED_TEST_SUITE(ChronoValueIteratorTest, TestingTypes);
 TYPED_TEST(ChronoValueIteratorTest, non_null_iterator) { non_null_iterator(*this); }

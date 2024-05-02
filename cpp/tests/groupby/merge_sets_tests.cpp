@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,8 +72,7 @@ auto merge_sets(vcol_views const& keys_cols, vcol_views const& values_cols)
 }  // namespace
 
 template <typename V>
-struct GroupbyMergeSetsTypedTest : public cudf::test::BaseFixture {
-};
+struct GroupbyMergeSetsTypedTest : public cudf::test::BaseFixture {};
 
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
@@ -312,8 +311,7 @@ TYPED_TEST(GroupbyMergeSetsTypedTest, SlicedColumnsInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, verbosity);
 }
 
-struct GroupbyMergeSetsTest : public cudf::test::BaseFixture {
-};
+struct GroupbyMergeSetsTest : public cudf::test::BaseFixture {};
 
 TEST_F(GroupbyMergeSetsTest, StringsColumnInput)
 {

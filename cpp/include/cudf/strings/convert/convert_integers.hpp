@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -46,15 +47,17 @@ namespace strings {
  *
  * @throw cudf::logic_error if output_type is not integral type.
  *
- * @param strings Strings instance for this operation.
- * @param output_type Type of integer numeric column to return.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column with integers converted from strings.
+ * @param input Strings instance for this operation
+ * @param output_type Type of integer numeric column to return
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column with integers converted from strings
  */
 std::unique_ptr<column> to_integers(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new strings column converting the integer values from the
@@ -67,13 +70,15 @@ std::unique_ptr<column> to_integers(
  *
  * @throw cudf::logic_error if integers column is not integral type.
  *
- * @param integers Numeric column to convert.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column with integers as strings.
+ * @param integers Numeric column to convert
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column with integers as strings
  */
 std::unique_ptr<column> from_integers(
   column_view const& integers,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a boolean column identifying strings in which all
@@ -81,7 +86,7 @@ std::unique_ptr<column> from_integers(
  *
  * The output row entry will be set to `true` if the corresponding string element
  * have all characters in [-+0-9]. The optional sign character must only be in the first
- * position. Notice that the the integer value is not checked to be within its storage limits.
+ * position. Notice that the integer value is not checked to be within its storage limits.
  * For strict integer type check, use the other `is_integer()` API which accepts `data_type`
  * argument.
  *
@@ -94,13 +99,15 @@ std::unique_ptr<column> from_integers(
  *
  * Any null row results in a null entry for that row in the output column.
  *
- * @param strings  Strings instance for this operation.
- * @param mr       Device memory resource used to allocate the returned column's device memory.
- * @return         New column of boolean results for each string.
+ * @param input Strings instance for this operation
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column of boolean results for each string
  */
 std::unique_ptr<column> is_integer(
-  strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  strings_column_view const& input,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a boolean column identifying strings in which all
@@ -124,15 +131,17 @@ std::unique_ptr<column> is_integer(
  *
  * Any null row results in a null entry for that row in the output column.
  *
- * @param strings  Strings instance for this operation.
- * @param int_type Integer type used for checking underflow and overflow.
- * @param mr       Device memory resource used to allocate the returned column's device memory.
- * @return         New column of boolean results for each string.
+ * @param input Strings instance for this operation
+ * @param int_type Integer type used for checking underflow and overflow
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column of boolean results for each string
  */
 std::unique_ptr<column> is_integer(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   data_type int_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new integer numeric column parsing hexadecimal values from the
@@ -152,15 +161,17 @@ std::unique_ptr<column> is_integer(
  *
  * @throw cudf::logic_error if output_type is not integral type.
  *
- * @param strings Strings instance for this operation.
- * @param output_type Type of integer numeric column to return.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column with integers converted from strings.
+ * @param input Strings instance for this operation
+ * @param output_type Type of integer numeric column to return
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column with integers converted from strings
  */
 std::unique_ptr<column> hex_to_integers(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a boolean column identifying strings in which all
@@ -179,13 +190,15 @@ std::unique_ptr<column> hex_to_integers(
  *
  * Any null row results in a null entry for that row in the output column.
  *
- * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column of boolean results for each string.
+ * @param input Strings instance for this operation
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column of boolean results for each string
  */
 std::unique_ptr<column> is_hex(
-  strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  strings_column_view const& input,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new strings column converting integer columns to hexadecimal
@@ -199,24 +212,26 @@ std::unique_ptr<column> is_hex(
  *
  * @code{.pseudo}
  * Example:
- * input = [123, -1, 0, 27, 342718233] // int32 type input column
+ * input = [1234, -1, 0, 27, 342718233] // int32 type input column
  * s = integers_to_hex(input)
  * s is [ '04D2', 'FFFFFFFF', '00', '1B', '146D7719']
  * @endcode
  *
  * The example above shows an `INT32` type column where each integer is 4 bytes.
  * Leading zeros are suppressed unless filling out a complete byte as in
- * `123 -> '04D2'` instead of `000004D2` or `4D2`.
+ * `1234 -> '04D2'` instead of `000004D2` or `4D2`.
  *
  * @throw cudf::logic_error if the input column is not integral type.
  *
- * @param input Integer column to convert to hex.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column with hexadecimal characters.
+ * @param input Integer column to convert to hex
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column with hexadecimal characters
  */
 std::unique_ptr<column> integers_to_hex(
   column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

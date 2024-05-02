@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/testing_main.hpp>
+#include <cudf_test/type_list_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/labeling/label_bins.hpp>
 #include <cudf/types.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/type_list_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <algorithm>
 #include <limits>
@@ -45,8 +48,7 @@ using NumericTypesNotBool =
 using SignedNumericTypesNotBool =
   cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
-struct BinTestFixture : public cudf::test::BaseFixture {
-};
+struct BinTestFixture : public cudf::test::BaseFixture {};
 
 /*
  * Test error cases.
@@ -63,7 +65,7 @@ TEST(BinColumnErrorTests, TestInvalidLeft)
 
   EXPECT_THROW(
     cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-    cudf::logic_error);
+    cudf::data_type_error);
 };
 
 // Right edges type check.
@@ -75,7 +77,7 @@ TEST(BinColumnErrorTests, TestInvalidRight)
 
   EXPECT_THROW(
     cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-    cudf::logic_error);
+    cudf::data_type_error);
 };
 
 // Input type check.
@@ -87,7 +89,7 @@ TEST(BinColumnErrorTests, TestInvalidInput)
 
   EXPECT_THROW(
     cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-    cudf::logic_error);
+    cudf::data_type_error);
 };
 
 // Number of left and right edges must match.
@@ -144,8 +146,7 @@ struct GenericExceptionCasesBinTestFixture : public BinTestFixture {
 };
 
 template <typename T>
-struct ExceptionCasesBinTestFixture : public GenericExceptionCasesBinTestFixture<T> {
-};
+struct ExceptionCasesBinTestFixture : public GenericExceptionCasesBinTestFixture<T> {};
 
 TYPED_TEST_SUITE(ExceptionCasesBinTestFixture, NumericTypesNotBool);
 
@@ -176,8 +177,7 @@ TYPED_TEST(ExceptionCasesBinTestFixture, TestInputWithNulls)
 
 // Test that nan values are assigned the NULL label.
 template <typename T>
-struct NaNBinTestFixture : public GenericExceptionCasesBinTestFixture<T> {
-};
+struct NaNBinTestFixture : public GenericExceptionCasesBinTestFixture<T> {};
 
 TYPED_TEST_SUITE(NaNBinTestFixture, FloatingPointTypes);
 
@@ -328,8 +328,7 @@ TYPED_TEST(NegativeNumbersBinTestFixture, TestNegativeNumbers1024) { this->test(
  */
 
 template <typename T>
-struct FixedPointBinTestFixture : public BinTestFixture {
-};
+struct FixedPointBinTestFixture : public BinTestFixture {};
 
 TYPED_TEST_SUITE(FixedPointBinTestFixture, FixedPointTypes);
 

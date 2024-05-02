@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,69 +19,69 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 
-namespace cudf {
-namespace test {
-
-using namespace iterators;
+using namespace cudf::test::iterators;
 
 template <typename T>
-using input              = fixed_width_column_wrapper<T>;
-using rank_result_col    = fixed_width_column_wrapper<size_type>;
-using percent_result_col = fixed_width_column_wrapper<double>;
+using input              = cudf::test::fixed_width_column_wrapper<T>;
+using rank_result_col    = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+using percent_result_col = cudf::test::fixed_width_column_wrapper<double>;
 using null_iter_t        = decltype(nulls_at({}));
 
 auto constexpr X     = int32_t{0};  // Placeholder for NULL rows.
 auto const all_valid = nulls_at({});
 
-inline void test_rank_scans(column_view const& keys,
-                            column_view const& order,
-                            column_view const& expected_dense,
-                            column_view const& expected_rank,
-                            column_view const& expected_percent_rank)
+void test_rank_scans(cudf::column_view const& keys,
+                     cudf::column_view const& order,
+                     cudf::column_view const& expected_dense,
+                     cudf::column_view const& expected_rank,
+                     cudf::column_view const& expected_percent_rank)
 {
-  test_single_scan(
-    keys,
-    order,
-    keys,
-    expected_dense,
-    make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE, {}, null_policy::INCLUDE),
-    null_policy::INCLUDE,
-    sorted::YES);
-  test_single_scan(
-    keys,
-    order,
-    keys,
-    expected_rank,
-    make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN, {}, null_policy::INCLUDE),
-    null_policy::INCLUDE,
-    sorted::YES);
-  test_single_scan(
-    keys,
-    order,
-    keys,
-    expected_percent_rank,
-    make_rank_aggregation<groupby_scan_aggregation>(
-      rank_method::MIN, {}, null_policy::INCLUDE, {}, rank_percentage::ONE_NORMALIZED),
-    null_policy::INCLUDE,
-    sorted::YES);
+  test_single_scan(keys,
+                   order,
+                   keys,
+                   expected_dense,
+                   cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+                     cudf::rank_method::DENSE, {}, cudf::null_policy::INCLUDE),
+                   cudf::null_policy::INCLUDE,
+                   cudf::sorted::YES);
+  test_single_scan(keys,
+                   order,
+                   keys,
+                   expected_rank,
+                   cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+                     cudf::rank_method::MIN, {}, cudf::null_policy::INCLUDE),
+                   cudf::null_policy::INCLUDE,
+                   cudf::sorted::YES);
+  test_single_scan(keys,
+                   order,
+                   keys,
+                   expected_percent_rank,
+                   cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+                     cudf::rank_method::MIN,
+                     {},
+                     cudf::null_policy::INCLUDE,
+                     {},
+                     cudf::rank_percentage::ONE_NORMALIZED),
+                   cudf::null_policy::INCLUDE,
+                   cudf::sorted::YES);
 }
 
-struct groupby_rank_scan_test : public BaseFixture {
-};
+struct groupby_rank_scan_test : public cudf::test::BaseFixture {};
 
-struct groupby_rank_scan_test_failures : public BaseFixture {
-};
+struct groupby_rank_scan_test_failures : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct typed_groupby_rank_scan_test : public BaseFixture {
-};
+struct typed_groupby_rank_scan_test : public cudf::test::BaseFixture {};
 
-using testing_type_set =
-  Concat<IntegralTypesNotBool, FloatingPointTypes, FixedPointTypes, ChronoTypes>;
+using testing_type_set = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
+                                            cudf::test::FloatingPointTypes,
+                                            cudf::test::FixedPointTypes,
+                                            cudf::test::ChronoTypes>;
 
 TYPED_TEST_SUITE(typed_groupby_rank_scan_test, testing_type_set);
 
@@ -91,7 +91,7 @@ TYPED_TEST(typed_groupby_rank_scan_test, empty_cols)
 
   auto const keys            = input<T>{};
   auto const order_by        = input<T>{};
-  auto const order_by_struct = structs_column_wrapper{};
+  auto const order_by_struct = cudf::test::structs_column_wrapper{};
 
   auto const expected_dense   = rank_result_col{};
   auto const expected_rank    = rank_result_col{};
@@ -110,7 +110,7 @@ TYPED_TEST(typed_groupby_rank_scan_test, zero_valid_keys)
   auto const order_by_struct = [] {
     auto member_1 = input<T>{{3, 3, 1}};
     auto member_2 = input<T>{{3, 3, 1}};
-    return structs_column_wrapper{member_1, member_2};
+    return cudf::test::structs_column_wrapper{member_1, member_2};
   }();
 
   auto const dense_rank_results  = rank_result_col{1, 1, 2};
@@ -131,7 +131,7 @@ TYPED_TEST(typed_groupby_rank_scan_test, zero_valid_orders)
   auto const make_struct_order_by = [&](null_iter_t const& null_iter = no_nulls()) {
     auto member1 = make_order_by();
     auto member2 = make_order_by();
-    return structs_column_wrapper{{member1, member2}, null_iter};
+    return cudf::test::structs_column_wrapper{{member1, member2}, null_iter};
   };
   auto const order_by                  = make_order_by();
   auto const order_by_struct           = make_struct_order_by();
@@ -156,7 +156,7 @@ TYPED_TEST(typed_groupby_rank_scan_test, basic)
   auto const order_by_struct = [&] {
     auto order2 = make_order_by();
     auto order3 = make_order_by();
-    return structs_column_wrapper{order2, order3};
+    return cudf::test::structs_column_wrapper{order2, order3};
   }();
 
   auto const expected_dense   = rank_result_col{1, 1, 1, 2, 2, 2, 3, 1, 2, 2, 3, 3};
@@ -180,7 +180,7 @@ TYPED_TEST(typed_groupby_rank_scan_test, null_orders)
   auto const make_struct_order_by = [&](null_iter_t const& null_iter = all_valid) {
     auto member1 = make_order_by();
     auto member2 = make_order_by();
-    return structs_column_wrapper{{member1, member2}, null_iter};
+    return cudf::test::structs_column_wrapper{{member1, member2}, null_iter};
   };
   auto const order_by                   = make_order_by();
   auto const order_by_struct            = make_struct_order_by();
@@ -209,7 +209,7 @@ TYPED_TEST(typed_groupby_rank_scan_test, null_orders_and_keys)
   auto const make_struct_order_by = [&](null_iter_t const& null_iter = all_valid) {
     auto member1 = make_order_by();
     auto member2 = make_order_by();
-    return structs_column_wrapper{{member1, member2}, null_iter};
+    return cudf::test::structs_column_wrapper{{member1, member2}, null_iter};
   };
   auto const order_by                   = make_order_by();
   auto const order_by_struct            = make_struct_order_by();
@@ -230,12 +230,12 @@ TYPED_TEST(typed_groupby_rank_scan_test, mixedStructs)
 {
   auto const struct_col = [] {
     auto nums    = input<TypeParam>{{0, 0, 7, 7, 7, X, 4, 4, 4, 9, 9, 9}, null_at(5)};
-    auto strings = strings_column_wrapper{
+    auto strings = cudf::test::strings_column_wrapper{
       {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "XX", "9", "9", "10d"}, null_at(8)};
-    return structs_column_wrapper{{nums, strings}, null_at(11)}.release();
+    return cudf::test::structs_column_wrapper{{nums, strings}, null_at(11)}.release();
   }();
 
-  auto const keys = strings_column_wrapper{
+  auto const keys = cudf::test::strings_column_wrapper{
     {"0", "0", "0", "0", "0", "0", "1", "1", "1", "X", "X", "X"}, nulls_at({9, 10, 11})};
 
   auto const expected_dense   = rank_result_col{1, 1, 2, 2, 3, 4, 1, 1, 2, 1, 1, 2};
@@ -243,20 +243,25 @@ TYPED_TEST(typed_groupby_rank_scan_test, mixedStructs)
   auto const expected_percent = percent_result_col{
     0.0, 0.0, 2.0 / 5, 2.0 / 5, 4.0 / 5, 5.0 / 5, 0.0, 0.0, 2.0 / 2, 0.0, 0.0, 2.0 / 2};
 
-  std::vector<groupby::scan_request> requests;
-  requests.emplace_back(groupby::scan_request());
+  std::vector<cudf::groupby::scan_request> requests;
+  requests.emplace_back(cudf::groupby::scan_request());
   requests[0].values = *struct_col;
-  requests[0].aggregations.push_back(
-    make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE, {}, null_policy::INCLUDE));
-  requests[0].aggregations.push_back(
-    make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN, {}, null_policy::INCLUDE));
-  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(
-    rank_method::MIN, {}, null_policy::INCLUDE, {}, rank_percentage::ONE_NORMALIZED));
+  requests[0].aggregations.push_back(cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+    cudf::rank_method::DENSE, {}, cudf::null_policy::INCLUDE));
+  requests[0].aggregations.push_back(cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+    cudf::rank_method::MIN, {}, cudf::null_policy::INCLUDE));
+  requests[0].aggregations.push_back(cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+    cudf::rank_method::MIN,
+    {},
+    cudf::null_policy::INCLUDE,
+    {},
+    cudf::rank_percentage::ONE_NORMALIZED));
 
-  groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
+  cudf::groupby::groupby gb_obj(
+    cudf::table_view({keys}), cudf::null_policy::INCLUDE, cudf::sorted::YES);
   auto [result_keys, agg_results] = gb_obj.scan(requests);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({keys}), result_keys->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view({keys}), result_keys->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[0].results[0], expected_dense);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[0].results[1], expected_rank);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[0].results[2], expected_percent);
@@ -269,48 +274,57 @@ TYPED_TEST(typed_groupby_rank_scan_test, nestedStructs)
   auto nested_structs = [] {
     auto structs_member = [] {
       auto nums_member    = input<T>{{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9}, null_at(5)};
-      auto strings_member = strings_column_wrapper{
+      auto strings_member = cudf::test::strings_column_wrapper{
         {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "6c", "9", "9", "10d"}, null_at(8)};
-      return structs_column_wrapper{nums_member, strings_member};
+      return cudf::test::structs_column_wrapper{nums_member, strings_member};
     }();
     auto nums_member = input<T>{{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9}, null_at(5)};
-    return structs_column_wrapper{structs_member, nums_member}.release();
+    return cudf::test::structs_column_wrapper{structs_member, nums_member}.release();
   }();
 
   auto flat_struct = [] {
     auto nums_member    = input<T>{{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9}, null_at(5)};
-    auto strings_member = strings_column_wrapper{
+    auto strings_member = cudf::test::strings_column_wrapper{
       {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "6c", "9", "9", "10d"}, null_at(8)};
     auto nuther_nums =
-      fixed_width_column_wrapper<T>{{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9}, null_at(5)};
-    return structs_column_wrapper{nums_member, strings_member, nuther_nums}.release();
+      cudf::test::fixed_width_column_wrapper<T>{{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9}, null_at(5)};
+    return cudf::test::structs_column_wrapper{nums_member, strings_member, nuther_nums}.release();
   }();
 
-  auto const keys = strings_column_wrapper{
+  auto const keys = cudf::test::strings_column_wrapper{
     {"0", "0", "0", "0", "0", "0", "1", "1", "1", "1", "0", "1"}, nulls_at({9, 10, 11})};
 
-  std::vector<groupby::scan_request> requests;
-  requests.emplace_back(groupby::scan_request());
-  requests.emplace_back(groupby::scan_request());
+  std::vector<cudf::groupby::scan_request> requests;
+  requests.emplace_back(cudf::groupby::scan_request());
+  requests.emplace_back(cudf::groupby::scan_request());
   requests[0].values = *nested_structs;
   requests[0].aggregations.push_back(
-    make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE));
+    cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(cudf::rank_method::DENSE));
   requests[0].aggregations.push_back(
-    make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN));
-  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(
-    rank_method::MIN, {}, null_policy::INCLUDE, {}, rank_percentage::ONE_NORMALIZED));
+    cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(cudf::rank_method::MIN));
+  requests[0].aggregations.push_back(cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+    cudf::rank_method::MIN,
+    {},
+    cudf::null_policy::INCLUDE,
+    {},
+    cudf::rank_percentage::ONE_NORMALIZED));
   requests[1].values = *flat_struct;
   requests[1].aggregations.push_back(
-    make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE));
+    cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(cudf::rank_method::DENSE));
   requests[1].aggregations.push_back(
-    make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN));
-  requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(
-    rank_method::MIN, {}, null_policy::INCLUDE, {}, rank_percentage::ONE_NORMALIZED));
+    cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(cudf::rank_method::MIN));
+  requests[1].aggregations.push_back(cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+    cudf::rank_method::MIN,
+    {},
+    cudf::null_policy::INCLUDE,
+    {},
+    cudf::rank_percentage::ONE_NORMALIZED));
 
-  groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
+  cudf::groupby::groupby gb_obj(
+    cudf::table_view({keys}), cudf::null_policy::INCLUDE, cudf::sorted::YES);
   auto [result_keys, agg_results] = gb_obj.scan(requests);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({keys}), result_keys->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view({keys}), result_keys->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[0].results[0], *agg_results[1].results[0]);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[0].results[1], *agg_results[1].results[1]);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[0].results[2], *agg_results[1].results[2]);
@@ -324,14 +338,15 @@ TYPED_TEST(typed_groupby_rank_scan_test, structsWithNullPushdown)
 
   auto get_struct_column = [] {
     auto nums_member =
-      fixed_width_column_wrapper<T>{{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9}, null_at(5)};
-    auto strings_member = strings_column_wrapper{
+      cudf::test::fixed_width_column_wrapper<T>{{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9}, null_at(5)};
+    auto strings_member = cudf::test::strings_column_wrapper{
       {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "6c", "9", "9", "10d"}, null_at(8)};
-    auto struct_column = structs_column_wrapper{nums_member, strings_member}.release();
+    auto struct_column = cudf::test::structs_column_wrapper{nums_member, strings_member}.release();
     // Reset null-mask, a posteriori. Nulls will not be pushed down to children.
     auto const null_iter = nulls_at({1, 2, 11});
-    struct_column->set_null_mask(
-      cudf::test::detail::make_null_mask(null_iter, null_iter + num_rows));
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(null_iter, null_iter + num_rows);
+    struct_column->set_null_mask(std::move(null_mask), null_count);
     return struct_column;
   };
 
@@ -339,32 +354,42 @@ TYPED_TEST(typed_groupby_rank_scan_test, structsWithNullPushdown)
 
   auto const definitely_null_structs = [&] {
     auto struct_column = get_struct_column();
-    struct_column->set_null_mask(create_null_mask(num_rows, mask_state::ALL_NULL));
+    struct_column->set_null_mask(cudf::create_null_mask(num_rows, cudf::mask_state::ALL_NULL),
+                                 num_rows);
     return struct_column;
   }();
 
-  strings_column_wrapper keys = {{"0", "0", "0", "0", "0", "0", "1", "1", "1", "X", "X", "X"},
-                                 nulls_at({9, 10, 11})};
+  cudf::test::strings_column_wrapper keys = {
+    {"0", "0", "0", "0", "0", "0", "1", "1", "1", "X", "X", "X"}, nulls_at({9, 10, 11})};
 
-  std::vector<groupby::scan_request> requests;
-  requests.emplace_back(groupby::scan_request());
-  requests.emplace_back(groupby::scan_request());
+  std::vector<cudf::groupby::scan_request> requests;
+  requests.emplace_back(cudf::groupby::scan_request());
+  requests.emplace_back(cudf::groupby::scan_request());
   requests[0].values = *possibly_null_structs;
-  requests[0].aggregations.push_back(
-    make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE, {}, null_policy::INCLUDE));
-  requests[0].aggregations.push_back(
-    make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN, {}, null_policy::INCLUDE));
-  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(
-    rank_method::MIN, {}, null_policy::INCLUDE, {}, rank_percentage::ONE_NORMALIZED));
+  requests[0].aggregations.push_back(cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+    cudf::rank_method::DENSE, {}, cudf::null_policy::INCLUDE));
+  requests[0].aggregations.push_back(cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+    cudf::rank_method::MIN, {}, cudf::null_policy::INCLUDE));
+  requests[0].aggregations.push_back(cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+    cudf::rank_method::MIN,
+    {},
+    cudf::null_policy::INCLUDE,
+    {},
+    cudf::rank_percentage::ONE_NORMALIZED));
   requests[1].values = *definitely_null_structs;
-  requests[1].aggregations.push_back(
-    make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE, {}, null_policy::INCLUDE));
-  requests[1].aggregations.push_back(
-    make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN, {}, null_policy::INCLUDE));
-  requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(
-    rank_method::MIN, {}, null_policy::INCLUDE, {}, rank_percentage::ONE_NORMALIZED));
+  requests[1].aggregations.push_back(cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+    cudf::rank_method::DENSE, {}, cudf::null_policy::INCLUDE));
+  requests[1].aggregations.push_back(cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+    cudf::rank_method::MIN, {}, cudf::null_policy::INCLUDE));
+  requests[1].aggregations.push_back(cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+    cudf::rank_method::MIN,
+    {},
+    cudf::null_policy::INCLUDE,
+    {},
+    cudf::rank_percentage::ONE_NORMALIZED));
 
-  groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
+  cudf::groupby::groupby gb_obj(
+    cudf::table_view({keys}), cudf::null_policy::INCLUDE, cudf::sorted::YES);
   auto [result_keys, agg_results] = gb_obj.scan(requests);
 
   auto expected_dense   = rank_result_col{1, 2, 2, 3, 4, 5, 1, 1, 2, 1, 1, 2};
@@ -385,7 +410,7 @@ TYPED_TEST(typed_groupby_rank_scan_test, structsWithNullPushdown)
 
 /* List support dependent on https://github.com/rapidsai/cudf/issues/8683
 template <typename T>
-struct list_groupby_rank_scan_test : public BaseFixture {
+struct list_groupby_rank_scan_test : public cudf::test::BaseFixture {
 };
 
 using list_test_type_set = Concat<IntegralTypesNotBool,
@@ -411,24 +436,24 @@ TYPED_TEST(list_groupby_rank_scan_test, lists)
     {9, 9},
     {9, 9},
     {9, 10}}.release();
-  fixed_width_column_wrapper<T> element1{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9};
-  fixed_width_column_wrapper<T> element2{0, 0, 2, 2, 3, 5, 6, 6, 6, 9, 9, 10};
-  auto struct_col = structs_column_wrapper{element1, element2}.release();
+  cudf::test::fixed_width_column_wrapper<T> element1{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9};
+  cudf::test::fixed_width_column_wrapper<T> element2{0, 0, 2, 2, 3, 5, 6, 6, 6, 9, 9, 10};
+  auto struct_col =  cudf::test::structs_column_wrapper{element1, element2}.release();
 
-  fixed_width_column_wrapper<T> keys = {{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1},
+  cudf::test::fixed_width_column_wrapper<T> keys = {{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1},
                                         {1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0}};
 
-  std::vector<groupby::scan_request> requests;
+  std::vector<cudf::groupby::scan_request> requests;
   requests.emplace_back(groupby::aggregation_request());
   requests.emplace_back(groupby::aggregation_request());
   requests[0].values = list_col;
-  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE));
-  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN));
+  requests[0].aggregations.push_back(make_rank_aggregation<cudf::groupby_scan_aggregation>(rank_method::DENSE));
+  requests[0].aggregations.push_back(make_rank_aggregation<cudf::groupby_scan_aggregation>(rank_method::MIN));
   requests[1].values = struct_col;
-  requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE));
-  requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN));
+  requests[1].aggregations.push_back(make_rank_aggregation<cudf::groupby_scan_aggregation>(rank_method::DENSE));
+  requests[1].aggregations.push_back(make_rank_aggregation<cudf::groupby_scan_aggregation>(rank_method::MIN));
 
-  groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
+  cudf::groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, cudf::sorted::YES);
   auto result = gb_obj.scan(requests);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({keys}), result.first->view());
@@ -441,7 +466,7 @@ TYPED_TEST(list_groupby_rank_scan_test, lists)
 
 TEST(groupby_rank_scan_test, bools)
 {
-  using bools       = fixed_width_column_wrapper<bool>;
+  using bools       = cudf::test::fixed_width_column_wrapper<bool>;
   using null_iter_t = decltype(nulls_at({}));
 
   auto const keys          = bools{{0, 0, 0, 0, 0, 0, 1, 1, 1, X, X, X}, nulls_at({9, 10, 11})};
@@ -450,7 +475,7 @@ TEST(groupby_rank_scan_test, bools)
   auto const make_structs  = [&](null_iter_t const& null_iter = all_valid) {
     auto member_1 = make_order_by();
     auto member_2 = make_order_by();
-    return structs_column_wrapper{{member_1, member_2}, null_iter};
+    return cudf::test::structs_column_wrapper{{member_1, member_2}, null_iter};
   };
 
   auto const order_by                    = make_order_by();
@@ -470,7 +495,7 @@ TEST(groupby_rank_scan_test, bools)
 
 TEST(groupby_rank_scan_test, strings)
 {
-  using strings     = strings_column_wrapper;
+  using strings     = cudf::test::strings_column_wrapper;
   using null_iter_t = decltype(nulls_at({}));
 
   auto const keys =
@@ -483,7 +508,7 @@ TEST(groupby_rank_scan_test, strings)
   auto const make_structs = [&](null_iter_t const& null_iter = all_valid) {
     auto member_1 = make_order_by();
     auto member_2 = make_order_by();
-    return structs_column_wrapper{{member_1, member_2}, null_iter};
+    return cudf::test::structs_column_wrapper{{member_1, member_2}, null_iter};
   };
 
   auto const order_by                    = make_order_by();
@@ -508,66 +533,64 @@ TEST_F(groupby_rank_scan_test_failures, DISABLED_test_exception_triggers)
   auto const keys = input<T>{{1, 2, 3}, null_at(2)};
   auto const col  = input<T>{3, 3, 1};
 
-  CUDF_EXPECT_THROW_MESSAGE(
-    test_single_scan(keys,
-                     col,
-                     keys,
-                     col,
-                     make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE),
-                     null_policy::INCLUDE,
-                     sorted::NO),
-    "Rank aggregate in groupby scan requires the keys to be presorted");
+  // All of these aggregations raise exceptions unless provided presorted keys
+  EXPECT_THROW(test_single_scan(keys,
+                                col,
+                                keys,
+                                col,
+                                cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+                                  cudf::rank_method::DENSE),
+                                cudf::null_policy::INCLUDE,
+                                cudf::sorted::NO),
+               cudf::logic_error);
 
-  CUDF_EXPECT_THROW_MESSAGE(
-    test_single_scan(keys,
-                     col,
-                     keys,
-                     col,
-                     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN),
-                     null_policy::INCLUDE,
-                     sorted::NO),
-    "Rank aggregate in groupby scan requires the keys to be presorted");
+  EXPECT_THROW(test_single_scan(keys,
+                                col,
+                                keys,
+                                col,
+                                cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+                                  cudf::rank_method::MIN),
+                                cudf::null_policy::INCLUDE,
+                                cudf::sorted::NO),
+               cudf::logic_error);
 
-  CUDF_EXPECT_THROW_MESSAGE(
-    test_single_scan(keys,
-                     col,
-                     keys,
-                     col,
-                     make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE),
-                     null_policy::EXCLUDE,
-                     sorted::YES),
-    "Rank aggregate in groupby scan requires the keys to be presorted");
+  EXPECT_THROW(test_single_scan(keys,
+                                col,
+                                keys,
+                                col,
+                                cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+                                  cudf::rank_method::DENSE),
+                                cudf::null_policy::EXCLUDE,
+                                cudf::sorted::YES),
+               cudf::logic_error);
 
-  CUDF_EXPECT_THROW_MESSAGE(
-    test_single_scan(keys,
-                     col,
-                     keys,
-                     col,
-                     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN),
-                     null_policy::EXCLUDE,
-                     sorted::YES),
-    "Rank aggregate in groupby scan requires the keys to be presorted");
+  EXPECT_THROW(test_single_scan(keys,
+                                col,
+                                keys,
+                                col,
+                                cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+                                  cudf::rank_method::MIN),
+                                cudf::null_policy::EXCLUDE,
+                                cudf::sorted::YES),
+               cudf::logic_error);
 
-  CUDF_EXPECT_THROW_MESSAGE(
-    test_single_scan(keys,
-                     col,
-                     keys,
-                     col,
-                     make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE),
-                     null_policy::EXCLUDE,
-                     sorted::NO),
-    "Rank aggregate in groupby scan requires the keys to be presorted");
+  EXPECT_THROW(test_single_scan(keys,
+                                col,
+                                keys,
+                                col,
+                                cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+                                  cudf::rank_method::DENSE),
+                                cudf::null_policy::EXCLUDE,
+                                cudf::sorted::NO),
+               cudf::logic_error);
 
-  CUDF_EXPECT_THROW_MESSAGE(
-    test_single_scan(keys,
-                     col,
-                     keys,
-                     col,
-                     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN),
-                     null_policy::EXCLUDE,
-                     sorted::NO),
-    "Rank aggregate in groupby scan requires the keys to be presorted");
+  EXPECT_THROW(test_single_scan(keys,
+                                col,
+                                keys,
+                                col,
+                                cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
+                                  cudf::rank_method::MIN),
+                                cudf::null_policy::EXCLUDE,
+                                cudf::sorted::NO),
+               cudf::logic_error);
 }
-
-}  // namespace test
-}  // namespace cudf

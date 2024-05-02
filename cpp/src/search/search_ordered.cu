@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,13 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
-#include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/binary_search.h>
 
@@ -39,7 +39,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
                                        std::vector<order> const& column_order,
                                        std::vector<null_order> const& null_precedence,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(
     column_order.empty() or static_cast<std::size_t>(haystack.num_columns()) == column_order.size(),
@@ -62,34 +62,56 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
 
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
-  auto const matched = dictionary::detail::match_dictionaries({haystack, needles}, stream);
+  auto const matched = dictionary::detail::match_dictionaries(
+    {haystack, needles}, stream, rmm::mr::get_current_device_resource());
   auto const& matched_haystack = matched.second.front();
   auto const& matched_needles  = matched.second.back();
 
   auto const comparator = cudf::experimental::row::lexicographic::two_table_comparator(
     matched_haystack, matched_needles, column_order, null_precedence, stream);
-  auto const has_nulls    = has_nested_nulls(matched_haystack) or has_nested_nulls(matched_needles);
-  auto const d_comparator = comparator.less(nullate::DYNAMIC{has_nulls});
+  auto const has_nulls = has_nested_nulls(matched_haystack) or has_nested_nulls(matched_needles);
 
   auto const haystack_it = cudf::experimental::row::lhs_iterator(0);
   auto const needles_it  = cudf::experimental::row::rhs_iterator(0);
 
-  if (find_first) {
-    thrust::lower_bound(rmm::exec_policy(stream),
-                        haystack_it,
-                        haystack_it + haystack.num_rows(),
-                        needles_it,
-                        needles_it + needles.num_rows(),
-                        out_it,
-                        d_comparator);
+  if (cudf::detail::has_nested_columns(haystack) || cudf::detail::has_nested_columns(needles)) {
+    auto const d_comparator = comparator.less<true>(nullate::DYNAMIC{has_nulls});
+    if (find_first) {
+      thrust::lower_bound(rmm::exec_policy(stream),
+                          haystack_it,
+                          haystack_it + haystack.num_rows(),
+                          needles_it,
+                          needles_it + needles.num_rows(),
+                          out_it,
+                          d_comparator);
+    } else {
+      thrust::upper_bound(rmm::exec_policy(stream),
+                          haystack_it,
+                          haystack_it + haystack.num_rows(),
+                          needles_it,
+                          needles_it + needles.num_rows(),
+                          out_it,
+                          d_comparator);
+    }
   } else {
-    thrust::upper_bound(rmm::exec_policy(stream),
-                        haystack_it,
-                        haystack_it + haystack.num_rows(),
-                        needles_it,
-                        needles_it + needles.num_rows(),
-                        out_it,
-                        d_comparator);
+    auto const d_comparator = comparator.less<false>(nullate::DYNAMIC{has_nulls});
+    if (find_first) {
+      thrust::lower_bound(rmm::exec_policy(stream),
+                          haystack_it,
+                          haystack_it + haystack.num_rows(),
+                          needles_it,
+                          needles_it + needles.num_rows(),
+                          out_it,
+                          d_comparator);
+    } else {
+      thrust::upper_bound(rmm::exec_policy(stream),
+                          haystack_it,
+                          haystack_it + haystack.num_rows(),
+                          needles_it,
+                          needles_it + needles.num_rows(),
+                          out_it,
+                          d_comparator);
+    }
   }
   return result;
 }
@@ -100,7 +122,7 @@ std::unique_ptr<column> lower_bound(table_view const& haystack,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   return search_ordered(haystack, needles, true, column_order, null_precedence, stream, mr);
 }
@@ -110,7 +132,7 @@ std::unique_ptr<column> upper_bound(table_view const& haystack,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   return search_ordered(haystack, needles, false, column_order, null_precedence, stream, mr);
 }
@@ -123,22 +145,22 @@ std::unique_ptr<column> lower_bound(table_view const& haystack,
                                     table_view const& needles,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::lower_bound(
-    haystack, needles, column_order, null_precedence, cudf::default_stream_value, mr);
+  return detail::lower_bound(haystack, needles, column_order, null_precedence, stream, mr);
 }
 
 std::unique_ptr<column> upper_bound(table_view const& haystack,
                                     table_view const& needles,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::upper_bound(
-    haystack, needles, column_order, null_precedence, cudf::default_stream_value, mr);
+  return detail::upper_bound(haystack, needles, column_order, null_precedence, stream, mr);
 }
 
 }  // namespace cudf

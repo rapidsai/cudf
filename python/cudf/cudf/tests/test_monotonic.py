@@ -1,27 +1,22 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 """
-Tests related to is_unique and is_monotonic attributes
+Tests related to is_unique, is_monotonic_increasing &
+is_monotonic_decreasing attributes
 """
+
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf import MultiIndex, Series
-from cudf.core.index import (
-    CategoricalIndex,
-    DatetimeIndex,
-    GenericIndex,
-    RangeIndex,
-    StringIndex,
-)
+from cudf import Index, MultiIndex, Series
+from cudf.core.index import CategoricalIndex, DatetimeIndex, RangeIndex
 from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize("testrange", [(10, 20, 1), (0, -10, -1), (5, 5, 1)])
 def test_range_index(testrange):
-
     index = RangeIndex(
         start=testrange[0], stop=testrange[1], step=testrange[2]
     )
@@ -30,7 +25,6 @@ def test_range_index(testrange):
     )
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -49,12 +43,10 @@ def test_range_index(testrange):
     ],
 )
 def test_generic_index(testlist):
-
-    index = GenericIndex(testlist)
+    index = Index(testlist)
     index_pd = pd.Index(testlist)
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -69,12 +61,10 @@ def test_generic_index(testlist):
     ],
 )
 def test_string_index(testlist):
-
-    index = StringIndex(testlist)
+    index = cudf.Index(testlist)
     index_pd = pd.Index(testlist)
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -83,14 +73,12 @@ def test_string_index(testlist):
     "testlist", [["c", "d", "e", "f"], ["z", "y", "x", "r"]]
 )
 def test_categorical_index(testlist):
-
     # Assuming unordered categorical data cannot be "monotonic"
     raw_cat = pd.Categorical(testlist, ordered=True)
     index = CategoricalIndex(raw_cat)
     index_pd = pd.CategoricalIndex(raw_cat)
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -126,12 +114,10 @@ def test_categorical_index(testlist):
     ],
 )
 def test_datetime_index(testlist):
-
     index = DatetimeIndex(testlist)
     index_pd = pd.DatetimeIndex(testlist)
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -154,7 +140,6 @@ def test_series(testlist):
     series_pd = pd.Series(testlist)
 
     assert series.is_unique == series_pd.is_unique
-    assert series.is_monotonic == series_pd.is_monotonic
     assert series.is_monotonic_increasing == series_pd.is_monotonic_increasing
     assert series.is_monotonic_decreasing == series_pd.is_monotonic_decreasing
 
@@ -179,7 +164,6 @@ def test_multiindex():
     gdf = cudf.from_pandas(pdf)
 
     assert pdf.index.is_unique == gdf.index.is_unique
-    assert pdf.index.is_monotonic == gdf.index.is_monotonic
     assert (
         pdf.index.is_monotonic_increasing == gdf.index.is_monotonic_increasing
     )
@@ -214,7 +198,6 @@ def test_multiindex_tuples(testarr):
     index_pd = pd.MultiIndex.from_tuples(tuples, names=testarr[1])
 
     assert index.is_unique == index_pd.is_unique
-    assert index.is_monotonic == index_pd.is_monotonic
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
@@ -229,14 +212,13 @@ def test_multiindex_tuples(testarr):
     ],
 )
 @pytest.mark.parametrize("side", ["left", "right"])
-@pytest.mark.parametrize("kind", ["loc", "getitem", None])
-def test_get_slice_bound(testlist, side, kind):
-    index = GenericIndex(testlist)
+def test_get_slice_bound(testlist, side):
+    index = Index(testlist)
     index_pd = pd.Index(testlist)
     for label in testlist:
-        assert index.get_slice_bound(
-            label, side, kind
-        ) == index_pd.get_slice_bound(label, side, kind)
+        expect = index_pd.get_slice_bound(label, side)
+        got = index.get_slice_bound(label, side)
+        assert got == expect
 
 
 @pytest.mark.parametrize("bounds", [(0, 10), (0, 1), (3, 4), (0, 0), (3, 3)])
@@ -245,14 +227,13 @@ def test_get_slice_bound(testlist, side, kind):
     [[-1, 0, 5, 10, 11], [-1, 0, 1, 2], [2, 3, 4, 5], [-1, 0, 1], [2, 3, 4]],
 )
 @pytest.mark.parametrize("side", ["left", "right"])
-@pytest.mark.parametrize("kind", ["getitem", "loc"])
-def test_rangeindex_get_slice_bound_basic(bounds, indices, side, kind):
+def test_rangeindex_get_slice_bound_basic(bounds, indices, side):
     start, stop = bounds
     pd_index = pd.RangeIndex(start, stop)
     cudf_index = RangeIndex(start, stop)
     for idx in indices:
-        expect = pd_index.get_slice_bound(idx, side, kind)
-        got = cudf_index.get_slice_bound(idx, side, kind)
+        expect = pd_index.get_slice_bound(idx, side)
+        got = cudf_index.get_slice_bound(idx, side)
         assert expect == got
 
 
@@ -265,41 +246,37 @@ def test_rangeindex_get_slice_bound_basic(bounds, indices, side, kind):
     [3, 8, 13, 18, 20, 15, 10, 5, -1, 0, 19, 21, 6, 11, 17],
 )
 @pytest.mark.parametrize("side", ["left", "right"])
-@pytest.mark.parametrize("kind", ["getitem", "loc"])
-def test_rangeindex_get_slice_bound_step(bounds, label, side, kind):
+def test_rangeindex_get_slice_bound_step(bounds, label, side):
     start, stop, step = bounds
     pd_index = pd.RangeIndex(start, stop, step)
     cudf_index = RangeIndex(start, stop, step)
 
-    expect = pd_index.get_slice_bound(label, side, kind)
-    got = cudf_index.get_slice_bound(label, side, kind)
+    expect = pd_index.get_slice_bound(label, side)
+    got = cudf_index.get_slice_bound(label, side)
     assert expect == got
 
 
 @pytest.mark.parametrize("label", [1, 3, 5, 7, 9, 11])
 @pytest.mark.parametrize("side", ["left", "right"])
-@pytest.mark.parametrize("kind", ["loc", "getitem", None])
-def test_get_slice_bound_missing(label, side, kind):
+def test_get_slice_bound_missing(label, side):
     mylist = [2, 4, 6, 8, 10]
-    index = GenericIndex(mylist)
+    index = Index(mylist)
     index_pd = pd.Index(mylist)
-    assert index.get_slice_bound(
-        label, side, kind
-    ) == index_pd.get_slice_bound(label, side, kind)
+
+    expect = index_pd.get_slice_bound(label, side)
+    got = index.get_slice_bound(label, side)
+    assert got == expect
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize("label", ["a", "c", "e", "g"])
 @pytest.mark.parametrize("side", ["left", "right"])
 def test_get_slice_bound_missing_str(label, side):
-    # Slicing for monotonic string indices not yet supported
-    # when missing values are specified (allowed in pandas)
     mylist = ["b", "d", "f"]
-    index = GenericIndex(mylist)
+    index = Index(mylist)
     index_pd = pd.Index(mylist)
-    assert index.get_slice_bound(
-        label, side, "getitem"
-    ) == index_pd.get_slice_bound(label, side, "getitem")
+    got = index.get_slice_bound(label, side)
+    expect = index_pd.get_slice_bound(label, side)
+    assert got == expect
 
 
 testdata = [
@@ -318,3 +295,43 @@ testdata = [
 def test_is_monotonic_always_falls_for_null(data, expected):
     assert_eq(expected, data.is_monotonic_increasing)
     assert_eq(expected, data.is_monotonic_decreasing)
+
+
+@pytest.mark.parametrize("box", [Series, Index])
+@pytest.mark.parametrize(
+    "value,na_like",
+    [
+        [1, None],
+        [np.datetime64("2020-01-01", "ns"), np.datetime64("nat", "ns")],
+        ["s", None],
+        [1.0, np.nan],
+    ],
+    ids=repr,
+)
+def test_is_unique(box, value, na_like):
+    obj = box([value], nan_as_null=False)
+    assert obj.is_unique
+
+    obj = box([value, value], nan_as_null=False)
+    assert not obj.is_unique
+
+    obj = box([None, value], nan_as_null=False)
+    assert obj.is_unique
+
+    obj = box([None, None, value], nan_as_null=False)
+    assert not obj.is_unique
+
+    if na_like is not None:
+        obj = box([na_like, value], nan_as_null=False)
+        assert obj.is_unique
+
+        obj = box([na_like, na_like], nan_as_null=False)
+        assert not obj.is_unique
+
+        try:
+            if not np.isnat(na_like):
+                # pyarrow coerces nat to null
+                obj = box([None, na_like, value], nan_as_null=False)
+                assert obj.is_unique
+        except TypeError:
+            pass

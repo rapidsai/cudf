@@ -3,18 +3,19 @@
 cuDF (Python):
   - 'python/**'
   - 'notebooks/**'
-  
+
 libcudf:
   - 'cpp/**'
 
 CMake:
   - '**/CMakeLists.txt'
   - '**/cmake/**'
-  
+  - '**/*.cmake'
+
 cuDF (Java):
   - 'java/**'
 
-gpuCI:
+ci:
   - 'ci/**'
 
 conda:

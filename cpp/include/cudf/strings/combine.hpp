@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -66,19 +67,21 @@ enum class output_if_empty_list {
  *
  * @throw cudf::logic_error if separator is not valid.
  *
- * @param strings Strings for this operation.
+ * @param input Strings for this operation
  * @param separator String that should inserted between each string.
  *        Default is an empty string.
- * @param narep String that should represent any null strings found.
+ * @param narep String to replace any null strings found.
  *        Default of invalid-scalar will ignore any null entries.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column containing one string.
  */
 std::unique_ptr<column> join_strings(
-  strings_column_view const& strings,
-  string_scalar const& separator      = string_scalar(""),
-  string_scalar const& narep          = string_scalar("", false),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  strings_column_view const& input,
+  string_scalar const& separator    = string_scalar(""),
+  string_scalar const& narep        = string_scalar("", false),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Concatenates a list of strings columns using separators for each row
@@ -127,18 +130,17 @@ std::unique_ptr<column> join_strings(
  * @throw cudf::logic_error if the number of rows from @p separators and @p strings_columns
  *                          do not match
  *
- * @param strings_columns List of strings columns to concatenate.
+ * @param strings_columns List of strings columns to concatenate
  * @param separators Strings column that provides the separator for a given row
- * @param separator_narep String that should be used in place of a null separator for a given
- *        row. Default of invalid-scalar means no row separator value replacements.
- *        Default is an invalid string.
- * @param col_narep String that should be used in place of any null strings
- *        found in any column. Default of invalid-scalar means no null column value replacements.
- *        Default is an invalid string.
+ * @param separator_narep String to replace a null separator for a given row.
+ *        Default of invalid-scalar means no row separator value replacements.
+ * @param col_narep String that should be used in place of any null strings found in any column.
+ *        Default of invalid-scalar means no null column value replacements.
  * @param separate_nulls If YES, then the separator is included for null rows
  *        if `col_narep` is valid.
- * @param mr Resource for allocating device memory.
- * @return New column with concatenated results.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Resource for allocating device memory
+ * @return New column with concatenated results
  */
 std::unique_ptr<column> concatenate(
   table_view const& strings_columns,
@@ -146,7 +148,8 @@ std::unique_ptr<column> concatenate(
   string_scalar const& separator_narep = string_scalar("", false),
   string_scalar const& col_narep       = string_scalar("", false),
   separator_on_nulls separate_nulls    = separator_on_nulls::YES,
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr    = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Row-wise concatenates the given list of strings columns and
@@ -184,22 +187,24 @@ std::unique_ptr<column> concatenate(
  * @throw cudf::logic_error if separator is not valid.
  * @throw cudf::logic_error if only one column is specified
  *
- * @param strings_columns List of string columns to concatenate.
+ * @param strings_columns List of string columns to concatenate
  * @param separator String that should inserted between each string from each row.
  *        Default is an empty string.
- * @param narep String that should be used in place of any null strings
- *        found in any column. Default of invalid-scalar means any null entry in any column will
+ * @param narep String to replace any null strings found in any column.
+ *        Default of invalid-scalar means any null entry in any column will
  *        produces a null result for that row.
- * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column with concatenated results.
+ * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column with concatenated results
  */
 std::unique_ptr<column> concatenate(
   table_view const& strings_columns,
-  string_scalar const& separator      = string_scalar(""),
-  string_scalar const& narep          = string_scalar("", false),
-  separator_on_nulls separate_nulls   = separator_on_nulls::YES,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  string_scalar const& separator    = string_scalar(""),
+  string_scalar const& narep        = string_scalar("", false),
+  separator_on_nulls separate_nulls = separator_on_nulls::YES,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Given a lists column of strings (each row is a list of strings), concatenates the strings
@@ -243,28 +248,30 @@ std::unique_ptr<column> concatenate(
  * @throw cudf::logic_error if the number of rows from `separators` and `lists_strings_column` do
  *        not match
  *
- * @param lists_strings_column Column containing lists of strings to concatenate.
- * @param separators Strings column that provides separators for concatenation.
- * @param separator_narep String that should be used to replace null separator, default is an
- *        invalid-scalar denoting that rows containing null separator will result in null string in
- *        the corresponding output rows.
- * @param string_narep String that should be used to replace null strings in any non-null list row,
- *        default is an invalid-scalar denoting that list rows containing null strings will result
- *        in null string in the corresponding output rows.
- * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid.
- * @param empty_list_policy if set to EMPTY_STRING, any input row that is an empty list will
+ * @param lists_strings_column Column containing lists of strings to concatenate
+ * @param separators Strings column that provides separators for concatenation
+ * @param separator_narep String that should be used to replace a null separator.
+ *        Default is an invalid-scalar denoting that rows containing null separator will result in
+ *        a null string in the corresponding output rows.
+ * @param string_narep String to replace null strings in any non-null list row.
+ *        Default is an invalid-scalar denoting that list rows containing null strings will result
+ *        in a null string in the corresponding output rows.
+ * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid
+ * @param empty_list_policy If set to EMPTY_STRING, any input row that is an empty list will
  *        result in an empty string. Otherwise, it will result in a null.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column with concatenated results.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column with concatenated results
  */
 std::unique_ptr<column> join_list_elements(
-  const lists_column_view& lists_strings_column,
-  const strings_column_view& separators,
+  lists_column_view const& lists_strings_column,
+  strings_column_view const& separators,
   string_scalar const& separator_narep   = string_scalar("", false),
   string_scalar const& string_narep      = string_scalar("", false),
   separator_on_nulls separate_nulls      = separator_on_nulls::YES,
   output_if_empty_list empty_list_policy = output_if_empty_list::EMPTY_STRING,
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr      = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Given a lists column of strings (each row is a list of strings), concatenates the strings
@@ -303,25 +310,27 @@ std::unique_ptr<column> join_list_elements(
  * @throw cudf::logic_error if input column is not lists of strings column.
  * @throw cudf::logic_error if separator is not valid.
  *
- * @param lists_strings_column Column containing lists of strings to concatenate.
- * @param separator String that should inserted between strings of each list row, default is an
- *        empty string.
- * @param narep String that should be used to replace null strings in any non-null list row, default
- *        is an invalid-scalar denoting that list rows containing null strings will result in null
- *        string in the corresponding output rows.
- * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid.
- * @param empty_list_policy if set to EMPTY_STRING, any input row that is an empty list will result
+ * @param lists_strings_column Column containing lists of strings to concatenate
+ * @param separator String to insert between strings of each list row.
+ *        Default is an empty string.
+ * @param narep String to replace null strings in any non-null list row.
+ *        Default is an invalid-scalar denoting that list rows containing null strings will result
+ *        in a null string in the corresponding output rows.
+ * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid
+ * @param empty_list_policy If set to EMPTY_STRING, any input row that is an empty list will result
  *        in an empty string. Otherwise, it will result in a null.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column with concatenated results.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column with concatenated results
  */
 std::unique_ptr<column> join_list_elements(
-  const lists_column_view& lists_strings_column,
+  lists_column_view const& lists_strings_column,
   string_scalar const& separator         = string_scalar(""),
   string_scalar const& narep             = string_scalar("", false),
   separator_on_nulls separate_nulls      = separator_on_nulls::YES,
   output_if_empty_list empty_list_policy = output_if_empty_list::EMPTY_STRING,
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr      = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

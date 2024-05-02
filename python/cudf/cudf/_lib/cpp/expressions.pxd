@@ -1,6 +1,7 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.scalar.scalar cimport (
@@ -40,6 +41,7 @@ cdef extern from "cudf/ast/expressions.hpp" namespace "cudf::ast" nogil:
         LOGICAL_OR "cudf::ast::ast_operator::LOGICAL_OR"
         # Unary operators
         IDENTITY "cudf::ast::ast_operator::IDENTITY"
+        IS_NULL "cudf::ast::ast_operator::IS_NULL"
         SIN "cudf::ast::ast_operator::SIN"
         COS "cudf::ast::ast_operator::COS"
         TAN "cudf::ast::ast_operator::TAN"
@@ -86,3 +88,8 @@ cdef extern from "cudf/ast/expressions.hpp" namespace "cudf::ast" nogil:
     cdef cppclass operation(expression):
         operation(ast_operator, const expression &)
         operation(ast_operator, const expression &, const expression&)
+
+    cdef cppclass column_name_reference(expression):
+        # column_name_reference is only meant for use in file I/O such as the
+        # Parquet reader.
+        column_name_reference(string) except +

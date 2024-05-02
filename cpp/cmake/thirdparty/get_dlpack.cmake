@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -15,6 +15,7 @@
 # This function finds dlpack and sets any additional necessary environment variables.
 function(find_and_configure_dlpack VERSION)
 
+  include(${rapids-cmake-dir}/find/generate_module.cmake)
   rapids_find_generate_module(DLPACK HEADER_NAMES dlpack.h)
 
   rapids_cpm_find(
@@ -35,6 +36,6 @@ function(find_and_configure_dlpack VERSION)
   endif()
 endfunction()
 
-set(CUDF_MIN_VERSION_dlpack 0.5)
+set(CUDF_MIN_VERSION_dlpack 0.8)
 
 find_and_configure_dlpack(${CUDF_MIN_VERSION_dlpack})

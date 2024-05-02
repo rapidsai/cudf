@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,25 +14,27 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/reduction_functions.hpp>
+#include "compound.cuh"
+
 #include <cudf/dictionary/dictionary_column_view.hpp>
-#include <reductions/compound.cuh>
+#include <cudf/reduction/detail/reduction_functions.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace reduction {
+namespace detail {
 
 std::unique_ptr<cudf::scalar> standard_deviation(column_view const& col,
                                                  cudf::data_type const output_dtype,
-                                                 cudf::size_type ddof,
+                                                 size_type ddof,
                                                  rmm::cuda_stream_view stream,
-                                                 rmm::mr::device_memory_resource* mr)
+                                                 rmm::device_async_resource_ref mr)
 {
   // TODO: add cuda version check when the fix is available
 #if !defined(__CUDACC_DEBUG__)
-  using reducer =
-    compound::detail::element_type_dispatcher<cudf::reduction::op::standard_deviation>;
+  using reducer = compound::detail::element_type_dispatcher<op::standard_deviation>;
   auto col_type =
     cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
   return cudf::type_dispatcher(col_type, reducer(), col, output_dtype, ddof, stream, mr);
@@ -43,5 +45,6 @@ std::unique_ptr<cudf::scalar> standard_deviation(column_view const& col,
 #endif
 }
 
+}  // namespace detail
 }  // namespace reduction
 }  // namespace cudf

@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -17,14 +17,7 @@ set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
   CXX
   SOURCE_FILES "${cython_sources}"
-  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX io_
+  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX io_ ASSOCIATED_TARGETS cudf
 )
 
-set(targets_using_numpy io_datasource io_utils)
-foreach(target IN LISTS targets_using_numpy)
-  target_include_directories(${target} PRIVATE "${Python_NumPy_INCLUDE_DIRS}")
-endforeach()
-
-foreach(cython_module IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
-  set_target_properties(${cython_module} PROPERTIES INSTALL_RPATH "\$ORIGIN;\$ORIGIN/../cpp")
-endforeach()
+link_to_pyarrow_headers("${RAPIDS_CYTHON_CREATED_TARGETS}")

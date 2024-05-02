@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,14 @@
 
 #pragma once
 
+#include <cudf/detail/utilities/stacktrace.hpp>
+
 #include <cuda.h>
 #include <cuda_runtime_api.h>
+
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 namespace cudf {
 /**
@@ -29,12 +33,34 @@ namespace cudf {
  */
 
 /**
+ * @brief The struct to store the current stacktrace upon its construction.
+ */
+struct stacktrace_recorder {
+  stacktrace_recorder()
+    // Exclude the current stackframe, as it is this constructor.
+    : _stacktrace{cudf::detail::get_stacktrace(cudf::detail::capture_last_stackframe::NO)}
+  {
+  }
+
+ public:
+  /**
+   * @brief Get the stored stacktrace captured during object construction.
+   *
+   * @return The pointer to a null-terminated string storing the output stacktrace
+   */
+  char const* stacktrace() const { return _stacktrace.c_str(); }
+
+ protected:
+  std::string const _stacktrace;  //!< The whole stacktrace stored as one string.
+};
+
+/**
  * @brief Exception thrown when logical precondition is violated.
  *
  * This exception should not be thrown directly and is instead thrown by the
  * CUDF_EXPECTS macro.
  */
-struct logic_error : public std::logic_error {
+struct logic_error : public std::logic_error, public stacktrace_recorder {
   /**
    * @brief Constructs a logic_error with the error message.
    *
@@ -51,12 +77,18 @@ struct logic_error : public std::logic_error {
 
   // TODO Add an error code member? This would be useful for translating an
   // exception to an error code in a pure-C API
+
+  ~logic_error()
+  {
+    // Needed so that the first instance of the implicit destructor for any TU isn't 'constructed'
+    // from a host+device function marking the implicit version also as host+device
+  }
 };
 /**
  * @brief Exception thrown when a CUDA error is encountered.
  *
  */
-struct cuda_error : public std::runtime_error {
+struct cuda_error : public std::runtime_error, public stacktrace_recorder {
   /**
    * @brief Construct a new cuda error object with error message and code.
    *
@@ -83,6 +115,29 @@ struct cuda_error : public std::runtime_error {
 struct fatal_cuda_error : public cuda_error {
   using cuda_error::cuda_error;  // Inherit constructors
 };
+
+/**
+ * @brief Exception thrown when an operation is attempted on an unsupported dtype.
+ *
+ * This exception should be thrown when an operation is attempted on an
+ * unsupported data_type. This exception should not be thrown directly and is
+ * instead thrown by the CUDF_EXPECTS or CUDF_FAIL macros.
+ */
+struct data_type_error : public std::invalid_argument, public stacktrace_recorder {
+  /**
+   * @brief Constructs a data_type_error with the error message.
+   *
+   * @param message Message to be associated with the exception
+   */
+  data_type_error(char const* const message) : std::invalid_argument(message) {}
+
+  /**
+   * @brief Construct a new data_type_error object with error message
+   *
+   * @param message Message to be associated with the exception
+   */
+  data_type_error(std::string const& message) : std::invalid_argument(message) {}
+};
 /** @} */
 
 }  // namespace cudf
@@ -99,42 +154,85 @@ struct fatal_cuda_error : public cuda_error {
  * @brief Macro for checking (pre-)conditions that throws an exception when
  * a condition is violated.
  *
+ * Defaults to throwing `cudf::logic_error`, but a custom exception may also be
+ * specified.
+ *
  * Example usage:
+ * ```
+ * // throws cudf::logic_error
+ * CUDF_EXPECTS(p != nullptr, "Unexpected null pointer");
  *
- * @code
- * CUDF_EXPECTS(lhs->dtype == rhs->dtype, "Column type mismatch");
- * @endcode
- *
- * @param[in] cond Expression that evaluates to true or false
- * @param[in] reason String literal description of the reason that cond is
- * expected to be true
- * @throw cudf::logic_error if the condition evaluates to false.
+ * // throws std::runtime_error
+ * CUDF_EXPECTS(p != nullptr, "Unexpected nullptr", std::runtime_error);
+ * ```
+ * @param ... This macro accepts either two or three arguments:
+ *   - The first argument must be an expression that evaluates to true or
+ *     false, and is the condition being checked.
+ *   - The second argument is a string literal used to construct the `what` of
+ *     the exception.
+ *   - When given, the third argument is the exception to be thrown. When not
+ *     specified, defaults to `cudf::logic_error`.
+ * @throw `_exception_type` if the condition evaluates to 0 (false).
  */
-#define CUDF_EXPECTS(cond, reason)                                  \
-  (!!(cond)) ? static_cast<void>(0)                                 \
-             : throw cudf::logic_error("cuDF failure at: " __FILE__ \
-                                       ":" CUDF_STRINGIFY(__LINE__) ": " reason)
+#define CUDF_EXPECTS(...)                                             \
+  GET_CUDF_EXPECTS_MACRO(__VA_ARGS__, CUDF_EXPECTS_3, CUDF_EXPECTS_2) \
+  (__VA_ARGS__)
+
+/// @cond
+
+#define GET_CUDF_EXPECTS_MACRO(_1, _2, _3, NAME, ...) NAME
+
+#define CUDF_EXPECTS_3(_condition, _reason, _exception_type)                    \
+  do {                                                                          \
+    static_assert(std::is_base_of_v<std::exception, _exception_type>);          \
+    (_condition) ? static_cast<void>(0)                                         \
+                 : throw _exception_type /*NOLINT(bugprone-macro-parentheses)*/ \
+      {"CUDF failure at: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _reason}; \
+  } while (0)
+
+#define CUDF_EXPECTS_2(_condition, _reason) CUDF_EXPECTS_3(_condition, _reason, cudf::logic_error)
+
+/// @endcond
 
 /**
  * @brief Indicates that an erroneous code path has been taken.
  *
- * In host code, throws a `cudf::logic_error`.
- *
- *
  * Example usage:
- * ```
- * CUDF_FAIL("Non-arithmetic operation is not supported");
+ * ```c++
+ * // Throws `cudf::logic_error`
+ * CUDF_FAIL("Unsupported code path");
+ *
+ * // Throws `std::runtime_error`
+ * CUDF_FAIL("Unsupported code path", std::runtime_error);
  * ```
  *
- * @param[in] reason String literal description of the reason
+ * @param ... This macro accepts either one or two arguments:
+ *   - The first argument is a string literal used to construct the `what` of
+ *     the exception.
+ *   - When given, the second argument is the exception to be thrown. When not
+ *     specified, defaults to `cudf::logic_error`.
+ * @throw `_exception_type` if the condition evaluates to 0 (false).
  */
-#define CUDF_FAIL(reason) \
-  throw cudf::logic_error("cuDF failure at: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " reason)
+#define CUDF_FAIL(...)                                       \
+  GET_CUDF_FAIL_MACRO(__VA_ARGS__, CUDF_FAIL_2, CUDF_FAIL_1) \
+  (__VA_ARGS__)
+
+/// @cond
+
+#define GET_CUDF_FAIL_MACRO(_1, _2, NAME, ...) NAME
+
+#define CUDF_FAIL_2(_what, _exception_type)      \
+  /*NOLINTNEXTLINE(bugprone-macro-parentheses)*/ \
+  throw _exception_type { "CUDF failure at:" __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _what }
+
+#define CUDF_FAIL_1(_what) CUDF_FAIL_2(_what, cudf::logic_error)
+
+/// @endcond
 
 namespace cudf {
 namespace detail {
 // @cond
-inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int line)
+inline void throw_cuda_error(cudaError_t error, char const* file, unsigned int line)
 {
   // Calls cudaGetLastError to clear the error status. It is nearly certain that a fatal error
   // occurred if it still returns the same error after a cleanup.

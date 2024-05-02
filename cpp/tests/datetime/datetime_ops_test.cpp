@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,20 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
+#include <cudf_test/timestamp_utilities.cuh>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/iterator_utilities.hpp>
-#include <cudf_test/timestamp_utilities.cuh>
-#include <cudf_test/type_lists.hpp>
 
 #include <thrust/transform.h>
 
@@ -51,7 +53,7 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp)
   using namespace cuda::std::chrono;
 
   cudf::data_type dtype{cudf::type_to_id<T>()};
-  cudf::column col{dtype, 0, rmm::device_buffer{}};
+  cudf::column col{dtype, 0, rmm::device_buffer{}, rmm::device_buffer{}, 0};
 
   EXPECT_THROW(extract_year(col), cudf::logic_error);
   EXPECT_THROW(extract_month(col), cudf::logic_error);
@@ -60,15 +62,16 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp)
   EXPECT_THROW(extract_hour(col), cudf::logic_error);
   EXPECT_THROW(extract_minute(col), cudf::logic_error);
   EXPECT_THROW(extract_second(col), cudf::logic_error);
+  EXPECT_THROW(extract_millisecond_fraction(col), cudf::logic_error);
+  EXPECT_THROW(extract_microsecond_fraction(col), cudf::logic_error);
+  EXPECT_THROW(extract_nanosecond_fraction(col), cudf::logic_error);
   EXPECT_THROW(last_day_of_month(col), cudf::logic_error);
   EXPECT_THROW(day_of_year(col), cudf::logic_error);
-  EXPECT_THROW(add_calendrical_months(
-                 col, cudf::column{cudf::data_type{cudf::type_id::INT16}, 0, rmm::device_buffer{}}),
+  EXPECT_THROW(add_calendrical_months(col, *cudf::make_empty_column(cudf::type_id::INT16)),
                cudf::logic_error);
 }
 
-struct BasicDatetimeOpsTest : public cudf::test::BaseFixture {
-};
+struct BasicDatetimeOpsTest : public cudf::test::BaseFixture {};
 
 TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
 {
@@ -97,12 +100,21 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
       1674631932929   // 2023-01-25 07:32:12.929 GMT
     };
 
+  auto timestamps_ns =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep>{
+      -23324234,  // 1969-12-31 23:59:59.976675766 GMT
+      23432424,   // 1970-01-01 00:00:00.023432424 GMT
+      987234623   // 1970-01-01 00:00:00.987234623 GMT
+    };
+
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps_D),
                                  fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps_s),
                                  fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps_ms),
                                  fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps_ns),
+                                 fixed_width_column_wrapper<int16_t>{1969, 1970, 1970});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps_D),
                                  fixed_width_column_wrapper<int16_t>{10, 7, 1});
@@ -110,6 +122,8 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
                                  fixed_width_column_wrapper<int16_t>{10, 7, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps_ms),
                                  fixed_width_column_wrapper<int16_t>{10, 7, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps_ns),
+                                 fixed_width_column_wrapper<int16_t>{12, 1, 1});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps_D),
                                  fixed_width_column_wrapper<int16_t>{26, 4, 25});
@@ -117,10 +131,14 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
                                  fixed_width_column_wrapper<int16_t>{26, 4, 25});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps_ms),
                                  fixed_width_column_wrapper<int16_t>{26, 4, 25});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps_ns),
+                                 fixed_width_column_wrapper<int16_t>{31, 1, 1});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps_D),
                                  fixed_width_column_wrapper<int16_t>{2, 3, 3});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps_s),
+                                 fixed_width_column_wrapper<int16_t>{2, 3, 3});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps_ms),
                                  fixed_width_column_wrapper<int16_t>{2, 3, 3});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps_ms),
                                  fixed_width_column_wrapper<int16_t>{2, 3, 3});
@@ -131,6 +149,8 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
                                  fixed_width_column_wrapper<int16_t>{14, 12, 7});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps_ms),
                                  fixed_width_column_wrapper<int16_t>{14, 12, 7});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps_ns),
+                                 fixed_width_column_wrapper<int16_t>{23, 0, 0});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps_D),
                                  fixed_width_column_wrapper<int16_t>{0, 0, 0});
@@ -138,6 +158,8 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
                                  fixed_width_column_wrapper<int16_t>{1, 0, 32});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps_ms),
                                  fixed_width_column_wrapper<int16_t>{1, 0, 32});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps_ns),
+                                 fixed_width_column_wrapper<int16_t>{59, 0, 0});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps_D),
                                  fixed_width_column_wrapper<int16_t>{0, 0, 0});
@@ -145,6 +167,35 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
                                  fixed_width_column_wrapper<int16_t>{12, 0, 12});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps_ms),
                                  fixed_width_column_wrapper<int16_t>{12, 0, 12});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps_ns),
+                                 fixed_width_column_wrapper<int16_t>{59, 0, 0});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond_fraction(timestamps_D),
+                                 fixed_width_column_wrapper<int16_t>{0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond_fraction(timestamps_s),
+                                 fixed_width_column_wrapper<int16_t>{0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond_fraction(timestamps_ms),
+                                 fixed_width_column_wrapper<int16_t>{762, 0, 929});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond_fraction(timestamps_ns),
+                                 fixed_width_column_wrapper<int16_t>{976, 23, 987});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond_fraction(timestamps_D),
+                                 fixed_width_column_wrapper<int16_t>{0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond_fraction(timestamps_s),
+                                 fixed_width_column_wrapper<int16_t>{0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond_fraction(timestamps_ms),
+                                 fixed_width_column_wrapper<int16_t>{0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond_fraction(timestamps_ns),
+                                 fixed_width_column_wrapper<int16_t>{675, 432, 234});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond_fraction(timestamps_D),
+                                 fixed_width_column_wrapper<int16_t>{0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond_fraction(timestamps_s),
+                                 fixed_width_column_wrapper<int16_t>{0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond_fraction(timestamps_ms),
+                                 fixed_width_column_wrapper<int16_t>{0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond_fraction(timestamps_ns),
+                                 fixed_width_column_wrapper<int16_t>{766, 424, 623});
 }
 
 template <typename T>
@@ -165,8 +216,8 @@ TYPED_TEST(TypedDatetimeOpsTest, TestEmptyColumns)
   auto int16s_dtype     = cudf::data_type{cudf::type_to_id<int16_t>()};
   auto timestamps_dtype = cudf::data_type{cudf::type_to_id<T>()};
 
-  cudf::column int16s{int16s_dtype, 0, rmm::device_buffer{}};
-  cudf::column timestamps{timestamps_dtype, 0, rmm::device_buffer{}};
+  cudf::column int16s{int16s_dtype, 0, rmm::device_buffer{}, rmm::device_buffer{}, 0};
+  cudf::column timestamps{timestamps_dtype, 0, rmm::device_buffer{}, rmm::device_buffer{}, 0};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps), int16s);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps), int16s);
@@ -175,6 +226,9 @@ TYPED_TEST(TypedDatetimeOpsTest, TestEmptyColumns)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps), int16s);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps), int16s);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps), int16s);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond_fraction(timestamps), int16s);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond_fraction(timestamps), int16s);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond_fraction(timestamps), int16s);
 }
 
 TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedDatetimeComponents)
@@ -475,8 +529,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithIncorrectColSizes)
 using ValidMonthIntegerType = cudf::test::Types<int16_t, int32_t>;
 
 template <typename T>
-struct TypedAddMonthsTest : public cudf::test::BaseFixture {
-};
+struct TypedAddMonthsTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedAddMonthsTest, ValidMonthIntegerType);
 

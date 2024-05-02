@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,14 @@
 
 #pragma once
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <iostream>
 #include <memory>
@@ -30,8 +31,7 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
+namespace cudf::io {
 /**
  * @addtogroup io_readers
  * @{
@@ -39,10 +39,12 @@ namespace io {
  */
 
 constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  ///< 128MB per row group
-constexpr size_type default_row_group_size_rows = 1000000;      ///< 1 million rows per row group
-constexpr size_t default_max_page_size_bytes    = 512 * 1024;   ///< 512KB per page
-constexpr size_type default_max_page_size_rows  = 20000;        ///< 20k rows per page
-constexpr size_type default_column_index_truncate_length = 64;  ///< truncate to 64 bytes
+constexpr size_type default_row_group_size_rows = 1000000;     ///< 1 million rows per row group
+constexpr size_t default_max_page_size_bytes    = 512 * 1024;  ///< 512KB per page
+constexpr size_type default_max_page_size_rows  = 20000;       ///< 20k rows per page
+constexpr int32_t default_column_index_truncate_length = 64;   ///< truncate to 64 bytes
+constexpr size_t default_max_dictionary_size           = 1024 * 1024;  ///< 1MB dictionary size
+constexpr size_type default_max_page_fragment_size     = 5000;  ///< 5000 rows per page fragment
 
 class parquet_reader_options_builder;
 
@@ -57,6 +59,13 @@ class parquet_reader_options {
 
   // List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
+  // Number of rows to skip from the start; Parquet stores the number of rows as int64_t
+  int64_t _skip_rows = 0;
+  // Number of rows to read; `nullopt` is all
+  std::optional<size_type> _num_rows;
+
+  // Predicate filter as AST to filter output rows.
+  std::optional<std::reference_wrapper<ast::expression const>> _filter;
 
   // Whether to store string data as categorical type
   bool _convert_strings_to_categories = false;
@@ -72,7 +81,7 @@ class parquet_reader_options {
    *
    * @param src source information used to read parquet file
    */
-  explicit parquet_reader_options(source_info const& src) : _source(src) {}
+  explicit parquet_reader_options(source_info src) : _source{std::move(src)} {}
 
   friend parquet_reader_options_builder;
 
@@ -90,7 +99,7 @@ class parquet_reader_options {
    * @param src Source information to read parquet file
    * @return Builder to build reader options
    */
-  static parquet_reader_options_builder builder(source_info const& src);
+  static parquet_reader_options_builder builder(source_info src);
 
   /**
    * @brief Returns source info.
@@ -128,6 +137,21 @@ class parquet_reader_options {
   }
 
   /**
+   * @brief Returns number of rows to skip from the start.
+   *
+   * @return Number of rows to skip from the start
+   */
+  [[nodiscard]] int64_t get_skip_rows() const { return _skip_rows; }
+
+  /**
+   * @brief Returns number of rows to read.
+   *
+   * @return Number of rows to read; `nullopt` if the option hasn't been set (in which case the file
+   * is read until the end)
+   */
+  [[nodiscard]] std::optional<size_type> const& get_num_rows() const { return _num_rows; }
+
+  /**
    * @brief Returns names of column to be read, if set.
    *
    * @return Names of column to be read; `nullopt` if the option is not set
@@ -140,6 +164,13 @@ class parquet_reader_options {
    * @return List of individual row groups to be read
    */
   [[nodiscard]] auto const& get_row_groups() const { return _row_groups; }
+
+  /**
+   * @brief Returns AST based filter for predicate pushdown.
+   *
+   * @return AST expression to use as filter
+   */
+  [[nodiscard]] auto const& get_filter() const { return _filter; }
 
   /**
    * @brief Returns timestamp type used to cast timestamp columns.
@@ -160,10 +191,14 @@ class parquet_reader_options {
    *
    * @param row_groups Vector of row groups to read
    */
-  void set_row_groups(std::vector<std::vector<size_type>> row_groups)
-  {
-    _row_groups = std::move(row_groups);
-  }
+  void set_row_groups(std::vector<std::vector<size_type>> row_groups);
+
+  /**
+   * @brief Sets AST based filter for predicate pushdown.
+   *
+   * @param filter AST expression to use as filter
+   */
+  void set_filter(ast::expression const& filter) { _filter = filter; }
 
   /**
    * @brief Sets to enable/disable conversion of strings to categories.
@@ -189,6 +224,20 @@ class parquet_reader_options {
   {
     _reader_column_schema = std::move(val);
   }
+
+  /**
+   * @brief Sets number of rows to skip.
+   *
+   * @param val Number of rows to skip from start
+   */
+  void set_skip_rows(int64_t val);
+
+  /**
+   * @brief Sets number of rows to read.
+   *
+   * @param val Number of rows to read after skip
+   */
+  void set_num_rows(size_type val);
 
   /**
    * @brief Sets timestamp_type used to cast timestamp columns.
@@ -217,7 +266,7 @@ class parquet_reader_options_builder {
    *
    * @param src The source information used to read parquet file
    */
-  explicit parquet_reader_options_builder(source_info const& src) : options(src) {}
+  explicit parquet_reader_options_builder(source_info src) : options{std::move(src)} {}
 
   /**
    * @brief Sets names of the columns to be read.
@@ -240,6 +289,18 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& row_groups(std::vector<std::vector<size_type>> row_groups)
   {
     options.set_row_groups(std::move(row_groups));
+    return *this;
+  }
+
+  /**
+   * @brief Sets vector of individual row groups to read.
+   *
+   * @param filter Vector of row groups to read
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& filter(ast::expression const& filter)
+  {
+    options.set_filter(filter);
     return *this;
   }
 
@@ -276,6 +337,30 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& set_column_schema(std::vector<reader_column_schema> val)
   {
     options._reader_column_schema = std::move(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets number of rows to skip.
+   *
+   * @param val Number of rows to skip from start
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& skip_rows(int64_t val)
+  {
+    options.set_skip_rows(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets number of rows to read.
+   *
+   * @param val Number of rows to read after skip
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& num_rows(size_type val)
+  {
+    options.set_num_rows(val);
     return *this;
   }
 
@@ -317,6 +402,7 @@ class parquet_reader_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata
  *
@@ -324,7 +410,104 @@ class parquet_reader_options_builder {
  */
 table_with_metadata read_parquet(
   parquet_reader_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief The chunked parquet reader class to read Parquet file iteratively in to a series of
+ * tables, chunk by chunk.
+ *
+ * This class is designed to address the reading issue when reading very large Parquet files such
+ * that the sizes of their column exceed the limit that can be stored in cudf column. By reading the
+ * file content by chunks using this class, each chunk is guaranteed to have its sizes stay within
+ * the given limit.
+ */
+class chunked_parquet_reader {
+ public:
+  /**
+   * @brief Default constructor, this should never be used.
+   *
+   * This is added just to satisfy cython.
+   */
+  chunked_parquet_reader() = default;
+
+  /**
+   * @brief Constructor for chunked reader.
+   *
+   * This constructor requires the same `parquet_reader_option` parameter as in
+   * `cudf::read_parquet()`, and an additional parameter to specify the size byte limit of the
+   * output table for each reading.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
+   * @param options The options used to read Parquet file
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_parquet_reader(
+    std::size_t chunk_read_limit,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+
+  /**
+   * @brief Constructor for chunked reader.
+   *
+   * This constructor requires the same `parquet_reader_option` parameter as in
+   * `cudf::read_parquet()`, with additional parameters to specify the size byte limit of the
+   * output table for each reading, and a byte limit on the amount of temporary memory to use
+   * when reading. pass_read_limit affects how many row groups we can read at a time by limiting
+   * the amount of memory dedicated to decompression space. pass_read_limit is a hint, not an
+   * absolute limit - if a single row group cannot fit within the limit given, it will still be
+   * loaded.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   * or `0` if there is no limit
+   * @param pass_read_limit Limit on the amount of memory used for reading and decompressing data or
+   * `0` if there is no limit
+   * @param options The options used to read Parquet file
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_parquet_reader(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+
+  /**
+   * @brief Destructor, destroying the internal reader instance.
+   *
+   * Since the declaration of the internal `reader` object does not exist in this header, this
+   * destructor needs to be defined in a separate source file which can access to that object's
+   * declaration.
+   */
+  ~chunked_parquet_reader();
+
+  /**
+   * @brief Check if there is any data in the given file has not yet read.
+   *
+   * @return A boolean value indicating if there is any data left to read
+   */
+  [[nodiscard]] bool has_next() const;
+
+  /**
+   * @brief Read a chunk of rows in the given Parquet file.
+   *
+   * The sequence of returned tables, if concatenated by their order, guarantees to form a complete
+   * dataset as reading the entire given file at once.
+   *
+   * An empty table will be returned if the given file is empty, or all the data in the file has
+   * been read and returned by the previous calls.
+   *
+   * @return An output `cudf::table` along with its metadata
+   */
+  [[nodiscard]] table_with_metadata read_chunk() const;
+
+ private:
+  std::unique_ptr<cudf::io::parquet::detail::chunked_reader> reader;
+};
 
 /** @} */  // end of group
 /**
@@ -332,6 +515,15 @@ table_with_metadata read_parquet(
  * @{
  * @file
  */
+
+/**
+ * @brief Struct used to describe column sorting metadata
+ */
+struct sorting_column {
+  int column_idx{};           //!< leaf column index within the row group
+  bool is_descending{false};  //!< true if sort order is descending
+  bool is_nulls_first{true};  //!< true if nulls come before non-null values
+};
 
 class parquet_writer_options_builder;
 
@@ -350,12 +542,15 @@ class parquet_writer_options {
   // Partitions described as {start_row, num_rows} pairs
   std::vector<partition_info> _partitions;
   // Optional associated metadata
-  table_input_metadata const* _metadata = nullptr;
+  std::optional<table_input_metadata> _metadata;
   // Optional footer key_value_metadata
   std::vector<std::map<std::string, std::string>> _user_data;
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
+  // Parquet writer can write timestamps as UTC
+  // Defaults to true because libcudf timestamps are implicitly UTC
+  bool _write_timestamps_as_UTC = true;
   // Column chunks file paths to be set in the raw output metadata. One per output file
   std::vector<std::string> _column_chunks_file_paths;
   // Maximum size of each row group (unless smaller than a single page)
@@ -367,7 +562,19 @@ class parquet_writer_options {
   // Maximum number of rows in a page
   size_type _max_page_size_rows = default_max_page_size_rows;
   // Maximum size of min or max values in column index
-  size_type _column_index_truncate_length = default_column_index_truncate_length;
+  int32_t _column_index_truncate_length = default_column_index_truncate_length;
+  // When to use dictionary encoding for data
+  dictionary_policy _dictionary_policy = dictionary_policy::ALWAYS;
+  // Maximum size of column chunk dictionary (in bytes)
+  size_t _max_dictionary_size = default_max_dictionary_size;
+  // Maximum number of rows in a page fragment
+  std::optional<size_type> _max_page_fragment_size;
+  // Optional compression statistics
+  std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // write V2 page headers?
+  bool _v2_page_headers = false;
+  // Which columns in _table are used for sorting
+  std::optional<std::vector<sorting_column>> _sorting_columns;
 
   /**
    * @brief Constructor from sink and table.
@@ -447,7 +654,7 @@ class parquet_writer_options {
    *
    * @return Associated metadata
    */
-  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] auto const& get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
@@ -465,6 +672,13 @@ class parquet_writer_options {
    * @return `true` if timestamps will be written as INT96
    */
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
+
+  /**
+   * @brief Returns `true` if timestamps will be written as UTC
+   *
+   * @return `true` if timestamps will be written as UTC
+   */
+  [[nodiscard]] auto is_enabled_utc_timestamps() const { return _write_timestamps_as_UTC; }
 
   /**
    * @brief Returns Column chunks file paths to be set in the raw output metadata.
@@ -522,36 +736,71 @@ class parquet_writer_options {
   auto get_column_index_truncate_length() const { return _column_index_truncate_length; }
 
   /**
+   * @brief Returns policy for dictionary use.
+   *
+   * @return policy for dictionary use
+   */
+  [[nodiscard]] dictionary_policy get_dictionary_policy() const { return _dictionary_policy; }
+
+  /**
+   * @brief Returns maximum dictionary size, in bytes.
+   *
+   * @return Maximum dictionary size, in bytes.
+   */
+  [[nodiscard]] auto get_max_dictionary_size() const { return _max_dictionary_size; }
+
+  /**
+   * @brief Returns maximum page fragment size, in rows.
+   *
+   * @return Maximum page fragment size, in rows.
+   */
+  [[nodiscard]] auto get_max_page_fragment_size() const { return _max_page_fragment_size; }
+
+  /**
+   * @brief Returns a shared pointer to the user-provided compression statistics.
+   *
+   * @return Compression statistics
+   */
+  [[nodiscard]] std::shared_ptr<writer_compression_statistics> get_compression_statistics() const
+  {
+    return _compression_stats;
+  }
+
+  /**
+   * @brief Returns `true` if V2 page headers should be written.
+   *
+   * @return `true` if V2 page headers should be written.
+   */
+  [[nodiscard]] auto is_enabled_write_v2_headers() const { return _v2_page_headers; }
+
+  /**
+   * @brief Returns the sorting_columns.
+   *
+   * @return Column sort order metadata
+   */
+  [[nodiscard]] auto const& get_sorting_columns() const { return _sorting_columns; }
+
+  /**
    * @brief Sets partitions.
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
    * be same size as number of sinks in sink_info
    */
-  void set_partitions(std::vector<partition_info> partitions)
-  {
-    CUDF_EXPECTS(partitions.size() == _sink.num_sinks(),
-                 "Mismatch between number of sinks and number of partitions");
-    _partitions = std::move(partitions);
-  }
+  void set_partitions(std::vector<partition_info> partitions);
 
   /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata
    */
-  void set_metadata(table_input_metadata const* metadata) { _metadata = metadata; }
+  void set_metadata(table_input_metadata metadata) { _metadata = std::move(metadata); }
 
   /**
    * @brief Sets metadata.
    *
    * @param metadata Key-Value footer metadata
    */
-  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata)
-  {
-    CUDF_EXPECTS(metadata.size() == _sink.num_sinks(),
-                 "Mismatch between number of sinks and number of metadata maps");
-    _user_data = std::move(metadata);
-  }
+  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata);
 
   /**
    * @brief Sets the level of statistics.
@@ -576,77 +825,101 @@ class parquet_writer_options {
   void enable_int96_timestamps(bool req) { _write_timestamps_as_int96 = req; }
 
   /**
+   * @brief Sets preference for writing timestamps as UTC. Write timestamps as UTC if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of timestamps as UTC.
+   */
+  void enable_utc_timestamps(bool val) { _write_timestamps_as_UTC = val; }
+
+  /**
    * @brief Sets column chunks file path to be set in the raw output metadata.
    *
    * @param file_paths Vector of Strings which indicates file path. Must be same size as number of
    * data sinks in sink info
    */
-  void set_column_chunks_file_paths(std::vector<std::string> file_paths)
-  {
-    CUDF_EXPECTS(file_paths.size() == _sink.num_sinks(),
-                 "Mismatch between number of sinks and number of chunk paths to set");
-    _column_chunks_file_paths = std::move(file_paths);
-  }
+  void set_column_chunks_file_paths(std::vector<std::string> file_paths);
 
   /**
    * @brief Sets the maximum row group size, in bytes.
    *
    * @param size_bytes Maximum row group size, in bytes to set
    */
-  void set_row_group_size_bytes(size_t size_bytes)
-  {
-    CUDF_EXPECTS(
-      size_bytes >= 4 * 1024,
-      "The maximum row group size cannot be smaller than the minimum page size, which is 4KB.");
-    _row_group_size_bytes = size_bytes;
-  }
+  void set_row_group_size_bytes(size_t size_bytes);
 
   /**
    * @brief Sets the maximum row group size, in rows.
    *
    * @param size_rows Maximum row group size, in rows to set
    */
-  void set_row_group_size_rows(size_type size_rows)
-  {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum row group size cannot be smaller than the fragment size, which is 5000 rows.");
-    _row_group_size_rows = size_rows;
-  }
+  void set_row_group_size_rows(size_type size_rows);
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
    *
    * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
-  void set_max_page_size_bytes(size_t size_bytes)
-  {
-    CUDF_EXPECTS(size_bytes >= 4 * 1024, "The maximum page size cannot be smaller than 4KB.");
-    _max_page_size_bytes = size_bytes;
-  }
+  void set_max_page_size_bytes(size_t size_bytes);
 
   /**
    * @brief Sets the maximum page size, in rows.
    *
    * @param size_rows Maximum page size, in rows to set
    */
-  void set_max_page_size_rows(size_type size_rows)
-  {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
-    _max_page_size_rows = size_rows;
-  }
+  void set_max_page_size_rows(size_type size_rows);
 
   /**
    * @brief Sets the maximum length of min or max values in column index, in bytes.
    *
    * @param size_bytes length min/max will be truncated to
    */
-  void set_column_index_truncate_length(size_type size_bytes)
+  void set_column_index_truncate_length(int32_t size_bytes);
+
+  /**
+   * @brief Sets the policy for dictionary use.
+   *
+   * @param policy Policy for dictionary use
+   */
+  void set_dictionary_policy(dictionary_policy policy);
+
+  /**
+   * @brief Sets the maximum dictionary size, in bytes.
+   *
+   * @param size_bytes Maximum dictionary size, in bytes
+   */
+  void set_max_dictionary_size(size_t size_bytes);
+
+  /**
+   * @brief Sets the maximum page fragment size, in rows.
+   *
+   * @param size_rows Maximum page fragment size, in rows.
+   */
+  void set_max_page_fragment_size(size_type size_rows);
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be updated after writing
+   */
+  void set_compression_statistics(std::shared_ptr<writer_compression_statistics> comp_stats)
   {
-    CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
-    _column_index_truncate_length = size_bytes;
+    _compression_stats = std::move(comp_stats);
+  }
+
+  /**
+   * @brief Sets preference for V2 page headers. Write V2 page headers if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of V2 page headers.
+   */
+  void enable_write_v2_headers(bool val) { _v2_page_headers = val; }
+
+  /**
+   * @brief Sets sorting columns.
+   *
+   * @param sorting_columns Column sort order metadata
+   */
+  void set_sorting_columns(std::vector<sorting_column> sorting_columns)
+  {
+    _sorting_columns = std::move(sorting_columns);
   }
 };
 
@@ -682,13 +955,7 @@ class parquet_writer_options_builder {
    * be same size as number of sinks in sink_info
    * @return this for chaining
    */
-  parquet_writer_options_builder& partitions(std::vector<partition_info> partitions)
-  {
-    CUDF_EXPECTS(partitions.size() == options._sink.num_sinks(),
-                 "Mismatch between number of sinks and number of partitions");
-    options.set_partitions(std::move(partitions));
-    return *this;
-  }
+  parquet_writer_options_builder& partitions(std::vector<partition_info> partitions);
 
   /**
    * @brief Sets metadata in parquet_writer_options.
@@ -696,9 +963,9 @@ class parquet_writer_options_builder {
    * @param metadata Associated metadata
    * @return this for chaining
    */
-  parquet_writer_options_builder& metadata(table_input_metadata const* metadata)
+  parquet_writer_options_builder& metadata(table_input_metadata metadata)
   {
-    options._metadata = metadata;
+    options._metadata = std::move(metadata);
     return *this;
   }
 
@@ -709,13 +976,7 @@ class parquet_writer_options_builder {
    * @return this for chaining
    */
   parquet_writer_options_builder& key_value_metadata(
-    std::vector<std::map<std::string, std::string>> metadata)
-  {
-    CUDF_EXPECTS(metadata.size() == options._sink.num_sinks(),
-                 "Mismatch between number of sinks and number of metadata maps");
-    options._user_data = std::move(metadata);
-    return *this;
-  }
+    std::vector<std::map<std::string, std::string>> metadata);
 
   /**
    * @brief Sets the level of statistics in parquet_writer_options.
@@ -748,13 +1009,7 @@ class parquet_writer_options_builder {
    * data sinks
    * @return this for chaining
    */
-  parquet_writer_options_builder& column_chunks_file_paths(std::vector<std::string> file_paths)
-  {
-    CUDF_EXPECTS(file_paths.size() == options._sink.num_sinks(),
-                 "Mismatch between number of sinks and number of chunk paths to set");
-    options.set_column_chunks_file_paths(std::move(file_paths));
-    return *this;
-  }
+  parquet_writer_options_builder& column_chunks_file_paths(std::vector<std::string> file_paths);
 
   /**
    * @brief Sets the maximum row group size, in bytes.
@@ -783,7 +1038,7 @@ class parquet_writer_options_builder {
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
    *
-   * Serves as a hint to the writer, * and can be exceeded under certain circumstances.
+   * Serves as a hint to the writer, and can be exceeded under certain circumstances.
    * Cannot be larger than the row group size in bytes, and will be adjusted to
    * match if it is.
    *
@@ -822,9 +1077,66 @@ class parquet_writer_options_builder {
    * @param val length min/max will be truncated to, with 0 indicating no truncation
    * @return this for chaining
    */
-  parquet_writer_options_builder& column_index_truncate_length(size_type val)
+  parquet_writer_options_builder& column_index_truncate_length(int32_t val)
   {
     options.set_column_index_truncate_length(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the policy for dictionary use.
+   *
+   * Certain compression algorithms (e.g Zstandard) have limits on how large of a buffer can
+   * be compressed. In some circumstances, the dictionary can grow beyond this limit, which
+   * will prevent the column from being compressed. This setting controls how the writer
+   * should act in these circumstances. A setting of dictionary_policy::ADAPTIVE will disable
+   * dictionary encoding for columns where the dictionary exceeds the limit. A setting of
+   * dictionary_policy::NEVER will disable the use of dictionary encoding globally. A setting of
+   * dictionary_policy::ALWAYS will allow the use of dictionary encoding even if it will result in
+   * the disabling of compression for columns that would otherwise be compressed.
+   *
+   * The default value is dictionary_policy::ALWAYS.
+   *
+   * @param val policy for dictionary use
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& dictionary_policy(enum dictionary_policy val);
+
+  /**
+   * @brief Sets the maximum dictionary size, in bytes.
+   *
+   * Disables dictionary encoding for any column chunk where the dictionary will
+   * exceed this limit.  Only used when the dictionary_policy is set to 'ADAPTIVE'.
+   *
+   * Default value is 1048576 (1MiB).
+   *
+   * @param val maximum dictionary size
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& max_dictionary_size(size_t val);
+
+  /**
+   * @brief Sets the maximum page fragment size, in rows.
+   *
+   * Files with nested schemas or very long strings may need a page fragment size
+   * smaller than the default value of 5000 to ensure a single fragment will not
+   * exceed the desired maximum page size in bytes.
+   *
+   * @param val maximum page fragment size
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& max_page_fragment_size(size_type val);
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be filled once writer is done
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& compression_statistics(
+    std::shared_ptr<writer_compression_statistics> const& comp_stats)
+  {
+    options._compression_stats = comp_stats;
     return *this;
   }
 
@@ -839,6 +1151,34 @@ class parquet_writer_options_builder {
     options._write_timestamps_as_int96 = enabled;
     return *this;
   }
+
+  /**
+   * @brief Set to true if timestamps are to be written as UTC.
+   *
+   * @param enabled Boolean value to enable/disable writing of timestamps as UTC.
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& utc_timestamps(bool enabled)
+  {
+    options._write_timestamps_as_UTC = enabled;
+    return *this;
+  }
+
+  /**
+   * @brief Set to true if V2 page headers are to be written.
+   *
+   * @param enabled Boolean value to enable/disable writing of V2 page headers.
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& write_v2_headers(bool enabled);
+
+  /**
+   * @brief Sets column sorting metadata to chunked_parquet_writer_options.
+   *
+   * @param sorting_columns Column sort order metadata
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& sorting_columns(std::vector<sorting_column> sorting_columns);
 
   /**
    * @brief move parquet_writer_options member once it's built.
@@ -866,15 +1206,13 @@ class parquet_writer_options_builder {
  * @endcode
  *
  * @param options Settings for controlling writing behavior
- * @param mr Device memory resource to use for device memory allocation
- *
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A blob that contains the file metadata (parquet FileMetadata thrift message) if
  *         requested in parquet_writer_options (empty blob otherwise).
  */
 
 std::unique_ptr<std::vector<uint8_t>> write_parquet(
-  parquet_writer_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  parquet_writer_options const& options, rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
@@ -886,7 +1224,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(
  * @return A parquet-compatible blob that contains the data for all row groups in the list
  */
 std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
-  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
+  std::vector<std::unique_ptr<std::vector<uint8_t>>> const& metadata_list);
 
 class chunked_parquet_writer_options_builder;
 
@@ -901,12 +1239,14 @@ class chunked_parquet_writer_options {
   // Specify the level of statistics in the output file
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
   // Optional associated metadata.
-  table_input_metadata const* _metadata = nullptr;
+  std::optional<table_input_metadata> _metadata;
   // Optional footer key_value_metadata
   std::vector<std::map<std::string, std::string>> _user_data;
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
+  // Parquet writer can write timestamps as UTC. Defaults to true.
+  bool _write_timestamps_as_UTC = true;
   // Maximum size of each row group (unless smaller than a single page)
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)
@@ -916,7 +1256,19 @@ class chunked_parquet_writer_options {
   // Maximum number of rows in a page
   size_type _max_page_size_rows = default_max_page_size_rows;
   // Maximum size of min or max values in column index
-  size_type _column_index_truncate_length = default_column_index_truncate_length;
+  int32_t _column_index_truncate_length = default_column_index_truncate_length;
+  // When to use dictionary encoding for data
+  dictionary_policy _dictionary_policy = dictionary_policy::ALWAYS;
+  // Maximum size of column chunk dictionary (in bytes)
+  size_t _max_dictionary_size = default_max_dictionary_size;
+  // Maximum number of rows in a page fragment
+  std::optional<size_type> _max_page_fragment_size;
+  // Optional compression statistics
+  std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // write V2 page headers?
+  bool _v2_page_headers = false;
+  // Which columns in _table are used for sorting
+  std::optional<std::vector<sorting_column>> _sorting_columns;
 
   /**
    * @brief Constructor from sink.
@@ -961,7 +1313,7 @@ class chunked_parquet_writer_options {
    *
    * @return Metadata information
    */
-  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] auto const& get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
@@ -979,6 +1331,13 @@ class chunked_parquet_writer_options {
    * @return `true` if timestamps will be written as INT96
    */
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
+
+  /**
+   * @brief Returns `true` if timestamps will be written as UTC
+   *
+   * @return `true` if timestamps will be written as UTC
+   */
+  [[nodiscard]] auto is_enabled_utc_timestamps() const { return _write_timestamps_as_UTC; }
 
   /**
    * @brief Returns maximum row group size, in bytes.
@@ -1027,23 +1386,63 @@ class chunked_parquet_writer_options {
   auto get_column_index_truncate_length() const { return _column_index_truncate_length; }
 
   /**
+   * @brief Returns policy for dictionary use.
+   *
+   * @return policy for dictionary use
+   */
+  [[nodiscard]] dictionary_policy get_dictionary_policy() const { return _dictionary_policy; }
+
+  /**
+   * @brief Returns maximum dictionary size, in bytes.
+   *
+   * @return Maximum dictionary size, in bytes.
+   */
+  [[nodiscard]] auto get_max_dictionary_size() const { return _max_dictionary_size; }
+
+  /**
+   * @brief Returns maximum page fragment size, in rows.
+   *
+   * @return Maximum page fragment size, in rows.
+   */
+  [[nodiscard]] auto get_max_page_fragment_size() const { return _max_page_fragment_size; }
+
+  /**
+   * @brief Returns a shared pointer to the user-provided compression statistics.
+   *
+   * @return Compression statistics
+   */
+  [[nodiscard]] std::shared_ptr<writer_compression_statistics> get_compression_statistics() const
+  {
+    return _compression_stats;
+  }
+
+  /**
+   * @brief Returns `true` if V2 page headers should be written.
+   *
+   * @return `true` if V2 page headers should be written.
+   */
+  [[nodiscard]] auto is_enabled_write_v2_headers() const { return _v2_page_headers; }
+
+  /**
+   * @brief Returns the sorting_columns.
+   *
+   * @return Column sort order metadata
+   */
+  [[nodiscard]] auto const& get_sorting_columns() const { return _sorting_columns; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata
    */
-  void set_metadata(table_input_metadata const* metadata) { _metadata = metadata; }
+  void set_metadata(table_input_metadata metadata) { _metadata = std::move(metadata); }
 
   /**
    * @brief Sets Key-Value footer metadata.
    *
    * @param metadata Key-Value footer metadata
    */
-  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata)
-  {
-    CUDF_EXPECTS(metadata.size() == _sink.num_sinks(),
-                 "Mismatch between number of sinks and number of metadata maps");
-    _user_data = std::move(metadata);
-  }
+  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata);
 
   /**
    * @brief Sets the level of statistics in parquet_writer_options.
@@ -1069,64 +1468,93 @@ class chunked_parquet_writer_options {
   void enable_int96_timestamps(bool req) { _write_timestamps_as_int96 = req; }
 
   /**
+   * @brief Sets preference for writing timestamps as UTC. Write timestamps as UTC if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of timestamps as UTC.
+   */
+  void enable_utc_timestamps(bool val) { _write_timestamps_as_UTC = val; }
+
+  /**
    * @brief Sets the maximum row group size, in bytes.
    *
    * @param size_bytes Maximum row group size, in bytes to set
    */
-  void set_row_group_size_bytes(size_t size_bytes)
-  {
-    CUDF_EXPECTS(
-      size_bytes >= 4 * 1024,
-      "The maximum row group size cannot be smaller than the minimum page size, which is 4KB.");
-    _row_group_size_bytes = size_bytes;
-  }
+  void set_row_group_size_bytes(size_t size_bytes);
 
   /**
    * @brief Sets the maximum row group size, in rows.
    *
    * @param size_rows The maximum row group size, in rows to set
    */
-  void set_row_group_size_rows(size_type size_rows)
-  {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum row group size cannot be smaller than the fragment size, which is 5000 rows.");
-    _row_group_size_rows = size_rows;
-  }
+  void set_row_group_size_rows(size_type size_rows);
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
    *
    * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
-  void set_max_page_size_bytes(size_t size_bytes)
-  {
-    CUDF_EXPECTS(size_bytes >= 4 * 1024, "The maximum page size cannot be smaller than 4KB.");
-    _max_page_size_bytes = size_bytes;
-  }
+  void set_max_page_size_bytes(size_t size_bytes);
 
   /**
    * @brief Sets the maximum page size, in rows.
    *
    * @param size_rows The maximum page size, in rows to set
    */
-  void set_max_page_size_rows(size_type size_rows)
-  {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
-    _max_page_size_rows = size_rows;
-  }
+  void set_max_page_size_rows(size_type size_rows);
 
   /**
    * @brief Sets the maximum length of min or max values in column index, in bytes.
    *
    * @param size_bytes length min/max will be truncated to
    */
-  void set_column_index_truncate_length(size_type size_bytes)
+  void set_column_index_truncate_length(int32_t size_bytes);
+
+  /**
+   * @brief Sets the policy for dictionary use.
+   *
+   * @param policy Policy for dictionary use
+   */
+  void set_dictionary_policy(dictionary_policy policy);
+
+  /**
+   * @brief Sets the maximum dictionary size, in bytes.
+   *
+   * @param size_bytes Maximum dictionary size, in bytes
+   */
+  void set_max_dictionary_size(size_t size_bytes);
+
+  /**
+   * @brief Sets the maximum page fragment size, in rows.
+   *
+   * @param size_rows Maximum page fragment size, in rows.
+   */
+  void set_max_page_fragment_size(size_type size_rows);
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be updated after writing
+   */
+  void set_compression_statistics(std::shared_ptr<writer_compression_statistics> comp_stats)
   {
-    CUDF_EXPECTS(size_bytes >= 0, "Column index truncate length cannot be negative.");
-    _column_index_truncate_length = size_bytes;
+    _compression_stats = std::move(comp_stats);
+  }
+
+  /**
+   * @brief Sets preference for V2 page headers. Write V2 page headers if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of V2 page headers.
+   */
+  void enable_write_v2_headers(bool val) { _v2_page_headers = val; }
+
+  /**
+   * @brief Sets sorting columns.
+   *
+   * @param sorting_columns Column sort order metadata
+   */
+  void set_sorting_columns(std::vector<sorting_column> sorting_columns)
+  {
+    _sorting_columns = std::move(sorting_columns);
   }
 
   /**
@@ -1166,9 +1594,9 @@ class chunked_parquet_writer_options_builder {
    * @param metadata Associated metadata
    * @return this for chaining
    */
-  chunked_parquet_writer_options_builder& metadata(table_input_metadata const* metadata)
+  chunked_parquet_writer_options_builder& metadata(table_input_metadata metadata)
   {
-    options._metadata = metadata;
+    options._metadata = std::move(metadata);
     return *this;
   }
 
@@ -1179,16 +1607,10 @@ class chunked_parquet_writer_options_builder {
    * @return this for chaining
    */
   chunked_parquet_writer_options_builder& key_value_metadata(
-    std::vector<std::map<std::string, std::string>> metadata)
-  {
-    CUDF_EXPECTS(metadata.size() == options._sink.num_sinks(),
-                 "Mismatch between number of sinks and number of metadata maps");
-    options.set_key_value_metadata(std::move(metadata));
-    return *this;
-  }
+    std::vector<std::map<std::string, std::string>> metadata);
 
   /**
-   * @brief Sets Sets the level of statistics in chunked_parquet_writer_options.
+   * @brief Sets the level of statistics in chunked_parquet_writer_options.
    *
    * @param sf Level of statistics requested in the output file
    * @return this for chaining
@@ -1225,6 +1647,26 @@ class chunked_parquet_writer_options_builder {
     options._write_timestamps_as_int96 = enabled;
     return *this;
   }
+
+  /**
+   * @brief Set to true if timestamps are to be written as UTC.
+   *
+   * @param enabled Boolean value to enable/disable writing of timestamps as UTC.
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& utc_timestamps(bool enabled)
+  {
+    options._write_timestamps_as_UTC = enabled;
+    return *this;
+  }
+
+  /**
+   * @brief Set to true if V2 page headers are to be written.
+   *
+   * @param enabled Boolean value to enable/disable writing of V2 page headers.
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& write_v2_headers(bool enabled);
 
   /**
    * @brief Sets the maximum row group size, in bytes.
@@ -1291,11 +1733,77 @@ class chunked_parquet_writer_options_builder {
    * @param val length min/max will be truncated to, with 0 indicating no truncation
    * @return this for chaining
    */
-  chunked_parquet_writer_options_builder& column_index_truncate_length(size_type val)
+  chunked_parquet_writer_options_builder& column_index_truncate_length(int32_t val)
   {
     options.set_column_index_truncate_length(val);
     return *this;
   }
+
+  /**
+   * @brief Sets the policy for dictionary use.
+   *
+   * Certain compression algorithms (e.g Zstandard) have limits on how large of a buffer can
+   * be compressed. In some circumstances, the dictionary can grow beyond this limit, which
+   * will prevent the column from being compressed. This setting controls how the writer
+   * should act in these circumstances. A setting of dictionary_policy::ADAPTIVE will disable
+   * dictionary encoding for columns where the dictionary exceeds the limit. A setting of
+   * dictionary_policy::NEVER will disable the use of dictionary encoding globally. A setting of
+   * dictionary_policy::ALWAYS will allow the use of dictionary encoding even if it will result in
+   * the disabling of compression for columns that would otherwise be compressed.
+   *
+   * The default value is dictionary_policy::ALWAYS.
+   *
+   * @param val policy for dictionary use
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& dictionary_policy(enum dictionary_policy val);
+
+  /**
+   * @brief Sets the maximum dictionary size, in bytes.
+   *
+   * Disables dictionary encoding for any column chunk where the dictionary will
+   * exceed this limit.  Only used when the dictionary_policy is set to 'ADAPTIVE'.
+   *
+   * Default value is 1048576 (1MiB).
+   *
+   * @param val maximum dictionary size
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& max_dictionary_size(size_t val);
+
+  /**
+   * @brief Sets the maximum page fragment size, in rows.
+   *
+   * Files with nested schemas or very long strings may need a page fragment size
+   * smaller than the default value of 5000 to ensure a single fragment will not
+   * exceed the desired maximum page size in bytes.
+   *
+   * @param val maximum page fragment size
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& max_page_fragment_size(size_type val);
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be filled once writer is done
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& compression_statistics(
+    std::shared_ptr<writer_compression_statistics> const& comp_stats)
+  {
+    options._compression_stats = comp_stats;
+    return *this;
+  }
+
+  /**
+   * @brief Sets column sorting metadata to chunked_parquet_writer_options.
+   *
+   * @param sorting_columns Column sort order metadata
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& sorting_columns(
+    std::vector<sorting_column> sorting_columns);
 
   /**
    * @brief move chunked_parquet_writer_options member once it's built.
@@ -1343,11 +1851,10 @@ class parquet_chunked_writer {
    * @brief Constructor with chunked writer options
    *
    * @param[in] options options used to write table
-   * @param[in] mr Device memory resource to use for device memory allocation
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches
    */
-  parquet_chunked_writer(
-    chunked_parquet_writer_options const& options,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  parquet_chunked_writer(chunked_parquet_writer_options const& options,
+                         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Writes table to output.
@@ -1357,6 +1864,7 @@ class parquet_chunked_writer {
    * size as number of sinks.
    *
    * @throws cudf::logic_error If the number of partitions is not the same as number of sinks
+   * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
    * @return returns reference of the class object
    */
   parquet_chunked_writer& write(table_view const& table,
@@ -1374,9 +1882,9 @@ class parquet_chunked_writer {
     std::vector<std::string> const& column_chunks_file_paths = {});
 
   /// Unique pointer to impl writer class
-  std::unique_ptr<cudf::io::detail::parquet::writer> writer;
+  std::unique_ptr<parquet::detail::writer> writer;
 };
 
 /** @} */  // end of group
-}  // namespace io
-}  // namespace cudf
+
+}  // namespace cudf::io

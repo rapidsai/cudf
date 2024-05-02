@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/types.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -32,7 +34,7 @@ std::unique_ptr<cudf::column> make_structs_column(
   size_type null_count,
   rmm::device_buffer&& null_mask,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(null_count <= 0 || !null_mask.is_empty(),
                "Struct column with nulls must be nullable.");
@@ -44,8 +46,11 @@ std::unique_ptr<cudf::column> make_structs_column(
 
   if (!null_mask.is_empty()) {
     for (auto& child : child_columns) {
-      cudf::structs::detail::superimpose_parent_nulls(
-        static_cast<bitmask_type const*>(null_mask.data()), null_count, *child, stream, mr);
+      child = structs::detail::superimpose_nulls(static_cast<bitmask_type const*>(null_mask.data()),
+                                                 null_count,
+                                                 std::move(child),
+                                                 stream,
+                                                 mr);
     }
   }
 

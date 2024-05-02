@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +23,15 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
-#include <thrust/iterator/discard_iterator.h>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuda/functional>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
@@ -48,7 +50,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                                           size_type n,
                                           null_policy null_handling,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+                                          rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");
@@ -81,7 +83,9 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
     auto values_view = column_device_view::create(values, stream);
     auto bitmask_iterator =
       thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*values_view),
-                                      [] __device__(auto b) { return static_cast<size_type>(b); });
+                                      cuda::proclaim_return_type<size_type>([] __device__(auto b) {
+                                        return static_cast<size_type>(b);
+                                      }));
     rmm::device_uvector<size_type> intra_group_index(values.size(), stream);
     // intra group index for valids only.
     thrust::exclusive_scan_by_key(rmm::exec_policy(stream),

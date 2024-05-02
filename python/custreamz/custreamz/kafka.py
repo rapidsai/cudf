@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 import confluent_kafka as ck
 from cudf_kafka._lib.kafka import KafkaDatasource
 
@@ -25,6 +25,7 @@ class CudfKafkaClient:
 
         self.kafka_configs = kafka_configs
         self.kafka_meta_client = KafkaDatasource(kafka_configs)
+        self.ck_consumer = ck.Consumer(kafka_configs)
 
     def list_topics(self, specific_topic=None):
         """
@@ -98,7 +99,7 @@ class Consumer(CudfKafkaClient):
         topic : str,
             Name of the Kafka topic that the messages
             should be read from
-        parition : int,
+        partition : int,
             Partition number on the specified topic that
             should be read from
         lines : {{ True, False }}, default True,
@@ -128,7 +129,7 @@ class Consumer(CudfKafkaClient):
 
         if topic is None:
             raise ValueError(
-                "ERROR: You must specifiy the topic "
+                "ERROR: You must specify the topic "
                 "that you want to consume from"
             )
 
@@ -270,3 +271,21 @@ class Consumer(CudfKafkaClient):
             self.kafka_meta_client.commit_offset(
                 offs.topic.encode(), offs.partition, offs.offset
             )
+
+    def poll(self, timeout=None):
+        """
+        Consumes a single message, calls callbacks and returns events.
+
+        The application must check the returned Message object's
+        Message.error() method to distinguish between proper messages
+        (error() returns None), or an event or error
+        (see error().code() for specifics).
+
+        Parameters
+        ----------
+        timeout : float
+            Maximum time to block waiting for message, event or callback
+            (default: infinite (None translated into -1 in the
+            library)). (Seconds)
+        """
+        return self.ck.poll(timeout)

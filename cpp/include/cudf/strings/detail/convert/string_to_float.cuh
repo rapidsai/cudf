@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,8 +35,8 @@ namespace detail {
  */
 __device__ inline double stod(string_view const& d_str)
 {
-  const char* in_ptr = d_str.data();
-  const char* end    = in_ptr + d_str.size_bytes();
+  char const* in_ptr = d_str.data();
+  char const* end    = in_ptr + d_str.size_bytes();
   if (end == in_ptr) return 0.0;
   double sign{1.0};
   if (*in_ptr == '-' || *in_ptr == '+') {
@@ -102,6 +102,9 @@ __device__ inline double stod(string_view const& d_str)
           ch = *in_ptr++;
           if (ch < '0' || ch > '9') break;
           exp_ten = (exp_ten * 10) + (int)(ch - '0');
+          // Prevent integer overflow in exp_ten. 100,000,000 is the largest
+          // power of ten that can be multiplied by 10 without overflow.
+          if (exp_ten >= 100'000'000) { break; }
         }
       }
     }

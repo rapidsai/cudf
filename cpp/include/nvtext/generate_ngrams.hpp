@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <rmm/resource_ref.hpp>
 
 namespace nvtext {
 /**
@@ -47,48 +49,83 @@ namespace nvtext {
  * @throw cudf::logic_error if `separator` is invalid
  * @throw cudf::logic_error if there are not enough strings to generate any ngrams
  *
- * @param strings Strings column to tokenize and produce ngrams from.
- * @param ngrams The ngram number to generate.
- *               Default is 2 = bigram.
- * @param separator The string to use for separating ngram tokens.
- *                  Default is "_" character.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings columns of tokens.
+ * @param input Strings column to tokenize and produce ngrams from
+ * @param ngrams The ngram number to generate
+ * @param separator The string to use for separating ngram tokens
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings columns of tokens
  */
 std::unique_ptr<cudf::column> generate_ngrams(
-  cudf::strings_column_view const& strings,
-  cudf::size_type ngrams               = 2,
-  cudf::string_scalar const& separator = cudf::string_scalar{"_"},
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  cudf::strings_column_view const& input,
+  cudf::size_type ngrams,
+  cudf::string_scalar const& separator,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Generates ngrams of characters within each string.
+ * @brief Generates ngrams of characters within each string
  *
- * Each character of a string used to build ngrams.
+ * Each character of a string is used to build ngrams for the output row.
  * Ngrams are not created across strings.
  *
  * ```
- * ["ab", "cde", "fgh"] would generate bigrams as ["ab", "cd", "de", "fg", "gh"]
+ * ["ab", "cde", "fgh"] would generate bigrams as
+ * [["ab"], ["cd", "de"], ["fg", "gh"]]
  * ```
  *
- * The size of the output column will be the total number of ngrams generated from
+ * All null row entries are ignored and the corresponding output row will be empty.
+ *
+ * @throw std::invalid_argument if `ngrams < 2`
+ * @throw cudf::logic_error if there are not enough characters to generate any ngrams
+ *
+ * @param input Strings column to produce ngrams from
+ * @param ngrams The ngram number to generate.
+ *               Default is 2 = bigram.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Lists column of strings
+ */
+std::unique_ptr<cudf::column> generate_character_ngrams(
+  cudf::strings_column_view const& input,
+  cudf::size_type ngrams            = 2,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Hashes ngrams of characters within each string
+ *
+ * Each character of a string used to build the ngrams and ngrams are not
+ * produced across adjacent strings rows.
+ *
+ * ```
+ * "abcdefg" would generate ngrams=5 as ["abcde", "bcdef" "cdefg"]
+ * ```
+ *
+ * The ngrams for each string are hashed and returned in a list column where
+ * the offsets specify rows of hash values for each string.
+ *
+ * The size of the child column will be the total number of ngrams generated from
  * the input strings column.
  *
  * All null row entries are ignored and the output contains all valid rows.
  *
+ * The hash algorithm uses MurmurHash32 on each ngram.
+ *
  * @throw cudf::logic_error if `ngrams < 2`
  * @throw cudf::logic_error if there are not enough characters to generate any ngrams
  *
- * @param strings Strings column to produce ngrams from.
- * @param ngrams The ngram number to generate.
- *               Default is 2 = bigram.
+ * @param input Strings column to produce ngrams from
+ * @param ngrams The ngram number to generate. Default is 5.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings columns of tokens.
+ * @return A lists column of hash values
  */
-std::unique_ptr<cudf::column> generate_character_ngrams(
-  cudf::strings_column_view const& strings,
-  cudf::size_type ngrams              = 2,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> hash_character_ngrams(
+  cudf::strings_column_view const& input,
+  cudf::size_type ngrams            = 5,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace nvtext

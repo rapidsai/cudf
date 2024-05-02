@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -81,7 +81,7 @@ def test_column_offset_and_size(pandas_input, offset, size):
         children=col.base_children,
     )
 
-    if cudf.api.types.is_categorical_dtype(col.dtype):
+    if isinstance(col.dtype, cudf.CategoricalDtype):
         assert col.size == col.codes.size
         assert col.size == (col.codes.data.size / col.codes.dtype.itemsize)
     elif cudf.api.types.is_string_dtype(col.dtype):
@@ -120,7 +120,7 @@ def column_slicing_test(col, offset, size, cast_to_float=False):
     else:
         pd_series = series.to_pandas()
 
-    if cudf.api.types.is_categorical_dtype(col.dtype):
+    if isinstance(col.dtype, cudf.CategoricalDtype):
         # The cudf.Series is constructed from an already sliced column, whereas
         # the pandas.Series is constructed from the unsliced series and then
         # sliced, so the indexes should be different and we must ignore it.
@@ -176,8 +176,8 @@ def test_column_series_multi_dim(data):
 @pytest.mark.parametrize(
     ("data", "error"),
     [
-        ([1, "1.0", "2", -3], pa.lib.ArrowInvalid),
-        ([np.nan, 0, "null", cp.nan], pa.lib.ArrowInvalid),
+        ([1, "1.0", "2", -3], cudf.errors.MixedTypeError),
+        ([np.nan, 0, "null", cp.nan], cudf.errors.MixedTypeError),
         (
             [np.int32(4), np.float64(1.5), np.float32(1.290994), np.int8(0)],
             None,
@@ -193,12 +193,15 @@ def test_column_mixed_dtype(data, error):
 
 
 @pytest.mark.parametrize("nan_as_null", [True, False])
-def test_as_column_scalar_with_nan(nan_as_null):
-    size = 10
-    scalar = np.nan
-
+@pytest.mark.parametrize(
+    "scalar",
+    [np.nan, pd.Timedelta(days=1), pd.Timestamp(2020, 1, 1)],
+    ids=repr,
+)
+@pytest.mark.parametrize("size", [1, 10])
+def test_as_column_scalar_with_nan(nan_as_null, scalar, size):
     expected = (
-        cudf.Series([np.nan] * size, nan_as_null=nan_as_null)
+        cudf.Series([scalar] * size, nan_as_null=nan_as_null)
         .dropna()
         .to_numpy()
     )
@@ -285,8 +288,8 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     expect = pd.Series(cpu_data_view, dtype=cpu_data_view.dtype)
     got = cudf.Series(gpu_data_view, dtype=gpu_data_view.dtype)
 
-    gpu_ptr = gpu_data.data.ptr
-    assert gpu_ptr == got._column.data.ptr
+    gpu_ptr = gpu_data.data.get_ptr(mode="read")
+    assert gpu_ptr == got._column.data.get_ptr(mode="read")
     assert_eq(expect, got)
 
 
@@ -308,7 +311,6 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
         rfunc=gpu_data.view,
         lfunc_args_and_kwargs=([to_dtype],),
         rfunc_args_and_kwargs=([to_dtype],),
-        expected_error_message="Can not divide",
     )
 
 
@@ -331,7 +333,6 @@ def test_column_view_valid_string_to_numeric(data, to_dtype):
 
 
 def test_column_view_nulls_widths_even():
-
     data = [1, 2, None, 4, None]
     expect_data = [
         np.int32(val).view("float32") if val is not None else np.nan
@@ -359,7 +360,6 @@ def test_column_view_nulls_widths_even():
 
 @pytest.mark.parametrize("slc", [slice(1, 5), slice(0, 4), slice(2, 4)])
 def test_column_view_numeric_slice(slc):
-
     data = np.array([1, 2, 3, 4, 5], dtype="int32")
     sr = cudf.Series(data)
 
@@ -396,17 +396,17 @@ def test_column_view_string_slice(slc):
         ),
         (
             cp.array([], dtype="uint8"),
-            cudf.core.column.as_column([], dtype="uint8"),
+            cudf.core.column.column_empty(0, dtype="uint8"),
         ),
         (
-            cp.array([453], dtype="uint8"),
-            cudf.core.column.as_column([453], dtype="uint8"),
+            cp.array([255], dtype="uint8"),
+            cudf.core.column.as_column([255], dtype="uint8"),
         ),
     ],
 )
 def test_as_column_buffer(data, expected):
     actual_column = cudf.core.column.as_column(
-        cudf.core.buffer.as_device_buffer_like(data), dtype=data.dtype
+        cudf.core.buffer.as_buffer(data), dtype=data.dtype
     )
     assert_eq(cudf.Series(actual_column), cudf.Series(expected))
 
@@ -521,10 +521,7 @@ def test_concatenate_large_column_strings():
     s_1 = cudf.Series(["very long string " * string_scale_f] * num_strings)
     s_2 = cudf.Series(["very long string " * string_scale_f] * num_strings)
 
-    with pytest.raises(
-        OverflowError,
-        match="total size of output is too large for a cudf column",
-    ):
+    with pytest.raises(OverflowError):
         cudf.concat([s_1, s_2])
 
 

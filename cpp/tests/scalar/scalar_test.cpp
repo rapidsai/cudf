@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,17 +17,16 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/scalar/scalar.hpp>
 
 template <typename T>
-struct TypedScalarTest : public cudf::test::BaseFixture {
-};
+struct TypedScalarTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedScalarTestWithoutFixedPoint : public cudf::test::BaseFixture {
-};
+struct TypedScalarTestWithoutFixedPoint : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedScalarTest, cudf::test::FixedWidthTypes);
 TYPED_TEST_SUITE(TypedScalarTestWithoutFixedPoint, cudf::test::FixedWidthTypesWithoutFixedPoint);
@@ -35,7 +34,7 @@ TYPED_TEST_SUITE(TypedScalarTestWithoutFixedPoint, cudf::test::FixedWidthTypesWi
 TYPED_TEST(TypedScalarTest, DefaultValidity)
 {
   using Type = cudf::device_storage_type_t<TypeParam>;
-  Type value = cudf::test::make_type_param_scalar<TypeParam>(7);
+  Type value = static_cast<Type>(cudf::test::make_type_param_scalar<TypeParam>(7));
   cudf::scalar_type_t<TypeParam> s(value);
 
   EXPECT_TRUE(s.is_valid());
@@ -73,7 +72,7 @@ TYPED_TEST(TypedScalarTestWithoutFixedPoint, SetNull)
 TYPED_TEST(TypedScalarTest, CopyConstructor)
 {
   using Type = cudf::device_storage_type_t<TypeParam>;
-  Type value = cudf::test::make_type_param_scalar<TypeParam>(8);
+  Type value = static_cast<Type>(cudf::test::make_type_param_scalar<TypeParam>(8));
   cudf::scalar_type_t<TypeParam> s(value);
   auto s2 = s;
 
@@ -93,8 +92,7 @@ TYPED_TEST(TypedScalarTest, MoveConstructor)
   EXPECT_EQ(data_ptr, s2.data());
 }
 
-struct StringScalarTest : public cudf::test::BaseFixture {
-};
+struct StringScalarTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringScalarTest, DefaultValidity)
 {
@@ -127,8 +125,7 @@ TEST_F(StringScalarTest, MoveConstructor)
   EXPECT_EQ(data_ptr, s2.data());
 }
 
-struct ListScalarTest : public cudf::test::BaseFixture {
-};
+struct ListScalarTest : public cudf::test::BaseFixture {};
 
 TEST_F(ListScalarTest, DefaultValidityNonNested)
 {
@@ -212,8 +209,7 @@ TEST_F(ListScalarTest, MoveConstructorNested)
   EXPECT_EQ(s.view().num_children(), 0);
 }
 
-struct StructScalarTest : public cudf::test::BaseFixture {
-};
+struct StructScalarTest : public cudf::test::BaseFixture {};
 
 TEST_F(StructScalarTest, Basic)
 {

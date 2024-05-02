@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/lists/combine.hpp>
+#include <cudf/utilities/error.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -33,8 +34,7 @@ constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_leve
 constexpr int32_t null{0};
 }  // namespace
 
-struct ListConcatenateRowsTest : public cudf::test::BaseFixture {
-};
+struct ListConcatenateRowsTest : public cudf::test::BaseFixture {};
 
 TEST_F(ListConcatenateRowsTest, InvalidInput)
 {
@@ -54,13 +54,12 @@ TEST_F(ListConcatenateRowsTest, InvalidInput)
     auto const col1 = IntListsCol{}.release();
     auto const col2 = StrListsCol{}.release();
     EXPECT_THROW(cudf::lists::concatenate_rows(TView{{col1->view(), col2->view()}}),
-                 cudf::logic_error);
+                 cudf::data_type_error);
   }
 }
 
 template <typename T>
-struct ListConcatenateRowsTypedTest : public cudf::test::BaseFixture {
-};
+struct ListConcatenateRowsTypedTest : public cudf::test::BaseFixture {};
 
 using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                         cudf::test::FloatingPointTypes,
@@ -331,9 +330,9 @@ TYPED_TEST(ListConcatenateRowsTypedTest, SlicedColumnsInputNoNull)
   auto const col3         = cudf::slice(col_original->view(), {2, 5})[0];
   auto const col4         = cudf::slice(col_original->view(), {3, 6})[0];
   auto const expected     = ListsCol{
-    {1, 2, 3, 2, 3, 3, 4, 5, 6, 5, 6},
-    {2, 3, 3, 4, 5, 6, 5, 6},
-    {3, 4, 5, 6, 5, 6, 7}}.release();
+        {1, 2, 3, 2, 3, 3, 4, 5, 6, 5, 6},
+        {2, 3, 3, 4, 5, 6, 5, 6},
+        {3, 4, 5, 6, 5, 6, 7}}.release();
   auto const results = cudf::lists::concatenate_rows(TView{{col1, col2, col3, col4}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
@@ -480,8 +479,7 @@ TEST_F(ListConcatenateRowsTest, StringsColumnsWithEmptyListTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
 
-struct ListConcatenateRowsNestedTypesTest : public cudf::test::BaseFixture {
-};
+struct ListConcatenateRowsNestedTypesTest : public cudf::test::BaseFixture {};
 
 TEST_F(ListConcatenateRowsNestedTypesTest, Identity)
 {
@@ -547,9 +545,9 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNulls)
   // list<list<string>>
 
   // clang-format off
-  
-  // col 0  
-  cudf::test::lists_column_wrapper<cudf::string_view> 
+
+  // col 0
+  cudf::test::lists_column_wrapper<cudf::string_view>
     l0{ {
           {{{"whee", "yay", "bananas"}, nulls_at({1})}, {}},
           {{}},
@@ -559,23 +557,23 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNulls)
         }, nulls_at({3, 4}) };
 
   // col1
-  cudf::test::lists_column_wrapper<cudf::string_view> 
+  cudf::test::lists_column_wrapper<cudf::string_view>
     l1{ {
           {{}},
           {{"arg"}, {"mno", "ampere"}, {"gpu"}, {"def"}},
           {{{{"", "hhh"}, nulls_at({0})}, {"www"}},                               nulls_at({1})},
           {{"warp", "donuts", "parking"}, { "", "apply", "twelve", "mouse", "bbb"}, {"bbb", "pom"}, {}},
-          {{}} 
+          {{}}
         }, nulls_at({4}) };
 
   // col2
-  cudf::test::lists_column_wrapper<cudf::string_view> 
+  cudf::test::lists_column_wrapper<cudf::string_view>
     l2{ {
           {{"monitor", "sugar"}},
           {{"spurs", "garlic"}, {"onion", "shallot", "carrot"}},
           {{"cars", "trucks", "planes"}, {"abc"}, {"mno", "pqr"}},
           {{}, {"ram", "cpu", "disk"}, {}},
-          {{"round"}, {"square"}} 
+          {{"round"}, {"square"}}
         }, nulls_at({0, 4}) };
 
   // concatenate_policy::IGNORE_NULLS
@@ -584,39 +582,39 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNulls)
     cudf::table_view t({l0, l1, l2});
     auto result = cudf::lists::concatenate_rows(t, cudf::lists::concatenate_null_policy::IGNORE);
 
-    // expected  
+    // expected
     cudf::test::lists_column_wrapper<cudf::string_view>
-      expected{ {        
+      expected{ {
                   {{{"whee", "yay", "bananas"}, nulls_at({1})}, {}, {}},
                   {{}, {"arg"}, {"mno", "ampere"}, {"gpu"}, {"def"}, {"spurs", "garlic"}, {"onion", "shallot", "carrot"}},
-                  {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"}, 
-                    {{"", "hhh"}, nulls_at({0})}, {"www"}, {"cars", "trucks", "planes"}, {"abc"}, {"mno", "pqr"}},                           
+                  {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"},
+                    {{"", "hhh"}, nulls_at({0})}, {"www"}, {"cars", "trucks", "planes"}, {"abc"}, {"mno", "pqr"}},
                       nulls_at({0, 2, 4}) },
                   {{"warp", "donuts", "parking"}, { "", "apply", "twelve", "mouse", "bbb"}, {"bbb", "pom"}, {}, {}, {"ram", "cpu", "disk"}, {}},
                   {{}}
                 }, nulls_at({4}) };
-        
+
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
-  
+
   // concatenate_policy::NULLIFY_OUTPUT_ROW
   {
     // perform the concatenate
     cudf::table_view t({l0, l1, l2});
     auto result = cudf::lists::concatenate_rows(t, cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW);
 
-    // expected  
+    // expected
     cudf::test::lists_column_wrapper<cudf::string_view>
-      expected{ {        
+      expected{ {
                   {{}},
                   {{}, {"arg"}, {"mno", "ampere"}, {"gpu"}, {"def"}, {"spurs", "garlic"}, {"onion", "shallot", "carrot"}},
-                  {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"}, 
-                    {{"", "hhh"}, nulls_at({0})}, {"www"}, {"cars", "trucks", "planes"}, {"abc"}, {"mno", "pqr"}},                           
+                  {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"},
+                    {{"", "hhh"}, nulls_at({0})}, {"www"}, {"cars", "trucks", "planes"}, {"abc"}, {"mno", "pqr"}},
                       nulls_at({0, 2, 4}) },
                   {{}},
                   {{}}
-                }, nulls_at({0, 3, 4}) };    
-        
+                }, nulls_at({0, 3, 4}) };
+
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
@@ -628,9 +626,9 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNullsSliced)
   // list<list<string>>
 
   // clang-format off
-  
-  // col 0  
-  cudf::test::lists_column_wrapper<cudf::string_view> 
+
+  // col 0
+  cudf::test::lists_column_wrapper<cudf::string_view>
     unsliced_l0{ {
           {{{"whee", "yay", "bananas"}, nulls_at({1})}, {}},
           {{}},
@@ -641,13 +639,13 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNullsSliced)
   auto l0 = cudf::split(unsliced_l0, {2})[1];
 
   // col1
-  cudf::test::lists_column_wrapper<cudf::string_view> 
+  cudf::test::lists_column_wrapper<cudf::string_view>
     unsliced_l1{ {
           {{}},
           {{"arg"}, {"mno", "ampere"}, {"gpu"}, {"def"}},
           {{{{"", "hhh"}, nulls_at({0})}, {"www"}},                               nulls_at({1})},
           {{"warp", "donuts", "parking"}, { "", "apply", "twelve", "mouse", "bbb"}, {"bbb", "pom"}, {}},
-          {{}} 
+          {{}}
         }, nulls_at({4}) };
   auto l1 = cudf::split(unsliced_l1, {2})[1];
 
@@ -657,14 +655,14 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNullsSliced)
     cudf::table_view t({l0, l1});
     auto result = cudf::lists::concatenate_rows(t, cudf::lists::concatenate_null_policy::IGNORE);
 
-    // expected  
+    // expected
     cudf::test::lists_column_wrapper<cudf::string_view>
-      expected{ { {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"}, 
+      expected{ { {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"},
                     {{"", "hhh"}, nulls_at({0})}, {"www"}},                           nulls_at({0, 2, 4}) },
                   {{"warp", "donuts", "parking"}, { "", "apply", "twelve", "mouse", "bbb"}, {"bbb", "pom"}, {}},
                   {{}}
                 }, nulls_at({2}) };
-        
+
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
@@ -674,14 +672,14 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNullsSliced)
     cudf::table_view t({l0, l1});
     auto result = cudf::lists::concatenate_rows(t, cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW);
 
-    // expected  
+    // expected
     cudf::test::lists_column_wrapper<cudf::string_view>
-      expected{ { {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"}, 
+      expected{ { {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"},
                     {{"", "hhh"}, nulls_at({0})}, {"www"}},                           nulls_at({0, 2, 4}) },
                   {{}},
-                  {{}} 
-                }, nulls_at({1, 2}) };    
-        
+                  {{}}
+                }, nulls_at({1, 2}) };
+
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
@@ -767,12 +765,10 @@ TEST_F(ListConcatenateRowsNestedTypesTest, StructWithNulls)
   cudf::test::fixed_width_column_wrapper<int> l0_offsets{0, 2, 2, 5, 6, 8};
   auto const l0_size = static_cast<cudf::column_view>(l0_offsets).size() - 1;
   std::vector<bool> l0_validity{false, true, true, false, true};
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(l0_validity.begin(), l0_validity.end());
   auto l0 = cudf::make_lists_column(
-    l0_size,
-    l0_offsets.release(),
-    s0.release(),
-    2,
-    cudf::test::detail::make_null_mask(l0_validity.begin(), l0_validity.end()));
+    l0_size, l0_offsets.release(), s0.release(), null_count, std::move(null_mask));
 
   // col1
   cudf::test::fixed_width_column_wrapper<int> s1_0{
@@ -799,12 +795,10 @@ TEST_F(ListConcatenateRowsNestedTypesTest, StructWithNulls)
   cudf::test::fixed_width_column_wrapper<int> l1_offsets{0, 0, 4, 7, 15, 15};
   auto const l1_size = static_cast<cudf::column_view>(l1_offsets).size() - 1;
   std::vector<bool> l1_validity{false, true, true, true, true};
+  std::tie(null_mask, null_count) =
+    cudf::test::detail::make_null_mask(l1_validity.begin(), l1_validity.end());
   auto l1 = cudf::make_lists_column(
-    l1_size,
-    l1_offsets.release(),
-    s1.release(),
-    1,
-    cudf::test::detail::make_null_mask(l1_validity.begin(), l1_validity.end()));
+    l1_size, l1_offsets.release(), s1.release(), null_count, std::move(null_mask));
 
   // concatenate_policy::IGNORE_NULLS
   {
@@ -814,25 +808,22 @@ TEST_F(ListConcatenateRowsNestedTypesTest, StructWithNulls)
 
     // expected
     cudf::test::fixed_width_column_wrapper<int> se_0{
-      {10, 11, 12, 13, 2, 3, 4, 14, 15, 16, 5, 17, 18, 19, 20, 21, 22, 23, 24, 6, 7},
-      nulls_at({18})};
+      {10, 11, 12, 13, 2, 3, 4, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 6, 7}, nulls_at({17})};
     cudf::test::strings_column_wrapper se_1{
-      {"arg",    "mno",     "ampere", "gpu",   "bananas", "",      "",    "",    "hhh", "warp", "g",
+      {"arg",    "mno",     "ampere", "gpu",   "bananas", "",      "",    "",    "hhh", "warp",
        "donuts", "parking", "",       "apply", "twelve",  "mouse", "bbb", "pom", "xyw", "ijk"},
       nulls_at({5, 6})};
     std::vector<std::unique_ptr<cudf::column>> se_children;
     se_children.push_back(se_0.release());
     se_children.push_back(se_1.release());
     cudf::test::structs_column_wrapper se(std::move(se_children));
-    cudf::test::fixed_width_column_wrapper<int> le_offsets{0, 0, 4, 10, 19, 21};
+    cudf::test::fixed_width_column_wrapper<int> le_offsets{0, 0, 4, 10, 18, 20};
     auto const le_size = static_cast<cudf::column_view>(le_offsets).size() - 1;
     std::vector<bool> le_validity{false, true, true, true, true};
+    std::tie(null_mask, null_count) =
+      cudf::test::detail::make_null_mask(le_validity.begin(), le_validity.end());
     auto expected = cudf::make_lists_column(
-      le_size,
-      le_offsets.release(),
-      se.release(),
-      1,
-      cudf::test::detail::make_null_mask(le_validity.begin(), le_validity.end()));
+      le_size, le_offsets.release(), se.release(), null_count, std::move(null_mask));
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
   }
@@ -857,12 +848,10 @@ TEST_F(ListConcatenateRowsNestedTypesTest, StructWithNulls)
     cudf::test::fixed_width_column_wrapper<int> le_offsets{0, 0, 4, 10, 10, 12};
     auto const le_size = static_cast<cudf::column_view>(le_offsets).size() - 1;
     std::vector<bool> le_validity{false, true, true, false, true};
+    std::tie(null_mask, null_count) =
+      cudf::test::detail::make_null_mask(le_validity.begin(), le_validity.end());
     auto expected = cudf::make_lists_column(
-      le_size,
-      le_offsets.release(),
-      se.release(),
-      2,
-      cudf::test::detail::make_null_mask(le_validity.begin(), le_validity.end()));
+      le_size, le_offsets.release(), se.release(), null_count, std::move(null_mask));
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
   }
@@ -883,12 +872,10 @@ TEST_F(ListConcatenateRowsNestedTypesTest, StructWithNullsSliced)
   cudf::test::fixed_width_column_wrapper<int> l0_offsets{0, 2, 2, 5, 6, 8};
   auto const l0_size = static_cast<cudf::column_view>(l0_offsets).size() - 1;
   std::vector<bool> l0_validity{false, true, false, false, true};
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(l0_validity.begin(), l0_validity.end());
   auto l0_unsliced = cudf::make_lists_column(
-    l0_size,
-    l0_offsets.release(),
-    s0.release(),
-    2,
-    cudf::test::detail::make_null_mask(l0_validity.begin(), l0_validity.end()));
+    l0_size, l0_offsets.release(), s0.release(), null_count, std::move(null_mask));
   auto l0 = cudf::split(*l0_unsliced, {2})[1];
 
   // col1
@@ -916,12 +903,10 @@ TEST_F(ListConcatenateRowsNestedTypesTest, StructWithNullsSliced)
   cudf::test::fixed_width_column_wrapper<int> l1_offsets{0, 0, 4, 7, 15, 15};
   auto const l1_size = static_cast<cudf::column_view>(l1_offsets).size() - 1;
   std::vector<bool> l1_validity{false, true, false, true, true};
+  std::tie(null_mask, null_count) =
+    cudf::test::detail::make_null_mask(l1_validity.begin(), l1_validity.end());
   auto l1_unsliced = cudf::make_lists_column(
-    l1_size,
-    l1_offsets.release(),
-    s1.release(),
-    1,
-    cudf::test::detail::make_null_mask(l1_validity.begin(), l1_validity.end()));
+    l1_size, l1_offsets.release(), s1.release(), null_count, std::move(null_mask));
   auto l1 = cudf::split(*l1_unsliced, {2})[1];
 
   // concatenate_policy::IGNORE_NULLS
@@ -931,24 +916,21 @@ TEST_F(ListConcatenateRowsNestedTypesTest, StructWithNullsSliced)
     auto result = cudf::lists::concatenate_rows(t, cudf::lists::concatenate_null_policy::IGNORE);
 
     // expected
-    cudf::test::fixed_width_column_wrapper<int> se_0{{5, 17, 18, 19, 20, 21, 22, 23, 24, 6, 7},
-                                                     nulls_at({8})};
+    cudf::test::fixed_width_column_wrapper<int> se_0{{17, 18, 19, 20, 21, 22, 23, 24, 6, 7},
+                                                     nulls_at({7})};
     cudf::test::strings_column_wrapper se_1{
-      {"g", "donuts", "parking", "", "apply", "twelve", "mouse", "bbb", "pom", "xyw", "ijk"},
-      nulls_at({})};
+      {"donuts", "parking", "", "apply", "twelve", "mouse", "bbb", "pom", "xyw", "ijk"}};
     std::vector<std::unique_ptr<cudf::column>> se_children;
     se_children.push_back(se_0.release());
     se_children.push_back(se_1.release());
     cudf::test::structs_column_wrapper se(std::move(se_children));
-    cudf::test::fixed_width_column_wrapper<int> le_offsets{0, 0, 9, 11};
+    cudf::test::fixed_width_column_wrapper<int> le_offsets{0, 0, 8, 10};
     auto const le_size = static_cast<cudf::column_view>(le_offsets).size() - 1;
     std::vector<bool> le_validity{false, true, true};
+    std::tie(null_mask, null_count) =
+      cudf::test::detail::make_null_mask(le_validity.begin(), le_validity.end());
     auto expected = cudf::make_lists_column(
-      le_size,
-      le_offsets.release(),
-      se.release(),
-      1,
-      cudf::test::detail::make_null_mask(le_validity.begin(), le_validity.end()));
+      le_size, le_offsets.release(), se.release(), null_count, std::move(null_mask));
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
   }
@@ -962,7 +944,7 @@ TEST_F(ListConcatenateRowsNestedTypesTest, StructWithNullsSliced)
 
     // expected
     cudf::test::fixed_width_column_wrapper<int> se_0{{6, 7}, nulls_at({})};
-    cudf::test::strings_column_wrapper se_1{{"xyw", "ijk"}, nulls_at({})};
+    cudf::test::strings_column_wrapper se_1{"xyw", "ijk"};
     std::vector<std::unique_ptr<cudf::column>> se_children;
     se_children.push_back(se_0.release());
     se_children.push_back(se_1.release());
@@ -970,12 +952,10 @@ TEST_F(ListConcatenateRowsNestedTypesTest, StructWithNullsSliced)
     cudf::test::fixed_width_column_wrapper<int> le_offsets{0, 0, 0, 2};
     auto const le_size = static_cast<cudf::column_view>(le_offsets).size() - 1;
     std::vector<bool> le_validity{false, false, true};
+    std::tie(null_mask, null_count) =
+      cudf::test::detail::make_null_mask(le_validity.begin(), le_validity.end());
     auto expected = cudf::make_lists_column(
-      le_size,
-      le_offsets.release(),
-      se.release(),
-      2,
-      cudf::test::detail::make_null_mask(le_validity.begin(), le_validity.end()));
+      le_size, le_offsets.release(), se.release(), null_count, std::move(null_mask));
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
   }

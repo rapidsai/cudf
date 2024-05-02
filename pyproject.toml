@@ -1,19 +1,46 @@
-[tool.black]
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+
+[tool.mypy]
+ignore_missing_imports = true
+# If we don't specify this, then mypy will check excluded files if
+# they are imported by a checked file.
+follow_imports = "skip"
+exclude = [
+    "cudf/_lib/",
+    "cudf/cudf/tests/",
+    "custreamz/custreamz/tests/",
+    "dask_cudf/dask_cudf/tests/",
+ ]
+
+[tool.codespell]
+# note: pre-commit passes explicit lists of files here, which this skip file list doesn't override -
+# this is only to allow you to run codespell interactively
+skip = "./.git,./.github,./cpp/build,.*egg-info.*,./.mypy_cache,./cpp/tests,./python/cudf/cudf/tests,./java/src/test,./cpp/include/cudf_test/cxxopts.hpp"
+# ignore short words, and typename parameters like OffsetT
+ignore-regex = "\\b(.{1,4}|[A-Z]\\w*T)\\b"
+ignore-words-list = "inout,unparseable,falsy,couldn,Couldn"
+builtin = "clear"
+quiet-level = 3
+
+[tool.ruff]
 line-length = 79
-target-version = ["py38"]
-include = '\.py?$'
-exclude = '''
-/(
-    thirdparty |
-    \.eggs |
-    \.git |
-    \.hg |
-    \.mypy_cache |
-    \.tox |
-    \.venv |
-    _build |
-    buck-out |
-    build |
-    dist
-)/
-'''
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "D201", "D204", "D206", "D207", "D208", "D209", "D210", "D211", "D214", "D215", "D300", "D301", "D403", "D405", "D406", "D407", "D408", "D409", "D410", "D411", "D412", "D414", "D418"]
+ignore = [
+    # whitespace before :
+    "E203",
+    # line-too-long (due to Copyright header)
+    "E501",
+]
+fixable = ["ALL"]
+exclude = [
+    # TODO: Remove this in a follow-up where we fix __all__.
+    "__init__.py",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Lots of pytest implicitly injected attributes in conftest-patch.py
+"python/cudf/cudf/pandas/scripts/conftest-patch.py" = ["F821"]
+"python/cudf/cudf/pandas/scripts/*" = ["D"]
+"python/cudf/cudf_pandas_tests/*" = ["D"]

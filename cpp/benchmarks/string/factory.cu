@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,8 +44,7 @@ struct string_view_to_pair {
 };
 }  // namespace
 
-class StringsFactory : public cudf::benchmark {
-};
+class StringsFactory : public cudf::benchmark {};
 
 static void BM_factory(benchmark::State& state)
 {
@@ -55,7 +54,7 @@ static void BM_factory(benchmark::State& state)
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
   auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
   auto d_column     = cudf::column_device_view::create(column->view());
-  rmm::device_uvector<string_pair> pairs(d_column->size(), cudf::default_stream_value);
+  rmm::device_uvector<string_pair> pairs(d_column->size(), cudf::get_default_stream());
   thrust::transform(thrust::device,
                     d_column->pair_begin<cudf::string_view, true>(),
                     d_column->pair_end<cudf::string_view, true>(),
@@ -63,12 +62,12 @@ static void BM_factory(benchmark::State& state)
                     string_view_to_pair{});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
-    cudf::make_strings_column(pairs);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
+    cudf::make_strings_column(pairs, cudf::get_default_stream());
   }
 
   cudf::strings_column_view input(column->view());
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
+  state.SetBytesProcessed(state.iterations() * input.chars_size(cudf::get_default_stream()));
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)

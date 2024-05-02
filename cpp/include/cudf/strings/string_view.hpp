@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 #pragma once
 
 #include <cudf/types.hpp>
+
+#include <cuda_runtime.h>
 
 #include <iterator>
 
@@ -58,7 +60,7 @@ class string_view {
    *
    * @return A pointer to the internal device array
    */
-  CUDF_HOST_DEVICE [[nodiscard]] inline const char* data() const { return _data; }
+  CUDF_HOST_DEVICE [[nodiscard]] inline char const* data() const { return _data; }
 
   /**
    * @brief Return true if string has no characters
@@ -78,34 +80,37 @@ class string_view {
     using reference         = char_utf8&;
     using pointer           = char_utf8*;
     using iterator_category = std::input_iterator_tag;
-    __device__ inline const_iterator(const string_view& str, size_type pos);
-    const_iterator(const const_iterator& mit) = default;
-    const_iterator(const_iterator&& mit)      = default;
-    const_iterator& operator=(const const_iterator&) = default;
-    const_iterator& operator=(const_iterator&&) = default;
+    __device__ inline const_iterator(string_view const& str, size_type pos);
+    const_iterator(const_iterator const& mit)        = default;
+    const_iterator(const_iterator&& mit)             = default;
+    const_iterator& operator=(const_iterator const&) = default;
+    const_iterator& operator=(const_iterator&&)      = default;
     __device__ inline const_iterator& operator++();
     __device__ inline const_iterator operator++(int);
     __device__ inline const_iterator& operator+=(difference_type);
-    __device__ inline const_iterator operator+(difference_type);
+    __device__ inline const_iterator operator+(difference_type) const;
     __device__ inline const_iterator& operator--();
     __device__ inline const_iterator operator--(int);
     __device__ inline const_iterator& operator-=(difference_type);
-    __device__ inline const_iterator operator-(difference_type);
-    __device__ inline bool operator==(const const_iterator&) const;
-    __device__ inline bool operator!=(const const_iterator&) const;
-    __device__ inline bool operator<(const const_iterator&) const;
-    __device__ inline bool operator<=(const const_iterator&) const;
-    __device__ inline bool operator>(const const_iterator&) const;
-    __device__ inline bool operator>=(const const_iterator&) const;
+    __device__ inline const_iterator operator-(difference_type) const;
+    __device__ inline const_iterator& move_to(size_type);
+    __device__ inline bool operator==(const_iterator const&) const;
+    __device__ inline bool operator!=(const_iterator const&) const;
+    __device__ inline bool operator<(const_iterator const&) const;
+    __device__ inline bool operator<=(const_iterator const&) const;
+    __device__ inline bool operator>(const_iterator const&) const;
+    __device__ inline bool operator>=(const_iterator const&) const;
     __device__ inline char_utf8 operator*() const;
     [[nodiscard]] __device__ inline size_type position() const;
     [[nodiscard]] __device__ inline size_type byte_offset() const;
 
    private:
-    const char* p{};
+    friend class string_view;
+    char const* p{};
     size_type bytes{};
     size_type char_pos{};
     size_type byte_pos{};
+    __device__ inline const_iterator(string_view const& str, size_type pos, size_type offset);
     /// @endcond
   };
 
@@ -150,7 +155,7 @@ class string_view {
    *            not match is greater in the arg string, or all compared characters
    *            match but the arg string is longer.
    */
-  __device__ [[nodiscard]] inline int compare(const string_view& str) const;
+  __device__ [[nodiscard]] inline int compare(string_view const& str) const;
   /**
    * @brief Comparing target string with this string. Each character is compared
    * as a UTF-8 code-point value.
@@ -165,7 +170,7 @@ class string_view {
    *            not match is greater in the arg string, or all compared characters
    *            match but the arg string is longer.
    */
-  __device__ inline int compare(const char* str, size_type bytes) const;
+  __device__ inline int compare(char const* str, size_type bytes) const;
 
   /**
    * @brief Returns true if rhs matches this string exactly.
@@ -173,42 +178,42 @@ class string_view {
    * @param rhs Target string to compare with this string.
    * @return true if rhs matches this string exactly
    */
-  __device__ inline bool operator==(const string_view& rhs) const;
+  __device__ inline bool operator==(string_view const& rhs) const;
   /**
    * @brief Returns true if rhs does not match this string.
    *
    * @param rhs Target string to compare with this string.
    * @return true if rhs does not match this string
    */
-  __device__ inline bool operator!=(const string_view& rhs) const;
+  __device__ inline bool operator!=(string_view const& rhs) const;
   /**
    * @brief Returns true if this string is ordered before rhs.
    *
    * @param rhs Target string to compare with this string.
    * @return true if this string is ordered before rhs
    */
-  __device__ inline bool operator<(const string_view& rhs) const;
+  __device__ inline bool operator<(string_view const& rhs) const;
   /**
    * @brief Returns true if rhs is ordered before this string.
    *
    * @param rhs Target string to compare with this string.
    * @return true if rhs is ordered before this string
    */
-  __device__ inline bool operator>(const string_view& rhs) const;
+  __device__ inline bool operator>(string_view const& rhs) const;
   /**
    * @brief Returns true if this string matches or is ordered before rhs.
    *
    * @param rhs Target string to compare with this string.
    * @return true if this string matches or is ordered before rhs
    */
-  __device__ inline bool operator<=(const string_view& rhs) const;
+  __device__ inline bool operator<=(string_view const& rhs) const;
   /**
    * @brief Returns true if rhs matches or is ordered before this string.
    *
    * @param rhs Target string to compare with this string.
    * @return true if rhs matches or is ordered before this string
    */
-  __device__ inline bool operator>=(const string_view& rhs) const;
+  __device__ inline bool operator>=(string_view const& rhs) const;
 
   /**
    * @brief Returns the character position of the first occurrence where the
@@ -220,7 +225,7 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return npos if str is not found in this string.
    */
-  __device__ [[nodiscard]] inline size_type find(const string_view& str,
+  __device__ [[nodiscard]] inline size_type find(string_view const& str,
                                                  size_type pos   = 0,
                                                  size_type count = -1) const;
   /**
@@ -234,7 +239,7 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return npos if arg string is not found in this string.
    */
-  __device__ inline size_type find(const char* str,
+  __device__ inline size_type find(char const* str,
                                    size_type bytes,
                                    size_type pos   = 0,
                                    size_type count = -1) const;
@@ -261,7 +266,7 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return npos if arg string is not found in this string.
    */
-  __device__ [[nodiscard]] inline size_type rfind(const string_view& str,
+  __device__ [[nodiscard]] inline size_type rfind(string_view const& str,
                                                   size_type pos   = 0,
                                                   size_type count = -1) const;
   /**
@@ -275,7 +280,7 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return npos if arg string is not found in this string.
    */
-  __device__ inline size_type rfind(const char* str,
+  __device__ inline size_type rfind(char const* str,
                                     size_type bytes,
                                     size_type pos   = 0,
                                     size_type count = -1) const;
@@ -335,12 +340,12 @@ class string_view {
    * @param data Device char array encoded in UTF8.
    * @param bytes Number of bytes in data array.
    */
-  CUDF_HOST_DEVICE inline string_view(const char* data, size_type bytes)
+  CUDF_HOST_DEVICE inline string_view(char const* data, size_type bytes)
     : _data(data), _bytes(bytes), _length(UNKNOWN_STRING_LENGTH)
   {
   }
 
-  string_view(const string_view&) = default;  ///< Copy constructor
+  string_view(string_view const&) = default;  ///< Copy constructor
   string_view(string_view&&)      = default;  ///< Move constructor
   ~string_view()                  = default;
   /**
@@ -348,7 +353,7 @@ class string_view {
    *
    * @return Reference to this instance
    */
-  string_view& operator=(const string_view&) = default;
+  string_view& operator=(string_view const&) = default;
   /**
    * @brief Move assignment operator
    *
@@ -364,7 +369,7 @@ class string_view {
   static inline cudf::size_type const npos{-1};
 
  private:
-  const char* _data{};          ///< Pointer to device memory contain char array for this string
+  char const* _data{};          ///< Pointer to device memory contain char array for this string
   size_type _bytes{};           ///< Number of bytes in _data for this string
   mutable size_type _length{};  ///< Number of characters in this string (computed)
 
@@ -395,7 +400,7 @@ class string_view {
    * @return npos if str is not found in this string
    */
   template <bool forward>
-  __device__ inline size_type find_impl(const char* str,
+  __device__ inline size_type find_impl(char const* str,
                                         size_type bytes,
                                         size_type pos,
                                         size_type count) const;

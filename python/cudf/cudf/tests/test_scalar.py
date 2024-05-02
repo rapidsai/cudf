@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import datetime
 import re
@@ -9,6 +9,8 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
+import rmm
+
 import cudf
 from cudf._lib.copying import get_element
 from cudf.testing._utils import (
@@ -17,6 +19,13 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
 )
+
+
+@pytest.fixture(autouse=True)
+def clear_scalar_cache():
+    cudf.Scalar._clear_instance_cache()
+    yield
+
 
 TEST_DECIMAL_TYPES = [
     cudf.Decimal64Dtype(1, 1),
@@ -135,7 +144,7 @@ def test_scalar_device_initialization(value):
     column = cudf.Series([value], nan_as_null=False)._column
     dev_slr = get_element(column, 0)
 
-    s = cudf.Scalar(dev_slr)
+    s = cudf.Scalar.from_device_scalar(dev_slr)
 
     assert s._is_device_value_current
     assert not s._is_host_value_current
@@ -156,7 +165,7 @@ def test_scalar_device_initialization_decimal(value, decimal_type):
     column = cudf.Series([str(value)]).astype(dtype)._column
     dev_slr = get_element(column, 0)
 
-    s = cudf.Scalar(dev_slr)
+    s = cudf.Scalar.from_device_scalar(dev_slr)
 
     assert s._is_device_value_current
     assert not s._is_host_value_current
@@ -202,7 +211,12 @@ def test_scalar_roundtrip(value):
 )
 def test_null_scalar(dtype):
     s = cudf.Scalar(None, dtype=dtype)
-    assert s.value is cudf.NA
+    if cudf.api.types.is_datetime64_dtype(
+        dtype
+    ) or cudf.api.types.is_timedelta64_dtype(dtype):
+        assert s.value is cudf.NaT
+    else:
+        assert s.value is cudf.NA
     assert s.dtype == (
         cudf.dtype(dtype)
         if not isinstance(dtype, cudf.core.dtypes.DecimalDtype)
@@ -226,7 +240,7 @@ def test_null_scalar(dtype):
 )
 def test_nat_to_null_scalar_succeeds(value):
     s = cudf.Scalar(value)
-    assert s.value is cudf.NA
+    assert s.value is cudf.NaT
     assert not s.is_valid()
     assert s.dtype == value.dtype
 
@@ -337,9 +351,13 @@ def test_scalar_implicit_int_conversion(value):
 @pytest.mark.parametrize("cls", [int, float, bool])
 @pytest.mark.parametrize("dtype", sorted(set(ALL_TYPES) - {"category"}))
 def test_scalar_invalid_implicit_conversion(cls, dtype):
-
     try:
-        cls(pd.NA)
+        cls(
+            pd.NaT
+            if cudf.api.types.is_datetime64_dtype(dtype)
+            or cudf.api.types.is_timedelta64_dtype(dtype)
+            else pd.NA
+        )
     except TypeError as e:
         with pytest.raises(TypeError, match=re.escape(str(e))):
             slr = cudf.Scalar(None, dtype=dtype)
@@ -402,6 +420,27 @@ def test_datetime_scalar_from_string(data, dtype):
     assert expected == slr.value
 
 
+def test_scalar_cache():
+    s = cudf.Scalar(1)
+    s2 = cudf.Scalar(1)
+
+    assert s is s2
+
+
+def test_scalar_cache_rmm_hook():
+    # test that reinitializing rmm clears the cuDF scalar cache, as we
+    # register a hook with RMM that does that on reinitialization
+    s = cudf.Scalar(1)
+    s2 = cudf.Scalar(1)
+
+    assert s is s2
+
+    rmm.reinitialize()
+
+    s3 = cudf.Scalar(1)
+    assert s3 is not s
+
+
 def test_default_integer_bitwidth_scalar(default_integer_bitwidth):
     # Test that integer scalars are default to 32 bits under user options.
     slr = cudf.Scalar(128)
@@ -412,3 +451,20 @@ def test_default_float_bitwidth_scalar(default_float_bitwidth):
     # Test that float scalars are default to 32 bits under user options.
     slr = cudf.Scalar(128.0)
     assert slr.dtype == np.dtype(f"f{default_float_bitwidth//8}")
+
+
+def test_scalar_numpy_casting():
+    # binop should upcast to wider type
+    s1 = cudf.Scalar(1, dtype=np.int32)
+    s2 = np.int64(2)
+    assert s1 < s2
+
+
+def test_construct_timezone_scalar_error():
+    pd_scalar = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
+    with pytest.raises(NotImplementedError):
+        cudf.utils.dtypes.to_cudf_compatible_scalar(pd_scalar)
+
+    date_scalar = datetime.datetime.now(datetime.timezone.utc)
+    with pytest.raises(NotImplementedError):
+        cudf.utils.dtypes.to_cudf_compatible_scalar(date_scalar)

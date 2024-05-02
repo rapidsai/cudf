@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include "detail/range_window_bounds.hpp"
+
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
@@ -30,49 +31,60 @@ namespace {
  * This makes it possible to copy construct and copy assign `range_window_bounds` objects.
  */
 struct range_scalar_constructor {
-  template <typename T, std::enable_if_t<!detail::is_supported_range_type<T>(), void>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(not detail::is_supported_range_type<T>())>
   std::unique_ptr<scalar> operator()(scalar const& range_scalar_) const
   {
     CUDF_FAIL(
       "Unsupported range type. "
-      "Only Durations and non-boolean integral range types are allowed.");
+      "Only durations, fixed-point, and non-boolean numeric range types are allowed.");
   }
 
-  template <typename T, std::enable_if_t<cudf::is_duration<T>(), void>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_duration<T>())>
   std::unique_ptr<scalar> operator()(scalar const& range_scalar_) const
   {
     return std::make_unique<duration_scalar<T>>(
       static_cast<duration_scalar<T> const&>(range_scalar_));
   }
 
-  template <typename T,
-            std::enable_if_t<std::is_integral_v<T> && !cudf::is_boolean<T>(), void>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() && not cudf::is_boolean<T>())>
   std::unique_ptr<scalar> operator()(scalar const& range_scalar_) const
   {
     return std::make_unique<numeric_scalar<T>>(
       static_cast<numeric_scalar<T> const&>(range_scalar_));
   }
-};
 
+  template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
+  std::unique_ptr<scalar> operator()(scalar const& range_scalar_) const
+  {
+    return std::make_unique<fixed_point_scalar<T>>(
+      static_cast<fixed_point_scalar<T> const&>(range_scalar_));
+  }
+};
 }  // namespace
 
-range_window_bounds::range_window_bounds(bool is_unbounded_, std::unique_ptr<scalar> range_scalar_)
-  : _is_unbounded{is_unbounded_}, _range_scalar{std::move(range_scalar_)}
+range_window_bounds::range_window_bounds(extent_type extent_, std::unique_ptr<scalar> range_scalar_)
+  : _extent{extent_}, _range_scalar{std::move(range_scalar_)}
 {
   CUDF_EXPECTS(_range_scalar.get(), "Range window scalar cannot be null.");
-  CUDF_EXPECTS(_is_unbounded || _range_scalar->is_valid(),
+  CUDF_EXPECTS(_extent == extent_type::UNBOUNDED || _extent == extent_type::CURRENT_ROW ||
+                 _range_scalar->is_valid(),
                "Bounded Range window scalar must be valid.");
 }
 
 range_window_bounds range_window_bounds::unbounded(data_type type)
 {
-  return range_window_bounds(true, make_default_constructed_scalar(type));
+  return {extent_type::UNBOUNDED, make_default_constructed_scalar(type)};
+}
+
+range_window_bounds range_window_bounds::current_row(data_type type)
+{
+  return {extent_type::CURRENT_ROW, make_default_constructed_scalar(type)};
 }
 
 range_window_bounds range_window_bounds::get(scalar const& boundary)
 {
-  return range_window_bounds{
-    false, cudf::type_dispatcher(boundary.type(), range_scalar_constructor{}, boundary)};
+  return {extent_type::BOUNDED,
+          cudf::type_dispatcher(boundary.type(), range_scalar_constructor{}, boundary)};
 }
 
 }  // namespace cudf

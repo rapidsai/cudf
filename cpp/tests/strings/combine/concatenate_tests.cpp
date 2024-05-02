@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/combine.hpp>
@@ -21,26 +25,20 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <tests/strings/utilities.h>
-
 #include <thrust/iterator/transform_iterator.h>
 
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
-struct StringsCombineTest : public cudf::test::BaseFixture {
-};
+struct StringsCombineTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsCombineTest, Concatenate)
 {
-  std::vector<const char*> h_strings1{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
+  std::vector<char const*> h_strings1{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings1(
     h_strings1.begin(),
     h_strings1.end(),
     thrust::make_transform_iterator(h_strings1.begin(), [](auto str) { return str != nullptr; }));
-  std::vector<const char*> h_strings2{"xyz", "abc", "d", "éa", "", nullptr, "f"};
+  std::vector<char const*> h_strings2{"xyz", "abc", "d", "éa", "", nullptr, "f"};
   cudf::test::strings_column_wrapper strings2(
     h_strings2.begin(),
     h_strings2.end(),
@@ -53,7 +51,7 @@ TEST_F(StringsCombineTest, Concatenate)
   cudf::table_view table(strings_columns);
 
   {
-    std::vector<const char*> h_expected{"eeexyz", "bbabc", nullptr, "éa", "aa", nullptr, "éééf"};
+    std::vector<char const*> h_expected{"eeexyz", "bbabc", nullptr, "éa", "aa", nullptr, "éééf"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
       h_expected.end(),
@@ -63,7 +61,7 @@ TEST_F(StringsCombineTest, Concatenate)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    std::vector<const char*> h_expected{
+    std::vector<char const*> h_expected{
       "eee:xyz", "bb:abc", nullptr, ":éa", "aa:", nullptr, "ééé:f"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
@@ -74,7 +72,7 @@ TEST_F(StringsCombineTest, Concatenate)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    std::vector<const char*> h_expected{"eee:xyz", "bb:abc", "_:d", ":éa", "aa:", "bbb:_", "ééé:f"};
+    std::vector<char const*> h_expected{"eee:xyz", "bb:abc", "_:d", ":éa", "aa:", "bbb:_", "ééé:f"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
       h_expected.end(),
@@ -85,7 +83,7 @@ TEST_F(StringsCombineTest, Concatenate)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    std::vector<const char*> h_expected{"eeexyz", "bbabc", "d", "éa", "aa", "bbb", "éééf"};
+    std::vector<char const*> h_expected{"eeexyz", "bbabc", "d", "éa", "aa", "bbb", "éééf"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
       h_expected.end(),
@@ -151,24 +149,22 @@ TEST_F(StringsCombineTest, ConcatenateSkipNulls)
 
 TEST_F(StringsCombineTest, ConcatZeroSizeStringsColumns)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
   std::vector<cudf::column_view> strings_columns;
   strings_columns.push_back(zero_size_strings_column);
   strings_columns.push_back(zero_size_strings_column);
   cudf::table_view table(strings_columns);
   auto results = cudf::strings::concatenate(table);
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsCombineTest, SingleColumnErrorCheck)
 {
-  cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  EXPECT_THROW(cudf::strings::concatenate(cudf::table_view{{col0}}), cudf::logic_error);
+  auto const col0 = cudf::make_empty_column(cudf::type_id::STRING);
+  EXPECT_THROW(cudf::strings::concatenate(cudf::table_view{{col0->view()}}), cudf::logic_error);
 }
 
-struct StringsConcatenateWithColSeparatorTest : public cudf::test::BaseFixture {
-};
+struct StringsConcatenateWithColSeparatorTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConcatenateWithColSeparatorTest, ExceptionTests)
 {
@@ -183,7 +179,7 @@ TEST_F(StringsConcatenateWithColSeparatorTest, ExceptionTests)
   }
 
   {
-    cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+    auto const col0 = cudf::make_empty_column(cudf::type_id::STRING)->view();
     cudf::test::fixed_width_column_wrapper<int64_t> col1{{1}};
 
     EXPECT_THROW(
@@ -203,11 +199,10 @@ TEST_F(StringsConcatenateWithColSeparatorTest, ExceptionTests)
 
 TEST_F(StringsConcatenateWithColSeparatorTest, ZeroSizedColumns)
 {
-  cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-
+  auto const col0 = cudf::make_empty_column(cudf::type_id::STRING)->view();
   auto results =
     cudf::strings::concatenate(cudf::table_view{{col0}}, cudf::strings_column_view(col0));
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsConcatenateWithColSeparatorTest, SingleColumnEmptyAndNullStringsNoReplacements)

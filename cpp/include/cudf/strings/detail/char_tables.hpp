@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ using character_flags_table_type = std::uint8_t;
  *
  * @return Device memory pointer to character flags table.
  */
-const character_flags_table_type* get_character_flags_table();
+character_flags_table_type const* get_character_flags_table();
 
 // utilities to dissect a character-table flag
 constexpr uint8_t IS_DECIMAL(uint8_t x) { return ((x) & (1 << 0)); }
@@ -46,6 +46,7 @@ constexpr uint8_t IS_LOWER(uint8_t x) { return ((x) & (1 << 6)); }
 constexpr uint8_t IS_SPECIAL(uint8_t x) { return ((x) & (1 << 7)); }
 constexpr uint8_t IS_ALPHANUM(uint8_t x) { return ((x) & (0x0F)); }
 constexpr uint8_t IS_UPPER_OR_LOWER(uint8_t x) { return ((x) & ((1 << 5) | (1 << 6))); }
+constexpr uint8_t ALL_FLAGS = 0xFF;
 
 // Type for the character cases table.
 using character_cases_table_type = uint16_t;
@@ -60,7 +61,7 @@ using character_cases_table_type = uint16_t;
  *
  * @return Device memory pointer to character cases table.
  */
-const character_cases_table_type* get_character_cases_table();
+character_cases_table_type const* get_character_cases_table();
 
 /**
  * @brief Case mapping structure for special characters.

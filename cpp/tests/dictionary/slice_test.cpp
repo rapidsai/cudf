@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,24 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/dictionary/update_keys.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
 
 #include <vector>
 
-struct DictionarySliceTest : public cudf::test::BaseFixture {
-};
+struct DictionarySliceTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionarySliceTest, SliceColumn)
 {
   cudf::test::strings_column_wrapper strings{
-    {"eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"}, {1, 1, 1, 1, 1, 0, 1, 1, 1}};
+    {"eee", "aaa", "ddd", "bbb", "ccc", "", "ccc", "eee", "aaa"}, {1, 1, 1, 1, 1, 0, 1, 1, 1}};
   auto dictionary = cudf::dictionary::encode(strings);
 
   std::vector<cudf::size_type> splits{1, 6};

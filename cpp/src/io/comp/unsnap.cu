@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,7 @@
  */
 
 #include "gpuinflate.hpp"
-
-#include <io/utilities/block_utils.cuh>
+#include "io/utilities/block_utils.cuh"
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -52,6 +51,8 @@ struct unsnap_batch_s {
  * @brief Queue structure used to exchange data between warps
  */
 struct unsnap_queue_s {
+  unsnap_queue_s() = default;  // required to compile on ctk-12.2 + aarch64
+
   uint32_t prefetch_wrpos;         ///< Prefetcher write position
   uint32_t prefetch_rdpos;         ///< Prefetch consumer read position
   int32_t prefetch_end;            ///< Prefetch enable flag (nonzero stops prefetcher)
@@ -64,13 +65,15 @@ struct unsnap_queue_s {
  * @brief snappy decompression state
  */
 struct unsnap_state_s {
-  const uint8_t* base;             ///< base ptr of compressed stream
-  const uint8_t* end;              ///< end of compressed stream
-  uint32_t uncompressed_size;      ///< uncompressed stream size
-  uint32_t bytes_left;             ///< remaining bytes to decompress
-  int32_t error;                   ///< current error status
-  uint32_t tstart;                 ///< start time for perf logging
-  volatile unsnap_queue_s q;       ///< queue for cross-warp communication
+  constexpr unsnap_state_s() noexcept {}  // required to compile on ctk-12.2 + aarch64
+
+  uint8_t const* base{};           ///< base ptr of compressed stream
+  uint8_t const* end{};            ///< end of compressed stream
+  uint32_t uncompressed_size{};    ///< uncompressed stream size
+  uint32_t bytes_left{};           ///< remaining bytes to decompress
+  int32_t error{};                 ///< current error status
+  uint32_t tstart{};               ///< start time for perf logging
+  volatile unsnap_queue_s q{};     ///< queue for cross-warp communication
   device_span<uint8_t const> src;  ///< input for current block
   device_span<uint8_t> dst;        ///< output for current block
 };
@@ -88,7 +91,7 @@ inline __device__ volatile uint8_t& byte_access(unsnap_state_s* s, uint32_t pos)
  */
 __device__ void snappy_prefetch_bytestream(unsnap_state_s* s, int t)
 {
-  const uint8_t* base = s->base;
+  uint8_t const* base = s->base;
   auto end            = (uint32_t)(s->end - base);
   auto align_bytes    = (uint32_t)(0x20 - (0x1f & reinterpret_cast<uintptr_t>(base)));
   int32_t pos         = min(align_bytes, end);
@@ -538,7 +541,7 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
           uint32_t tr  = t - shuffle(bofs - blen_t, it);
           int32_t dist = shuffle(dist_t, it);
           if (it < n) {
-            const uint8_t* src = (dist > 0) ? (out + t - dist) : (literal_base + tr - dist);
+            uint8_t const* src = (dist > 0) ? (out + t - dist) : (literal_base + tr - dist);
             out[t]             = *src;
           }
           out += shuffle(bofs, n - 1);
@@ -565,7 +568,7 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
           }
           blen += blen2;
           if (t < blen) {
-            const uint8_t* src = (dist > 0) ? (out - d) : (literal_base - d);
+            uint8_t const* src = (dist > 0) ? (out - d) : (literal_base - d);
             out[t]             = src[t];
           }
           out += blen;
@@ -578,12 +581,12 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
         uint8_t b0, b1;
         if (t < blen) {
           uint32_t pos       = t;
-          const uint8_t* src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
+          uint8_t const* src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
           b0                 = *src;
         }
         if (32 + t < blen) {
           uint32_t pos       = 32 + t;
-          const uint8_t* src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
+          uint8_t const* src = out + ((pos >= dist) ? (pos % dist) : pos) - dist;
           b1                 = *src;
         }
         if (t < blen) { out[t] = b0; }
@@ -624,10 +627,10 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
  * @param[out] outputs Decompression status per block
  */
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   unsnap_kernel(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<decompress_status> statuses)
+                device_span<compression_result> results)
 {
   __shared__ __align__(16) unsnap_state_s state_g;
   __shared__ cub::WarpReduce<uint32_t>::TempStorage temp_storage;
@@ -698,25 +701,26 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
   }
   if (!t) {
-    statuses[strm_id].bytes_written = s->uncompressed_size - s->bytes_left;
-    statuses[strm_id].status        = s->error;
+    results[strm_id].bytes_written = s->uncompressed_size - s->bytes_left;
+    results[strm_id].status =
+      (s->error == 0) ? compression_status::SUCCESS : compression_status::FAILURE;
     if (log_cyclecount) {
-      statuses[strm_id].reserved = clock() - s->tstart;
+      results[strm_id].reserved = clock() - s->tstart;
     } else {
-      statuses[strm_id].reserved = 0;
+      results[strm_id].reserved = 0;
     }
   }
 }
 
 void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<decompress_status> statuses,
+                device_span<compression_result> results,
                 rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);           // 4 warps per stream, 1 stream per block
   dim3 dim_grid(inputs.size(), 1);  // TODO: Check max grid dimensions vs max expected count
 
-  unsnap_kernel<128><<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, statuses);
+  unsnap_kernel<128><<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
 }
 
 }  // namespace io

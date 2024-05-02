@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf::lists::detail {
 
@@ -33,11 +34,10 @@ namespace cudf::lists::detail {
  * @param mr Device memory resource used to allocate the returned object
  * @return A column containing list labels corresponding to each element in the child column
  */
-std::unique_ptr<column> generate_labels(
-  lists_column_view const& input,
-  size_type n_elements,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> generate_labels(lists_column_view const& input,
+                                        size_type n_elements,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::device_async_resource_ref mr);
 
 /**
  * @brief Reconstruct an offsets column from the input list labels column.
@@ -51,6 +51,18 @@ std::unique_ptr<column> generate_labels(
 std::unique_ptr<column> reconstruct_offsets(column_view const& labels,
                                             size_type n_lists,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr);
+                                            rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Generate 0-based list offsets from the offsets of the input lists column.
+ *
+ * @param input The input lists column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned object
+ * @return The output offsets column with values start from 0
+ */
+std::unique_ptr<column> get_normalized_offsets(lists_column_view const& input,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr);
 
 }  // namespace cudf::lists::detail

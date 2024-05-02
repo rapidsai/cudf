@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -39,6 +39,24 @@ import java.util.function.Consumer;
  * to increment the reference count.
  */
 public final class ColumnVector extends ColumnView {
+  /**
+   * Interface to handle events for this ColumnVector. Only invoked during
+   * close, hence `onClosed` is the only event.
+   */
+  public interface EventHandler {
+    /**
+     * `onClosed` is invoked with the updated `refCount` during `close`.
+     * The last invocation of `onClosed` will be with `refCount=0`.
+     *
+     * @note the callback is invoked with this `ColumnVector`'s lock held.
+     *
+     * @param cv reference to the ColumnVector we are closing
+     * @param refCount the updated ref count for this ColumnVector at the time
+     *                 of invocation
+     */
+    void onClosed(ColumnVector cv, int refCount);
+  }
+
   private static final Logger log = LoggerFactory.getLogger(ColumnVector.class);
 
   static {
@@ -47,6 +65,7 @@ public final class ColumnVector extends ColumnView {
 
   private Optional<Long> nullCount = Optional.empty();
   private int refCount;
+  private EventHandler eventHandler;
 
   /**
    * Wrap an existing on device cudf::column with the corresponding ColumnVector. The new
@@ -101,7 +120,10 @@ public final class ColumnVector extends ColumnView {
     incRefCountInternal(true);
   }
 
-  private static OffHeapState makeOffHeap(DType type, long rows, Optional<Long> nullCount,
+  /**
+   * This method is internal and exposed purely for testing purposes
+   */
+  static OffHeapState makeOffHeap(DType type, long rows, Optional<Long> nullCount,
       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
       DeviceMemoryBuffer offsetBuffer, List<DeviceMemoryBuffer> toClose, long[] childHandles) {
     long viewHandle = initViewHandle(type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
@@ -123,7 +145,7 @@ public final class ColumnVector extends ColumnView {
    * @param offsetBuffer a host buffer required for strings and string categories. The column
    *                    vector takes ownership of the buffer. Do not use the buffer after calling
    *                    this.
-   * @param toClose  List of buffers to track adn close once done, usually in case of children
+   * @param toClose  List of buffers to track and close once done, usually in case of children
    * @param childHandles array of longs for child column view handles.
    */
   public ColumnVector(DType type, long rows, Optional<Long> nullCount,
@@ -184,20 +206,41 @@ public final class ColumnVector extends ColumnView {
     }
   }
 
-  static long initViewHandle(DType type, int rows, int nc,
-                                       BaseDeviceMemoryBuffer dataBuffer,
-                                       BaseDeviceMemoryBuffer validityBuffer,
-                                       BaseDeviceMemoryBuffer offsetBuffer, long[] childHandles) {
+  static long initViewHandle(DType type, int numRows, int nullCount,
+                             BaseDeviceMemoryBuffer dataBuffer,
+                             BaseDeviceMemoryBuffer validityBuffer,
+                             BaseDeviceMemoryBuffer offsetBuffer, long[] childHandles) {
     long cd = dataBuffer == null ? 0 : dataBuffer.address;
     long cdSize = dataBuffer == null ? 0 : dataBuffer.length;
     long od = offsetBuffer == null ? 0 : offsetBuffer.address;
     long vd = validityBuffer == null ? 0 : validityBuffer.address;
     return makeCudfColumnView(type.typeId.getNativeId(), type.getScale(), cd, cdSize,
-        od, vd, nc, rows, childHandles);
+        od, vd, nullCount, numRows, childHandles);
   }
 
   static ColumnVector fromViewWithContiguousAllocation(long columnViewAddress, DeviceMemoryBuffer buffer) {
     return new ColumnVector(columnViewAddress, buffer);
+  }
+
+  /**
+   * Set an event handler for this vector. This method can be invoked with null
+   * to unset the handler.
+   *
+   * @param newHandler - the EventHandler to use from this point forward
+   * @return the prior event handler, or null if not set.
+   */
+  public synchronized EventHandler setEventHandler(EventHandler newHandler) {
+    EventHandler prev = this.eventHandler;
+    this.eventHandler = newHandler;
+    return prev;
+  }
+
+  /**
+   * Returns the current event handler for this ColumnVector or null if no handler
+   * is associated.
+   */
+  public synchronized EventHandler getEventHandler() {
+    return this.eventHandler;
   }
 
   /**
@@ -217,11 +260,18 @@ public final class ColumnVector extends ColumnView {
   public synchronized void close() {
     refCount--;
     offHeap.delRef();
-    if (refCount == 0) {
-      offHeap.clean(false);
-    } else if (refCount < 0) {
-      offHeap.logRefCountDebug("double free " + this);
-      throw new IllegalStateException("Close called too many times " + this);
+    try {
+      if (refCount == 0) {
+        super.close();
+        offHeap.clean(false);
+      } else if (refCount < 0) {
+        offHeap.logRefCountDebug("double free " + this);
+        throw new IllegalStateException("Close called too many times " + this);
+      }
+    } finally {
+      if (eventHandler != null) {
+        eventHandler.onClosed(this, refCount);
+      }
     }
   }
 
@@ -272,7 +322,7 @@ public final class ColumnVector extends ColumnView {
   /**
    * Returns this column's current refcount
    */
-  synchronized int getRefCount() {
+  public synchronized int getRefCount() {
     return refCount;
   }
 
@@ -722,42 +772,7 @@ public final class ColumnVector extends ColumnView {
           "Unsupported nested type column";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId(), 0));
-  }
-
-  /**
-   * Create a new vector containing spark's 32-bit murmur3 hash of each row in the table.
-   * Spark's murmur3 hash uses a different tail processing algorithm.
-   *
-   * @param seed integer seed for the murmur3 hash function
-   * @param columns array of columns to hash, must have identical number of rows.
-   * @return the new ColumnVector of 32-bit values representing each row's hash value.
-   */
-  public static ColumnVector spark32BitMurmurHash3(int seed, ColumnView columns[]) {
-    if (columns.length < 1) {
-      throw new IllegalArgumentException("Murmur3 hashing requires at least 1 column of input");
-    }
-    long[] columnViews = new long[columns.length];
-    long size = columns[0].getRowCount();
-
-    for(int i = 0; i < columns.length; i++) {
-      assert columns[i] != null : "Column vectors passed may not be null";
-      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
-      assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      columnViews[i] = columns[i].getNativeView();
-    }
-    return new ColumnVector(hash(columnViews, HashType.HASH_SPARK_MURMUR3.getNativeId(), seed));
-  }
-
-  /**
-   * Create a new vector containing spark's 32-bit murmur3 hash of each row in the table with the
-   * seed set to 0. Spark's murmur3 hash uses a different tail processing algorithm.
-   *
-   * @param columns array of columns to hash, must have identical number of rows.
-   * @return the new ColumnVector of 32-bit values representing each row's hash value.
-   */
-  public static ColumnVector spark32BitMurmurHash3(ColumnView columns[]) {
-    return spark32BitMurmurHash3(0, columns);
+    return new ColumnVector(md5(columnViews));
   }
 
   /**
@@ -864,15 +879,12 @@ public final class ColumnVector extends ColumnView {
                                                        boolean separate_nulls);
 
   /**
-   * Native method to hash each row of the given table. Hashing function dispatched on the
-   * native side using the hashId.
+   * Native method to MD5 hash each row of the given table
    *
    * @param viewHandles array of native handles to the cudf::column_view columns being operated on.
-   * @param hashId integer native ID of the hashing function identifier HashType.
-   * @param seed integer seed for the hash. Only used by serial murmur3 hash.
    * @return native handle of the resulting cudf column containing the hex-string hashing results.
    */
-  private static native long hash(long[] viewHandles, int hashId, int seed) throws CudfException;
+  private static native long md5(long[] viewHandles) throws CudfException;
 
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
@@ -1680,6 +1692,41 @@ public final class ColumnVector extends ColumnView {
       }
     } else {
       throw new IllegalArgumentException("Unsupported data type: " + colType);
+    }
+  }
+
+  static ColumnVector[] getColumnVectorsFromPointers(long[] nativeHandles) {
+    ColumnVector[] columns = new ColumnVector[nativeHandles.length];
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
+        nativeHandles[i] = 0;
+        columns[i] = new ColumnVector(nativeHandle);
+      }
+      return columns;
+    } catch (Throwable t) {
+      for (ColumnVector columnVector : columns) {
+        if (columnVector != null) {
+          try {
+            columnVector.close();
+          } catch (Throwable s) {
+            t.addSuppressed(s);
+          }
+        }
+      }
+      for (long nativeHandle : nativeHandles) {
+        if (nativeHandle != 0) {
+          try {
+            deleteCudfColumn(nativeHandle);
+          } catch (Throwable s) {
+            t.addSuppressed(s);
+          }
+        }
+      }
+
+      throw t;
     }
   }
 }

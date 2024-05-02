@@ -1,26 +1,26 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
-
-import cudf
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from cpython cimport pycapsule
-from libcpp cimport bool
-from libcpp.memory cimport shared_ptr, unique_ptr
-from libcpp.string cimport string
+from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-from libcpp.vector cimport vector
-from pyarrow.lib cimport CTable, pyarrow_unwrap_table, pyarrow_wrap_table
+
+from cudf._lib import pylibcudf
 
 from cudf._lib.cpp.interop cimport (
     DLManagedTensor,
-    column_metadata,
-    from_arrow as cpp_from_arrow,
     from_dlpack as cpp_from_dlpack,
-    to_arrow as cpp_to_arrow,
     to_dlpack as cpp_to_dlpack,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
+from cudf._lib.utils cimport (
+    columns_from_pylibcudf_table,
+    columns_from_unique_ptr,
+    table_view_from_columns,
+)
+
+from cudf.core.buffer import acquire_spill_lock
+from cudf.core.dtypes import ListDtype, StructDtype
 
 
 def from_dlpack(dlpack_capsule):
@@ -72,7 +72,7 @@ def to_dlpack(list source_columns):
     )
 
 
-cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
+cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj) noexcept:
     cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>0
     try:
         dlpack_tensor = <DLManagedTensor*>pycapsule.PyCapsule_GetPointer(
@@ -84,52 +84,69 @@ cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
     dlpack_tensor.deleter(dlpack_tensor)
 
 
-cdef vector[column_metadata] gather_metadata(object metadata) except *:
+def gather_metadata(object cols_dtypes):
     """
-    Metadata is stored as lists, and expected format is as follows,
-    [["a", [["b"], ["c"], ["d"]]],       [["e"]],        ["f", ["", ""]]].
-    First value signifies name of the main parent column,
-    and adjacent list will signify child column.
-    """
-    cdef vector[column_metadata] cpp_metadata
-    if isinstance(metadata, list):
-        cpp_metadata.reserve(len(metadata))
-        for i, val in enumerate(metadata):
-            cpp_metadata.push_back(column_metadata(str.encode(str(val[0]))))
-            if len(val) == 2:
-                cpp_metadata[i].children_meta = gather_metadata(val[1])
+    Generates a ColumnMetadata vector for each column.
 
-        return cpp_metadata
+    Parameters
+    ----------
+    cols_dtypes : iterable
+        An iterable of ``(column_name, dtype)`` pairs.
+    """
+    cpp_metadata = []
+    if cols_dtypes is not None:
+        for idx, (col_name, col_dtype) in enumerate(cols_dtypes):
+            cpp_metadata.append(pylibcudf.interop.ColumnMetadata(col_name))
+            if isinstance(col_dtype, (ListDtype, StructDtype)):
+                _set_col_children_metadata(col_dtype, cpp_metadata[idx])
     else:
-        raise ValueError("Malformed metadata has been encountered")
+        raise TypeError(
+            "An iterable of (column_name, dtype) pairs is required to "
+            "construct column_metadata"
+        )
+    return cpp_metadata
 
 
-def to_arrow(list source_columns, object metadata):
+def _set_col_children_metadata(dtype, col_meta):
+    if isinstance(dtype, StructDtype):
+        for name, value in dtype.fields.items():
+            element_metadata = pylibcudf.interop.ColumnMetadata(name)
+            _set_col_children_metadata(value, element_metadata)
+            col_meta.children_meta.append(element_metadata)
+    elif isinstance(dtype, ListDtype):
+        # Offsets - child 0
+        col_meta.children_meta.append(pylibcudf.interop.ColumnMetadata())
+
+        # Element column - child 1
+        element_metadata = pylibcudf.interop.ColumnMetadata()
+        _set_col_children_metadata(dtype.element_type, element_metadata)
+        col_meta.children_meta.append(element_metadata)
+    else:
+        col_meta.children_meta.append(pylibcudf.interop.ColumnMetadata())
+
+
+@acquire_spill_lock()
+def to_arrow(list source_columns, object column_dtypes):
     """Convert a list of columns from
     cudf Frame to a PyArrow Table.
 
     Parameters
     ----------
     source_columns : a list of columns to convert
-    metadata : a list of metadata, see `gather_metadata` for layout
+    column_dtypes : Iterable of ``(column_name, column_dtype)`` pairs
 
     Returns
     -------
     pyarrow table
     """
-
-    cdef vector[column_metadata] cpp_metadata = gather_metadata(metadata)
-    cdef table_view input_table_view = table_view_from_columns(source_columns)
-
-    cdef shared_ptr[CTable] cpp_arrow_table
-    with nogil:
-        cpp_arrow_table = cpp_to_arrow(
-            input_table_view, cpp_metadata
-        )
-
-    return pyarrow_wrap_table(cpp_arrow_table)
+    cpp_metadata = gather_metadata(column_dtypes)
+    return pylibcudf.interop.to_arrow(
+        pylibcudf.Table([c.to_pylibcudf(mode="read") for c in source_columns]),
+        cpp_metadata,
+    )
 
 
+@acquire_spill_lock()
 def from_arrow(object input_table):
     """Convert from PyArrow Table to a list of columns.
 
@@ -141,12 +158,6 @@ def from_arrow(object input_table):
     -------
     A list of columns to construct Frame object
     """
-    cdef shared_ptr[CTable] cpp_arrow_table = (
-        pyarrow_unwrap_table(input_table)
+    return columns_from_pylibcudf_table(
+        pylibcudf.interop.from_arrow(input_table)
     )
-    cdef unique_ptr[table] c_result
-
-    with nogil:
-        c_result = move(cpp_from_arrow(cpp_arrow_table.get()[0]))
-
-    return columns_from_unique_ptr(move(c_result))

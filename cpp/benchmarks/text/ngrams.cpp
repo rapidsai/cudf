@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,8 +24,7 @@
 
 #include <nvtext/generate_ngrams.hpp>
 
-class TextNGrams : public cudf::benchmark {
-};
+class TextNGrams : public cudf::benchmark {};
 
 enum class ngrams_type { tokens, characters };
 
@@ -37,16 +36,17 @@ static void BM_ngrams(benchmark::State& state, ngrams_type nt)
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
   auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
   cudf::strings_column_view input(column->view());
+  auto const separator = cudf::string_scalar("_");
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
     switch (nt) {
-      case ngrams_type::tokens: nvtext::generate_ngrams(input); break;
+      case ngrams_type::tokens: nvtext::generate_ngrams(input, 2, separator); break;
       case ngrams_type::characters: nvtext::generate_character_ngrams(input); break;
     }
   }
 
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
+  state.SetBytesProcessed(state.iterations() * input.chars_size(cudf::get_default_stream()));
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)

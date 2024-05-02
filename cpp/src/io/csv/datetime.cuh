@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,12 @@
 
 #pragma once
 
-#include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/time_utils.cuh>
+#include "io/utilities/parsing_utils.cuh"
+#include "io/utilities/time_utils.cuh"
 
 #include <cudf/fixed_point/fixed_point.hpp>
 
+#include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/reduce.h>
@@ -166,7 +167,7 @@ __inline__ __device__ cuda::std::chrono::hh_mm_ss<duration_ms> extract_time_of_d
   end = last + 1;
 
   // Find hour-minute separator
-  const auto hm_sep = thrust::find(thrust::seq, begin, end, sep);
+  auto const hm_sep = thrust::find(thrust::seq, begin, end, sep);
   // Extract hours
   d_h += cudf::duration_h{to_non_negative_integer<int>(begin, hm_sep)};
 
@@ -175,14 +176,14 @@ __inline__ __device__ cuda::std::chrono::hh_mm_ss<duration_ms> extract_time_of_d
   duration_ms d_ms{0};
 
   // Find minute-second separator (if present)
-  const auto ms_sep = thrust::find(thrust::seq, hm_sep + 1, end, sep);
+  auto const ms_sep = thrust::find(thrust::seq, hm_sep + 1, end, sep);
   if (ms_sep == end) {
     d_m = duration_m{to_non_negative_integer<int32_t>(hm_sep + 1, end)};
   } else {
     d_m = duration_m{to_non_negative_integer<int32_t>(hm_sep + 1, ms_sep)};
 
     // Find second-millisecond separator (if present)
-    const auto sms_sep = thrust::find(thrust::seq, ms_sep + 1, end, '.');
+    auto const sms_sep = thrust::find(thrust::seq, ms_sep + 1, end, '.');
     if (sms_sep == end) {
       d_s = duration_s{to_non_negative_integer<int64_t>(ms_sep + 1, end)};
     } else {
@@ -302,6 +303,37 @@ __inline__ __device__ T parse_optional_integer(char const** begin, char const* e
 
   ++(*begin);
   return parse_integer<T>(begin, end);
+}
+
+/**
+ * @brief Finds the first element after the leading space characters.
+ *
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ * @return Pointer to the first character excluding any leading spaces
+ */
+__inline__ __device__ auto skip_spaces(char const* begin, char const* end)
+{
+  return thrust::find_if(thrust::seq, begin, end, [](auto elem) { return elem != ' '; });
+}
+
+/**
+ * @brief Excludes the prefix from the input range if the string starts with the prefix.
+ *
+ * @tparam N length of the prefix, plus one
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ * @param prefix String we're searching for at the start of the input range
+ * @return Pointer to the start of the string excluding the prefix
+ */
+template <int N>
+__inline__ __device__ auto skip_if_starts_with(char const* begin,
+                                               char const* end,
+                                               char const (&prefix)[N])
+{
+  static constexpr size_t prefix_len = N - 1;
+  if (end - begin < prefix_len) return begin;
+  return thrust::equal(thrust::seq, begin, begin + prefix_len, prefix) ? begin + prefix_len : begin;
 }
 
 /**

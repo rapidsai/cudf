@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <vector>
 
@@ -47,15 +48,17 @@ namespace strings {
  * r is now ["AA", "", "cccc", "AcQ"]
  * @endcode
  *
- * @param strings Strings instance for this operation.
- * @param chars_table Table of UTF-8 character mappings.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column with padded strings.
+ * @param input Strings instance for this operation
+ * @param chars_table Table of UTF-8 character mappings
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column with padded strings
  */
 std::unique_ptr<column> translate(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Removes or keeps the specified character ranges in cudf::strings::filter_characters
@@ -87,20 +90,22 @@ enum class filter_type : bool {
  *
  * @throw cudf::logic_error if `replacement` is invalid
  *
- * @param strings Strings instance for this operation.
- * @param characters_to_filter Table of character ranges to filter on.
+ * @param input Strings instance for this operation
+ * @param characters_to_filter Table of character ranges to filter on
  * @param keep_characters If true, the `characters_to_filter` are retained and all other characters
- * are removed.
- * @param replacement Optional replacement string for each character removed.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column with filtered strings.
+ * are removed
+ * @param replacement Optional replacement string for each character removed
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column with filtered strings
  */
 std::unique_ptr<column> filter_characters(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> characters_to_filter,
-  filter_type keep_characters         = filter_type::KEEP,
-  string_scalar const& replacement    = string_scalar(""),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  filter_type keep_characters       = filter_type::KEEP,
+  string_scalar const& replacement  = string_scalar(""),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <join/join_common_utils.hpp>
-#include <join/mixed_join_common_utils.cuh>
+#include "join/join_common_utils.hpp"
+#include "join/mixed_join_common_utils.cuh"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -41,6 +41,7 @@ namespace detail {
  * @param[in] right_table The right table
  * @param[in] probe The table with which to probe the hash table for matches.
  * @param[in] build The table with which the hash table was built.
+ * @param[in] hash_probe The hasher used for the probe table.
  * @param[in] equality_probe The equality comparator used when probing the hash table.
  * @param[in] join_type The type of join to be performed
  * @param[in] hash_table_view The hash table built from `build`.
@@ -56,12 +57,14 @@ namespace detail {
  * left/right tables to determine which is the build table and which is the
  * probe table has already happened on the host.
  */
+
 template <int block_size, bool has_nulls>
 __global__ void compute_mixed_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
+  row_hash const hash_probe,
   row_equality const equality_probe,
   join_kind const join_type,
   cudf::detail::mixed_multimap_type::device_view hash_table_view,
@@ -87,6 +90,7 @@ __global__ void compute_mixed_join_output_size(
  * @param[in] right_table The right table
  * @param[in] probe The table with which to probe the hash table for matches.
  * @param[in] build The table with which the hash table was built.
+ * @param[in] hash_probe The hasher used for the probe table.
  * @param[in] equality_probe The equality comparator used when probing the hash table.
  * @param[in] join_type The type of join to be performed
  * @param[in] hash_table_view The hash table built from `build`.
@@ -105,6 +109,7 @@ __global__ void mixed_join(table_device_view left_table,
                            table_device_view right_table,
                            table_device_view probe,
                            table_device_view build,
+                           row_hash const hash_probe,
                            row_equality const equality_probe,
                            join_kind const join_type,
                            cudf::detail::mixed_multimap_type::device_view hash_table_view,

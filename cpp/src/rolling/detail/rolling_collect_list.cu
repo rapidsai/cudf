@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/detail/iterator.cuh>
 
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -114,7 +115,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   column_view const& offsets,
   size_type num_child_nulls,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto input_device_view = column_device_view::create(input, stream);
 
@@ -140,8 +141,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   thrust::tabulate(rmm::exec_policy(stream),
                    new_sizes->mutable_view().template begin<size_type>(),
                    new_sizes->mutable_view().template end<size_type>(),
-                   [d_gather_map  = gather_map.template begin<offset_type>(),
-                    d_old_offsets = offsets.template begin<offset_type>(),
+                   [d_gather_map  = gather_map.template begin<size_type>(),
+                    d_old_offsets = offsets.template begin<size_type>(),
                     input_row_not_null] __device__(auto i) {
                      return thrust::count_if(thrust::seq,
                                              d_gather_map + d_old_offsets[i],
@@ -149,11 +150,11 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
                                              input_row_not_null);
                    });
 
-  auto new_offsets =
-    strings::detail::make_offsets_child_column(new_sizes->view().template begin<size_type>(),
-                                               new_sizes->view().template end<size_type>(),
-                                               stream,
-                                               mr);
+  auto new_offsets = std::get<0>(
+    cudf::detail::make_offsets_child_column(new_sizes->view().template begin<size_type>(),
+                                            new_sizes->view().template end<size_type>(),
+                                            stream,
+                                            mr));
 
   return std::make_pair<std::unique_ptr<column>, std::unique_ptr<column>>(std::move(new_gather_map),
                                                                           std::move(new_offsets));

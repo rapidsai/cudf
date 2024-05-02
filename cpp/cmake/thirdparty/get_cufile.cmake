@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -16,15 +16,15 @@
 function(find_and_configure_cufile)
 
   list(APPEND CMAKE_MODULE_PATH ${CUDF_SOURCE_DIR}/cmake/Modules)
-  rapids_find_package(cuFile QUIET)
+  rapids_find_package(cuFile)
 
   if(cuFile_FOUND AND NOT BUILD_SHARED_LIBS)
     include("${rapids-cmake-dir}/export/find_package_file.cmake")
     rapids_export_find_package_file(
-      BUILD "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" cudf-exports
+      BUILD "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" EXPORT_SET cudf-exports
     )
     rapids_export_find_package_file(
-      INSTALL "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" cudf-exports
+      INSTALL "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" EXPORT_SET cudf-exports
     )
   endif()
 endfunction()

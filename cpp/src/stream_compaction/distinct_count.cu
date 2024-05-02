@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,12 +26,15 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuco/static_set.cuh>
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -125,33 +128,58 @@ cudf::size_type distinct_count(table_view const& keys,
                                null_equality nulls_equal,
                                rmm::cuda_stream_view stream)
 {
-  auto table_ptr      = cudf::table_device_view::create(keys, stream);
-  auto const num_rows = table_ptr->num_rows();
-  auto const has_null = nullate::DYNAMIC{cudf::has_nulls(keys)};
+  auto const num_rows = keys.num_rows();
+  if (num_rows == 0) { return 0; }  // early exit for empty input
+  auto const has_nulls = nullate::DYNAMIC{cudf::has_nested_nulls(keys)};
 
-  hash_map_type key_map{compute_hash_table_size(num_rows),
-                        cuco::sentinel::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
-                        cuco::sentinel::empty_value{COMPACTION_EMPTY_VALUE_SENTINEL},
-                        detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-                        stream.value()};
+  auto const preprocessed_input =
+    cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
+  auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
+  auto const hash_key   = row_hasher.device_hasher(has_nulls);
+  auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
-  compaction_hash hash_key{has_null, *table_ptr};
-  row_equality_comparator row_equal(has_null, *table_ptr, *table_ptr, nulls_equal);
-  auto iter = cudf::detail::make_counting_transform_iterator(
-    0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
+  auto const comparator_helper = [&](auto const row_equal) {
+    using hasher_type = decltype(hash_key);
+    auto key_set      = cuco::static_set{cuco::extent{compute_hash_table_size(num_rows)},
+                                    cuco::empty_key<cudf::size_type>{-1},
+                                    row_equal,
+                                    cuco::linear_probing<1, hasher_type>{hash_key},
+                                         {},
+                                         {},
+                                    cudf::detail::cuco_allocator{stream},
+                                    stream.value()};
 
-  // when nulls are equal, insert non-null rows only to improve efficiency
-  if (nulls_equal == null_equality::EQUAL and has_null) {
-    thrust::counting_iterator<size_type> stencil(0);
-    auto const [row_bitmask, null_count] = cudf::detail::bitmask_or(keys, stream);
-    row_validity pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+    auto const iter = thrust::counting_iterator<cudf::size_type>(0);
+    // when nulls are equal, we skip hashing any row that has a null
+    // in every column to improve efficiency.
+    if (nulls_equal == null_equality::EQUAL and has_nulls) {
+      thrust::counting_iterator<size_type> stencil(0);
+      // We must consider a row if any of its column entries is valid,
+      // hence OR together the validities of the columns.
+      auto const [row_bitmask, null_count] =
+        cudf::detail::bitmask_or(keys, stream, rmm::mr::get_current_device_resource());
 
-    key_map.insert_if(iter, iter + num_rows, stencil, pred, hash_key, row_equal, stream.value());
-    return key_map.get_size() + static_cast<std::size_t>((null_count > 0) ? 1 : 0);
+      // Unless all columns have a null mask, row_bitmask will be
+      // null, and null_count will be zero. Equally, unless there is
+      // some row which is null in all columns, null_count will be
+      // zero. So, it is only when null_count is not zero that we need
+      // to do a filtered insertion.
+      if (null_count > 0) {
+        row_validity pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+        return key_set.insert_if(iter, iter + num_rows, stencil, pred, stream.value()) + 1;
+      }
+    }
+    // otherwise, insert all
+    return key_set.insert(iter, iter + num_rows, stream.value());
+  };
+
+  if (cudf::detail::has_nested_columns(keys)) {
+    auto const row_equal = row_comp.equal_to<true>(has_nulls, nulls_equal);
+    return comparator_helper(row_equal);
+  } else {
+    auto const row_equal = row_comp.equal_to<false>(has_nulls, nulls_equal);
+    return comparator_helper(row_equal);
   }
-  // otherwise, insert all
-  key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
-  return key_map.get_size();
 }
 
 cudf::size_type distinct_count(column_view const& input,
@@ -187,12 +215,12 @@ cudf::size_type distinct_count(column_view const& input,
                                nan_policy nan_handling)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct_count(input, null_handling, nan_handling);
+  return detail::distinct_count(input, null_handling, nan_handling, cudf::get_default_stream());
 }
 
 cudf::size_type distinct_count(table_view const& input, null_equality nulls_equal)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct_count(input, nulls_equal);
+  return detail::distinct_count(input, nulls_equal, cudf::get_default_stream());
 }
 }  // namespace cudf

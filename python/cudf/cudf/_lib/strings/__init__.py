@@ -1,9 +1,12 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 from cudf._lib.nvtext.edit_distance import edit_distance, edit_distance_matrix
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams,
     generate_ngrams,
+    hash_character_ngrams,
 )
+from cudf._lib.nvtext.jaccard import jaccard_index
+from cudf._lib.nvtext.minhash import minhash, minhash64
 from cudf._lib.nvtext.ngrams_tokenize import ngrams_tokenize
 from cudf._lib.nvtext.normalize import normalize_characters, normalize_spaces
 from cudf._lib.nvtext.replace import filter_tokens, replace_tokens
@@ -20,6 +23,7 @@ from cudf._lib.nvtext.tokenize import (
     _tokenize_scalar,
     character_tokenize,
     detokenize,
+    tokenize_with_vocabulary,
 )
 from cudf._lib.strings.attributes import (
     code_points,
@@ -61,8 +65,9 @@ from cudf._lib.strings.find import (
     startswith,
     startswith_multiple,
 )
-from cudf._lib.strings.findall import findall, findall_record
-from cudf._lib.strings.json import get_json_object, GetJsonObjectOptions
+from cudf._lib.strings.find_multiple import find_multiple
+from cudf._lib.strings.findall import findall
+from cudf._lib.strings.json import GetJsonObjectOptions, get_json_object
 from cudf._lib.strings.padding import (
     SideType,
     center,

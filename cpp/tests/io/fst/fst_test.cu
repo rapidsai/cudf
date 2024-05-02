@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-#include <io/fst/lookup_tables.cuh>
-#include <io/utilities/hostdevice_vector.hpp>
+#include "io/fst/lookup_tables.cuh"
+#include "io/utilities/hostdevice_vector.hpp"
+
 #include <tests/io/fst/common.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/repeat_strings.hpp>
@@ -116,13 +118,10 @@ static std::pair<OutputItT, IndexOutputItT> fst_baseline(InputItT begin,
   }
   return {out_tape, out_index_tape};
 }
-
-using namespace cudf::test::io::json;
 }  // namespace
 
 // Base test fixture for tests
-struct FstTest : public cudf::test::BaseFixture {
-};
+struct FstTest : public cudf::test::BaseFixture {};
 
 TEST_F(FstTest, GroundTruth)
 {
@@ -131,9 +130,6 @@ TEST_F(FstTest, GroundTruth)
 
   // Type sufficiently large to index symbols within the input and output (may be unsigned)
   using SymbolOffsetT = uint32_t;
-
-  // Helper class to set up transition table, symbol group lookup table, and translation table
-  using DfaFstT = cudf::io::fst::detail::Dfa<char, NUM_SYMBOL_GROUPS, TT_NUM_STATES>;
 
   // Prepare cuda stream for data transfers & kernels
   rmm::cuda_stream stream{};
@@ -146,7 +142,7 @@ TEST_F(FstTest, GroundTruth)
                       R"("author": "Nigel Rees",)"
                       R"("title": "Sayings of the Century",)"
                       R"("price": 8.95)"
-                      R"(}  )"
+                      R"(~  )"
                       R"({)"
                       R"("category": "reference",)"
                       R"("index:" [4,{},null,{"a":[]}],)"
@@ -165,12 +161,16 @@ TEST_F(FstTest, GroundTruth)
 
   // Prepare input & output buffers
   constexpr std::size_t single_item = 1;
-  hostdevice_vector<SymbolT> output_gpu(input.size(), stream_view);
-  hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
-  hostdevice_vector<SymbolOffsetT> out_indexes_gpu(input.size(), stream_view);
+  cudf::detail::hostdevice_vector<SymbolT> output_gpu(input.size(), stream_view);
+  cudf::detail::hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
+  cudf::detail::hostdevice_vector<SymbolOffsetT> out_indexes_gpu(input.size(), stream_view);
 
   // Run algorithm
-  DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
+  auto parser = cudf::io::fst::detail::make_fst(
+    cudf::io::fst::detail::make_symbol_group_lut(pda_sgs),
+    cudf::io::fst::detail::make_transition_table(pda_state_tt),
+    cudf::io::fst::detail::make_translation_table<TT_NUM_STATES * NUM_SYMBOL_GROUPS>(pda_out_tt),
+    stream);
 
   // Allocate device-side temporary storage & run algorithm
   parser.Transduce(d_input.data(),
@@ -182,9 +182,9 @@ TEST_F(FstTest, GroundTruth)
                    stream.value());
 
   // Async copy results from device to host
-  output_gpu.device_to_host(stream.view());
-  out_indexes_gpu.device_to_host(stream.view());
-  output_gpu_size.device_to_host(stream.view());
+  output_gpu.device_to_host_async(stream.view());
+  out_indexes_gpu.device_to_host_async(stream.view());
+  output_gpu_size.device_to_host_async(stream.view());
 
   // Prepare CPU-side results for verification
   std::string output_cpu{};

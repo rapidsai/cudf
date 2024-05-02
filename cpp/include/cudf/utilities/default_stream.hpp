@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,24 @@
 
 #pragma once
 
+#include <cudf/detail/utilities/default_stream.hpp>
+
+#include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
+/**
+ * @addtogroup default_stream
+ * @{
+ * @file
+ */
 
 /**
- * @brief Default stream for cudf
+ * @brief Get the current default stream
  *
- * Use this value to ensure the correct stream is used when compiled with per
- * thread default stream.
+ * @return The current default stream.
  */
-#if defined(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
-static const rmm::cuda_stream_view default_stream_value{rmm::cuda_stream_per_thread};
-#else
-static constexpr rmm::cuda_stream_view default_stream_value{};
-#endif
+rmm::cuda_stream_view const get_default_stream();
 
 /**
  * @brief Check if per-thread default stream is enabled.
@@ -39,4 +42,5 @@ static constexpr rmm::cuda_stream_view default_stream_value{};
  */
 bool is_ptds_enabled();
 
+/** @} */  // end of group
 }  // namespace cudf

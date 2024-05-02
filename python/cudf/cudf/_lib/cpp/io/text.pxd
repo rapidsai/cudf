@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint64_t
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 
@@ -25,14 +27,23 @@ cdef extern from "cudf/io/text/data_chunk_source_factories.hpp" \
     unique_ptr[data_chunk_source] make_source(string data) except +
     unique_ptr[data_chunk_source] \
         make_source_from_file(string filename) except +
+    unique_ptr[data_chunk_source] \
+        make_source_from_bgzip_file(string filename) except +
+    unique_ptr[data_chunk_source] \
+        make_source_from_bgzip_file(string filename,
+                                    uint64_t virtual_begin,
+                                    uint64_t virtual_end) except +
 
 
 cdef extern from "cudf/io/text/multibyte_split.hpp" \
         namespace "cudf::io::text" nogil:
 
-    unique_ptr[column] multibyte_split(data_chunk_source source,
-                                       string delimiter) except +
+    cdef cppclass parse_options:
+        byte_range_info byte_range
+        bool strip_delimiters
+
+        parse_options() except +
 
     unique_ptr[column] multibyte_split(data_chunk_source source,
                                        string delimiter,
-                                       byte_range_info byte_range) except +
+                                       parse_options options) except +

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
  */
 #include <tests/iterator/optional_iterator_test.cuh>
 
+#include <cudf_test/random.hpp>
+
 #include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/execution_policy.h>
@@ -24,9 +26,18 @@
 
 using TestingTypes = cudf::test::NumericTypes;
 
+namespace cudf {
+// To print meanvar for debug.
+// Needs to be in the cudf namespace for ADL
 template <typename T>
-struct NumericOptionalIteratorTest : public IteratorTest<T> {
+std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
+{
+  return os << "[" << rhs.value << ", " << rhs.value_squared << ", " << rhs.count << "] ";
 };
+}  // namespace cudf
+
+template <typename T>
+struct NumericOptionalIteratorTest : public IteratorTest<T> {};
 
 TYPED_TEST_SUITE(NumericOptionalIteratorTest, TestingTypes);
 TYPED_TEST(NumericOptionalIteratorTest, nonull_optional_iterator)
@@ -34,13 +45,6 @@ TYPED_TEST(NumericOptionalIteratorTest, nonull_optional_iterator)
   nonull_optional_iterator(*this);
 }
 TYPED_TEST(NumericOptionalIteratorTest, null_optional_iterator) { null_optional_iterator(*this); }
-
-// to print meanvar for debug.
-template <typename T>
-std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
-{
-  return os << "[" << rhs.value << ", " << rhs.value_squared << ", " << rhs.count << "] ";
-};
 
 // Transformers and Operators for optional_iterator test
 template <typename ElementType>
@@ -59,7 +63,7 @@ struct transformer_optional_meanvar {
 
 template <typename T>
 struct optional_to_meanvar {
-  CUDF_HOST_DEVICE inline T operator()(const thrust::optional<T>& v) { return v.value_or(T{0}); }
+  CUDF_HOST_DEVICE inline T operator()(thrust::optional<T> const& v) { return v.value_or(T{0}); }
 };
 
 // TODO: enable this test also at __CUDACC_DEBUG__
@@ -72,7 +76,7 @@ TYPED_TEST(NumericOptionalIteratorTest, mean_var_output)
   using T_output = cudf::meanvar<T>;
   transformer_optional_meanvar<T> transformer{};
 
-  const int column_size{50};
+  int const column_size{50};
   const T init{0};
 
   // data and valid arrays
@@ -111,13 +115,14 @@ TYPED_TEST(NumericOptionalIteratorTest, mean_var_output)
 
   // this can be computed with a single reduce and without a temporary output vector
   // but the approach increases the compile time by ~2x
-  auto results = rmm::device_uvector<T_output>(d_col->size(), cudf::default_stream_value);
-  thrust::transform(thrust::device,
+  auto results = rmm::device_uvector<T_output>(d_col->size(), cudf::get_default_stream());
+  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                     it_dev_squared,
                     it_dev_squared + d_col->size(),
                     results.begin(),
                     optional_to_meanvar<T_output>{});
-  auto result = thrust::reduce(thrust::device, results.begin(), results.end(), T_output{});
+  auto result = thrust::reduce(
+    rmm::exec_policy(cudf::get_default_stream()), results.begin(), results.end(), T_output{});
 
   if (not std::is_floating_point<T>()) {
     EXPECT_EQ(expected_value, result) << "optional iterator reduction sum";

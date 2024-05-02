@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,21 @@
  * limitations under the License.
  */
 
-#include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/strings/convert/convert_fixed_point.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/strings/convert/convert_fixed_point.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+
 #include <limits>
 
-#include <tests/strings/utilities.h>
-
-struct StringsConvertTest : public cudf::test::BaseFixture {
-};
+struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-class StringsFixedPointConvertTest : public StringsConvertTest {
-};
+class StringsFixedPointConvertTest : public StringsConvertTest {};
 
 TYPED_TEST_SUITE(StringsFixedPointConvertTest, cudf::test::FixedPointTypes);
 
@@ -224,7 +221,7 @@ TEST_F(StringsConvertTest, ZeroSizeStringsColumnFixedPoint)
   auto zero_size_column = cudf::make_empty_column(cudf::data_type{cudf::type_id::DECIMAL32});
 
   auto results = cudf::strings::from_fixed_point(zero_size_column->view());
-  cudf::test::expect_strings_empty(results->view());
+  cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsConvertTest, ZeroSizeFixedPointColumn)
@@ -327,7 +324,8 @@ TEST_F(StringsConvertTest, DISABLED_FixedPointStringConversionOperator)
 {
   auto const max = cuda::std::numeric_limits<__int128_t>::max();
 
-  auto const x = numeric::decimal128{max, numeric::scale_type{-10}};
+  // Must use scaled_integer, else shift (multiply) is undefined behavior (integer overflow)
+  auto const x = numeric::decimal128(numeric::scaled_integer{max, numeric::scale_type{-10}});
   EXPECT_EQ(static_cast<std::string>(x), "17014118346046923173168730371.5884105727");
 
   auto const y = numeric::decimal128{max, numeric::scale_type{10}};

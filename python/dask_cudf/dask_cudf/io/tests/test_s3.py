@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import os
 import socket
@@ -55,9 +55,12 @@ def s3_base(endpoint_ip, endpoint_port):
     with ensure_safe_environment_variables():
         # Fake aws credentials exported to prevent botocore looking for
         # system aws credentials, https://github.com/spulec/moto/issues/1793
-        os.environ.setdefault("AWS_ACCESS_KEY_ID", "foobar_key")
-        os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "foobar_secret")
-        os.environ.setdefault("S3FS_LOGGING_LEVEL", "DEBUG")
+        os.environ["AWS_ACCESS_KEY_ID"] = "foobar_key"
+        os.environ["AWS_SECRET_ACCESS_KEY"] = "foobar_secret"
+        os.environ["S3FS_LOGGING_LEVEL"] = "DEBUG"
+        os.environ["AWS_SECURITY_TOKEN"] = "foobar_security_token"
+        os.environ["AWS_SESSION_TOKEN"] = "foobar_session_token"
+        os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 
         # Launching moto in server mode, i.e., as a separate process
         # with an S3 endpoint on localhost
@@ -104,7 +107,7 @@ def test_read_csv(s3_base, s3so):
         s3_base=s3_base, bucket="daskcsv", files={"a.csv": b"a,b\n1,2\n3,4\n"}
     ):
         df = dask_cudf.read_csv(
-            "s3://daskcsv/*.csv", chunksize="50 B", storage_options=s3so
+            "s3://daskcsv/*.csv", blocksize="50 B", storage_options=s3so
         )
         assert df.a.sum().compute() == 4
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,9 @@
 #include <cudf/fixed_point/temporary.hpp>
 #include <cudf/types.hpp>
 
-// Note: The <cuda/std/*> versions are used in order for Jitify to work with our fixed_point type.
-//       Jitify is needed for several algorithms (binaryop, rolling, etc)
-#include <cuda/std/climits>
 #include <cuda/std/limits>
-#include <cuda/std/type_traits>  // add cuda namespace
+#include <cuda/std/type_traits>
+#include <cuda/std/utility>
 
 #include <algorithm>
 #include <cassert>
@@ -33,6 +31,13 @@
 
 /// `fixed_point` and supporting types
 namespace numeric {
+
+/**
+ * @addtogroup fixed_point_classes
+ * @{
+ * @file
+ * @brief Class definition for fixed point data type
+ */
 
 /// The scale type for fixed_point
 enum scale_type : int32_t {};
@@ -62,26 +67,13 @@ constexpr inline auto is_supported_representation_type()
          cuda::std::is_same_v<T, __int128_t>;
 }
 
-/**
- * @brief Returns `true` if the value type is supported for constructing a `fixed_point`
- *
- * @tparam T The construction value type
- * @return `true` if the value type is supported to construct a `fixed_point` type
- */
-template <typename T>
-constexpr inline auto is_supported_construction_value_type()
-{
-  return cuda::std::is_integral<T>() || cuda::std::is_floating_point_v<T>;
-}
+/** @} */  // end of group
 
 // Helper functions for `fixed_point` type
 namespace detail {
+
 /**
- * @brief A function for integer exponentiation by squaring
- *
- * https://simple.wikipedia.org/wiki/Exponentiation_by_squaring <br>
- * Note: this is the iterative equivalent of the recursive definition (faster) <br>
- * Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y
+ * @brief A function for integer exponentiation by squaring.
  *
  * @tparam Rep Representation type for return type
  * @tparam Base The base to be exponentiated
@@ -96,16 +88,19 @@ template <typename Rep,
 CUDF_HOST_DEVICE inline Rep ipow(T exponent)
 {
   cudf_assert(exponent >= 0 && "integer exponentiation with negative exponent is not possible.");
-  if (exponent == 0) { return static_cast<Rep>(1); }
 
+  if constexpr (Base == numeric::Radix::BASE_2) { return static_cast<Rep>(1) << exponent; }
+
+  // Note: Including an array here introduces too much register pressure
+  // https://simple.wikipedia.org/wiki/Exponentiation_by_squaring
+  // This is the iterative equivalent of the recursive definition (faster)
+  // Quick-bench for squaring: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y
+  if (exponent == 0) { return static_cast<Rep>(1); }
   auto extra  = static_cast<Rep>(1);
   auto square = static_cast<Rep>(Base);
   while (exponent > 1) {
-    if (exponent & 1 /* odd */) {
-      extra *= square;
-      exponent -= 1;
-    }
-    exponent /= 2;
+    if (exponent & 1) { extra *= square; }
+    exponent >>= 1;
     square *= square;
   }
   return square * extra;
@@ -215,23 +210,8 @@ class fixed_point {
   scale_type _scale;
 
  public:
-  using rep = Rep;  ///< The representation type
-
-  /**
-   * @brief Constructor that will perform shifting to store value appropriately (from floating point
-   * types)
-   *
-   * @tparam T The floating point type that you are constructing from
-   * @param value The value that will be constructed from
-   * @param scale The exponent that is applied to Rad to perform shifting
-   */
-  template <typename T,
-            typename cuda::std::enable_if_t<cuda::std::is_floating_point<T>() &&
-                                            is_supported_representation_type<Rep>()>* = nullptr>
-  CUDF_HOST_DEVICE inline explicit fixed_point(T const& value, scale_type const& scale)
-    : _value{static_cast<Rep>(detail::shift<Rep, Rad>(value, scale))}, _scale{scale}
-  {
-  }
+  using rep                 = Rep;  ///< The representation type
+  static constexpr auto rad = Rad;  ///< The base
 
   /**
    * @brief Constructor that will perform shifting to store value appropriately (from integral
@@ -242,7 +222,7 @@ class fixed_point {
    * @param scale The exponent that is applied to Rad to perform shifting
    */
   template <typename T,
-            typename cuda::std::enable_if_t<cuda::std::is_integral<T>() &&
+            typename cuda::std::enable_if_t<cuda::std::is_integral_v<T> &&
                                             is_supported_representation_type<Rep>()>* = nullptr>
   CUDF_HOST_DEVICE inline explicit fixed_point(T const& value, scale_type const& scale)
     // `value` is cast to `Rep` to avoid overflow in cases where
@@ -268,8 +248,7 @@ class fixed_point {
    * @tparam T The value type being constructing from
    * @param value The value that will be constructed from
    */
-  template <typename T,
-            typename cuda::std::enable_if_t<is_supported_construction_value_type<T>()>* = nullptr>
+  template <typename T, typename cuda::std::enable_if_t<cuda::std::is_integral_v<T>>* = nullptr>
   CUDF_HOST_DEVICE inline fixed_point(T const& value)
     : _value{static_cast<Rep>(value)}, _scale{scale_type{0}}
   {
@@ -280,19 +259,6 @@ class fixed_point {
    * value and scale of zero
    */
   CUDF_HOST_DEVICE inline fixed_point() : _scale{scale_type{0}} {}
-
-  /**
-   * @brief Explicit conversion operator for casting to floating point types
-   *
-   * @tparam U The floating point type that is being explicitly converted to
-   * @return The `fixed_point` number in base 10 (aka human readable format)
-   */
-  template <typename U,
-            typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<U>>* = nullptr>
-  explicit constexpr operator U() const
-  {
-    return detail::shift<Rep, Rad>(static_cast<U>(_value), scale_type{-_scale});
-  }
 
   /**
    * @brief Explicit conversion operator for casting to integral types

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -51,12 +51,6 @@ import java.util.Optional;
  * ColumnVectors are closed.  It is assumed that this will not be a problem because for processing
  * efficiency after the data is transferred it will likely be combined with other similar batches
  * from other processes into a single larger buffer.
- * <p>
- * There is a known bug in this where the null count of a range of values is lost, and replaced with
- * a 0 if it is known that there can be no nulls in the data, or a 1 if there is the possibility of
- * a null being in the data.  This is not likely to cause issues if the data is processed using cudf
- * as the null count is only used as a flag to check if a validity buffer is needed or not.
- * Processing outside of cudf should be careful.
  */
 public class JCudfSerialization {
   /**
@@ -240,7 +234,15 @@ public class JCudfSerialization {
     SerializedColumnHeader(ColumnBufferProvider column, long rowOffset, long numRows) {
       this.dtype = column.getType();
       this.rowCount = numRows;
-      this.nullCount = Math.min(column.getNullCount(), numRows);
+      long columnNullCount = column.getNullCount();
+      // For a subset of the original column we do not know the null count unless
+      // the original column is either all nulls or no nulls.
+      if (column.getRowCount() == numRows
+          || columnNullCount == 0 || columnNullCount == column.getRowCount()) {
+        this.nullCount = Math.min(columnNullCount, numRows);
+      } else {
+        this.nullCount = ColumnView.UNKNOWN_NULL_COUNT;
+      }
       ColumnBufferProvider[] childProviders = column.getChildProviders();
       if (childProviders != null) {
         children = new SerializedColumnHeader[childProviders.length];
@@ -628,7 +630,7 @@ public class JCudfSerialization {
     @Override
     public void writeIntNativeOrder(int i) throws IOException {
       // TODO this only works on Little Endian Architectures, x86.  If we need
-      // to support others we need to detect the endianess and switch on the right implementation.
+      // to support others we need to detect the endianness and switch on the right implementation.
       writeInt(Integer.reverseBytes(i));
     }
 
@@ -756,7 +758,7 @@ public class JCudfSerialization {
   private static long getSlicedSerializedDataSizeInBytes(ColumnBufferProvider column, long rowOffset, long numRows) {
     long totalDataSize = 0;
     DType type = column.getType();
-    if (column.getNullCount() > 0) {
+    if (needsValidityBuffer(column.getNullCount())) {
       totalDataSize += padFor64byteAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
     }
 
@@ -845,7 +847,7 @@ public class JCudfSerialization {
     long data = 0;
     long dataLen = 0;
     long rowCount = column.getRowCount();
-    if (column.getNullCount() > 0) {
+    if (needsValidityBuffer(column.getNullCount())) {
       long validityLen = padFor64byteAlignment(BitVectorHelper.getValidityLengthInBytes(rowCount));
       validity = bufferOffset;
       bufferOffset += validityLen;
@@ -1076,14 +1078,21 @@ public class JCudfSerialization {
     long nullCount = 0;
     for (ColumnBufferProvider provider : providers) {
       rowCount += provider.getRowCount();
-      nullCount += provider.getNullCount();
+      if (nullCount != ColumnView.UNKNOWN_NULL_COUNT) {
+        long providerNullCount = provider.getNullCount();
+        if (providerNullCount == ColumnView.UNKNOWN_NULL_COUNT) {
+          nullCount = ColumnView.UNKNOWN_NULL_COUNT;
+        } else {
+          nullCount += providerNullCount;
+        }
+      }
     }
 
     if (rowCount > Integer.MAX_VALUE) {
       throw new IllegalArgumentException("Cannot build a batch larger than " + Integer.MAX_VALUE + " rows");
     }
 
-    if (nullCount > 0) {
+    if (needsValidityBuffer(nullCount)) {
       totalSize += padFor64byteAlignment(BitVectorHelper.getValidityLengthInBytes(rowCount));
     }
 
@@ -1154,6 +1163,10 @@ public class JCudfSerialization {
   /////////////////////////////////////////////
   // VALIDITY
   /////////////////////////////////////////////
+
+  private static boolean needsValidityBuffer(long nullCount) {
+    return nullCount > 0 || nullCount == ColumnView.UNKNOWN_NULL_COUNT;
+  }
 
   private static int copyPartialValidity(byte[] dest,
                                          int destBitOffset,
@@ -1309,7 +1322,7 @@ public class JCudfSerialization {
       int validityBitOffset = 0;
       while(rowsLeftInBatch > 0) {
         int rowsStoredJustNow;
-        if (provider.getNullCount() > 0) {
+        if (needsValidityBuffer(provider.getNullCount())) {
           rowsStoredJustNow = copyPartialValidity(arrayBuffer, rowsStoredInArray, provider, validityBitOffset, rowsLeftInBatch);
         } else {
           rowsStoredJustNow = fillValidity(arrayBuffer, rowsStoredInArray, rowsLeftInBatch);
@@ -1463,7 +1476,7 @@ public class JCudfSerialization {
 
   private static void writeConcat(DataWriter out, SerializedColumnHeader header,
                                   ColumnBufferProvider[] providers) throws IOException {
-    if (header.getNullCount() > 0) {
+    if (needsValidityBuffer(header.getNullCount())) {
       concatValidity(out, header.getRowCount(), providers);
     }
 
@@ -1497,7 +1510,7 @@ public class JCudfSerialization {
                                   ColumnBufferProvider column,
                                   long rowOffset,
                                   long numRows) throws IOException {
-    if (column.getNullCount() > 0) {
+    if (needsValidityBuffer(column.getNullCount())) {
       try (NvtxRange range = new NvtxRange("Write Validity", NvtxColor.DARK_GREEN)) {
         copySlicedValidity(out, column, rowOffset, numRows);
       }
@@ -1550,8 +1563,6 @@ public class JCudfSerialization {
     for (int i = 0; i < columns.length; i++) {
       long rows = columns[i].getRowCount();
       assert rowOffset + numRows <= rows;
-      long nullCount = columns[i].getNullCount();
-      assert nullCount == (int) nullCount : "can only support an int for indexes";
       assert rows == (int) rows : "can only support an int for indexes";
     }
 
@@ -1685,7 +1696,7 @@ public class JCudfSerialization {
       if (!dtype.isNestedType()) {
         dataBuffer = buffer.slice(offsetsInfo.data, offsetsInfo.dataLen);
       }
-      if (nullCount > 0) {
+      if (needsValidityBuffer(nullCount)) {
         long validitySize = BitVectorHelper.getValidityLengthInBytes(rowCount);
         validityBuffer = buffer.slice(offsetsInfo.validity, validitySize);
       }
@@ -1697,12 +1708,12 @@ public class JCudfSerialization {
       HostColumnVectorCore result;
       // Only creates HostColumnVector for root columns, since child columns are managed by their parents.
       if (isRootColumn) {
-        result = new HostColumnVector(dtype, column.getRowCount(),
-            Optional.of(column.getNullCount()), dataBuffer, validityBuffer, offsetsBuffer,
+        result = new HostColumnVector(dtype, rowCount,
+            Optional.of(nullCount), dataBuffer, validityBuffer, offsetsBuffer,
             childColumns);
       } else {
-        result = new HostColumnVectorCore(dtype, column.getRowCount(),
-            Optional.of(column.getNullCount()), dataBuffer, validityBuffer, offsetsBuffer,
+        result = new HostColumnVectorCore(dtype, rowCount,
+            Optional.of(nullCount), dataBuffer, validityBuffer, offsetsBuffer,
             childColumns);
       }
       childColumns = null;
@@ -1731,8 +1742,9 @@ public class JCudfSerialization {
       }
       DType dtype = column.getType();
       long bufferAddress = combinedBuffer.getAddress();
-      long dataAddress = dtype.isNestedType() ? 0 : bufferAddress + offsetsInfo.data;
-      long validityAddress = column.getNullCount() > 0 ? bufferAddress + offsetsInfo.validity : 0;
+      long dataAddress = offsetsInfo.dataLen == 0 ? 0 : bufferAddress + offsetsInfo.data;
+      long validityAddress = needsValidityBuffer(column.getNullCount())
+          ? bufferAddress + offsetsInfo.validity : 0;
       long offsetsAddress = dtype.hasOffsets() ? bufferAddress + offsetsInfo.offsets : 0;
       return ColumnView.makeCudfColumnView(
           dtype.typeId.getNativeId(), dtype.getScale(),
@@ -1798,14 +1810,17 @@ public class JCudfSerialization {
    * Concatenate multiple tables in host memory into a single host table buffer.
    * @param headers table headers corresponding to the host table buffers
    * @param dataBuffers host table buffer for each input table to be concatenated
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return host table header and buffer
    */
   public static HostConcatResult concatToHostBuffer(SerializedTableHeader[] headers,
-                                                    HostMemoryBuffer[] dataBuffers) throws IOException {
+                                                    HostMemoryBuffer[] dataBuffers,
+                                                    HostMemoryAllocator hostMemoryAllocator
+                                                    ) throws IOException {
     ColumnBufferProvider[][] providersPerColumn = providersFrom(headers, dataBuffers);
     try {
       SerializedTableHeader combined = calcConcatHeader(providersPerColumn);
-      HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen);
+      HostMemoryBuffer hostBuffer = hostMemoryAllocator.allocate(combined.dataLen);
       try {
         try (NvtxRange range = new NvtxRange("Concat Host Side", NvtxColor.GREEN)) {
           DataWriter writer = writerFrom(hostBuffer);
@@ -1824,6 +1839,12 @@ public class JCudfSerialization {
       closeAll(providersPerColumn);
     }
   }
+
+    public static HostConcatResult concatToHostBuffer(SerializedTableHeader[] headers,
+                                                      HostMemoryBuffer[] dataBuffers
+                                                      ) throws IOException {
+      return concatToHostBuffer(headers, dataBuffers, DefaultHostMemoryAllocator.get());
+    }
 
   /**
    * Deserialize a serialized contiguous table into an array of host columns.
@@ -1904,12 +1925,14 @@ public class JCudfSerialization {
   /**
    * Read a serialize table from the given InputStream.
    * @param in the stream to read the table data from.
+   * @param hostMemoryAllocator a host memory allocator for an intermediate host memory buffer
    * @return the deserialized table in device memory, or null if the stream has no table to read
    * from, an end of the stream at the very beginning.
    * @throws IOException on any error.
    * @throws EOFException if the data stream ended unexpectedly in the middle of processing.
    */
-  public static TableAndRowCountPair readTableFrom(InputStream in) throws IOException {
+  public static TableAndRowCountPair readTableFrom(InputStream in,
+      HostMemoryAllocator hostMemoryAllocator) throws IOException {
     DataInputStream din;
     if (in instanceof DataInputStream) {
       din = (DataInputStream) in;
@@ -1922,12 +1945,16 @@ public class JCudfSerialization {
       return new TableAndRowCountPair(0, null);
     }
 
-    try (HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(header.dataLen)) {
+    try (HostMemoryBuffer hostBuffer = hostMemoryAllocator.allocate(header.dataLen)) {
       if (header.dataLen > 0) {
         readTableIntoBuffer(din, header, hostBuffer);
       }
       return readTableFrom(header, hostBuffer);
     }
+  }
+
+  public static TableAndRowCountPair readTableFrom(InputStream in) throws IOException {
+    return readTableFrom(in, DefaultHostMemoryAllocator.get());
   }
 
   /** Holds the result of deserializing a table. */

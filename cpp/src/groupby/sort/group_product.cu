@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
+#include "groupby/sort/group_single_pass_reduction_util.cuh"
+
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/span.hpp>
-#include <groupby/sort/group_single_pass_reduction_util.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace groupby {
@@ -27,7 +29,7 @@ std::unique_ptr<column> group_product(column_view const& values,
                                       size_type num_groups,
                                       cudf::device_span<size_type const> group_labels,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()

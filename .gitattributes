@@ -1,2 +1,0 @@
-python/cudf/cudf/_version.py export-subst
-CHANGELOG.md merge=union

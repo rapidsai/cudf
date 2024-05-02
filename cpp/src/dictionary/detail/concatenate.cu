@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/sorting.hpp>
@@ -26,11 +26,16 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
@@ -79,13 +84,13 @@ struct compute_children_offsets_fn {
   }
 
   /**
-   * @brief Return the first keys().type of the dictionary columns.
+   * @brief Return the first keys() of the dictionary columns.
    */
-  data_type get_keys_type()
+  column_view get_keys()
   {
     auto const view(*std::find_if(
       columns_ptrs.begin(), columns_ptrs.end(), [](auto pcv) { return pcv->size() > 0; }));
-    return dictionary_column_view(*view).keys().type();
+    return dictionary_column_view(*view).keys();
   }
 
   /**
@@ -114,7 +119,8 @@ struct compute_children_offsets_fn {
       [](auto lhs, auto rhs) {
         return offsets_pair{lhs.first + rhs.first, lhs.second + rhs.second};
       });
-    return cudf::detail::make_device_uvector_sync(offsets, stream);
+    return cudf::detail::make_device_uvector_sync(
+      offsets, stream, rmm::mr::get_current_device_resource());
   }
 
  private:
@@ -137,7 +143,7 @@ struct dispatch_compute_indices {
              offsets_pair const* d_offsets,
              size_type const* d_map_to_keys,
              rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+             rmm::device_async_resource_ref mr)
   {
     auto keys_view     = column_device_view::create(all_keys, stream);
     auto indices_view  = column_device_view::create(all_indices, stream);
@@ -149,10 +155,11 @@ struct dispatch_compute_indices {
       keys_view->begin<Element>(),
       thrust::make_transform_iterator(
         thrust::make_counting_iterator<size_type>(0),
-        [d_offsets, d_map_to_keys, d_all_indices, indices_itr] __device__(size_type idx) {
-          if (d_all_indices.is_null(idx)) return 0;
-          return indices_itr[idx] + d_offsets[d_map_to_keys[idx]].first;
-        }));
+        cuda::proclaim_return_type<size_type>(
+          [d_offsets, d_map_to_keys, d_all_indices, indices_itr] __device__(size_type idx) {
+            if (d_all_indices.is_null(idx)) return 0;
+            return indices_itr[idx] + d_offsets[d_map_to_keys[idx]].first;
+          })));
 
     auto new_keys_view = column_device_view::create(new_keys, stream);
 
@@ -202,24 +209,27 @@ struct dispatch_compute_indices {
 
 std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   // exception here is the same behavior as in cudf::concatenate
   CUDF_EXPECTS(not columns.empty(), "Unexpected empty list of columns to concatenate.");
 
   // concatenate the keys (and check the keys match)
   compute_children_offsets_fn child_offsets_fn{columns};
-  auto keys_type = child_offsets_fn.get_keys_type();
+  auto expected_keys = child_offsets_fn.get_keys();
   std::vector<column_view> keys_views(columns.size());
-  std::transform(columns.begin(), columns.end(), keys_views.begin(), [keys_type](auto cv) {
+  std::transform(columns.begin(), columns.end(), keys_views.begin(), [expected_keys](auto cv) {
     auto dict_view = dictionary_column_view(cv);
     // empty column may not have keys so we create an empty column_view place-holder
-    if (dict_view.is_empty()) return column_view{keys_type, 0, nullptr};
+    if (dict_view.is_empty()) return column_view{expected_keys.type(), 0, nullptr, nullptr, 0};
     auto keys = dict_view.keys();
-    CUDF_EXPECTS(keys.type() == keys_type, "key types of all dictionary columns must match");
+    CUDF_EXPECTS(cudf::have_same_types(keys, expected_keys),
+                 "key types of all dictionary columns must match",
+                 cudf::data_type_error);
     return keys;
   });
-  auto all_keys = cudf::detail::concatenate(keys_views, stream);
+  auto all_keys =
+    cudf::detail::concatenate(keys_views, stream, rmm::mr::get_current_device_resource());
 
   // sort keys and remove duplicates;
   // this becomes the keys child for the output dictionary column
@@ -242,7 +252,9 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   std::vector<column_view> indices_views(columns.size());
   std::transform(columns.begin(), columns.end(), indices_views.begin(), [](auto cv) {
     auto dict_view = dictionary_column_view(cv);
-    if (dict_view.is_empty()) return column_view{data_type{type_id::UINT32}, 0, nullptr};
+    if (dict_view.is_empty()) {
+      return column_view{data_type{type_id::UINT32}, 0, nullptr, nullptr, 0};
+    }
     return dict_view.get_indices_annotated();  // nicely includes validity mask and view offset
   });
   auto all_indices        = cudf::detail::concatenate(indices_views, stream, mr);
@@ -251,23 +263,23 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   // build a vector of values to map the old indices to the concatenated keys
   auto children_offsets = child_offsets_fn.create_children_offsets(stream);
   rmm::device_uvector<size_type> map_to_keys(indices_size, stream);
-  auto indices_itr =
-    cudf::detail::make_counting_transform_iterator(1, [] __device__(size_type idx) {
+  auto indices_itr = cudf::detail::make_counting_transform_iterator(
+    1, cuda::proclaim_return_type<offsets_pair>([] __device__(size_type idx) {
       return offsets_pair{0, idx};
-    });
+    }));
   // the indices offsets (pair.second) are for building the map
   thrust::lower_bound(
     rmm::exec_policy(stream),
     children_offsets.begin() + 1,
     children_offsets.end(),
     indices_itr,
-    indices_itr + indices_size + 1,
+    indices_itr + indices_size,
     map_to_keys.begin(),
     [] __device__(auto const& lhs, auto const& rhs) { return lhs.second < rhs.second; });
 
   // now recompute the indices values for the new keys_column;
   // the keys offsets (pair.first) are for mapping to the input keys
-  auto indices_column = type_dispatcher(keys_type,
+  auto indices_column = type_dispatcher(expected_keys.type(),
                                         dispatch_compute_indices{},
                                         all_keys->view(),     // old keys
                                         all_indices->view(),  // old indices

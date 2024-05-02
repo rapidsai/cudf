@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,17 +17,18 @@
 #include "config_utils.hpp"
 
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
+
+#include <rmm/cuda_device.hpp>
+#include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cstdlib>
 #include <string>
 
-namespace cudf::io::detail {
+namespace cudf::io {
 
-std::string getenv_or(std::string const& env_var_name, std::string_view default_val)
-{
-  auto const env_val = std::getenv(env_var_name.c_str());
-  return std::string{(env_val == nullptr) ? default_val : env_val};
-}
+namespace detail {
 
 namespace cufile_integration {
 
@@ -42,7 +43,7 @@ enum class usage_policy : uint8_t { OFF, GDS, ALWAYS, KVIKIO };
  */
 usage_policy get_env_policy()
 {
-  static auto const env_val = getenv_or<std::string>("LIBCUDF_CUFILE_POLICY", "GDS");
+  static auto const env_val = getenv_or<std::string>("LIBCUDF_CUFILE_POLICY", "KVIKIO");
   if (env_val == "OFF") return usage_policy::OFF;
   if (env_val == "GDS") return usage_policy::GDS;
   if (env_val == "ALWAYS") return usage_policy::ALWAYS;
@@ -86,4 +87,38 @@ bool is_stable_enabled() { return is_all_enabled() or get_env_policy() == usage_
 
 }  // namespace nvcomp_integration
 
-}  // namespace cudf::io::detail
+inline std::mutex& host_mr_lock()
+{
+  static std::mutex map_lock;
+  return map_lock;
+}
+
+inline rmm::host_async_resource_ref default_pinned_mr()
+{
+  static rmm::mr::pinned_host_memory_resource default_mr{};
+  return default_mr;
+}
+
+CUDF_EXPORT inline auto& host_mr()
+{
+  static rmm::host_async_resource_ref host_mr = default_pinned_mr();
+  return host_mr;
+}
+
+}  // namespace detail
+
+rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_ref mr)
+{
+  std::lock_guard lock{detail::host_mr_lock()};
+  auto last_mr      = detail::host_mr();
+  detail::host_mr() = mr;
+  return last_mr;
+}
+
+rmm::host_async_resource_ref get_host_memory_resource()
+{
+  std::lock_guard lock{detail::host_mr_lock()};
+  return detail::host_mr();
+}
+
+}  // namespace cudf::io

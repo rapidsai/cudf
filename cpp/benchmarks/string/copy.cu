@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,7 @@
 #include <thrust/random.h>
 #include <thrust/shuffle.h>
 
-class StringCopy : public cudf::benchmark {
-};
+class StringCopy : public cudf::benchmark {};
 
 enum copy_type { gather, scatter };
 
@@ -58,15 +57,16 @@ static void BM_copy(benchmark::State& state, copy_type ct)
                        thrust::default_random_engine());
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::default_stream_value);
+    cuda_event_timer raii(state, true, cudf::get_default_stream());
     switch (ct) {
       case gather: cudf::gather(source->view(), index_map); break;
       case scatter: cudf::scatter(source->view(), index_map, target->view()); break;
     }
   }
 
-  state.SetBytesProcessed(state.iterations() *
-                          cudf::strings_column_view(source->view().column(0)).chars_size());
+  state.SetBytesProcessed(
+    state.iterations() *
+    cudf::strings_column_view(source->view().column(0)).chars_size(cudf::get_default_stream()));
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)

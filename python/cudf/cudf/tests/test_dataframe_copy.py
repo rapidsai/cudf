@@ -1,13 +1,13 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 from copy import copy, deepcopy
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
-from numba import cuda
 
 from cudf.core.dataframe import DataFrame
-from cudf.testing._utils import ALL_TYPES, assert_eq
+from cudf.testing._utils import ALL_TYPES, assert_eq, assert_neq
 
 """
 DataFrame copy expectations
@@ -131,28 +131,7 @@ def test_cudf_dataframe_copy_then_insert(copy_fn, ncols, data_type):
     assert not copy_df.to_string().split() == df.to_string().split()
 
 
-@cuda.jit
-def group_mean(data, segments, output):
-    i = cuda.grid(1)
-    if i < segments.size:
-        s = segments[i]
-        e = segments[i + 1] if (i + 1) < segments.size else data.size
-        # mean calculation
-        carry = 0.0
-        n = e - s
-        for j in range(s, e):
-            carry += data[j]
-        output[i] = carry / n
-
-
-@cuda.jit
-def add_one(data):
-    i = cuda.grid(1)
-    if i == 1:
-        data[i] = data[i] + 1.0
-
-
-def test_kernel_deep_copy():
+def test_deep_copy_write_in_place():
     pdf = pd.DataFrame(
         [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
     )
@@ -160,18 +139,25 @@ def test_kernel_deep_copy():
     cdf = gdf.copy(deep=True)
     sr = gdf["b"]
 
-    add_one[1, len(sr)](sr._column.data_array_view)
-    assert not gdf.to_string().split() == cdf.to_string().split()
+    # Write a value in-place on the deep copy.
+    # This should only affect the copy and not the original.
+    cp.asarray(sr._column)[1] = 42
+
+    assert_neq(gdf, cdf)
 
 
-def test_kernel_shallow_copy():
+def test_shallow_copy_write_in_place():
     pdf = pd.DataFrame(
         [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
     )
     gdf = DataFrame.from_pandas(pdf)
     cdf = gdf.copy(deep=False)
     sr = gdf["a"]
-    add_one[1, len(sr)](sr.to_cupy())
+
+    # Write a value in-place on the shallow copy.
+    # This should change the copy and original.
+    cp.asarray(sr._column)[1] = 42
+
     assert_eq(gdf, cdf)
 
 

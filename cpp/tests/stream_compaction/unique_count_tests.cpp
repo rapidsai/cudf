@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,13 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -21,14 +28,13 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
-
 #include <algorithm>
 #include <cmath>
+
+using lists_col   = cudf::test::lists_column_wrapper<int32_t>;
+using structs_col = cudf::test::structs_column_wrapper;
+
+using cudf::test::iterators::nulls_at;
 
 using cudf::nan_policy;
 using cudf::null_equality;
@@ -38,8 +44,7 @@ constexpr int32_t XXX{70};  // Mark for null elements
 constexpr int32_t YYY{3};   // Mark for null elements
 
 template <typename T>
-struct TypedUniqueCount : public cudf::test::BaseFixture {
-};
+struct TypedUniqueCount : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(TypedUniqueCount, cudf::test::NumericTypes);
 
@@ -83,15 +88,14 @@ TYPED_TEST(TypedUniqueCount, TableNoNull)
   EXPECT_EQ(gold, cudf::unique_count(input_table, null_equality::EQUAL));
 }
 
-struct UniqueCount : public cudf::test::BaseFixture {
-};
+struct UniqueCount : public cudf::test::BaseFixture {};
 
 TEST_F(UniqueCount, WithNull)
 {
   using T = int32_t;
 
   std::vector<T> input               = {1,   3,  3,  XXX, 31, 1, 8,  2, 0, XXX, XXX,
-                          XXX, 10, 40, 31,  42, 0, 42, 8, 5, XXX};
+                                        XXX, 10, 40, 31,  42, 0, 42, 8, 5, XXX};
   std::vector<cudf::size_type> valid = {1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0,
                                         0, 1, 1, 1, 1, 1, 1, 1, 1, 0};
 
@@ -107,7 +111,7 @@ TEST_F(UniqueCount, IgnoringNull)
   using T = int32_t;
 
   std::vector<T> input               = {1,   YYY, YYY, XXX, 31, 1, 8,  2, 0, XXX, 1,
-                          XXX, 10,  40,  31,  42, 0, 42, 8, 5, XXX};
+                                        XXX, 10,  40,  31,  42, 0, 42, 8, 5, XXX};
   std::vector<cudf::size_type> valid = {1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1,
                                         0, 1, 1, 1, 1, 1, 1, 1, 1, 0};
 
@@ -124,7 +128,7 @@ TEST_F(UniqueCount, WithNansAndNull)
   using T = float;
 
   std::vector<T> input               = {1,   3,  NAN, XXX, 31,  1, 8,   2, 0, XXX, 1,
-                          XXX, 10, 40,  31,  NAN, 0, NAN, 8, 5, XXX};
+                                        XXX, 10, 40,  31,  NAN, 0, NAN, 8, 5, XXX};
   std::vector<cudf::size_type> valid = {1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1,
                                         0, 1, 1, 1, 1, 1, 1, 1, 1, 0};
 
@@ -236,4 +240,49 @@ TEST_F(UniqueCount, EmptyColumn)
 
   constexpr auto expected = 0;
   EXPECT_EQ(expected, cudf::unique_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL));
+}
+
+TEST_F(UniqueCount, NullableLists)
+{
+  auto const keys = lists_col{
+    {{}, {}, {1, 1}, {1}, {1}, {} /*NULL*/, {} /*NULL*/, {2}, {2}, {2, 1}, {2, 2}, {2, 2}},
+    nulls_at({5, 6})};
+  auto const input = cudf::table_view{{keys}};
+
+  EXPECT_EQ(7, cudf::unique_count(input, null_equality::EQUAL));
+  EXPECT_EQ(8, cudf::unique_count(input, null_equality::UNEQUAL));
+}
+
+TEST_F(UniqueCount, NullableStructOfStructs)
+{
+  //  +-----------------+
+  //  |  s1{s2{a,b}, c} |
+  //  +-----------------+
+  // 0 |  { {1, 1}, 5}  |
+  // 1 |  { {1, 1}, 5}  |  // Same as 0
+  // 2 |  { {1, 2}, 4}  |
+  // 3 |  { Null,   6}  |
+  // 4 |  { Null,   4}  |
+  // 5 |  { Null,   4}  |  // Same as 4
+  // 6 |  Null          |
+  // 7 |  Null          |  // Same as 6
+  // 8 |  { {2, 1}, 5}  |
+
+  auto const keys = [&] {
+    auto a  = cudf::test::fixed_width_column_wrapper<int32_t>{1, 1, 1, XXX, XXX, XXX, 2, 1, 2};
+    auto b  = cudf::test::fixed_width_column_wrapper<int32_t>{1, 1, 2, XXX, XXX, XXX, 2, 1, 1};
+    auto s2 = structs_col{{a, b}, nulls_at({3, 4, 5})};
+
+    auto c = cudf::test::fixed_width_column_wrapper<int32_t>{5, 5, 4, 6, 4, 4, 3, 3, 5};
+    std::vector<std::unique_ptr<cudf::column>> s1_children;
+    s1_children.emplace_back(s2.release());
+    s1_children.emplace_back(c.release());
+    auto const null_it = nulls_at({6, 7});
+    return structs_col(std::move(s1_children), std::vector<bool>{null_it, null_it + 9});
+  }();
+
+  auto const input = cudf::table_view{{keys}};
+
+  EXPECT_EQ(6, cudf::unique_count(input, null_equality::EQUAL));
+  EXPECT_EQ(8, cudf::unique_count(input, null_equality::UNEQUAL));
 }

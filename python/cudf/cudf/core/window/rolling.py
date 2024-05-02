@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION
+# Copyright (c) 2020-2024, NVIDIA CORPORATION
 
 import itertools
 
@@ -9,7 +9,7 @@ from pandas.api.indexers import BaseIndexer
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_number
-from cudf.core import column
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import as_column
 from cudf.core.mixins import Reducible
 from cudf.utils import cudautils
@@ -220,11 +220,12 @@ class Rolling(GetAttrGetItemMixin, Reducible):
                 min_periods=self.min_periods,
                 center=self.center,
                 closed=None,
+                step=None,
             )
             start = as_column(start, dtype="int32")
             end = as_column(end, dtype="int32")
 
-            idx = cudf.core.column.arange(len(start))
+            idx = as_column(range(len(start)))
             preceding_window = (idx - start + cudf.Scalar(1, "int32")).astype(
                 "int32"
             )
@@ -234,8 +235,8 @@ class Rolling(GetAttrGetItemMixin, Reducible):
             window = None
         else:
             preceding_window = as_column(self.window)
-            following_window = column.full(
-                self.window.size, 0, dtype=self.window.dtype
+            following_window = as_column(
+                0, length=self.window.size, dtype=self.window.dtype
             )
             window = None
 
@@ -335,8 +336,7 @@ class Rolling(GetAttrGetItemMixin, Reducible):
 
     def apply(self, func, *args, **kwargs):
         """
-        Counterpart of `pandas.core.window.Rolling.apply
-        <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.core.window.rolling.Rolling.apply.html>`_.
+        Calculate the rolling custom aggregation function.
 
         Parameters
         ----------
@@ -349,12 +349,35 @@ class Rolling(GetAttrGetItemMixin, Reducible):
 
         See Also
         --------
-        cudf.Series.applymap : Apply an elementwise function to
+        cudf.Series.apply: Apply an elementwise function to
             transform the values in the Column.
 
         Notes
         -----
-        See notes of the :meth:`cudf.Series.applymap`
+        The supported Python features are listed in
+
+        https://numba.readthedocs.io/en/stable/cuda/cudapysupported.html
+
+        with these exceptions:
+
+        * Math functions in `cmath` are not supported since `libcudf` does not
+          have complex number support and output of `cmath` functions are most
+          likely complex numbers.
+
+        * These five functions in `math` are not supported since numba
+          generates multiple PTX functions from them:
+
+          * math.sin()
+          * math.cos()
+          * math.tan()
+          * math.gamma()
+          * math.lgamma()
+
+        * Series with string dtypes are not supported.
+
+        * Global variables need to be re-defined explicitly inside
+          the udf, as numba considers them to be compile-time constants
+          and there is no known way to obtain value of the global variable.
 
         Examples
         --------
@@ -455,9 +478,11 @@ class Rolling(GetAttrGetItemMixin, Reducible):
         if is_integer(window):
             return window
         else:
-            return cudautils.window_sizes_from_offset(
-                self.obj.index._values.data_array_view, window
-            )
+            with acquire_spill_lock():
+                return cudautils.window_sizes_from_offset(
+                    self.obj.index._values.data_array_view(mode="write"),
+                    window,
+                )
 
     def __repr__(self):
         return "{} [window={},min_periods={},center={}]".format(
@@ -492,23 +517,22 @@ class RollingGroupby(Rolling):
 
         super().__init__(obj, window, min_periods=min_periods, center=center)
 
+    @acquire_spill_lock()
     def _window_to_window_sizes(self, window):
         if is_integer(window):
             return cudautils.grouped_window_sizes_from_offset(
-                column.arange(len(self.obj)).data_array_view,
+                as_column(range(len(self.obj))).data_array_view(mode="read"),
                 self._group_starts,
                 window,
             )
         else:
             return cudautils.grouped_window_sizes_from_offset(
-                self.obj.index._values.data_array_view,
+                self.obj.index._values.data_array_view(mode="read"),
                 self._group_starts,
                 window,
             )
 
     def _apply_agg(self, agg_name):
-        if agg_name == "count" and not self._time_window:
-            self.min_periods = 0
         index = cudf.MultiIndex.from_frame(
             cudf.DataFrame(
                 {
@@ -521,5 +545,6 @@ class RollingGroupby(Rolling):
             )
         )
 
-        result = super()._apply_agg(agg_name).set_index(index)
+        result = super()._apply_agg(agg_name)
+        result.index = index
         return result

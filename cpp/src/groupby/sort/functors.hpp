@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
@@ -20,6 +22,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -40,7 +43,7 @@ struct store_result_functor {
                        sort::sort_groupby_helper& helper,
                        cudf::detail::result_cache& cache,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr,
+                       rmm::device_async_resource_ref mr,
                        sorted keys_are_sorted = sorted::NO)
     : helper(helper),
       cache(cache),
@@ -76,7 +79,7 @@ struct store_result_functor {
       // It's overridden in scan implementation.
       return sorted_values->view();
     else
-      return (grouped_values = helper.grouped_values(values, stream))->view();
+      return (grouped_values = helper.grouped_values(values, stream, mr))->view();
   };
 
   /**
@@ -88,7 +91,7 @@ struct store_result_functor {
   column_view get_sorted_values()
   {
     return sorted_values ? sorted_values->view()
-                         : (sorted_values = helper.sorted_values(values, stream))->view();
+                         : (sorted_values = helper.sorted_values(values, stream, mr))->view();
   };
 
  protected:
@@ -96,8 +99,8 @@ struct store_result_functor {
   cudf::detail::result_cache& cache;  ///< cache of results to store into
   column_view const& values;          ///< Column of values to group and aggregate
 
-  rmm::cuda_stream_view stream;         ///< CUDA stream on which to execute kernels
-  rmm::mr::device_memory_resource* mr;  ///< Memory resource to allocate space for results
+  rmm::cuda_stream_view stream;       ///< CUDA stream on which to execute kernels
+  rmm::device_async_resource_ref mr;  ///< Memory resource to allocate space for results
 
   sorted keys_are_sorted;                  ///< Whether the keys are sorted
   std::unique_ptr<column> sorted_values;   ///< Memoised grouped and sorted values

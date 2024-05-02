@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import os
 from string import ascii_letters
@@ -15,24 +15,18 @@ from cudf.testing._utils import NUMERIC_TYPES, assert_eq
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
     types = NUMERIC_TYPES + ["bool"]
-    renamer = {
-        "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
-    }
-    typer = {"col_" + val: val for val in types}
-    ncols = len(types)
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd._testing.makeCustomDataframe(
-        nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
+    test_pdf = pd.DataFrame(
+        {
+            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            for typ in types
+        }
     )
     # Delete the name of the column index, and rename the row index
     test_pdf.columns.name = None
     test_pdf.index.name = "index"
-
-    # Cast all the column dtypes to objects, rename them, and then cast to
-    # appropriate types
-    test_pdf = test_pdf.astype("object").rename(renamer, axis=1).astype(typer)
 
     # Create non-numeric categorical data otherwise may get typecasted
     data = [ascii_letters[np.random.randint(0, 52)] for i in range(nrows)]

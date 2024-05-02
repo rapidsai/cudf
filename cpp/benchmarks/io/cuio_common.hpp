@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,16 +22,9 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/types.hpp>
 
+#include <rmm/device_uvector.hpp>
+
 using cudf::io::io_type;
-
-#define RD_BENCHMARK_DEFINE_ALL_SOURCES(benchmark, name, type_or_group)                  \
-  benchmark(name##_file_input, type_or_group, static_cast<uint32_t>(io_type::FILEPATH)); \
-  benchmark(name##_buffer_input, type_or_group, static_cast<uint32_t>(io_type::HOST_BUFFER));
-
-#define WR_BENCHMARK_DEFINE_ALL_SINKS(benchmark, name, type_or_group)                          \
-  benchmark(name##_file_output, type_or_group, static_cast<uint32_t>(io_type::FILEPATH));      \
-  benchmark(name##_buffer_output, type_or_group, static_cast<uint32_t>(io_type::HOST_BUFFER)); \
-  benchmark(name##_void_output, type_or_group, static_cast<uint32_t>(io_type::VOID));
 
 std::string random_file_in_dir(std::string const& dir_path);
 
@@ -39,15 +32,6 @@ std::string random_file_in_dir(std::string const& dir_path);
  * @brief Class to create a coupled `source_info` and `sink_info` of given type.
  */
 class cuio_source_sink_pair {
-  class bytes_written_only_sink : public cudf::io::data_sink {
-    size_t _bytes_written = 0;
-
-   public:
-    void host_write(void const* data, size_t size) override { _bytes_written += size; }
-    void flush() override {}
-    size_t bytes_written() override { return _bytes_written; }
-  };
-
  public:
   cuio_source_sink_pair(io_type type);
   ~cuio_source_sink_pair()
@@ -68,8 +52,10 @@ class cuio_source_sink_pair {
   /**
    * @brief Created a sink info of the set type
    *
-   * The `data_sink` created using the returned `source_info` will write data to the same location
+   * The `data_sink` created using the returned `sink_info` will write data to the same location
    * that the result of a @ref `make_source_info` call reads from.
+   *
+   * `io_type::DEVICE_BUFFER` source/sink is an exception where a host buffer sink will be created.
    *
    * @return The description of the data sink
    */
@@ -81,9 +67,10 @@ class cuio_source_sink_pair {
   static temp_directory const tmpdir;
 
   io_type const type;
-  std::vector<char> buffer;
+  std::vector<char> h_buffer;
+  rmm::device_uvector<std::byte> d_buffer;
   std::string const file_name;
-  bytes_written_only_sink void_sink;
+  std::unique_ptr<cudf::io::data_sink> void_sink;
 };
 
 /**
@@ -142,3 +129,27 @@ std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks,
  * @throw cudf::logic_error if the environment variable is set and the command fails
  */
 void try_drop_l3_cache();
+
+/**
+ * @brief Convert a string to the corresponding io_type enum value.
+ *
+ * This function takes a string and returns the matching io_type enum value. It allows you to
+ * convert a string representation of an io_type into its corresponding enum value.
+ *
+ * @param io_string The input string representing the io_type
+ *
+ * @return The io_type enum value
+ */
+cudf::io::io_type retrieve_io_type_enum(std::string_view io_string);
+
+/**
+ * @brief Convert a string to the corresponding compression_type enum value.
+ *
+ * This function takes a string and returns the matching compression_type enum value. It allows you
+ * to convert a string representation of a compression_type into its corresponding enum value.
+ *
+ * @param compression_string The input string representing the compression_type
+ *
+ * @return The compression_type enum value
+ */
+cudf::io::compression_type retrieve_compression_type_enum(std::string_view compression_string);

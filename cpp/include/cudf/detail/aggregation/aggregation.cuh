@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -144,8 +144,8 @@ struct update_target_element<
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::MIN>;
-    atomicMin(&target.element<Target>(target_index),
-              static_cast<Target>(source.element<Source>(source_index)));
+    cudf::detail::atomic_min(&target.element<Target>(target_index),
+                             static_cast<Target>(source.element<Source>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -170,8 +170,8 @@ struct update_target_element<
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    atomicMin(&target.element<DeviceTarget>(target_index),
-              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    cudf::detail::atomic_min(&target.element<DeviceTarget>(target_index),
+                             static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -193,8 +193,8 @@ struct update_target_element<
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::MAX>;
-    atomicMax(&target.element<Target>(target_index),
-              static_cast<Target>(source.element<Source>(source_index)));
+    cudf::detail::atomic_max(&target.element<Target>(target_index),
+                             static_cast<Target>(source.element<Source>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -219,8 +219,8 @@ struct update_target_element<
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    atomicMax(&target.element<DeviceTarget>(target_index),
-              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    cudf::detail::atomic_max(&target.element<DeviceTarget>(target_index),
+                             static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -232,8 +232,8 @@ struct update_target_element<
   aggregation::SUM,
   target_has_nulls,
   source_has_nulls,
-  std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
-                   !is_fixed_point<Source>()>> {
+  std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+                   !cudf::is_fixed_point<Source>() && !cudf::is_timestamp<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -242,8 +242,8 @@ struct update_target_element<
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::SUM>;
-    atomicAdd(&target.element<Target>(target_index),
-              static_cast<Target>(source.element<Source>(source_index)));
+    cudf::detail::atomic_add(&target.element<Target>(target_index),
+                             static_cast<Target>(source.element<Source>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -268,8 +268,8 @@ struct update_target_element<
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    atomicAdd(&target.element<DeviceTarget>(target_index),
-              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    cudf::detail::atomic_add(&target.element<DeviceTarget>(target_index),
+                             static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -368,7 +368,7 @@ struct update_target_element<Source,
 
     using Target = target_type_t<Source, aggregation::SUM_OF_SQUARES>;
     auto value   = static_cast<Target>(source.element<Source>(source_index));
-    atomicAdd(&target.element<Target>(target_index), value * value);
+    cudf::detail::atomic_add(&target.element<Target>(target_index), value * value);
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
@@ -387,8 +387,8 @@ struct update_target_element<Source,
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::PRODUCT>;
-    atomicMul(&target.element<Target>(target_index),
-              static_cast<Target>(source.element<Source>(source_index)));
+    cudf::detail::atomic_mul(&target.element<Target>(target_index),
+                             static_cast<Target>(source.element<Source>(source_index)));
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
@@ -408,7 +408,7 @@ struct update_target_element<
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::COUNT_VALID>;
-    atomicAdd(&target.element<Target>(target_index), Target{1});
+    cudf::detail::atomic_add(&target.element<Target>(target_index), Target{1});
 
     // It is assumed the output for COUNT_VALID is initialized to be all valid
   }
@@ -427,7 +427,7 @@ struct update_target_element<
                              size_type source_index) const noexcept
   {
     using Target = target_type_t<Source, aggregation::COUNT_ALL>;
-    atomicAdd(&target.element<Target>(target_index), Target{1});
+    cudf::detail::atomic_add(&target.element<Target>(target_index), Target{1});
 
     // It is assumed the output for COUNT_ALL is initialized to be all valid
   }
@@ -449,10 +449,11 @@ struct update_target_element<
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::ARGMAX>;
-    auto old     = atomicCAS(&target.element<Target>(target_index), ARGMAX_SENTINEL, source_index);
+    auto old     = cudf::detail::atomic_cas(
+      &target.element<Target>(target_index), ARGMAX_SENTINEL, source_index);
     if (old != ARGMAX_SENTINEL) {
       while (source.element<Source>(source_index) > source.element<Source>(old)) {
-        old = atomicCAS(&target.element<Target>(target_index), old, source_index);
+        old = cudf::detail::atomic_cas(&target.element<Target>(target_index), old, source_index);
       }
     }
 
@@ -476,10 +477,11 @@ struct update_target_element<
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::ARGMIN>;
-    auto old     = atomicCAS(&target.element<Target>(target_index), ARGMIN_SENTINEL, source_index);
+    auto old     = cudf::detail::atomic_cas(
+      &target.element<Target>(target_index), ARGMIN_SENTINEL, source_index);
     if (old != ARGMIN_SENTINEL) {
       while (source.element<Source>(source_index) < source.element<Source>(old)) {
-        old = atomicCAS(&target.element<Target>(target_index), old, source_index);
+        old = cudf::detail::atomic_cas(&target.element<Target>(target_index), old, source_index);
       }
     }
 

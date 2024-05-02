@@ -1,0 +1,39 @@
+diff --git a/cub/cub/device/dispatch/dispatch_radix_sort.cuh b/cub/cub/device/dispatch/dispatch_radix_sort.cuh
+index 84b6ccffd..25a237f93 100644
+--- a/cub/cub/device/dispatch/dispatch_radix_sort.cuh
++++ b/cub/cub/device/dispatch/dispatch_radix_sort.cuh
+@@ -808,7 +808,7 @@ struct DeviceRadixSortPolicy
+
+
+     /// SM60 (GP100)
+-    struct Policy600 : ChainedPolicy<600, Policy600, Policy500>
++    struct Policy600 : ChainedPolicy<600, Policy600, Policy600>
+     {
+         enum {
+             PRIMARY_RADIX_BITS      = (sizeof(KeyT) > 1) ? 7 : 5,    // 6.9B 32b keys/s (Quadro P100)
+diff --git a/cub/cub/device/dispatch/dispatch_reduce.cuh b/cub/cub/device/dispatch/dispatch_reduce.cuh
+index 994adc095..d3e6719a7 100644
+--- a/cub/cub/device/dispatch/dispatch_reduce.cuh
++++ b/cub/cub/device/dispatch/dispatch_reduce.cuh
+@@ -479,7 +479,7 @@ struct DeviceReducePolicy
+   };
+
+   /// SM60
+-  struct Policy600 : ChainedPolicy<600, Policy600, Policy350>
++  struct Policy600 : ChainedPolicy<600, Policy600, Policy600>
+   {
+     static constexpr int threads_per_block  = 256;
+     static constexpr int items_per_thread   = 16;
+diff --git a/cub/cub/device/dispatch/tuning/tuning_scan.cuh b/cub/cub/device/dispatch/tuning/tuning_scan.cuh
+index 0ea5c41ad..1bcd8a111 100644
+--- a/cub/cub/device/dispatch/tuning/tuning_scan.cuh
++++ b/cub/cub/device/dispatch/tuning/tuning_scan.cuh
+@@ -303,7 +303,7 @@ struct DeviceScanPolicy
+   /// SM600
+   struct Policy600
+       : DefaultTuning
+-      , ChainedPolicy<600, Policy600, Policy520>
++      , ChainedPolicy<600, Policy600, Policy600>
+   {};
+
+   /// SM800
