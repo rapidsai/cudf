@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -507,7 +507,7 @@ TEST_F(groupby_shift_fixed_point_type_test, MismatchScaleType)
 
   EXPECT_THROW(test_groupby_shift_multi(
                  key, cudf::table_view{{v1}}, offset, {*slr1}, cudf::table_view{{stub}}),
-               cudf::logic_error);
+               cudf::data_type_error);
 }
 
 TEST_F(groupby_shift_fixed_point_type_test, MismatchRepType)
@@ -525,5 +525,5 @@ TEST_F(groupby_shift_fixed_point_type_test, MismatchRepType)
 
   EXPECT_THROW(test_groupby_shift_multi(
                  key, cudf::table_view{{v1}}, offset, {*slr1}, cudf::table_view{{stub}}),
-               cudf::logic_error);
+               cudf::data_type_error);
 }

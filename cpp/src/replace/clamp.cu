@@ -33,6 +33,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -192,7 +194,9 @@ struct dispatch_clamp {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
   {
-    CUDF_EXPECTS(lo.type() == input.type(), "mismatching types of scalar and input");
+    CUDF_EXPECTS(cudf::have_same_types(input, lo),
+                 "mismatching types of scalar and input",
+                 cudf::data_type_error);
 
     auto lo_itr         = make_optional_iterator<T>(lo, nullate::YES{});
     auto hi_itr         = make_optional_iterator<T>(hi, nullate::YES{});
@@ -316,9 +320,14 @@ std::unique_ptr<column> clamp(column_view const& input,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(lo.type() == hi.type(), "mismatching types of limit scalars");
-  CUDF_EXPECTS(lo_replace.type() == hi_replace.type(), "mismatching types of replace scalars");
-  CUDF_EXPECTS(lo.type() == lo_replace.type(), "mismatching types of limit and replace scalars");
+  CUDF_EXPECTS(
+    cudf::have_same_types(lo, hi), "mismatching types of limit scalars", cudf::data_type_error);
+  CUDF_EXPECTS(cudf::have_same_types(lo_replace, hi_replace),
+               "mismatching types of replace scalars",
+               cudf::data_type_error);
+  CUDF_EXPECTS(cudf::have_same_types(lo, lo_replace),
+               "mismatching types of limit and replace scalars",
+               cudf::data_type_error);
 
   if ((not lo.is_valid(stream) and not hi.is_valid(stream)) or (input.is_empty())) {
     // There will be no change
