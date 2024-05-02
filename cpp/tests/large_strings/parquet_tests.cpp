@@ -41,7 +41,6 @@ TEST_F(ParquetStringsTest, ReadLargeStrings)
   auto const column_size = cudf::strings_column_view(col0).chars_size(cudf::get_default_stream());
   auto const threshold   = column_size - 1;
   auto const expected    = cudf::table_view{{col0, col0, col0}};
-  auto const expected = cudf::table_view{{col0, col0, col0}};
 
   auto expected_metadata = cudf::io::table_input_metadata{expected};
   expected_metadata.column_metadata[1].set_encoding(
@@ -61,6 +60,7 @@ TEST_F(ParquetStringsTest, ReadLargeStrings)
 
   cudf::io::parquet_reader_options default_in_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto const result      = cudf::io::read_parquet(default_in_opts);
   auto const result_view = result.tbl->view();
   for (auto cv : result_view) {
     auto const offsets = cudf::strings_column_view(cv).offsets();
