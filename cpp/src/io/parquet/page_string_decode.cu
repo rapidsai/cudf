@@ -1119,7 +1119,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     __syncthreads();
   }
 
-  // now turn array of lengths into offsets, but skip if this is a large string column
+  // Now turn the array of lengths into offsets, but skip if this is a large string column. In the
+  // latter case, offsets will be computed during string column creation.
   if (not s->col.is_large_string_col) {
     int value_count = nesting_info_base[leaf_level_index].value_count;
 
