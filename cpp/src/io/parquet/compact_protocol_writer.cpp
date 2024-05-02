@@ -188,6 +188,7 @@ size_t CompactProtocolWriter::write(ColumnChunkMetaData const& s)
   if (s.index_page_offset != 0) { c.field_int(10, s.index_page_offset); }
   if (s.dictionary_page_offset != 0) { c.field_int(11, s.dictionary_page_offset); }
   c.field_struct(12, s.statistics);
+  if (s.encoding_stats.has_value()) { c.field_struct_list(13, s.encoding_stats.value()); }
   if (s.size_statistics.has_value()) { c.field_struct(16, s.size_statistics.value()); }
   return c.value();
 }
@@ -201,6 +202,8 @@ size_t CompactProtocolWriter::write(Statistics const& s)
   if (s.distinct_count.has_value()) { c.field_int(4, s.distinct_count.value()); }
   if (s.max_value.has_value()) { c.field_binary(5, s.max_value.value()); }
   if (s.min_value.has_value()) { c.field_binary(6, s.min_value.value()); }
+  if (s.is_max_value_exact.has_value()) { c.field_bool(7, s.is_max_value_exact.value()); }
+  if (s.is_min_value_exact.has_value()) { c.field_bool(8, s.is_min_value_exact.value()); }
   return c.value();
 }
 
@@ -245,6 +248,15 @@ size_t CompactProtocolWriter::write(ColumnOrder const& co)
     case ColumnOrder::TYPE_ORDER: c.field_empty_struct(co.type); break;
     default: CUDF_FAIL("Trying to write an invalid ColumnOrder " + std::to_string(co.type));
   }
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(PageEncodingStats const& enc)
+{
+  CompactProtocolFieldWriter c(*this);
+  c.field_int(1, static_cast<int32_t>(enc.page_type));
+  c.field_int(2, static_cast<int32_t>(enc.encoding));
+  c.field_int(3, enc.count);
   return c.value();
 }
 
