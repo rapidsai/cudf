@@ -1,33 +1,32 @@
 /*
-   base64_utils.cpp and base64_utils.hpp
-
-   base64 encoding and decoding with C++.
-
-   Version: 1.01.00
-
-   Copyright (C) 2004-2017 René Nyffenegger
-
-   This source code is provided 'as-is', without any express or implied
-   warranty. In no event will the author be held liable for any damages
-   arising from the use of this software.
-
-   Permission is granted to anyone to use this software for any purpose,
-   including commercial applications, and to alter it and redistribute it
-   freely, subject to the following restrictions:
-
-   1. The origin of this source code must not be misrepresented; you must not
-      claim that you wrote the original source code. If you use this source code
-      in a product, an acknowledgment in the product documentation would be
-      appreciated but is not required.
-
-   2. Altered source versions must be plainly marked as such, and must not be
-      misrepresented as being the original source code.
-
-   3. This notice may not be removed or altered from any source distribution.
-
-   René Nyffenegger rene.nyffenegger@adp-gmbh.ch
-
-*/
+ *  base64_utils.cpp and base64_utils.hpp
+ *
+ *  base64 encoding and decoding with C++.
+ *
+ *  Version: 1.01.00
+ *
+ *  Copyright (C) 2004-2017 René Nyffenegger
+ *
+ *  This source code is provided 'as-is', without any express or implied
+ *  warranty. In no event will the author be held liable for any damages
+ *  arising from the use of this software.
+ *
+ *  Permission is granted to anyone to use this software for any purpose,
+ *  including commercial applications, and to alter it and redistribute it
+ *  freely, subject to the following restrictions:
+ *
+ *  1. The origin of this source code must not be misrepresented; you must not
+ *     claim that you wrote the original source code. If you use this source code
+ *     in a product, an acknowledgment in the product documentation would be
+ *     appreciated but is not required.
+ *
+ *  2. Altered source versions must be plainly marked as such, and must not be
+ *     misrepresented as being the original source code.
+ *
+ *  3. This notice may not be removed or altered from any source distribution.
+ *
+ *  René Nyffenegger rene.nyffenegger@adp-gmbh.ch
+ */
 
 /**
  * @file base64_utils.hpp
@@ -143,9 +142,9 @@ std::string base64_decode(std::string_view encoded_string)
     }
     char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
     char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-    // altered: TODO: arrow source code doesn't have the below line.
-    // altered: This is inconsequential as it is never appended to
-    // altered: `decoded` as max(i) = 3 and 0 <= j < 2.
+    // altered: arrow source code doesn't have the below line.
+    //          This is inconsequential as it is never appended to
+    //          `decoded` as max(i) = 3 and 0 <= j < 2.
     char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
 
     for (j = 0; j < i - 1; j++) {

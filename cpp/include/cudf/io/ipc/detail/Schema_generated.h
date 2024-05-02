@@ -3,7 +3,7 @@
 #ifndef FLATBUFFERS_GENERATED_SCHEMA_CUDF_IO_PARQUET_FLATBUF_H_
 #define FLATBUFFERS_GENERATED_SCHEMA_CUDF_IO_PARQUET_FLATBUF_H_
 
-#include <cudf/io/ipc/flatbuffers/flatbuffers.h>
+#include <flatbuffers/flatbuffers.h>
 
 // Ensure the included flatbuffers.h is the same version as when this file was
 // generated, otherwise it may not be compatible.

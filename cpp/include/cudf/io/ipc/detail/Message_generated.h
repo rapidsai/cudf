@@ -3,7 +3,7 @@
 #ifndef FLATBUFFERS_GENERATED_MESSAGE_CUDF_IO_PARQUET_FLATBUF_H_
 #define FLATBUFFERS_GENERATED_MESSAGE_CUDF_IO_PARQUET_FLATBUF_H_
 
-#include <cudf/io/ipc/flatbuffers/flatbuffers.h>
+#include <flatbuffers/flatbuffers.h>
 
 // Ensure the included flatbuffers.h is the same version as when this file was
 // generated, otherwise it may not be compatible.
@@ -11,7 +11,7 @@ static_assert(FLATBUFFERS_VERSION_MAJOR == 24 && FLATBUFFERS_VERSION_MINOR == 3 
                 FLATBUFFERS_VERSION_REVISION == 25,
               "Non-compatible flatbuffers version included");
 
-#include <cudf/io/ipc/detail/Schema_generated.h>
+#include "Schema_generated.h"
 
 namespace cudf {
 namespace io {
