@@ -1868,9 +1868,13 @@ def test_concat_mixed_list_types_error(s1, s2):
 @pytest.mark.parametrize(
     "axis",
     [
-        # todo: implement 0 axis
-        # 0,
-        1
+        pytest.param(
+            0,
+            marks=pytest.mark.xfail(
+                reason="concat dictionaries with axis=0 not implemented"
+            ),
+        ),
+        1,
     ],
 )
 @pytest.mark.parametrize(
