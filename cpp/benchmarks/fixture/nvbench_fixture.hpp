@@ -211,12 +211,17 @@ struct nvbench_base_fixture {
     using host_pooled_mr = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
 
     if (not size.has_value()) {
-      size = getenv("CUIO_PINNED_POOL_SIZE") ? atoi(getenv("CUIO_PINNED_POOL_SIZE"))
-                                             : size_t{1} * 1024 * 1024 * 1024;
+      if (getenv("CUIO_PINNED_POOL_SIZE")) {
+        size = atoi(getenv("CUIO_PINNED_POOL_SIZE"));
+      } else {
+        size_t free{}, total{};
+        cudaMemGetInfo(&free, &total);
+        size = std::min(total / 200, size_t{100} * 1024 * 1024);
+      }
     }
 
     auto pool_size = (size.value() + 255) & ~255;
-    std::cout << "Pinned host pool size = " << pool_size << "\n";
+    std::cout << "CUIO pinned pool size = " << pool_size << "\n";
 
     static std::shared_ptr<host_pooled_mr> pool_mr = std::make_shared<host_pooled_mr>(
       std::make_shared<rmm::mr::pinned_host_memory_resource>().get(), pool_size, pool_size);
@@ -231,7 +236,6 @@ struct nvbench_base_fixture {
   {
     if (mode == "pageable") return make_cuio_host_pinned_pool_pinned_fallback(0, false);
     if (mode == "pinned") return make_cuio_host_pinned_pool_pinned_fallback(0, true);
-    // if (mode == "pinned_pool_expand") return make_cuio_host_pinned_pool_expandable();
     if (mode == "pinned_pool_fall_to_pageable")
       return make_cuio_host_pinned_pool_pinned_fallback(std::nullopt, false);
     if (mode == "pinned_pool_fall_to_pinned")
@@ -270,7 +274,7 @@ struct nvbench_base_fixture {
   std::string rmm_mode{"pool"};
 
   std::shared_ptr<host_pooled_mr_t> host_pooled_mr;
-  std::string cuio_host_mode{"pinned"};
+  std::string cuio_host_mode{"pinned_pool_fall_to_pinned"};
 };
 
 }  // namespace cudf
