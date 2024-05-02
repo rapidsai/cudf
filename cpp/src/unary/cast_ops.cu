@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/transform.h>
 
@@ -116,8 +117,12 @@ struct fixed_point_unary_cast {
     std::enable_if_t<(cudf::is_fixed_point<_SourceT>() && cudf::is_numeric<TargetT>())>* = nullptr>
   __device__ inline TargetT operator()(DeviceT const element)
   {
-    auto const fp = SourceT{numeric::scaled_integer<DeviceT>{element, scale}};
-    return static_cast<TargetT>(fp);
+    auto const fixed_point = SourceT{numeric::scaled_integer<DeviceT>{element, scale}};
+    if constexpr (cuda::std::is_floating_point_v<TargetT>) {
+      return convert_fixed_to_floating<TargetT>(fixed_point);
+    } else {
+      return static_cast<TargetT>(fixed_point);
+    }
   }
 
   template <
@@ -126,7 +131,11 @@ struct fixed_point_unary_cast {
     std::enable_if_t<(cudf::is_numeric<_SourceT>() && cudf::is_fixed_point<TargetT>())>* = nullptr>
   __device__ inline DeviceT operator()(SourceT const element)
   {
-    return TargetT{element, scale}.value();
+    if constexpr (cuda::std::is_floating_point_v<SourceT>) {
+      return convert_floating_to_fixed<TargetT>(element, scale).value();
+    } else {
+      return TargetT{element, scale}.value();
+    }
   }
 };
 
@@ -176,7 +185,7 @@ template <typename T, std::enable_if_t<is_fixed_point<T>()>* = nullptr>
 std::unique_ptr<column> rescale(column_view input,
                                 numeric::scale_type scale,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   using namespace numeric;
   using RepType = device_storage_type_t<T>;
@@ -194,12 +203,18 @@ std::unique_ptr<column> rescale(column_view input,
       auto const scalar  = make_fixed_point_scalar<T>(0, scale_type{scale}, stream);
       auto output_column = make_column_from_scalar(*scalar, input.size(), stream, mr);
       if (input.nullable()) {
-        auto const null_mask = copy_bitmask(input, stream, mr);
+        auto null_mask = detail::copy_bitmask(input, stream, mr);
         output_column->set_null_mask(std::move(null_mask), input.null_count());
       }
       return output_column;
     }
-    auto const scalar = make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff}, stream);
+
+    RepType scalar_value = 10;
+    for (int i = 1; i < -diff; ++i) {
+      scalar_value *= 10;
+    }
+
+    auto const scalar = make_fixed_point_scalar<T>(scalar_value, scale_type{diff}, stream);
     return detail::binary_operation(input, *scalar, binary_operator::DIV, type, stream, mr);
   }
 };
@@ -215,7 +230,7 @@ struct dispatch_unary_cast_to {
             std::enable_if_t<is_supported_non_fixed_point_cast<SourceT, TargetT>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     auto const size = input.size();
     auto output =
@@ -242,14 +257,14 @@ struct dispatch_unary_cast_to {
     std::enable_if_t<cudf::is_fixed_point<SourceT>() && cudf::is_numeric<TargetT>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     auto const size = input.size();
     auto output =
       std::make_unique<column>(type,
                                size,
                                rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                               copy_bitmask(input, stream, mr),
+                               detail::copy_bitmask(input, stream, mr),
                                input.null_count());
 
     mutable_column_view output_mutable = *output;
@@ -272,14 +287,14 @@ struct dispatch_unary_cast_to {
     std::enable_if_t<cudf::is_numeric<SourceT>() && cudf::is_fixed_point<TargetT>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     auto const size = input.size();
     auto output =
       std::make_unique<column>(type,
                                size,
                                rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                               copy_bitmask(input, stream, mr),
+                               detail::copy_bitmask(input, stream, mr),
                                input.null_count());
 
     mutable_column_view output_mutable = *output;
@@ -302,7 +317,7 @@ struct dispatch_unary_cast_to {
                              std::is_same_v<SourceT, TargetT>>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     if (input.type() == type) {
       return std::make_unique<column>(input, stream, mr);  // TODO add test for this
@@ -317,7 +332,7 @@ struct dispatch_unary_cast_to {
                              not std::is_same_v<SourceT, TargetT>>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     using namespace numeric;
     using SourceDeviceT = device_storage_type_t<SourceT>;
@@ -328,7 +343,7 @@ struct dispatch_unary_cast_to {
       auto output     = std::make_unique<column>(cudf::data_type{type.id(), input.type().scale()},
                                              size,
                                              rmm::device_buffer{size * cudf::size_of(type), stream},
-                                             copy_bitmask(input, stream, mr),
+                                             detail::copy_bitmask(input, stream, mr),
                                              input.null_count());
 
       mutable_column_view output_mutable = *output;
@@ -360,7 +375,7 @@ struct dispatch_unary_cast_to {
             std::enable_if_t<not is_supported_cast<SourceT, TargetT>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type,
                                      rmm::cuda_stream_view,
-                                     rmm::mr::device_memory_resource*)
+                                     rmm::device_async_resource_ref)
 
   {
     if (!cudf::is_fixed_width<TargetT>())
@@ -382,7 +397,7 @@ struct dispatch_unary_cast_from {
   template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return type_dispatcher(type, dispatch_unary_cast_to<T>{input}, type, stream, mr);
   }
@@ -398,7 +413,7 @@ struct dispatch_unary_cast_from {
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(is_fixed_width(type), "Unary cast type must be fixed-width.");
 
@@ -409,10 +424,11 @@ std::unique_ptr<column> cast(column_view const& input,
 
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::cast(input, type, cudf::get_default_stream(), mr);
+  return detail::cast(input, type, stream, mr);
 }
 
 }  // namespace cudf

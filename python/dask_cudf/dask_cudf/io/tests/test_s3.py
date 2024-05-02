@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import os
 import socket
@@ -107,7 +107,7 @@ def test_read_csv(s3_base, s3so):
         s3_base=s3_base, bucket="daskcsv", files={"a.csv": b"a,b\n1,2\n3,4\n"}
     ):
         df = dask_cudf.read_csv(
-            "s3://daskcsv/*.csv", chunksize="50 B", storage_options=s3so
+            "s3://daskcsv/*.csv", blocksize="50 B", storage_options=s3so
         )
         assert df.a.sum().compute() == 4
 

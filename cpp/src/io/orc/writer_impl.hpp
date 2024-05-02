@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,9 @@
 
 #pragma once
 
+#include "io/utilities/hostdevice_vector.hpp"
 #include "orc.hpp"
 #include "orc_gpu.hpp"
-
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/data_sink.hpp>
@@ -39,15 +38,11 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace orc {
+namespace cudf::io::orc::detail {
 // Forward internal classes
 class orc_column_view;
 
-using namespace cudf::io::orc;
-using namespace cudf::io;
+using namespace cudf::io::detail;
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
@@ -171,6 +166,8 @@ struct stripe_size_limits {
 struct intermediate_statistics {
   explicit intermediate_statistics(rmm::cuda_stream_view stream) : stripe_stat_chunks(0, stream) {}
 
+  intermediate_statistics(orc_table_view const& table, rmm::cuda_stream_view stream);
+
   intermediate_statistics(std::vector<ColStatsBlob> rb,
                           rmm::device_uvector<statistics_chunk> sc,
                           cudf::detail::hostdevice_vector<statistics_merge_group> smg,
@@ -230,6 +227,14 @@ struct encoded_footer_statistics {
   std::vector<ColStatsBlob> file_level;
 };
 
+enum class writer_state {
+  NO_DATA_WRITTEN,  // No table data has been written to the sink; if the writer is closed or
+                    // destroyed in this state, it should not write the footer.
+  DATA_WRITTEN,     // At least one table has been written to the sink; when the writer is closed,
+                    // it should write the footer.
+  CLOSED            // Writer has been closed; no further writes are allowed.
+};
+
 /**
  * @brief Implementation for ORC writer
  */
@@ -268,11 +273,6 @@ class writer::impl {
    * @brief Destructor to complete any incomplete write and release resources.
    */
   ~impl();
-
-  /**
-   * @brief Begins the chunked/streamed write process.
-   */
-  void init_state();
 
   /**
    * @brief Writes a single subtable as part of a larger ORC file/table write.
@@ -346,6 +346,7 @@ class writer::impl {
   size_t const _compression_blocksize;
   std::shared_ptr<writer_compression_statistics> _compression_statistics;  // Optional output
   statistics_freq const _stats_freq;
+  bool const _sort_dictionaries;
   single_write_mode const _single_write_mode;  // Special parameter only used by `write()` to
                                                // indicate that we are guaranteeing a single table
                                                // write. This enables some internal optimizations.
@@ -357,13 +358,10 @@ class writer::impl {
 
   // Internal states, filled during `write()` and written to sink during `write` and `close()`.
   std::unique_ptr<table_input_metadata> _table_meta;
-  cudf::io::orc::FileFooter _ffooter;
-  cudf::io::orc::Metadata _orc_meta;
+  Footer _footer;
+  Metadata _orc_meta;
   persisted_statistics _persisted_stripe_statistics;  // Statistics data saved between calls.
-  bool _closed = false;  // To track if the output has been written to sink.
+  writer_state _state = writer_state::NO_DATA_WRITTEN;
 };
 
-}  // namespace orc
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail

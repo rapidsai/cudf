@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
 import os
@@ -13,9 +13,9 @@ import numpy as np
 import pandas as pd
 from fsspec.core import get_fs_token_paths
 from pyarrow import PythonFile as ArrowPythonFile
-from pyarrow.fs import FSSpecHandler, PyFileSystem
 from pyarrow.lib import NativeFile
 
+from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
 
 try:
@@ -85,9 +85,7 @@ Examples
 0       10   hello
 1       20  rapids
 2       30      ai
-""".format(
-    remote_data_sources=_docstring_remote_sources
-)
+""".format(remote_data_sources=_docstring_remote_sources)
 doc_read_avro = docfmt_partial(docstring=_docstring_read_avro)
 
 _docstring_read_parquet_metadata = """
@@ -103,11 +101,13 @@ Returns
 Total number of rows
 Number of row groups
 List of column names
+Number of columns
+List of metadata of row groups
 
 Examples
 --------
 >>> import cudf
->>> num_rows, num_row_groups, names = cudf.io.read_parquet_metadata(filename)
+>>> num_rows, num_row_groups, names, num_columns, row_group_metadata = cudf.io.read_parquet_metadata(filename)
 >>> df = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
 >>> df = cudf.concat(df)
 >>> df
@@ -229,8 +229,9 @@ path : str or list of str
     File path or Root Directory path. Will be used as Root Directory path
     while writing a partitioned dataset. Use list of str with partition_offsets
     to write parts of the dataframe to different files.
-compression : {{'snappy', 'ZSTD', None}}, default 'snappy'
-    Name of the compression to use. Use ``None`` for no compression.
+compression : {{'snappy', 'ZSTD', 'LZ4', None}}, default 'snappy'
+    Name of the compression to use; case insensitive.
+    Use ``None`` for no compression.
 index : bool, default None
     If ``True``, include the dataframe's index(es) in the file output.
     If ``False``, they will not be written to the file.
@@ -288,6 +289,14 @@ return_metadata : bool, default False
     include the file path metadata (relative to `root_path`).
     To request metadata binary blob when using with ``partition_cols``, Pass
     ``return_metadata=True`` instead of specifying ``metadata_file_path``
+use_dictionary : bool, default True
+    When ``False``, prevents the use of dictionary encoding for Parquet page
+    data. When ``True``, dictionary encoding is preferred when not disabled due
+    to dictionary size constraints.
+header_version : {{'1.0', '2.0'}}, default "1.0"
+    Controls whether to use version 1.0 or version 2.0 page headers when
+    encoding. Version 1.0 is more portable, but version 2.0 enables the
+    use of newer encoding schemes.
 force_nullable_schema : bool, default False.
     If True, writes all columns as `null` in schema.
     If False, columns are written as `null` if they contain null values,
@@ -483,8 +492,9 @@ Parameters
 ----------
 fname : str
     File path or object where the ORC dataset will be stored.
-compression : {{ 'snappy', 'ZSTD', None }}, default 'snappy'
-    Name of the compression to use. Use None for no compression.
+compression : {{ 'snappy', 'ZSTD', 'ZLIB', 'LZ4', None }}, default 'snappy'
+    Name of the compression to use; case insensitive.
+    Use ``None`` for no compression.
 statistics: str {{ "ROWGROUP", "STRIPE", None }}, default "ROWGROUP"
     The granularity with which column statistics must
     be written to the file.
@@ -535,7 +545,7 @@ path_or_buf : list, str, path object, or file-like object
     function or `StringIO`). Multiple inputs may be provided as a list. If a
     list is specified each list entry may be of a different input type as long
     as each input is of a valid type and all input JSON schema(s) match.
-engine : {{ 'auto', 'cudf', 'cudf_legacy', 'pandas' }}, default 'auto'
+engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the engine will be
     automatically selected based on the other parameters. See notes below.
 orient : string
@@ -682,7 +692,6 @@ keep_quotes : bool, default False
 
        This parameter is only supported with ``engine='cudf'``.
 
-    This parameter is only supported in ``cudf`` engine.
     If `True`, any string values are read literally (and wrapped in an
     additional set of quotes).
     If `False` string values are parsed into Python strings.
@@ -693,7 +702,22 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+mixed_types_as_string : bool, default False
 
+    .. admonition:: GPU-accelerated feature
+
+       This parameter is only supported with ``engine='cudf'``.
+
+    If True, mixed type columns are returned as string columns.
+    If `False` parsing mixed type columns will thrown an error.
+prune_columns : bool, default False
+
+    .. admonition:: GPU-accelerated feature
+
+       This parameter is only supported with ``engine='cudf'``.
+
+    If True, only return those columns mentioned in the dtype argument.
+    If `False` dtype argument is used a type inference suggestion.
 Returns
 -------
 result : Series or DataFrame, depending on the value of `typ`.
@@ -1406,9 +1430,7 @@ filepath_or_buffer : str, bytes, BytesIO, list
     list of Filepath strings or in-memory buffers of data.
 compression : str
     Type of compression algorithm for the content
-    """.format(
-    bytes_per_thread=_BYTES_PER_THREAD_DEFAULT
-)
+    """.format(bytes_per_thread=_BYTES_PER_THREAD_DEFAULT)
 
 
 doc_get_reader_filepath_or_buffer = docfmt_partial(
@@ -1630,6 +1652,15 @@ def _open_remote_files(
             for path, rgs in zip(paths, row_groups)
         ]
 
+    # Avoid top-level pyarrow.fs import.
+    # Importing pyarrow.fs initializes a S3 SDK with a finalizer
+    # that runs atexit. In some circumstances it appears this
+    # runs a call into a logging system that is already shutdown.
+    # To avoid this, we only import this subsystem if it is
+    # really needed.
+    # See https://github.com/aws/aws-sdk-cpp/issues/2681
+    from pyarrow.fs import FSSpecHandler, PyFileSystem
+
     # Default open - Use pyarrow filesystem API
     pa_fs = PyFileSystem(FSSpecHandler(fs))
     return [
@@ -1650,6 +1681,8 @@ def get_reader_filepath_or_buffer(
     allow_raw_text_input=False,
     storage_options=None,
     bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
+    warn_on_raw_text_input=None,
+    warn_meta=None,
 ):
     """{docstring}"""
 
@@ -1663,6 +1696,18 @@ def get_reader_filepath_or_buffer(
                 path_or_data, storage_options
             )
             if fs is None:
+                if warn_on_raw_text_input:
+                    # Do not remove until pandas 3.0 support is added.
+                    assert (
+                        PANDAS_LT_300
+                    ), "Need to drop after pandas-3.0 support is added."
+                    warnings.warn(
+                        f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
+                        "deprecated and will be removed in a future version. "
+                        "To read from a literal string, wrap it in a "
+                        "'StringIO' object.",
+                        FutureWarning,
+                    )
                 return path_or_data, compression
 
         if _is_local_filesystem(fs):
@@ -1675,6 +1720,30 @@ def get_reader_filepath_or_buffer(
                     raise FileNotFoundError(
                         f"{path_or_data} could not be resolved to any files"
                     )
+                elif warn_on_raw_text_input:
+                    # Do not remove until pandas 3.0 support is added.
+                    assert (
+                        PANDAS_LT_300
+                    ), "Need to drop after pandas-3.0 support is added."
+                    warnings.warn(
+                        f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
+                        "deprecated and will be removed in a future version. "
+                        "To read from a literal string, wrap it in a "
+                        "'StringIO' object.",
+                        FutureWarning,
+                    )
+            elif warn_on_raw_text_input:
+                # Do not remove until pandas 3.0 support is added.
+                assert (
+                    PANDAS_LT_300
+                ), "Need to drop after pandas-3.0 support is added."
+                warnings.warn(
+                    f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
+                    "deprecated and will be removed in a future version. "
+                    "To read from a literal string, wrap it in a "
+                    "'StringIO' object.",
+                    FutureWarning,
+                )
 
         else:
             if len(paths) == 0:
@@ -1791,6 +1860,7 @@ def stringify_pathlike(pathlike):
     """
     Convert any object that implements the fspath protocol
     to a string. Leaves other objects unchanged
+
     Parameters
     ----------
     pathlike
@@ -2012,7 +2082,7 @@ def _merge_ranges(byte_ranges, max_block=256_000_000, max_gap=64_000):
         return new_ranges
 
     offset, size = byte_ranges[0]
-    for (new_offset, new_size) in byte_ranges[1:]:
+    for new_offset, new_size in byte_ranges[1:]:
         gap = new_offset - (offset + size)
         if gap > max_gap or (size + new_size + gap) > max_block:
             # Gap is too large or total read is too large
@@ -2052,7 +2122,7 @@ def _read_byte_ranges(
     # Simple utility to copy remote byte ranges
     # into a local buffer for IO in libcudf
     workers = []
-    for (offset, nbytes) in ranges:
+    for offset, nbytes in ranges:
         if len(ranges) > 1:
             workers.append(
                 Thread(

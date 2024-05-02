@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <nvtext/edit_distance.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -25,9 +23,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <nvtext/edit_distance.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -138,7 +139,7 @@ struct edit_distance_matrix_levenshtein_algorithm {
 std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& strings,
                                             cudf::strings_column_view const& targets,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   auto const strings_count = strings.size();
   if (strings_count == 0) {
@@ -203,7 +204,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
  */
 std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view const& strings,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+                                                   rmm::device_async_resource_ref mr)
 {
   cudf::size_type strings_count = strings.size();
   if (strings_count == 0) {
@@ -224,7 +225,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
   cudf::size_type n_upper = (strings_count * (strings_count - 1)) / 2;
   rmm::device_uvector<std::ptrdiff_t> offsets(n_upper, stream);
   auto d_offsets = offsets.data();
-  CUDF_CUDA_TRY(cudaMemsetAsync(d_offsets, 0, n_upper * sizeof(cudf::size_type), stream.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(d_offsets, 0, n_upper * sizeof(std::ptrdiff_t), stream.value()));
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
@@ -298,22 +299,24 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
 /**
  * @copydoc nvtext::edit_distance
  */
-std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& input,
                                             cudf::strings_column_view const& targets,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::edit_distance(strings, targets, cudf::get_default_stream(), mr);
+  return detail::edit_distance(input, targets, stream, mr);
 }
 
 /**
  * @copydoc nvtext::edit_distance_matrix
  */
-std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view const& strings,
-                                                   rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view const& input,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::edit_distance_matrix(strings, cudf::get_default_stream(), mr);
+  return detail::edit_distance_matrix(input, stream, mr);
 }
 
 }  // namespace nvtext

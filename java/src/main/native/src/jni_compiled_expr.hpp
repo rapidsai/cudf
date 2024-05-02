@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,11 @@
 
 #pragma once
 
+#include <cudf/ast/expressions.hpp>
+#include <cudf/scalar/scalar.hpp>
+
+#include <memory>
+#include <utility>
 #include <vector>
 
 namespace cudf {
@@ -38,29 +43,31 @@ class compiled_expr {
   /** GPU scalar instances that correspond to literal nodes */
   std::vector<std::unique_ptr<cudf::scalar>> scalars;
 
-public:
-  cudf::ast::literal &add_literal(std::unique_ptr<cudf::ast::literal> literal_ptr,
-                                  std::unique_ptr<cudf::scalar> scalar_ptr) {
+ public:
+  cudf::ast::literal& add_literal(std::unique_ptr<cudf::ast::literal> literal_ptr,
+                                  std::unique_ptr<cudf::scalar> scalar_ptr)
+  {
     expressions.push_back(std::move(literal_ptr));
     scalars.push_back(std::move(scalar_ptr));
-    return static_cast<cudf::ast::literal &>(*expressions.back());
+    return static_cast<cudf::ast::literal&>(*expressions.back());
   }
 
-  cudf::ast::column_reference &
-  add_column_ref(std::unique_ptr<cudf::ast::column_reference> ref_ptr) {
+  cudf::ast::column_reference& add_column_ref(std::unique_ptr<cudf::ast::column_reference> ref_ptr)
+  {
     expressions.push_back(std::move(ref_ptr));
-    return static_cast<cudf::ast::column_reference &>(*expressions.back());
+    return static_cast<cudf::ast::column_reference&>(*expressions.back());
   }
 
-  cudf::ast::operation &add_operation(std::unique_ptr<cudf::ast::operation> expr_ptr) {
+  cudf::ast::operation& add_operation(std::unique_ptr<cudf::ast::operation> expr_ptr)
+  {
     expressions.push_back(std::move(expr_ptr));
-    return static_cast<cudf::ast::operation &>(*expressions.back());
+    return static_cast<cudf::ast::operation&>(*expressions.back());
   }
 
   /** Return the expression node at the top of the tree */
-  cudf::ast::expression &get_top_expression() const { return *expressions.back(); }
+  cudf::ast::expression& get_top_expression() const { return *expressions.back(); }
 };
 
-} // namespace ast
-} // namespace jni
-} // namespace cudf
+}  // namespace ast
+}  // namespace jni
+}  // namespace cudf

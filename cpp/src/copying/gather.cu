@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,8 +25,12 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuda/functional>
 #include <thrust/iterator/transform_iterator.h>
+
+#include <stdexcept>
 
 namespace cudf {
 namespace detail {
@@ -36,9 +40,9 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               out_of_bounds_policy bounds_policy,
                               negative_index_policy neg_indices,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(not gather_map.has_nulls(), "gather_map contains nulls");
+  CUDF_EXPECTS(not gather_map.has_nulls(), "gather_map contains nulls", std::invalid_argument);
 
   // create index type normalizing iterator for the gather_map
   auto map_begin = indexalator_factory::make_input_iterator(gather_map);
@@ -46,7 +50,8 @@ std::unique_ptr<table> gather(table_view const& source_table,
 
   if (neg_indices == negative_index_policy::ALLOWED) {
     cudf::size_type n_rows = source_table.num_rows();
-    auto idx_converter = [n_rows] __device__(size_type in) { return in < 0 ? in + n_rows : in; };
+    auto idx_converter     = cuda::proclaim_return_type<size_type>(
+      [n_rows] __device__(size_type in) { return in < 0 ? in + n_rows : in; });
     return gather(source_table,
                   thrust::make_transform_iterator(map_begin, idx_converter),
                   thrust::make_transform_iterator(map_end, idx_converter),
@@ -62,7 +67,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               out_of_bounds_policy bounds_policy,
                               negative_index_policy neg_indices,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(gather_map.size() <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
                "gather map size exceeds the column size limit",
@@ -81,7 +86,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
                               out_of_bounds_policy bounds_policy,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 

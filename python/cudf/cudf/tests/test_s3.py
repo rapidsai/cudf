@@ -1,9 +1,9 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import os
 import socket
 from contextlib import contextmanager
-from io import BytesIO
+from io import BytesIO, StringIO
 
 import numpy as np
 import pandas as pd
@@ -433,7 +433,7 @@ def test_read_json(s3_base, s3so):
             storage_options=s3so,
         )
 
-    expect = pd.read_json(buffer, lines=True)
+    expect = pd.read_json(StringIO(buffer), lines=True)
     assert_eq(expect, got)
 
 
@@ -533,3 +533,18 @@ def test_write_chunked_parquet(s3_base, s3so):
             actual.sort_values(["b"]).reset_index(drop=True),
             cudf.concat([df1, df2]).sort_values(["b"]).reset_index(drop=True),
         )
+
+
+def test_no_s3fs_on_cudf_import():
+    import subprocess
+    import sys
+
+    output = subprocess.check_output(
+        [
+            sys.executable,
+            "-c",
+            "import cudf; import sys; print('pyarrow._s3fs' in sys.modules)",
+        ],
+        cwd="/",
+    )
+    assert output.strip() == b"False"

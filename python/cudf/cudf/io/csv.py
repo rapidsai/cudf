@@ -1,5 +1,6 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
+import warnings
 from collections import abc
 from io import BytesIO, StringIO
 
@@ -11,7 +12,7 @@ from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
 from cudf.utils import ioutils
 from cudf.utils.dtypes import _maybe_convert_to_default_type
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
 
 @_cudf_nvtx_annotate
@@ -54,6 +55,13 @@ def read_csv(
     bytes_per_thread=None,
 ):
     """{docstring}"""
+
+    if delim_whitespace is not False:
+        warnings.warn(
+            "The 'delim_whitespace' keyword in pd.read_csv is deprecated and "
+            "will be removed in a future version. Use ``sep='\\s+'`` instead",
+            FutureWarning,
+        )
 
     if use_python_file_object and bytes_per_thread is not None:
         raise ValueError(

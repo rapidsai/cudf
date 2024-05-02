@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <rmm/resource_ref.hpp>
 
 namespace nvtext {
 /**
@@ -66,22 +68,22 @@ namespace nvtext {
  *
  * All null row entries are ignored and the output contains all valid rows.
  *
- * @param strings Strings column to tokenize and produce ngrams from.
- * @param ngrams The ngram number to generate.
- *               Default is 2 = bigram.
+ * @param input Strings column to tokenize and produce ngrams from
+ * @param ngrams The ngram number to generate
  * @param delimiter UTF-8 characters used to separate each string into tokens.
- *                  The default of empty string will separate tokens using whitespace.
- * @param separator The string to use for separating ngram tokens.
- *                  Default is "_" character.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings columns of tokens.
+ *                  An empty string will separate tokens using whitespace.
+ * @param separator The string to use for separating ngram tokens
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings columns of tokens
  */
 std::unique_ptr<cudf::column> ngrams_tokenize(
-  cudf::strings_column_view const& strings,
-  cudf::size_type ngrams               = 2,
-  cudf::string_scalar const& delimiter = cudf::string_scalar{""},
-  cudf::string_scalar const& separator = cudf::string_scalar{"_"},
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  cudf::strings_column_view const& input,
+  cudf::size_type ngrams,
+  cudf::string_scalar const& delimiter,
+  cudf::string_scalar const& separator,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace nvtext

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,9 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <algorithm>
-#include <iostream>
-
 #include <cudf_test/base_fixture.hpp>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -30,6 +27,9 @@
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
+
+#include <algorithm>
+#include <iostream>
 
 struct valid_bit_functor {
   cudf::bitmask_type const* _null_mask;

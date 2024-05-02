@@ -1,4 +1,6 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+
+from __future__ import annotations
 
 import warnings
 from decimal import Decimal
@@ -7,17 +9,17 @@ from typing import Any, Optional, Sequence, Union, cast
 import cupy as cp
 import numpy as np
 import pyarrow as pa
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
 from cudf._typing import ColumnBinaryOperand, Dtype
 from cudf.api.types import is_integer_dtype, is_scalar
 from cudf.core.buffer import as_buffer
-from cudf.core.column import ColumnBase, as_column
+from cudf.core.column import ColumnBase
 from cudf.core.dtypes import (
     Decimal32Dtype,
     Decimal64Dtype,
@@ -36,8 +38,15 @@ class DecimalBaseColumn(NumericalBaseColumn):
     dtype: DecimalDtype
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            "Decimals are not yet supported via `__cuda_array_interface__`"
+        )
+
     def as_decimal_column(
-        self, dtype: Dtype, **kwargs
+        self,
+        dtype: Dtype,
     ) -> Union["DecimalBaseColumn"]:
         if (
             isinstance(dtype, cudf.core.dtypes.DecimalDtype)
@@ -53,20 +62,21 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return libcudf.unary.cast(self, dtype)
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
             return cpp_from_decimal(self)
         else:
             return cast(
-                "cudf.core.column.StringColumn", as_column([], dtype="object")
+                cudf.core.column.StringColumn,
+                cudf.core.column.column_empty(0, dtype="object"),
             )
 
     def __pow__(self, other):
         if isinstance(other, int):
             if other == 0:
-                res = cudf.core.column.full(
-                    size=len(self), fill_value=1, dtype=self.dtype
+                res = cudf.core.column.as_column(
+                    1, dtype=self.dtype, length=len(self)
                 )
                 if self.nullable:
                     res = res.set_mask(self.mask)
@@ -125,29 +135,28 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     def fillna(
         self,
-        value: Any = None,
+        fill_value: Any = None,
         method: Optional[str] = None,
-        dtype: Optional[Dtype] = None,
-    ):
+    ) -> Self:
         """Fill null values with ``value``.
 
         Returns a copy with null filled.
         """
-        if isinstance(value, (int, Decimal)):
-            value = cudf.Scalar(value, dtype=self.dtype)
+        if isinstance(fill_value, (int, Decimal)):
+            fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
         elif (
-            isinstance(value, DecimalBaseColumn)
-            or isinstance(value, cudf.core.column.NumericalColumn)
-            and is_integer_dtype(value.dtype)
+            isinstance(fill_value, DecimalBaseColumn)
+            or isinstance(fill_value, cudf.core.column.NumericalColumn)
+            and is_integer_dtype(fill_value.dtype)
         ):
-            value = value.astype(self.dtype)
+            fill_value = fill_value.astype(self.dtype)
         else:
             raise TypeError(
                 "Decimal columns only support using fillna with decimal and "
                 "integer values"
             )
 
-        return super().fillna(value=value, method=method)
+        return super().fillna(fill_value, method=method)
 
     def normalize_binop_value(self, other):
         if isinstance(other, ColumnBase):
@@ -192,19 +201,16 @@ class DecimalBaseColumn(NumericalBaseColumn):
     ) -> ColumnBase:
         quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls
-        sorted_indices = self.as_frame()._get_sorted_inds(
-            ascending=True, na_position="first"
+        indices = libcudf.sort.order_by(
+            [self], [True], "first", stable=True
+        ).slice(self.null_count, len(self))
+        result = libcudf.quantiles.quantile(
+            self, quant, interpolation, indices, exact
         )
-        sorted_indices = sorted_indices[self.null_count :]
-
-        result = cpp_quantile(
-            self, quant, interpolation, sorted_indices, exact
-        )
-
         return result._with_type_metadata(self.dtype)
 
     def as_numerical_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
         return libcudf.unary.cast(self, dtype)
 
@@ -340,12 +346,6 @@ class Decimal64Column(DecimalBaseColumn):
             offset=self._offset,
             length=self.size,
             buffers=[mask_buf, data_buf],
-        )
-
-    @property
-    def __cuda_array_interface__(self):
-        raise NotImplementedError(
-            "Decimals are not yet supported via `__cuda_array_interface__`"
         )
 
     def _with_type_metadata(

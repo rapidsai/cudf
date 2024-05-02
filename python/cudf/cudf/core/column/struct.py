@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from functools import cached_property
@@ -9,8 +9,7 @@ import pyarrow as pa
 
 import cudf
 from cudf._typing import Dtype
-from cudf.api.types import is_struct_dtype
-from cudf.core.column import ColumnBase, build_struct_column
+from cudf.core.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
 from cudf.core.missing import NA
@@ -59,16 +58,27 @@ class StructColumn(ColumnBase):
         )
 
     def to_pandas(
-        self, index: Optional[pd.Index] = None, **kwargs
+        self,
+        *,
+        index: Optional[pd.Index] = None,
+        nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
-
-        pd_series = pd.Series(self.to_arrow().tolist(), dtype="object")
-
-        if index is not None:
-            pd_series.index = index
-        return pd_series
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+        pa_array = self.to_arrow()
+        if arrow_type:
+            return pd.Series(
+                pd.arrays.ArrowExtensionArray(pa_array), index=index
+            )
+        else:
+            return pd.Series(pa_array.tolist(), dtype="object", index=index)
 
     @cached_property
     def memory_usage(self):
@@ -137,8 +147,9 @@ class StructColumn(ColumnBase):
         if isinstance(dtype, IntervalDtype):
             return IntervalColumn.from_struct_column(self, closed=dtype.closed)
         elif isinstance(dtype, StructDtype):
-            return build_struct_column(
-                names=dtype.fields.keys(),
+            return StructColumn(
+                data=None,
+                dtype=dtype,
                 children=tuple(
                     self.base_children[i]._with_type_metadata(dtype.fields[f])
                     for i, f in enumerate(dtype.fields.keys())
@@ -160,7 +171,7 @@ class StructMethods(ColumnMethods):
     _column: StructColumn
 
     def __init__(self, parent=None):
-        if not is_struct_dtype(parent.dtype):
+        if not isinstance(parent.dtype, StructDtype):
             raise AttributeError(
                 "Can only use .struct accessor with a 'struct' dtype"
             )

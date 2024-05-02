@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -66,7 +67,7 @@ std::unique_ptr<column> rolling_window(
   size_type following_window,
   size_type min_periods,
   rolling_aggregation const& agg,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  @copybrief rolling_window
@@ -76,7 +77,7 @@ std::unique_ptr<column> rolling_window(
  *            size_type following_window,
  *            size_type min_periods,
  *            rolling_aggregation const& agg,
- *            rmm::mr::device_memory_resource* mr)
+ *            rmm::device_async_resource_ref mr)
  *
  * @param default_outputs A column of per-row default values to be returned instead
  *                        of nulls. Used for LEAD()/LAG(), if the row offset crosses
@@ -89,7 +90,7 @@ std::unique_ptr<column> rolling_window(
   size_type following_window,
   size_type min_periods,
   rolling_aggregation const& agg,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Abstraction for window boundary sizes
@@ -199,10 +200,30 @@ struct window_bounds {
  * column of the same type as the input. Therefore it is suggested to convert integer column types
  * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
  *
+ * Note: `preceding_window` and `following_window` could well have negative values. This yields
+ * windows where the current row might not be included at all. For instance, consider a window
+ * defined as (preceding=3, following=-1). This produces a window from 2 (i.e. 3-1) rows preceding
+ * the current row, and 1 row *preceding* the current row. For the example above, the window for
+ * row#3 is:
+ *
+ *    [ 10,  20,  10,  50,  60,  20,  30,  80,  40 ]
+ *      <--window-->   ^
+ *                     |
+ *               current_row
+ *
+ * Similarly, `preceding` could have a negative value, indicating that the window begins at a
+ * position after the current row.  It differs slightly from the semantics for `following`, because
+ * `preceding` includes the current row. Therefore:
+ *   1. preceding=1  => Window starts at the current row.
+ *   2. preceding=0  => Window starts at 1 past the current row.
+ *   3. preceding=-1 => Window starts at 2 past the current row. Etc.
+ *
  * @param[in] group_keys The (pre-sorted) grouping columns
  * @param[in] input The input column (to be aggregated)
- * @param[in] preceding_window The static rolling window size in the backward direction
- * @param[in] following_window The static rolling window size in the forward direction
+ * @param[in] preceding_window The static rolling window size in the backward direction (for
+ * positive values), or forward direction (for negative values)
+ * @param[in] following_window The static rolling window size in the forward direction (for positive
+ * values), or backward direction (for negative values)
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
  * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
@@ -217,7 +238,7 @@ std::unique_ptr<column> grouped_rolling_window(
   size_type following_window,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  @copybrief grouped_rolling_window
@@ -228,7 +249,7 @@ std::unique_ptr<column> grouped_rolling_window(
  *            size_type following_window,
  *            size_type min_periods,
  *            rolling_aggregation const& aggr,
- *            rmm::mr::device_memory_resource* mr)
+ *            rmm::device_async_resource_ref mr)
  */
 std::unique_ptr<column> grouped_rolling_window(
   table_view const& group_keys,
@@ -237,7 +258,7 @@ std::unique_ptr<column> grouped_rolling_window(
   window_bounds following_window,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  @copybrief grouped_rolling_window
@@ -248,7 +269,7 @@ std::unique_ptr<column> grouped_rolling_window(
  *            size_type following_window,
  *            size_type min_periods,
  *            rolling_aggregation const& aggr,
- *            rmm::mr::device_memory_resource* mr)
+ *            rmm::device_async_resource_ref mr)
  *
  * @param default_outputs A column of per-row default values to be returned instead
  *                        of nulls. Used for LEAD()/LAG(), if the row offset crosses
@@ -262,7 +283,7 @@ std::unique_ptr<column> grouped_rolling_window(
   size_type following_window,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  @copybrief grouped_rolling_window
@@ -274,7 +295,7 @@ std::unique_ptr<column> grouped_rolling_window(
  *            size_type following_window,
  *            size_type min_periods,
  *            rolling_aggregation const& aggr,
- *            rmm::mr::device_memory_resource* mr)
+ *            rmm::device_async_resource_ref mr)
  */
 std::unique_ptr<column> grouped_rolling_window(
   table_view const& group_keys,
@@ -284,7 +305,7 @@ std::unique_ptr<column> grouped_rolling_window(
   window_bounds following_window,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
@@ -379,7 +400,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
   size_type following_window_in_days,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
@@ -394,7 +415,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  *                size_type following_window_in_days,
  *                size_type min_periods,
  *                rolling_aggregation const& aggr,
- *                rmm::mr::device_memory_resource* mr)
+ *                rmm::device_async_resource_ref mr)
  *
  * The `preceding_window_in_days` and `following_window_in_days` are specified as a `window_bounds`
  * and supports "unbounded" windows, if set to `window_bounds::unbounded()`.
@@ -408,7 +429,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
   window_bounds following_window_in_days,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Applies a grouping-aware, value range-based rolling window function to the values in a
@@ -528,7 +549,7 @@ std::unique_ptr<column> grouped_range_rolling_window(
   range_window_bounds const& following,
   size_type min_periods,
   rolling_aggregation const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Applies a variable-size rolling window function to the values in a column.
@@ -571,7 +592,7 @@ std::unique_ptr<column> rolling_window(
   column_view const& following_window,
   size_type min_periods,
   rolling_aggregation const& agg,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

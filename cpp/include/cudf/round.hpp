@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/column/column.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 
@@ -32,8 +33,9 @@ namespace cudf {
 /**
  * @brief Different rounding methods for `cudf::round`
  *
- * Info on HALF_UP   rounding: https://en.wikipedia.org/wiki/Rounding#Round_half_up
- * Info on HALF_EVEN rounding: https://en.wikipedia.org/wiki/Rounding#Round_half_to_even
+ * Info on HALF_EVEN rounding: https://en.wikipedia.org/wiki/Rounding#Rounding_half_to_even
+ * Info on HALF_UP   rounding: https://en.wikipedia.org/wiki/Rounding#Rounding_half_away_from_zero
+ * Note: HALF_UP means up in MAGNITUDE: Away from zero! Because of how Java and python define it
  */
 enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
 
@@ -71,9 +73,9 @@ enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
  */
 std::unique_ptr<column> round(
   column_view const& input,
-  int32_t decimal_places              = 0,
-  rounding_method method              = rounding_method::HALF_UP,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  int32_t decimal_places            = 0,
+  rounding_method method            = rounding_method::HALF_UP,
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

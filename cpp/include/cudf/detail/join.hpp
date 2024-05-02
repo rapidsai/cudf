@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/mr/device/polymorphic_allocator.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuco/static_multimap.cuh>
 
@@ -33,15 +33,15 @@
 #include <optional>
 
 // Forward declaration
-template <typename T>
-class default_allocator;
-
 namespace cudf::experimental::row::equality {
 class preprocessed_table;
 }
 
 namespace cudf {
 namespace detail {
+
+// Forward declaration
+class cuco_allocator;
 
 constexpr int DEFAULT_JOIN_CG_SIZE = 2;
 
@@ -62,8 +62,8 @@ struct hash_join {
     cuco::static_multimap<hash_value_type,
                           cudf::size_type,
                           cuda::thread_scope_device,
-                          rmm::mr::stream_allocator_adaptor<default_allocator<char>>,
-                          cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
+                          cudf::detail::cuco_allocator,
+                          cuco::legacy::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
 
   hash_join()                            = delete;
   ~hash_join()                           = default;
@@ -78,8 +78,8 @@ struct hash_join {
   cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
   cudf::table_view _build;                 ///< input table to build the hash map
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
-    _preprocessed_build;                   ///< input table preprocssed for row operators
-  map_type _hash_table;                    ///< hash table built on `_build`
+    _preprocessed_build;  ///< input table preprocssed for row operators
+  map_type _hash_table;   ///< hash table built on `_build`
 
  public:
   /**
@@ -106,7 +106,7 @@ struct hash_join {
   inner_join(cudf::table_view const& probe,
              std::optional<std::size_t> output_size,
              rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr) const;
+             rmm::device_async_resource_ref mr) const;
 
   /**
    * @copydoc cudf::hash_join::left_join
@@ -116,7 +116,7 @@ struct hash_join {
   left_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size,
             rmm::cuda_stream_view stream,
-            rmm::mr::device_memory_resource* mr) const;
+            rmm::device_async_resource_ref mr) const;
 
   /**
    * @copydoc cudf::hash_join::full_join
@@ -126,7 +126,7 @@ struct hash_join {
   full_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size,
             rmm::cuda_stream_view stream,
-            rmm::mr::device_memory_resource* mr) const;
+            rmm::device_async_resource_ref mr) const;
 
   /**
    * @copydoc cudf::hash_join::inner_join_size
@@ -145,7 +145,7 @@ struct hash_join {
    */
   std::size_t full_join_size(cudf::table_view const& probe,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr) const;
+                             rmm::device_async_resource_ref mr) const;
 
  private:
   /**
@@ -170,7 +170,7 @@ struct hash_join {
                      join_kind join,
                      std::optional<std::size_t> output_size,
                      rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr) const;
+                     rmm::device_async_resource_ref mr) const;
 
   /**
    * @copydoc cudf::detail::hash_join::probe_join_indices
@@ -185,7 +185,7 @@ struct hash_join {
                     join_kind join,
                     std::optional<std::size_t> output_size,
                     rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr) const;
+                    rmm::device_async_resource_ref mr) const;
 };
 }  // namespace detail
 }  // namespace cudf

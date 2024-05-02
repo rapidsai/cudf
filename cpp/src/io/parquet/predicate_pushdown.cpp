@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,13 +29,14 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <algorithm>
 #include <list>
 #include <numeric>
 #include <optional>
 
-namespace cudf::io::detail::parquet {
+namespace cudf::io::parquet::detail {
 
 namespace {
 /**
@@ -62,13 +63,13 @@ struct stats_caster {
 
   // uses storage type as T
   template <typename T, CUDF_ENABLE_IF(cudf::is_dictionary<T>() or cudf::is_nested<T>())>
-  static T convert(uint8_t const* stats_val, size_t stats_size, cudf::io::parquet::Type const type)
+  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     CUDF_FAIL("unsupported type for stats casting");
   }
 
   template <typename T, CUDF_ENABLE_IF(cudf::is_boolean<T>())>
-  static T convert(uint8_t const* stats_val, size_t stats_size, cudf::io::parquet::Type const type)
+  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     CUDF_EXPECTS(type == BOOLEAN, "Invalid type and stats combination");
     return targetType<T>(*reinterpret_cast<bool const*>(stats_val));
@@ -78,7 +79,7 @@ struct stats_caster {
   template <typename T,
             CUDF_ENABLE_IF((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or
                            cudf::is_fixed_point<T>() or cudf::is_chrono<T>())>
-  static T convert(uint8_t const* stats_val, size_t stats_size, cudf::io::parquet::Type const type)
+  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     switch (type) {
       case INT32: return targetType<T>(*reinterpret_cast<int32_t const*>(stats_val));
@@ -103,7 +104,7 @@ struct stats_caster {
   }
 
   template <typename T, CUDF_ENABLE_IF(cudf::is_floating_point<T>())>
-  static T convert(uint8_t const* stats_val, size_t stats_size, cudf::io::parquet::Type const type)
+  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     switch (type) {
       case FLOAT: return targetType<T>(*reinterpret_cast<float const*>(stats_val));
@@ -113,7 +114,7 @@ struct stats_caster {
   }
 
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
-  static T convert(uint8_t const* stats_val, size_t stats_size, cudf::io::parquet::Type const type)
+  static T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
   {
     switch (type) {
       case BYTE_ARRAY: [[fallthrough]];
@@ -129,7 +130,7 @@ struct stats_caster {
     size_t col_idx,
     cudf::data_type dtype,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const
+    rmm::device_async_resource_ref mr) const
   {
     // List, Struct, Dictionary types are not supported
     if constexpr (cudf::is_compound<T>() && !std::is_same_v<T, string_view>) {
@@ -150,12 +151,14 @@ struct stats_caster {
         {
         }
 
-        void set_index(size_type index, std::vector<uint8_t> const& binary_value, Type const type)
+        void set_index(size_type index,
+                       thrust::optional<std::vector<uint8_t>> const& binary_value,
+                       Type const type)
         {
-          if (!binary_value.empty()) {
-            val[index] = convert<T>(binary_value.data(), binary_value.size(), type);
+          if (binary_value.has_value()) {
+            val[index] = convert<T>(binary_value.value().data(), binary_value.value().size(), type);
           }
-          if (binary_value.empty()) {
+          if (not binary_value.has_value()) {
             clear_bit_unsafe(null_mask.data(), index);
             null_count++;
           }
@@ -163,7 +166,7 @@ struct stats_caster {
 
         static auto make_strings_children(host_span<string_view> host_strings,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+                                          rmm::device_async_resource_ref mr)
         {
           std::vector<char> chars{};
           std::vector<cudf::size_type> offsets(1, 0);
@@ -180,17 +183,17 @@ struct stats_caster {
 
         auto to_device(cudf::data_type dtype,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr)
+                       rmm::device_async_resource_ref mr)
         {
           if constexpr (std::is_same_v<T, string_view>) {
             auto [d_chars, d_offsets] = make_strings_children(val, stream, mr);
             return cudf::make_strings_column(
               val.size(),
-              std::move(d_offsets),
-              std::move(d_chars),
+              std::make_unique<column>(std::move(d_offsets), rmm::device_buffer{}, 0),
+              d_chars.release(),
+              null_count,
               rmm::device_buffer{
-                null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream, mr},
-              null_count);
+                null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream, mr});
           }
           return std::make_unique<column>(
             dtype,
@@ -210,10 +213,10 @@ struct stats_caster {
           auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
           auto const& colchunk  = row_group.columns[col_idx];
           // To support deprecated min, max fields.
-          auto const& min_value = colchunk.meta_data.statistics.min_value.size() > 0
+          auto const& min_value = colchunk.meta_data.statistics.min_value.has_value()
                                     ? colchunk.meta_data.statistics.min_value
                                     : colchunk.meta_data.statistics.min;
-          auto const& max_value = colchunk.meta_data.statistics.max_value.size() > 0
+          auto const& max_value = colchunk.meta_data.statistics.max_value.has_value()
                                     ? colchunk.meta_data.statistics.max_value
                                     : colchunk.meta_data.statistics.max;
           // translate binary data to Type then to <T>
@@ -527,4 +530,4 @@ named_to_reference_converter::visit_operands(
   return transformed_operands;
 }
 
-}  // namespace cudf::io::detail::parquet
+}  // namespace cudf::io::parquet::detail

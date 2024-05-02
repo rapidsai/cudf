@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
-#include <arrow/util/bitmap_builders.h>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
@@ -25,11 +29,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/type_lists.hpp>
+
+#include <arrow/util/bitmap_builders.h>
 
 #pragma once
 
@@ -186,7 +187,7 @@ template <typename T>
   auto constexpr BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(T);
 
   std::shared_ptr<arrow::Array> arr;
-  arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -scale),
+  arrow::Decimal128Builder decimal_builder(arrow::decimal(cudf::detail::max_precision<T>(), -scale),
                                            arrow::default_memory_pool());
 
   for (T i = 0; i < static_cast<T>(data.size() / BIT_WIDTH_RATIO); ++i) {

@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -14,10 +14,11 @@
 
 cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
-include(../fetch_rapids.cmake)
+include(../rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
+include(${rapids-cmake-dir}/cuda/set_runtime.cmake)
 include(rapids-export)
 include(rapids-find)
 
@@ -25,7 +26,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 23.10.00
+  VERSION "${RAPIDS_VERSION}"
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -78,6 +79,8 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+option(USE_LIBARROW_FROM_PYARROW "Only use the libarrow contained in pyarrow" OFF)
+mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
 if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
@@ -89,9 +92,6 @@ option(
   ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
-
-option(USE_LIBARROW_FROM_PYARROW "Use the libarrow contained within pyarrow." OFF)
-mark_as_advanced(USE_LIBARROW_FROM_PYARROW)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
@@ -182,19 +182,19 @@ endif()
 rapids_cpm_init()
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
+# find NVTX
+include(cmake/thirdparty/get_nvtx.cmake)
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
-# find thrust/cub
-include(cmake/thirdparty/get_thrust.cmake)
+# find CCCL before rmm so that we get cudf's patched version of CCCL
+include(cmake/thirdparty/get_cccl.cmake)
 # find rmm
 include(cmake/thirdparty/get_rmm.cmake)
 # find arrow
 include(cmake/thirdparty/get_arrow.cmake)
 # find dlpack
 include(cmake/thirdparty/get_dlpack.cmake)
-# find libcu++
-include(cmake/thirdparty/get_libcudacxx.cmake)
-# find cuCollections Should come after including thrust and libcudacxx
+# find cuCollections, should come after including CCCL
 include(cmake/thirdparty/get_cucollections.cmake)
 # find or install GoogleTest
 if(CUDF_BUILD_TESTUTIL)
@@ -210,12 +210,14 @@ include(cmake/thirdparty/get_kvikio.cmake)
 include(cmake/thirdparty/get_fmt.cmake)
 # find spdlog
 include(cmake/thirdparty/get_spdlog.cmake)
+# find nanoarrow
+include(cmake/thirdparty/get_nanoarrow.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow)
   if(TARGET cufile::cuFile_interface)
     list(APPEND dependencies cuFile)
   endif()
@@ -323,6 +325,7 @@ add_library(
   src/groupby/sort/group_collect.cu
   src/groupby/sort/group_correlation.cu
   src/groupby/sort/group_count.cu
+  src/groupby/sort/group_histogram.cu
   src/groupby/sort/group_m2.cu
   src/groupby/sort/group_max.cu
   src/groupby/sort/group_min.cu
@@ -338,19 +341,27 @@ add_library(
   src/groupby/sort/group_count_scan.cu
   src/groupby/sort/group_max_scan.cu
   src/groupby/sort/group_min_scan.cu
+  src/groupby/sort/group_product_scan.cu
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
   src/groupby/sort/sort_helper.cu
-  src/hash/hashing.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
   src/hash/murmurhash3_x64_128.cu
-  src/hash/spark_murmurhash3_x86_32.cu
+  src/hash/sha1_hash.cu
+  src/hash/sha224_hash.cu
+  src/hash/sha256_hash.cu
+  src/hash/sha384_hash.cu
+  src/hash/sha512_hash.cu
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
+  src/interop/to_arrow_device.cu
+  src/interop/from_arrow_device.cu
+  src/interop/to_arrow_schema.cpp
+  src/interop/to_arrow_utilities.cpp
   src/interop/detail/arrow_allocator.cpp
   src/io/avro/avro.cpp
   src/io/avro/avro_gpu.cu
@@ -372,16 +383,20 @@ add_library(
   src/io/functions.cpp
   src/io/json/byte_range_info.cu
   src/io/json/json_column.cu
+  src/io/json/json_normalization.cu
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
   src/io/json/read_json.cu
   src/io/json/legacy/json_gpu.cu
   src/io/json/legacy/reader_impl.cu
+  src/io/json/parser_features.cpp
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp
   src/io/orc/reader_impl.cu
+  src/io/orc/reader_impl_helpers.cpp
+  src/io/orc/reader_impl_preprocess.cu
   src/io/orc/stats_enc.cu
   src/io/orc/stripe_data.cu
   src/io/orc/stripe_enc.cu
@@ -400,9 +415,11 @@ add_library(
   src/io/parquet/predicate_pushdown.cpp
   src/io/parquet/reader.cpp
   src/io/parquet/reader_impl.cpp
+  src/io/parquet/reader_impl_chunking.cu
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/writer_impl.cu
+  src/io/parquet/decode_fixed.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/byte_range_info.cpp
@@ -413,17 +430,20 @@ add_library(
   src/io/utilities/arrow_io_source.cpp
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
+  src/io/utilities/data_casting.cu
   src/io/utilities/data_sink.cpp
   src/io/utilities/datasource.cpp
   src/io/utilities/file_io_utilities.cpp
   src/io/utilities/parsing_utils.cu
   src/io/utilities/row_selection.cpp
+  src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
   src/jit/cache.cpp
   src/jit/parser.cpp
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
+  src/join/distinct_hash_join.cu
   src/join/hash_join.cu
   src/join/join.cu
   src/join/join_utils.cu
@@ -434,8 +454,8 @@ add_library(
   src/join/mixed_join_semi.cu
   src/join/mixed_join_size_kernel.cu
   src/join/mixed_join_size_kernel_nulls.cu
-  src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
+  src/json/json_path.cu
   src/lists/contains.cu
   src/lists/combine/concatenate_list_elements.cu
   src/lists/combine/concatenate_rows.cu
@@ -469,6 +489,7 @@ add_library(
   src/reductions/all.cu
   src/reductions/any.cu
   src/reductions/collect_ops.cu
+  src/reductions/histogram.cu
   src/reductions/max.cu
   src/reductions/mean.cu
   src/reductions/min.cu
@@ -530,7 +551,7 @@ add_library(
   src/stream_compaction/apply_boolean_mask.cu
   src/stream_compaction/distinct.cu
   src/stream_compaction/distinct_count.cu
-  src/stream_compaction/distinct_reduce.cu
+  src/stream_compaction/distinct_helpers.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
   src/stream_compaction/stable_distinct.cu
@@ -558,6 +579,7 @@ add_library(
   src/strings/convert/convert_lists.cu
   src/strings/copying/concatenate.cu
   src/strings/copying/copying.cu
+  src/strings/copying/copy_range.cu
   src/strings/copying/shift.cu
   src/strings/count_matches.cu
   src/strings/extract/extract.cu
@@ -565,18 +587,22 @@ add_library(
   src/strings/filling/fill.cu
   src/strings/filter_chars.cu
   src/strings/like.cu
+  src/strings/merge/merge.cu
   src/strings/padding.cu
-  src/strings/json/json_path.cu
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cpp
   src/strings/regex/regex_program.cpp
   src/strings/repeat_strings.cu
   src/strings/replace/backref_re.cu
+  src/strings/replace/find_replace.cu
   src/strings/replace/multi.cu
   src/strings/replace/multi_re.cu
   src/strings/replace/replace.cu
+  src/strings/replace/replace_nulls.cu
   src/strings/replace/replace_re.cu
+  src/strings/replace/replace_slice.cu
   src/strings/reverse.cu
+  src/strings/scan/scan_inclusive.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
@@ -593,6 +619,7 @@ add_library(
   src/strings/utilities.cu
   src/strings/wrap.cu
   src/structs/copying/concatenate.cu
+  src/structs/scan/scan_inclusive.cu
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cpp
@@ -609,13 +636,14 @@ add_library(
   src/text/normalize.cu
   src/text/replace.cu
   src/text/stemmer.cu
-  src/text/subword/bpe_tokenizer.cu
+  src/text/bpe/byte_pair_encoding.cu
+  src/text/bpe/load_merge_pairs.cu
   src/text/subword/data_normalizer.cu
   src/text/subword/load_hash_file.cu
-  src/text/subword/load_merges_file.cu
   src/text/subword/subword_tokenize.cu
   src/text/subword/wordpiece_tokenizer.cu
   src/text/tokenize.cu
+  src/text/vocabulary_tokenize.cu
   src/transform/bools_to_mask.cu
   src/transform/compute_column.cu
   src/transform/encode.cu
@@ -650,6 +678,12 @@ set_source_files_properties(
   src/rolling/rolling.cu
   src/transform/transform.cpp
   PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
+)
+
+set_property(
+  SOURCE src/io/parquet/writer_impl.cu
+  APPEND
+  PROPERTY COMPILE_DEFINITIONS "CUDF_VERSION=${PROJECT_VERSION}"
 )
 
 set_target_properties(
@@ -705,6 +739,7 @@ target_include_directories(
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+          "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -751,9 +786,9 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC ${ARROW_LIBRARIES} libcudacxx::libcudacxx cudf::Thrust rmm::rmm
-  PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
-          $<TARGET_NAME_IF_EXISTS:cuFile_interface>
+  PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
+          $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
 )
 
 # Add Conda library, and include paths if specified
@@ -761,17 +796,7 @@ if(TARGET conda_env)
   target_link_libraries(cudf PRIVATE conda_env)
 endif()
 
-if(CUDA_STATIC_RUNTIME)
-  # Tell CMake what CUDA language runtime to use
-  set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Static)
-  # Make sure to export to consumers what runtime we used
-  target_link_libraries(cudf PUBLIC CUDA::cudart_static)
-else()
-  # Tell CMake what CUDA language runtime to use
-  set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
-  # Make sure to export to consumers what runtime we used
-  target_link_libraries(cudf PUBLIC CUDA::cudart)
-endif()
+rapids_cuda_set_runtime(cudf USE_STATIC ${CUDA_STATIC_RUNTIME})
 
 file(
   WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
@@ -819,16 +844,16 @@ if(CUDF_BUILD_TESTUTIL)
     PUBLIC cudf
     PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
   )
+  rapids_cuda_set_runtime(cudftest_default_stream USE_STATIC ${CUDA_STATIC_RUNTIME})
 
   add_library(cudf::cudftest_default_stream ALIAS cudftest_default_stream)
 
-  # Needs to be static so that we support usage of static builds of gtest which doesn't compile with
-  # fPIC enabled and therefore can't be embedded into shared libraries.
   add_library(
-    cudftestutil STATIC
+    cudftestutil SHARED
     tests/io/metadata_utilities.cpp
-    tests/utilities/base_fixture.cpp
     tests/utilities/column_utilities.cu
+    tests/utilities/debug_utilities.cu
+    tests/utilities/random_seed.cpp
     tests/utilities/table_utilities.cu
     tests/utilities/tdigest_utilities.cu
   )
@@ -853,14 +878,15 @@ if(CUDF_BUILD_TESTUTIL)
 
   target_link_libraries(
     cudftestutil
-    PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf cudftest_default_stream
-    PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+    PUBLIC Threads::Threads cudf cudftest_default_stream
+    PRIVATE GTest::gmock GTest::gtest $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
   target_include_directories(
     cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
                         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
   )
+  rapids_cuda_set_runtime(cudftestutil USE_STATIC ${CUDA_STATIC_RUNTIME})
   add_library(cudf::cudftestutil ALIAS cudftestutil)
 
 endif()
@@ -899,6 +925,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     if(CUDF_BUILD_STACKTRACE_DEBUG)
       target_link_libraries(${_tgt} PRIVATE cudf_backtrace)
     endif()
+    rapids_cuda_set_runtime(${_tgt} USE_STATIC ${CUDA_STATIC_RUNTIME})
     add_library(cudf::${_tgt} ALIAS ${_tgt})
 
     if("${_mode}" STREQUAL "testing")
@@ -931,7 +958,7 @@ endif()
 if(CUDF_BUILD_BENCHMARKS)
   # Find or install GoogleBench
   include(${rapids-cmake-dir}/cpm/gbench.cmake)
-  rapids_cpm_gbench()
+  rapids_cpm_gbench(BUILD_STATIC)
 
   # Find or install nvbench
   include(cmake/thirdparty/get_nvbench.cmake)
@@ -1001,14 +1028,6 @@ following IMPORTED GLOBAL  targets:
     ]=]
 )
 
-set(common_code_string
-    [=[
-if(NOT TARGET cudf::Thrust)
-  thrust_create_target(cudf::Thrust FROM_OPTIONS)
-endif()
-]=]
-)
-
 if(CUDF_ENABLE_ARROW_PARQUET)
   string(
     APPEND
@@ -1032,7 +1051,6 @@ if(testing IN_LIST cudf_FIND_COMPONENTS)
 endif()
 ]=]
 )
-string(APPEND install_code_string "${common_code_string}")
 
 rapids_export(
   INSTALL cudf
@@ -1056,8 +1074,6 @@ endif()
 ]=]
 )
 
-string(APPEND build_code_string "${common_code_string}")
-
 rapids_export(
   BUILD cudf
   EXPORT_SET cudf-exports ${_components_export_string}
@@ -1074,7 +1090,8 @@ rapids_export(
 add_custom_command(
   OUTPUT CUDF_DOXYGEN
   WORKING_DIRECTORY ${CUDF_SOURCE_DIR}/doxygen
-  COMMAND doxygen Doxyfile
+  COMMAND ${CMAKE_COMMAND} -E env "RAPIDS_VERSION=${RAPIDS_VERSION}"
+          "RAPIDS_VERSION_MAJOR_MINOR=${RAPIDS_VERSION_MAJOR_MINOR}" doxygen Doxyfile
   VERBATIM
   COMMENT "Custom command for building cudf doxygen docs."
 )

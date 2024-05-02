@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -125,7 +125,6 @@ def test_can_detect_dtype_from_avro_type_nested(
     ],
 )
 def test_can_parse_single_value(avro_type, cudf_type, avro_val, cudf_val):
-
     schema_root = {
         "name": "root",
         "type": "record",
@@ -147,7 +146,6 @@ def test_can_parse_single_value(avro_type, cudf_type, avro_val, cudf_val):
 
 @pytest.mark.parametrize("avro_type, cudf_type", avro_type_params)
 def test_can_parse_single_null(avro_type, cudf_type):
-
     schema_root = {
         "name": "root",
         "type": "record",
@@ -167,7 +165,6 @@ def test_can_parse_single_null(avro_type, cudf_type):
 
 @pytest.mark.parametrize("avro_type, cudf_type", avro_type_params)
 def test_can_parse_no_data(avro_type, cudf_type):
-
     schema_root = {
         "name": "root",
         "type": "record",
@@ -188,7 +185,6 @@ def test_can_parse_no_data(avro_type, cudf_type):
 )
 @pytest.mark.parametrize("avro_type, cudf_type", avro_type_params)
 def test_can_parse_no_fields(avro_type, cudf_type):
-
     schema_root = {
         "name": "root",
         "type": "record",
@@ -205,7 +201,6 @@ def test_can_parse_no_fields(avro_type, cudf_type):
 
 
 def test_can_parse_no_schema():
-
     schema_root = None
     records = []
     actual = cudf_from_avro_util(schema_root, records)
@@ -307,7 +302,6 @@ def get_days_from_epoch(date: Optional[datetime.date]) -> Optional[int]:
 @pytest.mark.parametrize("nullable", [True, False])
 @pytest.mark.parametrize("prepend_null", [True, False])
 def test_can_parse_avro_date_logical_type(namespace, nullable, prepend_null):
-
     avro_type = {"logicalType": "date", "type": "int"}
     if nullable:
         if prepend_null:

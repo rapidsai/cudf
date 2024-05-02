@@ -16,29 +16,23 @@ sysroot_version:
 cmake_version:
   - ">=3.26.4"
 
-gbench_version:
-  - "==1.8.0"
-
-gtest_version:
-  - ">=1.13.0"
-
 libarrow_version:
-  - "=12"
+  - "==14.0.2"
 
 dlpack_version:
-  - ">=0.5,<0.6.0a0"
+  - ">=0.8,<1.0"
 
 librdkafka_version:
   - ">=1.9.0,<1.10.0a0"
 
 fmt_version:
-  - ">=9.1.0,<10"
+  - ">=10.1.1,<11"
 
 spdlog_version:
-  - ">=1.11.0,<1.12"
+  - ">=1.12.0,<1.13"
 
 nvcomp_version:
-  - "=2.6.1"
+  - "=3.0.6"
 
 zlib_version:
   - ">=1.2.13"

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <strings/regex/regex.cuh>
-#include <strings/regex/regex_program_impl.h>
+#include "strings/regex/regex.cuh"
+#include "strings/regex/regex_program_impl.h"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -31,6 +31,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
@@ -140,7 +141,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
                                    strings_column_view const& replacements,
                                    regex_flags const flags,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   if (patterns.empty()) {  // if no patterns; just return a copy
@@ -185,15 +186,15 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
 
   auto found_ranges = rmm::device_uvector<found_range>(d_progs.size() * input.size(), stream);
 
-  auto children = make_strings_children(
+  auto [offsets_column, chars] = make_strings_children(
     replace_multi_regex_fn{*d_strings, d_progs, found_ranges.data(), *d_repls},
     input.size(),
     stream,
     mr);
 
   return make_strings_column(input.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             chars.release(),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
@@ -206,10 +207,11 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    std::vector<std::string> const& patterns,
                                    strings_column_view const& replacements,
                                    regex_flags const flags,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_re(strings, patterns, replacements, flags, cudf::get_default_stream(), mr);
+  return detail::replace_re(strings, patterns, replacements, flags, stream, mr);
 }
 
 }  // namespace strings

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,9 +24,8 @@
 #include "parquet.hpp"
 #include "parquet_gpu.hpp"
 
-#include <cudf/io/data_sink.hpp>
-
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
@@ -38,15 +37,11 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace parquet {
+namespace cudf::io::parquet::detail {
+
 // Forward internal classes
 struct aggregate_writer_metadata;
 
-using namespace cudf::io::parquet;
-using namespace cudf::io;
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
@@ -66,7 +61,7 @@ class writer::impl {
    */
   explicit impl(std::vector<std::unique_ptr<data_sink>> sinks,
                 parquet_writer_options const& options,
-                single_write_mode mode,
+                cudf::io::detail::single_write_mode mode,
                 rmm::cuda_stream_view stream);
 
   /**
@@ -79,7 +74,7 @@ class writer::impl {
    */
   explicit impl(std::vector<std::unique_ptr<data_sink>> sinks,
                 chunked_parquet_writer_options const& options,
-                single_write_mode mode,
+                cudf::io::detail::single_write_mode mode,
                 rmm::cuda_stream_view stream);
 
   /**
@@ -134,16 +129,14 @@ class writer::impl {
    * @param chunks Column chunks
    * @param global_rowgroup_base Numbers of rowgroups in each file/partition
    * @param first_rg_in_part The first rowgroup in each partition
-   * @param batch_list The batches of rowgroups to encode
    * @param rg_to_part A map from rowgroup to partition
    * @param[out] bounce_buffer Temporary host output buffer
    */
   void write_parquet_data_to_sink(std::unique_ptr<aggregate_writer_metadata>& updated_agg_meta,
-                                  device_span<gpu::EncPage const> pages,
-                                  host_2dspan<gpu::EncColumnChunk const> chunks,
+                                  device_span<EncPage const> pages,
+                                  host_2dspan<EncColumnChunk const> chunks,
                                   host_span<size_t const> global_rowgroup_base,
                                   host_span<int const> first_rg_in_part,
-                                  host_span<size_type const> batch_list,
                                   host_span<int const> rg_to_part,
                                   host_span<uint8_t> bounce_buffer);
 
@@ -161,12 +154,15 @@ class writer::impl {
   size_t const _max_dictionary_size;
   std::optional<size_type> const _max_page_fragment_size;
   bool const _int96_timestamps;
+  bool const _utc_timestamps;
   bool const _write_v2_headers;
+  std::optional<std::vector<sorting_column>> _sorting_columns;
   int32_t const _column_index_truncate_length;
   std::vector<std::map<std::string, std::string>> const _kv_meta;  // Optional user metadata.
-  single_write_mode const _single_write_mode;  // Special parameter only used by `write()` to
-                                               // indicate that we are guaranteeing a single table
-                                               // write. This enables some internal optimizations.
+  cudf::io::detail::single_write_mode const
+    _single_write_mode;  // Special parameter only used by `write()` to
+                         // indicate that we are guaranteeing a single table
+                         // write. This enables some internal optimizations.
   std::vector<std::unique_ptr<data_sink>> const _out_sink;
 
   // Internal states, filled during `write()` and written to sink during `write` and `close()`.
@@ -180,7 +176,4 @@ class writer::impl {
   bool _closed                = false;  // To track if the output has been written to sink.
 };
 
-}  // namespace parquet
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

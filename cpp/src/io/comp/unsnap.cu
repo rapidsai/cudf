@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,7 @@
  */
 
 #include "gpuinflate.hpp"
-
-#include <io/utilities/block_utils.cuh>
+#include "io/utilities/block_utils.cuh"
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -45,13 +44,15 @@ void __device__ busy_wait(size_t cycles)
 struct unsnap_batch_s {
   int32_t len;  // 1..64 = Number of bytes
   uint32_t
-    offset;     // copy distance if greater than zero or negative of literal offset in byte stream
+    offset;  // copy distance if greater than zero or negative of literal offset in byte stream
 };
 
 /**
  * @brief Queue structure used to exchange data between warps
  */
 struct unsnap_queue_s {
+  unsnap_queue_s() = default;  // required to compile on ctk-12.2 + aarch64
+
   uint32_t prefetch_wrpos;         ///< Prefetcher write position
   uint32_t prefetch_rdpos;         ///< Prefetch consumer read position
   int32_t prefetch_end;            ///< Prefetch enable flag (nonzero stops prefetcher)
@@ -64,13 +65,15 @@ struct unsnap_queue_s {
  * @brief snappy decompression state
  */
 struct unsnap_state_s {
-  uint8_t const* base;             ///< base ptr of compressed stream
-  uint8_t const* end;              ///< end of compressed stream
-  uint32_t uncompressed_size;      ///< uncompressed stream size
-  uint32_t bytes_left;             ///< remaining bytes to decompress
-  int32_t error;                   ///< current error status
-  uint32_t tstart;                 ///< start time for perf logging
-  volatile unsnap_queue_s q;       ///< queue for cross-warp communication
+  constexpr unsnap_state_s() noexcept {}  // required to compile on ctk-12.2 + aarch64
+
+  uint8_t const* base{};           ///< base ptr of compressed stream
+  uint8_t const* end{};            ///< end of compressed stream
+  uint32_t uncompressed_size{};    ///< uncompressed stream size
+  uint32_t bytes_left{};           ///< remaining bytes to decompress
+  int32_t error{};                 ///< current error status
+  uint32_t tstart{};               ///< start time for perf logging
+  volatile unsnap_queue_s q{};     ///< queue for cross-warp communication
   device_span<uint8_t const> src;  ///< input for current block
   device_span<uint8_t> dst;        ///< output for current block
 };
@@ -624,7 +627,7 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
  * @param[out] outputs Decompression status per block
  */
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   unsnap_kernel(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
                 device_span<compression_result> results)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuda/functional>
 #include <thrust/distance.h>
 #include <thrust/scan.h>
 
@@ -299,7 +301,7 @@ std::pair<std::unique_ptr<column>, size_type> make_offsets_child_column(
   InputIterator begin,
   InputIterator end,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto count          = static_cast<size_type>(std::distance(begin, end));
   auto offsets_column = make_numeric_column(
@@ -311,9 +313,10 @@ std::pair<std::unique_ptr<column>, size_type> make_offsets_child_column(
   // using exclusive-scan technically requires count+1 input values even though
   // the final input value is never used.
   // The input iterator is wrapped here to allow the last value to be safely read.
-  auto map_fn = [begin, count] __device__(size_type idx) -> size_type {
-    return idx < count ? static_cast<size_type>(begin[idx]) : size_type{0};
-  };
+  auto map_fn =
+    cuda::proclaim_return_type<size_type>([begin, count] __device__(size_type idx) -> size_type {
+      return idx < count ? static_cast<size_type>(begin[idx]) : size_type{0};
+    });
   auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
   // Use the sizes-to-offsets iterator to compute the total number of elements
   auto const total_elements = sizes_to_offsets(input_itr, input_itr + count + 1, d_offsets, stream);

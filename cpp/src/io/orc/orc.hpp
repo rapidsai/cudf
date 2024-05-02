@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,13 @@
 
 #pragma once
 
+#include "io/comp/io_uncomp.hpp"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <io/comp/io_uncomp.hpp>
 
 #include <thrust/optional.h>
 
@@ -40,22 +41,51 @@ namespace orc {
 static constexpr uint32_t block_header_size = 3;
 // Seconds from January 1st, 1970 to January 1st, 2015
 static constexpr int64_t orc_utc_epoch = 1420070400;
+// ORC datasets start with a 3 byte header
+static constexpr char const* MAGIC = "ORC";
+
+// Each ORC writer implementation should write its code to the file footer
+// the codes are specified in the ORC specification
+static constexpr int32_t cudf_writer_code = 5;
+// Each ORC writer implementation should write its version to the PostScript
+// The version values are based on the ORC Java writer bug fixes and features
+// From https://github.com/apache/orc-format/blob/main/src/main/proto/orc_proto.proto:
+//   0 = original
+//   1 = HIVE-8732 fixed (fixed stripe/file maximum statistics &
+//                        string statistics use utf8 for min/max)
+//   2 = HIVE-4243 fixed (use real column names from Hive tables)
+//   3 = HIVE-12055 added (vectorized writer implementation)
+//   4 = HIVE-13083 fixed (decimals write present stream correctly)
+//   5 = ORC-101 fixed (bloom filters use utf8 consistently)
+//   6 = ORC-135 fixed (timestamp statistics use utc)
+//   7 = ORC-517 fixed (decimal64 min/max incorrect)
+//   8 = ORC-203 added (trim very long string statistics)
+//   9 = ORC-14 added (column encryption)
+// Our version should be updated as we implement the features from the list above
+static constexpr uint32_t cudf_writer_version = 7;
+
+// Used for the nanosecond remainder in timestamp statistics when the actual nanoseconds of min/max
+// are not included. As the timestamp statistics are stored as milliseconds + nanosecond remainder,
+// the maximum nanosecond remainder is 999,999 (nanoseconds in a millisecond - 1).
+static constexpr int32_t DEFAULT_MIN_NANOS = 0;
+static constexpr int32_t DEFAULT_MAX_NANOS = 999'999;
 
 struct PostScript {
-  uint64_t footerLength       = 0;     // the length of the footer section in bytes
-  CompressionKind compression = NONE;  // the kind of generic compression used
-  uint32_t compressionBlockSize{};     // the maximum size of each compression chunk
-  std::vector<uint32_t> version;       // the version of the writer [major, minor]
-  uint64_t metadataLength = 0;         // the length of the metadata section in bytes
-  std::string magic       = "";        // the fixed string "ORC"
+  uint64_t footerLength       = 0;        // the length of the footer section in bytes
+  CompressionKind compression = NONE;     // the kind of generic compression used
+  uint64_t compressionBlockSize{};        // the maximum size of each compression chunk
+  std::vector<uint32_t> version;          // the version of the file format [major, minor]
+  uint64_t metadataLength = 0;            // the length of the metadata section in bytes
+  std::optional<uint32_t> writerVersion;  // The version of the writer that wrote the file
+  std::string magic = "";                 // the fixed string "ORC"
 };
 
 struct StripeInformation {
   uint64_t offset       = 0;  // the start of the stripe within the file
   uint64_t indexLength  = 0;  // the length of the indexes in bytes
   uint64_t dataLength   = 0;  // the length of the data in bytes
-  uint32_t footerLength = 0;  // the length of the footer in bytes
-  uint32_t numberOfRows = 0;  // the number of rows in the stripe
+  uint64_t footerLength = 0;  // the length of the footer in bytes
+  uint64_t numberOfRows = 0;  // the number of rows in the stripe
 };
 
 struct SchemaType {
@@ -75,7 +105,7 @@ struct UserMetadataItem {
 
 using ColStatsBlob = std::vector<uint8_t>;  // Column statistics blob
 
-struct FileFooter {
+struct Footer {
   uint64_t headerLength  = 0;              // the length of the file header in bytes (always 3)
   uint64_t contentLength = 0;              // the length of the file header and body in bytes
   std::vector<StripeInformation> stripes;  // the information about the stripes
@@ -84,6 +114,7 @@ struct FileFooter {
   uint64_t numberOfRows = 0;               // the total number of rows in the file
   std::vector<ColStatsBlob> statistics;    // Column statistics blobs
   uint32_t rowIndexStride = 0;             // the maximum number of rows in each index entry
+  std::optional<uint32_t> writer;          // Writer code
 };
 
 struct Stream {
@@ -206,7 +237,7 @@ class ProtobufReader {
     read(s, m_end - m_cur);
   }
   void read(PostScript&, size_t maxlen);
-  void read(FileFooter&, size_t maxlen);
+  void read(Footer&, size_t maxlen);
   void read(StripeInformation&, size_t maxlen);
   void read(SchemaType&, size_t maxlen);
   void read(UserMetadataItem&, size_t maxlen);
@@ -488,7 +519,7 @@ class ProtobufWriter {
 
  public:
   size_t write(PostScript const&);
-  size_t write(FileFooter const&);
+  size_t write(Footer const&);
   size_t write(StripeInformation const&);
   size_t write(SchemaType const&);
   size_t write(UserMetadataItem const&);
@@ -509,7 +540,7 @@ class ProtobufWriter {
 
 class OrcDecompressor {
  public:
-  OrcDecompressor(CompressionKind kind, uint32_t blockSize);
+  OrcDecompressor(CompressionKind kind, uint64_t blockSize);
 
   /**
    * @brief ORC block decompression
@@ -522,17 +553,17 @@ class OrcDecompressor {
   host_span<uint8_t const> decompress_blocks(host_span<uint8_t const> src,
                                              rmm::cuda_stream_view stream);
   [[nodiscard]] uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
-  [[nodiscard]] uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const
+  [[nodiscard]] uint64_t GetMaxUncompressedBlockSize(uint32_t block_len) const
   {
-    return std::min(block_len << m_log2MaxRatio, m_blockSize);
+    return std::min(static_cast<uint64_t>(block_len) << m_log2MaxRatio, m_blockSize);
   }
   [[nodiscard]] compression_type compression() const { return _compression; }
-  [[nodiscard]] uint32_t GetBlockSize() const { return m_blockSize; }
+  [[nodiscard]] auto GetBlockSize() const { return m_blockSize; }
 
  protected:
   compression_type _compression;
   uint32_t m_log2MaxRatio = 24;  // log2 of maximum compression ratio
-  uint32_t m_blockSize;
+  uint64_t m_blockSize;
   std::vector<uint8_t> m_buf;
 };
 
@@ -582,9 +613,9 @@ class metadata {
  public:
   explicit metadata(datasource* const src, rmm::cuda_stream_view stream);
 
-  [[nodiscard]] size_t get_total_rows() const { return ff.numberOfRows; }
-  [[nodiscard]] int get_num_stripes() const { return ff.stripes.size(); }
-  [[nodiscard]] int get_num_columns() const { return ff.types.size(); }
+  [[nodiscard]] auto get_total_rows() const { return ff.numberOfRows; }
+  [[nodiscard]] size_type get_num_stripes() const { return ff.stripes.size(); }
+  [[nodiscard]] size_type get_num_columns() const { return ff.types.size(); }
   /**
    * @brief Returns the name of the column with the given ID.
    *
@@ -607,7 +638,7 @@ class metadata {
     CUDF_EXPECTS(column_id < get_num_columns(), "Out of range column id provided");
     return column_paths[column_id];
   }
-  [[nodiscard]] int get_row_index_stride() const { return ff.rowIndexStride; }
+  [[nodiscard]] auto get_row_index_stride() const { return ff.rowIndexStride; }
 
   /**
    * @brief Returns the ID of the parent column of the given column.
@@ -635,7 +666,7 @@ class metadata {
 
  public:
   PostScript ps;
-  FileFooter ff;
+  Footer ff;
   Metadata md;
   std::vector<StripeFooter> stripefooters;
   std::unique_ptr<OrcDecompressor> decompressor;

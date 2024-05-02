@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ static void BM_repeat_strings_scalar_times(benchmark::State& state)
     cudf::strings::repeat_strings(strings_col, default_repeat_times);
   }
 
-  state.SetBytesProcessed(state.iterations() * strings_col.chars_size());
+  state.SetBytesProcessed(state.iterations() * strings_col.chars_size(cudf::get_default_stream()));
 }
 
 static void BM_repeat_strings_column_times(benchmark::State& state)
@@ -75,8 +75,8 @@ static void BM_repeat_strings_column_times(benchmark::State& state)
     cudf::strings::repeat_strings(strings_col, repeat_times_col);
   }
 
-  state.SetBytesProcessed(state.iterations() *
-                          (strings_col.chars_size() + repeat_times_col.size() * sizeof(int32_t)));
+  state.SetBytesProcessed(state.iterations() * (strings_col.chars_size(cudf::get_default_stream()) +
+                                                repeat_times_col.size() * sizeof(int32_t)));
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,12 +23,12 @@
 
 #include <cuco/static_map.cuh>
 
-namespace cudf::io::parquet::gpu {
+namespace cudf::io::parquet::detail {
 
 auto constexpr KEY_SENTINEL   = size_type{-1};
 auto constexpr VALUE_SENTINEL = size_type{-1};
 
-using map_type = cuco::static_map<size_type, size_type>;
+using map_type = cuco::legacy::static_map<size_type, size_type>;
 
 /**
  * @brief The alias of `map_type::pair_atomic_type` class.
@@ -81,4 +81,4 @@ inline size_type __device__ row_to_value_idx(size_type idx,
   return idx;
 }
 
-}  // namespace cudf::io::parquet::gpu
+}  // namespace cudf::io::parquet::detail

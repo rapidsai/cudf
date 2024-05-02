@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import warnings
 from collections import abc
@@ -25,6 +25,8 @@ def read_json(
     byte_range=None,
     keep_quotes=False,
     storage_options=None,
+    mixed_types_as_string=False,
+    prune_columns=False,
     *args,
     **kwargs,
 ):
@@ -37,25 +39,6 @@ def read_json(
             f"or a bool, or None. Got {type(dtype)}"
         )
 
-    if engine == "cudf_experimental":
-        raise ValueError(
-            "engine='cudf_experimental' support has been removed, "
-            "use `engine='cudf'`"
-        )
-
-    if engine == "cudf_legacy":
-        # TODO: Deprecated in 23.02, please
-        # give some time until(more than couple of
-        # releases from now) `cudf_legacy`
-        # support can be removed completely.
-        warnings.warn(
-            "engine='cudf_legacy' is a deprecated engine."
-            "This will be removed in a future release."
-            "Please switch to using engine='cudf'.",
-            FutureWarning,
-        )
-    if engine == "cudf_legacy" and not lines:
-        raise ValueError(f"{engine} engine only supports JSON Lines format")
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
     if engine != "cudf" and keep_quotes:
@@ -63,7 +46,7 @@ def read_json(
             "keep_quotes='True' is supported only with engine='cudf'"
         )
 
-    if engine == "cudf_legacy" or engine == "cudf":
+    if engine == "cudf":
         if dtype is None:
             dtype = True
 
@@ -102,6 +85,8 @@ def read_json(
                 iotypes=(BytesIO, StringIO),
                 allow_raw_text_input=True,
                 storage_options=storage_options,
+                warn_on_raw_text_input=True,
+                warn_meta=("json", "read_json"),
             )
             if isinstance(tmp_source, list):
                 filepaths_or_buffers.extend(tmp_source)
@@ -114,8 +99,10 @@ def read_json(
             lines,
             compression,
             byte_range,
-            engine == "cudf_legacy",
+            False,
             keep_quotes,
+            mixed_types_as_string,
+            prune_columns,
         )
     else:
         warnings.warn(
@@ -179,6 +166,13 @@ def read_json(
     return df
 
 
+def maybe_return_nullable_pd_obj(cudf_obj):
+    try:
+        return cudf_obj.to_pandas(nullable=True)
+    except NotImplementedError:
+        return cudf_obj.to_pandas(nullable=False)
+
+
 @ioutils.doc_to_json()
 def to_json(
     cudf_val,
@@ -228,10 +222,16 @@ def to_json(
             return path_or_buf.read()
     elif engine == "pandas":
         warnings.warn("Using CPU via Pandas to write JSON dataset")
-        pd_value = cudf_val.to_pandas(nullable=True)
-        return pd.io.json.to_json(
+        if isinstance(cudf_val, cudf.DataFrame):
+            pd_data = {
+                col: maybe_return_nullable_pd_obj(series)
+                for col, series in cudf_val.items()
+            }
+            pd_value = pd.DataFrame(pd_data)
+        else:
+            pd_value = maybe_return_nullable_pd_obj(cudf_val)
+        return pd_value.to_json(
             path_or_buf,
-            pd_value,
             orient=orient,
             storage_options=storage_options,
             *args,

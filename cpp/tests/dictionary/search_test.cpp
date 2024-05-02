@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/dictionary/detail/search.hpp>
-#include <cudf/dictionary/search.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/dictionary/detail/search.hpp>
+#include <cudf/dictionary/search.hpp>
 
 struct DictionarySearchTest : public cudf::test::BaseFixture {};
 
@@ -76,9 +77,9 @@ TEST_F(DictionarySearchTest, Errors)
 {
   cudf::test::dictionary_column_wrapper<int64_t> dictionary({1, 2, 3});
   cudf::numeric_scalar<double> key(7);
-  EXPECT_THROW(cudf::dictionary::get_index(dictionary, key), cudf::logic_error);
+  EXPECT_THROW(cudf::dictionary::get_index(dictionary, key), cudf::data_type_error);
   EXPECT_THROW(
     cudf::dictionary::detail::get_insert_index(
       dictionary, key, cudf::get_default_stream(), rmm::mr::get_current_device_resource()),
-    cudf::logic_error);
+    cudf::data_type_error);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/lists/detail/scatter_helper.cuh>
 #include <cudf/lists/list_device_view.cuh>
-#include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -30,7 +30,9 @@
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuda/functional>
 #include <thrust/distance.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -52,7 +54,7 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
   IndexIterator index_begin,
   IndexIterator index_end,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto n_rows = thrust::distance(index_begin, index_end);
 
@@ -62,9 +64,10 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
                     index_begin,
                     index_end,
                     vector.begin(),
-                    [label, lists_column] __device__(size_type row_index) {
-                      return unbound_list_view{label, lists_column, row_index};
-                    });
+                    cuda::proclaim_return_type<unbound_list_view>(
+                      [label, lists_column] __device__(size_type row_index) {
+                        return unbound_list_view{label, lists_column, row_index};
+                      }));
 
   return vector;
 }
@@ -96,9 +99,9 @@ std::unique_ptr<column> scatter_impl(rmm::device_uvector<unbound_list_view> cons
                                      column_view const& source,
                                      column_view const& target,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(column_types_equal(source, target), "Mismatched column types.");
+  CUDF_EXPECTS(have_same_types(source, target), "Mismatched column types.");
 
   auto const child_column_type = lists_column_view(target).child().type();
 
@@ -115,7 +118,8 @@ std::unique_ptr<column> scatter_impl(rmm::device_uvector<unbound_list_view> cons
     lists_column_view(target);  // Checks that target is a list column.
 
   auto list_size_begin = thrust::make_transform_iterator(
-    target_vector.begin(), [] __device__(unbound_list_view l) { return l.size(); });
+    target_vector.begin(),
+    cuda::proclaim_return_type<size_type>([] __device__(unbound_list_view l) { return l.size(); }));
   auto offsets_column = std::get<0>(cudf::detail::make_offsets_child_column(
     list_size_begin, list_size_begin + target.size(), stream, mr));
 
@@ -130,8 +134,8 @@ std::unique_ptr<column> scatter_impl(rmm::device_uvector<unbound_list_view> cons
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(offsets_column));
   children.emplace_back(std::move(child_column));
-  auto null_mask =
-    target.has_nulls() ? copy_bitmask(target, stream, mr) : rmm::device_buffer{0, stream, mr};
+  auto null_mask = target.has_nulls() ? cudf::detail::copy_bitmask(target, stream, mr)
+                                      : rmm::device_buffer{0, stream, mr};
 
   // The output column from this function only has null masks copied from the target columns.
   // That is still not a correct final null mask for the scatter result.
@@ -174,7 +178,7 @@ std::unique_ptr<column> scatter(column_view const& source,
                                 MapIterator scatter_map_end,
                                 column_view const& target,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   auto const num_rows = target.size();
   if (num_rows == 0) { return cudf::empty_like(target); }
@@ -230,7 +234,7 @@ std::unique_ptr<column> scatter(scalar const& slr,
                                 MapIterator scatter_map_end,
                                 column_view const& target,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   auto const num_rows = target.size();
   if (num_rows == 0) { return cudf::empty_like(target); }

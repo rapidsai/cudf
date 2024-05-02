@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,13 +31,13 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
-#include <thrust/transform.h>
+#include <rmm/resource_ref.hpp>
 
 #include <cub/block/block_scan.cuh>
 #include <cub/device/device_histogram.cuh>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace {
@@ -122,14 +122,14 @@ class bitwise_partitioner {
  * @param[out] global_partition_sizes The number of rows in each partition.
  */
 template <class row_hasher_t, typename partitioner_type>
-__global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
-                                              size_type const num_rows,
-                                              size_type const num_partitions,
-                                              partitioner_type const the_partitioner,
-                                              size_type* __restrict__ row_partition_numbers,
-                                              size_type* __restrict__ row_partition_offset,
-                                              size_type* __restrict__ block_partition_sizes,
-                                              size_type* __restrict__ global_partition_sizes)
+CUDF_KERNEL void compute_row_partition_numbers(row_hasher_t the_hasher,
+                                               size_type const num_rows,
+                                               size_type const num_partitions,
+                                               partitioner_type const the_partitioner,
+                                               size_type* __restrict__ row_partition_numbers,
+                                               size_type* __restrict__ row_partition_offset,
+                                               size_type* __restrict__ block_partition_sizes,
+                                               size_type* __restrict__ global_partition_sizes)
 {
   // Accumulate histogram of the size of each partition in shared memory
   extern __shared__ size_type shared_partition_sizes[];
@@ -197,10 +197,10 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
          {block0 partition(num_partitions-1) offset, block1
  partition(num_partitions -1) offset, ...} }
  */
-__global__ void compute_row_output_locations(size_type* __restrict__ row_partition_numbers,
-                                             size_type const num_rows,
-                                             size_type const num_partitions,
-                                             size_type* __restrict__ block_partition_offsets)
+CUDF_KERNEL void compute_row_output_locations(size_type* __restrict__ row_partition_numbers,
+                                              size_type const num_rows,
+                                              size_type const num_partitions,
+                                              size_type* __restrict__ block_partition_offsets)
 {
   // Shared array that holds the offset of this blocks partitions in
   // global memory
@@ -255,14 +255,14 @@ __global__ void compute_row_output_locations(size_type* __restrict__ row_partiti
  * @param[in] scanned_block_partition_sizes The scan of block_partition_sizes
  */
 template <typename InputIter, typename DataType>
-__global__ void copy_block_partitions(InputIter input_iter,
-                                      DataType* __restrict__ output_buf,
-                                      size_type const num_rows,
-                                      size_type const num_partitions,
-                                      size_type const* __restrict__ row_partition_numbers,
-                                      size_type const* __restrict__ row_partition_offset,
-                                      size_type const* __restrict__ block_partition_sizes,
-                                      size_type const* __restrict__ scanned_block_partition_sizes)
+CUDF_KERNEL void copy_block_partitions(InputIter input_iter,
+                                       DataType* __restrict__ output_buf,
+                                       size_type const num_rows,
+                                       size_type const num_partitions,
+                                       size_type const* __restrict__ row_partition_numbers,
+                                       size_type const* __restrict__ row_partition_offset,
+                                       size_type const* __restrict__ block_partition_sizes,
+                                       size_type const* __restrict__ scanned_block_partition_sizes)
 {
   extern __shared__ char shared_memory[];
   auto block_output = reinterpret_cast<DataType*>(shared_memory);
@@ -414,7 +414,7 @@ struct copy_block_partitions_dispatcher {
                                      size_type const* scanned_block_partition_sizes,
                                      size_type grid_size,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     rmm::device_buffer output(input.size() * sizeof(DataType), stream, mr);
 
@@ -442,7 +442,7 @@ struct copy_block_partitions_dispatcher {
                                      size_type const* scanned_block_partition_sizes,
                                      size_type grid_size,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     // Use move_to_output_buffer to create an equivalent gather map
     auto gather_map = compute_gather_map(input.size(),
@@ -472,7 +472,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   size_type num_partitions,
   uint32_t seed,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto const num_rows = table_to_hash.num_rows();
 
@@ -659,7 +659,7 @@ struct dispatch_map_type {
              column_view const& partition_map,
              size_type num_partitions,
              rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr) const
+             rmm::device_async_resource_ref mr) const
   {
     // Build a histogram of the number of rows in each partition
     rmm::device_uvector<size_type> histogram(num_partitions + 1, stream);
@@ -762,7 +762,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   int num_partitions,
   uint32_t seed,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto table_to_hash = input.select(columns_to_hash);
 
@@ -786,7 +786,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   column_view const& partition_map,
   size_type num_partitions,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(t.num_rows() == partition_map.size(),
                "Size mismatch between table and partition map.");
@@ -810,7 +810,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   hash_id hash_function,
   uint32_t seed,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -834,7 +834,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,
   column_view const& partition_map,
   size_type num_partitions,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::partition(t, partition_map, num_partitions, cudf::get_default_stream(), mr);

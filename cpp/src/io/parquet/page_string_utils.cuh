@@ -18,7 +18,7 @@
 
 #include <cudf/strings/detail/gather.cuh>
 
-namespace cudf::io::parquet::gpu {
+namespace cudf::io::parquet::detail {
 
 // stole this from cudf/strings/detail/gather.cuh. modified to run on a single string on one warp.
 // copies from src to dst in 16B chunks per thread.
@@ -107,4 +107,4 @@ __device__ void block_excl_sum(size_type* arr, size_type length, size_type initi
   }
 }
 
-}  // namespace cudf::io::parquet::gpu
+}  // namespace cudf::io::parquet::detail

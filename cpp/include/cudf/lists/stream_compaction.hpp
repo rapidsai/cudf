@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf::lists {
 
@@ -54,13 +55,15 @@ namespace cudf::lists {
  *
  * @param input The input list column view to be filtered
  * @param boolean_mask A nullable list of bools column used to filter `input` elements
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return List column of the same type as `input`, containing filtered list rows
  */
 std::unique_ptr<column> apply_boolean_mask(
   lists_column_view const& input,
   lists_column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create a new list column without duplicate elements in each list.
@@ -78,14 +81,16 @@ std::unique_ptr<column> apply_boolean_mask(
  * @param input The input lists column
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned object
  * @return The resulting lists column containing lists without duplicates
  */
 std::unique_ptr<column> distinct(
   lists_column_view const& input,
-  null_equality nulls_equal           = null_equality::EQUAL,
-  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality nulls_equal         = null_equality::EQUAL,
+  nan_equality nans_equal           = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 

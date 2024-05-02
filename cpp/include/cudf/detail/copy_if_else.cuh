@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <rmm/device_scalar.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/iterator_traits.h>
 #include <thrust/optional.h>
@@ -37,7 +38,7 @@ template <size_type block_size,
           typename RightIter,
           typename Filter,
           bool has_nulls>
-__launch_bounds__(block_size) __global__
+__launch_bounds__(block_size) CUDF_KERNEL
   void copy_if_else_kernel(LeftIter lhs,
                            RightIter rhs,
                            Filter filter,
@@ -153,7 +154,7 @@ std::unique_ptr<column> copy_if_else(bool nullable,
                                      FilterFn filter,
                                      cudf::data_type output_type,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   // This is the type of the thrust::optional element in the passed iterators
   using Element = typename thrust::iterator_traits<LeftIter>::value_type::value_type;

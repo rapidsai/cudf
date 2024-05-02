@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <strings/count_matches.hpp>
-#include <strings/regex/regex_program_impl.h>
-#include <strings/regex/utilities.cuh>
+#include "strings/count_matches.hpp"
+#include "strings/regex/regex_program_impl.h"
+#include "strings/regex/utilities.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -30,6 +30,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/functional.h>
 #include <thrust/transform_scan.h>
@@ -104,7 +105,7 @@ struct extract_fn {
 std::unique_ptr<column> extract_all_record(strings_column_view const& input,
                                            regex_program const& prog,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   auto const strings_count = input.size();
   auto const d_strings     = column_device_view::create(input.parent(), stream);
@@ -118,12 +119,12 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
 
   // Get the match counts for each string.
   // This column will become the output lists child offsets column.
-  auto offsets   = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
-  auto d_offsets = offsets->mutable_view().data<size_type>();
+  auto counts   = count_matches(*d_strings, *d_prog, strings_count, stream, mr);
+  auto d_counts = counts->mutable_view().data<size_type>();
 
   // Compute null output rows
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    d_offsets, d_offsets + strings_count, [] __device__(auto v) { return v > 0; }, stream, mr);
+    d_counts, d_counts + strings_count, [] __device__(auto v) { return v > 0; }, stream, mr);
 
   // Return an empty lists column if there are no valid rows
   if (strings_count == null_count) {
@@ -132,18 +133,15 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
 
   // Convert counts into offsets.
   // Multiply each count by the number of groups.
-  thrust::transform_exclusive_scan(
-    rmm::exec_policy(stream),
-    d_offsets,
-    d_offsets + strings_count + 1,
-    d_offsets,
-    [groups] __device__(auto v) { return v * groups; },
-    size_type{0},
-    thrust::plus{});
-  auto const total_groups =
-    cudf::detail::get_value<size_type>(offsets->view(), strings_count, stream);
+  auto sizes_itr = cudf::detail::make_counting_transform_iterator(
+    0, cuda::proclaim_return_type<size_type>([d_counts, groups] __device__(auto idx) {
+      return d_counts[idx] * groups;
+    }));
+  auto [offsets, total_strings] =
+    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + strings_count, stream, mr);
+  auto d_offsets = offsets->view().data<size_type>();
 
-  rmm::device_uvector<string_index_pair> indices(total_groups, stream);
+  rmm::device_uvector<string_index_pair> indices(total_strings, stream);
 
   launch_for_each_kernel(
     extract_fn{*d_strings, d_offsets, indices.data()}, *d_prog, strings_count, stream);
@@ -164,12 +162,13 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
 
 // external API
 
-std::unique_ptr<column> extract_all_record(strings_column_view const& strings,
+std::unique_ptr<column> extract_all_record(strings_column_view const& input,
                                            regex_program const& prog,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_all_record(strings, prog, cudf::get_default_stream(), mr);
+  return detail::extract_all_record(input, prog, stream, mr);
 }
 
 }  // namespace strings

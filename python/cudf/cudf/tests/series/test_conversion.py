@@ -26,7 +26,8 @@ def test_convert_dtypes(data, dtype):
 
     # because we don't have distinct nullable types, we check that we
     # get the same result if we convert to nullable pandas types:
-    got = gs.convert_dtypes().to_pandas(nullable=True)
+    nullable = dtype not in ("category", "datetime64[ns]")
+    got = gs.convert_dtypes().to_pandas(nullable=nullable)
     assert_eq(expect, got)
 
 

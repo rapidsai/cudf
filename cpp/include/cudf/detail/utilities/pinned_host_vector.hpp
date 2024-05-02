@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008-2023 NVIDIA Corporation
+ *  Copyright (c) 2008-2024, NVIDIA CORPORATION
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,13 +16,13 @@
 
 #pragma once
 
-#include <cstddef>
-#include <limits>
-#include <new>  // for bad_alloc
-
 #include <cudf/utilities/error.hpp>
 
 #include <thrust/host_vector.h>
+
+#include <cstddef>
+#include <limits>
+#include <new>  // for bad_alloc
 
 namespace cudf::detail {
 
@@ -169,7 +169,12 @@ class pinned_allocator {
    *        It is the responsibility of the caller to destroy
    *        the objects stored at \p p.
    */
-  __host__ inline void deallocate(pointer p, size_type /*cnt*/) { CUDF_CUDA_TRY(cudaFreeHost(p)); }
+  __host__ inline void deallocate(pointer p, size_type /*cnt*/)
+  {
+    auto dealloc_worked = cudaFreeHost(p);
+    (void)dealloc_worked;
+    assert(dealloc_worked == cudaSuccess);
+  }
 
   /**
    * @brief This method returns the maximum size of the \c cnt parameter

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,9 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuda/functional>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
@@ -45,7 +47,7 @@ template <typename Tokenizer>
 std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                                         Tokenizer tokenizer,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) {
     return cudf::lists::detail::make_empty_lists_column(data_type{type_id::STRING}, stream, mr);
@@ -57,13 +59,16 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                              std::move(offsets),
                              std::move(results),
                              input.null_count(),
-                             copy_bitmask(input.parent(), stream, mr),
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr),
                              stream,
                              mr);
   }
 
   // builds the offsets and the vector of all tokens
   auto [offsets, tokens] = split_helper(input, tokenizer, stream, mr);
+  CUDF_EXPECTS(tokens.size() < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+               "Size of output exceeds the column size limit",
+               std::overflow_error);
 
   // build a strings column from the tokens
   auto strings_child = make_strings_column(tokens.begin(), tokens.end(), stream, mr);
@@ -72,7 +77,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                            std::move(offsets),
                            std::move(strings_child),
                            input.null_count(),
-                           copy_bitmask(input.parent(), stream, mr),
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
                            stream,
                            mr);
 }
@@ -138,11 +143,13 @@ template <typename TokenReader>
 std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& input,
                                                    TokenReader reader,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+                                                   rmm::device_async_resource_ref mr)
 {
   // create offsets column by counting the number of tokens per string
   auto sizes_itr = cudf::detail::make_counting_transform_iterator(
-    0, [reader] __device__(auto idx) { return reader.count_tokens(idx); });
+    0, cuda::proclaim_return_type<size_type>([reader] __device__(auto idx) {
+      return reader.count_tokens(idx);
+    }));
   auto [offsets, total_tokens] =
     cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + input.size(), stream, mr);
   auto d_offsets = offsets->view().template data<cudf::size_type>();
@@ -160,7 +167,7 @@ std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& in
                            std::move(offsets),
                            std::move(strings_output),
                            input.null_count(),
-                           copy_bitmask(input.parent(), stream, mr),
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
                            stream,
                            mr);
 }
@@ -170,7 +177,7 @@ std::unique_ptr<column> split_record(strings_column_view const& strings,
                                      string_scalar const& delimiter,
                                      size_type maxsplit,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
@@ -204,7 +211,7 @@ std::unique_ptr<column> split_record(strings_column_view const& strings,
                                      string_scalar const& delimiter,
                                      size_type maxsplit,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::split_record<detail::Direction::FORWARD>(strings, delimiter, maxsplit, stream, mr);
@@ -214,7 +221,7 @@ std::unique_ptr<column> rsplit_record(strings_column_view const& strings,
                                       string_scalar const& delimiter,
                                       size_type maxsplit,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::split_record<detail::Direction::BACKWARD>(

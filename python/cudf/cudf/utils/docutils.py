@@ -1,8 +1,9 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 """
 Helper functions for parameterized docstring
 """
+
 import functools
 import re
 import string
@@ -126,15 +127,6 @@ doc_describe = docfmt_partial(
               exclude pandas categorical columns, use ``'category'``
             - None (default) : The result will exclude nothing.
 
-        datetime_is_numeric : bool, default False
-            For DataFrame input, this also controls whether datetime columns
-            are included by default.
-
-            .. deprecated:: 23.04
-
-               `datetime_is_numeric` is deprecated and will be removed in
-               a future version of cudf.
-
         Returns
         -------
         output_frame : Series or DataFrame
@@ -218,12 +210,11 @@ doc_describe = docfmt_partial(
 
         Describing a timestamp ``Series``.
 
-        >>> import numpy as np
         >>> s = cudf.Series([
-        ...   np.datetime64("2000-01-01"),
-        ...   np.datetime64("2010-01-01"),
-        ...   np.datetime64("2010-01-01")
-        ... ])
+        ...   "2000-01-01",
+        ...   "2010-01-01",
+        ...   "2010-01-01"
+        ... ], dtype="datetime64[s]")
         >>> s
         0   2000-01-01
         1   2010-01-01

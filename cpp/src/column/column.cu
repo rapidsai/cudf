@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,10 +33,11 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
 #include <iterator>
@@ -46,9 +47,7 @@
 namespace cudf {
 
 // Copy ctor w/ optional stream/mr
-column::column(column const& other,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
+column::column(column const& other, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
   : _type{other._type},
     _size{other._size},
     _data{other._data, stream, mr},
@@ -160,7 +159,7 @@ namespace {
 struct create_column_from_view {
   cudf::column_view view;
   rmm::cuda_stream_view stream{cudf::get_default_stream()};
-  rmm::mr::device_memory_resource* mr;
+  rmm::device_async_resource_ref mr;
 
   template <typename ColumnType,
             std::enable_if_t<std::is_same_v<ColumnType, cudf::string_view>>* = nullptr>
@@ -254,7 +253,7 @@ struct create_column_from_view {
 }  // anonymous namespace
 
 // Copy from a view
-column::column(column_view view, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+column::column(column_view view, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
   :  // Move is needed here because the dereference operator of unique_ptr returns
      // an lvalue reference, which would otherwise dispatch to the copy constructor
     column{std::move(*type_dispatcher(view.type(), create_column_from_view{view, stream, mr}))}

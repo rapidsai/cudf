@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-#include <strings/count_matches.hpp>
-#include <strings/regex/utilities.cuh>
+#include "strings/count_matches.hpp"
+#include "strings/regex/utilities.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/string_view.cuh>
+
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -60,7 +62,7 @@ std::unique_ptr<column> count_matches(column_device_view const& d_strings,
                                       reprog_device& d_prog,
                                       size_type output_size,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   assert(output_size >= d_strings.size() and "Unexpected output size");
 

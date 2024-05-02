@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,15 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <memory>
 #include <vector>
 
 namespace cudf {
 
 /**
- * @addtogroup column_copy
+ * @addtogroup copy_split
  * @{
  * @file
  * @brief Table APIs for contiguous_split, pack, unpack, and metadata
@@ -33,8 +35,6 @@ namespace cudf {
 
 /**
  * @brief Column data in a serialized format
- *
- * @ingroup copy_split
  *
  * Contains data from an array of columns in two contiguous buffers: one on host, which contains
  * table metadata and one on device which contains the table data.
@@ -65,8 +65,6 @@ struct packed_columns {
 /**
  * @brief The result(s) of a cudf::contiguous_split
  *
- * @ingroup copy_split
- *
  * Each table_view resulting from a split operation performed by contiguous_split,
  * will be returned wrapped in a `packed_table`. The table_view and internal
  * column_views in this struct are not owned by a top level cudf::table or cudf::column.
@@ -84,8 +82,6 @@ struct packed_table {
 /**
  * @brief Performs a deep-copy split of a `table_view` into a vector of `packed_table` where each
  * `packed_table` is using a single contiguous block of memory for all of the split's column data.
- *
- * @ingroup copy_split
  *
  * The memory for the output views is allocated in a single contiguous `rmm::device_buffer` returned
  * in the `packed_table`. There is no top-level owning table.
@@ -112,9 +108,9 @@ struct packed_table {
  * @endcode
  *
  *
- * @throws cudf::logic_error if `splits` has end index > size of `input`.
- * @throws cudf::logic_error When the value in `splits` is not in the range [0, input.size()).
- * @throws cudf::logic_error When the values in the `splits` are 'strictly decreasing'.
+ * @throws std::out_of_range if `splits` has end index > size of `input`.
+ * @throws std::out_of_range When the value in `splits` is not in the range [0, input.size()).
+ * @throws std::invalid_argument When the values in the `splits` are 'strictly decreasing'.
  *
  * @param input View of a table to split
  * @param splits A vector of indices where the view will be split
@@ -125,7 +121,7 @@ struct packed_table {
 std::vector<packed_table> contiguous_split(
   cudf::table_view const& input,
   std::vector<size_type> const& splits,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 namespace detail {
 struct contiguous_split_state;
@@ -202,7 +198,7 @@ class chunked_pack {
   explicit chunked_pack(
     cudf::table_view const& input,
     std::size_t user_buffer_size,
-    rmm::mr::device_memory_resource* temp_mr = rmm::mr::get_current_device_resource());
+    rmm::device_async_resource_ref temp_mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Destructor that will be implemented as default. Declared with definition here because
@@ -267,7 +263,7 @@ class chunked_pack {
   [[nodiscard]] static std::unique_ptr<chunked_pack> create(
     cudf::table_view const& input,
     std::size_t user_buffer_size,
-    rmm::mr::device_memory_resource* temp_mr = rmm::mr::get_current_device_resource());
+    rmm::device_async_resource_ref temp_mr = rmm::mr::get_current_device_resource());
 
  private:
   // internal state of contiguous split
@@ -287,7 +283,7 @@ class chunked_pack {
  *         and device memory respectively
  */
 packed_columns pack(cudf::table_view const& input,
-                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Produce the metadata used for packing a table stored in a contiguous buffer.

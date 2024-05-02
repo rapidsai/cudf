@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,18 +15,16 @@
  */
 
 #include "file_io_utilities.hpp"
+#include "io/utilities/config_utils.hpp"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
-#include <io/utilities/config_utils.hpp>
 
 #include <kvikio/file_handle.hpp>
-#include <rmm/device_buffer.hpp>
 
-#include <arrow/io/memory.h>
+#include <rmm/device_buffer.hpp>
 
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -45,6 +43,7 @@ class file_source : public datasource {
  public:
   explicit file_source(char const* filepath) : _file(filepath, O_RDONLY)
   {
+    detail::force_init_cuda_context();
     if (detail::cufile_integration::is_kvikio_enabled()) {
       _kvikio_file = kvikio::FileHandle(filepath);
       CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode {}.",
@@ -194,7 +193,9 @@ class memory_mapped_source : public file_source {
     if (result == cudaSuccess) {
       _is_map_registered = true;
     } else {
-      CUDF_LOG_WARN("cudaHostRegister failed with {} ({})", result, cudaGetErrorString(result));
+      CUDF_LOG_WARN("cudaHostRegister failed with {} ({})",
+                    static_cast<int>(result),
+                    cudaGetErrorString(result));
     }
   }
 
@@ -207,7 +208,9 @@ class memory_mapped_source : public file_source {
 
     auto const result = cudaHostUnregister(_map_addr);
     if (result != cudaSuccess) {
-      CUDF_LOG_WARN("cudaHostUnregister failed with {} ({})", result, cudaGetErrorString(result));
+      CUDF_LOG_WARN("cudaHostUnregister failed with {} ({})",
+                    static_cast<int>(result),
+                    cudaGetErrorString(result));
     }
   }
 
@@ -334,6 +337,33 @@ class device_buffer_source final : public datasource {
   cudf::device_span<std::byte const> _d_buffer;  ///< A non-owning view of the existing device data
 };
 
+// zero-copy host buffer source
+class host_buffer_source final : public datasource {
+ public:
+  explicit host_buffer_source(cudf::host_span<std::byte const> h_buffer) : _h_buffer{h_buffer} {}
+
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    auto const count = std::min(size, this->size() - offset);
+    std::memcpy(dst, _h_buffer.data() + offset, count);
+    return count;
+  }
+
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  {
+    auto const count = std::min(size, this->size() - offset);
+    return std::make_unique<non_owning_buffer>(
+      reinterpret_cast<uint8_t const*>(_h_buffer.data() + offset), count);
+  }
+
+  [[nodiscard]] bool supports_device_read() const override { return false; }
+
+  [[nodiscard]] size_t size() const override { return _h_buffer.size(); }
+
+ private:
+  cudf::host_span<std::byte const> _h_buffer;  ///< A non-owning view of the existing host data
+};
+
 /**
  * @brief Wrapper class for user implemented data sources
  *
@@ -360,6 +390,11 @@ class user_datasource_wrapper : public datasource {
     return source->supports_device_read();
   }
 
+  [[nodiscard]] bool is_device_read_preferred(size_t size) const override
+  {
+    return source->is_device_read_preferred(size);
+  }
+
   size_t device_read(size_t offset,
                      size_t size,
                      uint8_t* dst,
@@ -375,7 +410,17 @@ class user_datasource_wrapper : public datasource {
     return source->device_read(offset, size, stream);
   }
 
+  std::future<size_t> device_read_async(size_t offset,
+                                        size_t size,
+                                        uint8_t* dst,
+                                        rmm::cuda_stream_view stream) override
+  {
+    return source->device_read_async(offset, size, dst, stream);
+  }
+
   [[nodiscard]] size_t size() const override { return source->size(); }
+
+  [[nodiscard]] bool is_empty() const override { return source->is_empty(); }
 
  private:
   datasource* const source;  ///< A non-owning pointer to the user-implemented datasource
@@ -405,9 +450,7 @@ std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
 
 std::unique_ptr<datasource> datasource::create(cudf::host_span<std::byte const> buffer)
 {
-  // Use Arrow IO buffer class for zero-copy reads of host memory
-  return std::make_unique<arrow_io_source>(std::make_shared<arrow::io::BufferReader>(
-    reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size()));
+  return std::make_unique<host_buffer_source>(buffer);
 }
 
 std::unique_ptr<datasource> datasource::create(cudf::device_span<std::byte const> buffer)

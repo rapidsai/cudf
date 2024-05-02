@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,23 @@
 #pragma once
 
 #ifdef __CUDACC__
+/**
+ * @brief Indicates that the function or method is usable on host and device
+ */
 #define CUDF_HOST_DEVICE __host__ __device__
+/**
+ * @brief Indicates that the function is a CUDA kernel
+ */
+#define CUDF_KERNEL __global__ static
 #else
+/**
+ * @brief Indicates that the function or method is usable on host and device
+ */
 #define CUDF_HOST_DEVICE
+/**
+ * @brief Indicates that the function is a CUDA kernel
+ */
+#define CUDF_KERNEL static
 #endif
 
 #include <cassert>
@@ -48,7 +62,6 @@ class mutable_column_view;
 class string_view;
 class list_view;
 class struct_view;
-
 class scalar;
 
 // clang-format off
@@ -81,6 +94,7 @@ using size_type         = int32_t;   ///< Row index type for columns and tables
 using bitmask_type      = uint32_t;  ///< Bitmask type stored as 32-bit unsigned integer
 using valid_type        = uint8_t;   ///< Valid type in host memory
 using thread_index_type = int64_t;   ///< Thread index type in kernels
+using char_utf8         = uint32_t;  ///< UTF-8 characters are 1-4 bytes
 
 /**
  * @brief Similar to `std::distance` but returns `cudf::size_type` and performs `static_cast`

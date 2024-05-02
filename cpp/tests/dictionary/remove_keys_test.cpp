@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/copying.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/dictionary/update_keys.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -118,7 +120,7 @@ TEST_F(DictionaryRemoveKeysTest, Errors)
   auto const dictionary = cudf::dictionary::encode(input);
 
   cudf::test::fixed_width_column_wrapper<float> del_keys{1.0, 2.0, 3.0};
-  EXPECT_THROW(cudf::dictionary::remove_keys(dictionary->view(), del_keys), cudf::logic_error);
+  EXPECT_THROW(cudf::dictionary::remove_keys(dictionary->view(), del_keys), cudf::data_type_error);
   cudf::test::fixed_width_column_wrapper<int64_t> null_keys{{1, 2, 3}, {1, 0, 1}};
   EXPECT_THROW(cudf::dictionary::remove_keys(dictionary->view(), null_keys), cudf::logic_error);
 }

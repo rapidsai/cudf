@@ -1,8 +1,9 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import cudf
 from cudf.core.buffer import acquire_spill_lock
 
+from libc.stdint cimport int64_t
 from libcpp cimport bool, int
 from libcpp.map cimport map
 from libcpp.memory cimport unique_ptr
@@ -10,6 +11,7 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+import datetime
 from collections import OrderedDict
 
 cimport cudf._lib.cpp.lists.lists_column_view as cpp_lists_column_view
@@ -31,8 +33,19 @@ from cudf._lib.cpp.io.orc cimport (
     write_orc as libcudf_write_orc,
 )
 from cudf._lib.cpp.io.orc_metadata cimport (
-    raw_orc_statistics,
-    read_raw_orc_statistics as libcudf_read_raw_orc_statistics,
+    binary_statistics,
+    bucket_statistics,
+    column_statistics,
+    date_statistics,
+    decimal_statistics,
+    double_statistics,
+    integer_statistics,
+    no_statistics,
+    parsed_orc_statistics,
+    read_parsed_orc_statistics as libcudf_read_parsed_orc_statistics,
+    statistics_type,
+    string_statistics,
+    timestamp_statistics,
 )
 from cudf._lib.cpp.io.types cimport (
     column_in_metadata,
@@ -50,6 +63,7 @@ from cudf._lib.io.utils cimport (
     make_source_info,
     update_column_struct_field_names,
 )
+from cudf._lib.variant cimport get_if as std_get_if, holds_alternative
 
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
@@ -59,12 +73,130 @@ from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 from pyarrow.lib import NativeFile
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
-from cudf.api.types import is_list_dtype, is_struct_dtype
 
 
-cpdef read_raw_orc_statistics(filepath_or_buffer):
+cdef _parse_column_type_statistics(column_statistics stats):
+    # Initialize stats to return and parse stats blob
+    column_stats = {}
+
+    if stats.number_of_values.has_value():
+        column_stats["number_of_values"] = stats.number_of_values.value()
+
+    if stats.has_null.has_value():
+        column_stats["has_null"] = stats.has_null.value()
+
+    cdef statistics_type type_specific_stats = stats.type_specific_stats
+
+    cdef integer_statistics* int_stats
+    cdef double_statistics* dbl_stats
+    cdef string_statistics* str_stats
+    cdef bucket_statistics* bucket_stats
+    cdef decimal_statistics* dec_stats
+    cdef date_statistics* date_stats
+    cdef binary_statistics* bin_stats
+    cdef timestamp_statistics* ts_stats
+
+    if holds_alternative[no_statistics](type_specific_stats):
+        return column_stats
+    elif int_stats := std_get_if[integer_statistics](&type_specific_stats):
+        if int_stats.minimum.has_value():
+            column_stats["minimum"] = int_stats.minimum.value()
+        else:
+            column_stats["minimum"] = None
+        if int_stats.maximum.has_value():
+            column_stats["maximum"] = int_stats.maximum.value()
+        else:
+            column_stats["maximum"] = None
+        if int_stats.sum.has_value():
+            column_stats["sum"] = int_stats.sum.value()
+        else:
+            column_stats["sum"] = None
+    elif dbl_stats := std_get_if[double_statistics](&type_specific_stats):
+        if dbl_stats.minimum.has_value():
+            column_stats["minimum"] = dbl_stats.minimum.value()
+        else:
+            column_stats["minimum"] = None
+        if dbl_stats.maximum.has_value():
+            column_stats["maximum"] = dbl_stats.maximum.value()
+        else:
+            column_stats["maximum"] = None
+        if dbl_stats.sum.has_value():
+            column_stats["sum"] = dbl_stats.sum.value()
+        else:
+            column_stats["sum"] = None
+    elif str_stats := std_get_if[string_statistics](&type_specific_stats):
+        if str_stats.minimum.has_value():
+            column_stats["minimum"] = str_stats.minimum.value().decode("utf-8")
+        else:
+            column_stats["minimum"] = None
+        if str_stats.maximum.has_value():
+            column_stats["maximum"] = str_stats.maximum.value().decode("utf-8")
+        else:
+            column_stats["maximum"] = None
+        if str_stats.sum.has_value():
+            column_stats["sum"] = str_stats.sum.value()
+        else:
+            column_stats["sum"] = None
+    elif bucket_stats := std_get_if[bucket_statistics](&type_specific_stats):
+        column_stats["true_count"] = bucket_stats.count[0]
+        column_stats["false_count"] = (
+            column_stats["number_of_values"]
+            - column_stats["true_count"]
+        )
+    elif dec_stats := std_get_if[decimal_statistics](&type_specific_stats):
+        if dec_stats.minimum.has_value():
+            column_stats["minimum"] = dec_stats.minimum.value().decode("utf-8")
+        else:
+            column_stats["minimum"] = None
+        if dec_stats.maximum.has_value():
+            column_stats["maximum"] = dec_stats.maximum.value().decode("utf-8")
+        else:
+            column_stats["maximum"] = None
+        if dec_stats.sum.has_value():
+            column_stats["sum"] = dec_stats.sum.value().decode("utf-8")
+        else:
+            column_stats["sum"] = None
+    elif date_stats := std_get_if[date_statistics](&type_specific_stats):
+        if date_stats.minimum.has_value():
+            column_stats["minimum"] = datetime.datetime.fromtimestamp(
+                datetime.timedelta(date_stats.minimum.value()).total_seconds(),
+                datetime.timezone.utc,
+            )
+        else:
+            column_stats["minimum"] = None
+        if date_stats.maximum.has_value():
+            column_stats["maximum"] = datetime.datetime.fromtimestamp(
+                datetime.timedelta(date_stats.maximum.value()).total_seconds(),
+                datetime.timezone.utc,
+            )
+        else:
+            column_stats["maximum"] = None
+    elif bin_stats := std_get_if[binary_statistics](&type_specific_stats):
+        if bin_stats.sum.has_value():
+            column_stats["sum"] = bin_stats.sum.value()
+        else:
+            column_stats["sum"] = None
+    elif ts_stats := std_get_if[timestamp_statistics](&type_specific_stats):
+        # Before ORC-135, the local timezone offset was included and they were
+        # stored as minimum and maximum. After ORC-135, the timestamp is
+        # adjusted to UTC before being converted to milliseconds and stored
+        # in minimumUtc and maximumUtc.
+        # TODO: Support minimum and maximum by reading writer's local timezone
+        if ts_stats.minimum_utc.has_value() and ts_stats.maximum_utc.has_value():
+            column_stats["minimum"] = datetime.datetime.fromtimestamp(
+                ts_stats.minimum_utc.value() / 1000, datetime.timezone.utc
+            )
+            column_stats["maximum"] = datetime.datetime.fromtimestamp(
+                ts_stats.maximum_utc.value() / 1000, datetime.timezone.utc
+            )
+    else:
+        raise ValueError("Unsupported statistics type")
+    return column_stats
+
+
+cpdef read_parsed_orc_statistics(filepath_or_buffer):
     """
-    Cython function to call into libcudf API, see `read_raw_orc_statistics`.
+    Cython function to call into libcudf API, see `read_parsed_orc_statistics`.
 
     See Also
     --------
@@ -75,10 +207,25 @@ cpdef read_raw_orc_statistics(filepath_or_buffer):
     if isinstance(filepath_or_buffer, NativeFile):
         filepath_or_buffer = NativeFileDatasource(filepath_or_buffer)
 
-    cdef raw_orc_statistics raw = (
-        libcudf_read_raw_orc_statistics(make_source_info([filepath_or_buffer]))
+    cdef parsed_orc_statistics parsed = (
+        libcudf_read_parsed_orc_statistics(make_source_info([filepath_or_buffer]))
     )
-    return (raw.column_names, raw.file_stats, raw.stripes_stats)
+
+    cdef vector[column_statistics] file_stats = parsed.file_stats
+    cdef vector[vector[column_statistics]] stripes_stats = parsed.stripes_stats
+
+    parsed_file_stats = [
+        _parse_column_type_statistics(file_stats[column_index])
+        for column_index in range(file_stats.size())
+    ]
+
+    parsed_stripes_stats = [
+        [_parse_column_type_statistics(stripes_stats[stripe_index][column_index])
+         for column_index in range(stripes_stats[stripe_index].size())]
+        for stripe_index in range(stripes_stats.size())
+    ]
+
+    return parsed.column_names, parsed_file_stats, parsed_stripes_stats
 
 
 cpdef read_orc(object filepaths_or_buffers,
@@ -99,8 +246,8 @@ cpdef read_orc(object filepaths_or_buffers,
         filepaths_or_buffers,
         columns,
         stripes or [],
-        get_size_t_arg(skip_rows, "skip_rows"),
-        get_size_t_arg(num_rows, "num_rows"),
+        get_skiprows_arg(skip_rows),
+        get_num_rows_arg(num_rows),
         (
             type_id.EMPTY
             if timestamp_type is None else
@@ -116,6 +263,7 @@ cpdef read_orc(object filepaths_or_buffers,
     )
 
     cdef table_with_metadata c_result
+    cdef size_type nrows
 
     with nogil:
         c_result = move(libcudf_read_orc(c_orc_reader_options))
@@ -126,6 +274,12 @@ cpdef read_orc(object filepaths_or_buffers,
                                              names,
                                              skip_rows,
                                              num_rows)
+
+    if columns is not None and (isinstance(columns, list) and len(columns) == 0):
+        # When `columns=[]`, index needs to be
+        # established, but not the columns.
+        nrows = c_result.tbl.get()[0].view().num_rows()
+        return {}, cudf.RangeIndex(nrows)
 
     data, index = data_from_unique_ptr(
         move(c_result.tbl),
@@ -151,12 +305,16 @@ cpdef read_orc(object filepaths_or_buffers,
 cdef compression_type _get_comp_type(object compression):
     if compression is None or compression is False:
         return compression_type.NONE
-    elif compression == "snappy":
+
+    compression = str(compression).upper()
+    if compression == "SNAPPY":
         return compression_type.SNAPPY
     elif compression == "ZLIB":
         return compression_type.ZLIB
     elif compression == "ZSTD":
         return compression_type.ZSTD
+    elif compression == "LZ4":
+        return compression_type.LZ4
     else:
         raise ValueError(f"Unsupported `compression` type {compression}")
 
@@ -173,7 +331,6 @@ cdef tuple _get_index_from_metadata(
     range_idx = None
     if json_str != "":
         meta = json.loads(json_str)
-
         if 'index_columns' in meta and len(meta['index_columns']) > 0:
             index_col = meta['index_columns']
             if isinstance(index_col[0], dict) and \
@@ -309,15 +466,16 @@ def write_orc(
         libcudf_write_orc(c_orc_writer_options)
 
 
-cdef size_type get_size_t_arg(object arg, str name) except*:
-    if name == "skip_rows":
-        arg = 0 if arg is None else arg
-        if not isinstance(arg, int) or arg < 0:
-            raise TypeError(f"{name} must be an int >= 0")
-    else:
-        arg = -1 if arg is None else arg
-        if not isinstance(arg, int) or arg < -1:
-            raise TypeError(f"{name} must be an int >= -1")
+cdef int64_t get_skiprows_arg(object arg) except*:
+    arg = 0 if arg is None else arg
+    if not isinstance(arg, int) or arg < 0:
+        raise TypeError("skiprows must be an int >= 0")
+    return <int64_t> arg
+
+cdef size_type get_num_rows_arg(object arg) except*:
+    arg = -1 if arg is None else arg
+    if not isinstance(arg, int) or arg < -1:
+        raise TypeError("num_rows must be an int >= -1")
     return <size_type> arg
 
 
@@ -325,7 +483,7 @@ cdef orc_reader_options make_orc_reader_options(
     object filepaths_or_buffers,
     object column_names,
     object stripes,
-    size_type skip_rows,
+    int64_t skip_rows,
     size_type num_rows,
     type_id timestamp_type,
     bool use_index
@@ -353,7 +511,8 @@ cdef orc_reader_options make_orc_reader_options(
         c_column_names.reserve(len(column_names))
         for col in column_names:
             c_column_names.push_back(str(col).encode())
-        opts.set_columns(c_column_names)
+        if len(column_names) > 0:
+            opts.set_columns(c_column_names)
 
     return opts
 
@@ -376,13 +535,19 @@ cdef class ORCWriter:
     cdef object index
     cdef table_input_metadata tbl_meta
     cdef object cols_as_map_type
+    cdef object stripe_size_bytes
+    cdef object stripe_size_rows
+    cdef object row_index_stride
 
     def __cinit__(self,
                   object path,
                   object index=None,
                   object compression="snappy",
                   object statistics="ROWGROUP",
-                  object cols_as_map_type=None):
+                  object cols_as_map_type=None,
+                  object stripe_size_bytes=None,
+                  object stripe_size_rows=None,
+                  object row_index_stride=None):
 
         self.sink = make_sink_info(path, self._data_sink)
         self.stat_freq = _get_orc_stat_freq(statistics)
@@ -390,6 +555,9 @@ cdef class ORCWriter:
         self.index = index
         self.cols_as_map_type = cols_as_map_type \
             if cols_as_map_type is None else set(cols_as_map_type)
+        self.stripe_size_bytes = stripe_size_bytes
+        self.stripe_size_rows = stripe_size_rows
+        self.row_index_stride = row_index_stride
         self.initialized = False
 
     def write_table(self, table):
@@ -457,9 +625,7 @@ cdef class ORCWriter:
         pandas_metadata = generate_pandas_metadata(table, self.index)
         user_data[str.encode("pandas")] = str.encode(pandas_metadata)
 
-        cdef chunked_orc_writer_options args
-        with nogil:
-            args = move(
+        cdef chunked_orc_writer_options c_opts = move(
                 chunked_orc_writer_options.builder(self.sink)
                 .metadata(self.tbl_meta)
                 .key_value_metadata(move(user_data))
@@ -467,14 +633,22 @@ cdef class ORCWriter:
                 .enable_statistics(self.stat_freq)
                 .build()
             )
-            self.writer.reset(new orc_chunked_writer(args))
+        if self.stripe_size_bytes is not None:
+            c_opts.set_stripe_size_bytes(self.stripe_size_bytes)
+        if self.stripe_size_rows is not None:
+            c_opts.set_stripe_size_rows(self.stripe_size_rows)
+        if self.row_index_stride is not None:
+            c_opts.set_row_index_stride(self.row_index_stride)
+
+        with nogil:
+            self.writer.reset(new orc_chunked_writer(c_opts))
 
         self.initialized = True
 
 cdef _set_col_children_metadata(Column col,
                                 column_in_metadata& col_meta,
                                 list_column_as_map=False):
-    if is_struct_dtype(col):
+    if isinstance(col.dtype, cudf.StructDtype):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
@@ -482,7 +656,7 @@ cdef _set_col_children_metadata(Column col,
             _set_col_children_metadata(
                 child_col, col_meta.child(i), list_column_as_map
             )
-    elif is_list_dtype(col):
+    elif isinstance(col.dtype, cudf.ListDtype):
         if list_column_as_map:
             col_meta.set_list_column_as_map()
         _set_col_children_metadata(

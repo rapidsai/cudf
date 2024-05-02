@@ -13,26 +13,18 @@ Creating and storing DataFrames
 of DataFrames from a variety of storage formats. For on-disk data that
 are not supported directly in Dask-cuDF, we recommend using Dask's
 data reading facilities, followed by calling
-:func:`.from_dask_dataframe` to obtain a Dask-cuDF object.
+:meth:`*.to_backend("cudf")` to obtain a Dask-cuDF object.
 
 .. automodule:: dask_cudf
    :members:
       from_cudf,
-      from_dask_dataframe,
+      from_delayed,
       read_csv,
       read_json,
       read_orc,
       to_orc,
       read_text,
       read_parquet
-
-.. warning::
-
-   FIXME: where should the following live?
-
-   .. autofunction:: dask_cudf.concat
-
-   .. autofunction:: dask_cudf.from_delayed
 
 Grouping
 ========
@@ -77,3 +69,7 @@ identical. The full API is provided below.
    :members:
    :inherited-members:
    :show-inheritance:
+
+.. automodule:: dask_cudf
+   :members:
+      concat

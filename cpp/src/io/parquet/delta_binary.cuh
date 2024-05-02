@@ -18,7 +18,7 @@
 
 #include "page_decode.cuh"
 
-namespace cudf::io::parquet::gpu {
+namespace cudf::io::parquet::detail {
 
 // DELTA_XXX encoding support
 //
@@ -39,21 +39,15 @@ namespace cudf::io::parquet::gpu {
 // per mini-block. While encoding, the lowest delta value is subtracted from all the deltas in the
 // block to ensure that all encoded values are positive. The deltas for each mini-block are bit
 // packed using the same encoding as the RLE/Bit-Packing Hybrid encoder.
-//
-// DELTA_BYTE_ARRAY encoding (incremental encoding or front compression), is used for BYTE_ARRAY
-// columns. For each element in a sequence of strings, a prefix length from the preceding string
-// and a suffix is stored. The prefix lengths are DELTA_BINARY_PACKED encoded. The suffixes are
-// encoded with DELTA_LENGTH_BYTE_ARRAY encoding, which is a DELTA_BINARY_PACKED list of suffix
-// lengths, followed by the concatenated suffix data.
 
-// TODO: The delta encodings use ULEB128 integers, but for now we're only
-// using max 64 bits. Need to see what the performance impact is of using
-// __int128_t rather than int64_t.
-using uleb128_t   = uint64_t;
-using zigzag128_t = int64_t;
+// The largest mini-block size we can currently support.
+constexpr int max_delta_mini_block_size = 64;
 
-// we decode one mini-block at a time. max mini-block size seen is 64.
-constexpr int delta_rolling_buf_size = 128;
+// The first pass decodes `values_per_mb` values, and then the second pass does another
+// batch of size `values_per_mb`. The largest value for values_per_miniblock among the
+// major writers seems to be 64, so 2 * 64 should be good. We save the first value separately
+// since it is not encoded in the first mini-block.
+constexpr int delta_rolling_buf_size = 2 * max_delta_mini_block_size;
 
 /**
  * @brief Read a ULEB128 varint integer
@@ -90,23 +84,31 @@ inline __device__ zigzag128_t get_zz128(uint8_t const*& cur, uint8_t const* end)
 }
 
 struct delta_binary_decoder {
-  uint8_t const* block_start;    // start of data, but updated as data is read
-  uint8_t const* block_end;      // end of data
-  uleb128_t block_size;          // usually 128, must be multiple of 128
-  uleb128_t mini_block_count;    // usually 4, chosen such that block_size/mini_block_count is a
-                                 // multiple of 32
-  uleb128_t value_count;         // total values encoded in the block
-  zigzag128_t last_value;        // last value decoded, initialized to first_value from header
+  uint8_t const* block_start;  // start of data, but updated as data is read
+  uint8_t const* block_end;    // end of data
+  uleb128_t block_size;        // usually 128, must be multiple of 128
+  uleb128_t mini_block_count;  // usually 4, chosen such that block_size/mini_block_count is a
+                               // multiple of 32
+  uleb128_t value_count;       // total values encoded in the block
+  zigzag128_t first_value;     // initial value, stored in the header
+  zigzag128_t last_value;      // last value decoded
 
-  uint32_t values_per_mb;        // block_size / mini_block_count, must be multiple of 32
-  uint32_t current_value_idx;    // current value index, initialized to 0 at start of block
+  uint32_t values_per_mb;      // block_size / mini_block_count, must be multiple of 32
+  uint32_t current_value_idx;  // current value index, initialized to 0 at start of block
 
   zigzag128_t cur_min_delta;     // min delta for the block
   uint32_t cur_mb;               // index of the current mini-block within the block
   uint8_t const* cur_mb_start;   // pointer to the start of the current mini-block data
   uint8_t const* cur_bitwidths;  // pointer to the bitwidth array in the block
 
-  uleb128_t value[delta_rolling_buf_size];  // circular buffer of delta values
+  zigzag128_t value[delta_rolling_buf_size];  // circular buffer of delta values
+
+  // returns the value stored in the `value` array at index
+  // `rolling_index<delta_rolling_buf_size>(idx)`. If `idx` is `0`, then return `first_value`.
+  constexpr zigzag128_t value_at(size_type idx)
+  {
+    return idx == 0 ? first_value : value[rolling_index<delta_rolling_buf_size>(idx)];
+  }
 
   // returns the number of values encoded in the block data. when all_values is true,
   // account for the first value in the header. otherwise just count the values encoded
@@ -151,7 +153,8 @@ struct delta_binary_decoder {
     block_size       = get_uleb128(d_start, d_end);
     mini_block_count = get_uleb128(d_start, d_end);
     value_count      = get_uleb128(d_start, d_end);
-    last_value       = get_zz128(d_start, d_end);
+    first_value      = get_zz128(d_start, d_end);
+    last_value       = first_value;
 
     current_value_idx = 0;
     values_per_mb     = block_size / mini_block_count;
@@ -185,6 +188,28 @@ struct delta_binary_decoder {
     }
   }
 
+  // given start/end pointers in the data, find the end of the binary encoded block. when done,
+  // `this` will be initialized with the correct start and end positions. returns the end, which is
+  // start of data/next block. should only be called from thread 0.
+  inline __device__ uint8_t const* find_end_of_block(uint8_t const* start, uint8_t const* end)
+  {
+    // read block header
+    init_binary_block(start, end);
+
+    // test for no encoded values. a single value will be in the block header.
+    if (value_count <= 1) { return block_start; }
+
+    // read mini-block headers and skip over data
+    while (current_value_idx < num_encoded_values(false)) {
+      setup_next_mini_block(false);
+    }
+    // calculate the correct end of the block
+    auto const* const new_end = cur_mb == 0 ? block_start : cur_mb_start;
+    // re-init block with correct end
+    init_binary_block(start, new_end);
+    return new_end;
+  }
+
   // decode the current mini-batch of deltas, and convert to values.
   // called by all threads in a warp, currently only one warp supported.
   inline __device__ void calc_mini_block_values(int lane_id)
@@ -192,12 +217,11 @@ struct delta_binary_decoder {
     using cudf::detail::warp_size;
     if (current_value_idx >= value_count) { return; }
 
-    // need to save first value from header on first pass
+    // need to account for the first value from header on first pass
     if (current_value_idx == 0) {
-      if (lane_id == 0) {
-        current_value_idx++;
-        value[0] = last_value;
-      }
+      // make sure all threads access current_value_idx above before incrementing
+      __syncwarp();
+      if (lane_id == 0) { current_value_idx++; }
       __syncwarp();
       if (current_value_idx >= value_count) { return; }
     }
@@ -275,6 +299,49 @@ struct delta_binary_decoder {
     }
   }
 
+  // Decodes and skips values until the block containing the value after `skip` is reached.
+  // Keeps a running sum of the values and returns that upon exit. Called by all threads in a
+  // warp 0. Result is only valid on thread 0.
+  // This is intended for use only by the DELTA_LENGTH_BYTE_ARRAY decoder.
+  inline __device__ size_t skip_values_and_sum(int skip)
+  {
+    using cudf::detail::warp_size;
+    // DELTA_LENGTH_BYTE_ARRAY lengths are encoded as INT32 by convention (since the PLAIN encoding
+    // uses 4-byte lengths).
+    using delta_length_type = int32_t;
+    using warp_reduce       = cub::WarpReduce<size_t>;
+    __shared__ warp_reduce::TempStorage temp_storage;
+    int const t = threadIdx.x;
+
+    // initialize sum with first value, which is stored in the block header. cast to
+    // `delta_length_type` to ensure the value is interpreted properly before promoting it
+    // back to `size_t`.
+    size_t sum = static_cast<delta_length_type>(value_at(0));
+
+    // if only skipping one value, we're done already
+    if (skip == 1) { return sum; }
+
+    // need to do in multiple passes if values_per_mb != 32
+    uint32_t const num_pass = values_per_mb / warp_size;
+
+    while (current_value_idx < skip && current_value_idx < num_encoded_values(true)) {
+      calc_mini_block_values(t);
+
+      int const idx = current_value_idx + t;
+
+      for (uint32_t p = 0; p < num_pass; p++) {
+        auto const pidx     = idx + p * warp_size;
+        size_t const val    = pidx < skip ? static_cast<delta_length_type>(value_at(pidx)) : 0;
+        auto const warp_sum = warp_reduce(temp_storage).Sum(val);
+        if (t == 0) { sum += warp_sum; }
+      }
+      if (t == 0) { setup_next_mini_block(true); }
+      __syncwarp();
+    }
+
+    return sum;
+  }
+
   // decodes the current mini block and stores the values obtained. should only be called by
   // a single warp.
   inline __device__ void decode_batch()
@@ -291,4 +358,4 @@ struct delta_binary_decoder {
   }
 };
 
-}  // namespace cudf::io::parquet::gpu
+}  // namespace cudf::io::parquet::detail

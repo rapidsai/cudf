@@ -6,13 +6,12 @@ from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.libcpp.memory cimport make_unique
 from cudf._lib.cpp.null_mask cimport (
     bitmask_allocation_size_bytes as cpp_bitmask_allocation_size_bytes,
     bitmask_and as cpp_bitmask_and,

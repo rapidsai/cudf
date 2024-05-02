@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <io/utilities/output_builder.cuh>
+#include "io/utilities/output_builder.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -37,14 +37,15 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cub/block/block_load.cuh>
+#include <cub/block/block_scan.cuh>
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
-
-#include <cub/block/block_load.cuh>
-#include <cub/block/block_scan.cuh>
 
 #include <cstdint>
 #include <limits>
@@ -136,7 +137,7 @@ using byte_offset   = int64_t;
 // it begins in. From there, each thread can then take deterministic action. In this case, the
 // deterministic action is counting and outputting delimiter offsets when a delimiter is found.
 
-__global__ void multibyte_split_init_kernel(
+CUDF_KERNEL void multibyte_split_init_kernel(
   cudf::size_type base_tile_idx,
   cudf::size_type num_tiles,
   cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
@@ -152,7 +153,7 @@ __global__ void multibyte_split_init_kernel(
   }
 }
 
-__global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
+CUDF_KERNEL __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   cudf::size_type base_tile_idx,
   byte_offset base_input_offset,
   output_offset base_output_offset,
@@ -229,7 +230,7 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   }
 }
 
-__global__ __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
+CUDF_KERNEL __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
   cudf::size_type base_tile_idx,
   byte_offset base_input_offset,
   output_offset base_output_offset,
@@ -306,7 +307,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                               byte_range_info byte_range,
                                               bool strip_delimiters,
                                               rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+                                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -527,29 +528,36 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                     global_offsets.begin(),
                     global_offsets.end(),
                     offsets.begin() + insert_begin,
-                    [baseline = *first_row_offset] __device__(byte_offset global_offset) {
-                      return static_cast<int32_t>(global_offset - baseline);
-                    });
+                    cuda::proclaim_return_type<int32_t>(
+                      [baseline = *first_row_offset] __device__(byte_offset global_offset) {
+                        return static_cast<int32_t>(global_offset - baseline);
+                      }));
   auto string_count = offsets.size() - 1;
   if (strip_delimiters) {
     auto it = cudf::detail::make_counting_transform_iterator(
       0,
-      [ofs        = offsets.data(),
-       chars      = chars.data(),
-       delim_size = static_cast<size_type>(delimiter.size()),
-       last_row   = static_cast<size_type>(string_count) - 1,
-       insert_end] __device__(size_type row) {
-        auto const begin = ofs[row];
-        auto const len   = ofs[row + 1] - begin;
-        if (row == last_row && insert_end) {
-          return thrust::make_pair(chars + begin, len);
-        } else {
-          return thrust::make_pair(chars + begin, std::max<size_type>(0, len - delim_size));
-        };
-      });
+      cuda::proclaim_return_type<thrust::pair<char*, int32_t>>(
+        [ofs        = offsets.data(),
+         chars      = chars.data(),
+         delim_size = static_cast<size_type>(delimiter.size()),
+         last_row   = static_cast<size_type>(string_count) - 1,
+         insert_end] __device__(size_type row) {
+          auto const begin = ofs[row];
+          auto const len   = ofs[row + 1] - begin;
+          if (row == last_row && insert_end) {
+            return thrust::make_pair(chars + begin, len);
+          } else {
+            return thrust::make_pair(chars + begin, std::max<size_type>(0, len - delim_size));
+          };
+        }));
     return cudf::strings::detail::make_strings_column(it, it + string_count, stream, mr);
   } else {
-    return cudf::make_strings_column(string_count, std::move(offsets), std::move(chars), {}, 0);
+    return cudf::make_strings_column(
+      string_count,
+      std::make_unique<cudf::column>(std::move(offsets), rmm::device_buffer{}, 0),
+      chars.release(),
+      0,
+      {});
   }
 }
 
@@ -558,7 +566,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
                                               std::string const& delimiter,
                                               std::optional<byte_range_info> byte_range,
-                                              rmm::mr::device_memory_resource* mr)
+                                              rmm::device_async_resource_ref mr)
 {
   return multibyte_split(
     source, delimiter, parse_options{byte_range.value_or(create_byte_range_info_max())}, mr);
@@ -567,7 +575,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
                                               std::string const& delimiter,
                                               parse_options options,
-                                              rmm::mr::device_memory_resource* mr)
+                                              rmm::device_async_resource_ref mr)
 {
   auto stream = cudf::get_default_stream();
 
@@ -579,7 +587,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
                                               std::string const& delimiter,
-                                              rmm::mr::device_memory_resource* mr)
+                                              rmm::device_async_resource_ref mr)
 {
   return multibyte_split(source, delimiter, parse_options{}, mr);
 }

@@ -374,6 +374,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Get the code point values (integers) for each character of each string.
+   *
+   * @return ColumnVector, with code point integer values for each character as INT32
+   */
+  public final ColumnVector codePoints() {
+    assert type.equals(DType.STRING) : "type has to be a String";
+    return new ColumnVector(codePoints(getNativeView()));
+  }
+
+  /**
    * Get the number of elements for each list. Null lists will have a value of null.
    * @return the number of elements in each list as an INT32 value.
    */
@@ -2978,11 +2988,29 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Note: Only implements the operators: $ . [] *
    *
    * @param path The JSONPath string to be applied to each row
+   * @param path The GetJsonObjectOptions to control get_json_object behaviour
+   * @return new strings ColumnVector containing the retrieved json object strings
+   */
+  public final ColumnVector getJSONObject(Scalar path, GetJsonObjectOptions options) {
+    assert(type.equals(DType.STRING)) : "column type must be a String";
+    return new ColumnVector(getJSONObject(getNativeView(), path.getScalarHandle(), options.isAllowSingleQuotes(), options.isStripQuotesFromSingleStrings(), options.isMissingFieldsAsNulls()));
+  }
+
+   /**
+   * Apply a JSONPath string to all rows in an input strings column.
+   *
+   * Applies a JSONPath string to an incoming strings column where each row in the column
+   * is a valid json string.  The output is returned by row as a strings column.
+   *
+   * For reference, https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html
+   * Note: Only implements the operators: $ . [] *
+   *
+   * @param path The JSONPath string to be applied to each row
    * @return new strings ColumnVector containing the retrieved json object strings
    */
   public final ColumnVector getJSONObject(Scalar path) {
     assert(type.equals(DType.STRING)) : "column type must be a String";
-    return new ColumnVector(getJSONObject(getNativeView(), path.getScalarHandle()));
+    return getJSONObject(path, GetJsonObjectOptions.DEFAULT);
   }
 
   /**
@@ -4089,6 +4117,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long isFixedPoint(long viewHandle, int nativeTypeId, int scale);
 
+  private static native long toHex(long viewHandle);
+
   /**
    * Native method to concatenate a list column of strings (each row is a list of strings),
    * concatenates the strings within each row and returns a single strings column result.
@@ -4182,7 +4212,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     long repeatTimesHandle);
 
 
-  private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
+  private static native long getJSONObject(long viewHandle, long scalarHandle, boolean allowSingleQuotes, boolean stripQuotesFromSingleStrings, boolean missingFieldsAsNulls) throws CudfException;
 
   /**
    * Native method to parse and convert a timestamp column vector to string column vector. A unix
@@ -4507,6 +4537,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long countElements(long viewHandle);
 
   private static native long byteCount(long viewHandle) throws CudfException;
+
+  private static native long codePoints(long viewHandle);
 
   private static native long extractListElement(long nativeView, int index);
 
@@ -5230,5 +5262,30 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         throw t;
       }
     }
+  }
+
+  /**
+   * Convert this integer column to hexadecimal column and return a new strings column
+   *
+   * Any null entries will result in corresponding null entries in the output column.
+   *
+   * The output character set is '0'-'9' and 'A'-'F'. The output string width will
+   * be a multiple of 2 depending on the size of the integer type. A single leading
+   * zero is applied to the first non-zero output byte if it is less than 0x10.
+   *
+   * Example:
+   * input = [123, -1, 0, 27, 342718233]
+   * s = input.toHex()
+   * s is [ '04D2', 'FFFFFFFF', '00', '1B', '146D7719']
+   *
+   * The example above shows an `INT32` type column where each integer is 4 bytes.
+   * Leading zeros are suppressed unless filling out a complete byte as in
+   * `123 -> '04D2'` instead of `000004D2` or `4D2`.
+   *
+   * @return new string ColumnVector
+   */
+  public ColumnVector toHex() {
+    assert getType().isIntegral() : "Only integers are supported";
+    return new ColumnVector(toHex(this.getNativeView()));
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -280,6 +280,30 @@ constexpr inline bool is_integral()
 bool is_integral(data_type type);
 
 /**
+ * @brief Indicates whether the type `T` is an integral type but not bool type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is integral but not bool
+ * @return false  `T` is not integral or is bool
+ */
+template <typename T>
+constexpr inline bool is_integral_not_bool()
+{
+  return cuda::std::is_integral_v<T> and not std::is_same_v<T, bool>;
+}
+
+/**
+ * @brief Indicates whether `type` is a integral `data_type` and not BOOL8
+ *
+ * "Integral" types are fundamental integer types such as `INT*` and `UINT*`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is integral but not bool
+ * @return false `type` is integral or is bool
+ */
+bool is_integral_not_bool(data_type type);
+
+/**
  * @brief Indicates whether the type `T` is a floating point type.
  *
  * @tparam T  The type to verify
@@ -373,7 +397,10 @@ template <typename T>
 constexpr inline bool is_fixed_point()
 {
   return std::is_same_v<numeric::decimal32, T> || std::is_same_v<numeric::decimal64, T> ||
-         std::is_same_v<numeric::decimal128, T>;
+         std::is_same_v<numeric::decimal128, T> ||
+         std::is_same_v<numeric::fixed_point<int32_t, numeric::Radix::BASE_2>, T> ||
+         std::is_same_v<numeric::fixed_point<int64_t, numeric::Radix::BASE_2>, T> ||
+         std::is_same_v<numeric::fixed_point<__int128_t, numeric::Radix::BASE_2>, T>;
 }
 
 /**

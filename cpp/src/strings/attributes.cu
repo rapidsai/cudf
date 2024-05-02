@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cub/warp/warp_reduce.cuh>
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -39,8 +42,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
-
-#include <cub/warp/warp_reduce.cuh>
 
 namespace cudf {
 namespace strings {
@@ -75,7 +76,7 @@ template <typename UnaryFunction>
 std::unique_ptr<column> counts_fn(strings_column_view const& strings,
                                   UnaryFunction& ufn,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   // create output column
   auto results   = make_numeric_column(data_type{type_to_id<size_type>()},
@@ -93,11 +94,11 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(strings.size()),
                     d_lengths,
-                    [d_strings, ufn] __device__(size_type idx) {
+                    cuda::proclaim_return_type<int32_t>([d_strings, ufn] __device__(size_type idx) {
                       return d_strings.is_null(idx)
                                ? 0
                                : static_cast<int32_t>(ufn(d_strings.element<string_view>(idx)));
-                    });
+                    }));
   results->set_null_count(strings.null_count());  // reset null count
   return results;
 }
@@ -108,8 +109,8 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
  * @param d_strings Column with strings to count
  * @param d_lengths Results of the counts per string
  */
-__global__ void count_characters_parallel_fn(column_device_view const d_strings,
-                                             size_type* d_lengths)
+CUDF_KERNEL void count_characters_parallel_fn(column_device_view const d_strings,
+                                              size_type* d_lengths)
 {
   auto const idx    = cudf::detail::grid_1d::global_thread_id();
   using warp_reduce = cub::WarpReduce<size_type>;
@@ -136,7 +137,7 @@ __global__ void count_characters_parallel_fn(column_device_view const d_strings,
 
 std::unique_ptr<column> count_characters_parallel(strings_column_view const& input,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::device_async_resource_ref mr)
 {
   // create output column
   auto results = make_numeric_column(data_type{type_to_id<size_type>()},
@@ -165,11 +166,13 @@ std::unique_ptr<column> count_characters_parallel(strings_column_view const& inp
 
 std::unique_ptr<column> count_characters(strings_column_view const& input,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   if ((input.size() == input.null_count()) ||
-      ((input.chars_size() / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD)) {
-    auto ufn = [] __device__(string_view const& d_str) { return d_str.length(); };
+      ((input.chars_size(stream) / (input.size() - input.null_count())) <
+       AVG_CHAR_BYTES_THRESHOLD)) {
+    auto ufn = cuda::proclaim_return_type<size_type>(
+      [] __device__(string_view const& d_str) { return d_str.length(); });
     return counts_fn(input, ufn, stream, mr);
   }
 
@@ -178,9 +181,10 @@ std::unique_ptr<column> count_characters(strings_column_view const& input,
 
 std::unique_ptr<column> count_bytes(strings_column_view const& input,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
-  auto ufn = [] __device__(string_view const& d_str) { return d_str.size_bytes(); };
+  auto ufn = cuda::proclaim_return_type<size_type>(
+    [] __device__(string_view const& d_str) { return d_str.size_bytes(); });
   return counts_fn(input, ufn, stream, mr);
 }
 
@@ -216,7 +220,7 @@ namespace detail {
 //
 std::unique_ptr<column> code_points(strings_column_view const& input,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_column       = *strings_column;
@@ -228,11 +232,11 @@ std::unique_ptr<column> code_points(strings_column_view const& input,
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(input.size()),
     offsets.begin() + 1,
-    [d_column] __device__(size_type idx) {
+    cuda::proclaim_return_type<size_type>([d_column] __device__(size_type idx) {
       size_type length = 0;
       if (!d_column.is_null(idx)) length = d_column.element<string_view>(idx).length();
       return length;
-    },
+    }),
     thrust::plus<size_type>());
 
   offsets.set_element_to_zero_async(0, stream);
@@ -260,21 +264,21 @@ std::unique_ptr<column> code_points(strings_column_view const& input,
 // external APIS
 
 std::unique_ptr<column> count_characters(strings_column_view const& input,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::count_characters(input, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> count_bytes(strings_column_view const& input,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::count_bytes(input, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> code_points(strings_column_view const& input,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::code_points(input, cudf::get_default_stream(), mr);

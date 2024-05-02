@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-#include <io/utilities/trie.cuh>
-#include <io/utilities/type_inference.cuh>
+#include "io/utilities/string_parsing.hpp"
+#include "io/utilities/trie.cuh"
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
-#include <cudf_test/base_fixture.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -50,8 +52,8 @@ TEST_F(TypeInference, Basic)
   auto d_data           = cudf::make_string_scalar(data);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
-  auto const string_offset   = std::vector<int32_t>{1, 4, 7};
-  auto const string_length   = std::vector<std::size_t>{2, 2, 1};
+  auto const string_offset   = std::vector<cudf::size_type>{1, 4, 7};
+  auto const string_length   = std::vector<cudf::size_type>{2, 2, 1};
   auto const d_string_offset = cudf::detail::make_device_uvector_async(
     string_offset, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto const d_string_length = cudf::detail::make_device_uvector_async(
@@ -83,8 +85,8 @@ TEST_F(TypeInference, Null)
   auto d_data           = cudf::make_string_scalar(data);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
-  auto const string_offset   = std::vector<int32_t>{1, 1, 4};
-  auto const string_length   = std::vector<std::size_t>{0, 2, 1};
+  auto const string_offset   = std::vector<cudf::size_type>{1, 1, 4};
+  auto const string_length   = std::vector<cudf::size_type>{0, 2, 1};
   auto const d_string_offset = cudf::detail::make_device_uvector_async(
     string_offset, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto const d_string_length = cudf::detail::make_device_uvector_async(
@@ -116,8 +118,8 @@ TEST_F(TypeInference, AllNull)
   auto d_data           = cudf::make_string_scalar(data);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
-  auto const string_offset   = std::vector<int32_t>{1, 1, 1};
-  auto const string_length   = std::vector<std::size_t>{0, 0, 4};
+  auto const string_offset   = std::vector<cudf::size_type>{1, 1, 1};
+  auto const string_length   = std::vector<cudf::size_type>{0, 0, 4};
   auto const d_string_offset = cudf::detail::make_device_uvector_async(
     string_offset, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto const d_string_length = cudf::detail::make_device_uvector_async(
@@ -149,8 +151,8 @@ TEST_F(TypeInference, String)
   auto d_data           = cudf::make_string_scalar(data);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
-  auto const string_offset   = std::vector<int32_t>{1, 8, 12};
-  auto const string_length   = std::vector<std::size_t>{6, 3, 4};
+  auto const string_offset   = std::vector<cudf::size_type>{1, 8, 12};
+  auto const string_length   = std::vector<cudf::size_type>{6, 3, 4};
   auto const d_string_offset = cudf::detail::make_device_uvector_async(
     string_offset, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto const d_string_length = cudf::detail::make_device_uvector_async(
@@ -182,8 +184,8 @@ TEST_F(TypeInference, Bool)
   auto d_data           = cudf::make_string_scalar(data);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
-  auto const string_offset   = std::vector<int32_t>{1, 6, 12};
-  auto const string_length   = std::vector<std::size_t>{4, 5, 5};
+  auto const string_offset   = std::vector<cudf::size_type>{1, 6, 12};
+  auto const string_length   = std::vector<cudf::size_type>{4, 5, 5};
   auto const d_string_offset = cudf::detail::make_device_uvector_async(
     string_offset, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto const d_string_length = cudf::detail::make_device_uvector_async(
@@ -215,8 +217,8 @@ TEST_F(TypeInference, Timestamp)
   auto d_data           = cudf::make_string_scalar(data);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
-  auto const string_offset   = std::vector<int32_t>{1, 10};
-  auto const string_length   = std::vector<std::size_t>{8, 9};
+  auto const string_offset   = std::vector<cudf::size_type>{1, 10};
+  auto const string_length   = std::vector<cudf::size_type>{8, 9};
   auto const d_string_offset = cudf::detail::make_device_uvector_async(
     string_offset, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto const d_string_length = cudf::detail::make_device_uvector_async(
@@ -249,8 +251,8 @@ TEST_F(TypeInference, InvalidInput)
   auto d_data           = cudf::make_string_scalar(data);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_data);
 
-  auto const string_offset   = std::vector<int32_t>{1, 3, 5, 7, 9};
-  auto const string_length   = std::vector<std::size_t>{1, 1, 1, 1, 1};
+  auto const string_offset   = std::vector<cudf::size_type>{1, 3, 5, 7, 9};
+  auto const string_length   = std::vector<cudf::size_type>{1, 1, 1, 1, 1};
   auto const d_string_offset = cudf::detail::make_device_uvector_async(
     string_offset, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   auto const d_string_length = cudf::detail::make_device_uvector_async(

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,16 @@
 
 #include "reader_impl.hpp"
 
-namespace cudf::io::detail::parquet {
+#include <rmm/resource_ref.hpp>
+
+namespace cudf::io::parquet::detail {
 
 reader::reader() = default;
 
 reader::reader(std::vector<std::unique_ptr<datasource>>&& sources,
                parquet_reader_options const& options,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
+               rmm::device_async_resource_ref mr)
   : _impl(std::make_unique<impl>(std::move(sources), options, stream, mr))
 {
 }
@@ -43,12 +45,14 @@ table_with_metadata reader::read(parquet_reader_options const& options)
 }
 
 chunked_reader::chunked_reader(std::size_t chunk_read_limit,
+                               std::size_t pass_read_limit,
                                std::vector<std::unique_ptr<datasource>>&& sources,
                                parquet_reader_options const& options,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
-  _impl = std::make_unique<impl>(chunk_read_limit, std::move(sources), options, stream, mr);
+  _impl = std::make_unique<impl>(
+    chunk_read_limit, pass_read_limit, std::move(sources), options, stream, mr);
 }
 
 chunked_reader::~chunked_reader() = default;
@@ -57,4 +61,4 @@ bool chunked_reader::has_next() const { return _impl->has_next(); }
 
 table_with_metadata chunked_reader::read_chunk() const { return _impl->read_chunk(); }
 
-}  // namespace cudf::io::detail::parquet
+}  // namespace cudf::io::parquet::detail

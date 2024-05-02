@@ -25,6 +25,11 @@
 
 namespace cudf {
 namespace ast {
+/**
+ * @addtogroup expressions
+ * @{
+ * @file
+ */
 
 // Forward declaration.
 namespace detail {
@@ -544,6 +549,7 @@ class column_name_reference : public expression {
   std::string column_name;
 };
 
+/** @} */  // end of group
 }  // namespace ast
 
 }  // namespace cudf

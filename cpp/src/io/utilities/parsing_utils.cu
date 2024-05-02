@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,9 @@
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/pair.h>
-
 #include <rmm/device_buffer.hpp>
+
+#include <thrust/pair.h>
 
 #include <algorithm>
 
@@ -87,12 +87,12 @@ __device__ __forceinline__ void setElement(void*, cudf::size_type, T const&, V c
  * @param[out] positions Array containing the output positions
  */
 template <class T>
-__global__ void count_and_set_positions(char const* data,
-                                        uint64_t size,
-                                        uint64_t offset,
-                                        char const key,
-                                        cudf::size_type* count,
-                                        T* positions)
+CUDF_KERNEL void count_and_set_positions(char const* data,
+                                         uint64_t size,
+                                         uint64_t offset,
+                                         char const key,
+                                         cudf::size_type* count,
+                                         T* positions)
 {
   // thread IDs range per block, so also need the block id
   auto const tid = cudf::detail::grid_1d::global_thread_id();
@@ -106,7 +106,7 @@ __global__ void count_and_set_positions(char const* data,
   // Process the data
   for (long i = 0; i < byteToProcess; i++) {
     if (raw[i] == key) {
-      auto const idx = atomicAdd(count, (cudf::size_type)1);
+      auto const idx = atomicAdd(count, static_cast<cudf::size_type>(1));
       setElement(positions, idx, did + offset + i, key);
     }
   }

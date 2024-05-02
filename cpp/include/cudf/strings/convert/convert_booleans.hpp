@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -35,15 +36,17 @@ namespace strings {
  *
  * Any null entries will result in corresponding null entries in the output column.
  *
- * @param strings Strings instance for this operation.
- * @param true_string String to expect for true. Non-matching strings are false.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New BOOL8 column converted from strings.
+ * @param input Strings instance for this operation
+ * @param true_string String to expect for true. Non-matching strings are false
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New BOOL8 column converted from strings
  */
 std::unique_ptr<column> to_booleans(
-  strings_column_view const& strings,
-  string_scalar const& true_string    = string_scalar("true"),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  strings_column_view const& input,
+  string_scalar const& true_string,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new strings column converting the boolean values from the
@@ -53,17 +56,19 @@ std::unique_ptr<column> to_booleans(
  *
  * @throw cudf::logic_error if the input column is not BOOL8 type.
  *
- * @param booleans Boolean column to convert.
- * @param true_string String to use for true in the output column.
- * @param false_string String to use for false in the output column.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column.
+ * @param booleans Boolean column to convert
+ * @param true_string String to use for true in the output column
+ * @param false_string String to use for false in the output column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column
  */
 std::unique_ptr<column> from_booleans(
   column_view const& booleans,
-  string_scalar const& true_string    = string_scalar("true"),
-  string_scalar const& false_string   = string_scalar("false"),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  string_scalar const& true_string,
+  string_scalar const& false_string,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

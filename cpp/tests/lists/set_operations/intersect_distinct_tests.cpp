@@ -514,7 +514,7 @@ TEST_F(SetIntersectTest, InputListsOfNestedStructsHaveNull)
                                       null,  // end list1
                                       null,  // end list2
                                       null,
-                                      null   // end list3
+                                      null  // end list3
                                     },
                                     all_nulls()};
       auto grandchild2 = strings_col{{
@@ -522,7 +522,7 @@ TEST_F(SetIntersectTest, InputListsOfNestedStructsHaveNull)
                                        "Apple",      // end list1
                                        "" /*NULL*/,  // end list2
                                        "ÁÁÁ",
-                                       "ÉÉÉÉÉ"       // end list3
+                                       "ÉÉÉÉÉ"  // end list3
                                      },
                                      nulls_at({0, 2})};
       auto child1      = structs_col{{grandchild1, grandchild2}, null_at(0)};

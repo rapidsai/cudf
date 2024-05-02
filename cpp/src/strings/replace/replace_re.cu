@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <strings/regex/regex_program_impl.h>
-#include <strings/regex/utilities.cuh>
+#include "strings/regex/regex_program_impl.h"
+#include "strings/regex/utilities.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -29,6 +29,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -42,13 +43,14 @@ struct replace_regex_fn {
   column_device_view const d_strings;
   string_view const d_repl;
   size_type const maxrepl;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
   {
     if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -68,7 +70,7 @@ struct replace_regex_fn {
       if (!match) { break; }  // no more matches
 
       auto const [start_pos, end_pos] = match_positions_to_bytes(*match, d_str, last_pos);
-      nbytes += d_repl.size_bytes() - (end_pos - start_pos);               // add new size
+      nbytes += d_repl.size_bytes() - (end_pos - start_pos);  // add new size
 
       if (out_ptr) {                                                       // replace:
                                                                            // i:bbbbsssseeee
@@ -89,7 +91,7 @@ struct replace_regex_fn {
                      d_str.size_bytes() - last_pos.byte_offset(),  //             ^   ^
                      out_ptr);
     } else {
-      d_offsets[idx] = nbytes;
+      d_sizes[idx] = nbytes;
     }
   }
 };
@@ -102,7 +104,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
                                    string_scalar const& replacement,
                                    std::optional<size_type> max_replace_count,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
@@ -116,12 +118,12 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
-  auto children = make_strings_children(
+  auto [offsets_column, chars] = make_strings_children(
     replace_regex_fn{*d_strings, d_repl, maxrepl}, *d_prog, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             chars.release(),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
@@ -134,11 +136,11 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    regex_program const& prog,
                                    string_scalar const& replacement,
                                    std::optional<size_type> max_replace_count,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_re(
-    strings, prog, replacement, max_replace_count, cudf::get_default_stream(), mr);
+  return detail::replace_re(strings, prog, replacement, max_replace_count, stream, mr);
 }
 
 }  // namespace strings

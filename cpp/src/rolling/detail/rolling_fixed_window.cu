@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,15 @@
 
 #include "rolling.cuh"
 
+#include <cudf_test/column_utilities.hpp>
+
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/resource_ref.hpp>
+
+#include <cuda/functional>
 #include <thrust/extrema.h>
-#include <thrust/iterator/constant_iterator.h>
 
 namespace cudf::detail {
 
@@ -32,7 +36,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type min_periods,
                                        rolling_aggregation const& agg,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -42,6 +46,9 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
   CUDF_EXPECTS((default_outputs.is_empty() || default_outputs.size() == input.size()),
                "Defaults column must be either empty or have as many rows as the input column.");
+
+  CUDF_EXPECTS(-(preceding_window - 1) <= following_window,
+               "Preceding window bounds must precede the following window bounds.");
 
   if (agg.kind == aggregation::CUDA || agg.kind == aggregation::PTX) {
     // TODO: In future, might need to clamp preceding/following to column boundaries.
@@ -58,18 +65,21 @@ std::unique_ptr<column> rolling_window(column_view const& input,
     // Clamp preceding/following to column boundaries.
     // E.g. If preceding_window == 2, then for a column of 5 elements, preceding_window will be:
     //      [1, 2, 2, 2, 1]
-    auto const preceding_window_begin = cudf::detail::make_counting_transform_iterator(
-      0,
+
+    auto const preceding_calc = cuda::proclaim_return_type<cudf::size_type>(
       [preceding_window] __device__(size_type i) { return thrust::min(i + 1, preceding_window); });
-    auto const following_window_begin = cudf::detail::make_counting_transform_iterator(
-      0, [col_size = input.size(), following_window] __device__(size_type i) {
+
+    auto const following_calc = cuda::proclaim_return_type<cudf::size_type>(
+      [col_size = input.size(), following_window] __device__(size_type i) {
         return thrust::min(col_size - i - 1, following_window);
       });
 
+    auto const preceding_column = expand_to_column(preceding_calc, input.size(), stream);
+    auto const following_column = expand_to_column(following_calc, input.size(), stream);
     return cudf::detail::rolling_window(input,
                                         default_outputs,
-                                        preceding_window_begin,
-                                        following_window_begin,
+                                        preceding_column->view().begin<cudf::size_type>(),
+                                        following_column->view().begin<cudf::size_type>(),
                                         min_periods,
                                         agg,
                                         stream,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <rmm/resource_ref.hpp>
 
 //! NVText APIs
 namespace nvtext {
@@ -44,13 +46,15 @@ namespace nvtext {
  * A null input element at row `i` produces a corresponding null entry
  * for row `i` in the output column.
  *
- * @param strings Strings column to normalize.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param input Strings column to normalize
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return New strings columns of normalized strings.
  */
 std::unique_ptr<cudf::column> normalize_spaces(
-  cudf::strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  cudf::strings_column_view const& input,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Normalizes strings characters for tokenizing.
@@ -89,17 +93,19 @@ std::unique_ptr<cudf::column> normalize_spaces(
  * This function requires about 16x the number of character bytes in the input
  * strings column as working memory.
  *
- * @param strings The input strings to normalize.
+ * @param input The input strings to normalize
  * @param do_lower_case If true, upper-case characters are converted to
  *        lower-case and accents are stripped from those characters.
  *        If false, accented and upper-case characters are not transformed.
- * @param mr Memory resource to allocate any returned objects.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Memory resource to allocate any returned objects
  * @return Normalized strings column
  */
 std::unique_ptr<cudf::column> normalize_characters(
-  cudf::strings_column_view const& strings,
+  cudf::strings_column_view const& input,
   bool do_lower_case,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace nvtext

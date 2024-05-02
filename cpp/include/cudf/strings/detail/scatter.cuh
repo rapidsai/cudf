@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuda/functional>
 #include <thrust/distance.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
@@ -62,7 +64,7 @@ std::unique_ptr<column> scatter(SourceIterator begin,
                                 MapIterator scatter_map,
                                 strings_column_view const& target,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   if (target.is_empty()) return make_empty_column(type_id::STRING);
 
@@ -73,7 +75,9 @@ std::unique_ptr<column> scatter(SourceIterator begin,
   // this ensures empty strings are not mapped to nulls in the make_strings_column function
   auto const size = thrust::distance(begin, end);
   auto itr        = thrust::make_transform_iterator(
-    begin, [] __device__(string_view const sv) { return sv.empty() ? string_view{} : sv; });
+    begin, cuda::proclaim_return_type<string_view>([] __device__(string_view const sv) {
+      return sv.empty() ? string_view{} : sv;
+    }));
 
   // do the scatter
   thrust::scatter(

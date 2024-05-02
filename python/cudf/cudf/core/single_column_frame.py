@@ -1,9 +1,8 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 """Base class for Frame types that only have a single column."""
 
 from __future__ import annotations
 
-import warnings
 from typing import Any, Dict, Optional, Tuple, Union
 
 import cupy
@@ -15,11 +14,14 @@ from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
+    is_integer,
     is_integer_dtype,
+    is_numeric_dtype,
 )
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
-from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import NotIterable
 
 
 class SingleColumnFrame(Frame, NotIterable):
@@ -39,19 +41,16 @@ class SingleColumnFrame(Frame, NotIterable):
         self,
         op,
         axis=no_default,
-        level=None,
-        numeric_only=None,
+        numeric_only=False,
         **kwargs,
     ):
         if axis not in (None, 0, no_default):
             raise NotImplementedError("axis parameter is not implemented yet")
 
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only:
-            raise NotImplementedError(
-                f"Series.{op} does not implement numeric_only"
+        if numeric_only and not is_numeric_dtype(self._column):
+            raise TypeError(
+                f"Series.{op} does not allow numeric_only={numeric_only} "
+                "with non-numeric dtypes."
             )
         try:
             return getattr(self._column, op)(**kwargs)
@@ -104,11 +103,6 @@ class SingleColumnFrame(Frame, NotIterable):
     def _column(self):
         return self._data[self.name]
 
-    @_column.setter  # type: ignore
-    @_cudf_nvtx_annotate
-    def _column(self, value):
-        self._data[self.name] = value
-
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def values(self):  # noqa: D102
@@ -160,7 +154,7 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> import cudf
         >>> import pyarrow as pa
         >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
-        StringIndex(['a' 'b' None], dtype='object')
+        Index(['a', 'b', None], dtype='object')
         >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
         0       a
         1       b
@@ -202,23 +196,14 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_monotonic(self):
-        """Return boolean if values in the object are monotonically increasing.
-
-        This property is an alias for :attr:`is_monotonic_increasing`.
+    def is_unique(self):
+        """Return boolean if values in the object are unique.
 
         Returns
         -------
         bool
         """
-        # Do not remove until pandas 2.0 support is added.
-        warnings.warn(
-            "is_monotonic is deprecated and will be removed in a future "
-            "version. Use is_monotonic_increasing instead.",
-            FutureWarning,
-        )
-
-        return self.is_monotonic_increasing
+        return self._column.is_unique
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -245,24 +230,26 @@ class SingleColumnFrame(Frame, NotIterable):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def __cuda_array_interface__(self):
-        return self._column.__cuda_array_interface__
+        # While the parent column class has a `__cuda_array_interface__` method
+        # defined, it is not implemented for all column types. When it is not
+        # implemented, though, at the Frame level we really want to throw an
+        # AttributeError.
+        try:
+            return self._column.__cuda_array_interface__
+        except NotImplementedError:
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute "
+                "'__cuda_array_interface__'"
+            )
 
     @_cudf_nvtx_annotate
-    def factorize(self, sort=False, na_sentinel=None, use_na_sentinel=None):
+    def factorize(self, sort=False, use_na_sentinel=True):
         """Encode the input values as integer labels.
 
         Parameters
         ----------
         sort : bool, default True
             Sort uniques and shuffle codes to maintain the relationship.
-        na_sentinel : number, default -1
-            Value to indicate missing category.
-
-            .. deprecated:: 23.04
-
-               The na_sentinel argument is deprecated and will be removed in
-               a future version of cudf. Specify use_na_sentinel as
-               either True or False.
         use_na_sentinel : bool, default True
             If True, the sentinel -1 will be used for NA values.
             If False, NA values will be encoded as non-negative
@@ -284,12 +271,11 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> codes
         array([0, 0, 1], dtype=int8)
         >>> uniques
-        StringIndex(['a' 'c'], dtype='object')
+        Index(['a', 'c'], dtype='object')
         """
         return cudf.core.algorithms.factorize(
             self,
             sort=sort,
-            na_sentinel=na_sentinel,
             use_na_sentinel=use_na_sentinel,
         )
 
@@ -299,8 +285,6 @@ class SingleColumnFrame(Frame, NotIterable):
         other: Any,
         fill_value: Any = None,
         reflect: bool = False,
-        *args,
-        **kwargs,
     ) -> Union[
         Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
         NotImplementedType,
@@ -375,6 +359,11 @@ class SingleColumnFrame(Frame, NotIterable):
         # _absolutely_ necessary, since in almost all cases a more specific
         # method can be used e.g. element_indexing or slice.
         if _is_scalar_or_zero_d_array(arg):
+            if not is_integer(arg):
+                raise ValueError(
+                    "Can only select elements with an integer, "
+                    f"not a {type(arg).__name__}"
+                )
             return self._column.element_indexing(int(arg))
         elif isinstance(arg, slice):
             start, stop, stride = arg.indices(len(self))
@@ -382,7 +371,7 @@ class SingleColumnFrame(Frame, NotIterable):
         else:
             arg = as_column(arg)
             if len(arg) == 0:
-                arg = as_column([], dtype="int32")
+                arg = cudf.core.column.column_empty(0, dtype="int32")
             if is_integer_dtype(arg.dtype):
                 return self._column.take(arg)
             if is_bool_dtype(arg.dtype):

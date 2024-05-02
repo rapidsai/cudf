@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
@@ -56,7 +57,7 @@ struct byte_list_conversion_dispatcher {
   std::unique_ptr<column> operator()(column_view const& input,
                                      flip_endianness configuration,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+                                     rmm::device_async_resource_ref mr) const
   {
     return byte_list_conversion_fn<T>::invoke(input, configuration, stream, mr);
   }
@@ -67,7 +68,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
   static std::unique_ptr<column> invoke(column_view const& input,
                                         flip_endianness configuration,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     if (input.size() == 0) {
       return cudf::lists::detail::make_empty_lists_column(output_type, stream, mr);
@@ -124,7 +125,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
   static std::unique_ptr<column> invoke(column_view const& input,
                                         flip_endianness,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     if (input.size() == 0) {
       return cudf::lists::detail::make_empty_lists_column(output_type, stream, mr);
@@ -135,10 +136,9 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
     }
 
     auto col_content     = std::make_unique<column>(input, stream, mr)->release();
-    auto chars_contents  = col_content.children[strings_column_view::chars_column_index]->release();
-    auto const num_chars = chars_contents.data->size();
+    auto const num_chars = col_content.data->size();
     auto uint8_col       = std::make_unique<column>(
-      output_type, num_chars, std::move(*(chars_contents.data)), rmm::device_buffer{}, 0);
+      output_type, num_chars, std::move(*(col_content.data)), rmm::device_buffer{}, 0);
 
     auto result = make_lists_column(
       input.size(),
@@ -163,14 +163,14 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
 }  // namespace
 
 /**
- * @copydoc cudf::byte_cast(column_view const&, flip_endianness, rmm::mr::device_memory_resource*)
+ * @copydoc cudf::byte_cast(column_view const&, flip_endianness, rmm::device_async_resource_ref)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> byte_cast(column_view const& input,
                                   flip_endianness endian_configuration,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   return type_dispatcher(
     input.type(), byte_list_conversion_dispatcher{}, input, endian_configuration, stream, mr);
@@ -179,11 +179,11 @@ std::unique_ptr<column> byte_cast(column_view const& input,
 }  // namespace detail
 
 /**
- * @copydoc cudf::byte_cast(column_view const&, flip_endianness, rmm::mr::device_memory_resource*)
+ * @copydoc cudf::byte_cast(column_view const&, flip_endianness, rmm::device_async_resource_ref)
  */
 std::unique_ptr<column> byte_cast(column_view const& input,
                                   flip_endianness endian_configuration,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::byte_cast(input, endian_configuration, cudf::get_default_stream(), mr);

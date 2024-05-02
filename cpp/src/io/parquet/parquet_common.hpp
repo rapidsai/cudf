@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,8 @@
 
 #include <cstdint>
 
-namespace cudf {
-namespace io {
-namespace parquet {
+namespace cudf::io::parquet::detail {
+
 // Max decimal precisions according to the parquet spec:
 // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#decimal
 auto constexpr MAX_DECIMAL32_PRECISION  = 9;
@@ -104,8 +103,9 @@ enum Compression {
   GZIP         = 2,
   LZO          = 3,
   BROTLI       = 4,  // Added in 2.3.2
-  LZ4          = 5,  // Added in 2.3.2
+  LZ4          = 5,  // deprecated; based on LZ4, but with an additional undocumented framing scheme
   ZSTD         = 6,  // Added in 2.3.2
+  LZ4_RAW      = 7,  // "standard" LZ4 block format
 };
 
 /**
@@ -141,21 +141,20 @@ enum BoundaryOrder {
 /**
  * @brief Thrift compact protocol struct field types
  */
-enum {
-  ST_FLD_TRUE   = 1,
-  ST_FLD_FALSE  = 2,
-  ST_FLD_BYTE   = 3,
-  ST_FLD_I16    = 4,
-  ST_FLD_I32    = 5,
-  ST_FLD_I64    = 6,
-  ST_FLD_DOUBLE = 7,
-  ST_FLD_BINARY = 8,
-  ST_FLD_LIST   = 9,
-  ST_FLD_SET    = 10,
-  ST_FLD_MAP    = 11,
-  ST_FLD_STRUCT = 12,
+enum class FieldType : uint8_t {
+  BOOLEAN_TRUE  = 1,
+  BOOLEAN_FALSE = 2,
+  I8            = 3,
+  I16           = 4,
+  I32           = 5,
+  I64           = 6,
+  DOUBLE        = 7,
+  BINARY        = 8,
+  LIST          = 9,
+  SET           = 10,
+  MAP           = 11,
+  STRUCT        = 12,
+  UUID          = 13,
 };
 
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

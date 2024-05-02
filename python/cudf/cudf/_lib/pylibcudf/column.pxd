@@ -1,10 +1,10 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.types cimport bitmask_type, size_type
 
 from .gpumemoryview cimport gpumemoryview
@@ -21,14 +21,18 @@ cdef class Column:
         gpumemoryview _mask
         size_type _null_count
         size_type _offset
-        # children: List[Column]
+        # _children: List[Column]
         list _children
         size_type _num_children
 
     cdef column_view view(self) nogil
+    cdef mutable_column_view mutable_view(self) nogil
 
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col)
+
+    @staticmethod
+    cdef Column from_column_view(const column_view& libcudf_col, Column owner)
 
     cpdef DataType type(self)
     cpdef Column child(self, size_type index)
@@ -39,8 +43,9 @@ cdef class Column:
     cpdef gpumemoryview data(self)
     cpdef gpumemoryview null_mask(self)
     cpdef list children(self)
+    cpdef Column copy(self)
 
-    cpdef list_view(self)
+    cpdef ListColumnView list_view(self)
 
 
 cdef class ListColumnView:

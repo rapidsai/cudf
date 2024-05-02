@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,10 @@
  */
 #pragma once
 
+#include <cudf/io/memory_resource.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
@@ -24,12 +26,17 @@
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <string>
 
 namespace cudf {
+
 namespace detail {
 static std::string rmm_mode_param{"--rmm_mode"};  ///< RMM mode command-line parameter name
+static std::string cuio_host_mem_param{
+  "--cuio_host_mem"};  ///< cuio host memory mode parameter name
 }  // namespace detail
 
 /**
@@ -38,11 +45,14 @@ static std::string rmm_mode_param{"--rmm_mode"};  ///< RMM mode command-line par
  * Initializes the default memory resource to use the RMM pool device resource.
  */
 struct nvbench_base_fixture {
+  using host_pooled_mr_t = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
+
   inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
 
   inline auto make_pool()
   {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda());
+    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+      make_cuda(), rmm::percent_of_free_device_memory(50));
   }
 
   inline auto make_async() { return std::make_shared<rmm::mr::cuda_async_memory_resource>(); }
@@ -56,7 +66,8 @@ struct nvbench_base_fixture {
 
   inline auto make_managed_pool()
   {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_managed());
+    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+      make_managed(), rmm::percent_of_free_device_memory(50));
   }
 
   inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
@@ -72,6 +83,32 @@ struct nvbench_base_fixture {
               "\nExpecting: cuda, pool, async, arena, managed, or managed_pool");
   }
 
+  inline rmm::host_async_resource_ref make_cuio_host_pinned()
+  {
+    static std::shared_ptr<rmm::mr::pinned_host_memory_resource> mr =
+      std::make_shared<rmm::mr::pinned_host_memory_resource>();
+    return *mr;
+  }
+
+  inline rmm::host_async_resource_ref make_cuio_host_pinned_pool()
+  {
+    if (!this->host_pooled_mr) {
+      // Don't store in static, as the CUDA context may be destroyed before static destruction
+      this->host_pooled_mr = std::make_shared<host_pooled_mr_t>(
+        std::make_shared<rmm::mr::pinned_host_memory_resource>().get(),
+        size_t{1} * 1024 * 1024 * 1024);
+    }
+
+    return *this->host_pooled_mr;
+  }
+
+  inline rmm::host_async_resource_ref create_cuio_host_memory_resource(std::string const& mode)
+  {
+    if (mode == "pinned") return make_cuio_host_pinned();
+    if (mode == "pinned_pool") return make_cuio_host_pinned_pool();
+    CUDF_FAIL("Unknown cuio_host_mem parameter: " + mode + "\nExpecting: pinned or pinned_pool");
+  }
+
   nvbench_base_fixture(int argc, char const* const* argv)
   {
     for (int i = 1; i < argc - 1; ++i) {
@@ -79,16 +116,31 @@ struct nvbench_base_fixture {
       if (arg == detail::rmm_mode_param) {
         i++;
         rmm_mode = argv[i];
+      } else if (arg == detail::cuio_host_mem_param) {
+        i++;
+        cuio_host_mode = argv[i];
       }
     }
 
     mr = create_memory_resource(rmm_mode);
     rmm::mr::set_current_device_resource(mr.get());
     std::cout << "RMM memory resource = " << rmm_mode << "\n";
+
+    cudf::io::set_host_memory_resource(create_cuio_host_memory_resource(cuio_host_mode));
+    std::cout << "CUIO host memory resource = " << cuio_host_mode << "\n";
+  }
+
+  ~nvbench_base_fixture()
+  {
+    // Ensure the the pool is freed before the CUDA context is destroyed:
+    cudf::io::set_host_memory_resource(this->make_cuio_host_pinned());
   }
 
   std::shared_ptr<rmm::mr::device_memory_resource> mr;
   std::string rmm_mode{"pool"};
+
+  std::shared_ptr<host_pooled_mr_t> host_pooled_mr;
+  std::string cuio_host_mode{"pinned"};
 };
 
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-#include <nvtext/tokenize.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -30,8 +28,11 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <nvtext/tokenize.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -47,12 +48,13 @@ namespace {
  * the same row. The `d_separator` is appended between each token.
  */
 struct detokenizer_fn {
-  cudf::column_device_view const d_strings;  // these are the tokens
-  cudf::size_type const* d_row_map;          // indices sorted by output row
-  cudf::size_type const* d_token_offsets;    // to each input token array
-  cudf::string_view const d_separator;       // append after each token
-  cudf::size_type* d_offsets{};              // offsets to output buffer d_chars
-  char* d_chars{};                           // output buffer for characters
+  cudf::column_device_view const d_strings;    // these are the tokens
+  cudf::size_type const* d_row_map;            // indices sorted by output row
+  cudf::size_type const* d_token_offsets;      // to each input token array
+  cudf::string_view const d_separator;         // append after each token
+  cudf::size_type* d_sizes{};                  // output sizes
+  char* d_chars{};                             // output buffer for characters
+  cudf::detail::input_offsetalator d_offsets;  // for addressing output row data in d_chars
 
   __device__ void operator()(cudf::size_type idx)
   {
@@ -74,7 +76,7 @@ struct detokenizer_fn {
         nbytes += d_separator.size_bytes();
       }
     }
-    if (!d_chars) { d_offsets[idx] = (nbytes > 0) ? (nbytes - d_separator.size_bytes()) : 0; }
+    if (!d_chars) { d_sizes[idx] = (nbytes > 0) ? (nbytes - d_separator.size_bytes()) : 0; }
   }
 };
 
@@ -132,7 +134,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
                                          cudf::column_view const& row_indices,
                                          cudf::string_scalar const& separator,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be valid");
   CUDF_EXPECTS(row_indices.size() == strings.size(),
@@ -156,7 +158,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
 
   cudf::string_view const d_separator(separator.data(), separator.size());
 
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
     detokenizer_fn{*strings_column, d_row_map, tokens_offsets.data(), d_separator},
     output_count,
     stream,
@@ -164,18 +166,19 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
 
   // make the output strings column from the offsets and chars column
   return cudf::make_strings_column(
-    output_count, std::move(children.first), std::move(children.second), 0, rmm::device_buffer{});
+    output_count, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail
 
-std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& input,
                                          cudf::column_view const& row_indices,
                                          cudf::string_scalar const& separator,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::detokenize(strings, row_indices, separator, cudf::get_default_stream(), mr);
+  return detail::detokenize(input, row_indices, separator, stream, mr);
 }
 
 }  // namespace nvtext

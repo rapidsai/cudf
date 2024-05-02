@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,10 @@
 #include <cudf/column/column.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/types.hpp>
-#include <rmm/cuda_stream_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf::lists::detail {
 
@@ -35,7 +36,7 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                                      null_equality nulls_equal,
                                      nan_equality nans_equal,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr);
+                                     rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::list::intersect_distinct
@@ -47,7 +48,7 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
                                            null_equality nulls_equal,
                                            nan_equality nans_equal,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr);
+                                           rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::list::union_distinct
@@ -59,7 +60,7 @@ std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
                                        null_equality nulls_equal,
                                        nan_equality nans_equal,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr);
+                                       rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::list::difference_distinct
@@ -71,7 +72,7 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
                                             null_equality nulls_equal,
                                             nan_equality nans_equal,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr);
+                                            rmm::device_async_resource_ref mr);
 
 /** @} */  // end of group
 }  // namespace cudf::lists::detail

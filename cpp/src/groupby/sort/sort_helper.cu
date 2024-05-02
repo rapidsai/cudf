@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,7 @@
  */
 
 #include "common_utils.cuh"
-
-#include <stream_compaction/stream_compaction_common.cuh>
+#include "stream_compaction/stream_compaction_common.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -36,7 +35,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuda/functional>
 #include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -96,8 +97,8 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
 
   if (_keys_pre_sorted == sorted::YES) {
     _key_sorted_order = cudf::detail::sequence(_keys.num_rows(),
-                                               numeric_scalar<size_type>(0),
-                                               numeric_scalar<size_type>(1),
+                                               numeric_scalar<size_type>(0, true, stream),
+                                               numeric_scalar<size_type>(1, true, stream),
                                                stream,
                                                rmm::mr::get_current_device_resource());
     return sliced_key_sorted_order();
@@ -236,7 +237,7 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
   auto [row_bitmask, null_count] =
     cudf::detail::bitmask_and(_keys, stream, rmm::mr::get_current_device_resource());
 
-  auto const zero = numeric_scalar<int8_t>(0);
+  auto const zero = numeric_scalar<int8_t>(0, true, stream);
   // Create a temporary variable and only set _keys_bitmask_column right before the return.
   // This way, a 2nd (parallel) call to this will not be given a partially created object.
   auto keys_bitmask_column = cudf::detail::sequence(
@@ -248,7 +249,7 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
 }
 
 sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
-  column_view const& values, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  column_view const& values, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   column_ptr values_sort_order =
     cudf::detail::stable_sorted_order(table_view({unsorted_keys_labels(stream), values}),
@@ -272,7 +273,7 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
 }
 
 sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
-  column_view const& values, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  column_view const& values, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   auto gather_map = key_sort_order(stream);
 
@@ -287,12 +288,14 @@ sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
 }
 
 std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view stream,
-                                                        rmm::mr::device_memory_resource* mr)
+                                                        rmm::device_async_resource_ref mr)
 {
   auto idx_data = key_sort_order(stream).data<size_type>();
 
-  auto gather_map_it = thrust::make_transform_iterator(
-    group_offsets(stream).begin(), [idx_data] __device__(size_type i) { return idx_data[i]; });
+  auto gather_map_it =
+    thrust::make_transform_iterator(group_offsets(stream).begin(),
+                                    cuda::proclaim_return_type<size_type>(
+                                      [idx_data] __device__(size_type i) { return idx_data[i]; }));
 
   return cudf::detail::gather(_keys,
                               gather_map_it,
@@ -303,7 +306,7 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
 }
 
 std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::cuda_stream_view stream,
-                                                        rmm::mr::device_memory_resource* mr)
+                                                        rmm::device_async_resource_ref mr)
 {
   return cudf::detail::gather(_keys,
                               key_sort_order(stream),

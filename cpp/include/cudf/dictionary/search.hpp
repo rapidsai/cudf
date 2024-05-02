@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/scalar/scalar.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -37,13 +38,15 @@ namespace dictionary {
  *
  * @param dictionary The dictionary to search for the key.
  * @param key The value to search for in the dictionary keyset.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory.
- * @return Numeric scalar index value of the key within the dictionary
+ * @return Numeric scalar index value of the key within the dictionary.
  */
 std::unique_ptr<scalar> get_index(
   dictionary_column_view const& dictionary,
   scalar const& key,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace dictionary

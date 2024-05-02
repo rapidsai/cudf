@@ -374,7 +374,7 @@ TEST_F(GroupbyMergeListsTest, StringsColumnInput)
                 "" /*NULL*/,
                 "" /*NULL*/,
                 "German Shepherd",
-                ""                                                /*NULL*/
+                "" /*NULL*/
               },
               nulls_at({3, 4, 5, 7})},                            // key = "dog"
     lists_col{{"Whale", "" /*NULL*/, "Polar Bear"}, null_at(1)},  // key = "unknown"

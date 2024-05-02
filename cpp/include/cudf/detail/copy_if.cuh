@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,13 +37,12 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-
-#include <thrust/copy.h>
-#include <thrust/iterator/counting_iterator.h>
+#include <rmm/resource_ref.hpp>
 
 #include <cub/cub.cuh>
-
 #include <cuda/atomic>
+#include <thrust/copy.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 
@@ -52,10 +51,10 @@ namespace detail {
 
 // Compute the count of elements that pass the mask within each block
 template <typename Filter, int block_size>
-__global__ void compute_block_counts(cudf::size_type* __restrict__ block_counts,
-                                     cudf::size_type size,
-                                     cudf::size_type per_thread,
-                                     Filter filter)
+CUDF_KERNEL void compute_block_counts(cudf::size_type* __restrict__ block_counts,
+                                      cudf::size_type size,
+                                      cudf::size_type per_thread,
+                                      Filter filter)
 {
   int tid   = threadIdx.x + per_thread * block_size * blockIdx.x;
   int count = 0;
@@ -96,7 +95,7 @@ __device__ cudf::size_type block_scan_mask(bool mask_true, cudf::size_type& bloc
 //
 // Note: `filter` is not run on indices larger than the input column size
 template <typename T, typename Filter, int block_size, bool has_validity>
-__launch_bounds__(block_size) __global__
+__launch_bounds__(block_size) CUDF_KERNEL
   void scatter_kernel(cudf::mutable_column_device_view output_view,
                       cudf::size_type* output_null_count,
                       cudf::column_device_view input_view,
@@ -133,7 +132,7 @@ __launch_bounds__(block_size) __global__
     if (has_validity) {
       temp_valids[threadIdx.x] = false;  // init shared memory
       if (threadIdx.x < cudf::detail::warp_size) temp_valids[block_size + threadIdx.x] = false;
-      __syncthreads();                   // wait for init
+      __syncthreads();  // wait for init
     }
 
     if (mask_true) {
@@ -241,7 +240,7 @@ struct scatter_gather_functor {
                                            Filter filter,
                                            cudf::size_type per_thread,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
   {
     auto output_column = cudf::detail::allocate_like(
       input, output_size, cudf::mask_allocation_policy::RETAIN, stream, mr);
@@ -288,7 +287,7 @@ struct scatter_gather_functor {
                                            Filter filter,
                                            cudf::size_type,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
   {
     rmm::device_uvector<cudf::size_type> indices(output_size, stream);
 
@@ -327,7 +326,7 @@ template <typename Filter>
 std::unique_ptr<table> copy_if(table_view const& input,
                                Filter filter,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 

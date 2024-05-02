@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace detail {
@@ -54,7 +55,7 @@ namespace detail {
  * @param output_column The destination for the results of evaluating the expression.
  */
 template <cudf::size_type max_block_size, bool has_nulls>
-__launch_bounds__(max_block_size) __global__
+__launch_bounds__(max_block_size) CUDF_KERNEL
   void compute_column_kernel(table_device_view const table,
                              ast::detail::expression_device_view device_expression_data,
                              mutable_column_device_view output_column)
@@ -83,7 +84,7 @@ __launch_bounds__(max_block_size) __global__
 std::unique_ptr<column> compute_column(table_view const& table,
                                        ast::expression const& expr,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   // If evaluating the expression may produce null outputs we create a nullable
   // output column and follow the null-supporting expression evaluation code
@@ -137,7 +138,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
 
 std::unique_ptr<column> compute_column(table_view const& table,
                                        ast::expression const& expr,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::compute_column(table, expr, cudf::get_default_stream(), mr);

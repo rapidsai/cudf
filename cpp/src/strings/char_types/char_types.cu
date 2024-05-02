@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -29,6 +29,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
@@ -87,7 +88,7 @@ std::unique_ptr<column> all_characters_of_type(strings_column_view const& input,
                                                string_character_types types,
                                                string_character_types verify_types,
                                                rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+                                               rmm::device_async_resource_ref mr)
 {
   auto d_strings = column_device_view::create(input.parent(), stream);
 
@@ -129,8 +130,9 @@ struct filter_chars_fn {
   string_character_types const types_to_remove;
   string_character_types const types_to_keep;
   string_view const d_replacement;  ///< optional replacement for removed characters
-  int32_t* d_offsets{};             ///< size of the output string stored here during first pass
-  char* d_chars{};                  ///< this is null only during the first pass
+  size_type* d_sizes{};
+  char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   /**
    * @brief Returns true if the given character should be replaced.
@@ -139,9 +141,9 @@ struct filter_chars_fn {
   {
     auto const code_point = detail::utf8_to_codepoint(ch);
     auto const flag       = code_point <= 0x00'FFFF ? d_flags[code_point] : 0;
-    if (flag == 0)                       // all types pass unless specifically identified
+    if (flag == 0)  // all types pass unless specifically identified
       return (types_to_remove == ALL_TYPES);
-    if (types_to_keep == ALL_TYPES)      // filter case
+    if (types_to_keep == ALL_TYPES)  // filter case
       return (types_to_remove & flag) != 0;
     return (types_to_keep & flag) == 0;  // keep case
   }
@@ -149,7 +151,7 @@ struct filter_chars_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_column.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     auto const d_str  = d_column.element<string_view>(idx);
@@ -164,7 +166,7 @@ struct filter_chars_fn {
       nbytes += d_newchar.size_bytes() - char_size;
       if (out_ptr) out_ptr = cudf::strings::detail::copy_string(out_ptr, d_newchar);
     }
-    if (!out_ptr) d_offsets[idx] = nbytes;
+    if (!out_ptr) { d_sizes[idx] = nbytes; }
   }
 };
 
@@ -175,7 +177,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
                                                   string_scalar const& replacement,
                                                   string_character_types types_to_keep,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(replacement.is_valid(stream), "Parameter replacement must be valid");
   if (types_to_remove == ALL_TYPES)
@@ -200,12 +202,13 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // this utility calls filterer to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(filterer, strings_count, stream, mr);
+  auto [offsets_column, chars] =
+    cudf::strings::detail::experimental::make_strings_children(filterer, strings_count, stream, mr);
 
   // return new strings column
   return make_strings_column(strings_count,
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             chars.release(),
                              strings.null_count(),
                              std::move(null_mask));
 }
@@ -214,25 +217,26 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
 
 // external API
 
-std::unique_ptr<column> all_characters_of_type(strings_column_view const& strings,
+std::unique_ptr<column> all_characters_of_type(strings_column_view const& input,
                                                string_character_types types,
                                                string_character_types verify_types,
-                                               rmm::mr::device_memory_resource* mr)
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::all_characters_of_type(
-    strings, types, verify_types, cudf::get_default_stream(), mr);
+  return detail::all_characters_of_type(input, types, verify_types, stream, mr);
 }
 
-std::unique_ptr<column> filter_characters_of_type(strings_column_view const& strings,
+std::unique_ptr<column> filter_characters_of_type(strings_column_view const& input,
                                                   string_character_types types_to_remove,
                                                   string_scalar const& replacement,
                                                   string_character_types types_to_keep,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::filter_characters_of_type(
-    strings, types_to_remove, replacement, types_to_keep, cudf::get_default_stream(), mr);
+    input, types_to_remove, replacement, types_to_keep, stream, mr);
 }
 
 }  // namespace strings

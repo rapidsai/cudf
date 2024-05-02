@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <map>
 #include <string>
@@ -98,6 +99,10 @@ class json_reader_options {
 
   // Read the file as a json object per line
   bool _lines = false;
+  // Parse mixed types as a string column
+  bool _mixed_types_as_string = false;
+  // Prune columns on read, selected based on the _dtypes option
+  bool _prune_columns = false;
 
   // Bytes to skip from the start
   size_t _byte_range_offset = 0;
@@ -113,6 +118,12 @@ class json_reader_options {
   // Whether to keep the quote characters of string values
   bool _keep_quotes = false;
 
+  // Normalize single quotes
+  bool _normalize_single_quotes = false;
+
+  // Normalize unquoted spaces and tabs
+  bool _normalize_whitespace = false;
+
   // Whether to recover after an invalid JSON line
   json_recovery_mode_t _recovery_mode = json_recovery_mode_t::FAIL;
 
@@ -121,7 +132,7 @@ class json_reader_options {
    *
    * @param src source information used to read parquet file
    */
-  explicit json_reader_options(source_info const& src) : _source(src) {}
+  explicit json_reader_options(source_info src) : _source{std::move(src)} {}
 
   friend json_reader_options_builder;
 
@@ -139,7 +150,7 @@ class json_reader_options {
    * @param src source information used to read json file
    * @returns builder to build the options
    */
-  static json_reader_options_builder builder(source_info const& src);
+  static json_reader_options_builder builder(source_info src);
 
   /**
    * @brief Returns source info.
@@ -207,7 +218,7 @@ class json_reader_options {
 
     auto const max_row_bytes = 16 * 1024;  // 16KB
     auto const column_bytes  = 64;
-    auto const base_padding  = 1024;       // 1KB
+    auto const base_padding  = 1024;  // 1KB
 
     if (num_columns == 0) {
       // Use flat size if the number of columns is not known
@@ -226,6 +237,24 @@ class json_reader_options {
   bool is_enabled_lines() const { return _lines; }
 
   /**
+   * @brief Whether to parse mixed types as a string column.
+   *
+   * @return `true` if mixed types are parsed as a string column
+   */
+  bool is_enabled_mixed_types_as_string() const { return _mixed_types_as_string; }
+
+  /**
+   * @brief Whether to prune columns on read, selected based on the @ref set_dtypes option.
+   *
+   * When set as true, if the reader options include @ref set_dtypes, then
+   * the reader will only return those columns which are mentioned in @ref set_dtypes.
+   * If false, then all columns are returned, independent of the @ref set_dtypes setting.
+   *
+   * @return True if column pruning is enabled
+   */
+  bool is_enabled_prune_columns() const { return _prune_columns; }
+
+  /**
    * @brief Whether to parse dates as DD/MM versus MM/DD.
    *
    * @returns true if dates are parsed as DD/MM, false if MM/DD
@@ -235,9 +264,11 @@ class json_reader_options {
   /**
    * @brief Whether the legacy reader should be used.
    *
+   * @deprecated Since 24.06
+   *
    * @returns true if the legacy reader will be used, false otherwise
    */
-  bool is_enabled_legacy() const { return _legacy; }
+  [[deprecated]] bool is_enabled_legacy() const { return _legacy; }
 
   /**
    * @brief Whether the reader should keep quotes of string values.
@@ -245,6 +276,20 @@ class json_reader_options {
    * @returns true if the reader should keep quotes, false otherwise
    */
   bool is_enabled_keep_quotes() const { return _keep_quotes; }
+
+  /**
+   * @brief Whether the reader should normalize single quotes around strings
+   *
+   * @returns true if the reader should normalize single quotes, false otherwise
+   */
+  bool is_enabled_normalize_single_quotes() const { return _normalize_single_quotes; }
+
+  /**
+   * @brief Whether the reader should normalize unquoted whitespace characters
+   *
+   * @returns true if the reader should normalize whitespace, false otherwise
+   */
+  bool is_enabled_normalize_whitespace() const { return _normalize_whitespace; }
 
   /**
    * @brief Queries the JSON reader's behavior on invalid JSON lines.
@@ -303,6 +348,25 @@ class json_reader_options {
   void enable_lines(bool val) { _lines = val; }
 
   /**
+   * @brief Set whether to parse mixed types as a string column.
+   * Also enables forcing to read a struct as string column using schema.
+   *
+   * @param val Boolean value to enable/disable parsing mixed types as a string column
+   */
+  void enable_mixed_types_as_string(bool val) { _mixed_types_as_string = val; }
+
+  /**
+   * @brief Set whether to prune columns on read, selected based on the @ref set_dtypes option.
+   *
+   * When set as true, if the reader options include @ref set_dtypes, then
+   * the reader will only return those columns which are mentioned in @ref set_dtypes.
+   * If false, then all columns are returned, independent of the @ref set_dtypes setting.
+   *
+   * @param val Boolean value to enable/disable column pruning
+   */
+  void enable_prune_columns(bool val) { _prune_columns = val; }
+
+  /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
    *
    * @param val Boolean value to enable/disable day first parsing format
@@ -312,9 +376,11 @@ class json_reader_options {
   /**
    * @brief Set whether to use the legacy reader.
    *
+   * @deprecated Since 24.06
+   *
    * @param val Boolean value to enable/disable the legacy reader
    */
-  void enable_legacy(bool val) { _legacy = val; }
+  [[deprecated]] void enable_legacy(bool val) { _legacy = val; }
 
   /**
    * @brief Set whether the reader should keep quotes of string values.
@@ -323,6 +389,22 @@ class json_reader_options {
    * of string values
    */
   void enable_keep_quotes(bool val) { _keep_quotes = val; }
+
+  /**
+   * @brief Set whether the reader should enable normalization of single quotes around strings.
+   *
+   * @param val Boolean value to indicate whether the reader should normalize single quotes around
+   * strings
+   */
+  void enable_normalize_single_quotes(bool val) { _normalize_single_quotes = val; }
+
+  /**
+   * @brief Set whether the reader should enable normalization of unquoted whitespace
+   *
+   * @param val Boolean value to indicate whether the reader should normalize unquoted whitespace
+   * characters i.e. tabs and spaces
+   */
+  void enable_normalize_whitespace(bool val) { _normalize_whitespace = val; }
 
   /**
    * @brief Specifies the JSON reader's behavior on invalid JSON lines.
@@ -351,7 +433,7 @@ class json_reader_options_builder {
    *
    * @param src The source information used to read avro file
    */
-  explicit json_reader_options_builder(source_info const& src) : options(src) {}
+  explicit json_reader_options_builder(source_info src) : options{std::move(src)} {}
 
   /**
    * @brief Set data types for columns to be read.
@@ -438,6 +520,35 @@ class json_reader_options_builder {
   }
 
   /**
+   * @brief Set whether to parse mixed types as a string column.
+   * Also enables forcing to read a struct as string column using schema.
+   *
+   * @param val Boolean value to enable/disable parsing mixed types as a string column
+   * @return this for chaining
+   */
+  json_reader_options_builder& mixed_types_as_string(bool val)
+  {
+    options._mixed_types_as_string = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether to prune columns on read, selected based on the @ref dtypes option.
+   *
+   * When set as true, if the reader options include @ref dtypes, then
+   * the reader will only return those columns which are mentioned in @ref dtypes.
+   * If false, then all columns are returned, independent of the @ref dtypes setting.
+   *
+   * @param val Boolean value to enable/disable column pruning
+   * @return this for chaining
+   */
+  json_reader_options_builder& prune_columns(bool val)
+  {
+    options._prune_columns = val;
+    return *this;
+  }
+
+  /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
    *
    * @param val Boolean value to enable/disable day first parsing format
@@ -452,10 +563,12 @@ class json_reader_options_builder {
   /**
    * @brief Set whether to use the legacy reader.
    *
+   * @deprecated Since 24.06
+   *
    * @param val Boolean value to enable/disable legacy parsing
    * @return this for chaining
    */
-  json_reader_options_builder& legacy(bool val)
+  [[deprecated]] json_reader_options_builder& legacy(bool val)
   {
     options._legacy = val;
     return *this;
@@ -471,6 +584,32 @@ class json_reader_options_builder {
   json_reader_options_builder& keep_quotes(bool val)
   {
     options._keep_quotes = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether the reader should normalize single quotes around strings
+   *
+   * @param val Boolean value to indicate whether the reader should normalize single quotes
+   * of strings
+   * @return this for chaining
+   */
+  json_reader_options_builder& normalize_single_quotes(bool val)
+  {
+    options._normalize_single_quotes = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether the reader should normalize unquoted whitespace
+   *
+   * @param val Boolean value to indicate whether the reader should normalize unquoted
+   * whitespace
+   * @return this for chaining
+   */
+  json_reader_options_builder& normalize_whitespace(bool val)
+  {
+    options._normalize_whitespace = val;
     return *this;
   }
 
@@ -512,6 +651,7 @@ class json_reader_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata.
  *
@@ -519,7 +659,8 @@ class json_reader_options_builder {
  */
 table_with_metadata read_json(
   json_reader_options options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 
@@ -861,10 +1002,12 @@ class json_writer_options_builder {
  * @endcode
  *
  * @param options Settings for controlling writing behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  */
 void write_json(json_writer_options const& options,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace io

@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
@@ -21,6 +21,8 @@ cdef class Table:
         The columns in this table.
     """
     def __init__(self, list columns):
+        if not all(isinstance(c, Column) for c in columns):
+            raise ValueError("All columns must be pylibcudf Column objects")
         self._columns = columns
 
     cdef table_view view(self) nogil:
@@ -58,5 +60,31 @@ cdef class Table:
             for i in range(c_columns.size())
         ])
 
+    @staticmethod
+    cdef Table from_table_view(const table_view& tv, Table owner):
+        """Create a Table from a libcudf table.
+
+        This method accepts shared ownership of the underlying data from the
+        owner and relies on the offset from the view.
+
+        This method is for pylibcudf's functions to use to ingest outputs of
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
+        cdef int i
+        return Table([
+            Column.from_column_view(tv.column(i), owner.columns()[i])
+            for i in range(tv.num_columns())
+        ])
+
+    cpdef int num_columns(self):
+        """The number of columns in this table."""
+        return len(self._columns)
+
+    cpdef int num_rows(self):
+        """The number of rows in this table."""
+        return self._columns[0].size()
+
     cpdef list columns(self):
+        """The columns in this table."""
         return self._columns

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,9 +44,8 @@ Mark Adler    madler@alumni.caltech.edu
 */
 
 #include "gpuinflate.hpp"
+#include "io/utilities/block_utils.cuh"
 #include "io_uncomp.hpp"
-
-#include <io/utilities/block_utils.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -124,11 +123,11 @@ struct inflate_state_s {
   uint8_t* outbase;  ///< start of output buffer
   uint8_t* outend;   ///< end of output buffer
   // Input state
-  uint8_t const* cur;       ///< input buffer
-  uint8_t const* end;       ///< end of input buffer
+  uint8_t const* cur;  ///< input buffer
+  uint8_t const* end;  ///< end of input buffer
 
-  uint2 bitbuf;             ///< bit buffer (64-bit)
-  uint32_t bitpos;          ///< position in bit buffer
+  uint2 bitbuf;     ///< bit buffer (64-bit)
+  uint32_t bitpos;  ///< position in bit buffer
 
   int32_t err;              ///< Error status
   int btype;                ///< current block type
@@ -295,7 +294,7 @@ __device__ int construct(
     return 0;                    // complete, but decode() will fail
 
   // check for an over-subscribed or incomplete set of lengths
-  left = 1;                     // one possible code of zero length
+  left = 1;  // one possible code of zero length
   for (len = 1; len <= max_bits; len++) {
     left <<= 1;                 // one more bit, double codes left
     left -= counts[len];        // deduct count from possible codes
@@ -349,8 +348,8 @@ __device__ int init_dynamic(inflate_state_s* s)
   index = 0;
   while (index < nlen + ndist) {
     int symbol = decode(s, s->lencnt, s->lensym);
-    if (symbol < 0) return symbol;    // invalid symbol
-    if (symbol < 16)                  // length in 0..15
+    if (symbol < 0) return symbol;  // invalid symbol
+    if (symbol < 16)                // length in 0..15
       lengths[index++] = symbol;
     else {                            // repeat instruction
       int len = 0;                    // last length to repeat, assume repeating zeros
@@ -358,9 +357,9 @@ __device__ int init_dynamic(inflate_state_s* s)
         if (index == 0) return -5;    // no last length!
         len    = lengths[index - 1];  // last length
         symbol = 3 + getbits(s, 2);
-      } else if (symbol == 17)        // repeat zero 3..10 times
+      } else if (symbol == 17)  // repeat zero 3..10 times
         symbol = 3 + getbits(s, 3);
-      else                            // == 18, repeat zero 11..138 times
+      else  // == 18, repeat zero 11..138 times
         symbol = 11 + getbits(s, 7);
       if (index + symbol > nlen + ndist) return -6;  // too many lengths!
       while (symbol--)                               // repeat last or zero symbol times
@@ -805,8 +804,7 @@ __device__ void process_symbols(inflate_state_s* s, int t)
       dist   = symbol >> 16;
       for (int i = t; i < len; i += 32) {
         uint8_t const* src = out + ((i >= dist) ? (i % dist) : i) - dist;
-        uint8_t b          = (src < outbase) ? 0 : *src;
-        if (out + i < outend) { out[i] = b; }
+        if (out + i < outend and src >= outbase) { out[i] = *src; }
       }
       out += len;
       pos++;
@@ -1024,7 +1022,7 @@ __device__ int parse_gzip_header(uint8_t const* src, size_t src_size)
  * @param parse_hdr If nonzero, indicates that the compressed bitstream includes a GZIP header
  */
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   inflate_kernel(device_span<device_span<uint8_t const> const> inputs,
                  device_span<device_span<uint8_t> const> outputs,
                  device_span<compression_result> results,
@@ -1152,7 +1150,7 @@ __global__ void __launch_bounds__(block_size)
  *
  * @param inputs Source and destination information per block
  */
-__global__ void __launch_bounds__(1024)
+CUDF_KERNEL void __launch_bounds__(1024)
   copy_uncompressed_kernel(device_span<device_span<uint8_t const> const> inputs,
                            device_span<device_span<uint8_t> const> outputs)
 {

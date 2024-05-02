@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cub/device/device_reduce.cuh>
-
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -145,7 +144,7 @@ void BM_iterator(benchmark::State& state)
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     if (cub_or_thrust) {
       if (raw_or_iterator) {
-        raw_stream_bench_cub<T>(hasnull_F, dev_result);       // driven by raw pointer
+        raw_stream_bench_cub<T>(hasnull_F, dev_result);  // driven by raw pointer
       } else {
         iterator_bench_cub<T, false>(hasnull_F, dev_result);  // driven by riterator without nulls
       }

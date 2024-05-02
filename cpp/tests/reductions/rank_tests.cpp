@@ -140,7 +140,7 @@ auto make_input_column()
 auto make_strings_column()
 {
   return cudf::test::strings_column_wrapper{
-    {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "6c", "9", "9", "10d"},
+    {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "", "9", "9", "10d"},
     cudf::test::iterators::null_at(8)};
 }
 

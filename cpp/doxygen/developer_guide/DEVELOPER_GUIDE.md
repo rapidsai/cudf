@@ -84,7 +84,7 @@ prefixed with an underscore.
 
 ```c++
 template <typename IteratorType>
-void algorithm_function(int x, rmm::cuda_stream_view s, rmm::device_memory_resource* mr)
+void algorithm_function(int x, rmm::cuda_stream_view s, rmm::device_async_resource_ref mr)
 {
   ...
 }
@@ -127,8 +127,12 @@ and we try to follow his rules: "No raw loops. No raw pointers. No raw synchroni
    does use raw synchronization primitives. So we should revisit Parent's third rule and improve
    here.
 
-Additional style guidelines for libcudf code include:
+Additional style guidelines for libcudf code:
 
+ * Prefer "east const", placing `const` after the type. This is not
+   automatically enforced by `clang-format` because the option
+   `QualifierAlignment: Right` has been observed to produce false negatives and
+   false positives.
  * [NL.11: Make Literals
    Readable](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#nl11-make-literals-readable):
    Decimal values should use integer separators every thousands place, like
@@ -148,15 +152,20 @@ The following guidelines apply to organizing `#include` lines.
    from other RAPIDS libraries, then includes from related libraries, like `<thrust/...>`, then
    includes from dependencies installed with cuDF, and then standard headers (for example
    `<string>`, `<iostream>`).
- * Use `<>` instead of `""` unless the header is in the same directory as the source file.
+ * We use clang-format for grouping and sorting headers automatically. See the
+   `cudf/cpp/.clang-format` file for specifics.
+ * Use `<>` for all includes except for internal headers that are not in the `include`
+   directory. In other words, if it is a cuDF internal header (e.g. in the `src` or `test`
+   directory), the path will not start with `cudf` (e.g. `#include <cudf/some_header.hpp>`) so it
+   should use quotes. Example: `#include "io/utilities/hostdevice_vector.hpp"`.
+ * `cudf_test` and `nvtext` are separate libraries within the `libcudf` repo. As such, they have
+   public headers in `include` that should be included with `<>`.
  * Tools like `clangd` often auto-insert includes when they can, but they usually get the grouping
-   and brackets wrong.
+   and brackets wrong. Correct the usage of quotes or brackets and then run clang-format to correct
+   the grouping.
  * Always check that includes are only necessary for the file in which they are included.
    Try to avoid excessive including especially in header files. Double check this when you remove
    code.
- * Use quotes `"` to include local headers from the same relative source directory. This should only
-   occur in source files and non-public header files. Otherwise use angle brackets `<>` around
-   included header filenames.
  * Avoid relative paths with `..` when possible. Paths with `..` are necessary when including
    (internal) headers from source paths not in the same directory as the including file,
    because source paths are not passed with `-I`.
@@ -185,9 +194,10 @@ and produce `unique_ptr`s to owning objects as output. For example,
 std::unique_ptr<table> sort(table_view const& input);
 ```
 
-## rmm::device_memory_resource
+## Memory Resources
 
-libcudf allocates all device memory via RMM memory resources (MR). See the
+libcudf allocates all device memory via RMM memory resources (MR) or CUDA MRs. Either type
+can be passed to libcudf functions via `rmm::device_async_resource_ref` parameters. See the
 [RMM documentation](https://github.com/rapidsai/rmm/blob/main/README.md) for details.
 
 ### Current Device Memory Resource
@@ -196,6 +206,27 @@ RMM provides a "default" memory resource for each device that can be accessed an
 `rmm::mr::get_current_device_resource()` and `rmm::mr::set_current_device_resource(...)` functions,
 respectively. All memory resource parameters should be defaulted to use the return value of
 `rmm::mr::get_current_device_resource()`.
+
+### Resource Refs
+
+Memory resources are passed via resource ref parameters. A resource ref is a memory resource wrapper
+that enables consumers to specify properties of resources that they expect. These are defined
+in the `cuda::mr` namespace of libcu++, but RMM provides some convenience wrappers in
+`rmm/resource_ref.hpp`:
+ - `rmm::device_resource_ref` accepts a memory resource that provides synchronous allocation
+    of device-accessible memory.
+ - `rmm::device_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
+    of device-accessible memory.
+ - `rmm::host_resource_ref` accepts a memory resource that provides synchronous allocation of host-
+    accessible memory.
+ - `rmm::host_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
+    of host-accessible memory.
+ - `rmm::host_device_resource_ref` accepts a memory resource that provides synchronous allocation of
+    host- and device-accessible memory.
+ - `rmm::host_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
+    of host- and device-accessible memory.
+
+See the libcu++ [docs on `resource_ref`](https://nvidia.github.io/cccl/libcudacxx/extended_api/memory_resource/resource_ref.html) for more information.
 
 ## cudf::column
 
@@ -510,23 +541,23 @@ how device memory is allocated.
 
 ### Output Memory
 
-Any libcudf API that allocates memory that is *returned* to a user must accept a pointer to a
-`device_memory_resource` as the last parameter. Inside the API, this memory resource must be used
-to allocate any memory for returned objects. It should therefore be passed into functions whose
-outputs will be returned. Example:
+Any libcudf API that allocates memory that is *returned* to a user must accept a
+`rmm::device_async_resource_ref` as the last parameter. Inside the API, this memory resource must
+be used to allocate any memory for returned objects. It should therefore be passed into functions
+whose outputs will be returned. Example:
 
 ```c++
 // Returned `column` contains newly allocated memory,
 // therefore the API must accept a memory resource pointer
 std::unique_ptr<column> returns_output_memory(
-  ..., rmm::device_memory_resource * mr = rmm::mr::get_current_device_resource());
+  ..., rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 // This API does not allocate any new *output* memory, therefore
 // a memory resource is unnecessary
 void does_not_allocate_output_memory(...);
 ```
 
-This rule automatically applies to all detail APIs that allocates memory. Any detail API may be
+This rule automatically applies to all detail APIs that allocate memory. Any detail API may be
 called by any public API, and therefore could be allocating memory that is returned to the user.
 To support such uses cases, all detail APIs allocating memory resources should accept an `mr`
 parameter. Callers are responsible for either passing through a provided `mr` or
@@ -540,7 +571,7 @@ obtained from `rmm::mr::get_current_device_resource()` for temporary memory allo
 
 ```c++
 rmm::device_buffer some_function(
-  ..., rmm::mr::device_memory_resource mr * = rmm::mr::get_current_device_resource()) {
+  ..., rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) {
     rmm::device_buffer returned_buffer(..., mr); // Returned buffer uses the passed in MR
     ...
     rmm::device_buffer temporary_buffer(...); // Temporary buffer uses default MR
@@ -552,11 +583,11 @@ rmm::device_buffer some_function(
 ### Memory Management
 
 libcudf code generally eschews raw pointers and direct memory allocation. Use RMM classes built to
-use `device_memory_resource`s for device memory allocation with automated lifetime management.
+use memory resources for device memory allocation with automated lifetime management.
 
 #### rmm::device_buffer
 Allocates a specified number of bytes of untyped, uninitialized device memory using a
-`device_memory_resource`. If no resource is explicitly provided, uses
+memory resource. If no `rmm::device_async_resource_ref` is explicitly provided, it uses
 `rmm::mr::get_current_device_resource()`.
 
 `rmm::device_buffer` is movable and copyable on a stream. A copy performs a deep copy of the
@@ -655,10 +686,14 @@ defaults.
 ## NVTX Ranges
 
 In order to aid in performance optimization and debugging, all compute intensive libcudf functions
-should have a corresponding NVTX range. libcudf has a convenience macro `CUDF_FUNC_RANGE()` that
-automatically annotates the lifetime of the enclosing function and uses the function's name as
-the name of the NVTX range. For more information about NVTX, see
-[here](https://github.com/NVIDIA/NVTX/tree/dev/c).
+should have a corresponding NVTX range. Choose between `CUDF_FUNC_RANGE` or `cudf::scoped_range`
+for declaring NVTX ranges in the current scope:
+- Use the `CUDF_FUNC_RANGE()` macro if you want to use the name of the function as the name of the
+NVTX range
+- Use `cudf::scoped_range rng{"custom_name"};` to provide a custom name for the current scope's
+NVTX range
+
+For more information about NVTX, see [here](https://github.com/NVIDIA/NVTX/tree/dev/c).
 
 ## Input/Output Style
 
@@ -908,13 +943,14 @@ Use the `CUDF_EXPECTS` macro to enforce runtime conditions necessary for correct
 Example usage:
 
 ```c++
-CUDF_EXPECTS(lhs.type() == rhs.type(), "Column type mismatch");
+CUDF_EXPECTS(cudf::have_same_types(lhs, rhs), "Type mismatch", cudf::data_type_error);
 ```
 
 The first argument is the conditional expression expected to resolve to `true` under normal
-conditions. If the conditional evaluates to `false`, then an error has occurred and an instance of
-`cudf::logic_error` is thrown. The second argument to `CUDF_EXPECTS` is a short description of the
-error that has occurred and is used for the exception's `what()` message.
+conditions. The second argument to `CUDF_EXPECTS` is a short description of the error that has
+occurred and is used for the exception's `what()` message. If the conditional evaluates to
+`false`, then an error has occurred and an instance of the exception class in the third argument
+(or the default, `cudf::logic_error`) is thrown.
 
 There are times where a particular code path, if reached, should indicate an error no matter what.
 For example, often the `default` case of a `switch` statement represents an invalid alternative.
@@ -1012,6 +1048,12 @@ types such as numeric types and timestamps/durations, adding support for nested 
 
 Enabling an algorithm differently for different types uses either template specialization or SFINAE,
 as discussed in [Specializing Type-Dispatched Code Paths](#specializing-type-dispatched-code-paths).
+
+## Comparing Data Types
+
+When comparing the data types of two columns or scalars, do not directly compare
+`a.type() == b.type()`. Nested types such as lists of structs of integers will not be handled
+properly if only the top level type is compared. Instead, use the `cudf::have_same_types` function.
 
 # Type Dispatcher
 
@@ -1197,17 +1239,15 @@ This is related to [Arrow's "Variable-Size List" memory layout](https://arrow.ap
 
 ## Strings columns
 
-Strings are represented in much the same way as lists, except that the data child column is always
-a non-nullable column of `INT8` data. The parent column's type is `STRING` and contains no data,
+Strings are represented as a column with a data device buffer and a child offsets column.
+The parent column's type is `STRING` and its data holds all the characters across all the strings packed together
 but its size represents the number of strings in the column, and its null mask represents the
 validity of each string. To summarize, the strings column children are:
 
 1. A non-nullable column of [`size_type`](#cudfsize_type) elements that indicates the offset to the beginning of each
-   string in a dense column of all characters.
-2. A non-nullable column of `INT8` elements of all the characters across all the strings packed
-   together.
+   string in a dense data buffer of all characters.
 
-With this representation, `characters[offsets[i]]` is the first character of string `i`, and the
+With this representation, `data[offsets[i]]` is the first character of string `i`, and the
 size of string `i` is given by `offsets[i+1] - offsets[i]`. The following image shows an example of
 this compound column representation of strings.
 
@@ -1373,3 +1413,25 @@ cuIO is a component of libcudf that provides GPU-accelerated reading and writing
 formats commonly used in data analytics, including CSV, Parquet, ORC, Avro, and JSON_Lines.
 
 // TODO: add more detail and move to a separate file.
+
+# Debugging Tips
+
+Here are some tools that can help with debugging libcudf (besides printf of course):
+1. `cuda-gdb`\
+   Follow the instructions in the [Contributor to cuDF guide](../../../CONTRIBUTING.md#debugging-cudf) to build
+   and run libcudf with debug symbols.
+2. `compute-sanitizer`\
+   The [CUDA Compute Sanitizer](https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html)
+   tool can be used to locate many CUDA reported errors by providing a call stack
+   close to where the error occurs even with a non-debug build. The sanitizer includes various
+   tools including `memcheck`, `racecheck`, and `initcheck` as well as others.
+   The `racecheck` and `initcheck` have been known to produce false positives.
+3. `cudf::test::print()`\
+   The `print()` utility can be called within a gtest to output the data in a `cudf::column_view`.
+   More information is available in the [Testing Guide](TESTING.md#printing-and-accessing-column-data)
+4. GCC Address Sanitizer\
+   The GCC ASAN can also be used by adding the `-fsanitize=address` compiler flag.
+   There is a compatibility issue with the CUDA runtime that can be worked around by setting
+   environment variable `ASAN_OPTIONS=protect_shadow_gap=0` before running the executable.
+   Note that the CUDA `compute-sanitizer` can also be used with GCC ASAN by setting the
+   environment variable `ASAN_OPTIONS=protect_shadow_gap=0,alloc_dealloc_mismatch=0`.

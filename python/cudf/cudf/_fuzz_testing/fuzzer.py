@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import datetime
 import json
@@ -31,7 +31,6 @@ class Fuzzer:
         max_lists_length=None,
         max_lists_nesting_depth=None,
     ):
-
         self._target = target
         self._dirs = [] if dirs is None else dirs
         self._crash_dir = crash_reports_dir
@@ -86,7 +85,6 @@ class Fuzzer:
             self._data_handler.write_data(error_file_name)
 
     def start(self):
-
         while True:
             logging.info(f"Running test {self._total_executions}")
             file_name = self._data_handler.generate_input()

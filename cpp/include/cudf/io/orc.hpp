@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <optional>
@@ -80,7 +81,7 @@ class orc_reader_options {
    *
    * @param src source information used to read orc file
    */
-  explicit orc_reader_options(source_info const& src) : _source(src) {}
+  explicit orc_reader_options(source_info src) : _source{std::move(src)} {}
 
  public:
   /**
@@ -96,7 +97,7 @@ class orc_reader_options {
    * @param src Source information to read orc file
    * @return Builder to build reader options
    */
-  static orc_reader_options_builder builder(source_info const& src);
+  static orc_reader_options_builder builder(source_info src);
 
   /**
    * @brief Returns source info.
@@ -200,6 +201,7 @@ class orc_reader_options {
   void set_skip_rows(uint64_t rows)
   {
     CUDF_EXPECTS(rows == 0 or _stripes.empty(), "Can't set both skip_rows along with stripes");
+    CUDF_EXPECTS(rows <= std::numeric_limits<int64_t>::max(), "skip_rows is too large");
     _skip_rows = rows;
   }
 
@@ -269,7 +271,7 @@ class orc_reader_options_builder {
    *
    * @param src The source information used to read orc file
    */
-  explicit orc_reader_options_builder(source_info const& src) : options{src} {};
+  explicit orc_reader_options_builder(source_info src) : options{std::move(src)} {};
 
   /**
    * @brief Sets names of the column to read.
@@ -393,6 +395,7 @@ class orc_reader_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata.
  *
@@ -400,7 +403,8 @@ class orc_reader_options_builder {
  */
 table_with_metadata read_orc(
   orc_reader_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 /**
@@ -450,6 +454,8 @@ class orc_writer_options {
   std::map<std::string, std::string> _user_data;
   // Optional compression statistics
   std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // Specify whether string dictionaries should be alphabetically sorted
+  bool _enable_dictionary_sort = true;
 
   friend orc_writer_options_builder;
 
@@ -572,6 +578,13 @@ class orc_writer_options {
     return _compression_stats;
   }
 
+  /**
+   * @brief Returns whether string dictionaries should be sorted.
+   *
+   * @return `true` if string dictionaries should be sorted
+   */
+  [[nodiscard]] bool get_enable_dictionary_sort() const { return _enable_dictionary_sort; }
+
   // Setters
 
   /**
@@ -670,6 +683,13 @@ class orc_writer_options {
   {
     _compression_stats = std::move(comp_stats);
   }
+
+  /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   */
+  void set_enable_dictionary_sort(bool val) { _enable_dictionary_sort = val; }
 };
 
 /**
@@ -811,6 +831,18 @@ class orc_writer_options_builder {
   }
 
   /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   * @return this for chaining
+   */
+  orc_writer_options_builder& enable_dictionary_sort(bool val)
+  {
+    options._enable_dictionary_sort = val;
+    return *this;
+  }
+
+  /**
    * @brief move orc_writer_options member once it's built.
    */
   operator orc_writer_options&&() { return std::move(options); }
@@ -836,8 +868,10 @@ class orc_writer_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
-void write_orc(orc_writer_options const& options);
+void write_orc(orc_writer_options const& options,
+               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Builds settings to use for `write_orc_chunked()`.
@@ -866,6 +900,8 @@ class chunked_orc_writer_options {
   std::map<std::string, std::string> _user_data;
   // Optional compression statistics
   std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // Specify whether string dictionaries should be alphabetically sorted
+  bool _enable_dictionary_sort = true;
 
   friend chunked_orc_writer_options_builder;
 
@@ -966,6 +1002,13 @@ class chunked_orc_writer_options {
     return _compression_stats;
   }
 
+  /**
+   * @brief Returns whether string dictionaries should be sorted.
+   *
+   * @return `true` if string dictionaries should be sorted
+   */
+  [[nodiscard]] bool get_enable_dictionary_sort() const { return _enable_dictionary_sort; }
+
   // Setters
 
   /**
@@ -1057,6 +1100,13 @@ class chunked_orc_writer_options {
   {
     _compression_stats = std::move(comp_stats);
   }
+
+  /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   */
+  void set_enable_dictionary_sort(bool val) { _enable_dictionary_sort = val; }
 };
 
 /**
@@ -1184,6 +1234,18 @@ class chunked_orc_writer_options_builder {
   }
 
   /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   * @return this for chaining
+   */
+  chunked_orc_writer_options_builder& enable_dictionary_sort(bool val)
+  {
+    options._enable_dictionary_sort = val;
+    return *this;
+  }
+
+  /**
    * @brief move chunked_orc_writer_options member once it's built.
    */
   operator chunked_orc_writer_options&&() { return std::move(options); }
@@ -1231,8 +1293,10 @@ class orc_chunked_writer {
    * @brief Constructor with chunked writer options
    *
    * @param[in] options options used to write table
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches
    */
-  orc_chunked_writer(chunked_orc_writer_options const& options);
+  orc_chunked_writer(chunked_orc_writer_options const& options,
+                     rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Writes table to output.
@@ -1248,7 +1312,7 @@ class orc_chunked_writer {
   void close();
 
   /// Unique pointer to impl writer class
-  std::unique_ptr<cudf::io::detail::orc::writer> writer;
+  std::unique_ptr<orc::detail::writer> writer;
 };
 
 /** @} */  // end of group

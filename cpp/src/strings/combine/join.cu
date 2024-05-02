@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/combine.hpp>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -32,6 +33,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -83,8 +85,9 @@ struct join_base_fn {
  * This functor is suitable for make_strings_children
  */
 struct join_fn : public join_base_fn {
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   join_fn(column_device_view const d_strings,
           string_view d_separator,
@@ -105,7 +108,7 @@ struct join_fn : public join_base_fn {
     } else {
       bytes += d_str.size_bytes() + d_sep.size_bytes();
     }
-    if (!d_chars) { d_offsets[idx] = bytes; }
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 
@@ -131,7 +134,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
                                      string_scalar const& separator,
                                      string_scalar const& narep,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
 
@@ -142,24 +145,34 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
 
   auto d_strings = column_device_view::create(input.parent(), stream);
 
-  auto chars_column = [&] {
+  auto chars = [&] {
     // build the strings column and commandeer the chars column
     if ((input.size() == input.null_count()) ||
-        ((input.chars_size() / (input.size() - input.null_count())) <= AVG_CHAR_BYTES_THRESHOLD)) {
-      return std::get<1>(
-        make_strings_children(join_fn{*d_strings, d_separator, d_narep}, input.size(), stream, mr));
+        ((input.chars_size(stream) / (input.size() - input.null_count())) <=
+         AVG_CHAR_BYTES_THRESHOLD)) {
+      return std::get<1>(experimental::make_strings_children(
+                           join_fn{*d_strings, d_separator, d_narep}, input.size(), stream, mr))
+        .release();
     }
     // dynamically feeds index pairs to build the output
     auto indices = cudf::detail::make_counting_transform_iterator(
       0, join_gather_fn{*d_strings, d_separator, d_narep});
     auto joined_col = make_strings_column(indices, indices + (input.size() * 2), stream, mr);
-    return std::move(joined_col->release().children.back());
+    auto chars_data = joined_col->release().data;
+    return std::move(*chars_data);
   }();
 
   // build the offsets: single string output has offsets [0,chars-size]
-  auto offsets = cudf::detail::make_device_uvector_async(
-    std::vector<size_type>({0, chars_column->size()}), stream, mr);
-  auto offsets_column = std::make_unique<column>(std::move(offsets), rmm::device_buffer{}, 0);
+  auto offsets_column = [&] {
+    if (chars.size() < static_cast<std::size_t>(get_offset64_threshold())) {
+      auto offsets32 = cudf::detail::make_device_uvector_async(
+        std::vector<int32_t>({0, static_cast<int32_t>(chars.size())}), stream, mr);
+      return std::make_unique<column>(std::move(offsets32), rmm::device_buffer{}, 0);
+    }
+    auto offsets64 = cudf::detail::make_device_uvector_async(
+      std::vector<int64_t>({0L, static_cast<int64_t>(chars.size())}), stream, mr);
+    return std::make_unique<column>(std::move(offsets64), rmm::device_buffer{}, 0);
+  }();
 
   // build the null mask: only one output row so it is either all-valid or all-null
   auto const null_count =
@@ -170,7 +183,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
 
   // perhaps this return a string_scalar instead of a single-row column
   return make_strings_column(
-    1, std::move(offsets_column), std::move(chars_column), null_count, std::move(null_mask));
+    1, std::move(offsets_column), std::move(chars), null_count, std::move(null_mask));
 }
 
 }  // namespace detail
@@ -180,10 +193,11 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
 std::unique_ptr<column> join_strings(strings_column_view const& strings,
                                      string_scalar const& separator,
                                      string_scalar const& narep,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::join_strings(strings, separator, narep, cudf::get_default_stream(), mr);
+  return detail::join_strings(strings, separator, narep, stream, mr);
 }
 
 }  // namespace strings

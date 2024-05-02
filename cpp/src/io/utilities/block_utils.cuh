@@ -157,7 +157,7 @@ inline __device__ void memcpy_block(void* dstv, void const* srcv, uint32_t len, 
     uint32_t align_len = min(dst_align_bytes, len);
     uint8_t b;
     if (t < align_len) { b = src[t]; }
-    if (sync_before_store) { __syncthreads(); }
+    if constexpr (sync_before_store) { __syncthreads(); }
     if (t < align_len) { dst[t] = b; }
     src += align_len;
     dst += align_len;
@@ -173,7 +173,7 @@ inline __device__ void memcpy_block(void* dstv, void const* srcv, uint32_t len, 
       v = src32[t];
       if (src_align_bits != 0) { v = __funnelshift_r(v, src32[t + 1], src_align_bits); }
     }
-    if (sync_before_store) { __syncthreads(); }
+    if constexpr (sync_before_store) { __syncthreads(); }
     if (t < copy_cnt) { reinterpret_cast<uint32_t*>(dst)[t] = v; }
     src += copy_cnt * 4;
     dst += copy_cnt * 4;
@@ -182,7 +182,7 @@ inline __device__ void memcpy_block(void* dstv, void const* srcv, uint32_t len, 
   if (len != 0) {
     uint8_t b;
     if (t < len) { b = src[t]; }
-    if (sync_before_store) { __syncthreads(); }
+    if constexpr (sync_before_store) { __syncthreads(); }
     if (t < len) { dst[t] = b; }
   }
 }

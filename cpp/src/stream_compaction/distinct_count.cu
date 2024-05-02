@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuco/static_set.cuh>
-
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -136,18 +135,19 @@ cudf::size_type distinct_count(table_view const& keys,
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
-  auto const hash_key   = experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
+  auto const hash_key   = row_hasher.device_hasher(has_nulls);
   auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
   auto const comparator_helper = [&](auto const row_equal) {
     using hasher_type = decltype(hash_key);
-    auto key_set      = cuco::experimental::static_set{
-      cuco::experimental::extent{compute_hash_table_size(num_rows)},
-      cuco::empty_key<cudf::size_type>{COMPACTION_EMPTY_KEY_SENTINEL},
-      row_equal,
-      cuco::experimental::linear_probing<1, hasher_type>{hash_key},
-      detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-      stream.value()};
+    auto key_set      = cuco::static_set{cuco::extent{compute_hash_table_size(num_rows)},
+                                    cuco::empty_key<cudf::size_type>{-1},
+                                    row_equal,
+                                    cuco::linear_probing<1, hasher_type>{hash_key},
+                                         {},
+                                         {},
+                                    cudf::detail::cuco_allocator{stream},
+                                    stream.value()};
 
     auto const iter = thrust::counting_iterator<cudf::size_type>(0);
     // when nulls are equal, we skip hashing any row that has a null

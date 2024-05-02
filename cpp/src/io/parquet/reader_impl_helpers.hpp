@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,9 +32,69 @@
 #include <tuple>
 #include <vector>
 
-namespace cudf::io::detail::parquet {
+namespace cudf::io::parquet::detail {
 
-using namespace cudf::io::parquet;
+/**
+ * @brief page location and size info
+ */
+struct page_info {
+  // page location info from the offset index
+  PageLocation location;
+  // number of rows in the page, calculated from offset index
+  int64_t num_rows;
+  // number of valid values in page, calculated from definition level histogram if present
+  std::optional<int64_t> num_valid;
+  // number of null values in page, calculated from definition level histogram if present
+  std::optional<int64_t> num_nulls;
+  // number of bytes of variable-length data from the offset index (byte_array columns only)
+  std::optional<int64_t> var_bytes_size;
+};
+
+/**
+ * @brief column chunk metadata
+ */
+struct column_chunk_info {
+  // offset in file of the dictionary (if present)
+  std::optional<int64_t> dictionary_offset;
+  // size of dictionary (if present)
+  std::optional<int32_t> dictionary_size;
+  std::vector<page_info> pages;
+
+  /**
+   * @brief Determine if this column chunk has a dictionary page.
+   *
+   * @return `true` if this column chunk has a dictionary page.
+   */
+  [[nodiscard]] constexpr bool has_dictionary() const
+  {
+    return dictionary_offset.has_value() && dictionary_size.has_value();
+  }
+};
+
+/**
+ * @brief The row_group_info class
+ */
+struct row_group_info {
+  size_type index;  // row group index within a file. aggregate_reader_metadata::get_row_group() is
+                    // called with index and source_index
+  size_t start_row;
+  size_type source_index;  // file index.
+
+  // Optional metadata pulled from the column and offset indexes, if present.
+  std::optional<std::vector<column_chunk_info>> column_chunks;
+
+  row_group_info() = default;
+
+  row_group_info(size_type index, size_t start_row, size_type source_index)
+    : index{index}, start_row{start_row}, source_index{source_index}
+  {
+  }
+
+  /**
+   * @brief Indicates the presence of page-level indexes.
+   */
+  [[nodiscard]] bool has_page_index() const { return column_chunks.has_value(); }
+};
 
 /**
  * @brief Function that translates Parquet datatype to cuDF type enum
@@ -54,23 +114,11 @@ using namespace cudf::io::parquet;
 }
 
 /**
- * @brief The row_group_info class
- */
-struct row_group_info {
-  size_type const index;
-  size_t const start_row;  // TODO source index
-  size_type const source_index;
-  row_group_info(size_type index, size_t start_row, size_type source_index)
-    : index(index), start_row(start_row), source_index(source_index)
-  {
-  }
-};
-
-/**
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public FileMetaData {
   explicit metadata(datasource* source);
+  void sanitize_schema();
 };
 
 class aggregate_reader_metadata {
@@ -101,6 +149,14 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] size_type calc_num_row_groups() const;
 
+  /**
+   * @brief Calculate column index info for the given `row_group_info`
+   *
+   * @param rg_info Struct used to summarize metadata for a single row group
+   * @param chunk_start_row Global index of first row in the row group
+   */
+  void column_info_for_row_group(row_group_info& rg_info, size_type chunk_start_row) const;
+
  public:
   aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources);
 
@@ -109,6 +165,13 @@ class aggregate_reader_metadata {
   [[nodiscard]] ColumnChunkMetaData const& get_column_metadata(size_type row_group_index,
                                                                size_type src_idx,
                                                                int schema_idx) const;
+
+  /**
+   * @brief Extracts high-level metadata for all row groups
+   *
+   * @return List of maps containing metadata information for each row group
+   */
+  [[nodiscard]] std::vector<std::unordered_map<std::string, int64_t>> get_rowgroup_metadata() const;
 
   [[nodiscard]] auto get_num_rows() const { return num_rows; }
 
@@ -122,6 +185,7 @@ class aggregate_reader_metadata {
   [[nodiscard]] auto const& get_key_value_metadata() const& { return keyval_maps; }
 
   [[nodiscard]] auto&& get_key_value_metadata() && { return std::move(keyval_maps); }
+
   /**
    * @brief Gets the concrete nesting depth of output cudf columns
    *
@@ -214,12 +278,13 @@ class aggregate_reader_metadata {
    * @return input column information, output column information, list of output column schema
    * indices
    */
-  [[nodiscard]] std::
-    tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<size_type>>
-    select_columns(std::optional<std::vector<std::string>> const& use_names,
-                   bool include_index,
-                   bool strings_to_categorical,
-                   type_id timestamp_type_id) const;
+  [[nodiscard]] std::tuple<std::vector<input_column_info>,
+                           std::vector<cudf::io::detail::inline_column_buffer>,
+                           std::vector<size_type>>
+  select_columns(std::optional<std::vector<std::string>> const& use_names,
+                 bool include_index,
+                 bool strings_to_categorical,
+                 type_id timestamp_type_id) const;
 };
 
 /**
@@ -288,4 +353,4 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   std::list<ast::operation> _operators;
 };
 
-}  // namespace cudf::io::detail::parquet
+}  // namespace cudf::io::parquet::detail

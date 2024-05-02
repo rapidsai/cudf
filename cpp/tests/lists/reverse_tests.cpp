@@ -370,8 +370,8 @@ TYPED_TEST(ListsReverseTypedTest, InputListsOfStructsWithNulls)
                                          "Kiwi",
                                          "Cherry",
                                          "Banana",
-                                         "",        /*NULL*/
-                                         "",        /*NULL*/
+                                         "", /*NULL*/
+                                         "", /*NULL*/
                                          "Apple",
                                          "",        /*NULL*/
                                          "Banana",  // end list1
@@ -436,8 +436,8 @@ TYPED_TEST(ListsReverseTypedTest, InputListsOfStructsWithNulls)
                                          "Kiwi",
                                          "Cherry",
                                          "Banana",
-                                         "",        /*NULL*/
-                                         "",        /*NULL*/
+                                         "", /*NULL*/
+                                         "", /*NULL*/
                                          "Apple",
                                          "",        /*NULL*/
                                          "Banana",  // end list1

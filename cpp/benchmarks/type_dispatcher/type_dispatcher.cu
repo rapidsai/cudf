@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ constexpr int block_size = 256;
 
 // This is for NO_DISPATCHING
 template <FunctorType functor_type, class T>
-__global__ void no_dispatching_kernel(T** A, cudf::size_type n_rows, cudf::size_type n_cols)
+CUDF_KERNEL void no_dispatching_kernel(T** A, cudf::size_type n_rows, cudf::size_type n_cols)
 {
   using F           = Functor<T, functor_type>;
   auto tidx         = cudf::detail::grid_1d::global_thread_id();
@@ -74,7 +74,7 @@ __global__ void no_dispatching_kernel(T** A, cudf::size_type n_rows, cudf::size_
 
 // This is for HOST_DISPATCHING
 template <FunctorType functor_type, class T>
-__global__ void host_dispatching_kernel(cudf::mutable_column_device_view source_column)
+CUDF_KERNEL void host_dispatching_kernel(cudf::mutable_column_device_view source_column)
 {
   using F           = Functor<T, functor_type>;
   T* A              = source_column.data<T>();
@@ -128,7 +128,7 @@ struct RowHandle {
 
 // This is for DEVICE_DISPATCHING
 template <FunctorType functor_type>
-__global__ void device_dispatching_kernel(cudf::mutable_table_device_view source)
+CUDF_KERNEL void device_dispatching_kernel(cudf::mutable_table_device_view source)
 {
   cudf::size_type const n_rows = source.num_rows();
   auto tidx                    = cudf::detail::grid_1d::global_thread_id();

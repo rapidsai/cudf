@@ -23,6 +23,7 @@ from cudf._lib.nvtext.tokenize import (
     _tokenize_scalar,
     character_tokenize,
     detokenize,
+    tokenize_with_vocabulary,
 )
 from cudf._lib.strings.attributes import (
     code_points,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,13 +28,11 @@
 #include <cudf/rolling.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <src/rolling/detail/rolling.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 
-#include <algorithm>
-#include <vector>
+#include <src/rolling/detail/rolling.hpp>
 
 const std::string cuda_func{
   R"***(
@@ -637,7 +635,7 @@ TYPED_TEST(GroupedRollingTest, ZeroWindow)
                                                                          key_1_vec.end());
   const cudf::table_view grouping_keys{std::vector<cudf::column_view>{key_0, key_1}};
 
-  cudf::size_type preceding_window = 0;
+  cudf::size_type preceding_window = 1;
   cudf::size_type following_window = 0;
   std::vector<cudf::size_type> expected_group_offsets{0, 4, 8, DATA_SIZE};
 

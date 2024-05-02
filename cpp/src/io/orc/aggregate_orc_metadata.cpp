@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,10 @@
 
 #include "aggregate_orc_metadata.hpp"
 
-#include <io/utilities/row_selection.hpp>
+#include "io/utilities/row_selection.hpp"
 
 #include <algorithm>
 #include <numeric>
-#include <optional>
 
 namespace cudf::io::orc::detail {
 
@@ -156,7 +155,7 @@ aggregate_orc_metadata::aggregate_orc_metadata(
 std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>>
 aggregate_orc_metadata::select_stripes(
   std::vector<std::vector<size_type>> const& user_specified_stripes,
-  uint64_t skip_rows,
+  int64_t skip_rows,
   std::optional<size_type> const& num_rows,
   rmm::cuda_stream_view stream)
 {
@@ -164,7 +163,7 @@ aggregate_orc_metadata::select_stripes(
                "Can't use both the row selection and the stripe selection");
 
   auto [rows_to_skip, rows_to_read] = [&]() {
-    if (not user_specified_stripes.empty()) { return std::pair<uint64_t, size_type>{0, 0}; }
+    if (not user_specified_stripes.empty()) { return std::pair<int64_t, size_type>{0, 0}; }
     return cudf::io::detail::skip_rows_num_rows_from_options(skip_rows, num_rows, get_num_rows());
   }();
 
@@ -193,9 +192,9 @@ aggregate_orc_metadata::select_stripes(
       selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
     }
   } else {
-    uint64_t count             = 0;
-    size_type stripe_skip_rows = 0;
-    // Iterate all source files, each source file has corelating metadata
+    int64_t count            = 0;
+    int64_t stripe_skip_rows = 0;
+    // Iterate all source files, each source file has correlating metadata
     for (size_t src_file_idx = 0;
          src_file_idx < per_file_metadata.size() && count < rows_to_skip + rows_to_read;
          ++src_file_idx) {
@@ -220,27 +219,25 @@ aggregate_orc_metadata::select_stripes(
   }
 
   // Read each stripe's stripefooter metadata
-  if (not selected_stripes_mapping.empty()) {
-    for (auto& mapping : selected_stripes_mapping) {
-      // Resize to all stripe_info for the source level
-      per_file_metadata[mapping.source_idx].stripefooters.resize(mapping.stripe_info.size());
+  for (auto& mapping : selected_stripes_mapping) {
+    // Resize to all stripe_info for the source level
+    per_file_metadata[mapping.source_idx].stripefooters.resize(mapping.stripe_info.size());
 
-      for (size_t i = 0; i < mapping.stripe_info.size(); i++) {
-        auto const stripe         = mapping.stripe_info[i].first;
-        auto const sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
-        auto const sf_comp_length = stripe->footerLength;
-        CUDF_EXPECTS(
-          sf_comp_offset + sf_comp_length < per_file_metadata[mapping.source_idx].source->size(),
-          "Invalid stripe information");
-        auto const buffer =
-          per_file_metadata[mapping.source_idx].source->host_read(sf_comp_offset, sf_comp_length);
-        auto sf_data = per_file_metadata[mapping.source_idx].decompressor->decompress_blocks(
-          {buffer->data(), buffer->size()}, stream);
-        ProtobufReader(sf_data.data(), sf_data.size())
-          .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
-        mapping.stripe_info[i].second = &per_file_metadata[mapping.source_idx].stripefooters[i];
-        if (stripe->indexLength == 0) { row_grp_idx_present = false; }
-      }
+    for (size_t i = 0; i < mapping.stripe_info.size(); i++) {
+      auto const stripe         = mapping.stripe_info[i].first;
+      auto const sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
+      auto const sf_comp_length = stripe->footerLength;
+      CUDF_EXPECTS(
+        sf_comp_offset + sf_comp_length < per_file_metadata[mapping.source_idx].source->size(),
+        "Invalid stripe information");
+      auto const buffer =
+        per_file_metadata[mapping.source_idx].source->host_read(sf_comp_offset, sf_comp_length);
+      auto sf_data = per_file_metadata[mapping.source_idx].decompressor->decompress_blocks(
+        {buffer->data(), buffer->size()}, stream);
+      ProtobufReader(sf_data.data(), sf_data.size())
+        .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
+      mapping.stripe_info[i].second = &per_file_metadata[mapping.source_idx].stripefooters[i];
+      if (stripe->indexLength == 0) { row_grp_idx_present = false; }
     }
   }
 
@@ -270,7 +267,7 @@ column_hierarchy aggregate_orc_metadata::select_columns(
       CUDF_EXPECTS(name_found, "Unknown column name: " + std::string(path));
     }
   }
-  return {std::move(selected_columns)};
+  return column_hierarchy{std::move(selected_columns)};
 }
 
 }  // namespace cudf::io::orc::detail

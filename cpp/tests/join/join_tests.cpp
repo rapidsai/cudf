@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -30,12 +38,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/iterator_utilities.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <limits>
 
@@ -58,7 +61,7 @@ template <std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
             cudf::table_view const& left_keys,
             cudf::table_view const& right_keys,
             cudf::null_equality compare_nulls,
-            rmm::mr::device_memory_resource* mr),
+            rmm::device_async_resource_ref mr),
           cudf::out_of_bounds_policy oob_policy = cudf::out_of_bounds_policy::DONT_CHECK>
 std::unique_ptr<cudf::table> join_and_gather(
   cudf::table_view const& left_input,
@@ -66,7 +69,7 @@ std::unique_ptr<cudf::table> join_and_gather(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   auto left_selected  = left_input.select(left_on);
   auto right_selected = right_input.select(right_on);
@@ -1939,62 +1942,6 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
-}
-
-TEST_F(JoinTest, Repro_StructsWithoutNullsPushedDown)
-{
-  // When joining on a STRUCT column, if the parent nulls are not reflected in
-  // the children, the join might produce incorrect results.
-  //
-  // In this test, a fact table of structs is joined against a dimension table.
-  // Both tables must match (only) on the NULL row. This will fail if the fact table's
-  // nulls are not pushed down into its children.
-  using ints    = column_wrapper<int32_t>;
-  using structs = cudf::test::structs_column_wrapper;
-  using namespace cudf::test::iterators;
-
-  auto make_table = [](auto&& col) {
-    auto columns = CVector{};
-    columns.push_back(std::move(col));
-    return cudf::table{std::move(columns)};
-  };
-
-  auto const fact_table = [make_table] {
-    auto fact_ints    = ints{0, 1, 2, 3, 4};
-    auto fact_structs = structs{{fact_ints}, no_nulls()}.release();
-    // Now set struct validity to invalidate index#3.
-    cudf::detail::set_null_mask(
-      fact_structs->mutable_view().null_mask(), 3, 4, false, cudf::get_default_stream());
-    // Struct row#3 is null, but Struct.child has a non-null value.
-    return make_table(std::move(fact_structs));
-  }();
-
-  auto const dimension_table = [make_table] {
-    auto dim_ints    = ints{999};
-    auto dim_structs = structs{{dim_ints}, null_at(0)};
-    return make_table(dim_structs.release());
-  }();
-
-  auto const result = inner_join(fact_table.view(), dimension_table.view(), {0}, {0});
-  EXPECT_EQ(result->num_rows(), 1);  // The null STRUCT rows should match.
-
-  // Note: Join result might not have nulls pushed down, since it's an output of gather().
-  // Must superimpose parent nulls before comparisons.
-  auto [superimposed_results, _] = cudf::structs::detail::push_down_nulls(
-    *result, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-
-  auto const expected = [] {
-    auto fact_ints    = ints{0};
-    auto fact_structs = structs{{fact_ints}, null_at(0)};
-    auto dim_ints     = ints{0};
-    auto dim_structs  = structs{{dim_ints}, null_at(0)};
-    auto columns      = CVector{};
-    columns.push_back(fact_structs.release());
-    columns.push_back(dim_structs.release());
-    return cudf::table{std::move(columns)};
-  }();
-
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(superimposed_results, expected);
 }
 
 using lcw = cudf::test::lists_column_wrapper<int32_t>;
