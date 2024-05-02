@@ -33,7 +33,7 @@
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/replace.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
@@ -75,8 +75,9 @@ namespace {
 struct escape_strings_fn {
   column_device_view const d_column;
   string_view const d_delimiter;  // check for column delimiter
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void write_char(char_utf8 chr, char*& d_buffer, size_type& bytes)
   {
@@ -89,7 +90,7 @@ struct escape_strings_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_column.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -115,7 +116,7 @@ struct escape_strings_fn {
     }
     if (quote_row) write_char(quote, d_buffer, bytes);
 
-    if (!d_chars) d_offsets[idx] = bytes;
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 
@@ -182,7 +183,7 @@ struct column_to_strings_fn {
     auto d_column = column_device_view::create(column_v, stream_);
     escape_strings_fn fn{*d_column, delimiter.value(stream_)};
     auto [offsets_column, chars] =
-      cudf::strings::detail::make_strings_children(fn, column_v.size(), stream_, mr_);
+      cudf::strings::detail::experimental::make_strings_children(fn, column_v.size(), stream_, mr_);
 
     return make_strings_column(column_v.size(),
                                std::move(offsets_column),
