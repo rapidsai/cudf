@@ -352,7 +352,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
-        if not typs.issubset({cudf.Series, cudf.DataFrame}):
+        if not all(isinstance(o, (cudf.Series, cudf.DataFrame)) for o in objs):
             raise TypeError(
                 "Can only concatenate Series and DataFrame objects when axis=1"
             )
