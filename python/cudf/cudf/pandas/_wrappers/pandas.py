@@ -1170,13 +1170,48 @@ Minute = make_final_proxy_type(
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
+
+def Timestamp__new__(cls, *args, **kwargs):
+    # Call fast/slow constructor
+    # This takes care of running __init__ as well, but must be paired
+    # with a removal of the defaulted __init__ that
+    # make_final_proxy_type provides.
+    if len(args) > 0 and args[0] is pd.NaT:
+        return pd.NaT
+    self, _ = _fast_slow_function_call(
+        lambda cls, args, kwargs: cls(*args, **kwargs),
+        cls,
+        args,
+        kwargs,
+    )
+    return self
+
+
 Timedelta = make_final_proxy_type(
     "Timedelta",
     _Unusable,
     pd.Timedelta,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "__new__": Timestamp__new__,
+        "__init__": _DELETE,
+    },
+)
+
+
+Timestamp = make_final_proxy_type(
+    "Timestamp",
+    _Unusable,
+    pd.Timestamp,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "__new__": Timestamp__new__,
+        "__init__": _DELETE,
+    },
 )
 
 MonthBegin = make_final_proxy_type(

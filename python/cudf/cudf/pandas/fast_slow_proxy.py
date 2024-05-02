@@ -552,6 +552,24 @@ class _FastSlowProxy:
             other,
         )[0]
 
+    def __isub__(self, other):
+        return _fast_slow_function_call(
+            lambda x, y: x.__isub__(y)
+            if hasattr(x, "__isub__")
+            else NotImplemented,
+            self,
+            other,
+        )[0]
+
+    def __idd__(self, other):
+        return _fast_slow_function_call(
+            lambda x, y: x.__iadd__(y)
+            if hasattr(x, "__iadd__")
+            else NotImplemented,
+            self,
+            other,
+        )[0]
+
     def __rsub__(self, other):
         return _fast_slow_function_call(
             lambda x, y: x.__rsub__(y)
