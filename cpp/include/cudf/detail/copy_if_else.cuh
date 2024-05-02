@@ -45,10 +45,10 @@ __launch_bounds__(block_size) CUDF_KERNEL
                            mutable_column_device_view out,
                            size_type* __restrict__ const valid_count)
 {
-  auto tidx                      = cudf::detail::grid_1d::global_thread_id();
-  auto const stride              = cudf::detail::grid_1d::grid_stride();
-  int const warp_id              = tidx / warp_size;
-  size_type const warps_per_grid = gridDim.x * block_size / warp_size;
+  auto tidx                      = cudf::detail::grid_1d::global_thread_id<block_size>();
+  auto const stride              = cudf::detail::grid_1d::grid_stride<block_size>();
+  int const warp_id              = tidx / cudf::detail::warp_size;
+  size_type const warps_per_grid = gridDim.x * block_size / cudf::detail::warp_size;
 
   // begin/end indices for the column data
   size_type const begin = 0;
@@ -61,7 +61,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
 
   // lane id within the current warp
   constexpr size_type leader_lane{0};
-  int const lane_id = threadIdx.x % warp_size;
+  int const lane_id = threadIdx.x % cudf::detail::warp_size;
 
   size_type warp_valid_count{0};
 
@@ -160,7 +160,7 @@ std::unique_ptr<column> copy_if_else(bool nullable,
   using Element = typename thrust::iterator_traits<LeftIter>::value_type::value_type;
 
   size_type size           = std::distance(lhs_begin, lhs_end);
-  size_type num_els        = cudf::util::round_up_safe(size, warp_size);
+  size_type num_els        = cudf::util::round_up_safe(size, cudf::detail::warp_size);
   constexpr int block_size = 256;
   cudf::detail::grid_1d grid{num_els, block_size, 1};
 
