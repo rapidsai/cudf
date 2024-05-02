@@ -291,7 +291,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             raise TypeError(
                 "when concatenating indices you must provide ONLY indices"
             )
-    typs = {type(o) for o in objs}
+
+    only_series = all(isinstance(o, cudf.Series) for o in objs)
 
     # Return for single object
     if len(objs) == 1:
@@ -388,8 +389,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             objs = _align_objs(objs, how=join, sort=sort)
             df.index = objs[0].index
 
-        only_series = typs == {cudf.Series}
-
         if keys is None:
             for o in objs:
                 for name, col in o._data.items():
@@ -464,8 +463,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         return df
 
     # If we get here, we are always concatenating along axis 0 (the rows).
-    typ = list(typs)[0]
-    if len(typs) > 1:
+    typ = type(objs[0])
+    if len({type(o) for o in objs}) > 1:
         _normalize_series_and_dataframe(objs, axis=axis)
         typ = cudf.DataFrame
 
