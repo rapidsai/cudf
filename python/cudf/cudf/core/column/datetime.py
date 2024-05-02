@@ -672,13 +672,13 @@ class DatetimeColumn(column.ColumnBase):
 
     def _find_ambiguous_and_nonexistent(
         self, zone_name: str
-    ) -> Tuple[NumericalColumn | bool, NumericalColumn | bool]:
+    ) -> Tuple[NumericalColumn, NumericalColumn] | Tuple[bool, bool]:
         """
         Recognize ambiguous and nonexistent timestamps for the given timezone.
 
         Returns a tuple of columns, both of "bool" dtype and of the same
-        size as `data`, that respectively indicate ambiguous and
-        nonexistent timestamps in `data` with the value `True`.
+        size as `self`, that respectively indicate ambiguous and
+        nonexistent timestamps in `self` with the value `True`.
 
         Ambiguous and/or nonexistent timestamps are only possible if any
         transitions occur in the time zone database for the given timezone.

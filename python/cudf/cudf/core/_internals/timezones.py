@@ -92,7 +92,7 @@ def _read_tzfile_as_columns(
 
 def check_ambiguous_and_nonexistent(
     ambiguous: Literal["NaT"], nonexistent: Literal["NaT"]
-) -> None:
+) -> Tuple[Literal["NaT"], Literal["NaT"]]:
     if ambiguous != "NaT":
         raise NotImplementedError(
             "Only ambiguous='NaT' is currently supported"
@@ -101,3 +101,4 @@ def check_ambiguous_and_nonexistent(
         raise NotImplementedError(
             "Only nonexistent='NaT' is currently supported"
         )
+    return ambiguous, nonexistent
