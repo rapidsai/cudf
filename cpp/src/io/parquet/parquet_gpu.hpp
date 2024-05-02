@@ -456,7 +456,7 @@ struct ColumnChunkDesc {
   float list_bytes_per_row_est{};  // for LIST columns, an estimate on number of bytes per row
 
   bool is_strings_to_cat{};    // convert strings to hashes
-  bool is_large_string_col{};  // `true` if string data exceeds 2GB limit
+  bool is_large_string_col{};  // `true` if string data uses 64-bit offsets
 };
 
 /**
