@@ -26,8 +26,8 @@ def get_tz_data(zone_name: str) -> Tuple[DatetimeColumn, TimeDeltaColumn]:
 
     Returns
     -------
-    DataFrame with two columns containing the transition times
-    ("transition_times") and corresponding UTC offsets ("offsets").
+    Tuple with two columns containing the transition times
+    and corresponding UTC offsets.
     """
     try:
         # like zoneinfo, we first look in TZPATH
@@ -43,7 +43,7 @@ def _find_and_read_tzfile_tzpath(
 ) -> Tuple[DatetimeColumn, TimeDeltaColumn]:
     for search_path in zoneinfo.TZPATH:
         if os.path.isfile(os.path.join(search_path, zone_name)):
-            return _read_tzfile_as_frame(search_path, zone_name)
+            return _read_tzfile_as_columns(search_path, zone_name)
     raise zoneinfo.ZoneInfoNotFoundError(zone_name)
 
 
@@ -54,7 +54,7 @@ def _find_and_read_tzfile_tzdata(
 
     package_base = "tzdata.zoneinfo"
     try:
-        return _read_tzfile_as_frame(
+        return _read_tzfile_as_columns(
             str(importlib.resources.files(package_base)), zone_name
         )
     # TODO: make it so that the call to libcudf raises a
@@ -76,7 +76,7 @@ def _find_and_read_tzfile_tzdata(
         raise zoneinfo.ZoneInfoNotFoundError(zone_name)
 
 
-def _read_tzfile_as_frame(
+def _read_tzfile_as_columns(
     tzdir, zone_name: str
 ) -> Tuple[DatetimeColumn, TimeDeltaColumn]:
     transition_times_and_offsets = make_timezone_transition_table(
