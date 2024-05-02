@@ -211,7 +211,7 @@ def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
         # Randomly but reproducibly mark subset of rows as invalid
         random.seed(1337)
         mask = random.sample(range(nrows), nvalids)
-        test_pdf[test_pdf.index.isin(mask)] = np.NaN
+        test_pdf[test_pdf.index.isin(mask)] = np.nan
     if dtype:
         test_pdf = test_pdf.astype(dtype)
 

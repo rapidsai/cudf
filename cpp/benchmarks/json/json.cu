@@ -22,7 +22,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/json/json.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -77,8 +77,9 @@ struct json_benchmark_row_builder {
   cudf::column_device_view const d_book_pct;           // Book percentage
   cudf::column_device_view const d_misc_order;         // Misc-Store order
   cudf::column_device_view const d_store_order;        // Books-Bicycles order
-  int32_t* d_offsets{};
+  cudf::size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
   thrust::minstd_rand rng{5236};
   thrust::uniform_int_distribution<int> dist{};
 
@@ -155,7 +156,7 @@ struct json_benchmark_row_builder {
       output_str += Misc;
     }
     output_str += brace2;
-    if (!output_str.ptr) d_offsets[idx] = output_str.bytes;
+    if (!output_str.ptr) { d_sizes[idx] = output_str.bytes; }
   }
 };
 
@@ -177,7 +178,7 @@ auto build_json_string_column(int desired_bytes, int num_rows)
   auto d_store_order = cudf::column_device_view::create(float_2bool_columns->get_column(2));
   json_benchmark_row_builder jb{
     desired_bytes, num_rows, {*d_books, *d_bicycles}, *d_book_pct, *d_misc_order, *d_store_order};
-  auto [offsets, chars] = cudf::strings::detail::make_strings_children(
+  auto [offsets, chars] = cudf::strings::detail::experimental::make_strings_children(
     jb, num_rows, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   return cudf::make_strings_column(num_rows, std::move(offsets), chars.release(), 0, {});
 }
