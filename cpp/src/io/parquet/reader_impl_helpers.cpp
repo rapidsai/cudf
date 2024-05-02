@@ -23,6 +23,8 @@
 #include <cudf/io/ipc/detail/Message_generated.h>
 #include <cudf/io/ipc/detail/Schema_generated.h>
 
+#include <thrust/iterator/counting_iterator.h>
+
 #include <numeric>
 #include <regex>
 
@@ -561,8 +563,71 @@ aggregate_reader_metadata::aggregate_reader_metadata(
 [[nodiscard]] std::optional<arrow_schema_data_types>
 aggregate_reader_metadata::collect_arrow_schema() const
 {
-  // Check if the key_value metadata contains an ARROW:schema
-  // If yes, read and decode the flatbuffer schema
+  // Check the key_value metadata for ARROW:schema, decode and walk it
+
+  // Function to convert from flatbuf::duration type to cudf::type_id
+  auto duration_from_flatbuffer = [](flatbuf::Duration const* duration) {
+    // TODO: we only need this for arrow::DurationType for now. Else, we can take in a
+    // void ptr and typecast it to the corresponding type based on the type_id.
+    auto fb_unit = duration->unit();
+    switch (fb_unit) {
+      case flatbuf::TimeUnit::TimeUnit_SECOND:
+        return cudf::data_type{cudf::type_id::DURATION_SECONDS};
+      case flatbuf::TimeUnit::TimeUnit_MILLISECOND:
+        return cudf::data_type{cudf::type_id::DURATION_MILLISECONDS};
+      case flatbuf::TimeUnit::TimeUnit_MICROSECOND:
+        return cudf::data_type{cudf::type_id::DURATION_MICROSECONDS};
+      case flatbuf::TimeUnit::TimeUnit_NANOSECOND:
+        return cudf::data_type{cudf::type_id::DURATION_NANOSECONDS};
+      default: break;
+    }
+    // 0 is simply a dummy value for the scalar
+    return cudf::data_type{};
+  };
+
+  // variable that tracks if an arrow_type specific column is seen
+  // in the walk
+  bool arrow_type_col_seen = false;
+
+  // Lambda function to walk a field and its children in DFS manner and
+  // return boolean walk success status
+  std::function<bool(const flatbuf::Field*, arrow_schema_data_types&)> walk_field =
+    [&walk_field, &duration_from_flatbuffer, &arrow_type_col_seen](
+      const flatbuf::Field* field, arrow_schema_data_types& schema_elem) {
+      // DFS: recursively walk over the children first
+      auto const& field_children = field->children();
+
+      if (field_children != nullptr) {
+        auto schema_children = std::vector<arrow_schema_data_types>(field->children()->size());
+
+        if (not std::all_of(
+              thrust::make_counting_iterator(0),
+              thrust::make_counting_iterator(static_cast<int32_t>(field_children->size())),
+              [&](auto const& idx) {
+                return walk_field(*(field_children->begin() + idx), schema_children[idx]);
+              })) {
+          return false;
+        }
+
+        schema_elem.children = std::move(schema_children);
+      }
+
+      // Walk the field itself
+      if (field->type_type() == flatbuf::Type::Type_Duration) {
+        auto type_data = field->type_as_Duration();
+        if (type_data != nullptr) {
+          auto name = (field->name()) ? field->name()->str() : "";
+          // set the schema_elem type to duration type
+          schema_elem.type = duration_from_flatbuffer(type_data);
+          arrow_type_col_seen |= (schema_elem.type.id() != type_id::EMPTY);
+        } else {
+          CUDF_LOG_ERROR("Parquet reader encountered an invalid type_data pointer.",
+                         "arrow:schema not processed.");
+          return false;
+        }
+      }
+      return true;
+    };
 
   // Question: Should we check if any file has the "ARROW:schema" key or
   // Or if all files have the same "ARROW:schema"?
@@ -612,76 +677,19 @@ aggregate_reader_metadata::collect_arrow_schema() const
     return std::nullopt;
   }
 
-  // This lambda function converts from flatbuf::duration type to cudf::type_id
-  auto duration_from_flatbuffer = [](flatbuf::Duration const* duration) {
-    // TODO: we only need this for arrow::DurationType for now. Else, we can take in a
-    // void ptr and typecast it to the corresponding type based on the type_id.
-    auto fb_unit = duration->unit();
-    switch (fb_unit) {
-      case flatbuf::TimeUnit::TimeUnit_SECOND:
-        return cudf::data_type{cudf::type_id::DURATION_SECONDS};
-      case flatbuf::TimeUnit::TimeUnit_MILLISECOND:
-        return cudf::data_type{cudf::type_id::DURATION_MILLISECONDS};
-      case flatbuf::TimeUnit::TimeUnit_MICROSECOND:
-        return cudf::data_type{cudf::type_id::DURATION_MICROSECONDS};
-      case flatbuf::TimeUnit::TimeUnit_NANOSECOND:
-        return cudf::data_type{cudf::type_id::DURATION_NANOSECONDS};
-      default: break;
-    }
-    // 0 is simply a dummy value for the scalar
-    return cudf::data_type{};
-  };
-
-  // variable that tracks if an arrow_type specific column is seen
-  // in the walk
-  bool arrow_type_col_seen = false;
-
-  // Lambda function to walk a field and its children in DFS manner and
-  // return boolean walk success status
-  std::function<bool(const flatbuf::Field*, arrow_schema_data_types&)> walk_field =
-    [&walk_field, &duration_from_flatbuffer, &arrow_type_col_seen](
-      const flatbuf::Field* field, arrow_schema_data_types& schema_elem) {
-      // DFS: recursively walk over the children first
-      auto const& field_children = field->children();
-
-      if (field_children != nullptr) {
-        auto schema_children = std::vector<arrow_schema_data_types>(field->children()->size());
-        // TODO: raw loop. Should try and change to STL.
-        for (uint32_t idx = 0; idx < field_children->size(); idx++) {
-          if (not walk_field(*(field_children->begin() + idx), schema_children[idx])) {
-            return false;
-          }
-        }
-        schema_elem.children = std::move(schema_children);
-      }
-
-      // Walk the field itself
-      if (field->type_type() == flatbuf::Type::Type_Duration) {
-        auto type_data = field->type_as_Duration();
-        if (type_data != nullptr) {
-          auto name = (field->name()) ? field->name()->str() : "";
-          // set the schema_elem type to duration type
-          schema_elem.type = duration_from_flatbuffer(type_data);
-          arrow_type_col_seen |= (schema_elem.type.id() != type_id::EMPTY);
-        } else {
-          CUDF_LOG_ERROR("Parquet reader encountered an invalid type_data pointer.",
-                         "arrow:schema not processed.");
-          return false;
-        }
-      }
-      return true;
-    };
-
   // arrow schema structure to return
   arrow_schema_data_types schema;
 
-  // Recursively walk the arrow schema and set cudf::data_type
-  // for all duration columns
+  // Recursively walk the arrow schema and set cudf::data_type for all duration columns
   if (fields->size() > 0) {
     schema.children = std::vector<arrow_schema_data_types>(fields->size());
-    // TODO: raw loop. Should try and change to STL.
-    for (uint32_t idx = 0; idx < fields->size(); idx++) {
-      if (not walk_field(*(fields->begin() + idx), schema.children[idx])) { return std::nullopt; }
+
+    if (not std::all_of(thrust::make_counting_iterator(0),
+                        thrust::make_counting_iterator(static_cast<int32_t>(fields->size())),
+                        [&](auto const& idx) {
+                          return walk_field(*(fields->begin() + idx), schema.children[idx]);
+                        })) {
+      return std::nullopt;
     }
 
     // if no arrow type column seen, return nullopt.
@@ -693,60 +701,68 @@ aggregate_reader_metadata::collect_arrow_schema() const
 
 void aggregate_reader_metadata::consume_arrow_schema()
 {
-  auto schema_root       = get_schema(0);
-  auto arrow_schema_root = arrow_schema.value();
+  // Function to verify equal num_children at each level in Parquet and arrow schemas.
+  std::function<bool(arrow_schema_data_types&, int)> validate_schemas =
+    [&](arrow_schema_data_types& arrow_schema, int schema_idx) {
+      auto& schema_elem = per_file_metadata[0].schema[schema_idx];
 
-  /*
-   * Recursively verify that the number of columns at each level in
-   * Parquet schema and arrow schema are the same. If yes, do the
-   * co-walk between them, else skip it
-   */
+      // TODO: raw loops. Should change to STL if possible.
+      if (not std::all_of(thrust::make_counting_iterator(0),
+                          thrust::make_counting_iterator(schema_elem.num_children),
+                          [&](auto const& idx) {
+                            return validate_schemas(arrow_schema.children[idx],
+                                                    schema_elem.children_idx[idx]);
+                          })) {
+        return false;
+      }
 
-  // Should verify at each level rather than total number of fields
-  auto num_fields       = arrow_schema_root.children.size();
-  auto num_schema_elems = schema_root.children_idx.size();
+      return schema_elem.num_children == static_cast<int32_t>(arrow_schema.children.size());
+    };
 
-  // lambda to compute total number of fields in arrow schema
-  std::function<int32_t(const arrow_schema_data_types&)> calc_num_fields =
-    [&calc_num_fields](const arrow_schema_data_types& arrow_schema_elem) -> int32_t {
-    int32_t num_fields = arrow_schema_elem.children.size();
-    std::for_each(arrow_schema_elem.children.cbegin(),
-                  arrow_schema_elem.children.cend(),
-                  [&](auto const& schema_elem) { num_fields += calc_num_fields(schema_elem); });
-
-    return num_fields;
-  };
-
-  // calculate the total number of fields.
-  std::for_each(arrow_schema_root.children.cbegin(),
-                arrow_schema_root.children.cend(),
-                [&](auto const& schema_elem) { num_fields += calc_num_fields(schema_elem); });
-
-  // check if total number of fields are equal
-  if (num_fields != num_schema_elems) {
-    CUDF_LOG_DEBUG("Parquet reader encountered a mismatch between Parquet and arrow schema.",
-                   "arrow:schema not processed.");
-    return;
-  }
-
-  // All good, now co-walk schemas
+  // Function to co-walk arrow and parquet schemas
   std::function<void(arrow_schema_data_types&, int)> co_walk_schemas =
     [&](arrow_schema_data_types& arrow_schema, int schema_idx) {
       auto& schema_elem = per_file_metadata[0].schema[schema_idx];
-      // TODO: raw loop. Should try and change to STL.
-      for (int32_t idx = 0; idx < static_cast<int32_t>(arrow_schema.children.size()); idx++) {
-        co_walk_schemas(arrow_schema.children[idx], schema_elem.children_idx[idx]);
-      }
+      std::for_each(thrust::make_counting_iterator(0),
+                    thrust::make_counting_iterator(schema_elem.num_children),
+                    [&](auto const& idx) {
+                      co_walk_schemas(arrow_schema.children[idx], schema_elem.children_idx[idx]);
+                    });
 
       // true for DurationType columns only for now.
       if (arrow_schema.type.id() != type_id::EMPTY) {
         schema_elem.arrow_type = arrow_schema.type.id();
       }
     };
-  // TODO: raw loop. Should try and change to STL.
-  for (int32_t idx = 0; idx < static_cast<int32_t>(arrow_schema_root.children.size()); idx++) {
-    co_walk_schemas(arrow_schema_root.children[idx], schema_root.children_idx[idx]);
+
+  auto schema_root       = get_schema(0);
+  auto arrow_schema_root = arrow_schema.value();
+
+  // verify equal number of children at root level
+  if (schema_root.num_children != static_cast<int32_t>(arrow_schema_root.children.size())) {
+    CUDF_LOG_DEBUG("Parquet reader encountered a mismatch between Parquet and arrow schema.",
+                   "arrow:schema not processed.");
+    return;
   }
+
+  // Verify equal number of children at all sub-levels
+  if (not std::all_of(thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(schema_root.num_children),
+                      [&](auto const& idx) {
+                        return validate_schemas(arrow_schema_root.children[idx],
+                                                schema_root.children_idx[idx]);
+                      })) {
+    CUDF_LOG_DEBUG("Parquet reader encountered a mismatch between Parquet and arrow schema.",
+                   "arrow:schema not processed.");
+    return;
+  }
+
+  // All good, now co-walk schemas
+  std::for_each(thrust::make_counting_iterator(0),
+                thrust::make_counting_iterator(schema_root.num_children),
+                [&](auto const& idx) {
+                  co_walk_schemas(arrow_schema_root.children[idx], schema_root.children_idx[idx]);
+                });
 
   return;
 }
