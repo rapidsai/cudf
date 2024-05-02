@@ -131,20 +131,16 @@ Expr.var = _patched_var
 
 def _quantile(a, q):
     a = a.to_frame() if a.ndim == 1 else a
-    n = len(a)
-    if not len(a):
-        return None, n
     return (
         a.quantile(q=q.tolist(), interpolation="nearest", method="table"),
-        n,
+        len(a),
     )
 
 
 def merge_quantiles(finalq, qs, vals):
     from dask_cudf.sorting import merge_quantiles as mq
 
-    result = mq(finalq, qs, vals)
-    return result.iloc[:, 0].to_pandas()
+    return mq(finalq, qs, vals).iloc[:, 0].to_pandas()
 
 
 _original_layer = RepartitionQuantiles._layer
