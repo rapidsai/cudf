@@ -31,6 +31,7 @@
 #include <cudf/filling.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -1226,7 +1227,7 @@ TEST_F(ListsColumnTest, ConcatenateMismatchedHierarchies)
     cudf::test::lists_column_wrapper<int> b{{{LCW{}}}};
     cudf::test::lists_column_wrapper<int> c{{LCW{}}};
 
-    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b, c})), cudf::logic_error);
+    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b, c})), cudf::data_type_error);
   }
 
   {
@@ -1235,7 +1236,7 @@ TEST_F(ListsColumnTest, ConcatenateMismatchedHierarchies)
     cudf::test::lists_column_wrapper<int> b{{{LCW{}}}};
     cudf::test::lists_column_wrapper<int> c{{LCW{}}};
 
-    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b, c})), cudf::logic_error);
+    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b, c})), cudf::data_type_error);
   }
 
   {
@@ -1243,14 +1244,14 @@ TEST_F(ListsColumnTest, ConcatenateMismatchedHierarchies)
     cudf::test::lists_column_wrapper<int> b{1, 2, 3};
     cudf::test::lists_column_wrapper<int> c{{3, 4, 5}};
 
-    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b, c})), cudf::logic_error);
+    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b, c})), cudf::data_type_error);
   }
 
   {
     cudf::test::lists_column_wrapper<int> a{{{1, 2, 3}}};
     cudf::test::lists_column_wrapper<int> b{{4, 5}};
 
-    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b})), cudf::logic_error);
+    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b})), cudf::data_type_error);
   }
 }
 
@@ -1605,7 +1606,7 @@ TEST_F(FixedPointTest, FixedPointScaleMismatch)
   auto const b = fp_wrapper(vec.begin() + 300, vec.begin() + 700, scale_type{-2});
   auto const c = fp_wrapper(vec.begin() + 700, vec.end(), /*****/ scale_type{-3});
 
-  EXPECT_THROW(cudf::concatenate(std::vector<cudf::column_view>{a, b, c}), cudf::logic_error);
+  EXPECT_THROW(cudf::concatenate(std::vector<cudf::column_view>{a, b, c}), cudf::data_type_error);
 }
 
 struct DictionaryConcatTest : public cudf::test::BaseFixture {};
@@ -1650,7 +1651,7 @@ TEST_F(DictionaryConcatTest, ErrorsTest)
   cudf::test::fixed_width_column_wrapper<int32_t> integers({10, 30, 20});
   auto dictionary2 = cudf::dictionary::encode(integers);
   std::vector<cudf::column_view> views({dictionary1->view(), dictionary2->view()});
-  EXPECT_THROW(cudf::concatenate(views), cudf::logic_error);
+  EXPECT_THROW(cudf::concatenate(views), cudf::data_type_error);
   std::vector<cudf::column_view> empty;
   EXPECT_THROW(cudf::concatenate(empty), cudf::logic_error);
 }
