@@ -418,6 +418,15 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         # need to create a MultiIndex column
         else:
+            multiple_column_label_types = (
+                len({type(name) for o in objs for name in o._data.keys()}) > 1
+            )
+            if multiple_column_label_types:
+                raise NotImplementedError(
+                    "Can not construct a MultiIndex column with multiple "
+                    "label types in cuDF at this time. You must convert "
+                    "the labels to the same type."
+                )
             for k, o in zip(keys, objs):
                 for name, col in o._data.items():
                     # if only series, then only keep keys as column labels
@@ -429,7 +438,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                     elif isinstance(name, tuple):
                         col_label = (k, *name)
                     else:
-                        col_label = (k, str(name))
+                        col_label = (k, name)
                     if empty_inner:
                         df[col_label] = cudf.core.column.column_empty_like(
                             col, newsize=0

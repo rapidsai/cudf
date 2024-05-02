@@ -1897,14 +1897,53 @@ def test_concat_mixed_list_types_error(s1, s2):
             "third": cudf.DataFrame({"A": [5, 6], "C": [7, 8]}),
             "fourth": cudf.DataFrame({"B": [9, 10]}),
         },
-        {
-            "first": cudf.DataFrame({2.0: [1, 1]}),
-            "second": cudf.DataFrame({"test": ["abc", "def"]}),
-        },
+        pytest.param(
+            {
+                "first": cudf.DataFrame({2.0: [1, 1]}),
+                "second": cudf.DataFrame({"test": ["abc", "def"]}),
+            },
+            marks=pytest.mark.xfail(
+                reason=(
+                    "Can not construct a MultiIndex column with multiple "
+                    "label types in cuDF at this time. You must convert "
+                    "the labels to the same type."
+                )
+            ),
+        ),
         {"first": cudf.Series([1, 2, 3]), "second": cudf.Series([4, 5, 6])},
         {
             "first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]}),
             "second": cudf.Series([5, 6], name="C"),
+        },
+        pytest.param(
+            {
+                "first": cudf.DataFrame({("A", "B"): [1, 2], "C": [3, 4]}),
+                "second": cudf.DataFrame({"D": [5, 6], ("A", "B"): [7, 8]}),
+            },
+            marks=pytest.mark.xfail(
+                reason=(
+                    "Can not construct a MultiIndex column with multiple "
+                    "label types in cuDF at this time. You must convert "
+                    "the labels to the same type."
+                )
+            ),
+        ),
+        pytest.param(
+            {
+                "first": cudf.DataFrame({("A", "B"): [3, 4], 2.0: [1, 1]}),
+                "second": cudf.DataFrame({("C", "D"): [3, 4], 3.0: [5, 6]}),
+            },
+            marks=pytest.mark.xfail(
+                reason=(
+                    "Can not construct a MultiIndex column with multiple "
+                    "label types in cuDF at this time. You must convert "
+                    "the labels to the same type."
+                )
+            ),
+        ),
+        {
+            "first": cudf.DataFrame({(1, 2): [1, 2], (3, 4): [3, 4]}),
+            "second": cudf.DataFrame({(1, 2): [5, 6], (5, 6): [7, 8]}),
         },
     ],
 )
