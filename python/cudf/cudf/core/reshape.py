@@ -279,7 +279,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         cudf.Series,
         cudf.DataFrame,
         cudf.BaseIndex,
-        cudf.MultiIndex,
     }
     if not all(isinstance(o, tuple(allowed_typs)) for o in objs):
         raise TypeError(
@@ -287,10 +286,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             f"{allowed_typs}, instead received {[type(o) for o in objs]}"
         )
 
-    if any(isinstance(o, (cudf.BaseIndex, cudf.MultiIndex)) for o in objs):
-        if not all(
-            isinstance(o, (cudf.BaseIndex, cudf.MultiIndex)) for o in objs
-        ):
+    if any(isinstance(o, cudf.BaseIndex) for o in objs):
+        if not all(isinstance(o, cudf.BaseIndex) for o in objs):
             raise TypeError(
                 "when concatenating indices you must provide ONLY indices"
             )
