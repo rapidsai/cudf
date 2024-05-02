@@ -525,10 +525,10 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
 }
 
 aggregate_reader_metadata::aggregate_reader_metadata(
-  host_span<std::unique_ptr<datasource> const> sources)
+  host_span<std::unique_ptr<datasource> const> sources, bool use_arrow_schema)
   : per_file_metadata(metadatas_from_sources(sources)),
     keyval_maps(collect_keyval_metadata()),
-    arrow_schema(collect_arrow_schema()),
+    arrow_schema(collect_arrow_schema(use_arrow_schema)),
     num_rows(calc_num_rows()),
     num_row_groups(calc_num_row_groups())
 {
@@ -561,10 +561,12 @@ aggregate_reader_metadata::aggregate_reader_metadata(
 }
 
 [[nodiscard]] std::optional<arrow_schema_data_types>
-aggregate_reader_metadata::collect_arrow_schema() const
+aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
 {
-  // Check the key_value metadata for ARROW:schema, decode and walk it
+  // Check if we want to collect the arrow_schema
+  if (not use_arrow_schema) { return std::nullopt; }
 
+  // Check the key_value metadata for ARROW:schema, decode and walk it
   // Function to convert from flatbuf::duration type to cudf::type_id
   auto duration_from_flatbuffer = [](flatbuf::Duration const* duration) {
     // TODO: we only need this for arrow::DurationType for now. Else, we can take in a

@@ -124,6 +124,7 @@ def _parse_metadata(meta):
 
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
+                   use_arrow_schema=True,
                    use_pandas_metadata=True,
                    Expression filters=None):
     """
@@ -152,6 +153,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         filepaths_or_buffers)
 
     cdef bool cpp_use_pandas_metadata = use_pandas_metadata
+    cdef bool cpp_use_arrow_schema = use_arrow_schema
 
     cdef vector[vector[size_type]] cpp_row_groups
     cdef data_type cpp_timestamp_type = cudf_types.data_type(
@@ -167,6 +169,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         parquet_reader_options.builder(source)
         .row_groups(cpp_row_groups)
         .use_pandas_metadata(cpp_use_pandas_metadata)
+        .use_arrow_schema(cpp_use_arrow_schema)
         .timestamp_type(cpp_timestamp_type)
     )
     if filters is not None:

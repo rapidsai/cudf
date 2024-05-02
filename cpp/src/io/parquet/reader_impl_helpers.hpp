@@ -28,8 +28,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
-#include <arrow/type_fwd.h>
-
 #include <list>
 #include <tuple>
 #include <vector>
@@ -149,11 +147,16 @@ class aggregate_reader_metadata {
     const;
 
   /**
-   * @brief Decodes and walks over "ARROW:schema"  from Parquet key value
-   * metadata section and return it.
+   * @brief Decodes and constructs the arrow schema from the "ARROW:schema" IPC message
+   * in key value metadata section of Parquet file footer
    */
-  [[nodiscard]] std::optional<arrow_schema_data_types> collect_arrow_schema() const;
+  [[nodiscard]] std::optional<arrow_schema_data_types> collect_arrow_schema(
+    bool use_arrow_schema) const;
 
+  /**
+   * @brief Co-walks the collected arrow and Parquet schema, updates
+   * dtypes and destroys the no longer needed arrow schema object(s).
+   */
   void consume_arrow_schema();
 
   /**
@@ -181,7 +184,8 @@ class aggregate_reader_metadata {
   void column_info_for_row_group(row_group_info& rg_info, size_type chunk_start_row) const;
 
  public:
-  aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources);
+  aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
+                            bool use_arrow_schema);
 
   [[nodiscard]] RowGroup const& get_row_group(size_type row_group_index, size_type src_idx) const;
 

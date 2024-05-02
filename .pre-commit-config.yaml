@@ -140,9 +140,11 @@ repos:
     hooks:
       - id: verify-copyright
         exclude: |
-          (?x)
-              cpp/include/cudf_test/cxxopts[.]hpp$
-
+          (?x)^(
+            cpp/include/cudf_test/cxxopts[.]hpp|
+            cpp/include/cudf/io/ipc/detail/.*|
+            cpp/include/cudf/detail/utilities/base64_utils[.]hpp
+          )$
 
 default_language_version:
       python: python3
