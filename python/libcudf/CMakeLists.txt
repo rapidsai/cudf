@@ -25,6 +25,16 @@ project(
   LANGUAGES CXX
 )
 
+# Check if cudf is already available. If so, it is the user's responsibility to ensure that the
+# CMake package is also available at build time of the Python cudf package.
+find_package(cudf "${RAPIDS_VERSION}")
+
+if(cudf_FOUND)
+  return()
+endif()
+
+unset(cudf_FOUND)
+
 # For wheels, this should always be true
 set(USE_LIBARROW_FROM_PYARROW ON)
 
