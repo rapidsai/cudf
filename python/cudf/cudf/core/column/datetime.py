@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import datetime
+import functools
 import locale
 import re
 from locale import nl_langinfo
-from typing import Any, Mapping, Optional, Sequence, cast
+from typing import Any, Optional, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -24,7 +25,7 @@ from cudf._typing import (
 )
 from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
 from cudf.core._compat import PANDAS_GE_220
-from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
+from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
@@ -241,6 +242,8 @@ class DatetimeColumn(column.ColumnBase):
         null_count: Optional[int] = None,
     ):
         dtype = cudf.dtype(dtype)
+        if dtype.kind != "M":
+            raise TypeError(f"{self.dtype} is not a supported datetime type")
 
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
@@ -256,26 +259,26 @@ class DatetimeColumn(column.ColumnBase):
             null_count=null_count,
         )
 
-        if self.dtype.type is not np.datetime64:
-            raise TypeError(f"{self.dtype} is not a supported datetime type")
-
-        self._time_unit, _ = np.datetime_data(self.dtype)
-
     def __contains__(self, item: ScalarLike) -> bool:
         try:
-            item_as_dt64 = np.datetime64(item, self._time_unit)
-        except ValueError:
-            # If item cannot be converted to datetime type
-            # np.datetime64 raises ValueError, hence `item`
-            # cannot exist in `self`.
+            ts = pd.Timestamp(item).as_unit(self.time_unit)
+        except Exception:
+            # pandas can raise a variety of errors
+            # item cannot exist in self.
             return False
-        return item_as_dt64.astype("int64") in self.as_numerical_column(
+        if ts.tzinfo is None and isinstance(self.dtype, pd.DatetimeTZDtype):
+            return False
+        elif ts.tzinfo is not None:
+            ts = ts.tz_convert(None)
+        return ts.to_numpy().astype("int64") in self.as_numerical_column(
             "int64"
         )
 
-    @property
+    @functools.cached_property
     def time_unit(self) -> str:
-        return self._time_unit
+        if isinstance(self.dtype, pd.DatetimeTZDtype):
+            return self.dtype.unit
+        return np.datetime_data(self.dtype)[0]
 
     @property
     def year(self) -> ColumnBase:
@@ -321,6 +324,12 @@ class DatetimeColumn(column.ColumnBase):
         raise NotImplementedError(
             "DateTime Arrays is not yet implemented in cudf"
         )
+
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        if cudf.get_option("mode.pandas_compatible"):
+            return pd.Timestamp(result)
+        return result
 
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
@@ -389,29 +398,6 @@ class DatetimeColumn(column.ColumnBase):
                 pass
 
         return NotImplemented
-
-    @property
-    def __cuda_array_interface__(self) -> Mapping[str, Any]:
-        output = {
-            "shape": (len(self),),
-            "strides": (self.dtype.itemsize,),
-            "typestr": self.dtype.str,
-            "data": (self.data_ptr, False),
-            "version": 1,
-        }
-
-        if self.nullable and self.has_nulls():
-            # Create a simple Python object that exposes the
-            # `__cuda_array_interface__` attribute here since we need to modify
-            # some of the attributes from the numba device array
-            output["mask"] = cuda_array_interface_wrapper(
-                ptr=self.mask_ptr,
-                size=len(self),
-                owner=self.mask,
-                readonly=True,
-                typestr="<t1",
-            )
-        return output
 
     def as_datetime_column(
         self, dtype: Dtype, format: str | None = None

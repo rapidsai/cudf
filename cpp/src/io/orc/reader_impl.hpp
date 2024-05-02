@@ -24,6 +24,7 @@
 #include <cudf/io/orc.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <io/utilities/column_buffer.hpp>
 
@@ -43,7 +44,7 @@ class reader_impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    *
-   * This constructor will call the other constructor with `output_size_limit` and `data_read_limit`
+   * This constructor will call the other constructor with `chunk_read_limit` and `pass_read_limit`
    * set to `0` and `output_row_granularity` set to `DEFAULT_OUTPUT_ROW_GRANULARITY`.
    *
    * @param sources Dataset sources
@@ -54,30 +55,30 @@ class reader_impl {
   explicit reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
                        orc_reader_options const& options,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr);
+                       rmm::device_async_resource_ref mr);
 
   /**
    * @copydoc cudf::io::orc::detail::chunked_reader::chunked_reader(std::size_t, std::size_t,
-   * orc_reader_options const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+   * orc_reader_options const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
    */
-  explicit reader_impl(std::size_t output_size_limit,
-                       std::size_t data_read_limit,
+  explicit reader_impl(std::size_t chunk_read_limit,
+                       std::size_t pass_read_limit,
                        std::vector<std::unique_ptr<datasource>>&& sources,
                        orc_reader_options const& options,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr);
+                       rmm::device_async_resource_ref mr);
 
   /**
    * @copydoc cudf::io::orc::detail::chunked_reader::chunked_reader(std::size_t, std::size_t,
-   * size_type, orc_reader_options const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+   * size_type, orc_reader_options const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
    */
-  explicit reader_impl(std::size_t output_size_limit,
-                       std::size_t data_read_limit,
+  explicit reader_impl(std::size_t chunk_read_limit,
+                       std::size_t pass_read_limit,
                        size_type output_row_granularity,
                        std::vector<std::unique_ptr<datasource>>&& sources,
                        orc_reader_options const& options,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr);
+                       rmm::device_async_resource_ref mr);
 
   /**
    * @copydoc cudf::io::orc::detail::reader::read
@@ -111,18 +112,18 @@ class reader_impl {
   void prepare_data(read_mode mode);
 
   /**
-   * @brief Perform a global preprocessing step that executes exactly once for the entire duration
-   * of the reader.
+   * @brief Perform a preprocessing step on the input data sources that executes exactly once
+   * for the entire duration of the reader.
    *
    * In this step, the metadata of all stripes in the data sources is parsed, and information about
    * data streams of the selected columns in all stripes are generated. If the reader has a data
    * read limit, sizes of these streams are used to split the list of all stripes into multiple
-   * subsets, each of which will be read into memory in the `load_data()` step. These subsets are
-   * computed such that memory usage will be kept to be around a fixed size limit.
+   * subsets, each of which will be loaded into memory in the `load_next_stripe_data()` step. These
+   * subsets are computed such that memory usage will be kept to be around a fixed size limit.
    *
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
-  void global_preprocess(read_mode mode);
+  void preprocess_file(read_mode mode);
 
   /**
    * @brief Load stripes from the input data sources into memory.
@@ -131,23 +132,23 @@ class reader_impl {
    * their total data size does not exceed a fixed size limit. Then, the data is probed to
    * estimate its uncompressed sizes, which are in turn used to split that stripe subset into
    * smaller subsets, each of which to be decompressed and decoded in the next step
-   * `decompress_and_decode()`. This is to ensure that loading data from data sources together with
-   * decompression and decoding will be capped around the given data read limit.
+   * `decompress_and_decode_stripes()`. This is to ensure that loading data from data sources
+   * together with decompression and decoding will be capped around the given data read limit.
    *
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
-  void load_data(read_mode mode);
+  void load_next_stripe_data(read_mode mode);
 
   /**
    * @brief Decompress and decode stripe data in the internal buffers, and store the result into
    * an intermediate table.
    *
    * This function expects that the other preprocessing steps (`global preprocess()` and
-   * `load_data()`) have already been done.
+   * `load_next_stripe_data()`) have already been done.
    *
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
-  void decompress_and_decode(read_mode mode);
+  void decompress_and_decode_stripes(read_mode mode);
 
   /**
    * @brief Create the output table from the intermediate table and return it along with metadata.
@@ -164,7 +165,7 @@ class reader_impl {
   table_metadata get_meta_with_user_data();
 
   rmm::cuda_stream_view const _stream;
-  rmm::mr::device_memory_resource* const _mr;
+  rmm::device_async_resource_ref const _mr;
 
   // Reader configs.
   struct {
@@ -177,7 +178,7 @@ class reader_impl {
     int64_t const skip_rows;
     std::optional<int64_t> num_read_rows;
     std::vector<std::vector<size_type>> const selected_stripes;
-  } const _config;
+  } const _options;
 
   // Intermediate data for reading.
   std::unique_ptr<reader_column_meta> const _col_meta;  // Track of orc mapping and child details
@@ -193,6 +194,9 @@ class reader_impl {
   std::vector<std::vector<cudf::io::detail::column_buffer>> _out_buffers;
 
   // The default value used for subdividing the decoded table for final output.
+  // Larger values will reduce the computation time but will make the output table less granular.
+  // Smaller values (minimum is `1`) will increase the computation time but the output table will
+  // have size closer to the given `chunk_read_limit`.
   static inline constexpr size_type DEFAULT_OUTPUT_ROW_GRANULARITY = 10'000;
 };
 

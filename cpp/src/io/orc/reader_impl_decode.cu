@@ -34,6 +34,7 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/fill.h>
@@ -87,7 +88,7 @@ rmm::device_buffer decompress_stripe_data(
   rmm::cuda_stream_view stream)
 {
   // Whether we have the comppression info precomputed.
-  auto const compinfo_ready = compinfo_map.size() > 0;
+  auto const compinfo_ready = not compinfo_map.empty();
 
   // Count the exact number of compressed blocks
   std::size_t num_compressed_blocks   = 0;
@@ -330,7 +331,7 @@ rmm::device_buffer decompress_stripe_data(
 void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
                       host_span<column_buffer> out_buffers,
                       rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr)
+                      rmm::device_async_resource_ref mr)
 {
   auto const num_stripes = chunks.size().first;
   auto const num_columns = chunks.size().second;
@@ -421,7 +422,7 @@ void decode_stream_data(int64_t num_dicts,
                         cudf::detail::device_2dspan<gpu::RowGroup> row_groups,
                         std::vector<column_buffer>& out_buffers,
                         rmm::cuda_stream_view stream,
-                        rmm::mr::device_memory_resource* mr)
+                        rmm::device_async_resource_ref mr)
 {
   auto const num_stripes = chunks.size().first;
   auto const num_columns = chunks.size().second;
@@ -484,40 +485,38 @@ void decode_stream_data(int64_t num_dicts,
  * layer.
  */
 void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& chunks,
-                      cudf::host_span<rmm::device_uvector<uint32_t>> prefix_sums,
+                      uint32_t* d_prefix_sums,
                       rmm::cuda_stream_view stream)
 {
   auto const num_stripes = chunks.size().first;
   if (num_stripes == 0) return;
 
   auto const num_columns = chunks.size().second;
-  std::vector<thrust::pair<size_type, cudf::device_span<uint32_t>>> prefix_sums_to_update;
+  std::vector<thrust::pair<size_type, uint32_t*>> prefix_sums_to_update;
   for (auto col_idx = 0ul; col_idx < num_columns; ++col_idx) {
     // Null counts sums are only needed for children of struct columns
     if (chunks[0][col_idx].type_kind == STRUCT) {
-      prefix_sums_to_update.emplace_back(col_idx, prefix_sums[col_idx]);
+      prefix_sums_to_update.emplace_back(col_idx, d_prefix_sums + num_stripes * col_idx);
     }
   }
   auto const d_prefix_sums_to_update = cudf::detail::make_device_uvector_async(
     prefix_sums_to_update, stream, rmm::mr::get_current_device_resource());
 
-  thrust::for_each(rmm::exec_policy_nosync(stream),
-                   d_prefix_sums_to_update.begin(),
-                   d_prefix_sums_to_update.end(),
-                   [chunks = cudf::detail::device_2dspan<gpu::ColumnDesc const>{chunks}] __device__(
-                     auto const& idx_psums) {
-                     auto const col_idx = idx_psums.first;
-                     auto const psums   = idx_psums.second;
-
-                     thrust::transform(
-                       thrust::seq,
-                       thrust::make_counting_iterator(0),
-                       thrust::make_counting_iterator(0) + psums.size(),
-                       psums.begin(),
-                       [&](auto stripe_idx) { return chunks[stripe_idx][col_idx].null_count; });
-
-                     thrust::inclusive_scan(thrust::seq, psums.begin(), psums.end(), psums.begin());
-                   });
+  thrust::for_each(
+    rmm::exec_policy_nosync(stream),
+    d_prefix_sums_to_update.begin(),
+    d_prefix_sums_to_update.end(),
+    [num_stripes, chunks = cudf::detail::device_2dspan<gpu::ColumnDesc const>{chunks}] __device__(
+      auto const& idx_psums) {
+      auto const col_idx = idx_psums.first;
+      auto const psums   = idx_psums.second;
+      thrust::transform(thrust::seq,
+                        thrust::make_counting_iterator<std::size_t>(0ul),
+                        thrust::make_counting_iterator<std::size_t>(num_stripes),
+                        psums,
+                        [&](auto stripe_idx) { return chunks[stripe_idx][col_idx].null_count; });
+      thrust::inclusive_scan(thrust::seq, psums, psums + num_stripes, psums);
+    });
   // `prefix_sums_to_update` goes out of scope, copy has to be done before we return
   stream.synchronize();
 }
@@ -668,8 +667,11 @@ std::vector<range> find_table_splits(table_view const& input,
                                      std::size_t size_limit,
                                      rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(size_limit > 0, "Invalid size limit");
-  CUDF_EXPECTS(segment_length > 0, "Invalid segment_length");
+  if (size_limit == 0) {
+    return std::vector<range>{range{0, static_cast<std::size_t>(input.num_rows())}};
+  }
+
+  CUDF_EXPECTS(segment_length > 0, "Invalid segment_length", std::invalid_argument);
 
   // `segmented_row_bit_count` requires that `segment_length` is not larger than number of rows.
   segment_length = std::min(segment_length, input.num_rows());
@@ -701,7 +703,7 @@ std::vector<range> find_table_splits(table_view const& input,
                          segmented_sizes.d_begin(),
                          segmented_sizes.d_end(),
                          segmented_sizes.d_begin(),
-                         cumulative_size_sum{});
+                         cumulative_size_plus{});
   segmented_sizes.device_to_host_sync(stream);
 
   return find_splits<cumulative_size>(segmented_sizes, input.num_rows(), size_limit);
@@ -709,9 +711,9 @@ std::vector<range> find_table_splits(table_view const& input,
 
 }  // namespace
 
-void reader_impl::decompress_and_decode(read_mode mode)
+void reader_impl::decompress_and_decode_stripes(read_mode mode)
 {
-  if (_file_itm_data.has_no_data()) { return; }
+  if (!_file_itm_data.has_data()) { return; }
 
   CUDF_EXPECTS(_chunk_read_data.curr_load_stripe_range > 0, "There is not any stripe loaded.");
 
@@ -719,7 +721,7 @@ void reader_impl::decompress_and_decode(read_mode mode)
     _chunk_read_data.decode_stripe_ranges[_chunk_read_data.curr_decode_stripe_range++];
   auto const stripe_start = stripe_range.begin;
   auto const stripe_end   = stripe_range.end;
-  auto const stripe_count = stripe_range.end - stripe_range.begin;
+  auto const stripe_count = stripe_range.size();
 
   // The start index of loaded stripes. They are different from decoding stripes.
   auto const load_stripe_range =
@@ -745,7 +747,7 @@ void reader_impl::decompress_and_decode(read_mode mode)
   _file_itm_data.rows_to_skip = 0;
   _file_itm_data.rows_to_read -= rows_to_decode;
 
-  // Technically, overflow here should never happen because the `load_data()` step
+  // Technically, overflow here should never happen because the `load_next_stripe_data()` step
   // already handled it by splitting the loaded stripe range into multiple decode ranges.
   CUDF_EXPECTS(rows_to_decode <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
                "Number or rows to decode exceeds the column size limit.",
@@ -758,11 +760,22 @@ void reader_impl::decompress_and_decode(read_mode mode)
   // Column descriptors ('chunks').
   // Each 'chunk' of data here corresponds to an orc column, in a stripe, at a nested level.
   // Unfortunately we cannot create one hostdevice_vector to use for all levels because
-  // currently we do not have hostdevice_2dspan exists.
+  // currently we do not have a hostdevice_2dspan class.
   std::vector<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>> lvl_chunks(num_levels);
 
   // For computing null count.
-  std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums(num_levels);
+  auto null_count_prefix_sums = [&] {
+    auto const num_total_cols = std::accumulate(
+      _selected_columns.levels.begin(),
+      _selected_columns.levels.end(),
+      std::size_t{0},
+      [](auto const& sum, auto const& cols_level) { return sum + cols_level.size(); });
+
+    return cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
+      num_total_cols * stripe_count, _stream, rmm::mr::get_current_device_resource());
+  }();
+  std::size_t num_processed_lvl_columns      = 0;
+  std::size_t num_processed_prev_lvl_columns = 0;
 
   // For parsing decompression data.
   // We create one hostdevice_vector that is large enough to use for all levels,
@@ -773,9 +786,8 @@ void reader_impl::decompress_and_decode(read_mode mode)
       // Find the maximum number of streams in all levels of the decoding stripes.
       for (std::size_t level = 0; level < num_levels; ++level) {
         auto const stream_range =
-          get_range(_file_itm_data.lvl_stripe_stream_ranges[level], stripe_range);
-        auto const num_streams = stream_range.end - stream_range.begin;
-        max_num_streams        = std::max(max_num_streams, num_streams);
+          merge_selected_ranges(_file_itm_data.lvl_stripe_stream_ranges[level], stripe_range);
+        max_num_streams = std::max(max_num_streams, stream_range.size());
       }
     }
     return cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo>{max_num_streams, _stream};
@@ -784,8 +796,7 @@ void reader_impl::decompress_and_decode(read_mode mode)
   auto& col_meta = *_col_meta;
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     auto const& stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges[level];
-    auto const stream_range          = get_range(stripe_stream_ranges, stripe_range);
-    auto const num_streams           = stream_range.end - stream_range.begin;
+    auto const stream_range          = merge_selected_ranges(stripe_stream_ranges, stripe_range);
 
     auto const& columns_level = _selected_columns.levels[level];
     auto const& stream_info   = _file_itm_data.lvl_stream_info[level];
@@ -795,29 +806,23 @@ void reader_impl::decompress_and_decode(read_mode mode)
     auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
     auto& chunks      = lvl_chunks[level];
 
-    auto const num_level_columns = columns_level.size();
+    auto const num_lvl_columns = columns_level.size();
     chunks =
-      cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>(stripe_count, num_level_columns, _stream);
+      cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>(stripe_count, num_lvl_columns, _stream);
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
 
     const bool use_index =
-      _config.use_index &&
+      _options.use_index &&
       // Do stripes have row group index
       _metadata.is_row_grp_idx_present() &&
       // Only use if we don't have much work with complete columns & stripes
       // TODO: Consider nrows, gpu, and tune the threshold
       (rows_to_decode > _metadata.get_row_index_stride() &&
        !(_metadata.get_row_index_stride() & 7) && _metadata.get_row_index_stride() != 0 &&
-       num_level_columns * stripe_count < 8 * 128) &&
+       num_lvl_columns * stripe_count < 8 * 128) &&
       // Only use if first row is aligned to a stripe boundary
       // TODO: Fix logic to handle unaligned rows
       (rows_to_skip == 0);
-
-    null_count_prefix_sums[level].reserve(num_level_columns);
-    std::generate_n(std::back_inserter(null_count_prefix_sums[level]), num_level_columns, [&]() {
-      return cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
-        stripe_count, _stream, rmm::mr::get_current_device_resource());
-    });
 
     // 0-based counters, used across all decoding stripes in this step.
     int64_t stripe_start_row{0};
@@ -844,7 +849,7 @@ void reader_impl::decompress_and_decode(read_mode mode)
                                                                       level == 0,
                                                                       &num_dict_entries,
                                                                       &local_stream_order,
-                                                                      std::nullopt,  // stream_info
+                                                                      nullptr,  // stream_info
                                                                       &chunks);
 
       auto const is_stripe_data_empty = total_data_size == 0;
@@ -862,24 +867,25 @@ void reader_impl::decompress_and_decode(read_mode mode)
                   : 0;
 
       // Update chunks to reference streams pointers.
-      for (std::size_t col_idx = 0; col_idx < num_level_columns; col_idx++) {
+      for (std::size_t col_idx = 0; col_idx < num_lvl_columns; col_idx++) {
         auto& chunk = chunks[stripe_local_idx][col_idx];
         // start row, number of rows in a each stripe and total number of rows
         // may change in lower levels of nesting
         chunk.start_row =
           (level == 0) ? stripe_start_row
-                       : col_meta.child_start_row[stripe_local_idx * num_level_columns + col_idx];
+                       : col_meta.child_start_row[stripe_local_idx * num_lvl_columns + col_idx];
         chunk.num_rows =
           (level == 0)
             ? num_rows_in_stripe
-            : col_meta.num_child_rows_per_stripe[stripe_local_idx * num_level_columns + col_idx];
+            : col_meta.num_child_rows_per_stripe[stripe_local_idx * num_lvl_columns + col_idx];
         chunk.column_num_rows = (level == 0) ? rows_to_decode : col_meta.num_child_rows[col_idx];
         chunk.parent_validity_info =
           (level == 0) ? column_validity_info{} : col_meta.parent_column_data[col_idx];
         chunk.parent_null_count_prefix_sums =
-          (level == 0)
-            ? nullptr
-            : null_count_prefix_sums[level - 1][col_meta.parent_column_index[col_idx]].data();
+          (level == 0) ? nullptr
+                       : null_count_prefix_sums.data() + (num_processed_prev_lvl_columns +
+                                                          col_meta.parent_column_index[col_idx]) *
+                                                           stripe_count;
         chunk.encoding_kind = stripe_footer->columns[columns_level[col_idx].id].kind;
         chunk.type_kind =
           _metadata.per_file_metadata[stripe.source_idx].ff.types[columns_level[col_idx].id].kind;
@@ -902,7 +908,7 @@ void reader_impl::decompress_and_decode(read_mode mode)
         chunk.num_rowgroups = stripe_num_rowgroups;
 
         if (chunk.type_kind == orc::TIMESTAMP) {
-          chunk.timestamp_type_id = _config.timestamp_type.id();
+          chunk.timestamp_type_id = _options.timestamp_type.id();
         }
         if (not is_stripe_data_empty) {
           for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
@@ -920,10 +926,10 @@ void reader_impl::decompress_and_decode(read_mode mode)
 
     // Process dataset chunks into output columns.
     auto row_groups =
-      cudf::detail::hostdevice_2dvector<gpu::RowGroup>(num_rowgroups, num_level_columns, _stream);
+      cudf::detail::hostdevice_2dvector<gpu::RowGroup>(num_rowgroups, num_lvl_columns, _stream);
     if (level > 0 and row_groups.size().first) {
       cudf::host_span<gpu::RowGroup> row_groups_span(row_groups.base_host_ptr(),
-                                                     num_rowgroups * num_level_columns);
+                                                     num_rowgroups * num_lvl_columns);
       auto& rw_grp_meta = col_meta.rwgrp_meta;
 
       // Update start row and num rows per row group
@@ -941,7 +947,7 @@ void reader_impl::decompress_and_decode(read_mode mode)
     // Setup row group descriptors if using indexes.
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       auto compinfo = cudf::detail::hostdevice_span<gpu::CompressedStreamInfo>(
-        hd_compinfo.begin(), hd_compinfo.d_begin(), num_streams);
+        hd_compinfo.begin(), hd_compinfo.d_begin(), stream_range.size());
       auto decomp_data = decompress_stripe_data(load_stripe_range,
                                                 stream_range,
                                                 stripe_count,
@@ -970,7 +976,7 @@ void reader_impl::decompress_and_decode(read_mode mode)
         gpu::ParseRowGroupIndex(row_groups.base_device_ptr(),
                                 nullptr,
                                 chunks.base_device_ptr(),
-                                num_level_columns,
+                                num_lvl_columns,
                                 stripe_count,
                                 _metadata.get_row_index_stride(),
                                 level == 0,
@@ -1010,7 +1016,8 @@ void reader_impl::decompress_and_decode(read_mode mode)
 
     if (nested_cols.size()) {
       // Extract information to process nested child columns.
-      scan_null_counts(chunks, null_count_prefix_sums[level], _stream);
+      scan_null_counts(
+        chunks, null_count_prefix_sums.data() + num_processed_lvl_columns * stripe_count, _stream);
 
       row_groups.device_to_host_sync(_stream);
       aggregate_child_meta(
@@ -1028,6 +1035,8 @@ void reader_impl::decompress_and_decode(read_mode mode)
 
       if (not buff_data.empty()) { generate_offsets_for_list(buff_data, _stream); }
     }
+    num_processed_prev_lvl_columns = num_processed_lvl_columns;
+    num_processed_lvl_columns += num_lvl_columns;
   }  // end loop level
 
   // Now generate a table from the decoded result.
@@ -1064,14 +1073,10 @@ void reader_impl::decompress_and_decode(read_mode mode)
 
   // Split the decoded table into ranges that be output into chunks having size within the given
   // output size limit.
-  _chunk_read_data.output_table_ranges =
-    _chunk_read_data.output_size_limit == 0
-      ? std::vector<range>{range{
-          0, static_cast<std::size_t>(_chunk_read_data.decoded_table->num_rows())}}
-      : find_table_splits(_chunk_read_data.decoded_table->view(),
-                          _chunk_read_data.output_row_granularity,
-                          _chunk_read_data.output_size_limit,
-                          _stream);
+  _chunk_read_data.output_table_ranges = find_table_splits(_chunk_read_data.decoded_table->view(),
+                                                           _chunk_read_data.output_row_granularity,
+                                                           _chunk_read_data.chunk_read_limit,
+                                                           _stream);
 }
 
 }  // namespace cudf::io::orc::detail

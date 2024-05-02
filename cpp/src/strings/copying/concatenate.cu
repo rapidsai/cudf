@@ -28,6 +28,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/advance.h>
 #include <thrust/binary_search.h>
@@ -203,7 +204,7 @@ CUDF_KERNEL void fused_concatenate_string_chars_kernel(column_device_view const*
 
 std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   // Compute output sizes
@@ -220,9 +221,6 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   CUDF_EXPECTS(offsets_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total number of strings exceeds the column size limit",
                std::overflow_error);
-  CUDF_EXPECTS(total_bytes <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-               "total size of strings exceeds the column size limit",
-               std::overflow_error);
 
   bool const has_nulls =
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
@@ -232,8 +230,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   auto d_new_chars = output_chars.data();
 
   // create output offsets column
-  auto offsets_column = make_numeric_column(
-    data_type{type_id::INT32}, offsets_count, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_column = create_offsets_child_column(total_bytes, offsets_count, stream, mr);
   auto itr_new_offsets =
     cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
 

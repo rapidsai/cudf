@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -52,7 +53,7 @@ namespace cudf {
  */
 std::unique_ptr<column> interleave_columns(
   table_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Repeats the rows from `input` table `count` times to form a new table.
@@ -75,7 +76,7 @@ std::unique_ptr<column> interleave_columns(
 std::unique_ptr<table> tile(
   table_view const& input,
   size_type count,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Configures whether byte casting flips endianness
@@ -100,7 +101,7 @@ enum class flip_endianness : bool { NO, YES };
 std::unique_ptr<column> byte_cast(
   column_view const& input_column,
   flip_endianness endian_configuration,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 

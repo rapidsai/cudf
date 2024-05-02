@@ -44,9 +44,6 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-#include <fstream>
-#include <type_traits>
-
 namespace {
 enum class output_limit : std::size_t {};
 enum class input_limit : std::size_t {};
@@ -175,6 +172,18 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadNoData)
   EXPECT_EQ(result->num_rows(), 0);
   EXPECT_EQ(result->num_columns(), 2);
   CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+}
+
+TEST_F(OrcChunkedReaderTest, TestChunkedReadInvalidParameter)
+{
+  std::vector<std::unique_ptr<cudf::column>> input_columns;
+  input_columns.emplace_back(int32s_col{}.release());
+  input_columns.emplace_back(int64s_col{}.release());
+
+  auto const [expected, filepath] = write_file(input_columns, "chunked_read_invalid");
+  EXPECT_THROW(
+    chunked_read(filepath, output_limit{1'000}, output_row_granularity{-1} /*invalid value*/),
+    cudf::logic_error);
 }
 
 TEST_F(OrcChunkedReaderTest, TestChunkedReadSimpleData)
@@ -1413,6 +1422,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, read_result->view());
   }
 
+  // The test below requires a huge amount of memory, thus it is disabled by default.
 #ifdef LOCAL_TEST
   // Read with only output limit -- there is no limit on the memory usage.
   // However, the reader should be able to detect and load only enough stripes each time

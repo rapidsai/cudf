@@ -37,8 +37,7 @@ TEST_F(JSONTest, JSONreader)
     cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
       .dtypes(std::vector<cudf::data_type>{cudf::data_type{cudf::type_id::INT32},
                                            cudf::data_type{cudf::type_id::FLOAT64}})
-      .lines(true)
-      .legacy(true);
+      .lines(true);
   cudf::io::table_with_metadata result =
     cudf::io::read_json(in_options, cudf::test::get_default_stream());
 }

@@ -32,6 +32,30 @@ def test_from_dict_backend_dispatch():
     dd.assert_eq(expect, ddf)
 
 
+def test_to_dask_dataframe_deprecated():
+    gdf = cudf.DataFrame({"a": range(100)})
+    ddf = dd.from_pandas(gdf, npartitions=2)
+    assert isinstance(ddf._meta, cudf.DataFrame)
+
+    with pytest.warns(FutureWarning, match="API is now deprecated"):
+        assert isinstance(
+            ddf.to_dask_dataframe()._meta,
+            pd.DataFrame,
+        )
+
+
+def test_from_dask_dataframe_deprecated():
+    gdf = pd.DataFrame({"a": range(100)})
+    ddf = dd.from_pandas(gdf, npartitions=2)
+    assert isinstance(ddf._meta, pd.DataFrame)
+
+    with pytest.warns(FutureWarning, match="API is now deprecated"):
+        assert isinstance(
+            dask_cudf.from_dask_dataframe(ddf)._meta,
+            cudf.DataFrame,
+        )
+
+
 def test_to_backend():
     np.random.seed(0)
     data = {
@@ -913,3 +937,37 @@ def test_categorical_dtype_round_trip():
     actual = ds.compute()
     expected = pds.compute()
     assert actual.dtype.ordered == expected.dtype.ordered
+
+
+def test_implicit_array_conversion_cupy():
+    s = cudf.Series(range(10))
+    ds = dask_cudf.from_cudf(s, npartitions=2)
+
+    def func(x):
+        return x.values
+
+    # Need to compute the dask collection for now.
+    # See: https://github.com/dask/dask/issues/11017
+    result = ds.map_partitions(func, meta=s.values).compute()
+    expect = func(s)
+
+    dask.array.assert_eq(result, expect)
+
+
+def test_implicit_array_conversion_cupy_sparse():
+    cupyx = pytest.importorskip("cupyx")
+
+    s = cudf.Series(range(10), dtype="float32")
+    ds = dask_cudf.from_cudf(s, npartitions=2)
+
+    def func(x):
+        return cupyx.scipy.sparse.csr_matrix(x.values)
+
+    # Need to compute the dask collection for now.
+    # See: https://github.com/dask/dask/issues/11017
+    result = ds.map_partitions(func, meta=s.values).compute()
+    expect = func(s)
+
+    # NOTE: The calculation here doesn't need to make sense.
+    # We just need to make sure we get the right type back.
+    assert type(result) == type(expect)

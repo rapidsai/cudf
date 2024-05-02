@@ -23,6 +23,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <string>
@@ -59,7 +60,7 @@ class reader {
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                   orc_reader_options const& options,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  rmm::device_async_resource_ref mr);
 
   /**
    * @brief Destructor explicitly declared to avoid inlining in header
@@ -84,29 +85,29 @@ class chunked_reader {
  public:
   /**
    * @copydoc cudf::io::chunked_orc_reader::chunked_orc_reader(std::size_t, std::size_t, size_type,
-   * orc_reader_options const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+   * orc_reader_options const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
    *
    * @param sources Input `datasource` objects to read the dataset from
    */
-  explicit chunked_reader(std::size_t output_size_limit,
-                          std::size_t data_read_limit,
+  explicit chunked_reader(std::size_t chunk_read_limit,
+                          std::size_t pass_read_limit,
                           size_type output_row_granularity,
                           std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                           orc_reader_options const& options,
                           rmm::cuda_stream_view stream,
-                          rmm::mr::device_memory_resource* mr);
+                          rmm::device_async_resource_ref mr);
   /**
    * @copydoc cudf::io::chunked_orc_reader::chunked_orc_reader(std::size_t, std::size_t,
-   * orc_reader_options const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+   * orc_reader_options const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
    *
    * @param sources Input `datasource` objects to read the dataset from
    */
-  explicit chunked_reader(std::size_t output_size_limit,
-                          std::size_t data_read_limit,
+  explicit chunked_reader(std::size_t chunk_read_limit,
+                          std::size_t pass_read_limit,
                           std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                           orc_reader_options const& options,
                           rmm::cuda_stream_view stream,
-                          rmm::mr::device_memory_resource* mr);
+                          rmm::device_async_resource_ref mr);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header.

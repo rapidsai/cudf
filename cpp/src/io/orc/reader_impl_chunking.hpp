@@ -29,7 +29,55 @@
 namespace cudf::io::orc::detail {
 
 /**
- * @brief Struct that store source information of an ORC streams.
+ * @brief Struct representing a range of of data offsets.
+ */
+struct range {
+  std::size_t begin{0};
+  std::size_t end{0};
+
+  [[nodiscard]] auto size() const { return end - begin; }
+};
+
+/**
+ * @brief Expand a range of ranges into a simple range of data.
+ *
+ * @param input_ranges The list of all data ranges
+ * @param selected_ranges A range of ranges from `input_ranges`
+ * @return The range of data span by the selected range of ranges
+ */
+inline range merge_selected_ranges(host_span<range const> input_ranges,
+                                   range const& selected_ranges)
+{
+  // The first and last range.
+  auto const& first_range = input_ranges[selected_ranges.begin];
+  auto const& last_range  = input_ranges[selected_ranges.end - 1];
+
+  // The range of data covered from the first to the last range.
+  return {first_range.begin, last_range.end};
+}
+
+// Store information to identify where to read a chunk of data from source.
+// Each read corresponds to one or more consecutive streams combined.
+struct stream_data_read_info {
+  uint64_t offset;         // offset in data source
+  std::size_t dst_pos;     // offset to store data in memory relative to start of raw stripe data
+  std::size_t length;      // data length to read
+  std::size_t source_idx;  // the data source id
+  std::size_t stripe_idx;  // global stripe index
+  std::size_t level;       // nested level
+};
+
+/**
+ * @brief Compression information for a stripe at a specific nested level.
+ */
+struct stripe_level_comp_info {
+  std::size_t num_compressed_blocks{0};
+  std::size_t num_uncompressed_blocks{0};
+  std::size_t total_decomp_size{0};
+};
+
+/**
+ * @brief Struct that stores source information of an ORC streams.
  */
 struct stream_source_info {
   std::size_t stripe_idx;  // global stripe id throughout all data sources
@@ -63,16 +111,9 @@ using stream_source_map =
   std::unordered_map<stream_source_info, T, stream_source_info::hash, stream_source_info::equal_to>;
 
 /**
- * @brief Struct that store information of an ORC stream.
+ * @brief Struct that stores information of an ORC stream.
  */
 struct orc_stream_info {
-  explicit orc_stream_info(uint64_t offset_,
-                           std::size_t dst_pos_,
-                           uint32_t length_,
-                           stream_source_info const& source_)
-    : offset(offset_), dst_pos(dst_pos_), length(length_), source(source_)
-  {
-  }
   // Data info:
   uint64_t offset;      // offset in data source
   std::size_t dst_pos;  // offset to store data in memory relative to start of raw stripe data
@@ -83,23 +124,6 @@ struct orc_stream_info {
 };
 
 /**
- * @brief Compression information for a stripe at a specific nested level.
- */
-struct stripe_level_comp_info {
-  std::size_t num_compressed_blocks{0};
-  std::size_t num_uncompressed_blocks{0};
-  std::size_t total_decomp_size{0};
-};
-
-/**
- * @brief Struct representing a range of data.
- */
-struct range {
-  std::size_t begin;
-  std::size_t end;
-};
-
-/**
  * @brief Struct storing intermediate processing data loaded from data sources.
  */
 struct file_intermediate_data {
@@ -107,41 +131,15 @@ struct file_intermediate_data {
   int64_t rows_to_read;
   std::vector<metadata::orc_stripe_info> selected_stripes;
 
-  // Return true if no rows or stripes to read.
-  bool has_no_data() const { return rows_to_read == 0 || selected_stripes.empty(); }
+  // Check if there is data to read.
+  bool has_data() const { return rows_to_read > 0 && !selected_stripes.empty(); }
 
-  // Store information to identify where to read a chunk of data from source.
-  // Each read corresponds to one or more consecutive streams combined.
-  struct stream_data_read_info {
-    stream_data_read_info(uint64_t offset_,
-                          std::size_t dst_pos_,
-                          std::size_t length_,
-                          std::size_t source_idx_,
-                          std::size_t stripe_idx_,
-                          std::size_t level_)
-      : offset(offset_),
-        dst_pos(dst_pos_),
-        length(length_),
-        source_idx(source_idx_),
-        stripe_idx(stripe_idx_),
-        level(level_)
-    {
-    }
-
-    uint64_t offset;         // offset in data source
-    std::size_t dst_pos;     // offset to store data in memory relative to start of raw stripe data
-    std::size_t length;      // data length to read
-    std::size_t source_idx;  // the data source id
-    std::size_t stripe_idx;  // global stripe index
-    std::size_t level;       // nested level
-  };
+  // For each stripe, we perform a number of reads for its streams.
+  // Those reads are identified by a chunk of consecutive read info stored in `data_read_info`.
+  std::vector<range> stripe_data_read_ranges;
 
   // Identify what data to read from source.
   std::vector<stream_data_read_info> data_read_info;
-
-  // For each stripe, we perform a number of read for its streams.
-  // Those reads are identified by a chunk of consecutive read info, stored in data_read_info.
-  std::vector<range> stripe_data_read_ranges;
 
   // Store the compression information for each data stream.
   stream_source_map<stripe_level_comp_info> compinfo_map;
@@ -181,35 +179,37 @@ struct chunk_read_data {
   explicit chunk_read_data(std::size_t output_size_limit_,
                            std::size_t data_read_limit_,
                            size_type output_row_granularity_)
-    : output_size_limit{output_size_limit_},
-      data_read_limit{data_read_limit_},
+    : chunk_read_limit{output_size_limit_},
+      pass_read_limit{data_read_limit_},
       output_row_granularity{output_row_granularity_}
   {
+    CUDF_EXPECTS(output_row_granularity > 0,
+                 "The value of `output_row_granularity` must be positive.");
   }
 
   std::size_t const
-    output_size_limit;  // maximum size (in bytes) of an output chunk, or 0 for no limit
-  std::size_t const data_read_limit;  // approximate maximum size (in bytes) used for store
+    chunk_read_limit;  // maximum size (in bytes) of an output chunk, or 0 for no limit
+  std::size_t const pass_read_limit;  // approximate maximum size (in bytes) used for store
                                       // intermediate data, or 0 for no limit
   size_type const output_row_granularity;
 
   // Memory limits for loading data and decoding are computed as
-  // `load/decode_limit_ratio * data_read_limit`.
-  // This is to maintain the total memory usage to be **around** the given `data_read_limit`.
+  // `*_limit_ratio * pass_read_limit`.
+  // This is to maintain the total memory usage to be **around** the given `pass_read_limit`.
   // Note that sum of these limits may not be `1.0`, and their values are set empirically.
   static double constexpr load_limit_ratio{0.25};
-  static double constexpr decode_limit_ratio{0.6};
+  static double constexpr decompress_and_decode_limit_ratio{0.6};
 
-  // Chunks of stripes that can be load into memory such that their data size is within a size
-  // limit.
+  // Chunks of stripes that can be loaded into memory such that their data size is within the user
+  // specified limit.
   std::vector<range> load_stripe_ranges;
   std::size_t curr_load_stripe_range{0};
-  bool more_stripe_to_load() const { return curr_load_stripe_range < load_stripe_ranges.size(); }
+  bool more_stripes_to_load() const { return curr_load_stripe_range < load_stripe_ranges.size(); }
 
-  // Chunks of stripes such that their decompression size is within a size limit.
+  // Chunks of stripes such that their decompression size is within the user specified size limit.
   std::vector<range> decode_stripe_ranges;
   std::size_t curr_decode_stripe_range{0};
-  bool more_stripe_to_decode() const
+  bool more_stripes_to_decode() const
   {
     return curr_decode_stripe_range < decode_stripe_ranges.size();
   }
@@ -218,7 +218,7 @@ struct chunk_read_data {
   std::vector<range> output_table_ranges;
   std::size_t curr_output_table_range{0};
   std::unique_ptr<cudf::table> decoded_table;
-  bool more_table_chunk_to_output() const
+  bool more_table_chunks_to_output() const
   {
     return curr_output_table_range < output_table_ranges.size();
   }
@@ -226,7 +226,7 @@ struct chunk_read_data {
   bool has_next() const
   {
     // Only has more chunk to output if:
-    return more_stripe_to_load() || more_stripe_to_decode() || more_table_chunk_to_output();
+    return more_stripes_to_load() || more_stripes_to_decode() || more_table_chunks_to_output();
   }
 };
 
@@ -242,16 +242,14 @@ struct cumulative_size {
  * @brief Struct to accumulate counts, sizes, and number of rows of some types such as stripes or
  * rows in tables.
  */
-struct cumulative_size_and_row {
-  std::size_t count{0};
-  std::size_t size_bytes{0};
-  std::size_t rows{0};
+struct cumulative_size_and_row : public cumulative_size {
+  std::size_t num_rows{0};
 };
 
 /**
  * @brief Functor to sum up cumulative data.
  */
-struct cumulative_size_sum {
+struct cumulative_size_plus {
   __device__ cumulative_size operator()(cumulative_size const& a, cumulative_size const& b) const
   {
     return cumulative_size{a.count + b.count, a.size_bytes + b.size_bytes};
@@ -260,7 +258,8 @@ struct cumulative_size_sum {
   __device__ cumulative_size_and_row operator()(cumulative_size_and_row const& a,
                                                 cumulative_size_and_row const& b) const
   {
-    return cumulative_size_and_row{a.count + b.count, a.size_bytes + b.size_bytes, a.rows + b.rows};
+    return cumulative_size_and_row{
+      a.count + b.count, a.size_bytes + b.size_bytes, a.num_rows + b.num_rows};
   }
 };
 
@@ -273,22 +272,13 @@ struct cumulative_size_sum {
  *
  * @param cumulative_sizes The input cumulative sizes to compute split ranges
  * @param total_count The total count in the entire input
- * @param size_limit The given soft limit to compute splits
+ * @param size_limit The given soft limit to compute splits; must be positive
  * @return A vector of ranges as splits of the input
  */
 template <typename T>
 std::vector<range> find_splits(host_span<T const> cumulative_sizes,
                                std::size_t total_count,
                                std::size_t size_limit);
-
-/**
- * @brief Expand a range of ranges into a simple range of data.
- *
- * @param input_ranges The list of all data ranges
- * @param selected_ranges A range of ranges from `input_ranges`
- * @return The range of data span by the selected range of ranges
- */
-range get_range(std::vector<range> const& input_ranges, range const& selected_ranges);
 
 /**
  * @brief Function that populates descriptors for either individual streams or chunks of column
@@ -300,7 +290,7 @@ range get_range(std::vector<range> const& input_ranges, range const& selected_ra
  * steps share most of the execution path thus this function takes mutually exclusive parameters
  * `stream_info` or `chunks` depending on each use case.
  *
- * @param stripe_order The index of the current stripe, can be global index or local decoding index
+ * @param stripe_id The index of the current stripe, can be global index or local decoding index
  * @param level The current processing nested level
  * @param stripeinfo The pointer to current stripe's information
  * @param stripefooter The pointer to current stripe's footer
@@ -315,7 +305,7 @@ range get_range(std::vector<range> const& input_ranges, range const& selected_ra
  * @return The number of bytes in the gathered streams
  */
 std::size_t gather_stream_info_and_column_desc(
-  std::size_t stripe_order,
+  std::size_t stripe_id,
   std::size_t level,
   orc::StripeInformation const* stripeinfo,
   orc::StripeFooter const* stripefooter,
@@ -325,7 +315,7 @@ std::size_t gather_stream_info_and_column_desc(
   bool apply_struct_map,
   int64_t* num_dictionary_entries,
   std::size_t* local_stream_order,
-  std::optional<std::vector<orc_stream_info>*> const& stream_info,
-  std::optional<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>*> const& chunks);
+  std::vector<orc_stream_info>* stream_info,
+  cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>* chunks);
 
 }  // namespace cudf::io::orc::detail

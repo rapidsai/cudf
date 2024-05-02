@@ -156,15 +156,16 @@ std::tuple<int64_t, int64_t, std::vector<metadata::orc_stripe_info>>
 aggregate_orc_metadata::select_stripes(
   std::vector<std::vector<size_type>> const& user_specified_stripes,
   int64_t skip_rows,
-  std::optional<size_type> const& num_rows,
+  std::optional<size_type> const& num_read_rows,
   rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS((skip_rows == 0 and not num_rows.has_value()) or user_specified_stripes.empty(),
+  CUDF_EXPECTS((skip_rows == 0 and not num_read_rows.has_value()) or user_specified_stripes.empty(),
                "Can't use both the row selection and the stripe selection");
 
   auto [rows_to_skip, rows_to_read] = [&]() {
     if (not user_specified_stripes.empty()) { return std::pair<int64_t, int64_t>{0, 0}; }
-    return cudf::io::detail::skip_rows_num_rows_from_options(skip_rows, num_rows, get_num_rows());
+    return cudf::io::detail::skip_rows_num_rows_from_options(
+      skip_rows, num_read_rows, get_num_rows());
   }();
 
   struct stripe_source_mapping {
@@ -182,6 +183,7 @@ aggregate_orc_metadata::select_stripes(
     // user_defined_stripes to get from that source file
     for (size_t src_file_idx = 0; src_file_idx < user_specified_stripes.size(); ++src_file_idx) {
       std::vector<metadata::orc_stripe_info> stripe_infos;
+      stripe_infos.reserve(user_specified_stripes[src_file_idx].size());
 
       // Coalesce stripe info at the source file later since that makes downstream processing much
       // easier in impl::read
@@ -212,6 +214,7 @@ aggregate_orc_metadata::select_stripes(
          src_file_idx < per_file_metadata.size() && count < rows_to_skip + rows_to_read;
          ++src_file_idx) {
       std::vector<metadata::orc_stripe_info> stripe_infos;
+      stripe_infos.reserve(per_file_metadata[src_file_idx].ff.stripes.size());
 
       for (size_t stripe_idx = 0; stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size() &&
                                   count < rows_to_skip + rows_to_read;
@@ -264,7 +267,9 @@ aggregate_orc_metadata::select_stripes(
       if (stripe->indexLength == 0) { row_grp_idx_present = false; }
     }
 
-    output.insert(output.end(), mapping.stripe_info.begin(), mapping.stripe_info.end());
+    output.insert(output.end(),
+                  std::make_move_iterator(mapping.stripe_info.begin()),
+                  std::make_move_iterator(mapping.stripe_info.end()));
   }
 
   return {rows_to_skip, rows_to_read, std::move(output)};
