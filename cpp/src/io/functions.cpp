@@ -420,7 +420,7 @@ table_with_metadata read_orc(orc_reader_options const& options,
 
   auto datasources = make_datasources(options.get_source());
   auto reader = std::make_unique<orc::detail::reader>(std::move(datasources), options, stream, mr);
-  return reader->read(options);
+  return reader->read();
 }
 
 /**
@@ -438,6 +438,64 @@ void write_orc(orc_writer_options const& options, rmm::cuda_stream_view stream)
   auto writer = std::make_unique<orc::detail::writer>(
     std::move(sinks[0]), options, io_detail::single_write_mode::YES, stream);
   writer->write(options.get_table());
+}
+
+chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
+                                       std::size_t pass_read_limit,
+                                       size_type output_row_granularity,
+                                       orc_reader_options const& options,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+  : reader{std::make_unique<orc::detail::chunked_reader>(chunk_read_limit,
+                                                         pass_read_limit,
+                                                         output_row_granularity,
+                                                         make_datasources(options.get_source()),
+                                                         options,
+                                                         stream,
+                                                         mr)}
+{
+}
+
+chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
+                                       std::size_t pass_read_limit,
+                                       orc_reader_options const& options,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+  : reader{std::make_unique<orc::detail::chunked_reader>(chunk_read_limit,
+                                                         pass_read_limit,
+                                                         make_datasources(options.get_source()),
+                                                         options,
+                                                         stream,
+                                                         mr)}
+{
+}
+
+chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
+                                       orc_reader_options const& options,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+  : chunked_orc_reader(chunk_read_limit, 0UL, options, stream, mr)
+{
+}
+
+// This destructor destroys the internal reader instance.
+// Since the declaration of the internal `reader` object does not exist in the header, this
+// destructor needs to be defined in a separate source file which can access to that object's
+// declaration.
+chunked_orc_reader::~chunked_orc_reader() = default;
+
+bool chunked_orc_reader::has_next() const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
+  return reader->has_next();
+}
+
+table_with_metadata chunked_orc_reader::read_chunk() const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
+  return reader->read_chunk();
 }
 
 /**

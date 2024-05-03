@@ -77,9 +77,9 @@ TEST_F(DictionarySearchTest, Errors)
 {
   cudf::test::dictionary_column_wrapper<int64_t> dictionary({1, 2, 3});
   cudf::numeric_scalar<double> key(7);
-  EXPECT_THROW(cudf::dictionary::get_index(dictionary, key), cudf::logic_error);
+  EXPECT_THROW(cudf::dictionary::get_index(dictionary, key), cudf::data_type_error);
   EXPECT_THROW(
     cudf::dictionary::detail::get_insert_index(
       dictionary, key, cudf::get_default_stream(), rmm::mr::get_current_device_resource()),
-    cudf::logic_error);
+    cudf::data_type_error);
 }
