@@ -9,52 +9,126 @@ import cudf._lib.pylibcudf as plc
 from cudf._lib.scalar import DeviceScalar
 
 
-@pytest.fixture()
-def plc_col():
-    data = pa.array(
-        ["AbC", "de", "FGHI", "j", "kLm", "nOPq", None, "RsT", None, "uVw"]
+@pytest.fixture
+def pa_data_col():
+    return pa.array(
+        [
+            "abc123",
+            "ABC123",
+            "aBc123",
+            "",
+            " ",
+            None,
+            "a",
+            None,
+            "abc123",
+            "ABC123",
+            "aBc123",
+            "",
+            " ",
+            None,
+            "a",
+            None,
+            "abc123",
+            "ABC123",
+            "aBc123",
+            "",
+            " ",
+            None,
+            "a",
+            None,
+            "abc123",
+            "ABC123",
+            "aBc123",
+            "",
+            " ",
+            None,
+            "a",
+            None,
+            "abc123",
+            "ABC123",
+            "aBc123",
+            "",
+            " ",
+            None,
+            "a",
+            None,
+        ]
     )
-    return plc.interop.from_arrow(data)
 
 
 @pytest.fixture
-def find_target_column():
-    return plc.interop.from_arrow(
-        pa.array(["A", "d", "F", "j", "k", "n", None, "R", None, "u"])
+def plc_data_col(pa_data_col):
+    return plc.interop.from_arrow(pa_data_col)
+
+
+@pytest.fixture
+def pa_target_col():
+    return pa.array(
+        [
+            "a",
+            "B",
+            "x",
+            "1",
+            " ",
+            "a",
+            None,
+            None,  # find
+            "a",
+            "B",
+            "x",
+            "1",
+            " ",
+            "a",
+            None,
+            None,  # rfind
+            "ab",
+            "12",
+            "BC",
+            "",
+            " ",
+            "a",
+            None,
+            None,  # contains
+            "ab",
+            "ABC",
+            "AB",
+            "",
+            " ",
+            "a",
+            None,
+            None,  # starts_with
+            "3",
+            "23",
+            "a23",
+            "",
+            " ",
+            "a",
+            None,
+            None,  # ends_with
+        ]
     )
 
 
 @pytest.fixture
-def contains_target_column():
-    return plc.interop.from_arrow(
-        pa.array(["a", "d", "F", "j", "m", "q", None, "R", None, "w"])
-    )
+def plc_target_col(pa_target_col):
+    return plc.interop.from_arrow(pa_target_col)
 
 
-@pytest.fixture
-def starts_with_target_column():
-    return plc.interop.from_arrow(
-        pa.array(["A", "d", "F", "j", "k", "n", None, "R", None, "u"])
-    )
+@pytest.fixture(params=["a", " ", "A", "Ab", "23"])
+def plc_target_scalar(request):
+    return plc.interop.from_arrow(pa.scalar(request.param, type=pa.string()))
 
 
-@pytest.fixture
-def ends_with_target_column():
-    return plc.interop.from_arrow(
-        pa.array(["C", "e", "I", "j", "m", "q", None, "T", None, "w"])
-    )
-
-
-@pytest.mark.parametrize("target", ["a", ""])
-def test_find(plc_col, target):
-    got = plc.strings.find.find(
-        plc_col, DeviceScalar(target, dtype=np.dtype("object")).c_value, 0, -1
-    )
+def test_find(pa_data_col, plc_data_col, plc_target_scalar):
+    got = plc.strings.find.find(plc_data_col, plc_target_scalar, 0, -1)
 
     expected = pa.array(
         [
-            elem.find(target) if elem is not None else None
-            for elem in plc.interop.to_arrow(plc_col).to_pylist()
+            elem.find(plc.interop.to_arrow(plc_target_scalar).as_py())
+            if elem is not None
+            else None
+            for elem in pa_data_col.to_pylist()
         ],
         type=pa.int32(),
     )
@@ -62,19 +136,19 @@ def test_find(plc_col, target):
     assert_column_eq(got, expected)
 
 
-def test_find_column(plc_col, find_target_column):
+def test_find_column(pa_data_col, pa_target_col, plc_data_col, plc_target_col):
     expected = pa.array(
         [
-            elem.find(target) if elem is not None else None
+            elem.find(target) if not (elem is None or target is None) else None
             for elem, target in zip(
-                plc.interop.to_arrow(plc_col).to_pylist(),
-                plc.interop.to_arrow(find_target_column).to_pylist(),
+                pa_data_col.to_pylist(),
+                pa_target_col.to_pylist(),
             )
         ],
         type=pa.int32(),
     )
 
-    got = plc.strings.find.find(plc_col, find_target_column, 0)
+    got = plc.strings.find.find(plc_data_col, plc_target_col, 0)
     assert_column_eq(got, expected)
 
 
