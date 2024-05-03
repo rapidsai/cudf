@@ -535,7 +535,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   while (s->error == 0 && processed_count < s->page.num_input_values) {
     int next_valid_count;
 
-    // only need to process definition levels if the column has nulls  
+    // only need to process definition levels if the column has nulls
     if (nullable_with_nulls) {
       processed_count += def_decoder.decode_next(t);
       __syncthreads();
