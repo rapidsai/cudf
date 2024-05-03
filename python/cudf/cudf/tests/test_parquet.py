@@ -3230,7 +3230,8 @@ def test_parquet_reader_roundtrip_with_arrow_schema():
         {
             "int64": cudf.Series([1234, 123, 4123], dtype="int64"),
             "list": list([[1, 2], [1, 2], [1, 2]]),
-            "time": cudf.Series([1234, 123, 4123], dtype="datetime64[ms]"),
+            "datetime": cudf.Series([1234, 123, 4123], dtype="datetime64[ms]"),
+            "map": cudf.Series(['cat', 'dog', 'cow']).map({'cat': 'kitten', 'dog': 'puppy', 'cow':'calf'})
         }
     )
 
