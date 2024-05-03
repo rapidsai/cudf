@@ -59,14 +59,10 @@ def _binaryop(self, other, op: str):
     Must be overridden by subclasses, the default implementation raises a
     NotImplementedError.
     """
-    if op == "__eq__":
+    if op in {"__eq__", "__ne__"}:
+        op_string = "==" if op == "__eq__" else "!="
         raise TypeError(
-            "'==' not supported between instances of "
-            f"'{type(self).__name__}' and '{type(other).__name__}'"
-        )
-    if op == "__ne__":
-        raise TypeError(
-            "'!=' not supported between instances of "
+            f"'{op_string}' not supported between instances of "
             f"'{type(self).__name__}' and '{type(other).__name__}'"
         )
     raise NotImplementedError()

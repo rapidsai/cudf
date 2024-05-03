@@ -1572,9 +1572,6 @@ class Frame(BinaryOperand, Scannable):
                 else:
                     assert False, "At least one operand must be a column."
 
-            # TODO: Disable logical and binary operators between columns that
-            # are not numerical using the new binops mixin.
-
             outcol = (
                 getattr(operator, fn)(right_column, left_column)
                 if reflect

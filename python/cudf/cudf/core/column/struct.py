@@ -8,8 +8,9 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf._typing import Dtype
-from cudf.core.column import ColumnBase
+import cudf._lib as libcudf
+from cudf._typing import ColumnBinaryOperand, Dtype
+from cudf.core.column import ColumnBase, as_column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
 from cudf.core.missing import NA
@@ -25,6 +26,7 @@ class StructColumn(ColumnBase):
     """
 
     dtype: StructDtype
+    _VALID_BINARY_OPERATIONS = {"__eq__", "__ne__"}
 
     @property
     def base_size(self):
@@ -32,6 +34,29 @@ class StructColumn(ColumnBase):
             return len(self.base_children[0])
         else:
             return self.size + self.offset
+
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
+        reflect, op = self._check_reflected_op(op)
+
+        normalized_other = self._wrap_binop_normalization(other)
+        if normalized_other is NotImplemented:
+            if op in {"__eq__", "__ne__"} and isinstance(other, ColumnBase):
+                return as_column(
+                    op != "__eq__", length=len(self), dtype="bool"
+                )
+            return NotImplemented
+        other = normalized_other
+
+        lhs, rhs = (other, self) if reflect else (self, other)
+
+        if op in {"__eq__", "__ne__"}:
+            return libcudf.binaryop.binaryop(
+                lhs=lhs, rhs=rhs, op=op, dtype="bool"
+            )
+        raise TypeError(
+            f"'{op}' not supported between instances of "
+            f"'{type(self).__name__}' and '{type(other).__name__}'"
+        )
 
     def to_arrow(self):
         children = [

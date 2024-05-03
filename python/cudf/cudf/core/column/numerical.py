@@ -217,9 +217,12 @@ class NumericalColumn(NumericalBaseColumn):
         if normalized_other is NotImplemented:
             # Non-numerical columns cannot be compared to numerical columns,
             # but are expected to return all False values for equality and all
-            # True values for inequality.
-            if op in {"__eq__", "__ne__"} and not isinstance(
-                other, NumericalBaseColumn
+            # True values for inequality. We have to exclude
+            # NumericalBaseColumn to ensure that decimal columns pass through.
+            if (
+                op in {"__eq__", "__ne__"}
+                and not isinstance(other, NumericalBaseColumn)
+                and isinstance(other, ColumnBase)
             ):
                 return as_column(
                     op != "__eq__", length=len(self), dtype="bool"
