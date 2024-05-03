@@ -152,16 +152,17 @@ def test_find_column(pa_data_col, pa_target_col, plc_data_col, plc_target_col):
     assert_column_eq(got, expected)
 
 
-@pytest.mark.parametrize("target", ["a", ""])
-def test_rfind(plc_col, target):
-    got = plc.strings.find.rfind(
-        plc_col, DeviceScalar(target, dtype=np.dtype("object")).c_value, 0, -1
-    )
+def test_rfind(pa_data_col, plc_data_col, plc_target_scalar):
+    py_target = plc.interop.to_arrow(plc_target_scalar).as_py()
+
+    got = plc.strings.find.rfind(plc_data_col, plc_target_scalar, 0, -1)
 
     expected = pa.array(
         [
-            elem.rfind(target) if elem is not None else None
-            for elem in plc.interop.to_arrow(plc_col).to_pylist()
+            elem.rfind(py_target)
+            if not (elem is None or py_target is None)
+            else None
+            for elem in pa_data_col.to_pylist()
         ],
         type=pa.int32(),
     )
