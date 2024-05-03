@@ -7,7 +7,7 @@ from utils import assert_column_eq
 import cudf._lib.pylibcudf as plc
 
 
-@pytest.fixture
+@pytest.fixture()
 def pa_data_col():
     return pa.array(
         [
@@ -55,12 +55,12 @@ def pa_data_col():
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def plc_data_col(pa_data_col):
     return plc.interop.from_arrow(pa_data_col)
 
 
-@pytest.fixture
+@pytest.fixture()
 def pa_target_col():
     return pa.array(
         [
@@ -108,7 +108,7 @@ def pa_target_col():
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 def plc_target_col(pa_target_col):
     return plc.interop.from_arrow(pa_target_col)
 
