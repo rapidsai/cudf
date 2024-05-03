@@ -656,16 +656,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     int next_valid_count;
 
     // only need to process definition levels if this is a nullable column
-    if (nullable) {
-      if (nullable_with_nulls) {
-        processed_count += def_decoder.decode_next(t);
-        __syncthreads();
-      } else {
-        processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
-      }
+    if (nullable_with_nulls) {
+      processed_count += def_decoder.decode_next(t);
+      __syncthreads();
 
-      next_valid_count = gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(
-        processed_count, s, sb, def, t, nullable_with_nulls);
+      next_valid_count =
+        gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(processed_count, s, sb, def, t);
     }
     // if we wanted to split off the skip_rows/num_rows case into a separate kernel, we could skip
     // this function call entirely since all it will ever generate is a mapping of (i -> i) for
@@ -673,7 +669,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     else {
       processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
       next_valid_count = gpuUpdateValidityOffsetsAndRowIndicesFlat<false, level_t>(
-        processed_count, s, sb, nullptr, t, false);
+        processed_count, s, sb, nullptr, t);
     }
     __syncthreads();
 
