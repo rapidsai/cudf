@@ -3036,8 +3036,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # First process the condition.
         if isinstance(cond, Series):
-            cond = self._from_data_like_self(
-                {name: cond._column for name in self._column_names},
+            cond = self._from_data(
+                self._data._from_columns_like_self(
+                    itertools.repeat(cond._column, len(self._column_names)),
+                    verify=False,
+                )
             )
         elif hasattr(cond, "__cuda_array_interface__"):
             cond = DataFrame(
@@ -3078,7 +3081,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 should be equal to number of columns of self"""
             )
 
-        out = {}
+        out = []
         for (name, col), other_col in zip(self._data.items(), other_cols):
             col, other_col = _check_and_cast_columns_with_other(
                 source_col=col,
@@ -3091,16 +3094,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     col, other_col, cond_col
                 )
 
-                out[name] = _make_categorical_like(result, self._data[name])
+                out.append(_make_categorical_like(result, self._data[name]))
             else:
                 out_mask = cudf._lib.null_mask.create_null_mask(
                     len(col),
                     state=cudf._lib.null_mask.MaskState.ALL_NULL,
                 )
-                out[name] = col.set_mask(out_mask)
+                out.append(col.set_mask(out_mask))
 
         return self._mimic_inplace(
-            self._from_data_like_self(out), inplace=inplace
+            self._from_data_like_self(self._data._from_columns_like_self(out)),
+            inplace=inplace,
         )
 
     @docutils.doc_apply(
