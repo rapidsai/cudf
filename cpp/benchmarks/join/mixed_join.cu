@@ -127,33 +127,35 @@ void nvbench_mixed_left_anti_join(nvbench::state& state,
 }
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_inner_join,
-                    NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
+                    NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
   .set_name("mixed_inner_join")
   .set_type_axes_names({"Key", "Nullable"})
   .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_table_size", JOIN_SIZE_RANGE);
 
-NVBENCH_BENCH_TYPES(nvbench_mixed_left_join, NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
+NVBENCH_BENCH_TYPES(nvbench_mixed_left_join,
+                    NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
   .set_name("mixed_left_join")
   .set_type_axes_names({"Key", "Nullable"})
   .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_table_size", JOIN_SIZE_RANGE);
 
-NVBENCH_BENCH_TYPES(nvbench_mixed_full_join, NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
+NVBENCH_BENCH_TYPES(nvbench_mixed_full_join,
+                    NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
   .set_name("mixed_full_join")
   .set_type_axes_names({"Key", "Nullable"})
   .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_table_size", JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_left_semi_join,
-                    NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
+                    NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
   .set_name("mixed_left_semi_join")
   .set_type_axes_names({"Key", "Nullable"})
   .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_table_size", JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_left_anti_join,
-                    NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
+                    NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
   .set_name("mixed_left_anti_join")
   .set_type_axes_names({"Key", "Nullable"})
   .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
