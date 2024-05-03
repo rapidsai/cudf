@@ -7,6 +7,21 @@ import pickle
 import sys
 
 import pandas as pd
+from pandas.tseries.holiday import (
+    AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
+    EasterMonday as pd_EasterMonday,
+    GoodFriday as pd_GoodFriday,
+    Holiday as pd_Holiday,
+    HolidayCalendarFactory as pd_HolidayCalendarFactory,
+    HolidayCalendarMetaClass as pd_HolidayCalendarMetaClass,
+    USColumbusDay as pd_USColumbusDay,
+    USFederalHolidayCalendar as pd_USFederalHolidayCalendar,
+    USLaborDay as pd_USLaborDay,
+    USMartinLutherKingJr as pd_USMartinLutherKingJr,
+    USMemorialDay as pd_USMemorialDay,
+    USPresidentsDay as pd_USPresidentsDay,
+    USThanksgivingDay as pd_USThanksgivingDay,
+)
 
 import cudf
 
@@ -364,6 +379,7 @@ PeriodArray = make_final_proxy_type(
     additional_attributes={
         "_data": _FastSlowAttribute("_data"),
         "_mask": _FastSlowAttribute("_mask"),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
 
@@ -1171,6 +1187,135 @@ Minute = make_final_proxy_type(
 )
 
 
+USFederalHolidayCalendar = make_final_proxy_type(
+    "USFederalHolidayCalendar",
+    _Unusable,
+    pd_USFederalHolidayCalendar,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+HolidayCalendarMetaClass = make_final_proxy_type(
+    "HolidayCalendarMetaClass",
+    _Unusable,
+    pd_HolidayCalendarMetaClass,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+
+@register_proxy_func(pd_HolidayCalendarFactory)
+def holiday_calendar_factory_wrapper(*args, **kwargs):
+    # Call the original HolidayCalendarFactory
+    result = _FunctionProxy(_Unusable(), pd_HolidayCalendarFactory)(
+        *args, **kwargs
+    )
+    # Return the slow proxy of the result
+    return result._fsproxy_slow
+
+
+# HolidayCalendarFactory = holiday_calendar_factory_wrapper
+# def customnew__(cls, clsname: str, bases, attrs):
+#     import pdb;pdb.set_trace()
+#     calendar_class = super().__new__(cls, clsname, bases, attrs)
+#     pd_register(calendar_class)
+#     return calendar_class
+
+AbstractHolidayCalendar = make_final_proxy_type(
+    "AbstractHolidayCalendar",
+    _Unusable,
+    pd_AbstractHolidayCalendar,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    # bases=(HolidayCalendarMetaClass,),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    meta_class=pd_HolidayCalendarMetaClass,
+)
+
+Holiday = make_final_proxy_type(
+    "Holiday",
+    _Unusable,
+    pd_Holiday,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+USThanksgivingDay = make_final_proxy_type(
+    "USThanksgivingDay",
+    _Unusable,
+    pd_USThanksgivingDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+USColumbusDay = make_final_proxy_type(
+    "USColumbusDay",
+    _Unusable,
+    pd_USColumbusDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+USLaborDay = make_final_proxy_type(
+    "USLaborDay",
+    _Unusable,
+    pd_USLaborDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+USMemorialDay = make_final_proxy_type(
+    "USMemorialDay",
+    _Unusable,
+    pd_USMemorialDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+USMartinLutherKingJr = make_final_proxy_type(
+    "USMartinLutherKingJr",
+    _Unusable,
+    pd_USMartinLutherKingJr,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+USPresidentsDay = make_final_proxy_type(
+    "USPresidentsDay",
+    _Unusable,
+    pd_USPresidentsDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+
+GoodFriday = make_final_proxy_type(
+    "GoodFriday",
+    _Unusable,
+    pd_GoodFriday,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+EasterMonday = make_final_proxy_type(
+    "GoodFriday",
+    _Unusable,
+    pd_EasterMonday,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+
 def Timestamp__new__(cls, *args, **kwargs):
     # Call fast/slow constructor
     # This takes care of running __init__ as well, but must be paired
@@ -1213,6 +1358,10 @@ Timestamp = make_final_proxy_type(
         "__init__": _DELETE,
     },
 )
+# class Timestamp(datetime, _Timestamp):
+#     pass
+
+# Timestamp.__bases__ = Timestamp.__bases__ + (datetime, )
 
 MonthBegin = make_final_proxy_type(
     "MonthBegin",

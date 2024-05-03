@@ -23,7 +23,6 @@ set -euo pipefail
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
 PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
---ignore=tests/indexes/test_indexing.py \
 --ignore=tests/frame/test_reductions.py"
 
 mkdir -p pandas-testing

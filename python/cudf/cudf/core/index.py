@@ -350,6 +350,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def __contains__(self, item):
+        hash(item)
         if isinstance(item, bool) or not isinstance(
             item,
             tuple(
@@ -1246,7 +1247,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         result = as_column(
             -1,
             length=len(needle),
-            dtype=libcudf.types.size_type_dtype,
+            dtype=libcudf.types.size_type_dtype
+            if not cudf.get_option("cudf.pandas_compatible")
+            else np.dtype("int64"),
         )
 
         if not len(self):
@@ -1522,6 +1525,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return self._column.values
 
     def __contains__(self, item):
+        hash(item)
         return item in self._values
 
     def _clean_nulls_from_index(self):
