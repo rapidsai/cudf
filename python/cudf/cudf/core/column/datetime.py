@@ -751,7 +751,9 @@ class DatetimeColumn(column.ColumnBase):
 
         if tz is None:
             return self.copy()
-        ambiguous, nonexistent = check_ambiguous_and_nonexistent(ambiguous, nonexistent)
+        ambiguous, nonexistent = check_ambiguous_and_nonexistent(
+            ambiguous, nonexistent
+        )
         dtype = pd.DatetimeTZDtype(self.time_unit, tz)
         ambiguous_col, nonexistent_col = self._find_ambiguous_and_nonexistent(
             tz
@@ -886,7 +888,9 @@ class DatetimeTZColumn(DatetimeColumn):
 
         if tz is None:
             return self._local_time
-        ambiguous, nonexistent = check_ambiguous_and_nonexistent(ambiguous, nonexistent)
+        ambiguous, nonexistent = check_ambiguous_and_nonexistent(
+            ambiguous, nonexistent
+        )
         raise ValueError(
             "Already localized. "
             "Use `tz_convert` to convert between time zones."
