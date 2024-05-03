@@ -40,6 +40,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -278,8 +279,9 @@ size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
     return size_of(column.type()) * column.size();
   } else if (column.type().id() == type_id::STRING) {
     auto const scol = strings_column_view(column);
-    return cudf::detail::get_value<size_type>(scol.offsets(), column.size(), stream) -
-           cudf::detail::get_value<size_type>(scol.offsets(), 0, stream);
+    return cudf::strings::detail::get_offset_value(
+             scol.offsets(), column.size() + column.offset(), stream) -
+           cudf::strings::detail::get_offset_value(scol.offsets(), column.offset(), stream);
   } else if (column.type().id() == type_id::STRUCT) {
     auto const scol = structs_column_view(column);
     size_t ret      = 0;
