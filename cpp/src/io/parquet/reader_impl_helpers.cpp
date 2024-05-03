@@ -609,8 +609,15 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
               })) {
           return false;
         }
-
-        schema_elem.children = std::move(schema_children);
+        switch (field->type_type()) {
+          case flatbuf::Type::Type_List:
+          case flatbuf::Type::Type_LargeList:
+          case flatbuf::Type::Type_FixedSizeList:
+            schema_elem.children.emplace_back(arrow_schema_data_types{});
+            schema_elem.children.back().children = std::move(schema_children);
+            break;
+          default: schema_elem.children = std::move(schema_children); break;
+        }
       }
 
       // Walk the field itself
