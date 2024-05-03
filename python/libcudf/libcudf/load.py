@@ -29,23 +29,13 @@ def load_library():
     try:
         libcudf_lib = ctypes.CDLL("libcudf.so", ctypes.RTLD_GLOBAL)
     except OSError:
-        this_dir = os.path.dirname(__file__)
-        lib_dir = os.path.join(this_dir, "lib")
-        lib64_dir = os.path.join(this_dir, "lib64")
-        for real_lib_dir in (lib_dir, lib64_dir):
-            if os.path.isdir(real_lib_dir):
-                break
-        else:
-            real_lib_dir = None
-
-        # If neither directory was found in the wheel, we assume we are in an
+        # If neither of these directories contain the library, we assume we are in an
         # environment where the C++ library is already installed somewhere else and the
         # CMake build of the libcudf Python package was a no-op.
-        if real_lib_dir is not None:
-            libcudf_lib = ctypes.CDLL(
-                os.path.join(real_lib_dir, "libcudf.so"),
-                ctypes.RTLD_GLOBAL,
-            )
+        for lib_dir in ("lib", "lib64"):
+            if os.path.isfile(lib := os.path.join(lib_dir, "libcudf.so")):
+                libcudf_lib = ctypes.CDLL(lib, ctypes.RTLD_GLOBAL)
+                break
 
     # The caller almost never needs to do anything with this library, but no
     # harm in offering the option since this object at least provides a handle
