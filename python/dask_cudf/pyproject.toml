@@ -107,3 +107,13 @@ skip = [
     "build",
     "dist",
 ]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "error::FutureWarning",
+    "error::DeprecationWarning",
+    "ignore:create_block_manager_from_blocks is deprecated and will be removed in a future version. Use public APIs instead.:DeprecationWarning",
+    # https://github.com/dask/partd/blob/main/partd/pandas.py#L198
+    "ignore:Passing a BlockManager to DataFrame is deprecated and will raise in a future version. Use public APIs instead.:DeprecationWarning",
+    "ignore:String support for `aggregate_files` is experimental. Behavior may change in the future.:FutureWarning:dask",
+]

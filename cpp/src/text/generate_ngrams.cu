@@ -22,7 +22,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -57,8 +57,9 @@ struct ngram_generator_fn {
   cudf::column_device_view const d_strings;
   cudf::size_type ngrams;
   cudf::string_view const d_separator;
-  cudf::size_type* d_offsets{};
+  cudf::size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   /**
    * @brief Build ngram for each string.
@@ -81,7 +82,7 @@ struct ngram_generator_fn {
       bytes += d_separator.size_bytes();
       if (out_ptr) out_ptr = cudf::strings::detail::copy_string(out_ptr, d_separator);
     }
-    if (!d_chars) d_offsets[idx] = bytes;
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 
@@ -141,7 +142,7 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
   // compute the number of strings of ngrams
   auto const ngrams_count = strings_count - ngrams + 1;
 
-  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
     ngram_generator_fn{d_strings, ngrams, d_separator}, ngrams_count, stream, mr);
 
   // make the output strings column from the offsets and chars column
@@ -175,8 +176,9 @@ struct character_ngram_generator_fn {
   cudf::column_device_view const d_strings;
   cudf::size_type ngrams;
   cudf::size_type const* d_ngram_offsets{};
-  cudf::size_type* d_offsets{};
+  cudf::size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(cudf::size_type idx)
   {
@@ -186,8 +188,8 @@ struct character_ngram_generator_fn {
     auto itr                = d_str.begin();
     auto const ngram_offset = d_ngram_offsets[idx];
     auto const ngram_count  = d_ngram_offsets[idx + 1] - ngram_offset;
-    auto d_sizes            = d_offsets + ngram_offset;
-    auto out_ptr            = d_chars ? d_chars + *d_sizes : nullptr;
+    auto d_output_sizes     = d_sizes + ngram_offset;
+    auto out_ptr            = d_chars ? d_chars + d_offsets[ngram_offset] : nullptr;
     for (cudf::size_type n = 0; n < ngram_count; ++n, ++itr) {
       auto const begin = itr.byte_offset();
       auto const end   = (itr + ngrams).byte_offset();
@@ -195,7 +197,7 @@ struct character_ngram_generator_fn {
         out_ptr =
           cudf::strings::detail::copy_and_increment(out_ptr, d_str.data() + begin, (end - begin));
       } else {
-        *d_sizes++ = end - begin;
+        *d_output_sizes++ = end - begin;
       }
     }
   }
@@ -233,7 +235,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                "Insufficient number of characters in each string to generate ngrams");
 
   character_ngram_generator_fn generator{*d_strings, ngrams, d_offsets};
-  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
     generator, strings_count, total_ngrams, stream, mr);
 
   auto output = cudf::make_strings_column(
