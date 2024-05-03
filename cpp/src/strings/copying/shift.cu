@@ -19,8 +19,8 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/strings/detail/copying.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -104,8 +104,8 @@ std::unique_ptr<column> shift(strings_column_view const& input,
   auto const d_input = column_device_view::create(input.parent(), stream);
   auto sizes_itr     = cudf::detail::make_counting_transform_iterator(
     0, output_sizes_fn{*d_input, d_fill_str, offset});
-  auto [offsets_column, total_bytes] =
-    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + input.size(), stream, mr);
+  auto [offsets_column, total_bytes] = cudf::strings::detail::make_offsets_child_column(
+    sizes_itr, sizes_itr + input.size(), stream, mr);
   auto offsets_view = offsets_column->view();
 
   // compute the shift-offset for the output characters child column
