@@ -390,22 +390,13 @@ CUDF_KERNEL void multi_contains_warp_parallel_fn(column_device_view const d_stri
   auto const str_idx    = (idx / cudf::detail::warp_size) / num_targets;
   auto const target_idx = (idx / cudf::detail::warp_size) % num_targets;
 
-  if (d_strings.is_null(str_idx)) {
-    d_results[target_idx][str_idx] = false; // Will be considered `null` because of the bitmask.
-    return;
-  }
+  if (d_strings.is_null(str_idx)) { return; }
 
   // Identify the target.
   auto const d_target = d_targets[target_idx];
 
   // get the string for this warp
   auto const d_str = d_strings.element<string_view>(str_idx);
-
-  if (d_target.size_bytes() > d_str.size_bytes()) {
-      d_results[target_idx][str_idx] = false; // The target can't possibly fit in the input string.
-      return;
-  }
-
   // each thread of the warp will check just part of the string
   auto found = false;
   for (auto i = static_cast<size_type>(idx % cudf::detail::warp_size);
@@ -472,7 +463,7 @@ std::vector<std::unique_ptr<column>> multi_contains_warp_parallel(
     targets.begin(), targets.end(), host_device_targets.begin(), [&](auto const& target) {
       return string_view{target.get().data(), target.get().size()};
     });
-  host_device_targets.host_to_device_async(stream);
+  host_device_targets.host_to_device_sync(stream);
 
   // Create output columns.
   auto const results_iter =
@@ -483,6 +474,11 @@ std::vector<std::unique_ptr<column>> multi_contains_warp_parallel(
                                              input.null_count(),
                                              stream,
                                              mr);
+      auto bool_column_view = bool_column->mutable_view();
+      thrust::fill(rmm::exec_policy(stream),
+                   bool_column_view.begin<bool>(),
+                   bool_column_view.end<bool>(),
+                   target.get().size() == 0);
       return bool_column;
     });
   auto results_list =
@@ -494,7 +490,7 @@ std::vector<std::unique_ptr<column>> multi_contains_warp_parallel(
                  [&](auto const& results_column) {
                    return results_column->mutable_view().template data<bool>();
                  });
-  host_device_results_list.host_to_device_async(stream);
+  host_device_results_list.host_to_device_sync(stream);
 
   constexpr int block_size = 256;
   // launch warp per string
