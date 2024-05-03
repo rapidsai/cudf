@@ -1,12 +1,10 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-import numpy as np
 import pyarrow as pa
 import pytest
 from utils import assert_column_eq
 
 import cudf._lib.pylibcudf as plc
-from cudf._lib.scalar import DeviceScalar
 
 
 @pytest.fixture
@@ -170,15 +168,16 @@ def test_rfind(pa_data_col, plc_data_col, plc_target_scalar):
     assert_column_eq(got, expected)
 
 
-@pytest.mark.parametrize("target", ["a", "aB", "Ab", ""])
-def test_contains(plc_col, target):
-    got = plc.strings.find.contains(
-        plc_col, DeviceScalar(target, dtype=np.dtype("object")).c_value
-    )
+def test_contains(pa_data_col, plc_data_col, plc_target_scalar):
+    py_target = plc.interop.to_arrow(plc_target_scalar).as_py()
+
+    got = plc.strings.find.contains(plc_data_col, plc_target_scalar)
     expected = pa.array(
         [
-            target in elem if elem is not None else None
-            for elem in plc.interop.to_arrow(plc_col).to_pylist()
+            py_target in elem
+            if not (elem is None or py_target is None)
+            else None
+            for elem in pa_data_col.to_pylist()
         ],
         type=pa.bool_(),
     )
@@ -186,67 +185,93 @@ def test_contains(plc_col, target):
     assert_column_eq(got, expected)
 
 
-def test_contains_column(plc_col, contains_target_column):
+def test_contains_column(
+    pa_data_col, pa_target_col, plc_data_col, plc_target_col
+):
+    def libcudf_logic(st, target):
+        if st is None:
+            return None
+        elif target is None:
+            return False
+        else:
+            return target in st
+
     expected = pa.array(
         [
-            target in elem if elem is not None else None
+            libcudf_logic(elem, target)
             for elem, target in zip(
-                plc.interop.to_arrow(plc_col).to_pylist(),
-                plc.interop.to_arrow(contains_target_column).to_pylist(),
+                pa_data_col.to_pylist(),
+                pa_target_col.to_pylist(),
             )
         ],
         type=pa.bool_(),
     )
 
-    got = plc.strings.find.contains(plc_col, contains_target_column)
+    got = plc.strings.find.contains(plc_data_col, plc_target_col)
     assert_column_eq(got, expected)
 
 
-@pytest.mark.parametrize("target", ["A", "", "Ab"])
-def test_starts_with(plc_col, target):
-    got = plc.strings.find.starts_with(
-        plc_col, DeviceScalar(target, dtype=np.dtype("object")).c_value
-    )
-    expected = pa.compute.starts_with(plc.interop.to_arrow(plc_col), target)
+def test_starts_with(pa_data_col, plc_data_col, plc_target_scalar):
+    py_target = plc.interop.to_arrow(plc_target_scalar).as_py()
+    got = plc.strings.find.starts_with(plc_data_col, plc_target_scalar)
+    expected = pa.compute.starts_with(pa_data_col, py_target)
     assert_column_eq(got, expected)
 
 
-def test_starts_with_column(plc_col, starts_with_target_column):
+def test_starts_with_column(
+    pa_data_col, pa_target_col, plc_data_col, plc_target_col
+):
+    def libcudf_logic(st, target):
+        if st is None:
+            return None
+        elif target is None:
+            return False
+        else:
+            return st.startswith(target)
+
     expected = pa.array(
         [
-            elem.startswith(target) if elem is not None else None
+            libcudf_logic(elem, target)
             for elem, target in zip(
-                plc.interop.to_arrow(plc_col).to_pylist(),
-                plc.interop.to_arrow(starts_with_target_column).to_pylist(),
+                pa_data_col.to_pylist(),
+                pa_target_col.to_pylist(),
             )
         ],
         type=pa.bool_(),
     )
 
-    got = plc.strings.find.starts_with(plc_col, starts_with_target_column)
+    got = plc.strings.find.starts_with(plc_data_col, plc_target_col)
     assert_column_eq(got, expected)
 
 
-@pytest.mark.parametrize("target", ["C", "bC", "BC", ""])
-def test_ends_with(plc_col, target):
-    got = plc.strings.find.ends_with(
-        plc_col, DeviceScalar(target, dtype=np.dtype("object")).c_value
-    )
-    expected = pa.compute.ends_with(plc.interop.to_arrow(plc_col), target)
+def test_ends_with(pa_data_col, plc_data_col, plc_target_scalar):
+    py_target = plc.interop.to_arrow(plc_target_scalar).as_py()
+    got = plc.strings.find.ends_with(plc_data_col, plc_target_scalar)
+    expected = pa.compute.ends_with(pa_data_col, py_target)
     assert_column_eq(got, expected)
 
 
-def test_ends_with_column(plc_col, ends_with_target_column):
+def test_ends_with_column(
+    pa_data_col, pa_target_col, plc_data_col, plc_target_col
+):
+    def libcudf_logic(st, target):
+        if st is None:
+            return None
+        elif target is None:
+            return False
+        else:
+            return st.endswith(target)
+
     expected = pa.array(
         [
-            elem.endswith(target) if elem is not None else None
+            libcudf_logic(elem, target)
             for elem, target in zip(
-                plc.interop.to_arrow(plc_col).to_pylist(),
-                plc.interop.to_arrow(ends_with_target_column).to_pylist(),
+                pa_data_col.to_pylist(),
+                pa_target_col.to_pylist(),
             )
         ],
         type=pa.bool_(),
     )
 
-    got = plc.strings.find.ends_with(plc_col, ends_with_target_column)
+    got = plc.strings.find.ends_with(plc_data_col, plc_target_col)
     assert_column_eq(got, expected)
