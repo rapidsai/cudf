@@ -63,10 +63,10 @@ def python_hash_value(x, method):
     else:
         raise NotImplementedError
     if method == "murmurhash3_x86_32":
-        # mmh3.hash by default uses MurmurHash3_x86_32
-        return mmh3.hash(
-            binary, seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED, signed=False
-        )
+        # reimplement libcudf hash combine for a single colum
+        seed = plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
+        hashval = mmh3.hash(binary, seed)
+        return seed ^ (hashval + 0x9E3779B9 + (seed << 6) + (seed >> 2))
     elif method == "murmurhash3_x64_128":
         hasher = mmh3.mmh3_x64_128(seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED)
         hasher.update(binary)
@@ -153,7 +153,8 @@ def test_murmurhash3_x86_32(pa_input_column):
     expect = pa.Array.from_pandas(
         pa_input_column.to_pandas().apply(
             python_hash_value, args=("murmurhash3_x86_32",)
-        )
+        ),
+        type=pa.uint32(),
     )
     assert_column_eq(got, expect)
 
