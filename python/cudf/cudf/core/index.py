@@ -2258,7 +2258,12 @@ class DatetimeIndex(Index):
 
         return self.__class__._from_data({self.name: out_column})
 
-    def tz_localize(self, tz, ambiguous="NaT", nonexistent="NaT"):
+    def tz_localize(
+        self,
+        tz: str | None,
+        ambiguous: Literal["NaT"] = "NaT",
+        nonexistent: Literal["NaT"] = "NaT",
+    ):
         """
         Localize timezone-naive data to timezone-aware data.
 
@@ -2300,17 +2305,12 @@ class DatetimeIndex(Index):
         ambiguous or nonexistent timestamps are converted
         to 'NaT'.
         """  # noqa: E501
-        from cudf.core._internals.timezones import delocalize, localize
-
-        if tz is None:
-            result_col = delocalize(self._column)
-        else:
-            result_col = localize(self._column, tz, ambiguous, nonexistent)
+        result_col = self._column.tz_localize(tz, ambiguous, nonexistent)
         return DatetimeIndex._from_data(
             {self.name: result_col}, freq=self._freq
         )
 
-    def tz_convert(self, tz):
+    def tz_convert(self, tz: str | None):
         """
         Convert tz-aware datetimes from one time zone to another.
 
@@ -2342,12 +2342,7 @@ class DatetimeIndex(Index):
                        '2018-03-03 14:00:00+00:00'],
                       dtype='datetime64[ns, Europe/London]')
         """  # noqa: E501
-        from cudf.core._internals.timezones import convert
-
-        if tz is None:
-            result_col = self._column._utc_time
-        else:
-            result_col = convert(self._column, tz)
+        result_col = self._column.tz_convert(tz)
         return DatetimeIndex._from_data({self.name: result_col})
 
 
