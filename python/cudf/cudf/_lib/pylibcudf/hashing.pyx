@@ -95,6 +95,23 @@ cpdef Column xxhash_64(
     Table input,
     uint64_t seed=DEFAULT_HASH_SEED
 ):
+    """Computes the xxHash 64-bit hash value of each row in the given table.
+
+    For details, see :cpp:func:`xxhash_64`.
+
+    Parameters
+    ----------
+    input : Table
+        The table of columns to hash
+    seed : uint32_t
+        Optional seed value to use for the hash function
+
+    Returns
+    -------
+    pylibcudf.Column
+        A column where each row is the hash of a row from the input
+    """
+
     cdef unique_ptr[column] c_result
     with  nogil:
         c_result = move(
@@ -108,6 +125,23 @@ cpdef Column xxhash_64(
 
 
 cpdef Column md5(Table input):
+    """Computes the MD5 hash value of each row in the given table.
+
+    For details, see :cpp:func:`md5`.
+
+    Parameters
+    ----------
+
+    input : Table
+        The table of columns to hash
+
+    Returns
+    -------
+    pylibcudf.Column
+        A column where each row is the md5 hash of a row from the input
+
+    """
+
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(cpp_md5(input.view()))

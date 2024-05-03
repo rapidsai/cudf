@@ -7,9 +7,8 @@ from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib import pylibcudf
-
 cimport cudf._lib.cpp.types as libcudf_types
+from cudf._lib cimport pylibcudf
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.partitioning cimport hash_partition as cpp_hash_partition
 from cudf._lib.cpp.table.table cimport table
@@ -51,7 +50,9 @@ def hash_partition(list source_columns, object columns_to_hash,
 
 @acquire_spill_lock()
 def hash(list source_columns, str method, int seed=0):
-    ctbl = pylibcudf.Table([c.to_pylibcudf(mode="read") for c in source_columns])
+    cdef pylibcudf.Table ctbl = pylibcudf.Table(
+        [c.to_pylibcudf(mode="read") for c in source_columns]
+    )
     if method == "murmur3":
         return Column.from_pylibcudf(murmurhash3_x86_32(ctbl, seed))
 #    elif method == "xxhash64":
