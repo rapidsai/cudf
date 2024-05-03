@@ -67,25 +67,25 @@ template <typename Key,
           typename Join>
 void BM_join(state_type& state, Join JoinFunc)
 {
-  auto const right_table_size = [&]() {
+  auto const right_size = [&]() {
     if constexpr (std::is_same_v<state_type, benchmark::State>) {
       return static_cast<cudf::size_type>(state.range(0));
     }
     if constexpr (std::is_same_v<state_type, nvbench::state>) {
-      return static_cast<cudf::size_type>(state.get_int64("right_table_size"));
+      return static_cast<cudf::size_type>(state.get_int64("right_size"));
     }
   }();
-  auto const left_table_size = [&]() {
+  auto const left_size = [&]() {
     if constexpr (std::is_same_v<state_type, benchmark::State>) {
       return static_cast<cudf::size_type>(state.range(1));
     }
     if constexpr (std::is_same_v<state_type, nvbench::state>) {
-      return static_cast<cudf::size_type>(state.get_int64("left_table_size"));
+      return static_cast<cudf::size_type>(state.get_int64("left_size"));
     }
   }();
 
   if constexpr (std::is_same_v<state_type, nvbench::state>) {
-    if (right_table_size > left_table_size) {
+    if (right_size > left_size) {
       state.skip("Skip large right table");
       return;
     }
@@ -107,28 +107,28 @@ void BM_join(state_type& state, Join JoinFunc)
   };
 
   std::unique_ptr<cudf::column> right_key_column0 = [&]() {
-    auto [null_mask, null_count] = right_random_null_mask(right_table_size);
-    return Nullable ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()),
-                                                right_table_size,
-                                                std::move(null_mask),
-                                                null_count)
-                    : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()),
-                                                right_table_size);
-  }();
-  std::unique_ptr<cudf::column> left_key_column0 = [&]() {
-    auto [null_mask, null_count] = right_random_null_mask(left_table_size);
+    auto [null_mask, null_count] = right_random_null_mask(right_size);
     return Nullable
              ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()),
-                                         left_table_size,
+                                         right_size,
                                          std::move(null_mask),
                                          null_count)
-             : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()), left_table_size);
+             : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()), right_size);
+  }();
+  std::unique_ptr<cudf::column> left_key_column0 = [&]() {
+    auto [null_mask, null_count] = right_random_null_mask(left_size);
+    return Nullable
+             ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()),
+                                         left_size,
+                                         std::move(null_mask),
+                                         null_count)
+             : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()), left_size);
   }();
 
   generate_input_tables<Key, cudf::size_type>(right_key_column0->mutable_view().data<Key>(),
-                                              right_table_size,
+                                              right_size,
                                               left_key_column0->mutable_view().data<Key>(),
-                                              left_table_size,
+                                              left_size,
                                               selectivity,
                                               multiplicity);
 
@@ -137,7 +137,7 @@ void BM_join(state_type& state, Join JoinFunc)
   auto const right_key_column1 = [&]() {
     auto col = std::make_unique<cudf::column>(right_key_column0->view());
     if (Nullable) {
-      auto [null_mask, null_count] = right_random_null_mask(right_table_size);
+      auto [null_mask, null_count] = right_random_null_mask(right_size);
       col->set_null_mask(std::move(null_mask), null_count);
     }
     return col;
@@ -145,15 +145,15 @@ void BM_join(state_type& state, Join JoinFunc)
   auto const left_key_column1 = [&]() {
     auto col = std::make_unique<cudf::column>(left_key_column0->view());
     if (Nullable) {
-      auto [null_mask, null_count] = right_random_null_mask(left_table_size);
+      auto [null_mask, null_count] = right_random_null_mask(left_size);
       col->set_null_mask(std::move(null_mask), null_count);
     }
     return col;
   }();
 
   auto init                 = cudf::make_fixed_width_scalar<Key>(static_cast<Key>(0));
-  auto right_payload_column = cudf::sequence(right_table_size, *init);
-  auto left_payload_column  = cudf::sequence(left_table_size, *init);
+  auto right_payload_column = cudf::sequence(right_size, *init);
+  auto left_payload_column  = cudf::sequence(left_size, *init);
 
   CUDF_CHECK_CUDA(0);
 

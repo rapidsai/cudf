@@ -71,17 +71,17 @@ void nvbench_full_join(nvbench::state& state, nvbench::type_list<Key, nvbench::e
 NVBENCH_BENCH_TYPES(nvbench_inner_join, NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
   .set_name("inner_join")
   .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_table_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("left_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_left_join, NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
   .set_name("left_join")
   .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_table_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("left_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_full_join, NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
   .set_name("full_join")
   .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_table_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("left_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
