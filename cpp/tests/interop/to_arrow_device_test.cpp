@@ -38,8 +38,6 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
-
 std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, nanoarrow::UniqueArray>
 get_nanoarrow_tables(cudf::size_type length)
 {

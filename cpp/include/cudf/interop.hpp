@@ -349,6 +349,50 @@ std::unique_ptr<cudf::scalar> from_arrow(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Create `cudf::table` from given ArrowDeviceArray input
+ *
+ * @throws cudf::logic_error if either schema or input are NULL
+ * 
+ * @throws cudf::logic_error if the device_type is not `ARROW_DEVICE_CPU`
+ * 
+ * @throws cudf::data_type_error if the input array is not a struct array,
+ * non-struct arrays should be passed to `from_arrow_device_host_column` instead.
+ * 
+ * @param schema `ArrowSchema` pointer to describe the type of the data
+ * @param input `ArrowDeviceArray` pointer to object owning the Arrow data
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to perform cuda allocation
+ * @return cudf table generated from the given Arrow data
+ */
+std::unique_ptr<table> from_arrow_device_host(
+  ArrowSchema const* schema,
+  ArrowDeviceArray const* input,
+  rmm::cuda_stream_view stream = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Create `cudf::column` from given ArrowDeviceArray input
+ * 
+ * @throws cudf::logic_error if either schema or input are NULL
+ * 
+ * @throws cudf::logic_error if the device_type is not `ARROW_DEVICE_CPU`
+ * 
+ * @throws cudf::data_type_error if input arrow data type is not supported in cudf.
+ * 
+ * @param schema `ArrowSchema` pointer to describe the type of the data
+ * @param input `ArrowDeviceArray` pointer to object owning the Arrow data
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to perform cuda allocation
+ * @return cudf table generated from the given Arrow data
+ */
+std::unique_ptr<column> from_arrow_device_host_column(
+  ArrowSchema const* schema,
+  ArrowDeviceArray const* input,
+  rmm::cuda_stream_view stream = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+
+/**
  * @brief typedef for a vector of owning columns, used for conversion from ArrowDeviceArray
  *
  */
