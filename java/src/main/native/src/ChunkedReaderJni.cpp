@@ -187,38 +187,24 @@ jlong create_chunked_orc_reader(JNIEnv* env,
                                 jlong pass_read_limit,
                                 std::optional<jlong> output_granularity,
                                 jobjectArray filter_col_names,
-                                jstring inp_file_path,
                                 jlong buffer,
                                 jlong buffer_length,
                                 jboolean using_numpy_Types,
                                 jint unit,
                                 jobjectArray dec128_col_names)
 {
-  bool read_buffer = true;
-  if (buffer == 0) {
-    JNI_NULL_CHECK(env, inp_file_path, "Input file or buffer must be supplied", 0);
-    read_buffer = false;
-  } else if (inp_file_path != nullptr) {
-    JNI_THROW_NEW(
-      env, cudf::jni::ILLEGAL_ARG_CLASS, "Cannot pass in both a buffer and an inp_file_path", 0);
-  } else if (buffer_length <= 0) {
+  JNI_NULL_CHECK(env, buffer, "buffer is null", 0);
+  if (buffer_length <= 0) {
     JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "An empty buffer is not supported", 0);
   }
 
   try {
     cudf::jni::auto_set_device(env);
-    cudf::jni::native_jstring filename(env, inp_file_path);
-    if (!read_buffer && filename.is_empty()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "inp_file_path cannot be empty", 0);
-    }
-
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
     cudf::jni::native_jstringArray n_dec128_col_names(env, dec128_col_names);
 
-    auto const source = read_buffer ? cudf::io::source_info(reinterpret_cast<char*>(buffer),
-                                                            static_cast<std::size_t>(buffer_length))
-                                    : cudf::io::source_info(filename.get());
-
+    auto const source = cudf::io::source_info(reinterpret_cast<char*>(buffer),
+                                              static_cast<std::size_t>(buffer_length));
     auto opts_builder = cudf::io::orc_reader_options::builder(source);
     if (n_filter_col_names.size() > 0) {
       opts_builder = opts_builder.columns(n_filter_col_names.as_cpp_vector());
@@ -253,7 +239,6 @@ Java_ai_rapids_cudf_ORCChunkedReader_createReader(JNIEnv* env,
                                                   jlong chunk_read_limit,
                                                   jlong pass_read_limit,
                                                   jobjectArray filter_col_names,
-                                                  jstring inp_file_path,
                                                   jlong buffer,
                                                   jlong buffer_length,
                                                   jboolean using_numpy_Types,
@@ -265,7 +250,6 @@ Java_ai_rapids_cudf_ORCChunkedReader_createReader(JNIEnv* env,
                                    pass_read_limit,
                                    std::nullopt,
                                    filter_col_names,
-                                   inp_file_path,
                                    buffer,
                                    buffer_length,
                                    using_numpy_Types,
@@ -282,7 +266,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ORCChunkedReader_createReaderWithOut
   jlong pass_read_limit,
   jlong output_granularity,
   jobjectArray filter_col_names,
-  jstring inp_file_path,
   jlong buffer,
   jlong buffer_length,
   jboolean using_numpy_Types,
@@ -294,7 +277,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ORCChunkedReader_createReaderWithOut
                                    pass_read_limit,
                                    output_granularity,
                                    filter_col_names,
-                                   inp_file_path,
                                    buffer,
                                    buffer_length,
                                    using_numpy_Types,
