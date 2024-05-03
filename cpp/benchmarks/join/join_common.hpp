@@ -125,6 +125,7 @@ void BM_join(state_type& state, Join JoinFunc)
              : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()), left_size);
   }();
 
+  // build table is right table, probe table is left table
   generate_input_tables<Key, cudf::size_type>(right_key_column0->mutable_view().data<Key>(),
                                               right_size,
                                               left_key_column0->mutable_view().data<Key>(),
