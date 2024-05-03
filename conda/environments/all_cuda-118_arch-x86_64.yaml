@@ -95,6 +95,7 @@ dependencies:
 - tokenizers==0.15.2
 - transformers==4.38.1
 - typing_extensions>=4.0.0
+- xxhash
 - zlib>=1.2.13
 - pip:
   - git+https://github.com/python-streamz/streamz.git@master
