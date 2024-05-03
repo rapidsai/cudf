@@ -55,6 +55,7 @@ test = [
     "cramjam",
     "fastavro>=0.22.9",
     "hypothesis",
+    "mmh3",
     "msgpack",
     "pytest-benchmark",
     "pytest-cases>=3.8.2",

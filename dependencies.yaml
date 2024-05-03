@@ -619,6 +619,7 @@ dependencies:
           - pytest-benchmark
           - pytest-cases>=3.8.2
           - scipy
+          - mmh3
       - output_types: conda
         packages:
           - aiobotocore>=2.2.0
