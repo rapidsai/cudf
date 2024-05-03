@@ -54,13 +54,18 @@ public class ORCChunkedReader implements AutoCloseable {
    * Construct a chunked ORC reader instance, similar to
    * {@link ORCChunkedReader#ORCChunkedReader(long, long, ORCOptions, HostMemoryBuffer, long, long)},
    * with an additional parameter to control the granularity of the output table.
+   * When reading a chunk table, with respect to the given size limits, a subset of stripes may
+   * be loaded, decompressed and decoded into a large intermediate table. The reader will then
+   * subdivide that table into smaller tables for final output using
+   * {@code outputRowSizingGranularity} as the subdivision step. If the chunked reader is
+   * constructed without this parameter, the default value of 10k rows will be used.
    *
-   * @param outputRowGranularity The change step in number of rows in the output table.
+   * @param outputRowSizingGranularity The change step in number of rows in the output table.
    * @see ORCChunkedReader#ORCChunkedReader(long, long, ORCOptions, HostMemoryBuffer, long, long)
    */
-  public ORCChunkedReader(long chunkReadLimit, long passReadLimit, long outputRowGranularity,
+  public ORCChunkedReader(long chunkReadLimit, long passReadLimit, long outputRowSizingGranularity,
       ORCOptions opts, HostMemoryBuffer buffer, long offset, long len) {
-    handle = createReaderWithOutputGranularity(chunkReadLimit, passReadLimit, outputRowGranularity,
+    handle = createReaderWithOutputGranularity(chunkReadLimit, passReadLimit, outputRowSizingGranularity,
         opts.getIncludeColumnNames(), buffer.getAddress() + offset, len,
         opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
         opts.getDecimal128Columns());
@@ -148,11 +153,11 @@ public class ORCChunkedReader implements AutoCloseable {
    * {@link ORCChunkedReader#createReader(long, long, String[], long, long, boolean, int, String[])},
    * with an additional parameter to control the granularity of the output table.
    *
-   * @param outputRowGranularity The change step in number of rows in the output table.
+   * @param outputRowSizingGranularity The change step in number of rows in the output table.
    * @see ORCChunkedReader#createReader(long, long, String[], long, long, boolean, int, String[])
    */
   private static native long createReaderWithOutputGranularity(
-      long chunkReadLimit, long passReadLimit, long outputRowGranularity,
+      long chunkReadLimit, long passReadLimit, long outputRowSizingGranularity,
       String[] filterColumnNames, long bufferAddrs, long length,
       boolean usingNumPyTypes, int timeUnit, String[] decimal128Columns);
 
