@@ -19,7 +19,9 @@
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/search.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -72,10 +74,12 @@ struct find_index_fn {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
   {
-    if (!key.is_valid(stream))
+    if (!key.is_valid(stream)) {
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
-    CUDF_EXPECTS(input.keys().type() == key.type(),
-                 "search key type must match dictionary keys type");
+    }
+    CUDF_EXPECTS(cudf::have_same_types(input.parent(), key),
+                 "search key type must match dictionary keys type",
+                 cudf::data_type_error);
 
     using ScalarType = cudf::scalar_type_t<Element>;
     auto find_key    = static_cast<ScalarType const&>(key).value(stream);
@@ -114,10 +118,12 @@ struct find_insert_index_fn {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
   {
-    if (!key.is_valid(stream))
+    if (!key.is_valid(stream)) {
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
-    CUDF_EXPECTS(input.keys().type() == key.type(),
-                 "search key type must match dictionary keys type");
+    }
+    CUDF_EXPECTS(cudf::have_same_types(input.parent(), key),
+                 "search key type must match dictionary keys type",
+                 cudf::data_type_error);
 
     using ScalarType = cudf::scalar_type_t<Element>;
     auto find_key    = static_cast<ScalarType const&>(key).value(stream);
