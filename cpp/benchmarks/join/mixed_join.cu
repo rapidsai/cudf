@@ -126,177 +126,35 @@ void nvbench_mixed_left_anti_join(nvbench::state& state,
   BM_join<Key, Nullable, join_t::MIXED>(state, join);
 }
 
-// inner join -----------------------------------------------------------------------
 NVBENCH_BENCH_TYPES(nvbench_mixed_inner_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
-                                      nvbench::enum_type_list<false>))
-  .set_name("mixed_inner_join_32bit")
+                    NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
+  .set_name("mixed_inner_join")
   .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {100'000, 10'000'000, 80'000'000, 100'000'000})
-  .add_int64_axis("left_table_size",
-                  {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});
+  .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("right_table_size", JOIN_SIZE_RANGE);
 
-NVBENCH_BENCH_TYPES(nvbench_mixed_inner_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int64_t>,
-                                      nvbench::enum_type_list<false>))
-  .set_name("mixed_inner_join_64bit")
+NVBENCH_BENCH_TYPES(nvbench_mixed_left_join, NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
+  .set_name("mixed_left_join")
   .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {40'000'000, 50'000'000})
-  .add_int64_axis("left_table_size", {50'000'000, 120'000'000});
+  .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("right_table_size", JOIN_SIZE_RANGE);
 
-NVBENCH_BENCH_TYPES(nvbench_mixed_inner_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
-                                      nvbench::enum_type_list<true>))
-  .set_name("mixed_inner_join_32bit_nulls")
+NVBENCH_BENCH_TYPES(nvbench_mixed_full_join, NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
+  .set_name("mixed_full_join")
   .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {100'000, 10'000'000, 80'000'000, 100'000'000})
-  .add_int64_axis("left_table_size",
-                  {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});
-
-NVBENCH_BENCH_TYPES(nvbench_mixed_inner_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int64_t>,
-                                      nvbench::enum_type_list<true>))
-  .set_name("mixed_inner_join_64bit_nulls")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {40'000'000, 50'000'000})
-  .add_int64_axis("left_table_size", {50'000'000, 120'000'000});
-
-// left join ------------------------------------------------------------------------
-NVBENCH_BENCH_TYPES(nvbench_mixed_left_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
-                                      nvbench::enum_type_list<false>))
-  .set_name("mixed_left_join_32bit")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {100'000, 10'000'000, 80'000'000, 100'000'000})
-  .add_int64_axis("left_table_size",
-                  {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});
-
-NVBENCH_BENCH_TYPES(nvbench_mixed_left_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int64_t>,
-                                      nvbench::enum_type_list<false>))
-  .set_name("mixed_left_join_64bit")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {40'000'000, 50'000'000})
-  .add_int64_axis("left_table_size", {50'000'000, 120'000'000});
-
-NVBENCH_BENCH_TYPES(nvbench_mixed_left_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
-                                      nvbench::enum_type_list<true>))
-  .set_name("mixed_left_join_32bit_nulls")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {100'000, 10'000'000, 80'000'000, 100'000'000})
-  .add_int64_axis("left_table_size",
-                  {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});
-
-NVBENCH_BENCH_TYPES(nvbench_mixed_left_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int64_t>,
-                                      nvbench::enum_type_list<true>))
-  .set_name("mixed_left_join_64bit_nulls")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {40'000'000, 50'000'000})
-  .add_int64_axis("left_table_size", {50'000'000, 120'000'000});
-
-// full join ------------------------------------------------------------------------
-NVBENCH_BENCH_TYPES(nvbench_mixed_full_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
-                                      nvbench::enum_type_list<false>))
-  .set_name("mixed_full_join_32bit")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {100'000, 10'000'000, 80'000'000, 100'000'000})
-  .add_int64_axis("left_table_size",
-                  {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});
-
-NVBENCH_BENCH_TYPES(nvbench_mixed_full_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int64_t>,
-                                      nvbench::enum_type_list<false>))
-  .set_name("mixed_full_join_64bit")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {40'000'000, 50'000'000})
-  .add_int64_axis("left_table_size", {50'000'000, 120'000'000});
-
-NVBENCH_BENCH_TYPES(nvbench_mixed_full_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
-                                      nvbench::enum_type_list<true>))
-  .set_name("mixed_full_join_32bit_nulls")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {100'000, 10'000'000, 80'000'000, 100'000'000})
-  .add_int64_axis("left_table_size",
-                  {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});
-
-NVBENCH_BENCH_TYPES(nvbench_mixed_full_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int64_t>,
-                                      nvbench::enum_type_list<true>))
-  .set_name("mixed_full_join_64bit_nulls")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {40'000'000, 50'000'000})
-  .add_int64_axis("left_table_size", {50'000'000, 120'000'000});
-
-// left semi join ------------------------------------------------------------------------
-NVBENCH_BENCH_TYPES(nvbench_mixed_left_semi_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
-                                      nvbench::enum_type_list<false>))
-  .set_name("mixed_left_semi_join_32bit")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {100'000, 10'000'000, 80'000'000, 100'000'000})
-  .add_int64_axis("left_table_size",
-                  {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});
+  .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("right_table_size", JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_left_semi_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int64_t>,
-                                      nvbench::enum_type_list<false>))
-  .set_name("mixed_left_semi_join_64bit")
+                    NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
+  .set_name("mixed_left_semi_join")
   .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {40'000'000, 50'000'000})
-  .add_int64_axis("left_table_size", {50'000'000, 120'000'000});
-
-NVBENCH_BENCH_TYPES(nvbench_mixed_left_semi_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
-                                      nvbench::enum_type_list<true>))
-  .set_name("mixed_left_semi_join_32bit_nulls")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {100'000, 10'000'000, 80'000'000, 100'000'000})
-  .add_int64_axis("left_table_size",
-                  {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});
-
-NVBENCH_BENCH_TYPES(nvbench_mixed_left_semi_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int64_t>,
-                                      nvbench::enum_type_list<true>))
-  .set_name("mixed_left_semi_join_64bit_nulls")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {40'000'000, 50'000'000})
-  .add_int64_axis("left_table_size", {50'000'000, 120'000'000});
-
-// left anti join ------------------------------------------------------------------------
-NVBENCH_BENCH_TYPES(nvbench_mixed_left_anti_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
-                                      nvbench::enum_type_list<false>))
-  .set_name("mixed_left_anti_join_32bit")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {100'000, 10'000'000, 80'000'000, 100'000'000})
-  .add_int64_axis("left_table_size",
-                  {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});
+  .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("right_table_size", JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_left_anti_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int64_t>,
-                                      nvbench::enum_type_list<false>))
-  .set_name("mixed_left_anti_join_64bit")
+                    NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
+  .set_name("mixed_left_anti_join")
   .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {40'000'000, 50'000'000})
-  .add_int64_axis("left_table_size", {50'000'000, 120'000'000});
-
-NVBENCH_BENCH_TYPES(nvbench_mixed_left_anti_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
-                                      nvbench::enum_type_list<true>))
-  .set_name("mixed_left_anti_join_32bit_nulls")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {100'000, 10'000'000, 80'000'000, 100'000'000})
-  .add_int64_axis("left_table_size",
-                  {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});
-
-NVBENCH_BENCH_TYPES(nvbench_mixed_left_anti_join,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int64_t>,
-                                      nvbench::enum_type_list<true>))
-  .set_name("mixed_left_anti_join_64bit_nulls")
-  .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("right_table_size", {40'000'000, 50'000'000})
-  .add_int64_axis("left_table_size", {50'000'000, 120'000'000});
+  .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("right_table_size", JOIN_SIZE_RANGE);
