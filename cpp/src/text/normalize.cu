@@ -26,7 +26,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -59,13 +59,14 @@ namespace {
  */
 struct normalize_spaces_fn {
   cudf::column_device_view const d_strings;  // strings to normalize
-  cudf::size_type* d_offsets{};              // offsets into d_chars
+  cudf::size_type* d_sizes{};                // size of each output row
   char* d_chars{};                           // output buffer for characters
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(cudf::size_type idx)
   {
     if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     cudf::string_view const single_space(" ", 1);
@@ -93,7 +94,7 @@ struct normalize_spaces_fn {
       nbytes += token.size_bytes() + 1;  // token size plus a single space
     }
     // remove trailing space
-    if (!d_chars) d_offsets[idx] = (nbytes > 0) ? nbytes - 1 : 0;
+    if (!d_chars) { d_sizes[idx] = (nbytes > 0) ? nbytes - 1 : 0; }
   }
 };
 
@@ -109,8 +110,9 @@ struct codepoint_to_utf8_fn {
   cudf::column_device_view const d_strings;  // input strings
   uint32_t const* cp_data;                   // full code-point array
   int64_t const* d_cp_offsets{};             // offsets to each string's code-point array
-  cudf::size_type* d_offsets{};              // offsets for the output strings
+  cudf::size_type* d_sizes{};                // size of output string
   char* d_chars{};                           // buffer for the output strings column
+  cudf::detail::input_offsetalator d_offsets;
 
   /**
    * @brief Return the number of bytes for the output string given its code-point array.
@@ -133,14 +135,14 @@ struct codepoint_to_utf8_fn {
   __device__ void operator()(cudf::size_type idx)
   {
     if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     auto const offset = d_cp_offsets[idx];
     auto const count  = d_cp_offsets[idx + 1] - offset;  // number of code-points
     auto str_cps      = cp_data + offset;                // code-points for this string
     if (!d_chars) {
-      d_offsets[idx] = compute_output_size(str_cps, count);
+      d_sizes[idx] = compute_output_size(str_cps, count);
       return;
     }
     // convert each code-point to 1-4 UTF-8 encoded bytes
@@ -183,7 +185,7 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
   auto d_strings = cudf::column_device_view::create(strings.parent(), stream);
 
   // build offsets and children using the normalize_space_fn
-  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
     normalize_spaces_fn{*d_strings}, strings.size(), stream, mr);
 
   return cudf::make_strings_column(strings.size(),
@@ -225,7 +227,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   auto d_strings = cudf::column_device_view::create(strings.parent(), stream);
 
   // build offsets and children using the codepoint_to_utf8_fn
-  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
     codepoint_to_utf8_fn{*d_strings, cp_chars, cp_offsets}, strings.size(), stream, mr);
 
   return cudf::make_strings_column(strings.size(),
