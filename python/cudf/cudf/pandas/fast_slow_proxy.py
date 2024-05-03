@@ -1047,6 +1047,15 @@ def _maybe_wrap_result(result: Any, func: Callable, /, *args, **kwargs) -> Any:
     elif isinstance(result, Iterator):
         return (_maybe_wrap_result(r, lambda x: x, r) for r in result)
     elif _is_function_or_method(result):
+        if (
+            result.__qualname__ != result.__name__
+            and next(iter(inspect.signature(result).parameters), None)
+            == "self"
+        ):
+            # https://github.com/rapidsai/cudf/issues/15637
+            # We cannot reliably proxy a non-bound method of class e.g. Foo.__init__
+            # since we do not (yet) get the instance (self) as an argument when this method is called e.g. Foo(2)
+            return result
         return _MethodProxy._fsproxy_wrap(
             result, method_chain=(func, args, kwargs)
         )

@@ -1220,3 +1220,14 @@ def test_apply_slow_path_udf_references_global_module():
     result = df.apply(my_apply, axis=1, unused=True)
     expected = xpd.Series([1])
     tm.assert_series_equal(result, expected)
+
+
+def test_dont_proxy_class_methods():
+    # https://github.com/rapidsai/cudf/issues/15637
+    class Foo:
+        @xpd.util._decorators.deprecate_kwarg("not", "important")
+        def __init__(self, val, important=None):
+            self.val = val
+
+    foo = Foo(2)
+    assert foo.val == 2
