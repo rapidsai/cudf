@@ -122,7 +122,7 @@ struct null_count_back_copier {
  */
 constexpr bool is_string_col(PageInfo const& page, device_span<ColumnChunkDesc const> chunks)
 {
-  if (page.flags & PAGEINFO_FLAGS_DICTIONARY != 0) { return false; }
+  if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0) { return false; }
   auto const& col = chunks[page.chunk_idx];
   return is_string_col(col);
 }

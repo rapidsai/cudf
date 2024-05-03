@@ -28,6 +28,8 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
@@ -154,8 +156,9 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(!init.has_value() || col.type() == init.value().get().type(),
-               "column and initial value must be the same type");
+  CUDF_EXPECTS(!init.has_value() || cudf::have_same_types(col, init.value().get()),
+               "column and initial value must be the same type",
+               cudf::data_type_error);
   if (init.has_value() && !(agg.kind == aggregation::SUM || agg.kind == aggregation::PRODUCT ||
                             agg.kind == aggregation::MIN || agg.kind == aggregation::MAX ||
                             agg.kind == aggregation::ANY || agg.kind == aggregation::ALL)) {

@@ -26,6 +26,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -158,7 +159,7 @@ std::unique_ptr<column> shift(column_view const& input,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(input.type() == fill_value.type(),
+  CUDF_EXPECTS(cudf::have_same_types(input, fill_value),
                "shift requires each fill value type to match the corresponding column type.",
                cudf::data_type_error);
 
