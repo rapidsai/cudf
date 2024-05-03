@@ -24,10 +24,18 @@
 
 #include <rmm/resource_ref.hpp>
 
+#include <fstream>
+#include <string>
+#include <vector>
+
 /**
  * @brief Base test fixture for JSON reader tests
  */
 struct JsonReaderTest : public cudf::test::BaseFixture {};
+
+cudf::test::TempDirTestEnvironment* const temp_env =
+  static_cast<cudf::test::TempDirTestEnvironment*>(
+    ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
 // function to extract first delimiter in the string in each chunk,
 // collate together and form byte_range for each chunk,
@@ -87,7 +95,7 @@ std::vector<cudf::io::table_with_metadata> skeleton_for_parellel_chunk_reader(
   return tables;
 }
 
-TEST_F(JsonReaderTest, ByteRange)
+TEST_F(JsonReaderTest, ByteRange_SingleFile)
 {
   std::string const json_string = R"(
     { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
@@ -125,4 +133,47 @@ TEST_F(JsonReaderTest, ByteRange)
     // cannot use EQUAL due to concatenate removing null mask
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(current_reader_table.tbl->view(), result->view());
   }
+}
+
+TEST_F(JsonReaderTest, ReadCompleteFiles)
+{
+  std::string const json_string = R"(
+    { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
+    { "a": { "y" : 6}, "b" : [4, 5   ], "c": 12 }
+    { "a": { "y" : 6}, "b" : [6      ], "c": 13 }
+    { "a": { "y" : 6}, "b" : [7      ], "c": 14 })";
+  auto filename                 = temp_env->get_temp_dir() + "ParseInRangeIntegers.json";
+  {
+    std::ofstream outfile(filename, std::ofstream::out);
+    outfile << json_string;
+  }
+
+  constexpr int num_sources = 5;
+  std::vector<std::string> filepaths(num_sources, filename);
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filepaths})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::FAIL);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  std::vector<cudf::io::table_with_metadata> part_tables;
+  for (auto filepath : filepaths) {
+    cudf::io::json_reader_options part_in_options =
+      cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
+        .lines(true)
+        .recovery_mode(cudf::io::json_recovery_mode_t::FAIL);
+
+    part_tables.push_back(cudf::io::read_json(part_in_options));
+  }
+
+  auto part_table_views = std::vector<cudf::table_view>(part_tables.size());
+  std::transform(part_tables.begin(), part_tables.end(), part_table_views.begin(), [](auto& table) {
+    return table.tbl->view();
+  });
+
+  auto expected_result = cudf::concatenate(part_table_views);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result.tbl->view(), expected_result->view());
 }
