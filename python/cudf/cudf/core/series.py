@@ -3654,7 +3654,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def where(self, cond, other=None, inplace=False):
         result_col = super().where(cond, other, inplace)
         return self._mimic_inplace(
-            self._from_data_like_self({self.name: result_col}),
+            self._from_data_like_self(
+                self._data._from_columns_like_self([result_col])
+            ),
             inplace=inplace,
         )
 
