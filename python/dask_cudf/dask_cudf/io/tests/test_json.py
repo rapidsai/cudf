@@ -84,9 +84,9 @@ def test_read_json_nested(tmp_path):
         }
     )
     kwargs = dict(orient="records", lines=True)
-    with tmp_path / "data.json" as f, dask.config.set(
-        {"dataframe.convert-string": False}
-    ):
+    f = tmp_path / "data.json"
+    f.touch()
+    with dask.config.set({"dataframe.convert-string": False}):
         df.to_json(f, **kwargs)
         # Ensure engine='cudf' is tested.
         actual = dask_cudf.read_json(f, engine="cudf", **kwargs)
