@@ -5,7 +5,6 @@ import struct
 
 import mmh3
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 import pytest
 import xxhash
@@ -58,8 +57,8 @@ def python_hash_value(x, method):
         binary = x.to_bytes(1, byteorder="little", signed=True)
     elif isinstance(x, int):
         binary = x.to_bytes(8, byteorder="little", signed=True)
-    elif isinstance(x, np.ndarray):
-        binary = x.tobytes()
+    elif isinstance(x, list):
+        binary = np.array(x).tobytes()
     else:
         raise NotImplementedError
     if method == "murmurhash3_x86_32":
@@ -94,8 +93,12 @@ def test_hash_column_sha(pa_input_column, method):
             plc_hasher(plc_tbl)
         return
 
-    expect = pa.Array.from_pandas(
-        pa_input_column.to_pandas().apply(python_hash_value, args=(method,))
+    expect = pa.array(
+        [
+            python_hash_value(val, method)
+            for val in pa_input_column.to_pylist()
+        ],
+        type=pa.string(),
     )
     got = plc_hasher(plc_tbl)
     assert_column_eq(got, expect)
@@ -111,8 +114,9 @@ def test_hash_column_md5(pa_input_column):
             plc.hashing.md5(plc_tbl)
         return
 
-    expect = pa.Array.from_pandas(
-        pa_input_column.to_pandas().apply(python_hash_value, args=("md5",))
+    expect = pa.array(
+        [python_hash_value(val, "md5") for val in pa_input_column.to_pylist()],
+        type=pa.string(),
     )
     got = plc.hashing.md5(plc_tbl)
     assert_column_eq(got, expect)
@@ -123,10 +127,12 @@ def test_hash_column_xxhash64(pa_input_column):
         pa.Table.from_arrays([pa_input_column], names=["data"])
     )
 
-    expect = pa.Array.from_pandas(
-        pa_input_column.to_pandas().apply(
-            python_hash_value, args=("xxhash_64",)
-        )
+    expect = pa.array(
+        [
+            python_hash_value(val, "xxhash_64")
+            for val in pa_input_column.to_pylist()
+        ],
+        type=pa.uint64(),
     )
     got = plc.hashing.xxhash_64(plc_tbl, 0)
     assert_column_eq(got, expect)
@@ -150,10 +156,11 @@ def test_murmurhash3_x86_32(pa_input_column):
         pa.Table.from_arrays([pa_input_column], names=["data"])
     )
     got = plc.hashing.murmurhash3_x86_32(plc_tbl, 0)
-    expect = pa.Array.from_pandas(
-        pa_input_column.to_pandas().apply(
-            python_hash_value, args=("murmurhash3_x86_32",)
-        ),
+    expect = pa.array(
+        [
+            python_hash_value(val, "murmurhash3_x86_32")
+            for val in pa_input_column.to_pylist()
+        ],
         type=pa.uint32(),
     )
     assert_column_eq(got, expect)
@@ -164,16 +171,16 @@ def test_murmurhash3_x64_128(pa_input_column):
         pa.Table.from_arrays([pa_input_column], names=["data"])
     )
     got = plc.hashing.murmurhash3_x64_128(plc_tbl, 0)
-    tuples = pa_input_column.to_pandas().apply(
-        python_hash_value, args=("murmurhash3_x64_128",)
-    )
-    expect = pa.Table.from_pandas(
-        pd.DataFrame(
-            {
-                0: tuples.apply(lambda tup: np.uint64(tup[0])),
-                1: tuples.apply(lambda tup: np.uint64(tup[1])),
-            }
-        )
+    tuples = [
+        python_hash_value(val, "murmurhash3_x64_128")
+        for val in pa_input_column.to_pylist()
+    ]
+    expect = pa.Table.from_arrays(
+        [
+            pa.array([np.uint64(t[0]) for t in tuples]),
+            pa.array([np.uint64(t[1]) for t in tuples]),
+        ],
+        names=["0", "1"],
     )
 
     assert_table_eq(got, expect)
