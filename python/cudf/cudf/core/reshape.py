@@ -419,10 +419,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         else:
             # All levels in the multiindex label must have the same type
             has_multiple_level_types = (
-                len(
-                    set().union(*(map(type, obj._data.keys()) for obj in objs))
-                )
-                > 1
+                len({type(name) for o in objs for name in o._data.keys()}) > 1
             )
             if has_multiple_level_types:
                 raise NotImplementedError(
