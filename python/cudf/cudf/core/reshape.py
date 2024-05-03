@@ -417,10 +417,15 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         # need to create a MultiIndex column
         else:
-            multiple_column_label_types = (
-                len({type(name) for o in objs for name in o._data.keys()}) > 1
+            # All levels in the multiindex label must have the same type
+            # transpose the keys and determine the types for each column
+            types_per_level = map(
+                set, zip(*(map(type, key) for key in o._data.keys()))
             )
-            if multiple_column_label_types:
+            has_multiple_level_types = any(
+                len(types) > 1 for types in types_per_level
+            )
+            if has_multiple_level_types:
                 raise NotImplementedError(
                     "Can not construct a MultiIndex column with multiple "
                     "label types in cuDF at this time. You must convert "
