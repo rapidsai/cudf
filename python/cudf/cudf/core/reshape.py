@@ -421,7 +421,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             has_multiple_level_types = (
                 len(
                     set().union(*(map(type, obj._data.keys()) for obj in objs))
-                ) 
+                )
                 > 1
             )
             if has_multiple_level_types:
