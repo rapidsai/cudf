@@ -418,13 +418,9 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         # need to create a MultiIndex column
         else:
             # All levels in the multiindex label must have the same type
-            # transpose the keys and determine the types for each column
-            types_per_level = map(
-                set, zip(*(map(type, key) for key in o._data.keys()))
-            )
-            has_multiple_level_types = any(
-                len(types) > 1 for types in types_per_level
-            )
+            has_multiple_level_types = len(
+                set().union(*(map(type, obj._data.keys()) for obj in objs))
+            ) > 1
             if has_multiple_level_types:
                 raise NotImplementedError(
                     "Can not construct a MultiIndex column with multiple "
