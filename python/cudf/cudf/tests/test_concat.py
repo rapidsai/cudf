@@ -1904,7 +1904,7 @@ def test_concat_mixed_list_types_error(s1, s2):
             },
             marks=pytest.mark.xfail(
                 reason=(
-                    "Can not construct a MultiIndex column with multiple "
+                    "Cannot construct a MultiIndex column with multiple "
                     "label types in cuDF at this time. You must convert "
                     "the labels to the same type."
                 )
@@ -1931,7 +1931,7 @@ def test_concat_mixed_list_types_error(s1, s2):
             },
             marks=pytest.mark.xfail(
                 reason=(
-                    "Can not construct a MultiIndex column with multiple "
+                    "Cannot construct a MultiIndex column with multiple "
                     "label types in cuDF at this time. You must convert "
                     "the labels to the same type."
                 )
@@ -1950,7 +1950,7 @@ def test_concat_mixed_list_types_error(s1, s2):
             },
             marks=pytest.mark.xfail(
                 reason=(
-                    "Can not construct a MultiIndex column with multiple "
+                    "Cannot construct a MultiIndex column with multiple "
                     "label types in cuDF at this time. You must convert "
                     "the labels to the same type."
                 )

@@ -423,7 +423,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             )
             if has_multiple_level_types:
                 raise NotImplementedError(
-                    "Can not construct a MultiIndex column with multiple "
+                    "Cannot construct a MultiIndex column with multiple "
                     "label types in cuDF at this time. You must convert "
                     "the labels to the same type."
                 )
