@@ -24,23 +24,19 @@ cudf = pytest.importorskip("cudf")
 
 @pytest.fixture(scope="module")
 def client():
-    with Client(processes=False, asynchronous=False) as client:
+    client = Client(processes=False, asynchronous=False)
+    try:
         yield client
+    finally:
+        client.close()
 
 
-@pytest.fixture(scope="module")
-def dask_stream(client):
-    return DaskStream()
-
-
-@pytest.fixture
-def core_stream():
-    return Stream()
-
-
-@pytest.fixture(params=["core_stream", "dask_stream"])
-def stream(request):
-    return request.getfixturevalue(request.param)
+@pytest.fixture(params=["core", "dask"])
+def stream(request, client):
+    if request.param == "core":
+        return Stream()
+    else:
+        return DaskStream()
 
 
 def test_identity(stream):
