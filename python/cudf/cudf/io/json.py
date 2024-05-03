@@ -26,6 +26,7 @@ def read_json(
     keep_quotes=False,
     storage_options=None,
     mixed_types_as_string=False,
+    prune_columns=False,
     *args,
     **kwargs,
 ):
@@ -101,6 +102,7 @@ def read_json(
             False,
             keep_quotes,
             mixed_types_as_string,
+            prune_columns,
         )
     else:
         warnings.warn(

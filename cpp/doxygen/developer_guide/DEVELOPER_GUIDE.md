@@ -943,13 +943,14 @@ Use the `CUDF_EXPECTS` macro to enforce runtime conditions necessary for correct
 Example usage:
 
 ```c++
-CUDF_EXPECTS(lhs.type() == rhs.type(), "Column type mismatch");
+CUDF_EXPECTS(cudf::have_same_types(lhs, rhs), "Type mismatch", cudf::data_type_error);
 ```
 
 The first argument is the conditional expression expected to resolve to `true` under normal
-conditions. If the conditional evaluates to `false`, then an error has occurred and an instance of
-`cudf::logic_error` is thrown. The second argument to `CUDF_EXPECTS` is a short description of the
-error that has occurred and is used for the exception's `what()` message.
+conditions. The second argument to `CUDF_EXPECTS` is a short description of the error that has
+occurred and is used for the exception's `what()` message. If the conditional evaluates to
+`false`, then an error has occurred and an instance of the exception class in the third argument
+(or the default, `cudf::logic_error`) is thrown.
 
 There are times where a particular code path, if reached, should indicate an error no matter what.
 For example, often the `default` case of a `switch` statement represents an invalid alternative.
@@ -1047,6 +1048,12 @@ types such as numeric types and timestamps/durations, adding support for nested 
 
 Enabling an algorithm differently for different types uses either template specialization or SFINAE,
 as discussed in [Specializing Type-Dispatched Code Paths](#specializing-type-dispatched-code-paths).
+
+## Comparing Data Types
+
+When comparing the data types of two columns or scalars, do not directly compare
+`a.type() == b.type()`. Nested types such as lists of structs of integers will not be handled
+properly if only the top level type is compared. Instead, use the `cudf::have_same_types` function.
 
 # Type Dispatcher
 
