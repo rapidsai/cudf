@@ -449,12 +449,11 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             df.columns = result_columns.unique()
             if ignore_index:
                 df.columns = cudf.RangeIndex(len(result_columns.unique()))
-        else:
-            if ignore_index:
-                # with ignore_index the column names change to numbers
-                df.columns = cudf.RangeIndex(len(result_columns))
-            elif not only_series:
-                df.columns = cudf.MultiIndex.from_tuples(df._column_names)
+        elif ignore_index:
+            # with ignore_index the column names change to numbers
+            df.columns = cudf.RangeIndex(len(result_columns))
+        elif not only_series:
+            df.columns = cudf.MultiIndex.from_tuples(df._column_names)
 
         if empty_inner:
             # if join is inner and it contains an empty df
