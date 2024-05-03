@@ -21,13 +21,13 @@ package ai.rapids.cudf;
 /**
  * Provide an interface for reading an ORC file in an iterative manner.
  */
-public class ORCChunkedReader extends ChunkedReaderBase implements AutoCloseable {
+public class ORCChunkedReader implements AutoCloseable {
   static {
     NativeDepsLoader.loadNativeDeps();
   }
 
   /**
-   * Construct the reader instance from output limit, read limit, reading options,
+   * Construct the reader instance from read limits, output row granularity,
    * and a file already loaded in a memory buffer.
    *
    * @param chunkReadLimit Limit on total number of bytes to be returned per read,
@@ -41,33 +41,88 @@ public class ORCChunkedReader extends ChunkedReaderBase implements AutoCloseable
    */
   public ORCChunkedReader(long chunkReadLimit, long passReadLimit,
       ORCOptions opts, HostMemoryBuffer buffer, long offset, long len) {
-    super(createReader(chunkReadLimit, passReadLimit,
-            opts.getIncludeColumnNames(), buffer.getAddress() + offset, len,
-            opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
-            opts.getDecimal128Columns()),
-        ChunkedReaderBase.FileType.ORC);
+    handle = createReader(chunkReadLimit, passReadLimit,
+        opts.getIncludeColumnNames(), buffer.getAddress() + offset, len,
+        opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+        opts.getDecimal128Columns());
+    if (handle == 0) {
+      throw new IllegalStateException("Cannot create native chunked ORC reader object.");
+    }
   }
 
   /**
    * Construct a chunked ORC reader instance, similar to
    * {@link ORCChunkedReader#ORCChunkedReader(long, long, ORCOptions, HostMemoryBuffer, long, long)},
    * with an additional parameter to control the granularity of the output table.
-   * When reading a chunk table, with respect to the given size limits, a subset of stripes may
-   * be loaded, decompressed and decoded into an intermediate table. The reader will then subdivide
-   * that table into smaller tables for final output using {@code outputRowSizingGranularity}
-   * as the subdivision step.
    *
-   * @param outputRowSizingGranularity The change step in number of rows in the output table.
+   * @param outputRowGranularity The change step in number of rows in the output table.
    * @see ORCChunkedReader#ORCChunkedReader(long, long, ORCOptions, HostMemoryBuffer, long, long)
    */
-  public ORCChunkedReader(long chunkReadLimit, long passReadLimit, long outputRowSizingGranularity,
+  public ORCChunkedReader(long chunkReadLimit, long passReadLimit, long outputRowGranularity,
       ORCOptions opts, HostMemoryBuffer buffer, long offset, long len) {
-    super(createReaderWithOutputGranularity(chunkReadLimit, passReadLimit, outputRowSizingGranularity,
-            opts.getIncludeColumnNames(), buffer.getAddress() + offset, len,
-            opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
-            opts.getDecimal128Columns()),
-        ChunkedReaderBase.FileType.ORC);
+    handle = createReaderWithOutputGranularity(chunkReadLimit, passReadLimit, outputRowGranularity,
+        opts.getIncludeColumnNames(), buffer.getAddress() + offset, len,
+        opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+        opts.getDecimal128Columns());
+    if (handle == 0) {
+      throw new IllegalStateException("Cannot create native chunked ORC reader object.");
+    }
   }
+
+  /**
+   * Check if the given file has anything left to read.
+   *
+   * @return A boolean value indicating if there is more data to read from file.
+   */
+  public boolean hasNext() {
+    if (handle == 0) {
+      throw new IllegalStateException("Native chunked ORC reader object may have been closed.");
+    }
+
+    if (firstCall) {
+      // This function needs to return true at least once, so an empty table
+      // (but having empty columns instead of no column) can be returned by readChunk()
+      // if the input file has no row.
+      firstCall = false;
+      return true;
+    }
+    return hasNext(handle);
+  }
+
+  /**
+   * Read a chunk of rows in the given ORC file such that the returning data has total size
+   * does not exceed the given read limit. If the given file has no data, or all data has been read
+   * before by previous calls to this function, a null Table will be returned.
+   *
+   * @return A table of new rows reading from the given file.
+   */
+  public Table readChunk() {
+    if (handle == 0) {
+      throw new IllegalStateException("Native chunked ORC reader object may have been closed.");
+    }
+
+    long[] columnPtrs = readChunk(handle);
+    return columnPtrs != null ? new Table(columnPtrs) : null;
+  }
+
+  @Override
+  public void close() {
+    if (handle != 0) {
+      close(handle);
+      handle = 0;
+    }
+  }
+
+
+  /**
+   * Auxiliary variable to help {@link #hasNext()} returning true at least once.
+   */
+  private boolean firstCall = true;
+
+  /**
+   * Handle for memory address of the native ORC chunked reader class.
+   */
+  private long handle;
 
   /**
    * Create a native chunked ORC reader object on heap and return its memory address.
@@ -93,11 +148,17 @@ public class ORCChunkedReader extends ChunkedReaderBase implements AutoCloseable
    * {@link ORCChunkedReader#createReader(long, long, String[], long, long, boolean, int, String[])},
    * with an additional parameter to control the granularity of the output table.
    *
-   * @param outputRowSizingGranularity The change step in number of rows in the output table.
+   * @param outputRowGranularity The change step in number of rows in the output table.
    * @see ORCChunkedReader#createReader(long, long, String[], long, long, boolean, int, String[])
    */
   private static native long createReaderWithOutputGranularity(
-      long chunkReadLimit, long passReadLimit, long outputRowSizingGranularity,
+      long chunkReadLimit, long passReadLimit, long outputRowGranularity,
       String[] filterColumnNames, long bufferAddrs, long length,
       boolean usingNumPyTypes, int timeUnit, String[] decimal128Columns);
+
+  private static native boolean hasNext(long handle);
+
+  private static native long[] readChunk(long handle);
+
+  private static native void close(long handle);
 }

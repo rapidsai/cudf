@@ -23,7 +23,7 @@ import java.io.File;
 /**
  * Provide an interface for reading a Parquet file in an iterative manner.
  */
-public class ParquetChunkedReader extends ChunkedReaderBase implements AutoCloseable {
+public class ParquetChunkedReader implements AutoCloseable {
   static {
     NativeDepsLoader.loadNativeDeps();
   }
@@ -62,9 +62,12 @@ public class ParquetChunkedReader extends ChunkedReaderBase implements AutoClose
    * @param filePath Full path of the input Parquet file to read.
    */
   public ParquetChunkedReader(long chunkSizeByteLimit, long passReadLimit, ParquetOptions opts, File filePath) {
-    super(create(chunkSizeByteLimit, passReadLimit, opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
-        filePath.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()),
-        ChunkedReaderBase.FileType.PARQUET);
+    handle = create(chunkSizeByteLimit, passReadLimit, opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
+        filePath.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId());
+
+    if (handle == 0) {
+      throw new IllegalStateException("Cannot create native chunked Parquet reader object.");
+    }
   }
 
   /**
@@ -97,9 +100,12 @@ public class ParquetChunkedReader extends ChunkedReaderBase implements AutoClose
   public ParquetChunkedReader(long chunkSizeByteLimit, long passReadLimit,
                               ParquetOptions opts, HostMemoryBuffer buffer,
                               long offset, long len) {
-    super(create(chunkSizeByteLimit,passReadLimit,  opts.getIncludeColumnNames(), opts.getReadBinaryAsString(), null,
-        buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()),
-        ChunkedReaderBase.FileType.PARQUET);
+    handle = create(chunkSizeByteLimit,passReadLimit,  opts.getIncludeColumnNames(), opts.getReadBinaryAsString(), null,
+        buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId());
+
+    if (handle == 0) {
+      throw new IllegalStateException("Cannot create native chunked Parquet reader object.");
+    }
   }
 
   /**
@@ -117,10 +123,9 @@ public class ParquetChunkedReader extends ChunkedReaderBase implements AutoClose
 
     boolean passed = false;
     try {
-      super(createWithDataSource(chunkSizeByteLimit, opts.getIncludeColumnNames(),
+      handle = createWithDataSource(chunkSizeByteLimit, opts.getIncludeColumnNames(),
               opts.getReadBinaryAsString(), opts.timeUnit().typeId.getNativeId(),
-              dataSourceHandle),
-          ChunkedReaderBase.FileType.PARQUET);
+              dataSourceHandle);
       passed = true;
     } finally {
       if (!passed) {
@@ -168,6 +173,10 @@ public class ParquetChunkedReader extends ChunkedReaderBase implements AutoClose
 
   @Override
   public void close() {
+    if (handle != 0) {
+      close(handle);
+      handle = 0;
+    }
     if (dataSourceHandle != 0) {
       DataSourceHelper.destroyWrapperDataSource(dataSourceHandle);
       dataSourceHandle = 0;
@@ -207,4 +216,10 @@ public class ParquetChunkedReader extends ChunkedReaderBase implements AutoClose
 
   private static native long createWithDataSource(long chunkedSizeByteLimit,
       String[] filterColumnNames, boolean[] binaryToString, int timeUnit, long dataSourceHandle);
+
+  private static native boolean hasNext(long handle);
+
+  private static native long[] readChunk(long handle);
+
+  private static native void close(long handle);
 }
