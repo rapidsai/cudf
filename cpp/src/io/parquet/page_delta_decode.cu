@@ -579,15 +579,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     __syncthreads();
   }
 
-  // now turn array of lengths into offsets
-  int value_count = nesting_info_base[leaf_level_index].value_count;
+  // Now turn the array of lengths into offsets, but skip if this is a large string column. In the
+  // latter case, offsets will be computed during string column creation.
+  if (not s->col.is_large_string_col) {
+    int value_count = nesting_info_base[leaf_level_index].value_count;
 
-  // if no repetition we haven't calculated start/end bounds and instead just skipped
-  // values until we reach first_row. account for that here.
-  if (!has_repetition) { value_count -= s->first_row; }
+    // if no repetition we haven't calculated start/end bounds and instead just skipped
+    // values until we reach first_row. account for that here.
+    if (!has_repetition) { value_count -= s->first_row; }
 
-  auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
-  block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
+    auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
+    block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
+  }
 
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
@@ -738,15 +741,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     __syncthreads();
   }
 
-  // now turn array of lengths into offsets
-  int value_count = nesting_info_base[leaf_level_index].value_count;
+  // Now turn the array of lengths into offsets, but skip if this is a large string column. In the
+  // latter case, offsets will be computed during string column creation.
+  if (not s->col.is_large_string_col) {
+    int value_count = nesting_info_base[leaf_level_index].value_count;
 
-  // if no repetition we haven't calculated start/end bounds and instead just skipped
-  // values until we reach first_row. account for that here.
-  if (!has_repetition) { value_count -= s->first_row; }
+    // if no repetition we haven't calculated start/end bounds and instead just skipped
+    // values until we reach first_row. account for that here.
+    if (!has_repetition) { value_count -= s->first_row; }
 
-  auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
-  block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
+    auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
+    block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
+  }
 
   // finally, copy the string data into place
   auto const dst = nesting_info_base[leaf_level_index].string_out;

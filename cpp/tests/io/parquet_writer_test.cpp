@@ -567,9 +567,7 @@ TEST_F(ParquetWriterTest, EmptyList)
   auto result = cudf::io::read_parquet(
     cudf::io::parquet_reader_options_builder(cudf::io::source_info(filepath)));
 
-  using lcw     = cudf::test::lists_column_wrapper<int64_t>;
-  auto expected = lcw{lcw{}, lcw{}, lcw{}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), L0->view());
 }
 
 TEST_F(ParquetWriterTest, DeepEmptyList)

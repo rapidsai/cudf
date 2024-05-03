@@ -2088,6 +2088,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return data_columns, index_columns, data_names, index_names
 
     def repeat(self, repeats, axis=None):
-        return self._from_columns_like_self(
-            Frame._repeat([*self._columns], repeats, axis), self._column_names
+        return self._from_data(
+            self._data._from_columns_like_self(
+                super()._repeat([*self._columns], repeats, axis)
+            )
         )

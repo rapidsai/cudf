@@ -10986,3 +10986,23 @@ def test_squeeze(axis, data):
     result = df.squeeze(axis=axis)
     expected = df.to_pandas().squeeze(axis=axis)
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("column", [range(1), np.array([1], dtype=np.int8)])
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda df: df.where(df < 2, 2),
+        lambda df: df.nans_to_nulls(),
+        lambda df: df.isna(),
+        lambda df: df.notna(),
+        lambda df: abs(df),
+        lambda df: -df,
+        lambda df: ~df,
+    ],
+)
+def test_op_preserves_column_metadata(column, operation):
+    df = cudf.DataFrame([1], columns=cudf.Index(column))
+    result = operation(df).columns
+    expected = pd.Index(column)
+    pd.testing.assert_index_equal(result, expected, exact=True)
