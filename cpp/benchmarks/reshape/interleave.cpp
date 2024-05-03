@@ -28,7 +28,7 @@ static void bench_interleave(nvbench::state& state)
   auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
   auto const num_cols  = static_cast<cudf::size_type>(state.get_int64("columns"));
 
-  if (static_cast<std::size_t>(num_rows) * static_cast<std::size_t>(row_width) >=
+  if (static_cast<std::size_t>(num_rows) * static_cast<std::size_t>(row_width) * num_cols >=
       static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
     state.skip("Skip benchmarks greater than size_type limit");
   }
