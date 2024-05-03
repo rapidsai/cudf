@@ -1875,6 +1875,7 @@ def test_concat_mixed_list_types_error(s1, s2):
             ),
         ),
         1,
+        "columns",
     ],
 )
 @pytest.mark.parametrize(
