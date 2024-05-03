@@ -16,9 +16,9 @@
 
 #include "join_common.hpp"
 
-template <typename key_type, typename payload_type, bool Nullable>
+template <typename Key, bool Nullable>
 void distinct_inner_join(nvbench::state& state,
-                         nvbench::type_list<key_type, payload_type, nvbench::enum_type<Nullable>>)
+                         nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
 {
   auto join = [](cudf::table_view const& build_input,
                  cudf::table_view const& probe_input,
@@ -33,12 +33,12 @@ void distinct_inner_join(nvbench::state& state,
     return hj_obj.inner_join(stream);
   };
 
-  BM_join<key_type, payload_type, Nullable>(state, join);
+  BM_join<Key, Nullable>(state, join);
 }
 
-template <typename key_type, typename payload_type, bool Nullable>
+template <typename Key, bool Nullable>
 void distinct_left_join(nvbench::state& state,
-                        nvbench::type_list<key_type, payload_type, nvbench::enum_type<Nullable>>)
+                        nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
 {
   auto join = [](cudf::table_view const& build_input,
                  cudf::table_view const& probe_input,
@@ -53,65 +53,59 @@ void distinct_left_join(nvbench::state& state,
     return hj_obj.left_join(stream);
   };
 
-  BM_join<key_type, payload_type, Nullable>(state, join);
+  BM_join<Key, Nullable>(state, join);
 }
 
 // inner join -----------------------------------------------------------------------
 NVBENCH_BENCH_TYPES(distinct_inner_join,
                     NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
-                                      nvbench::type_list<nvbench::int32_t>,
                                       nvbench::enum_type_list<false>))
   .set_name("distinct_inner_join_32bit")
-  .set_type_axes_names({"Key Type", "Payload Type", "Nullable"})
+  .set_type_axes_names({"Key", "Nullable"})
   .add_int64_axis("right_table_size", {100'000, 10'000'000, 80'000'000, 100'000'000})
   .add_int64_axis("left_table_size",
                   {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});
 
 NVBENCH_BENCH_TYPES(distinct_inner_join,
                     NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int64_t>,
-                                      nvbench::type_list<nvbench::int64_t>,
                                       nvbench::enum_type_list<false>))
   .set_name("distinct_inner_join_64bit")
-  .set_type_axes_names({"Key Type", "Payload Type", "Nullable"})
+  .set_type_axes_names({"Key", "Nullable"})
   .add_int64_axis("right_table_size", {40'000'000, 50'000'000})
   .add_int64_axis("left_table_size", {50'000'000, 120'000'000});
 
 NVBENCH_BENCH_TYPES(distinct_inner_join,
                     NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
-                                      nvbench::type_list<nvbench::int32_t>,
                                       nvbench::enum_type_list<true>))
   .set_name("distinct_inner_join_32bit_nulls")
-  .set_type_axes_names({"Key Type", "Payload Type", "Nullable"})
+  .set_type_axes_names({"Key", "Nullable"})
   .add_int64_axis("right_table_size", {100'000, 10'000'000, 80'000'000, 100'000'000})
   .add_int64_axis("left_table_size",
                   {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});
 
 NVBENCH_BENCH_TYPES(distinct_inner_join,
                     NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int64_t>,
-                                      nvbench::type_list<nvbench::int64_t>,
                                       nvbench::enum_type_list<true>))
   .set_name("distinct_inner_join_64bit_nulls")
-  .set_type_axes_names({"Key Type", "Payload Type", "Nullable"})
+  .set_type_axes_names({"Key", "Nullable"})
   .add_int64_axis("right_table_size", {40'000'000, 50'000'000})
   .add_int64_axis("left_table_size", {50'000'000, 120'000'000});
 
 // left join ------------------------------------------------------------------------
 NVBENCH_BENCH_TYPES(distinct_left_join,
                     NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
-                                      nvbench::type_list<nvbench::int32_t>,
                                       nvbench::enum_type_list<false>))
   .set_name("distinct_left_join_32bit")
-  .set_type_axes_names({"Key Type", "Payload Type", "Nullable"})
+  .set_type_axes_names({"Key", "Nullable"})
   .add_int64_axis("right_table_size", {100'000, 10'000'000, 80'000'000, 100'000'000})
   .add_int64_axis("left_table_size",
                   {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});
 
 NVBENCH_BENCH_TYPES(distinct_left_join,
                     NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
-                                      nvbench::type_list<nvbench::int32_t>,
                                       nvbench::enum_type_list<true>))
   .set_name("distinct_left_join_32bit_nulls")
-  .set_type_axes_names({"Key Type", "Payload Type", "Nullable"})
+  .set_type_axes_names({"Key", "Nullable"})
   .add_int64_axis("right_table_size", {100'000, 10'000'000, 80'000'000, 100'000'000})
   .add_int64_axis("left_table_size",
                   {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});

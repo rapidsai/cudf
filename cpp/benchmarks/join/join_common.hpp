@@ -60,8 +60,7 @@ struct null75_generator {
 
 enum class join_t { CONDITIONAL, MIXED, HASH };
 
-template <typename left_key_type,
-          typename right_key_type,
+template <typename Key,
           bool Nullable,
           join_t join_type = join_t::HASH,
           typename state_type,
@@ -86,10 +85,6 @@ void BM_join(state_type& state, Join JoinFunc)
   }();
 
   if constexpr (std::is_same_v<state_type, nvbench::state>) {
-    if (not std::is_same_v<key_type, payload_type>) {
-      state.skip("Skip unmatched key types");
-      return;
-    }
     if (right_table_size > left_table_size) {
       state.skip("Skip large right table");
       return;
@@ -113,30 +108,29 @@ void BM_join(state_type& state, Join JoinFunc)
 
   std::unique_ptr<cudf::column> right_key_column0 = [&]() {
     auto [null_mask, null_count] = right_random_null_mask(right_table_size);
-    return Nullable ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()),
+    return Nullable ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()),
                                                 right_table_size,
                                                 std::move(null_mask),
                                                 null_count)
-                    : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()),
+                    : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()),
                                                 right_table_size);
   }();
   std::unique_ptr<cudf::column> left_key_column0 = [&]() {
     auto [null_mask, null_count] = right_random_null_mask(left_table_size);
-    return Nullable ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()),
-                                                left_table_size,
-                                                std::move(null_mask),
-                                                null_count)
-                    : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()),
-                                                left_table_size);
+    return Nullable
+             ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()),
+                                         left_table_size,
+                                         std::move(null_mask),
+                                         null_count)
+             : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()), left_table_size);
   }();
 
-  generate_input_tables<key_type, cudf::size_type>(
-    right_key_column0->mutable_view().data<key_type>(),
-    right_table_size,
-    left_key_column0->mutable_view().data<key_type>(),
-    left_table_size,
-    selectivity,
-    multiplicity);
+  generate_input_tables<Key, cudf::size_type>(right_key_column0->mutable_view().data<Key>(),
+                                              right_table_size,
+                                              left_key_column0->mutable_view().data<Key>(),
+                                              left_table_size,
+                                              selectivity,
+                                              multiplicity);
 
   // Copy right_key_column0 and left_key_column0 into new columns.
   // If Nullable, the new columns will be assigned new nullmasks.
@@ -157,7 +151,7 @@ void BM_join(state_type& state, Join JoinFunc)
     return col;
   }();
 
-  auto init = cudf::make_fixed_width_scalar<payload_type>(static_cast<payload_type>(0));
+  auto init                 = cudf::make_fixed_width_scalar<Key>(static_cast<Key>(0));
   auto right_payload_column = cudf::sequence(right_table_size, *init);
   auto left_payload_column  = cudf::sequence(left_table_size, *init);
 

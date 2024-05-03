@@ -16,9 +16,9 @@
 
 #include <benchmarks/join/join_common.hpp>
 
-template <typename key_type, typename payload_type, bool Nullable>
+template <typename Key, bool Nullable>
 void nvbench_inner_join(nvbench::state& state,
-                        nvbench::type_list<key_type, payload_type, nvbench::enum_type<Nullable>>)
+                        nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
 {
   auto join = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
@@ -31,12 +31,11 @@ void nvbench_inner_join(nvbench::state& state,
     return hj_obj.inner_join(right_input, std::nullopt, stream);
   };
 
-  BM_join<key_type, payload_type, Nullable>(state, join);
+  BM_join<Key, Nullable>(state, join);
 }
 
-template <typename key_type, typename payload_type, bool Nullable>
-void nvbench_left_join(nvbench::state& state,
-                       nvbench::type_list<key_type, payload_type, nvbench::enum_type<Nullable>>)
+template <typename Key, bool Nullable>
+void nvbench_left_join(nvbench::state& state, nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
 {
   auto join = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
@@ -49,12 +48,11 @@ void nvbench_left_join(nvbench::state& state,
     return hj_obj.left_join(right_input, std::nullopt, stream);
   };
 
-  BM_join<key_type, payload_type, Nullable>(state, join);
+  BM_join<Key, Nullable>(state, join);
 }
 
-template <typename key_type, typename payload_type, bool Nullable>
-void nvbench_full_join(nvbench::state& state,
-                       nvbench::type_list<key_type, payload_type, nvbench::enum_type<Nullable>>)
+template <typename Key, bool Nullable>
+void nvbench_full_join(nvbench::state& state, nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
 {
   auto join = [](cudf::table_view const& left_input,
                  cudf::table_view const& right_input,
@@ -67,26 +65,23 @@ void nvbench_full_join(nvbench::state& state,
     return hj_obj.full_join(right_input, std::nullopt, stream);
   };
 
-  BM_join<key_type, payload_type, Nullable>(state, join);
+  BM_join<Key, Nullable>(state, join);
 }
 
-NVBENCH_BENCH_TYPES(nvbench_inner_join,
-                    NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
+NVBENCH_BENCH_TYPES(nvbench_inner_join, NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
   .set_name("inner_join")
-  .set_type_axes_names({"left_key_type", "right_key_type", "nullable"})
+  .set_type_axes_names({"Key", "Nullable"})
   .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_table_size", JOIN_SIZE_RANGE);
 
-NVBENCH_BENCH_TYPES(nvbench_left_join,
-                    NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
+NVBENCH_BENCH_TYPES(nvbench_left_join, NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
   .set_name("left_join")
-  .set_type_axes_names({"left_key_type", "right_key_type", "nullable"})
+  .set_type_axes_names({"Key", "Nullable"})
   .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_table_size", JOIN_SIZE_RANGE);
 
-NVBENCH_BENCH_TYPES(nvbench_full_join,
-                    NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
+NVBENCH_BENCH_TYPES(nvbench_full_join, NVBENCH_TYPE_AXES(JOIN_KEY_RANGE, JOIN_NULLABLE_RANGE))
   .set_name("full_join")
-  .set_type_axes_names({"left_key_type", "right_key_type", "nullable"})
+  .set_type_axes_names({"Key", "Nullable"})
   .add_int64_axis("left_table_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_table_size", JOIN_SIZE_RANGE);
