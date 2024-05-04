@@ -262,6 +262,16 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         objs = {k: obj for k, obj in objs.items() if obj is not None}
         keys = list(objs)
         objs = list(objs.values())
+        has_multiple_level_types = (
+            len({type(name) for o in objs for name in o._data.keys()}) > 1
+        )
+        # All levels in the multiindex label must have the same type
+        if has_multiple_level_types:
+            raise NotImplementedError(
+                "Cannot construct a MultiIndex column with multiple "
+                "label types in cuDF at this time. You must convert "
+                "the labels to the same type."
+            )
         if any(isinstance(o, cudf.BaseIndex) for o in objs):
             raise TypeError(
                 "cannot concatenate a dictionary containing indices"
@@ -429,16 +439,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         # need to create a MultiIndex column
         else:
-            # All levels in the multiindex label must have the same type
-            has_multiple_level_types = (
-                len({type(name) for o in objs for name in o._data.keys()}) > 1
-            )
-            if has_multiple_level_types:
-                raise NotImplementedError(
-                    "Cannot construct a MultiIndex column with multiple "
-                    "label types in cuDF at this time. You must convert "
-                    "the labels to the same type."
-                )
             for k, o in zip(keys, objs):
                 for name, col in o._data.items():
                     # if only series, then only keep keys as column labels
