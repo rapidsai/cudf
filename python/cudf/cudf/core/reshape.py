@@ -291,6 +291,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             raise TypeError(
                 "when concatenating indices you must provide ONLY indices"
             )
+        if axis == 1:
+            raise ValueError("cannot concatenate indices across axis 1")
 
     only_series = all(isinstance(o, cudf.Series) for o in objs)
 

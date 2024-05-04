@@ -1997,3 +1997,36 @@ def test_concat_dict_incorrect_type_index(d):
         match="cannot concatenate a dictionary containing indices",
     ):
         cudf.concat(d, axis=1)
+
+
+@pytest.mark.parametrize(
+    "axis",
+    [0, 1],
+)
+@pytest.mark.parametrize(
+    "idx",
+    [
+        [cudf.Index([1, 2, 3])],
+        [cudf.Index([1, 2, 3]), cudf.Index([4, 5, 6])],
+        [
+            cudf.MultiIndex(
+                levels=[[1, 2], ["blue", "red"]],
+                codes=[[0, 0, 1, 1], [1, 0, 1, 0]],
+            )
+        ],
+        [cudf.CategoricalIndex([1, 2, 3])],
+    ],
+)
+def test_concat_index(idx, axis):
+    if axis == 1:
+        with pytest.raises(
+            ValueError, match="cannot concatenate indices across axis 1"
+        ):
+            cudf.concat(idx, axis=axis)
+    else:
+        result = cudf.concat(idx, axis=axis)
+        assert isinstance(result, cudf.Index)
+    with pytest.raises(
+        TypeError, match="only Series and DataFrame objs are valid"
+    ):
+        pd.concat([i.to_pandas() for i in idx], axis=axis)
