@@ -340,12 +340,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                             ]
                         )
             else:
-                typs = None
-                o_typ = typs.pop()
-                if o_typ not in allowed_typs:
-                    raise TypeError(
-                        f"cannot concatenate object of type {o_typ}"
-                    )
                 data = obj._data.copy(deep=True)
                 if isinstance(obj, cudf.Series) and obj.name is None:
                     # If the Series has no name, pandas renames it to 0.
