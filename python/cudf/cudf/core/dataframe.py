@@ -1779,8 +1779,40 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         # Reassign index and column names
-        if objs[0]._data.multiindex:
-            out._set_columns_like(objs[0]._data)
+        if all(o._data.multiindex for o in objs):
+            out._data.multiindex = True
+            if not all(
+                o._data.label_dtype == objs[0]._data.label_dtype for o in objs
+            ):
+                raise ValueError(
+                    f"Label datatype for a multiindex dataframe "
+                    f"must be the same for all data, instead "
+                    f"the datatypes are "
+                    f"{set(o._data.label_dtype for o in objs)}"
+                )
+            unique_name_level_name = {
+                (name, level_name)
+                for name, level_name in [
+                    (name, level_name)
+                    for o in objs
+                    for name, level_name in zip(
+                        o._data.names, o._data.level_names
+                    )
+                ]
+            }
+            if len(unique_name_level_name) != len(out.dtypes):
+                raise ValueError(
+                    f"The length of unique names for the "
+                    f"MultilevelIndex was found to be "
+                    f"{len(unique_name_level_name)} "
+                    f"but the length of column data types "
+                    f"is {len(out.dtypes)}. These should be the same."
+                )
+            out._data._level_names = tuple(
+                level_name for _, level_name in unique_name_level_name
+            )
+            out._data.label_dtype = objs[0]._data.label_dtype
+            out._set_columns_like(out._data)
         else:
             out.columns = names
         if not ignore_index:
