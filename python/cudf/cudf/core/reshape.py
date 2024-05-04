@@ -252,6 +252,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     if not objs:
         raise ValueError("No objects to concatenate")
 
+    axis = _AXIS_MAP.get(axis, None)
+    if axis is None:
+        raise ValueError(
+            f'`axis` must be 0 / "index" or 1 / "columns", got: {axis}'
+        )
+
     if isinstance(objs, dict):
         objs = {k: obj for k, obj in objs.items() if obj is not None}
         keys = list(objs)
@@ -266,12 +272,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
     if not objs:
         raise ValueError("All objects passed were None")
-
-    axis = _AXIS_MAP.get(axis, None)
-    if axis is None:
-        raise ValueError(
-            f'`axis` must be 0 / "index" or 1 / "columns", got: {axis}'
-        )
 
     # Retrieve the base types of `objs`. In order to support sub-types
     # and object wrappers, we use `isinstance()` instead of comparing
