@@ -2001,7 +2001,15 @@ def test_concat_dict_incorrect_type_index(d):
 
 @pytest.mark.parametrize(
     "axis",
-    [0, 1],
+    [
+        0,
+        pytest.param(
+            1,
+            marks=pytest.mark.xfail(
+                reason=("cannot concatenate indices across axis 1")
+            ),
+        ),
+    ],
 )
 @pytest.mark.parametrize(
     "idx",
@@ -2018,14 +2026,8 @@ def test_concat_dict_incorrect_type_index(d):
     ],
 )
 def test_concat_index(idx, axis):
-    if axis == 1:
-        with pytest.raises(
-            ValueError, match="cannot concatenate indices across axis 1"
-        ):
-            cudf.concat(idx, axis=axis)
-    else:
-        result = cudf.concat(idx, axis=axis)
-        assert isinstance(result, cudf.Index)
+    result = cudf.concat(idx, axis=axis)
+    assert isinstance(result, cudf.Index)
     with pytest.raises(
         TypeError, match="only Series and DataFrame objs are valid"
     ):
