@@ -1867,49 +1867,128 @@ def test_concat_mixed_list_types_error(s1, s2):
 
 @pytest.mark.parametrize(
     "axis",
-    [0, 1],
+    [
+        0,
+        1,
+        "columns",
+    ],
 )
 @pytest.mark.parametrize(
     "d",
     [
-        {"first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]})},
+        {"first": (cudf.DataFrame, {"data": {"A": [1, 2], "B": [3, 4]}})},
         {
-            "first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]}),
-            "second": cudf.DataFrame({"A": [5, 6], "B": [7, 8]}),
-            "third": cudf.DataFrame({"C": [1, 2, 3]}),
+            "first": (cudf.DataFrame, {"data": {"A": [1, 2], "B": [3, 4]}}),
+            "second": (cudf.DataFrame, {"data": {"A": [5, 6], "B": [7, 8]}}),
+            "third": (cudf.DataFrame, {"data": {"C": [1, 2, 3]}}),
         },
         {
-            "first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]}),
-            "second": cudf.DataFrame({"C": [1, 2, 3]}),
-            "third": cudf.DataFrame({"A": [5, 6], "B": [7, 8]}),
+            "first": (cudf.DataFrame, {"data": {"A": [1, 2], "B": [3, 4]}}),
+            "second": (cudf.DataFrame, {"data": {"C": [1, 2, 3]}}),
+            "third": (cudf.DataFrame, {"data": {"A": [5, 6], "B": [7, 8]}}),
         },
         {
-            "first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]}),
-            "second": cudf.DataFrame({"C": [1, 2, 3]}),
-            "third": cudf.DataFrame({"A": [5, 6], "C": [7, 8]}),
-            "fourth": cudf.DataFrame({"B": [9, 10]}),
+            "first": (cudf.DataFrame, {"data": {"A": [1, 2], "B": [3, 4]}}),
+            "second": (cudf.DataFrame, {"data": {"C": [1, 2, 3]}}),
+            "third": (cudf.DataFrame, {"data": {"A": [5, 6], "C": [7, 8]}}),
+            "fourth": (cudf.DataFrame, {"data": {"B": [9, 10]}}),
         },
-        {"first": cudf.Series([1, 2, 3]), "second": cudf.Series([4, 5, 6])},
+        pytest.param(
+            {
+                "first": (cudf.DataFrame, {"data": {2.0: [1, 1]}}),
+                "second": (cudf.DataFrame, {"data": {"test": ["abc", "def"]}}),
+            },
+            marks=pytest.mark.xfail(
+                reason=(
+                    "Cannot construct a MultiIndex column with multiple "
+                    "label types in cuDF at this time. You must convert "
+                    "the labels to the same type."
+                )
+            ),
+        ),
         {
-            "first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]}),
-            "second": cudf.Series([5, 6], name="C"),
+            "first": (cudf.Series, {"data": [1, 2, 3]}),
+            "second": (cudf.Series, {"data": [4, 5, 6]}),
+        },
+        {
+            "first": (cudf.DataFrame, {"data": {"A": [1, 2], "B": [3, 4]}}),
+            "second": (cudf.Series, {"data": [5, 6], "name": "C"}),
+        },
+        pytest.param(
+            {
+                "first": (
+                    cudf.DataFrame,
+                    {"data": {("A", "B"): [1, 2], "C": [3, 4]}},
+                ),
+                "second": (
+                    cudf.DataFrame,
+                    {"data": {"D": [5, 6], ("A", "B"): [7, 8]}},
+                ),
+            },
+            marks=pytest.mark.xfail(
+                reason=(
+                    "Cannot construct a MultiIndex column with multiple "
+                    "label types in cuDF at this time. You must convert "
+                    "the labels to the same type."
+                )
+            ),
+        ),
+        pytest.param(
+            {
+                "first": (
+                    cudf.DataFrame,
+                    {"data": {("A", "B"): [3, 4], 2.0: [1, 1]}},
+                ),
+                "second": (
+                    cudf.DataFrame,
+                    {"data": {("C", "D"): [3, 4], 3.0: [5, 6]}},
+                ),
+            },
+            marks=pytest.mark.xfail(
+                reason=(
+                    "Cannot construct a MultiIndex column with multiple "
+                    "label types in cuDF at this time. You must convert "
+                    "the labels to the same type."
+                )
+            ),
+        ),
+        {
+            "first": (
+                cudf.DataFrame,
+                {"data": {(1, 2): [1, 2], (3, 4): [3, 4]}},
+            ),
+            "second": (
+                cudf.DataFrame,
+                {"data": {(1, 2): [5, 6], (5, 6): [7, 8]}},
+            ),
         },
     ],
 )
 def test_concat_dictionary(d, axis):
-    result = cudf.concat(d, axis=axis)
+    _dict = {k: c(**v) for k, (c, v) in d.items()}
+    result = cudf.concat(_dict, axis=axis)
     expected = cudf.from_pandas(
-        pd.concat({k: df.to_pandas() for k, df in d.items()}, axis=axis)
+        pd.concat({k: df.to_pandas() for k, df in _dict.items()}, axis=axis)
     )
     assert_eq(expected, result)
 
 
-def test_concat_dict_incorrect_type():
-    d = {
-        "first": cudf.Index([1, 2, 3]),
-    }
+@pytest.mark.parametrize(
+    "d",
+    [
+        {"first": cudf.Index([1, 2, 3])},
+        {
+            "first": cudf.MultiIndex(
+                levels=[[1, 2], ["blue", "red"]],
+                codes=[[0, 0, 1, 1], [1, 0, 1, 0]],
+            )
+        },
+        {"first": cudf.CategoricalIndex([1, 2, 3])},
+    ],
+)
+def test_concat_dict_incorrect_type_index(d):
     with pytest.raises(
         TypeError,
-        match=f"cannot concatenate object of type {type(d['first'])}",
+        match="cannot concatenate a dictionary containing indices",
     ):
         cudf.concat(d, axis=1)

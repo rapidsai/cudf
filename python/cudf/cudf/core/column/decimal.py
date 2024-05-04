@@ -38,6 +38,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
     dtype: DecimalDtype
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            "Decimals are not yet supported via `__cuda_array_interface__`"
+        )
+
     def as_decimal_column(
         self,
         dtype: Dtype,
@@ -340,12 +346,6 @@ class Decimal64Column(DecimalBaseColumn):
             offset=self._offset,
             length=self.size,
             buffers=[mask_buf, data_buf],
-        )
-
-    @property
-    def __cuda_array_interface__(self):
-        raise NotImplementedError(
-            "Decimals are not yet supported via `__cuda_array_interface__`"
         )
 
     def _with_type_metadata(

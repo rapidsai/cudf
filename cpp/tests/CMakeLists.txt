@@ -294,7 +294,7 @@ ConfigureTest(
   PERCENT 30
 )
 ConfigureTest(
-  ORC_TEST io/orc_test.cpp
+  ORC_TEST io/orc_chunked_reader_test.cu io/orc_test.cpp
   GPUS 1
   PERCENT 30
 )
@@ -572,7 +572,7 @@ ConfigureTest(
 # * large strings test ----------------------------------------------------------------------------
 ConfigureTest(
   LARGE_STRINGS_TEST large_strings/large_strings_fixture.cpp large_strings/merge_tests.cpp
-  large_strings/concatenate_tests.cpp
+  large_strings/concatenate_tests.cpp large_strings/parquet_tests.cpp
   GPUS 1
   PERCENT 100
 )

@@ -122,7 +122,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
     Parameters
     ----------
-    objs : list or dict of DataFrame, Series, or Index
+    objs : list or dictionary of DataFrame, Series, or Index
     axis : {0/'index', 1/'columns'}, default 0
         The axis to concatenate along.
     join : {'inner', 'outer'}, default 'outer'
@@ -256,6 +256,10 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         objs = {k: obj for k, obj in objs.items() if obj is not None}
         keys = list(objs)
         objs = list(objs.values())
+        if any(isinstance(o, cudf.BaseIndex) for o in objs):
+            raise TypeError(
+                "cannot concatenate a dictionary containing indices"
+            )
     else:
         objs = [obj for obj in objs if obj is not None]
         keys = None
@@ -272,20 +276,24 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     # Retrieve the base types of `objs`. In order to support sub-types
     # and object wrappers, we use `isinstance()` instead of comparing
     # types directly
-    typs = set()
-    for o in objs:
-        if isinstance(o, cudf.MultiIndex):
-            typs.add(cudf.MultiIndex)
-        elif isinstance(o, cudf.BaseIndex):
-            typs.add(type(o))
-        elif isinstance(o, cudf.DataFrame):
-            typs.add(cudf.DataFrame)
-        elif isinstance(o, cudf.Series):
-            typs.add(cudf.Series)
-        else:
-            raise TypeError(f"cannot concatenate object of type {type(o)}")
+    allowed_typs = (
+        cudf.Series,
+        cudf.DataFrame,
+        cudf.BaseIndex,
+    )
+    if not all(isinstance(o, allowed_typs) for o in objs):
+        raise TypeError(
+            f"can only concatenate objects which are instances of "
+            f"{allowed_typs}, instead received {[type(o) for o in objs]}"
+        )
 
-    allowed_typs = {cudf.Series, cudf.DataFrame}
+    if any(isinstance(o, cudf.BaseIndex) for o in objs):
+        if not all(isinstance(o, cudf.BaseIndex) for o in objs):
+            raise TypeError(
+                "when concatenating indices you must provide ONLY indices"
+            )
+
+    only_series = all(isinstance(o, cudf.Series) for o in objs)
 
     # Return for single object
     if len(objs) == 1:
@@ -332,6 +340,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                             ]
                         )
             else:
+                typs = None
                 o_typ = typs.pop()
                 if o_typ not in allowed_typs:
                     raise TypeError(
@@ -362,7 +371,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
-        if not typs.issubset(allowed_typs):
+        if not all(isinstance(o, (cudf.Series, cudf.DataFrame)) for o in objs):
             raise TypeError(
                 "Can only concatenate Series and DataFrame objects when axis=1"
             )
@@ -398,10 +407,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             objs = _align_objs(objs, how=join, sort=sort)
             df.index = objs[0].index
 
-        # if the dictionary consists of only dictionaries
-        # it must be handled differently
-        only_series = len(typs) == 1 and cudf.Series in typs
-
         if keys is None:
             for o in objs:
                 for name, col in o._data.items():
@@ -430,18 +435,27 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         # need to create a MultiIndex column
         else:
+            # All levels in the multiindex label must have the same type
+            has_multiple_level_types = (
+                len({type(name) for o in objs for name in o._data.keys()}) > 1
+            )
+            if has_multiple_level_types:
+                raise NotImplementedError(
+                    "Cannot construct a MultiIndex column with multiple "
+                    "label types in cuDF at this time. You must convert "
+                    "the labels to the same type."
+                )
             for k, o in zip(keys, objs):
                 for name, col in o._data.items():
                     # if only series, then only keep keys as column labels
                     # if the existing column is multiindex, prepend it
-                    # to handle cases where dfs and srs are concatenated,
-                    # explicitly cast int column labels into str
+                    # to handle cases where dfs and srs are concatenated
                     if only_series:
                         col_label = k
                     elif isinstance(name, tuple):
                         col_label = (k, *name)
                     else:
-                        col_label = (k, str(name))
+                        col_label = (k, name)
                     if empty_inner:
                         df[col_label] = cudf.core.column.column_empty_like(
                             col, newsize=0
@@ -452,13 +466,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         if keys is None:
             df.columns = result_columns.unique()
             if ignore_index:
-                df.columns = pd.RangeIndex(len(result_columns.unique()))
-        else:
-            if ignore_index:
-                # with ignore_index the column names change to numbers
-                df.columns = pd.RangeIndex(len(result_columns))
-            elif not only_series:
-                df.columns = cudf.MultiIndex.from_tuples(df._column_names)
+                df.columns = cudf.RangeIndex(len(result_columns.unique()))
+        elif ignore_index:
+            # with ignore_index the column names change to numbers
+            df.columns = cudf.RangeIndex(len(result_columns))
+        elif not only_series:
+            df.columns = cudf.MultiIndex.from_tuples(df._column_names)
 
         if empty_inner:
             # if join is inner and it contains an empty df
@@ -468,18 +481,10 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         return df
 
     # If we get here, we are always concatenating along axis 0 (the rows).
-    typ = list(typs)[0]
-    if len(typs) > 1:
-        if allowed_typs == typs:
-            # This block of code will run when `objs` has
-            # both Series & DataFrame kind of inputs.
-            _normalize_series_and_dataframe(objs, axis=axis)
-            typ = cudf.DataFrame
-        else:
-            raise TypeError(
-                f"`concat` cannot concatenate objects of "
-                f"types: {sorted([t.__name__ for t in typs])}."
-            )
+    typ = type(objs[0])
+    if len({type(o) for o in objs}) > 1:
+        _normalize_series_and_dataframe(objs, axis=axis)
+        typ = cudf.DataFrame
 
     if typ is cudf.DataFrame:
         old_objs = objs

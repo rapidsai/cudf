@@ -1039,7 +1039,9 @@ def test_index_append(data, other):
         (len(data) == 0 or len(other) == 0) and pd_data.dtype != pd_other.dtype
     ):
         expected = pd_data.append(pd_other)
-    with expect_warning_if(len(data) == 0 or len(other) == 0):
+    with expect_warning_if(
+        (len(data) == 0 or len(other) == 0) and gd_data.dtype != gd_other.dtype
+    ):
         actual = gd_data.append(gd_other)
     if len(data) == 0 and len(other) == 0:
         # Pandas default dtype to "object" for empty list
@@ -1237,7 +1239,10 @@ def test_index_append_list(data, other):
         and (any(d.dtype != data.dtype for d in other))
     ):
         expected = pd_data.append(pd_other)
-    with expect_warning_if(len(data) == 0 or any(len(d) == 0 for d in other)):
+    with expect_warning_if(
+        (len(data) == 0 or any(len(d) == 0 for d in other))
+        and (any(d.dtype != data.dtype for d in other))
+    ):
         actual = gd_data.append(gd_other)
 
     assert_eq(expected, actual)
@@ -2817,8 +2822,7 @@ def test_index_methods(index, func):
 
     if func == "append":
         expected = pidx.append(other=pidx)
-        with expect_warning_if(len(gidx) == 0):
-            actual = gidx.append(other=gidx)
+        actual = gidx.append(other=gidx)
     else:
         expected = getattr(pidx, func)()
         actual = getattr(gidx, func)()
