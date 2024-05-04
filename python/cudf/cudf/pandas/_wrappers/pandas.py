@@ -356,6 +356,18 @@ TimedeltaArray = make_final_proxy_type(
     },
 )
 
+NumpyExtensionArray = make_final_proxy_type(
+    "NumpyExtensionArray",
+    _Unusable,
+    pd.arrays.NumpyExtensionArray,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_ndarray": _FastSlowAttribute("_ndarray"),
+        "_dtype": _FastSlowAttribute("_dtype"),
+    },
+)
+
 PeriodIndex = make_final_proxy_type(
     "PeriodIndex",
     _Unusable,
