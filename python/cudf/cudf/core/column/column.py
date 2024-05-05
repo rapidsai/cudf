@@ -2163,6 +2163,15 @@ def as_column(
                     nan_as_null=nan_as_null,
                     length=length,
                 )
+            elif isinstance(
+                element, (pd.Timestamp, pd.Timedelta, type(pd.NaT))
+            ):
+                return as_column(
+                    pd.Series(arbitrary),
+                    dtype=dtype,
+                    nan_as_null=nan_as_null,
+                    length=length,
+                )
             elif not any(element is na for na in (None, pd.NA, np.nan)):
                 # Might have NA + element like above, but short-circuit if
                 # an element pyarrow/pandas might be able to parse
