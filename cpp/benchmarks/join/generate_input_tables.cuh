@@ -53,7 +53,7 @@ CUDF_KERNEL void init_build_tbl(key_type* const build_tbl,
 
   curandState localState = state[start_idx];
 
-  for (thread_index_type tidx = start_idx; tidx < build_tbl_size; tidx += stride) {
+  for (cudf::thread_index_type tidx = start_idx; tidx < build_tbl_size; tidx += stride) {
     auto const idx = static_cast<size_type>(tidx);
     double const x = curand_uniform_double(&localState);
 
@@ -79,7 +79,7 @@ CUDF_KERNEL void init_probe_tbl(key_type* const probe_tbl,
 
   curandState localState = state[start_idx];
 
-  for (thread_index_type tidx = start_idx; tidx < probe_tbl_size; tidx += stride) {
+  for (cudf::thread_index_type tidx = start_idx; tidx < probe_tbl_size; tidx += stride) {
     auto const idx = static_cast<size_type>(tidx);
     key_type val;
     double x = curand_uniform_double(&localState);

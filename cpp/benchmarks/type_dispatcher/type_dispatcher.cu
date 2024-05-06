@@ -64,7 +64,7 @@ CUDF_KERNEL void no_dispatching_kernel(T** A, cudf::size_type n_rows, cudf::size
   auto tidx         = cudf::detail::grid_1d::global_thread_id();
   auto const stride = cudf::detail::grid_1d::grid_stride();
   while (tidx < n_rows) {
-    auto const index = static_cast<cudf::size_type>(tid);
+    auto const index = static_cast<cudf::size_type>(tidx);
     for (int c = 0; c < n_cols; c++) {
       A[c][index] = F::f(A[c][index]);
     }
@@ -81,7 +81,7 @@ CUDF_KERNEL void host_dispatching_kernel(cudf::mutable_column_device_view source
   auto tidx         = cudf::detail::grid_1d::global_thread_id();
   auto const stride = cudf::detail::grid_1d::grid_stride();
   while (tidx < source_column.size()) {
-    auto const index = static_cast<cudf::size_type>(tid);
+    auto const index = static_cast<cudf::size_type>(tidx);
     A[index]         = F::f(A[index]);
     tidx += stride;
   }
