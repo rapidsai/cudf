@@ -718,17 +718,18 @@ void aggregate_reader_metadata::consume_arrow_schema()
     [&](arrow_schema_data_types& arrow_schema, int schema_idx) {
       auto& schema_elem = per_file_metadata[0].schema[schema_idx];
 
-      // TODO: raw loops. Should change to STL if possible.
-      if (not std::all_of(thrust::make_counting_iterator(0),
-                          thrust::make_counting_iterator(schema_elem.num_children),
-                          [&](auto const& idx) {
-                            return validate_schemas(arrow_schema.children[idx],
-                                                    schema_elem.children_idx[idx]);
-                          })) {
+      // ensure equal number of children first to avoid any segfaults in children
+      if (schema_elem.num_children == static_cast<int32_t>(arrow_schema.children.size())) {
+        // true if and only if true for all children as well
+        return std::all_of(thrust::make_counting_iterator(0),
+                           thrust::make_counting_iterator(schema_elem.num_children),
+                           [&](auto const& idx) {
+                             return validate_schemas(arrow_schema.children[idx],
+                                                     schema_elem.children_idx[idx]);
+                           });
+      } else {
         return false;
       }
-
-      return schema_elem.num_children == static_cast<int32_t>(arrow_schema.children.size());
     };
 
   // Function to co-walk arrow and parquet schemas
