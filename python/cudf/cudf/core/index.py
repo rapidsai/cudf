@@ -38,7 +38,7 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
-from cudf.core._base_index import BaseIndex
+from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import (
     CategoricalColumn,
@@ -1256,11 +1256,11 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         )
 
         if not len(self):
-            return result.values
+            return _return_get_indexer_result(result.values)
         try:
             lcol, rcol = _match_join_keys(needle, self._column, "inner")
         except ValueError:
-            return result.values
+            return _return_get_indexer_result(result.values)
 
         scatter_map, indices = libcudf.join.join([lcol], [rcol], how="inner")
         (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
@@ -1287,7 +1287,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 "{['ffill'/'pad', 'bfill'/'backfill', 'nearest', None]}"
             )
 
-        return result_series.to_cupy()
+        return _return_get_indexer_result(result_series.to_cupy())
 
     @_cudf_nvtx_annotate
     def get_loc(self, key):
