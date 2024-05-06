@@ -16,6 +16,7 @@
 
 #include "config_utils.hpp"
 
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
@@ -97,7 +98,7 @@ class fixed_pinned_pool_memory_resource {
   void* pool_begin_{};
   void* pool_end_{};
   size_t pool_size_{};
-  cuda::stream_ref stream_{cudf::get_default_stream().value()};
+  cuda::stream_ref stream_{cudf::detail::global_cuda_stream_pool().get_stream(0).value()};
   rmm::mr::pinned_host_memory_resource fallback_mr_{};
 
  public:
@@ -122,7 +123,6 @@ class fixed_pinned_pool_memory_resource {
       }
     }
 
-    // std::cout << "Falling back!\n";
     return fallback_mr_.allocate_async(bytes, alignment, stream);
   }
   void do_deallocate_async(void* ptr,
@@ -150,7 +150,9 @@ class fixed_pinned_pool_memory_resource {
   void* allocate(std::size_t bytes,
                  [[maybe_unused]] std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
   {
-    return allocate_async(bytes, stream_);
+    auto const result = allocate_async(bytes, stream_);
+    stream_.wait();
+    return result;
   }
 
   void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream) noexcept
@@ -170,7 +172,8 @@ class fixed_pinned_pool_memory_resource {
                   std::size_t bytes,
                   std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT) noexcept
   {
-    return deallocate_async(ptr, bytes, alignment, stream_);
+    deallocate_async(ptr, bytes, alignment, stream_);
+    stream_.wait();
   }
 
   bool operator==(const fixed_pinned_pool_memory_resource&) const { return true; }
@@ -217,6 +220,12 @@ inline std::mutex& host_mr_lock()
 {
   static std::mutex map_lock;
   return map_lock;
+}
+
+inline rmm::host_async_resource_ref old_default_pinned_mr()
+{
+  static rmm::mr::pinned_host_memory_resource default_mr{};
+  return default_mr;
 }
 
 CUDF_EXPORT inline auto& host_mr()

@@ -82,6 +82,11 @@ class cuda_stream_pool {
 cuda_stream_pool* create_global_cuda_stream_pool();
 
 /**
+ * @brief Get the global stream pool.
+ */
+cuda_stream_pool& global_cuda_stream_pool();
+
+/**
  * @brief Acquire a set of `cuda_stream_view` objects and synchronize them to an event on another
  * stream.
  *
