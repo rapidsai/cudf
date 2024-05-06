@@ -228,12 +228,15 @@ struct floating_converter {
 template <typename T, typename cuda::std::enable_if_t<(cuda::std::is_unsigned_v<T>)>* = nullptr>
 CUDF_HOST_DEVICE inline int count_significant_bits(T value)
 {
+  static_assert(std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> || std::is_same_v<T, __uint128_t>, 
+    "This function needs to be updated for this (currently) unsupported type");
+
 #ifdef __CUDA_ARCH__
   if constexpr (std::is_same_v<T, uint64_t>) {
     return 64 - __clzll(static_cast<int64_t>(value));
-  } else if constexpr (sizeof(T) <= sizeof(uint32_t)) {
+  } else if constexpr (std::is_same_v<T, uint32_t>) {
     return 32 - __clz(static_cast<int32_t>(value));
-  } else {
+  } else if constexpr (std::is_same_v<T, __uint128_t>) {
     // 128 bit type, must break u[ into high and low components
     auto const high_bits = static_cast<int64_t>(value >> 64);
     auto const low_bits  = static_cast<int64_t>(value);
@@ -245,9 +248,9 @@ CUDF_HOST_DEVICE inline int count_significant_bits(T value)
 
   if constexpr (std::is_same_v<T, uint64_t>) {
     return 64 - __builtin_clzll(value);
-  } else if constexpr (sizeof(T) <= sizeof(uint32_t)) {
+  } else if constexpr (std::is_same_v<T, uint32_t>) {
     return 32 - __builtin_clz(value);
-  } else {
+  } else if constexpr (std::is_same_v<T, __uint128_t>) {
     // 128 bit type, must break u[ into high and low components
     auto const high_bits = static_cast<uint64_t>(value >> 64);
     if (high_bits == 0) {
