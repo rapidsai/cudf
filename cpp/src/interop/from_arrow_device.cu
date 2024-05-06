@@ -250,21 +250,22 @@ std::unique_ptr<column> dispatch_copy_from_arrow_device::operator()<cudf::string
   auto chars_column = this->operator()<int8_t>(&view, &char_array, data_type(type_id::INT8), true);
 
   auto const num_rows = offsets_column->size() - 1;
-  auto out_col        = make_strings_column(num_rows,
-                                     std::move(offsets_column),
-                                     std::move(chars_column->release().data.release()[0]),
-                                     input->null_count,
-                                     std::move(*get_mask_buffer(input)));
+  auto bitmask        = get_mask_buffer(input);
+  auto out_col        = cudf::column_view(data_type{type_id::STRING},
+                                   num_rows,
+                                   chars_column->view().head(),
+                                   static_cast<bitmask_type*>(bitmask->data()),
+                                   input->null_count,
+                                   0,
+                                          {offsets_column->view()});
 
-  return input->offset == 0
-           ? std::move(out_col)
-           : std::make_unique<column>(
-               cudf::detail::slice(out_col->view(),
-                                   static_cast<size_type>(input->offset),
-                                   static_cast<size_type>(input->offset + input->length),
-                                   stream),
-               stream,
-               mr);
+  return std::make_unique<column>(
+    cudf::detail::slice(out_col,
+                        static_cast<size_type>(input->offset),
+                        static_cast<size_type>(input->offset + input->length),
+                        stream),
+    stream,
+    mr);
 }
 
 template <>
