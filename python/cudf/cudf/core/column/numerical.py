@@ -108,7 +108,7 @@ class NumericalColumn(NumericalBaseColumn):
         # Fails if item is of type None, so the handler.
         try:
             search_item = self.dtype.type(item)
-            if search_item != item and not is_float_dtype(self.dtype):
+            if search_item != item and self.dtype.kind != "f":
                 return False
         except (TypeError, ValueError):
             return False
