@@ -1,4 +1,25 @@
 /*
+ * Copyright (c) 2024, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/*
+ * Portions of this file are derived from Google's Brotli project at
+ * https://github.com/ReneNyffenegger/cpp-base64, original license text below.
+ */
+
+/*
  *  base64_utils.cpp and base64_utils.hpp
  *
  *  base64 encoding and decoding with C++.
@@ -45,7 +66,7 @@
 // altered: applying clang-format for libcudf on this file.
 
 // altered: use cudf namespaces
-namespace cudf::detail {
+namespace cudf::io::detail {
 
 static const std::string base64_chars =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -155,4 +176,4 @@ std::string base64_decode(std::string_view encoded_string)
   return decoded;
 }
 
-}  // namespace cudf::detail
+}  // namespace cudf::io::detail

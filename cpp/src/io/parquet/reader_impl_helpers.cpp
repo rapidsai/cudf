@@ -17,11 +17,10 @@
 #include "reader_impl_helpers.hpp"
 
 #include "io/parquet/parquet.hpp"
+#include "io/utilities/base64_utilities.hpp"
 #include "io/utilities/row_selection.hpp"
-
-#include <cudf/detail/utilities/base64_utils.hpp>
-#include <cudf/io/ipc/detail/Message_generated.h>
-#include <cudf/io/ipc/detail/Schema_generated.h>
+#include "ipc/Message_generated.h"
+#include "ipc/Schema_generated.h"
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -655,7 +654,7 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
   // Note: Store the output from base64_decode in the lvalue here and then pass
   // it to decode_ipc_message. Directly passing rvalue from base64_decode to
   // decode_ipc_message can lead to unintended nullptr dereferences.
-  auto decoded_message = cudf::detail::base64_decode(encoded_serialized_message);
+  auto decoded_message = cudf::io::detail::base64_decode(encoded_serialized_message);
 
   // Decode the ipc message to get a const void pointer to the arrow:Message flatbuffer
   auto metadata_buf = decode_ipc_message(decoded_message);

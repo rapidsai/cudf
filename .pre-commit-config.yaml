@@ -141,9 +141,8 @@ repos:
       - id: verify-copyright
         exclude: |
           (?x)^(
-            cpp/include/cudf_test/cxxopts[.]hpp|
-            cpp/include/cudf/io/ipc/detail/.*|
-            cpp/include/cudf/detail/utilities/base64_utils[.]hpp
+            cpp/include/cudf_test/cxxopts[.]hpp$
+            cpp/src/io/parquet/ipc/.*_generated[.]hpp
           )$
 
 default_language_version:
