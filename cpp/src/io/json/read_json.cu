@@ -100,10 +100,12 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
         bytes_read += sources[i]->device_read(range_offset, data_size, destination, stream);
       } else {
         h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
-        auto const& h_buffer = h_buffers.back();
-        CUDF_CUDA_TRY(cudaMemcpyAsync(
-          destination, h_buffer->data(), h_buffer->size(), cudaMemcpyHostToDevice, stream.value()));
-        bytes_read += h_buffer->size();
+        CUDF_CUDA_TRY(cudaMemcpyAsync(destination,
+                                      h_buffers[h_buffers.size() - 1]->data(),
+                                      h_buffers[h_buffers.size() - 1]->size(),
+                                      cudaMemcpyHostToDevice,
+                                      stream.value()));
+        bytes_read += h_buffers[h_buffers.size() - 1]->size();
       }
       range_offset = 0;
       delimiter_map.push_back(bytes_read + (num_delimiter_chars * delimiter_map.size()));
@@ -150,17 +152,15 @@ size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::data
                                         char const delimiter,
                                         rmm::cuda_stream_view stream)
 {
-  auto const total_source_size =
-    sources_size(sources, reader_opts.get_byte_range_offset(), reader_opts.get_byte_range_size()) +
-    (sources.size() - 1);
+  auto total_source_size = sources_size(sources, 0, 0) + (sources.size() - 1);
   rmm::device_uvector<char> buffer(total_source_size, stream);
-  ingest_raw_input(buffer,
-                   sources,
-                   reader_opts.get_compression(),
-                   reader_opts.get_byte_range_offset(),
-                   reader_opts.get_byte_range_size(),
-                   stream);
-  return find_first_delimiter(buffer, delimiter, stream);
+  auto readbufspan = ingest_raw_input(buffer,
+                                      sources,
+                                      reader_opts.get_compression(),
+                                      reader_opts.get_byte_range_offset(),
+                                      reader_opts.get_byte_range_size(),
+                                      stream);
+  return find_first_delimiter(readbufspan, '\n', stream);
 }
 
 /**

@@ -49,7 +49,6 @@ std::vector<cudf::io::table_with_metadata> skeleton_for_parellel_chunk_reader(
 {
   using namespace cudf::io::json::detail;
   using cudf::size_type;
-  // assuming single source.
   size_t total_source_size = 0;
   for (auto const& source : sources) {
     total_source_size += source->size();
@@ -176,4 +175,56 @@ TEST_F(JsonReaderTest, ReadCompleteFiles)
   auto expected_result = cudf::concatenate(part_table_views);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result.tbl->view(), expected_result->view());
+}
+
+TEST_F(JsonReaderTest, ByteRange_MultiSource)
+{
+  std::string const json_string = R"(
+    { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
+    { "a": { "y" : 6}, "b" : [4, 5   ], "c": 12 }
+    { "a": { "y" : 6}, "b" : [6      ], "c": 13 }
+    { "a": { "y" : 6}, "b" : [7      ], "c": 14 })";
+  auto filename                 = temp_env->get_temp_dir() + "ParseInRangeIntegers.json";
+  {
+    std::ofstream outfile(filename, std::ofstream::out);
+    outfile << json_string;
+  }
+
+  constexpr int num_sources = 5;
+  std::vector<std::string> filepaths(num_sources, filename);
+
+  // Initialize parsing options (reading json lines)
+  cudf::io::json_reader_options json_lines_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filepaths})
+      .lines(true)
+      .compression(cudf::io::compression_type::NONE)
+      .recovery_mode(cudf::io::json_recovery_mode_t::FAIL);
+
+  // Read full test data via existing, nested JSON lines reader
+  cudf::io::table_with_metadata current_reader_table = cudf::io::read_json(json_lines_options);
+
+  auto file_paths = json_lines_options.get_source().filepaths();
+  std::vector<std::unique_ptr<cudf::io::datasource>> datasources;
+  for (auto& fp : file_paths) {
+    datasources.emplace_back(cudf::io::datasource::create(fp));
+  }
+
+  // Test for different chunk sizes
+  for (auto chunk_size : {7, 10, 15, 20, 40, 50, 100, 200, 500, 1000, 2000}) {
+    auto const tables = skeleton_for_parellel_chunk_reader(datasources,
+                                                           json_lines_options,
+                                                           chunk_size,
+                                                           cudf::get_default_stream(),
+                                                           rmm::mr::get_current_device_resource());
+
+    auto table_views = std::vector<cudf::table_view>(tables.size());
+    std::transform(tables.begin(), tables.end(), table_views.begin(), [](auto& table) {
+      return table.tbl->view();
+    });
+    auto result = cudf::concatenate(table_views);
+
+    // Verify that the data read via chunked reader matches the data read via nested JSON reader
+    // cannot use EQUAL due to concatenate removing null mask
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(current_reader_table.tbl->view(), result->view());
+  }
 }
