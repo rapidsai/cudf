@@ -137,6 +137,29 @@ def test_find(pa_data_col, plc_data_col, pa_target_scalar, plc_target_scalar):
     assert_column_eq(got, expected)
 
 
+def colwise_apply(pa_data_col, pa_target_col, operator):
+    def libcudf_logic(st, target):
+        if st is None:
+            return None
+        elif target is None:
+            return False
+        else:
+            return operator(st, target)
+
+    expected = pa.array(
+        [
+            libcudf_logic(elem, target)
+            for elem, target in zip(
+                pa_data_col.to_pylist(),
+                pa_target_col.to_pylist(),
+            )
+        ],
+        type=pa.bool_(),
+    )
+
+    return expected
+
+
 def test_find_column(pa_data_col, pa_target_col, plc_data_col, plc_target_col):
     expected = pa.array(
         [
@@ -193,25 +216,9 @@ def test_contains(
 def test_contains_column(
     pa_data_col, pa_target_col, plc_data_col, plc_target_col
 ):
-    def libcudf_logic(st, target):
-        if st is None:
-            return None
-        elif target is None:
-            return False
-        else:
-            return target in st
-
-    expected = pa.array(
-        [
-            libcudf_logic(elem, target)
-            for elem, target in zip(
-                pa_data_col.to_pylist(),
-                pa_target_col.to_pylist(),
-            )
-        ],
-        type=pa.bool_(),
+    expected = colwise_apply(
+        pa_data_col, pa_target_col, lambda st, target: target in st
     )
-
     got = plc.strings.find.contains(plc_data_col, plc_target_col)
     assert_column_eq(got, expected)
 
@@ -228,25 +235,9 @@ def test_starts_with(
 def test_starts_with_column(
     pa_data_col, pa_target_col, plc_data_col, plc_target_col
 ):
-    def libcudf_logic(st, target):
-        if st is None:
-            return None
-        elif target is None:
-            return False
-        else:
-            return st.startswith(target)
-
-    expected = pa.array(
-        [
-            libcudf_logic(elem, target)
-            for elem, target in zip(
-                pa_data_col.to_pylist(),
-                pa_target_col.to_pylist(),
-            )
-        ],
-        type=pa.bool_(),
+    expected = colwise_apply(
+        pa_data_col, pa_target_col, lambda st, target: st.startswith(target)
     )
-
     got = plc.strings.find.starts_with(plc_data_col, plc_target_col)
     assert_column_eq(got, expected)
 
@@ -263,25 +254,8 @@ def test_ends_with(
 def test_ends_with_column(
     pa_data_col, pa_target_col, plc_data_col, plc_target_col
 ):
-    # helper function here
-    def libcudf_logic(st, target):
-        if st is None:
-            return None
-        elif target is None:
-            return False
-        else:
-            return st.endswith(target)
-
-    expected = pa.array(
-        [
-            libcudf_logic(elem, target)
-            for elem, target in zip(
-                pa_data_col.to_pylist(),
-                pa_target_col.to_pylist(),
-            )
-        ],
-        type=pa.bool_(),
+    expected = colwise_apply(
+        pa_data_col, pa_target_col, lambda st, target: st.endswith(target)
     )
-
     got = plc.strings.find.ends_with(plc_data_col, plc_target_col)
     assert_column_eq(got, expected)
