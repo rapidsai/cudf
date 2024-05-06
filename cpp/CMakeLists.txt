@@ -359,6 +359,9 @@ add_library(
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
   src/interop/to_arrow_device.cu
+  src/interop/from_arrow_device.cu
+  src/interop/to_arrow_schema.cpp
+  src/interop/to_arrow_utilities.cpp
   src/interop/detail/arrow_allocator.cpp
   src/io/avro/avro.cpp
   src/io/avro/avro_gpu.cu
@@ -392,8 +395,9 @@ add_library(
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp
   src/io/orc/reader_impl.cu
+  src/io/orc/reader_impl_chunking.cu
+  src/io/orc/reader_impl_decode.cu
   src/io/orc/reader_impl_helpers.cpp
-  src/io/orc/reader_impl_preprocess.cu
   src/io/orc/stats_enc.cu
   src/io/orc/stripe_data.cu
   src/io/orc/stripe_enc.cu
@@ -426,6 +430,7 @@ add_library(
   src/io/text/multibyte_split.cu
   src/io/utilities/arrow_io_source.cpp
   src/io/utilities/column_buffer.cpp
+  src/io/utilities/column_buffer_strings.cu
   src/io/utilities/config_utils.cpp
   src/io/utilities/data_casting.cu
   src/io/utilities/data_sink.cpp
@@ -584,6 +589,7 @@ add_library(
   src/strings/filling/fill.cu
   src/strings/filter_chars.cu
   src/strings/like.cu
+  src/strings/merge/merge.cu
   src/strings/padding.cu
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cpp
@@ -844,14 +850,12 @@ if(CUDF_BUILD_TESTUTIL)
 
   add_library(cudf::cudftest_default_stream ALIAS cudftest_default_stream)
 
-  # Needs to be static so that we support usage of static builds of gtest which doesn't compile with
-  # fPIC enabled and therefore can't be embedded into shared libraries.
   add_library(
-    cudftestutil STATIC
+    cudftestutil SHARED
     tests/io/metadata_utilities.cpp
-    tests/utilities/base_fixture.cpp
     tests/utilities/column_utilities.cu
     tests/utilities/debug_utilities.cu
+    tests/utilities/random_seed.cpp
     tests/utilities/table_utilities.cu
     tests/utilities/tdigest_utilities.cu
   )
@@ -876,8 +880,8 @@ if(CUDF_BUILD_TESTUTIL)
 
   target_link_libraries(
     cudftestutil
-    PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf cudftest_default_stream
-    PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+    PUBLIC Threads::Threads cudf cudftest_default_stream
+    PRIVATE GTest::gmock GTest::gtest $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
   target_include_directories(
@@ -956,7 +960,7 @@ endif()
 if(CUDF_BUILD_BENCHMARKS)
   # Find or install GoogleBench
   include(${rapids-cmake-dir}/cpm/gbench.cmake)
-  rapids_cpm_gbench()
+  rapids_cpm_gbench(BUILD_STATIC)
 
   # Find or install nvbench
   include(cmake/thirdparty/get_nvbench.cmake)

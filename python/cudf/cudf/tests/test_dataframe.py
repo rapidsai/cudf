@@ -2769,6 +2769,36 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     assert_eq(pdf2, gdf2)
 
 
+@pytest.mark.parametrize(
+    "index",
+    [
+        None,
+        cudf.RangeIndex(3, name="a"),
+        "a",
+        "b",
+        ["a", "b"],
+        cudf.RangeIndex(0, 5, 2, name="a"),
+    ],
+)
+@pytest.mark.parametrize("preserve_index", [True, False, None])
+def test_arrow_round_trip(preserve_index, index):
+    data = {"a": [4, 5, 6], "b": ["cat", "dog", "bird"]}
+    if isinstance(index, (list, str)):
+        gdf = cudf.DataFrame(data).set_index(index)
+    else:
+        gdf = cudf.DataFrame(data, index=index)
+
+    table = gdf.to_arrow(preserve_index=preserve_index)
+    table_pd = pa.Table.from_pandas(
+        gdf.to_pandas(), preserve_index=preserve_index
+    )
+
+    gdf_out = cudf.DataFrame.from_arrow(table)
+    pdf_out = table_pd.to_pandas()
+
+    assert_eq(gdf_out, pdf_out)
+
+
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
 def test_cuda_array_interface(dtype):
     np_data = np.arange(10).astype(dtype)
@@ -5169,20 +5199,20 @@ def test_df_constructor_dtype(dtype):
         cudf.DataFrame(
             {
                 "a": [1, 2, 3, 4],
-                "b": [7, np.NaN, 9, 10],
+                "b": [7, np.nan, 9, 10],
                 "c": cudf.Series(
-                    [np.NaN, np.NaN, np.NaN, np.NaN], nan_as_null=False
+                    [np.nan, np.nan, np.nan, np.nan], nan_as_null=False
                 ),
                 "d": cudf.Series([None, None, None, None], dtype="int64"),
                 "e": [100, None, 200, None],
-                "f": cudf.Series([10, None, np.NaN, 11], nan_as_null=False),
+                "f": cudf.Series([10, None, np.nan, 11], nan_as_null=False),
             }
         ),
         cudf.DataFrame(
             {
                 "a": [10, 11, 12, 13, 14, 15],
                 "b": cudf.Series(
-                    [10, None, np.NaN, 2234, None, np.NaN], nan_as_null=False
+                    [10, None, np.nan, 2234, None, np.nan], nan_as_null=False
                 ),
             }
         ),
@@ -5234,11 +5264,11 @@ def test_rowwise_ops_nullable_dtypes_all_null(op):
     gdf = cudf.DataFrame(
         {
             "a": [1, 2, 3, 4],
-            "b": [7, np.NaN, 9, 10],
-            "c": cudf.Series([np.NaN, np.NaN, np.NaN, np.NaN], dtype=float),
+            "b": [7, np.nan, 9, 10],
+            "c": cudf.Series([np.nan, np.nan, np.nan, np.nan], dtype=float),
             "d": cudf.Series([None, None, None, None], dtype="int64"),
             "e": [100, None, 200, None],
-            "f": cudf.Series([10, None, np.NaN, 11], nan_as_null=False),
+            "f": cudf.Series([10, None, np.nan, 11], nan_as_null=False),
         }
     )
 
@@ -5270,7 +5300,7 @@ def test_rowwise_ops_nullable_dtypes_partial_null(op):
         {
             "a": [10, 11, 12, 13, 14, 15],
             "b": cudf.Series(
-                [10, None, np.NaN, 2234, None, np.NaN],
+                [10, None, np.nan, 2234, None, np.nan],
                 nan_as_null=False,
             ),
         }
@@ -10956,3 +10986,23 @@ def test_squeeze(axis, data):
     result = df.squeeze(axis=axis)
     expected = df.to_pandas().squeeze(axis=axis)
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("column", [range(1), np.array([1], dtype=np.int8)])
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda df: df.where(df < 2, 2),
+        lambda df: df.nans_to_nulls(),
+        lambda df: df.isna(),
+        lambda df: df.notna(),
+        lambda df: abs(df),
+        lambda df: -df,
+        lambda df: ~df,
+    ],
+)
+def test_op_preserves_column_metadata(column, operation):
+    df = cudf.DataFrame([1], columns=cudf.Index(column))
+    result = operation(df).columns
+    expected = pd.Index(column)
+    pd.testing.assert_index_equal(result, expected, exact=True)

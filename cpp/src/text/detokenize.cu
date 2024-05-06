@@ -20,7 +20,7 @@
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -48,12 +48,13 @@ namespace {
  * the same row. The `d_separator` is appended between each token.
  */
 struct detokenizer_fn {
-  cudf::column_device_view const d_strings;  // these are the tokens
-  cudf::size_type const* d_row_map;          // indices sorted by output row
-  cudf::size_type const* d_token_offsets;    // to each input token array
-  cudf::string_view const d_separator;       // append after each token
-  cudf::size_type* d_offsets{};              // offsets to output buffer d_chars
-  char* d_chars{};                           // output buffer for characters
+  cudf::column_device_view const d_strings;    // these are the tokens
+  cudf::size_type const* d_row_map;            // indices sorted by output row
+  cudf::size_type const* d_token_offsets;      // to each input token array
+  cudf::string_view const d_separator;         // append after each token
+  cudf::size_type* d_sizes{};                  // output sizes
+  char* d_chars{};                             // output buffer for characters
+  cudf::detail::input_offsetalator d_offsets;  // for addressing output row data in d_chars
 
   __device__ void operator()(cudf::size_type idx)
   {
@@ -75,7 +76,7 @@ struct detokenizer_fn {
         nbytes += d_separator.size_bytes();
       }
     }
-    if (!d_chars) { d_offsets[idx] = (nbytes > 0) ? (nbytes - d_separator.size_bytes()) : 0; }
+    if (!d_chars) { d_sizes[idx] = (nbytes > 0) ? (nbytes - d_separator.size_bytes()) : 0; }
   }
 };
 
@@ -157,7 +158,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
 
   cudf::string_view const d_separator(separator.data(), separator.size());
 
-  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
     detokenizer_fn{*strings_column, d_row_map, tokens_offsets.data(), d_separator},
     output_count,
     stream,
