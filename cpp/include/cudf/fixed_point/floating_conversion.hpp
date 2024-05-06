@@ -230,7 +230,7 @@ CUDF_HOST_DEVICE inline int count_significant_bits(T value)
 {
   static_assert(
     std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> || std::is_same_v<T, __uint128_t>,
-    "This function needs to be updated for this (currently) unsupported type");
+    "Unimplemented type");
 
 #ifdef __CUDA_ARCH__
   if constexpr (std::is_same_v<T, uint64_t>) {
