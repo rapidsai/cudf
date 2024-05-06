@@ -1169,10 +1169,10 @@ struct page_to_string_size {
 struct page_offset_output_iter {
   PageInfo* p;
 
-  using value_type        = size_type;
-  using difference_type   = size_type;
-  using pointer           = size_type*;
-  using reference         = size_type&;
+  using value_type        = size_t;
+  using difference_type   = size_t;
+  using pointer           = size_t*;
+  using reference         = size_t&;
   using iterator_category = thrust::output_device_iterator_tag;
 
   __host__ __device__ page_offset_output_iter operator+(int i) { return {p + i}; }

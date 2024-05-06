@@ -22,6 +22,7 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 
 #include <rmm/resource_ref.hpp>
 
@@ -99,10 +100,20 @@ void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_row
     col_string_sizes = calculate_page_string_offsets();
 
     // check for overflow
-    if (std::any_of(col_string_sizes.cbegin(), col_string_sizes.cend(), [](std::size_t sz) {
-          return sz > std::numeric_limits<size_type>::max();
-        })) {
+    auto const threshold         = static_cast<size_t>(strings::detail::get_offset64_threshold());
+    auto const has_large_strings = std::any_of(col_string_sizes.cbegin(),
+                                               col_string_sizes.cend(),
+                                               [=](std::size_t sz) { return sz > threshold; });
+    if (has_large_strings and not strings::detail::is_large_strings_enabled()) {
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
+    }
+
+    // mark any chunks that are large string columns
+    if (has_large_strings) {
+      for (auto& chunk : pass.chunks) {
+        auto const idx = chunk.src_col_index;
+        if (col_string_sizes[idx] > threshold) { chunk.is_large_string_col = true; }
+      }
     }
   }
 
@@ -348,11 +359,13 @@ void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_row
       } else if (out_buf.type.id() == type_id::STRING) {
         // need to cap off the string offsets column
         auto const sz = static_cast<size_type>(col_string_sizes[idx]);
-        CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<size_type*>(out_buf.data()) + out_buf.size,
-                                      &sz,
-                                      sizeof(size_type),
-                                      cudaMemcpyDefault,
-                                      _stream.value()));
+        if (sz <= strings::detail::get_offset64_threshold()) {
+          CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<size_type*>(out_buf.data()) + out_buf.size,
+                                        &sz,
+                                        sizeof(size_type),
+                                        cudaMemcpyDefault,
+                                        _stream.value()));
+        }
       }
     }
   }
