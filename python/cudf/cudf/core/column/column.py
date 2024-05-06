@@ -2166,6 +2166,9 @@ def as_column(
             elif isinstance(
                 element, (pd.Timestamp, pd.Timedelta, type(pd.NaT))
             ):
+                # TODO: Remove this after
+                # https://github.com/apache/arrow/issues/26492
+                # is fixed.
                 return as_column(
                     pd.Series(arbitrary),
                     dtype=dtype,
