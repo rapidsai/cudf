@@ -317,9 +317,6 @@ def _process_col(
     format: Optional[str],
     utc: bool,
 ):
-    # Causes circular import
-    from cudf.core._internals.timezones import localize
-
     if col.dtype.kind == "f":
         if unit not in (None, "ns"):
             factor = cudf.Scalar(
@@ -396,7 +393,7 @@ def _process_col(
             f"dtype {col.dtype} cannot be converted to {_unit_dtype_map[unit]}"
         )
     if utc and not isinstance(col.dtype, pd.DatetimeTZDtype):
-        return localize(col, "UTC", ambiguous="NaT", nonexistent="NaT")
+        return col.tz_localize("UTC")
     return col
 
 

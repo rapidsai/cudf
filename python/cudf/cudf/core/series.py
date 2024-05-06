@@ -3654,7 +3654,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def where(self, cond, other=None, inplace=False):
         result_col = super().where(cond, other, inplace)
         return self._mimic_inplace(
-            self._from_data_like_self({self.name: result_col}),
+            self._from_data_like_self(
+                self._data._from_columns_like_self([result_col])
+            ),
             inplace=inplace,
         )
 
@@ -4753,22 +4755,22 @@ class DatetimeProperties:
         )
 
     @copy_docstring(DatetimeIndex.tz_localize)
-    def tz_localize(self, tz, ambiguous="NaT", nonexistent="NaT"):
-        from cudf.core._internals.timezones import delocalize, localize
-
-        if tz is None:
-            result_col = delocalize(self.series._column)
-        else:
-            result_col = localize(
-                self.series._column, tz, ambiguous, nonexistent
-            )
+    def tz_localize(
+        self,
+        tz: str | None,
+        ambiguous: Literal["NaT"] = "NaT",
+        nonexistent: Literal["NaT"] = "NaT",
+    ):
+        result_col = self.series._column.tz_localize(
+            tz, ambiguous, nonexistent
+        )
         return Series._from_data(
             data={self.series.name: result_col},
             index=self.series._index,
         )
 
     @copy_docstring(DatetimeIndex.tz_convert)
-    def tz_convert(self, tz):
+    def tz_convert(self, tz: str | None):
         """
         Parameters
         ----------
@@ -4778,12 +4780,7 @@ class DatetimeProperties:
             A `tz` of None will convert to UTC and remove the
             timezone information.
         """
-        from cudf.core._internals.timezones import convert
-
-        if tz is None:
-            result_col = self.series._column._utc_time
-        else:
-            result_col = convert(self.series._column, tz)
+        result_col = self.series._column.tz_convert(tz)
         return Series._from_data(
             {self.series.name: result_col}, index=self.series._index
         )

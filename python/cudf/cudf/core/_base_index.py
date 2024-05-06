@@ -2205,3 +2205,9 @@ class BaseIndex(Serializable):
 
 def _get_result_name(left_name, right_name):
     return left_name if _is_same_name(left_name, right_name) else None
+
+
+def _return_get_indexer_result(result):
+    if cudf.get_option("mode.pandas_compatible"):
+        return result.astype("int64")
+    return result
