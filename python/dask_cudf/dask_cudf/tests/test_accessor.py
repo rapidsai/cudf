@@ -543,7 +543,7 @@ def test_struct_explode(data):
 
 
 def test_tz_localize():
-    data = Series(date_range("2000-04-01", "2000-04-03", freq="H"))
+    data = Series(date_range("2000-04-01", "2000-04-03", freq="h"))
     expect = data.dt.tz_localize(
         "US/Eastern", ambiguous="NaT", nonexistent="NaT"
     )
@@ -560,8 +560,8 @@ def test_tz_localize():
 @pytest.mark.parametrize(
     "data",
     [
-        date_range("2000-04-01", "2000-04-03", freq="H").tz_localize("UTC"),
-        date_range("2000-04-01", "2000-04-03", freq="H").tz_localize(
+        date_range("2000-04-01", "2000-04-03", freq="h").tz_localize("UTC"),
+        date_range("2000-04-01", "2000-04-03", freq="h").tz_localize(
             "US/Eastern"
         ),
     ],
