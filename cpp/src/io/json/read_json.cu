@@ -150,7 +150,9 @@ size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::data
                                         char const delimiter,
                                         rmm::cuda_stream_view stream)
 {
-  auto const total_source_size = sources_size(sources, 0, 0) + (sources.size() - 1);
+  auto const total_source_size =
+    sources_size(sources, reader_opts.get_byte_range_offset(), reader_opts.get_byte_range_size()) +
+    (sources.size() - 1);
   rmm::device_uvector<char> buffer(total_source_size, stream);
   ingest_raw_input(buffer,
                    sources,
