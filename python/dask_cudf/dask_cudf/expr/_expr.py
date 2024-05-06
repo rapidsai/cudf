@@ -1,10 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import functools
 
-import numpy as np
 from dask_expr._cumulative import CumulativeBlockwise
 from dask_expr._expr import Expr, VarColumns
-from dask_expr._quantiles import RepartitionQuantiles
 from dask_expr._reductions import Reduction, Var
 
 from dask.dataframe.core import is_dataframe_like, make_meta, meta_nonempty
@@ -123,54 +121,3 @@ def _patched_var(
 
 
 Expr.var = _patched_var
-
-
-# Add custom code path for RepartitionQuantiles, because
-# upstream logic fails when null values are present. Note
-# that the cudf-specific code path can also be used for
-# multi-column divisions in the future.
-
-
-def _quantile(a, q):
-    if a.empty:
-        # Avoid calling `quantile` on empty data
-        return None, 0
-    a = a.to_frame() if a.ndim == 1 else a
-    return (
-        a.quantile(q=q.tolist(), interpolation="nearest", method="table"),
-        len(a),
-    )
-
-
-def merge_quantiles(finalq, qs, vals):
-    from dask_cudf.sorting import merge_quantiles as mq
-
-    return mq(finalq, qs, vals).iloc[:, 0].to_pandas()
-
-
-_original_layer = RepartitionQuantiles._layer
-
-
-def _cudf_layer(self):
-    if hasattr(self._meta, "to_pandas"):
-        # pandas/cudf uses quantile in [0, 1]
-        # numpy / cupy uses [0, 100]
-        qs = np.linspace(0.0, 1.0, self.input_npartitions + 1)
-        val_dsk = {
-            (self._name, 0, i): (_quantile, key, qs)
-            for i, key in enumerate(self.frame.__dask_keys__())
-        }
-        merge_dsk = {
-            (self._name, 0): (
-                merge_quantiles,
-                qs,
-                [qs] * self.input_npartitions,
-                sorted(val_dsk),
-            )
-        }
-        return {**val_dsk, **merge_dsk}
-    else:
-        return _original_layer(self)
-
-
-RepartitionQuantiles._layer = _cudf_layer
