@@ -114,18 +114,21 @@ def plc_target_col(pa_target_col):
 
 
 @pytest.fixture(params=["a", " ", "A", "Ab", "23"], scope="module")
-def plc_target_scalar(request):
-    return plc.interop.from_arrow(pa.scalar(request.param, type=pa.string()))
+def pa_target_scalar(request):
+    return pa.scalar(request.param, type=pa.string())
 
 
-def test_find(pa_data_col, plc_data_col, plc_target_scalar):
+@pytest.fixture(scope="module")
+def plc_target_scalar(pa_target_scalar):
+    return plc.interop.from_arrow(pa_target_scalar)
+
+
+def test_find(pa_data_col, plc_data_col, pa_target_scalar, plc_target_scalar):
     got = plc.strings.find.find(plc_data_col, plc_target_scalar, 0, -1)
 
     expected = pa.array(
         [
-            elem.find(plc.interop.to_arrow(plc_target_scalar).as_py())
-            if elem is not None
-            else None
+            elem.find(pa_target_scalar.as_py()) if elem is not None else None
             for elem in pa_data_col.to_pylist()
         ],
         type=pa.int32(),
@@ -150,8 +153,8 @@ def test_find_column(pa_data_col, pa_target_col, plc_data_col, plc_target_col):
     assert_column_eq(got, expected)
 
 
-def test_rfind(pa_data_col, plc_data_col, plc_target_scalar):
-    py_target = plc.interop.to_arrow(plc_target_scalar).as_py()
+def test_rfind(pa_data_col, plc_data_col, pa_target_scalar, plc_target_scalar):
+    py_target = pa_target_scalar.as_py()
 
     got = plc.strings.find.rfind(plc_data_col, plc_target_scalar, 0, -1)
 
@@ -168,8 +171,10 @@ def test_rfind(pa_data_col, plc_data_col, plc_target_scalar):
     assert_column_eq(got, expected)
 
 
-def test_contains(pa_data_col, plc_data_col, plc_target_scalar):
-    py_target = plc.interop.to_arrow(plc_target_scalar).as_py()
+def test_contains(
+    pa_data_col, plc_data_col, pa_target_scalar, plc_target_scalar
+):
+    py_target = pa_target_scalar.as_py()
 
     got = plc.strings.find.contains(plc_data_col, plc_target_scalar)
     expected = pa.array(
@@ -211,8 +216,10 @@ def test_contains_column(
     assert_column_eq(got, expected)
 
 
-def test_starts_with(pa_data_col, plc_data_col, plc_target_scalar):
-    py_target = plc.interop.to_arrow(plc_target_scalar).as_py()
+def test_starts_with(
+    pa_data_col, plc_data_col, pa_target_scalar, plc_target_scalar
+):
+    py_target = pa_target_scalar.as_py()
     got = plc.strings.find.starts_with(plc_data_col, plc_target_scalar)
     expected = pa.compute.starts_with(pa_data_col, py_target)
     assert_column_eq(got, expected)
@@ -244,8 +251,10 @@ def test_starts_with_column(
     assert_column_eq(got, expected)
 
 
-def test_ends_with(pa_data_col, plc_data_col, plc_target_scalar):
-    py_target = plc.interop.to_arrow(plc_target_scalar).as_py()
+def test_ends_with(
+    pa_data_col, plc_data_col, pa_target_scalar, plc_target_scalar
+):
+    py_target = pa_target_scalar.as_py()
     got = plc.strings.find.ends_with(plc_data_col, plc_target_scalar)
     expected = pa.compute.ends_with(pa_data_col, py_target)
     assert_column_eq(got, expected)
@@ -254,6 +263,7 @@ def test_ends_with(pa_data_col, plc_data_col, plc_target_scalar):
 def test_ends_with_column(
     pa_data_col, pa_target_col, plc_data_col, plc_target_col
 ):
+    # helper function here
     def libcudf_logic(st, target):
         if st is None:
             return None
