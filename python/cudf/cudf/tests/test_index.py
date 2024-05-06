@@ -1741,6 +1741,10 @@ def test_get_indexer_single_unique_numeric(idx, key, method):
 
         assert_eq(expected, got)
 
+        with cudf.option_context("mode.pandas_compatible", True):
+            got = gi.get_indexer(key, method=method)
+        assert_eq(expected, got, check_dtype=True)
+
 
 @pytest.mark.parametrize(
     "idx",
@@ -1769,6 +1773,12 @@ def test_get_indexer_rangeindex(idx, key, method, tolerance):
     )
 
     assert_eq(expected, got)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gi.get_indexer(
+            key, method=method, tolerance=None if method is None else tolerance
+        )
+    assert_eq(expected, got, check_dtype=True)
 
 
 @pytest.mark.parametrize(
@@ -1950,6 +1960,11 @@ def test_get_indexer_single_duplicate_string(idx, key, method):
 
         assert_eq(expected, got)
 
+        with cudf.option_context("mode.pandas_compatible", True):
+            got = gi.get_indexer(key, method=method)
+
+        assert_eq(expected, got, check_dtype=True)
+
 
 @pytest.mark.parametrize(
     "idx",
@@ -2008,6 +2023,11 @@ def test_get_indexer_multi_numeric(idx, key, method):
     got = gi.get_indexer(key, method=method)
 
     assert_eq(expected, got)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gi.get_indexer(key, method=method)
+
+    assert_eq(expected, got, check_dtype=True)
 
 
 @pytest.mark.parametrize(
