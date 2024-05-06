@@ -346,6 +346,11 @@ target_link_libraries(MULTIBYTE_SPLIT_NVBENCH PRIVATE ZLIB::ZLIB)
 # ---------------------------------------------------------------------------------
 ConfigureNVBench(DECIMAL_NVBENCH decimal/convert_floating.cpp)
 
+# ##################################################################################################
+# * reshape benchmark
+# ---------------------------------------------------------------------------------
+ConfigureNVBench(RESHAPE_NVBENCH reshape/interleave.cpp)
+
 add_custom_target(
   run_benchmarks
   DEPENDS CUDF_BENCHMARKS

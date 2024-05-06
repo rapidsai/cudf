@@ -43,7 +43,7 @@ requirements:
     {% endif %}
     - cuda-version ={{ cuda_version }}
     - ninja
-    - sysroot_{{ target_platform }} {{ sysroot_version }}
+    - {{ stdlib("c") }}
   host:
     - librmm ={{ minor_version }}
     - libkvikio ={{ minor_version }}
@@ -170,7 +170,7 @@ outputs:
         {% endif %}
         - cuda-version ={{ cuda_version }}
         - ninja
-        - sysroot_{{ target_platform }} {{ sysroot_version }}
+        - {{ stdlib("c") }}
       host:
         - {{ pin_subpackage('libcudf', exact=True) }}
         {% if cuda_major == "11" %}
