@@ -22,7 +22,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/detail/converters.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -37,7 +37,6 @@
 #include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
-#include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
@@ -756,8 +755,9 @@ struct datetime_formatter_fn {
   column_device_view const d_timestamps;
   column_device_view const d_format_names;
   device_span<format_item const> const d_format_items;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   /**
    * @brief Specialized modulo expression that handles negative values.
@@ -1087,14 +1087,14 @@ struct datetime_formatter_fn {
   __device__ void operator()(size_type idx) const
   {
     if (d_timestamps.is_null(idx)) {
-      if (!d_chars) { d_offsets[idx] = 0; }
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     auto const tstamp = d_timestamps.element<T>(idx);
     if (d_chars) {
       timestamp_to_string(tstamp, d_chars + d_offsets[idx]);
     } else {
-      d_offsets[idx] = compute_output_size(tstamp);
+      d_sizes[idx] = compute_output_size(tstamp);
     }
   }
 };
@@ -1109,7 +1109,7 @@ struct dispatch_from_timestamps_fn {
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr) const
   {
-    return make_strings_children(
+    return experimental::make_strings_children(
       datetime_formatter_fn<T>{d_timestamps, d_format_names, d_format_items},
       d_timestamps.size(),
       stream,
