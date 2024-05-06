@@ -955,7 +955,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 {
   using cudf::detail::warp_size;
   __shared__ __align__(16) page_state_s state_g;
-  __shared__ __align__(4) size_type last_offset;
+  __shared__ size_t last_offset;
   __shared__ __align__(16)
     page_state_buffers_s<rolling_buf_size, rolling_buf_size, rolling_buf_size>
       state_buffers;
@@ -1054,9 +1054,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                               ? gpuGetStringData(s, sb, src_pos + skipped_leaf_values + i)
                               : cuda::std::pair<char const*, size_t>{nullptr, 0};
 
-          __shared__ cub::WarpScan<size_type>::TempStorage temp_storage;
-          size_type offset, warp_total;
-          cub::WarpScan<size_type>(temp_storage).ExclusiveSum(len, offset, warp_total);
+          __shared__ cub::WarpScan<size_t>::TempStorage temp_storage;
+          size_t offset, warp_total;
+          cub::WarpScan<size_t>(temp_storage).ExclusiveSum(len, offset, warp_total);
           offset += last_offset;
 
           // choose a character parallel string copy when the average string is longer than a warp
@@ -1075,10 +1075,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
             }
             __syncwarp();
           } else if (use_char_ll) {
-            __shared__ __align__(8) uint8_t const* pointers[warp_size];
-            __shared__ __align__(4) size_type offsets[warp_size];
-            __shared__ __align__(4) int dsts[warp_size];
-            __shared__ __align__(4) int lengths[warp_size];
+            __shared__ uint8_t const* pointers[warp_size];
+            __shared__ size_t offsets[warp_size];
+            __shared__ int dsts[warp_size];
+            __shared__ int lengths[warp_size];
 
             offsets[me]  = offset;
             pointers[me] = reinterpret_cast<uint8_t const*>(ptr);
@@ -1119,15 +1119,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     __syncthreads();
   }
 
-  // now turn array of lengths into offsets
-  int value_count = nesting_info_base[leaf_level_index].value_count;
+  // Now turn the array of lengths into offsets, but skip if this is a large string column. In the
+  // latter case, offsets will be computed during string column creation.
+  if (not s->col.is_large_string_col) {
+    int value_count = nesting_info_base[leaf_level_index].value_count;
 
-  // if no repetition we haven't calculated start/end bounds and instead just skipped
-  // values until we reach first_row. account for that here.
-  if (!has_repetition) { value_count -= s->first_row; }
+    // if no repetition we haven't calculated start/end bounds and instead just skipped
+    // values until we reach first_row. account for that here.
+    if (!has_repetition) { value_count -= s->first_row; }
 
-  auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
-  block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
+    auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
+    block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
+  }
 
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }

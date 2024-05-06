@@ -395,8 +395,9 @@ add_library(
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp
   src/io/orc/reader_impl.cu
+  src/io/orc/reader_impl_chunking.cu
+  src/io/orc/reader_impl_decode.cu
   src/io/orc/reader_impl_helpers.cpp
-  src/io/orc/reader_impl_preprocess.cu
   src/io/orc/stats_enc.cu
   src/io/orc/stripe_data.cu
   src/io/orc/stripe_enc.cu
@@ -429,6 +430,7 @@ add_library(
   src/io/text/multibyte_split.cu
   src/io/utilities/arrow_io_source.cpp
   src/io/utilities/column_buffer.cpp
+  src/io/utilities/column_buffer_strings.cu
   src/io/utilities/config_utils.cpp
   src/io/utilities/data_casting.cu
   src/io/utilities/data_sink.cpp
