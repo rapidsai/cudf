@@ -15,7 +15,7 @@
  */
 
 /*
- * Portions of this file are derived from Google's Brotli project at
+ * Portions of this file are derived from Rene Nyffenegger's codebase at
  * https://github.com/ReneNyffenegger/cpp-base64, original license text below.
  */
 
