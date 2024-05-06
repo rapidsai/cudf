@@ -355,7 +355,7 @@ def _is_null_host_scalar(slr):
     if cudf.utils.utils.is_na_like(slr):
         return True
     elif (isinstance(slr, (np.datetime64, np.timedelta64)) and np.isnat(slr)) or \
-            isinstance(slr, type(pd.NaT)):
+            slr is pd.NaT:
         return True
     else:
         return False

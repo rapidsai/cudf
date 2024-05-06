@@ -2163,8 +2163,9 @@ def as_column(
                     nan_as_null=nan_as_null,
                     length=length,
                 )
-            elif isinstance(
-                element, (pd.Timestamp, pd.Timedelta, type(pd.NaT))
+            elif (
+                isinstance(element, (pd.Timestamp, pd.Timedelta))
+                or element is pd.NaT
             ):
                 # TODO: Remove this after
                 # https://github.com/apache/arrow/issues/26492

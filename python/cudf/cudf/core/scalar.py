@@ -223,7 +223,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
 
         if dtype is None:
             if not valid:
-                if isinstance(value, type(NaT)):
+                if value is NaT:
                     value = value.to_numpy()
 
                 if isinstance(value, (np.datetime64, np.timedelta64)):
