@@ -81,7 +81,9 @@ std::unique_ptr<column> make_numeric_column(data_type type,
                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.", cudf::data_type_error);
+  CUDF_EXPECTS(type.id() != type_id::EMPTY && is_numeric(type),
+               "Invalid, non-numeric type.",
+               cudf::data_type_error);
   CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");
 
   return std::make_unique<column>(
@@ -161,7 +163,9 @@ std::unique_ptr<column> make_fixed_width_column(data_type type,
                                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(is_fixed_width(type), "Invalid, non-fixed-width type.", cudf::data_type_error);
+  CUDF_EXPECTS(type.id() != type_id::EMPTY && is_fixed_width(type),
+               "Invalid, non-fixed-width type.",
+               cudf::data_type_error);
 
   // clang-format off
   if      (is_timestamp  (type)) return make_timestamp_column  (type, size, state, stream, mr);
