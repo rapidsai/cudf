@@ -81,6 +81,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_PARQUET_FILE_CHUNKED_READ = TestUtils.getResourceAsFile("splittable.parquet");
   private static final File TEST_PARQUET_FILE_BINARY = TestUtils.getResourceAsFile("binary.parquet");
   private static final File TEST_ORC_FILE = TestUtils.getResourceAsFile("TestOrcFile.orc");
+  private static final File TEST_ORC_FILE_CHUNKED_READ = TestUtils.getResourceAsFile("splittable.orc");
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = TestUtils.getResourceAsFile("timestamp-date-test.orc");
   private static final File TEST_DECIMAL_PARQUET_FILE = TestUtils.getResourceAsFile("decimal.parquet");
   private static final File TEST_ALL_TYPES_PLAIN_AVRO_FILE = TestUtils.getResourceAsFile("alltypes_plain.avro");
@@ -1696,6 +1697,29 @@ public class TableTest extends CudfTestBase {
       assertEquals(2, table.getNumberOfColumns());
       assertEquals(DType.TIMESTAMP_SECONDS, table.getColumn(0).getType());
       assertEquals(DType.TIMESTAMP_DAYS, table.getColumn(1).getType());
+    }
+  }
+
+  @Test
+  void testORCChunkedReader() throws IOException {
+    byte[] buffer = Files.readAllBytes(TEST_ORC_FILE_CHUNKED_READ.toPath());
+    long len = buffer.length;
+
+    try (HostMemoryBuffer hostBuf = hostMemoryAllocator.allocate(len)) {
+      hostBuf.setBytes(0, buffer, 0, len);
+      try (ORCChunkedReader reader = new ORCChunkedReader(0, 2 * 1024 * 1024, 10000,
+          ORCOptions.DEFAULT, hostBuf, 0, len)) {
+        int numChunks = 0;
+        long totalRows = 0;
+        while (reader.hasNext()) {
+          ++numChunks;
+          try (Table chunk = reader.readChunk()) {
+            totalRows += chunk.getRowCount();
+          }
+        }
+        assertEquals(10, numChunks);
+        assertEquals(1000000, totalRows);
+      }
     }
   }
 
