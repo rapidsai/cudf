@@ -761,16 +761,16 @@ unique_column_view_t from_arrow_device_column(ArrowSchemaView* schema,
                               custom_view_deleter<cudf::column_view>{std::move(owned)}};
 }
 
-std::unique_ptr<table> from_arrow_device_host(ArrowSchemaView* schema,
-                                              ArrowDeviceArray const* input,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> from_arrow_host(ArrowSchemaView* schema,
+                                       ArrowDeviceArray const* input,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   std::vector<std::unique_ptr<column>> columns;
 
   auto type = arrow_to_cudf_type(schema);
   CUDF_EXPECTS(type == data_type(type_id::STRUCT),
-               "Must pass a struct to `from_arrow_device_host`",
+               "Must pass a struct to `from_arrow_host`",
                cudf::data_type_error);
 
   std::transform(input->array.children,
@@ -787,10 +787,10 @@ std::unique_ptr<table> from_arrow_device_host(ArrowSchemaView* schema,
   return std::make_unique<table>(std::move(columns));
 }
 
-std::unique_ptr<column> from_arrow_device_host_column(ArrowSchemaView* schema,
-                                                      ArrowDeviceArray const* input,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> from_arrow_host_column(ArrowSchemaView* schema,
+                                               ArrowDeviceArray const* input,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
 {
   auto type = arrow_to_cudf_type(schema);
   return get_column_copy(schema, &input->array, type, false, stream, mr);
@@ -798,38 +798,38 @@ std::unique_ptr<column> from_arrow_device_host_column(ArrowSchemaView* schema,
 
 }  // namespace detail
 
-std::unique_ptr<table> from_arrow_device_host(ArrowSchema const* schema,
-                                              ArrowDeviceArray const* input,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> from_arrow_host(ArrowSchema const* schema,
+                                       ArrowDeviceArray const* input,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(schema != nullptr && input != nullptr,
                "input ArrowSchema and ArrowDeviceArray must not be NULL");
   CUDF_EXPECTS(input->device_type == ARROW_DEVICE_CPU,
-               "ArrowDeviceArray must have CPU device type for `from_arrow_device_host`");
+               "ArrowDeviceArray must have CPU device type for `from_arrow_host`");
 
   CUDF_FUNC_RANGE();
 
   ArrowSchemaView view;
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema, nullptr));
-  return detail::from_arrow_device_host(&view, input, stream, mr);
+  return detail::from_arrow_host(&view, input, stream, mr);
 }
 
-std::unique_ptr<column> from_arrow_device_host_column(ArrowSchema const* schema,
-                                                      ArrowDeviceArray const* input,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> from_arrow_host_column(ArrowSchema const* schema,
+                                               ArrowDeviceArray const* input,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(schema != nullptr && input != nullptr,
                "input ArrowSchema and ArrowDeviceArray must not be NULL");
   CUDF_EXPECTS(input->device_type == ARROW_DEVICE_CPU,
-               "ArrowDeviceArray must have CPU device type for `from_arrow_device_host_column`");
+               "ArrowDeviceArray must have CPU device type for `from_arrow_host_column`");
 
   CUDF_FUNC_RANGE();
 
   ArrowSchemaView view;
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema, nullptr));
-  return detail::from_arrow_device_host_column(&view, input, stream, mr);
+  return detail::from_arrow_host_column(&view, input, stream, mr);
 }
 
 unique_table_view_t from_arrow_device(ArrowSchema const* schema,

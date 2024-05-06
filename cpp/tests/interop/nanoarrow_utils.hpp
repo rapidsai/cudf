@@ -183,7 +183,9 @@ get_nanoarrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask
     ArrowBitmapAppendInt8Unsafe(&bitmap, reinterpret_cast<const int8_t*>(mask.data()), mask.size());
 
     ArrowArraySetValidityBitmap(tmp.get(), &bitmap);
-    tmp->null_count = data.size() - ArrowBitCountSet(ArrowArrayValidityBitmap(tmp.get())->buffer.data, 0, mask.size());
+    tmp->null_count =
+      data.size() -
+      ArrowBitCountSet(ArrowArrayValidityBitmap(tmp.get())->buffer.data, 0, mask.size());
   }
 
   ArrowBuffer buf;
@@ -209,8 +211,8 @@ std::enable_if_t<std::is_same_v<T, bool>, nanoarrow::UniqueArray> get_nanoarrow_
     ArrowBitmapInit(&out);
     NANOARROW_THROW_NOT_OK(ArrowBitmapResize(&out, b.size(), 1));
     out.buffer.size_bytes = (b.size() >> 3) + ((b.size() & 7) != 0);
-    out.size_bits = b.size();
-    
+    out.size_bits         = b.size();
+
     for (size_t i = 0; i < b.size(); ++i) {
       ArrowBitSetTo(out.buffer.data, i, static_cast<uint8_t>(b[i]));
     }
@@ -219,9 +221,11 @@ std::enable_if_t<std::is_same_v<T, bool>, nanoarrow::UniqueArray> get_nanoarrow_
   };
 
   if (!mask.empty()) {
-    auto validity_bitmap = to_arrow_bitmap(mask);    
+    auto validity_bitmap = to_arrow_bitmap(mask);
     ArrowArraySetValidityBitmap(tmp.get(), &validity_bitmap);
-    tmp->null_count = mask.size() - ArrowBitCountSet(ArrowArrayValidityBitmap(tmp.get())->buffer.data, 0, mask.size());
+    tmp->null_count =
+      mask.size() -
+      ArrowBitCountSet(ArrowArrayValidityBitmap(tmp.get())->buffer.data, 0, mask.size());
   }
 
   auto raw_buffer = to_arrow_bitmap(data);
@@ -297,7 +301,9 @@ nanoarrow::UniqueArray get_nanoarrow_list_array(std::vector<T> const& data,
       &bitmap, reinterpret_cast<const int8_t*>(list_validity.data()), list_validity.size());
 
     ArrowArraySetValidityBitmap(tmp.get(), &bitmap);
-    tmp->null_count = tmp->length - ArrowBitCountSet(ArrowArrayValidityBitmap(tmp.get())->buffer.data, 0, list_validity.size());
+    tmp->null_count =
+      tmp->length -
+      ArrowBitCountSet(ArrowArrayValidityBitmap(tmp.get())->buffer.data, 0, list_validity.size());
   }
 
   ArrowBuffer buf;

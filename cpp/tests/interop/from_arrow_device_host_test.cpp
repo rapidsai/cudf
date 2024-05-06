@@ -263,7 +263,7 @@ TEST_F(FromArrowHostDeviceTest, EmptyTable)
   input.device_id   = -1;
   input.device_type = ARROW_DEVICE_CPU;
 
-  auto got_cudf_table = cudf::from_arrow_device_host(schema.get(), &input);
+  auto got_cudf_table = cudf::from_arrow_host(schema.get(), &input);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table, got_cudf_table->view());
 }
 
@@ -297,10 +297,10 @@ TEST_F(FromArrowHostDeviceTest, DateTimeTable)
   input.device_id   = -1;
   input.device_type = ARROW_DEVICE_CPU;
 
-  auto got_cudf_table = cudf::from_arrow_device_host(input_schema.get(), &input);
+  auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
 
-  auto got_cudf_col = cudf::from_arrow_device_host_column(input_schema.get(), &input);
+  auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
   EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
   auto got_cudf_col_view = got_cudf_col->view();
   cudf::table_view from_struct{
@@ -351,10 +351,10 @@ TYPED_TEST(FromArrowHostDeviceTestDurationsTest, DurationTable)
   input.device_id   = -1;
   input.device_type = ARROW_DEVICE_CPU;
 
-  auto got_cudf_table = cudf::from_arrow_device_host(input_schema.get(), &input);
+  auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
 
-  auto got_cudf_col = cudf::from_arrow_device_host_column(input_schema.get(), &input);
+  auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
   EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
   auto got_cudf_col_view = got_cudf_col->view();
   cudf::table_view from_struct{
@@ -421,10 +421,10 @@ TEST_F(FromArrowHostDeviceTest, NestedList)
   input.device_id   = -1;
   input.device_type = ARROW_DEVICE_CPU;
 
-  auto got_cudf_table = cudf::from_arrow_device_host(input_schema.get(), &input);
+  auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
 
-  auto got_cudf_col = cudf::from_arrow_device_host_column(input_schema.get(), &input);
+  auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
   EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
   auto got_cudf_col_view = got_cudf_col->view();
   cudf::table_view from_struct{
@@ -579,10 +579,10 @@ TEST_F(FromArrowHostDeviceTest, StructColumn)
   input.device_id   = -1;
   input.device_type = ARROW_DEVICE_CPU;
 
-  auto got_cudf_table = cudf::from_arrow_device_host(input_schema.get(), &input);
+  auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
 
-  auto got_cudf_col = cudf::from_arrow_device_host_column(input_schema.get(), &input);
+  auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
   EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
   auto got_cudf_col_view = got_cudf_col->view();
   cudf::table_view from_struct{
@@ -652,10 +652,10 @@ TEST_F(FromArrowHostDeviceTest, DictionaryIndicesType)
   input.device_id   = -1;
   input.device_type = ARROW_DEVICE_CPU;
 
-  auto got_cudf_table = cudf::from_arrow_device_host(input_schema.get(), &input);
+  auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table.view(), got_cudf_table->view());
 
-  auto got_cudf_col = cudf::from_arrow_device_host_column(input_schema.get(), &input);
+  auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
   EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
   auto got_cudf_col_view = got_cudf_col->view();
   cudf::table_view from_struct{
@@ -670,7 +670,8 @@ void slice_host_nanoarrow(ArrowArray* arr, int64_t start, int64_t end)
     array->length = end - start;
     if (array->null_count != 0) {
       array->null_count =
-        array->length - ArrowBitCountSet(ArrowArrayValidityBitmap(array)->buffer.data, start, end - start);      
+        array->length -
+        ArrowBitCountSet(ArrowArrayValidityBitmap(array)->buffer.data, start, end - start);
     }
   };
 
@@ -704,11 +705,11 @@ TEST_P(FromArrowHostDeviceTestSlice, SliceTest)
   input.device_id   = -1;
   input.device_type = ARROW_DEVICE_CPU;
 
-  auto got_cudf_table = cudf::from_arrow_device_host(schema.get(), &input);
+  auto got_cudf_table = cudf::from_arrow_host(schema.get(), &input);
   if (got_cudf_table->num_rows() == 0 and sliced_cudf_table.num_rows() == 0) {
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_cudf_table.view(), got_cudf_table->view());
 
-    auto got_cudf_col = cudf::from_arrow_device_host_column(schema.get(), &input);
+    auto got_cudf_col = cudf::from_arrow_host_column(schema.get(), &input);
     EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
     auto got_cudf_col_view = got_cudf_col->view();
     cudf::table_view from_struct{std::vector<cudf::column_view>(got_cudf_col_view.child_begin(),
@@ -717,7 +718,7 @@ TEST_P(FromArrowHostDeviceTestSlice, SliceTest)
   } else {
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table.view(), got_cudf_table->view());
 
-    auto got_cudf_col = cudf::from_arrow_device_host_column(schema.get(), &input);
+    auto got_cudf_col = cudf::from_arrow_host_column(schema.get(), &input);
     EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
     auto got_cudf_col_view = got_cudf_col->view();
     cudf::table_view from_struct{std::vector<cudf::column_view>(got_cudf_col_view.child_begin(),
@@ -725,7 +726,6 @@ TEST_P(FromArrowHostDeviceTestSlice, SliceTest)
     CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
   }
 }
-
 
 INSTANTIATE_TEST_CASE_P(FromArrowHostDeviceTest,
                         FromArrowHostDeviceTestSlice,
