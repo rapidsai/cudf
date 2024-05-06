@@ -124,7 +124,8 @@ class rmm_host_allocator {
    */
   rmm_host_allocator& operator=(rmm_host_allocator const& other)
   {
-    mr = other.mr;
+    mr     = other.mr;
+    stream = other.stream;
     return *this;
   }
 
