@@ -138,7 +138,8 @@ def test_find(pa_data_col, plc_data_col, pa_target_scalar, plc_target_scalar):
 
 
 def colwise_apply(pa_data_col, pa_target_col, operator):
-    def libcudf_logic(st, target):
+    def handle_none(st, target):
+        # Match libcudf handling of nulls
         if st is None:
             return None
         elif target is None:
@@ -148,7 +149,7 @@ def colwise_apply(pa_data_col, pa_target_col, operator):
 
     expected = pa.array(
         [
-            libcudf_logic(elem, target)
+            handle_none(elem, target)
             for elem, target in zip(
                 pa_data_col.to_pylist(),
                 pa_target_col.to_pylist(),
