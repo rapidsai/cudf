@@ -721,7 +721,7 @@ def test_groupby_first_last(data, agg):
     )
 
 
-@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
+@xfail_dask_expr("Co-alignment check fails in dask-expr")
 def test_groupby_with_list_of_series():
     df = cudf.DataFrame({"a": [1, 2, 3, 4, 5]})
     gdf = dask_cudf.from_cudf(df, npartitions=2)
