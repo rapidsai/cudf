@@ -1489,17 +1489,16 @@ def test_delta_struct_list(tmpdir, nrows, add_nulls, str_encoding):
     pcdf = cudf.from_pandas(test_pdf)
     assert_eq(cdf, pcdf)
 
-    # Test DELTA_LENGTH_BYTE_ARRAY writing as well
-    if str_encoding == "DELTA_LENGTH_BYTE_ARRAY":
-        cudf_fname = tmpdir.join("cdfdeltaba.parquet")
-        pcdf.to_parquet(
-            cudf_fname,
-            compression="snappy",
-            header_version="2.0",
-            use_dictionary=False,
-        )
-        cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
-        assert_eq(cdf2, cdf)
+    # Write back out with cudf and make sure pyarrow can read it
+    cudf_fname = tmpdir.join("cdfdeltaba.parquet")
+    pcdf.to_parquet(
+        cudf_fname,
+        compression="snappy",
+        header_version="2.0",
+        use_dictionary=False,
+    )
+    cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
+    assert_eq(cdf2, cdf)
 
 
 @pytest.mark.parametrize(
