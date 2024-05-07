@@ -159,7 +159,10 @@ class rmm_host_allocator {
    *  @param x The other \p rmm_host_allocator of interest.
    *  @return This method always returns \c true.
    */
-  inline bool operator==(rmm_host_allocator const& x) const { return x.mr == mr; }
+  inline bool operator==(rmm_host_allocator const& x) const
+  {
+    return x.mr == mr && x.stream == stream;
+  }
 
   /**
    * @brief This method tests this \p rmm_host_allocator for inequality
