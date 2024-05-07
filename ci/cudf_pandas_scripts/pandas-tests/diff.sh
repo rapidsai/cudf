@@ -21,7 +21,7 @@ aws s3api list-objects-v2 --bucket rapids-downloads --prefix "nightly/" --query 
 cat s3_output.txt
 # read -r COMPARE_ENV < s3_output.txt
 # export COMPARE_ENV
-COMPARE_ENV=$(head -1 s3_output.txt)
+COMPARE_ENV=$(tail -n 1 s3_output.txt)
 rapids-logger "Latest available results from nightly: ${COMPARE_ENV}"
 
 rapids-logger s3_output.txt
