@@ -84,7 +84,7 @@ std::vector<cudf::io::table_with_metadata> skeleton_for_parellel_chunk_reader(
   std::vector<cudf::io::table_with_metadata> tables;
   // Process each chunk in parallel.
   for (auto const& [chunk_start, chunk_end] : record_ranges) {
-    if (chunk_start == -1 or chunk_end == -1 or (size_t) chunk_start >= total_source_size) continue;
+    if (chunk_start == -1 or chunk_end == -1 or static_cast<size_t>(chunk_start) >= total_source_size) continue;
     reader_opts_chunk.set_byte_range_offset(chunk_start);
     reader_opts_chunk.set_byte_range_size(chunk_end - chunk_start);
     tables.push_back(read_json(sources, reader_opts_chunk, stream, mr));
