@@ -134,6 +134,7 @@ CUDF_KERNEL void device_dispatching_kernel(cudf::mutable_table_device_view sourc
   auto tidx                    = cudf::detail::grid_1d::global_thread_id();
   auto const stride            = cudf::detail::grid_1d::grid_stride();
   while (tidx < n_rows) {
+    auto const index = static_cast<cudf::size_type>(tidx);
     for (cudf::size_type i = 0; i < source.num_columns(); i++) {
       cudf::type_dispatcher(
         source.column(i).type(), RowHandle<functor_type>{}, source.column(i), index);
