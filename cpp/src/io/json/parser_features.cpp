@@ -58,8 +58,15 @@ std::optional<schema_element> child_schema_element(std::string const& col_name,
 // "a": [ null]         {"a", list}, {"element", str}
 // back() is root.
 // front() is leaf.
+/**
+ * @brief Get the path data type of a column by path if present in input schema
+ *
+ * @param path path of the json column
+ * @param root root of input schema element
+ * @return data type of the column if present, otherwise std::nullopt
+ */
 std::optional<data_type> get_path_data_type(
-  host_span<std::pair<std::string, cudf::io::json::NodeT>> path, schema_element const& root)
+  host_span<std::pair<std::string, cudf::io::json::NodeT> const> path, schema_element const& root)
 {
   if (path.empty() || path.size() == 1) {
     return root.type;
@@ -81,7 +88,7 @@ std::optional<data_type> get_path_data_type(
 }
 
 std::optional<data_type> get_path_data_type(
-  host_span<std::pair<std::string, cudf::io::json::NodeT>> path,
+  host_span<std::pair<std::string, cudf::io::json::NodeT> const> path,
   cudf::io::json_reader_options const& options)
 {
   if (path.empty()) return {};
@@ -98,11 +105,11 @@ std::optional<data_type> get_path_data_type(
 std::vector<path_from_tree::path_rep> path_from_tree::get_path(NodeIndexT this_col_id)
 {
   std::vector<path_rep> path;
-  // TODO Need to stop at row root. so, how to find row root?
+  // stops at root.
   while (this_col_id != parent_node_sentinel) {
     auto type        = column_categories[this_col_id];
     std::string name = "";
-    // TODO make this ifelse into a separate lambda function, along with parent_col_id.
+    // code same as name_and_parent_index lambda.
     auto parent_col_id = column_parent_ids[this_col_id];
     if (parent_col_id == parent_node_sentinel || column_categories[parent_col_id] == NC_LIST) {
       if (is_array_of_arrays && parent_col_id == row_array_parent_col_id) {

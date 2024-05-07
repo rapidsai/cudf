@@ -113,7 +113,7 @@ def test_roundtrip_from_dask_none_index_false(tmpdir):
 @pytest.mark.parametrize("write_meta", [True, False])
 def test_roundtrip_from_dask_cudf(tmpdir, write_meta):
     tmpdir = str(tmpdir)
-    gddf = dask_cudf.from_dask_dataframe(ddf)
+    gddf = ddf.to_backend("cudf")
     gddf.to_parquet(tmpdir, write_metadata_file=write_meta)
 
     gddf2 = dask_cudf.read_parquet(tmpdir, calculate_divisions=True)
@@ -536,7 +536,7 @@ def test_check_file_size(tmpdir):
         dask_cudf.io.read_parquet(fn, check_file_size=1).compute()
 
 
-@xfail_dask_expr("HivePartitioning cannot be hashed", lt_version="1.0")
+@xfail_dask_expr("HivePartitioning cannot be hashed", lt_version="2024.3.0")
 def test_null_partition(tmpdir):
     import pyarrow as pa
     from pyarrow.dataset import HivePartitioning

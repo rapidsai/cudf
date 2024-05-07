@@ -22,6 +22,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/combine.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -204,12 +205,11 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
     std::all_of(input.begin(),
                 input.end(),
                 [](column_view const& col) { return col.type().id() == cudf::type_id::LIST; }),
-    "All columns of the input table must be of lists column type.");
-  CUDF_EXPECTS(
-    std::all_of(std::next(input.begin()),
-                input.end(),
-                [a = *input.begin()](column_view const& b) { return column_types_equal(a, b); }),
-    "The types of entries in the input columns must be the same.");
+    "All columns of the input table must be of list column type.",
+    cudf::data_type_error);
+  CUDF_EXPECTS(cudf::all_have_same_types(input.begin(), input.end()),
+               "The types of entries in the input columns must be the same.",
+               cudf::data_type_error);
 
   auto const num_rows = input.num_rows();
   auto const num_cols = input.num_columns();

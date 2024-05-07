@@ -712,7 +712,7 @@ TEST_F(DictionaryCopyIfElseTest, TypeMismatch)
   cudf::test::dictionary_column_wrapper<double> input2({1.0, 1.0, 1.0, 1.0});
   cudf::test::fixed_width_column_wrapper<bool> mask({1, 0, 0, 1});
 
-  EXPECT_THROW(cudf::copy_if_else(input1, input2, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::copy_if_else(input1, input2, mask), cudf::data_type_error);
 
   cudf::string_scalar input3{"1"};
   EXPECT_THROW(cudf::copy_if_else(input1, input3, mask), cudf::data_type_error);

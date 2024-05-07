@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import sys
 from collections import abc
 from functools import cached_property, reduce
 from typing import (
@@ -173,6 +174,38 @@ class ColumnAccessor(abc.MutableMapping):
             [f"{name}: {col.dtype}" for name, col in self.items()]
         )
         return f"{type_info}\n{column_info}"
+
+    def _from_columns_like_self(
+        self, columns: abc.Iterable[ColumnBase], verify: bool = True
+    ):
+        """
+        Return a new ColumnAccessor with columns and the properties of self.
+
+        Parameters
+        ----------
+        columns : iterable of Columns
+            New columns for the ColumnAccessor.
+        verify : bool, optional
+            Whether to verify column length and type.
+        """
+        if sys.version_info.major >= 3 and sys.version_info.minor >= 10:
+            data = zip(self.names, columns, strict=True)
+        else:
+            columns = list(columns)
+            if len(columns) != len(self.names):
+                raise ValueError(
+                    f"The number of columns ({len(columns)}) must match "
+                    f"the number of existing column labels ({len(self.names)})."
+                )
+            data = zip(self.names, columns)
+        return type(self)(
+            data=dict(data),
+            multiindex=self.multiindex,
+            level_names=self.level_names,
+            rangeindex=self.rangeindex,
+            label_dtype=self.label_dtype,
+            verify=verify,
+        )
 
     @property
     def level_names(self) -> Tuple[Any, ...]:

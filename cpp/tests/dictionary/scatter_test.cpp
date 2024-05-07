@@ -141,5 +141,5 @@ TEST_F(DictionaryScatterTest, Error)
   EXPECT_THROW(
     cudf::scatter(
       cudf::table_view{{source->view()}}, scatter_map, cudf::table_view{{target->view()}}),
-    cudf::logic_error);
+    cudf::data_type_error);
 }

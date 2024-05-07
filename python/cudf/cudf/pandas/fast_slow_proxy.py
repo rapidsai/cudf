@@ -1093,7 +1093,7 @@ def _replace_closurevars(
     f: types.FunctionType,
     attribute_name: Literal["_fsproxy_slow", "_fsproxy_fast"],
     seen: Set[int],
-) -> types.FunctionType:
+) -> Callable[..., Any]:
     """
     Return a copy of `f` with its closure variables replaced with
     their corresponding slow (or fast) types.
@@ -1133,12 +1133,11 @@ def _replace_closurevars(
         argdefs=f.__defaults__,
         closure=g_closure,
     )
-    g = functools.update_wrapper(
+    return functools.update_wrapper(
         g,
         f,
         assigned=functools.WRAPPER_ASSIGNMENTS + ("__kwdefaults__",),
     )
-    return g
 
 
 _SPECIAL_METHODS: Set[str] = {
