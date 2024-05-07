@@ -1222,14 +1222,14 @@ def test_apply_slow_path_udf_references_global_module():
     tm.assert_series_equal(result, expected)
 
 
-@pytest.mark.parametrize("data", [pd.NaT, 1234])
+@pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
 def test_timestamp(data):
     xtimestamp = xpd.Timestamp(data)
     timestamp = pd.Timestamp(data)
     tm.assert_equal(xtimestamp, timestamp)
 
 
-@pytest.mark.parametrize("data", [pd.NaT, 1234])
+@pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
 def test_timedelta(data):
     xtimedelta = xpd.Timedelta(data)
     timedelta = pd.Timedelta(data)

@@ -108,8 +108,8 @@ def Timestamp_Timedelta__new__(cls, *args, **kwargs):
     # This takes care of running __init__ as well, but must be paired
     # with a removal of the defaulted __init__ that
     # make_final_proxy_type provides.
-    if len(args) > 0 and args[0] is pd.NaT:
-        return pd.NaT
+    # Timestamp & Timedelta don't always return same types as self,
+    # hence this method is needed.
     self, _ = _fast_slow_function_call(
         lambda cls, args, kwargs: cls(*args, **kwargs),
         cls,
