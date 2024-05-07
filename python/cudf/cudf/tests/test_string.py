@@ -3341,6 +3341,7 @@ def test_str_join_lists_error():
         sr.str.join(sep=cudf.DataFrame())
 
 
+# todo
 @pytest.mark.parametrize(
     "sr,sep,string_na_rep,sep_na_rep,expected",
     [
@@ -3411,6 +3412,7 @@ def test_str_join_lists(sr, sep, string_na_rep, sep_na_rep, expected):
     assert_eq(actual, expected)
 
 
+# todo
 @pytest.mark.parametrize(
     "patterns, expected",
     [

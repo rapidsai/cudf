@@ -53,6 +53,7 @@ def pdf_gdf_multi():
     return pdf, gdf
 
 
+# todo
 @pytest.mark.parametrize(
     "i1, i2, i3",
     (
@@ -827,6 +828,7 @@ def test_empty_boolean_mask(dtype):
         pd.Series(pd.date_range("2010-01-01", "2010-01-04")),
     ],
 )
+# todo
 @pytest.mark.parametrize(
     "mask",
     [
@@ -1337,6 +1339,7 @@ def test_loc_datetime_index_slice_not_in(sli):
         assert_eq(pd_data.loc[sli], gd_data.loc[sli])
 
 
+# todo
 @pytest.mark.parametrize(
     "gdf_kwargs",
     [
@@ -1390,6 +1393,7 @@ def test_dataframe_sliced(gdf_kwargs, slice):
     assert_eq(actual, expected)
 
 
+#  todo
 @pytest.mark.parametrize(
     "gdf",
     [

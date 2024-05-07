@@ -109,6 +109,7 @@ def test_concat_dataframe(index, nulls, axis):
     assert_eq(res, sol, check_names=False, check_categorical=False)
 
 
+# todo
 @pytest.mark.parametrize(
     "values",
     [["foo", "bar"], [1.0, 2.0], pd.Series(["one", "two"], dtype="category")],
@@ -450,57 +451,91 @@ def test_concat_mixed_input():
 @pytest.mark.parametrize(
     "objs",
     [
-        [pd.Series([1, 2, 3]), pd.DataFrame({"a": [1, 2]})],
-        [pd.Series([1, 2, 3]), pd.DataFrame({"a": []})],
-        [pd.Series([], dtype="float64"), pd.DataFrame({"a": []})],
-        [pd.Series([], dtype="float64"), pd.DataFrame({"a": [1, 2]})],
         [
-            pd.Series([1, 2, 3.0, 1.2], name="abc"),
-            pd.DataFrame({"a": [1, 2]}),
+            (pd.Series, {"data": [1, 2, 3]}),
+            (pd.DataFrame, {"data": {"a": [1, 2]}}),
         ],
         [
-            pd.Series(
-                [1, 2, 3.0, 1.2], name="abc", index=[100, 110, 120, 130]
-            ),
-            pd.DataFrame({"a": [1, 2]}),
+            (pd.Series, {"data": [1, 2, 3]}),
+            (pd.DataFrame, {"data": {"a": []}}),
         ],
         [
-            pd.Series(
-                [1, 2, 3.0, 1.2], name="abc", index=["a", "b", "c", "d"]
-            ),
-            pd.DataFrame({"a": [1, 2]}, index=["a", "b"]),
+            (pd.Series, {"data": [], "dtype": "float64"}),
+            (pd.DataFrame, {"data": {"a": []}}),
         ],
         [
-            pd.Series(
-                [1, 2, 3.0, 1.2, 8, 100],
-                name="New name",
-                index=["a", "b", "c", "d", "e", "f"],
+            (pd.Series, {"data": [], "dtype": "float64"}),
+            (pd.DataFrame, {"data": {"a": [1, 2]}}),
+        ],
+        [
+            (pd.Series, {"data": [1, 2, 3.0, 1.2], "name": "abc"}),
+            (pd.DataFrame, {"data": {"a": [1, 2]}}),
+        ],
+        [
+            (
+                pd.Series,
+                {
+                    "data": [1, 2, 3.0, 1.2],
+                    "name": "abc",
+                    "index": [100, 110, 120, 130],
+                },
             ),
-            pd.DataFrame(
-                {"a": [1, 2, 4, 10, 11, 12]},
-                index=["a", "b", "c", "d", "e", "f"],
+            (pd.DataFrame, {"data": {"a": [1, 2]}}),
+        ],
+        [
+            (
+                pd.Series,
+                {
+                    "data": [1, 2, 3.0, 1.2],
+                    "name": "abc",
+                    "index": ["a", "b", "c", "d"],
+                },
+            ),
+            (pd.DataFrame, {"data": {"a": [1, 2]}, "index": ["a", "b"]}),
+        ],
+        [
+            (
+                pd.Series,
+                {
+                    "data": [1, 2, 3.0, 1.2, 8, 100],
+                    "name": "New name",
+                    "index": ["a", "b", "c", "d", "e", "f"],
+                },
+            ),
+            (
+                pd.DataFrame,
+                {
+                    "data": {"a": [1, 2, 4, 10, 11, 12]},
+                    "index": ["a", "b", "c", "d", "e", "f"],
+                },
             ),
         ],
         [
-            pd.Series(
-                [1, 2, 3.0, 1.2, 8, 100],
-                name="New name",
-                index=["a", "b", "c", "d", "e", "f"],
+            (
+                pd.Series,
+                {
+                    "data": [1, 2, 3.0, 1.2, 8, 100],
+                    "name": "New name",
+                    "index": ["a", "b", "c", "d", "e", "f"],
+                },
             ),
-            pd.DataFrame(
-                {"a": [1, 2, 4, 10, 11, 12]},
-                index=["a", "b", "c", "d", "e", "f"],
+            (
+                pd.DataFrame,
+                {
+                    "data": {"a": [1, 2, 4, 10, 11, 12]},
+                    "index": ["a", "b", "c", "d", "e", "f"],
+                },
             ),
         ]
         * 7,
     ],
 )
 def test_concat_series_dataframe_input(objs):
-    pd_objs = objs
+    _objs = [c(**d) for o in objs for c, d in o]
     gd_objs = [cudf.from_pandas(obj) for obj in objs]
 
     with _hide_concat_empty_dtype_warning():
-        expected = pd.concat(pd_objs)
+        expected = pd.concat(_objs)
         actual = cudf.concat(gd_objs)
 
     assert_eq(
@@ -511,6 +546,7 @@ def test_concat_series_dataframe_input(objs):
     )
 
 
+# todo
 @pytest.mark.parametrize(
     "objs",
     [
@@ -550,6 +586,7 @@ def test_concat_series_dataframe_input_str(objs):
     assert_eq(expected, actual, check_dtype=False, check_index_type=False)
 
 
+# todo
 @pytest.mark.parametrize(
     "df",
     [
@@ -566,6 +603,7 @@ def test_concat_series_dataframe_input_str(objs):
         pd.DataFrame({"cat": pd.Series(["one", "two"], dtype="category")}),
     ],
 )
+# todo
 @pytest.mark.parametrize(
     "other",
     [
@@ -665,6 +703,7 @@ def test_concat_two_empty_series(ignore_index, axis):
     assert_eq(got, expect, check_index_type=True)
 
 
+# todo
 @pytest.mark.parametrize(
     "df1,df2",
     [
@@ -701,6 +740,7 @@ def test_concat_dataframe_with_multiindex(df1, df2):
     )
 
 
+# todo
 @pytest.mark.parametrize(
     "objs",
     [
@@ -766,6 +806,7 @@ def test_concat_join(objs, ignore_index, sort, join, axis):
     )
 
 
+# todo
 @pytest.mark.parametrize(
     "objs",
     [
@@ -799,6 +840,7 @@ def test_concat_join_axis_1_dup_error(objs):
         )
 
 
+# todo
 @pytest.mark.parametrize(
     "objs",
     [
@@ -905,6 +947,7 @@ def test_concat_join_one_df(ignore_index, sort, join, axis):
     assert_eq(expected, actual, check_index_type=True)
 
 
+# todo
 @pytest.mark.parametrize(
     "pdf1,pdf2",
     [
@@ -995,6 +1038,7 @@ def test_concat_join_no_overlapping_columns_many_and_empty(
     )
 
 
+# todo
 @pytest.mark.parametrize(
     "objs",
     [
@@ -1144,6 +1188,7 @@ def test_concat_join_series(ignore_index, sort, join, axis):
     )
 
 
+# todo
 @pytest.mark.parametrize(
     "df",
     [
@@ -1160,6 +1205,7 @@ def test_concat_join_series(ignore_index, sort, join, axis):
         pd.DataFrame({"cat": pd.Series(["one", "two"], dtype="category")}),
     ],
 )
+# todo
 @pytest.mark.parametrize(
     "other",
     [
@@ -1231,6 +1277,7 @@ def test_concat_join_empty_dataframes(
     )
 
 
+#  todo
 @pytest.mark.parametrize(
     "df",
     [
@@ -1247,6 +1294,7 @@ def test_concat_join_empty_dataframes(
         pd.DataFrame({"cat": pd.Series(["one", "two"], dtype="category")}),
     ],
 )
+# todo
 @pytest.mark.parametrize(
     "other",
     [
@@ -1412,6 +1460,7 @@ def test_concat_decimal_series(ltype, rtype):
     assert_eq(expected, got, check_index_type=True)
 
 
+# todo
 @pytest.mark.parametrize(
     "df1, df2, df3, expected",
     [
@@ -1536,6 +1585,7 @@ def test_concat_decimal_numeric_dataframe(df1, df2, df3, expected):
     assert_eq(df.val.dtype, expected.val.dtype)
 
 
+# todo
 @pytest.mark.parametrize(
     "s1, s2, s3, expected",
     [
@@ -1653,6 +1703,7 @@ def test_concat_decimal_numeric_series(s1, s2, s3, expected):
     assert_eq(s, expected, check_index_type=True)
 
 
+# todo
 @pytest.mark.parametrize(
     "s1, s2, expected",
     [
@@ -1724,6 +1775,7 @@ def test_concat_decimal_non_numeric(s1, s2, expected):
     assert_eq(s, expected, check_index_type=True)
 
 
+# todo
 @pytest.mark.parametrize(
     "s1, s2, expected",
     [
@@ -1747,6 +1799,7 @@ def test_concat_struct_column(s1, s2, expected):
     assert_eq(s, expected, check_index_type=True)
 
 
+# todo
 @pytest.mark.parametrize(
     "frame1, frame2, expected",
     [

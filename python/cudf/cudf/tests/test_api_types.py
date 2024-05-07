@@ -10,6 +10,7 @@ from cudf.api import types
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 
+# todo
 @pytest.mark.parametrize(
     "obj, expect",
     (
@@ -116,6 +117,7 @@ def test_is_categorical_dtype(obj, expect):
     assert types._is_categorical_dtype(obj) == expect
 
 
+# todo
 @pytest.mark.parametrize(
     "obj, expect",
     (
@@ -218,6 +220,7 @@ def test_is_numeric_dtype(obj, expect):
     assert types.is_numeric_dtype(obj) == expect
 
 
+# todo
 @pytest.mark.parametrize(
     "obj, expect",
     (
@@ -320,6 +323,7 @@ def test_is_integer_dtype(obj, expect):
     assert types.is_integer_dtype(obj) == expect
 
 
+# todo
 @pytest.mark.parametrize(
     "obj, expect",
     (
@@ -422,6 +426,7 @@ def test_is_integer(obj, expect):
     assert types.is_integer(obj) == expect
 
 
+# todo
 # TODO: Temporarily ignoring all cases of "object" until we decide what to do.
 @pytest.mark.parametrize(
     "obj, expect",
@@ -539,6 +544,7 @@ def test_is_string_dtype(obj, expect):
     assert types.is_string_dtype(obj) == expect
 
 
+# todo
 @pytest.mark.parametrize(
     "obj, expect",
     (
@@ -641,6 +647,7 @@ def test_is_datetime_dtype(obj, expect):
     assert types.is_datetime_dtype(obj) == expect
 
 
+# todo
 @pytest.mark.parametrize(
     "obj, expect",
     (
@@ -743,6 +750,7 @@ def test_is_list_dtype(obj, expect):
     assert types.is_list_dtype(obj) == expect
 
 
+# todo
 @pytest.mark.parametrize(
     "obj, expect",
     (
@@ -848,6 +856,7 @@ def test_is_struct_dtype(obj, expect):
     assert types.is_struct_dtype(obj) == expect
 
 
+# todo
 @pytest.mark.parametrize(
     "obj, expect",
     (

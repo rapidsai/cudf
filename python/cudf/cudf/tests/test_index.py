@@ -382,6 +382,7 @@ def test_index_copy_category(name, deep=True):
 
 
 @pytest.mark.parametrize("deep", [True, False])
+# todo
 @pytest.mark.parametrize(
     "idx",
     [
@@ -3132,6 +3133,7 @@ def test_from_pandas_rangeindex_return_rangeindex():
     assert_eq(result, expected, exact=True)
 
 
+# todo
 @pytest.mark.parametrize(
     "idx",
     [

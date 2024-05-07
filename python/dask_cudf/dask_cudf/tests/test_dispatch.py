@@ -25,6 +25,7 @@ def test_is_categorical_dispatch():
 
 
 @pytest.mark.parametrize("preserve_index", [True, False])
+# todo
 @pytest.mark.parametrize("index", [None, cudf.RangeIndex(10, name="foo")])
 def test_pyarrow_conversion_dispatch(preserve_index, index):
     from dask.dataframe.dispatch import (

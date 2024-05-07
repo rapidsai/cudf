@@ -1779,6 +1779,7 @@ def test_typecast_on_join_indexes_matching_categorical():
     assert_join_results_equal(expect, got, how="inner")
 
 
+# todo
 @pytest.mark.parametrize(
     "lhs",
     [
@@ -1786,6 +1787,7 @@ def test_typecast_on_join_indexes_matching_categorical():
         cudf.DataFrame({"a": [2, 3, 4], "c": [4, 5, 6]}),
     ],
 )
+# todo
 @pytest.mark.parametrize(
     "rhs",
     [

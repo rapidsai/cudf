@@ -595,6 +595,7 @@ def test_categorical_dtype(categories, ordered):
     assert_eq(expected, got)
 
 
+# todo
 @pytest.mark.parametrize(
     ("data", "expected"),
     [
@@ -786,6 +787,7 @@ def test_series_construction_with_nulls(input_obj, dtype):
     assert_eq(expect, got)
 
 
+# todo
 @pytest.mark.parametrize(
     "data",
     [

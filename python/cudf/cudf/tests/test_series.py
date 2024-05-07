@@ -649,6 +649,7 @@ def test_series_value_counts_optional_arguments(ascending, dropna, normalize):
     )
 
 
+# todo
 @pytest.mark.parametrize(
     "gs",
     [
@@ -753,6 +754,7 @@ def test_series_round_half_up():
     assert_eq(expect, got)
 
 
+# todo
 @pytest.mark.parametrize(
     "series",
     [
@@ -843,6 +845,7 @@ def test_series_memory_usage():
     assert sr[:1].memory_usage() == 19  # hello world
 
 
+# todo
 @pytest.mark.parametrize(
     "sr,expected_psr",
     [
@@ -998,10 +1001,12 @@ def test_series_pipe_error():
     )
 
 
+# todo
 @pytest.mark.parametrize(
     "data",
     [cudf.Series([1, 2, 3]), cudf.Series([10, 11, 12], index=[1, 2, 3])],
 )
+# todo
 @pytest.mark.parametrize(
     "other",
     [
@@ -1267,6 +1272,7 @@ def test_explode(data, ignore_index, p_index):
     assert_eq(expect, got, check_dtype=False)
 
 
+# todo
 @pytest.mark.parametrize(
     "data, expected",
     [
@@ -1571,6 +1577,7 @@ def test_series_add_suffix():
     assert_eq(got, expected)
 
 
+# todo
 @pytest.mark.parametrize(
     "cudf_series",
     [
@@ -2693,6 +2700,7 @@ def test_series_from_named_object_name_priority(klass):
     assert result.name == "b"
 
 
+# todo
 @pytest.mark.parametrize(
     "data",
     [
@@ -2707,6 +2715,7 @@ def test_series_from_object_with_index_index_arg_reindex(data):
     assert_eq(result, expected)
 
 
+# todo
 @pytest.mark.parametrize(
     "data",
     [

@@ -280,6 +280,7 @@ def test_kurt_skew_error(op):
     )
 
 
+# todo
 @pytest.mark.parametrize(
     "data",
     [
@@ -344,6 +345,7 @@ def test_series_median(dtype, num_na):
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="warning not present in older pandas versions",
 )
+# todo
 @pytest.mark.parametrize(
     "data",
     [
@@ -379,6 +381,7 @@ def test_series_pct_change(data, periods, fill_method):
         )
 
 
+# todo
 @pytest.mark.parametrize(
     "data1",
     [
@@ -393,6 +396,7 @@ def test_series_pct_change(data, periods, fill_method):
         cudf.Series([-3]),
     ],
 )
+# todo
 @pytest.mark.parametrize(
     "data2",
     [
@@ -423,6 +427,7 @@ def test_cov1d(data1, data2):
     np.testing.assert_approx_equal(got, expected, significant=8)
 
 
+# todo
 @pytest.mark.parametrize(
     "data1",
     [
@@ -437,6 +442,7 @@ def test_cov1d(data1, data2):
         cudf.Series([-3]),
     ],
 )
+# todo
 @pytest.mark.parametrize(
     "data2",
     [
