@@ -116,7 +116,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     // If this is a multi-file source, we scatter the JSON line delimiters between files
     if (sources.size() > 1) {
       static_assert(num_delimiter_chars == 1,
-                   "Currently only single-character delimiters are supported");
+                    "Currently only single-character delimiters are supported");
       auto const delimiter_source = thrust::make_constant_iterator('\n');
       auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
         host_span<size_type const>{delimiter_map.data(), delimiter_map.size()},
