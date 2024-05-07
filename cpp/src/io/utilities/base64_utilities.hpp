@@ -160,30 +160,6 @@ std::string base64_encode(std::string_view string_to_encode)
 // base64 decode function
 std::string base64_decode(std::string_view encoded_string)
 {
-  // altered: converted to lambda function inside base64_decode
-  // Function to compute and return the position of character within base64
-  static constexpr auto error_position = static_cast<size_t>(-1);
-  std::function<size_t(unsigned char const)> base64_position =
-    [&](unsigned char const chr) -> size_t {
-    // altered: use braces around if else
-    if (chr >= 'A' and chr <= 'Z') {
-      return chr - 'A';
-    } else if (chr >= 'a' and chr <= 'z') {
-      return chr - 'a' + ('Z' - 'A') + 1;
-    } else if (chr >= '0' and chr <= '9') {
-      return chr - '0' + ('Z' - 'A') + ('z' - 'a') + 2;
-    } else if (chr == '+') {
-      return 62;
-    } else if (chr == '/') {
-      return 63;
-    } else {
-      CUDF_LOG_ERROR(
-        "Parquet reader encountered invalid base64-encoded data."
-        "arrow:schema not processed.");
-      return error_position;
-    }
-  };
-
   // altered: there must be at least 2 characters in the base64-encoded string
   if (encoded_string.size() < 2) {
     CUDF_LOG_ERROR(
@@ -217,59 +193,63 @@ std::string base64_decode(std::string_view encoded_string)
   //
   // altered: modify base64 encoder loop using STL and Thrust.
   // TODO: Port this loop to thrust cooperative groups of size 3 if needed for too-wide tables.
-  if (not std::all_of(
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(static_cast<int32_t>(input_length)),
-        [&](auto&& idx) {
-          int32_t modulus              = idx % 4;
-          size_t current_char_position = 0;
-          size_t char1_position        = 0;
-          size_t char2_position        = 0;
+  if (not std::all_of(thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(static_cast<int32_t>(input_length)),
+                      [&](auto&& idx) {
+                        int32_t modulus              = idx % 4;
+                        size_t current_char_position = 0;
+                        size_t char1_position        = 0;
+                        size_t char2_position        = 0;
 
-          // Check for data that is not padded with equal
-          // signs (which is allowed by RFC 2045)
-          if (encoded_string[idx] == '=') { return true; }
+                        // Check for data that is not padded with equal
+                        // signs (which is allowed by RFC 2045)
+                        if (encoded_string[idx] == '=') { return true; }
 
-          switch (modulus) {
-            case 0:
-              current_char_position = base64_position(encoded_string[idx]);
-              char1_position        = base64_position(encoded_string[idx + 1]);
-              if (current_char_position == error_position or char1_position == error_position) {
-                return false;
-              }
-              // Emit the first output byte that is produced in each chunk:
-              decoded.push_back(static_cast<std::string::value_type>(
-                (current_char_position << 2) + ((char1_position & 0x30) >> 4)));
-              break;
+                        switch (modulus) {
+                          case 0:
+                            current_char_position = base64_chars.find(encoded_string[idx]);
+                            char1_position        = base64_chars.find(encoded_string[idx + 1]);
+                            if (current_char_position == std::string::npos or
+                                char1_position == std::string::npos) {
+                              return false;
+                            }
+                            // Emit the first output byte that is produced in each chunk:
+                            decoded.push_back(static_cast<std::string::value_type>(
+                              (current_char_position << 2) + ((char1_position & 0x30) >> 4)));
+                            break;
 
-            case 2:
-              char1_position = base64_position(encoded_string[idx - 1]);
-              char2_position = base64_position(encoded_string[idx]);
-              if (char1_position == error_position or char2_position == error_position) {
-                return false;
-              }
-              // Emit a chunk's second byte (which might not be produced in the last chunk).
-              decoded.push_back(static_cast<std::string::value_type>(
-                ((char1_position & 0x0f) << 4) + ((char2_position & 0x3c) >> 2)));
-              break;
+                          case 2:
+                            char1_position = base64_chars.find(encoded_string[idx - 1]);
+                            char2_position = base64_chars.find(encoded_string[idx]);
+                            if (char1_position == std::string::npos or
+                                char2_position == std::string::npos) {
+                              return false;
+                            }
+                            // Emit a chunk's second byte (which might not be produced in the last
+                            // chunk).
+                            decoded.push_back(static_cast<std::string::value_type>(
+                              ((char1_position & 0x0f) << 4) + ((char2_position & 0x3c) >> 2)));
+                            break;
 
-            case 3:
-              char2_position        = base64_position(encoded_string[idx - 1]);
-              current_char_position = base64_position(encoded_string[idx]);
-              if (current_char_position == error_position or char2_position == error_position) {
-                return false;
-              }
-              // Emit a chunk's third byte (which might not be produced in the last chunk).
-              decoded.push_back(static_cast<std::string::value_type>(
-                ((char2_position & 0x03) << 6) + current_char_position));
-              break;
+                          case 3:
+                            char2_position        = base64_chars.find(encoded_string[idx - 1]);
+                            current_char_position = base64_chars.find(encoded_string[idx]);
+                            if (current_char_position == std::string::npos or
+                                char2_position == std::string::npos) {
+                              return false;
+                            }
+                            // Emit a chunk's third byte (which might not be produced in the last
+                            // chunk).
+                            decoded.push_back(static_cast<std::string::value_type>(
+                              ((char2_position & 0x03) << 6) + current_char_position));
+                            break;
 
-            default:  // case 1 (ignore)
-              break;
-          }
-          // all good, return true
-          return true;
-        })) {
+                          default:  // case 1 (ignore)
+                            break;
+                        }
+                        // all good, return true
+                        return true;
+                      })) {
     return std::string();
   }
 
