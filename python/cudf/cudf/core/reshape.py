@@ -287,6 +287,10 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         )
 
     if any(isinstance(o, cudf.BaseIndex) for o in objs):
+        warnings.warn(
+            "index concatenation will be deprecated in a future release",
+            FutureWarning,
+        )
         if not all(isinstance(o, cudf.BaseIndex) for o in objs):
             raise TypeError(
                 "when concatenating indices you must provide ONLY indices"
