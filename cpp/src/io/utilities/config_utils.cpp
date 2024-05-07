@@ -98,11 +98,11 @@ class fixed_pinned_pool_memory_resource {
 
  private:
   upstream_mr upstream_mr_{};
-  size_t pool_size_{};
+  size_t pool_size_{0};
   // Raw pointer to avoid a segfault when the pool is destroyed on exit
-  host_pooled_mr* pool_;
-  void* pool_begin_{};
-  void* pool_end_{};
+  host_pooled_mr* pool_{nullptr};
+  void* pool_begin_{nullptr};
+  void* pool_end_{nullptr};
   cuda::stream_ref stream_{cudf::detail::global_cuda_stream_pool().get_stream(0).value()};
 
  public:
@@ -150,10 +150,9 @@ class fixed_pinned_pool_memory_resource {
     return do_allocate_async(bytes, alignment, stream);
   }
 
-  void* allocate(std::size_t bytes,
-                 [[maybe_unused]] std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
+  void* allocate(std::size_t bytes, std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
   {
-    auto const result = allocate_async(bytes, stream_);
+    auto const result = do_allocate_async(bytes, alignment, stream_);
     stream_.wait();
     return result;
   }
@@ -179,17 +178,23 @@ class fixed_pinned_pool_memory_resource {
     stream_.wait();
   }
 
-  bool operator==(const fixed_pinned_pool_memory_resource&) const { return true; }
+  bool operator==(fixed_pinned_pool_memory_resource const& other) const
+  {
+    return pool_ == other.pool_ and stream_ == other.stream_;
+  }
 
-  bool operator!=(const fixed_pinned_pool_memory_resource&) const { return false; }
+  bool operator!=(fixed_pinned_pool_memory_resource const& other) const
+  {
+    return !operator==(other);
+  }
 
-  friend void get_property(fixed_pinned_pool_memory_resource const&,
-                           cuda::mr::device_accessible) noexcept
+  [[maybe_unused]] friend void get_property(fixed_pinned_pool_memory_resource const&,
+                                            cuda::mr::device_accessible) noexcept
   {
   }
 
-  friend void get_property(fixed_pinned_pool_memory_resource const&,
-                           cuda::mr::host_accessible) noexcept
+  [[maybe_unused]] friend void get_property(fixed_pinned_pool_memory_resource const&,
+                                            cuda::mr::host_accessible) noexcept
   {
   }
 };
