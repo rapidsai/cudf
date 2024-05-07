@@ -2022,18 +2022,22 @@ def test_concat_dict_incorrect_type_index(d):
 @pytest.mark.parametrize(
     "idx",
     [
-        [cudf.Index([1, 2, 3])],
-        [cudf.Index([1, 2, 3]), cudf.Index([4, 5, 6])],
+        [(cudf.Index, {"data": [1, 2, 3]})],
+        [(cudf.Index, {"data": [1, 2, 3]}), (cudf.Index, {"data": [4, 5, 6]})],
         [
-            cudf.MultiIndex(
-                levels=[[1, 2], ["blue", "red"]],
-                codes=[[0, 0, 1, 1], [1, 0, 1, 0]],
+            (
+                cudf.MultiIndex,
+                {
+                    "levels": [[1, 2], ["blue", "red"]],
+                    "codes": [[0, 0, 1, 1], [1, 0, 1, 0]],
+                },
             )
         ],
-        [cudf.CategoricalIndex([1, 2, 3])],
+        [(cudf.CategoricalIndex, {"data": [1, 2, 3]})],
     ],
 )
 def test_concat_index(idx, axis, exception):
+    idx = [c(**d) for c, d in idx]
     with pytest.warns(
         FutureWarning,
         match="index concatenation will be deprecated in a future release",
