@@ -1242,3 +1242,17 @@ def test_isub_iadd(op):
     array1 = op(array1, array2)
 
     tm.assert_equal(xarray1, array1)
+
+
+@pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
+def test_timestamp(data):
+    xtimestamp = xpd.Timestamp(data)
+    timestamp = pd.Timestamp(data)
+    tm.assert_equal(xtimestamp, timestamp)
+
+
+@pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
+def test_timedelta(data):
+    xtimedelta = xpd.Timedelta(data)
+    timedelta = pd.Timedelta(data)
+    tm.assert_equal(xtimedelta, timedelta)
