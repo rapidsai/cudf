@@ -162,16 +162,16 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
     return std::move(*chars_data);
   }();
 
+  // API returns a single output row which cannot exceed row limit(max of size_type).
+  CUDF_EXPECTS(chars.size() < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+               "The output exceeds the row size limit",
+               std::overflow_error);
+
   // build the offsets: single string output has offsets [0,chars-size]
   auto offsets_column = [&] {
-    if (chars.size() < static_cast<std::size_t>(get_offset64_threshold())) {
-      auto offsets32 = cudf::detail::make_device_uvector_async(
-        std::vector<int32_t>({0, static_cast<int32_t>(chars.size())}), stream, mr);
-      return std::make_unique<column>(std::move(offsets32), rmm::device_buffer{}, 0);
-    }
-    auto offsets64 = cudf::detail::make_device_uvector_async(
-      std::vector<int64_t>({0L, static_cast<int64_t>(chars.size())}), stream, mr);
-    return std::make_unique<column>(std::move(offsets64), rmm::device_buffer{}, 0);
+    auto offsets = cudf::detail::make_device_uvector_async(
+      std::vector<size_type>({0, static_cast<size_type>(chars.size())}), stream, mr);
+    return std::make_unique<column>(std::move(offsets), rmm::device_buffer{}, 0);
   }();
 
   // build the null mask: only one output row so it is either all-valid or all-null
