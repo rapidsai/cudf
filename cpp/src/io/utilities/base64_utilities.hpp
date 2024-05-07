@@ -84,13 +84,11 @@ static constexpr unsigned char trailing_char = '=';
 std::string base64_encode(std::string_view string_to_encode)
 {
   // altered: use braces around if else
-  auto bytes_to_encode = string_to_encode.data();
-  auto input_length    = string_to_encode.size();
+  auto input_length = string_to_encode.size();
 
   // altered: compute complete encoding length = floor(multiple of 3)
-  int32_t complete_encoding_length = (input_length / 3) * 3;
-  auto remaining_bytes             = input_length - complete_encoding_length;
-  CUDF_EXPECTS(remaining_bytes < 3, "Remaining bytes must be < 3");
+  int32_t num_iterations = (input_length / 3);
+  num_iterations += (input_length % 3) ? 1 : 0;
 
   std::string encoded;
   size_t encoded_length = (input_length + 2) / 3 * 4;
@@ -99,60 +97,29 @@ std::string base64_encode(std::string_view string_to_encode)
   // altered: modify base64 encoder loop using STL and Thrust.
   // TODO: Port this loop to thrust cooperative groups of size 4 if needed for too-wide tables.
   std::for_each(thrust::make_counting_iterator(0),
-                thrust::make_counting_iterator(complete_encoding_length),
-                [&](auto&& idx) {
-                  auto modulus = idx % 3;
-                  switch (modulus) {
-                    case 0:
-                      encoded.push_back(base64_chars[(bytes_to_encode[idx] & 0xfc) >> 2]);
-                      break;
+                thrust::make_counting_iterator(num_iterations),
+                [&](auto&& iter) {
+                  auto idx = iter * 3;
+                  encoded.push_back(base64_chars[(string_to_encode[idx + 0] & 0xfc) >> 2]);
 
-                    case 1:
-                      encoded.push_back(base64_chars[((bytes_to_encode[idx - 1] & 0x03) << 4) +
-                                                     ((bytes_to_encode[idx] & 0xf0) >> 4)]);
-                      break;
+                  if (idx + 1 < input_length) {
+                    encoded.push_back(base64_chars[((string_to_encode[idx + 0] & 0x03) << 4) +
+                                                   ((string_to_encode[idx + 1] & 0xf0) >> 4)]);
 
-                    case 2:
-                      encoded.push_back(base64_chars[((bytes_to_encode[idx - 1] & 0x0f) << 2) +
-                                                     ((bytes_to_encode[idx] & 0xc0) >> 6)]);
-                      encoded.push_back(base64_chars[bytes_to_encode[idx] & 0x3f]);
-                      break;
-
-                    default:
-                      // altered: default case should never be reached
-                      CUDF_UNREACHABLE("Invalid modulus");
-                      break;
+                    if (idx + 2 < input_length) {
+                      encoded.push_back(base64_chars[((string_to_encode[idx + 1] & 0x0f) << 2) +
+                                                     ((string_to_encode[idx + 2] & 0xc0) >> 6)]);
+                      encoded.push_back(base64_chars[string_to_encode[idx + 2] & 0x3f]);
+                    } else {
+                      encoded.push_back(base64_chars[(string_to_encode[idx + 1] & 0x0f) << 2]);
+                      encoded.push_back(trailing_char);
+                    }
+                  } else {
+                    encoded.push_back(base64_chars[(string_to_encode[idx + 0] & 0x03) << 4]);
+                    encoded.push_back(trailing_char);
+                    encoded.push_back(trailing_char);
                   }
                 });
-
-  // altered: encode the remaining 1 or 2 bytes
-  switch (remaining_bytes) {
-    case 0: break;
-
-    case 1:
-      // from case 0
-      encoded.push_back(base64_chars[(bytes_to_encode[complete_encoding_length] & 0xfc) >> 2]);
-      // from case 1
-      encoded.push_back(base64_chars[(bytes_to_encode[complete_encoding_length] & 0x03) << 4]);
-      // two trailing characters
-      encoded.push_back(trailing_char);
-      encoded.push_back(trailing_char);
-      break;
-
-    case 2:
-      // from case 0
-      encoded.push_back(base64_chars[(bytes_to_encode[complete_encoding_length] & 0xfc) >> 2]);
-      // from case 1
-      encoded.push_back(
-        base64_chars[((bytes_to_encode[complete_encoding_length] & 0x03) << 4) +
-                     ((bytes_to_encode[complete_encoding_length + 1] & 0xf0) >> 4)]);
-      // from case 2
-      encoded.push_back(base64_chars[(bytes_to_encode[complete_encoding_length + 1] & 0x0f) << 2]);
-      // one trailing character
-      encoded.push_back(trailing_char);
-      break;
-    default: CUDF_UNREACHABLE("Invalid number of remaining bytes"); break;
-  }
 
   return encoded;
 }
