@@ -64,6 +64,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <string>
 
@@ -83,8 +84,7 @@ static constexpr unsigned char trailing_char = '=';
 // Function to encode input string to base64 and return the encoded string
 std::string base64_encode(std::string_view string_to_encode)
 {
-  // altered: use braces around if else
-  auto input_length = string_to_encode.size();
+  auto input_length = static_cast<int32_t>(string_to_encode.size());
 
   // altered: compute complete encoding length = floor(multiple of 3)
   int32_t num_iterations = (input_length / 3);
