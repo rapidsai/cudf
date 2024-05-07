@@ -3093,6 +3093,25 @@ def test_parquet_reader_detect_bad_dictionary(datadir):
     with pytest.raises(RuntimeError):
         cudf.read_parquet(fname)
 
+@pytest.mark.parametrize("policy", [True, False, "ADAPTIVE", "ALWAYS", "NEVER"])
+def test_parquet_dictionary_policy(policy):
+    buf = BytesIO()
+    table = cudf.DataFrame(
+        {
+            "time64[ms]": cudf.Series([1234, 123, 4123], dtype="timedelta64[ms]"),
+            "int64": cudf.Series([1234, 123, 4123], dtype="int64"),
+            "list": list([[1,2],[1,2],[1,2]]),
+            "datetime[ms]": cudf.Series([1234, 123, 4123], dtype="datetime64[ms]"),
+        })
+    
+    # Write parquet with the specified dict policy
+    table.to_parquet(buf, use_dictionary=policy)
+
+    # Read the parquet back
+    got = cudf.read_parquet(buf)
+
+    # Check the tables
+    assert_eq(table, got)
 
 @pytest.mark.parametrize("data", [{"a": [1, 2, 3, 4]}, {"b": [1, None, 2, 3]}])
 @pytest.mark.parametrize("force_nullable_schema", [True, False])
