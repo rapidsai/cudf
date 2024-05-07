@@ -1205,6 +1205,14 @@ def test_pickle_groupby(dataframe):
     tm.assert_equal(pgb.sum(), gb.sum())
 
 
+def test_numpy_extension_array():
+    np_array = np.array([0, 1, 2, 3])
+    xarray = xpd.arrays.NumpyExtensionArray(np_array)
+    array = pd.arrays.NumpyExtensionArray(np_array)
+
+    tm.assert_equal(xarray, array)
+
+
 def test_isinstance_base_offset():
     offset = xpd.tseries.frequencies.to_offset("1s")
     assert isinstance(offset, xpd.tseries.offsets.BaseOffset)
