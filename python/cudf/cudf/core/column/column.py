@@ -2211,7 +2211,7 @@ def _mask_from_cuda_array_interface_desc(obj, cai_mask) -> Buffer:
         raise NotImplementedError(f"Cannot infer mask from typestr {typestr}")
 
 
-def serialize_columns(columns) -> Tuple[List[dict], List]:
+def serialize_columns(columns: list[ColumnBase]) -> Tuple[List[dict], List]:
     """
     Return the headers and frames resulting
     from serializing a list of Column
