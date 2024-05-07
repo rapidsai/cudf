@@ -310,6 +310,18 @@ TimedeltaIndex = make_final_proxy_type(
     additional_attributes={"__init__": _DELETE},
 )
 
+NumpyExtensionArray = make_final_proxy_type(
+    "NumpyExtensionArray",
+    _Unusable,
+    pd.arrays.NumpyExtensionArray,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_ndarray": _FastSlowAttribute("_ndarray"),
+        "_dtype": _FastSlowAttribute("_dtype"),
+    },
+)
+
 TimedeltaArray = make_final_proxy_type(
     "TimedeltaArray",
     _Unusable,
