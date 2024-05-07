@@ -2268,7 +2268,11 @@ def test_get_indexer_invalid(idx1, idx2):
 def test_range_index_concat(objs):
     cudf_objs = [cudf.from_pandas(obj) for obj in objs]
 
-    actual = cudf.concat(cudf_objs)
+    with pytest.warns(
+        FutureWarning,
+        match="index concatenation will be deprecated in a future release",
+    ):
+        actual = cudf.concat(cudf_objs)
 
     expected = objs[0]
     for obj in objs[1:]:
