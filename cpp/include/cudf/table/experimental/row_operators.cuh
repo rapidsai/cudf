@@ -29,6 +29,8 @@
 #include <cudf/structs/structs_column_device_view.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -58,25 +60,34 @@ namespace cudf {
 
 namespace experimental {
 
-template <cudf::type_id t, template <typename T> typename... c_rest>
-struct dispatch_conditional;
+template <typename T>
+using type_identity = T;
 
-template <cudf::type_id t,
-          template <typename T>
-          typename c_first,
-          template <typename T>
-          typename... c_rest>
-struct dispatch_condtional {
-  using type = c_first<typename dispatch_conditional<t, c_rest...>::type>;
+template <typename T, template <typename U> typename... c_rest>
+struct nested_conditional_t;
+
+template <typename T>
+struct nested_conditional_t<T> {
+  using type = type_identity<T>;
 };
 
-template <cudf::type_id t, template <typename T> typename c_first>
-struct dispatch_conditional<t, c_first> {
-  using type = c_first<id_to_type<t>>;
+template <typename T,
+          template <typename U>
+          typename c_first,
+          template <typename V>
+          typename... c_rest>
+struct nested_condtional_t {
+  using type = c_first<typename nested_conditional_t<T, c_rest...>::type>;
 };
 
 template <bool B, typename T>
 using dispatch_void_conditional_t = std::conditional_t<B, void, T>;
+
+template <typename... Types>
+struct dispatch_void_conditional_generator {
+  template <typename T>
+  using type = dispatch_void_conditional_t<std::disjunction<std::is_same<T, Types>...>::value, T>;
+};
 
 /**
  * @brief A map from cudf::type_id to cudf type that excludes LIST and STRUCT types.
@@ -100,7 +111,9 @@ using dispatch_void_if_nested_t =
                               T>;
 
 template <cudf::type_id t>
-using dispatch_void_if_nested = dispatch_conditional<t, dispatch_void_if_nested_t>;
+struct dispatch_void_if_nested {
+  using type = dispatch_void_if_nested_t<id_to_type<t>>;
+};
 
 namespace row {
 enum class lhs_index_type : size_type {};
@@ -1599,7 +1612,6 @@ struct preprocessed_table {
   friend class self_comparator;       ///< Allow self_comparator to access private members
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
   friend class hash::row_hasher;      ///< Allow row_hasher to access private members
-
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
 
@@ -1880,9 +1892,22 @@ class element_hasher {
  * @tparam hash_function Hash functor to use for hashing elements.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
-template <template <typename> class hash_function, typename Nullate>
+template <template <typename> class hash_function,
+          typename Nullate,
+          template <typename>
+          typename dispatch_conditional_t>
 class device_row_hasher {
   friend class row_hasher;  ///< Allow row_hasher to access private members.
+  template <cudf::type_id t>
+  struct dispatch_storage_type {
+    using type = nested_conditional_t<id_to_type<t>, device_storage_type_t, dispatch_conditional_t>;
+  };
+
+  template <cudf::type_id t>
+  struct dispatch_void_if_nested {
+    using type =
+      nested_conditional_t<id_to_type<t>, dispatch_void_if_nested_t, dispatch_conditional_t>;
+  };
 
  public:
   /**
@@ -2032,19 +2057,89 @@ class row_hasher {
    * @param seed The seed to use for the hash function
    * @return A hash operator to use on the device
    */
-  template <template <typename> class hash_function = cudf::hashing::detail::default_hash,
-            template <template <typename> class, typename>
+  template <template <typename> typename dispatch_cond = type_identity,
+            template <typename> class hash_function    = cudf::hashing::detail::default_hash,
+            template <template <typename> class, typename, template <typename> typename>
             class DeviceRowHasher = device_row_hasher,
             typename Nullate>
-  DeviceRowHasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
-                                                        uint32_t seed   = DEFAULT_HASH_SEED) const
+  DeviceRowHasher<hash_function, Nullate, dispatch_cond> device_hasher(
+    Nullate nullate = {}, uint32_t seed = DEFAULT_HASH_SEED) const
   {
-    return DeviceRowHasher<hash_function, Nullate>(nullate, *d_t, seed);
+    return DeviceRowHasher<hash_function, Nullate, dispatch_cond>(nullate, *d_t, seed);
   }
 
  private:
   std::shared_ptr<preprocessed_table> d_t;
 };
+
+// class cond_dispatch_row_hasher {
+//  public:
+//   cond_dispatch_row_hasher(table_view const& t,
+//                            rmm::cuda_stream_view stream,
+//                            std::optional<std::shared_ptr<preprocessed_table>> p_t)
+//     : _t(t), _stream(stream), _p_t(p_t)
+//   {
+//   }
+//   /**
+//    * @brief Get the hash operator to use on the device
+//    *
+//    * Returns a unary callable, `F`, with signature `hash_function::hash_value_type F(size_type)`.
+//    *
+//    * `F(i)` returns the hash of row i.
+//    *
+//    * @tparam Nullate A cudf::nullate type describing whether to check for nulls
+//    * @param nullate Indicates if any input column contains nulls
+//    * @param seed The seed to use for the hash function
+//    * @return A hash operator to use on the device
+//    */
+//   template <template <typename> class hash_function = cudf::hashing::detail::default_hash,
+//             template <template <typename> class, typename, template <typename> typename>
+//             class DeviceRowHasher = device_row_hasher,
+//             typename Nullate>
+//   auto device_hasher(Nullate nullate = {}, uint32_t seed = DEFAULT_HASH_SEED) const
+//   {
+//     // get the types this table
+//     std::set<cudf::type_id> column_types;
+//     for (auto col : _t) {
+//       column_types.insert(col.type().id());
+//     }
+
+//     std::shared_ptr<preprocessed_table> d_t =
+//       _p_t.value_or(std::move(preprocessed_table::create(_t, _stream)));
+
+//     if (find_any({type_id::STRUCT, type_id::LIST}, column_types)) {
+//       return DeviceRowHasher<hash_function, Nullate, type_identity>(nullate, *d_t, seed);
+//     } else if (find_any({type_id::DECIMAL32,
+//                          type_id::DECIMAL64,
+//                          type_id::DECIMAL128,
+//                          type_id::STRING,
+//                          type_id::DICTIONARY32},
+//                         column_types)) {
+//       return DeviceRowHasher<hash_function,
+//                              Nullate,
+//                              dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
+//                                                                  id_to_type<type_id::LIST>>::type>(
+//         nullate, *d_t, seed);
+//     }
+
+//     return DeviceRowHasher<
+//       hash_function,
+//       Nullate,
+//       dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
+//                                           id_to_type<type_id::LIST>,
+//                                           id_to_type<type_id::DECIMAL128>,
+//                                           id_to_type<type_id::DECIMAL64>,
+//                                           id_to_type<type_id::DECIMAL32>,
+//                                           id_to_type<type_id::STRING>,
+//                                           id_to_type<type_id::DICTIONARY32>>::type>(
+//       nullate, *d_t, seed);
+//   }
+
+//  private:
+//   cudf::table_view _t;
+//   rmm::cuda_stream_view _stream;
+//   std::optional<std::shared_ptr<preprocessed_table>> _p_t;
+// };
 
 }  // namespace hash
 

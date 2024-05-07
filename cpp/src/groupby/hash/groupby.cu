@@ -64,7 +64,8 @@ namespace {
 using probing_scheme_type = cuco::linear_probing<
   1,  ///< Number of threads used to handle each input key
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                   cudf::nullate::DYNAMIC>>;
+                                                   cudf::nullate::DYNAMIC,
+                                                   cudf::experimental::type_identity>>;
 
 /**
  * @brief List of aggregation operations that can be computed with a hash-based

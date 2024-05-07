@@ -31,7 +31,25 @@ namespace detail {
 
 using row_hash =
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                   cudf::nullate::DYNAMIC>;
+                                                   cudf::nullate::DYNAMIC,
+                                                   cudf::experimental::type_identity>;
+
+using row_hash_no_nested = cudf::experimental::row::hash::device_row_hasher<
+  cudf::hashing::detail::default_hash,
+  cudf::nullate::DYNAMIC,
+  cudf::experimental::dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
+                                                          id_to_type<type_id::LIST>>::type>;
+
+using row_hash_no_complex = cudf::experimental::row::hash::device_row_hasher<
+  cudf::hashing::detail::default_hash,
+  cudf::nullate::DYNAMIC,
+  cudf::experimental::dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
+                                                          id_to_type<type_id::LIST>,
+                                                          id_to_type<type_id::DECIMAL128>,
+                                                          id_to_type<type_id::DECIMAL64>,
+                                                          id_to_type<type_id::DECIMAL32>,
+                                                          id_to_type<type_id::STRING>,
+                                                          id_to_type<type_id::DICTIONARY32>>::type>;
 
 // // This alias is used by mixed_joins, which support only non-nested types
 using row_equality = cudf::experimental::row::equality::strong_index_comparator_adapter<

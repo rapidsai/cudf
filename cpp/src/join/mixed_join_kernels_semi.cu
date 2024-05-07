@@ -33,13 +33,13 @@ namespace cg = cooperative_groups;
 
 #pragma GCC diagnostic ignored "-Wattributes"
 
-template <cudf::size_type block_size, bool has_nulls>
+template <cudf::size_type block_size, bool has_nulls, typename HashProbe>
 __attribute__((visibility("hidden"))) __launch_bounds__(block_size) __global__
   void mixed_join_semi(table_device_view left_table,
                        table_device_view right_table,
                        table_device_view probe,
                        table_device_view build,
-                       row_hash const hash_probe,
+                       HashProbe const hash_probe,
                        row_equality const equality_probe,
                        cudf::detail::semi_map_type::device_view hash_table_view,
                        cudf::device_span<bool> left_table_keep_mask,
@@ -74,7 +74,7 @@ __attribute__((visibility("hidden"))) __launch_bounds__(block_size) __global__
   }
 }
 
-template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>(
+template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true, row_hash>(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,
@@ -85,12 +85,56 @@ template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>(
   cudf::device_span<bool> left_table_keep_mask,
   cudf::ast::detail::expression_device_view device_expression_data);
 
-template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>(
+template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false, row_hash>(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
   row_hash const hash_probe,
+  row_equality const equality_probe,
+  cudf::detail::semi_map_type::device_view hash_table_view,
+  cudf::device_span<bool> left_table_keep_mask,
+  cudf::ast::detail::expression_device_view device_expression_data);
+
+template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true, row_hash_no_nested>(
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  row_hash_no_nested const hash_probe,
+  row_equality const equality_probe,
+  cudf::detail::semi_map_type::device_view hash_table_view,
+  cudf::device_span<bool> left_table_keep_mask,
+  cudf::ast::detail::expression_device_view device_expression_data);
+
+template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false, row_hash_no_nested>(
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  row_hash_no_nested const hash_probe,
+  row_equality const equality_probe,
+  cudf::detail::semi_map_type::device_view hash_table_view,
+  cudf::device_span<bool> left_table_keep_mask,
+  cudf::ast::detail::expression_device_view device_expression_data);
+
+template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true, row_hash_no_complex>(
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  row_hash_no_complex const hash_probe,
+  row_equality const equality_probe,
+  cudf::detail::semi_map_type::device_view hash_table_view,
+  cudf::device_span<bool> left_table_keep_mask,
+  cudf::ast::detail::expression_device_view device_expression_data);
+
+template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false, row_hash_no_complex>(
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  row_hash_no_complex const hash_probe,
   row_equality const equality_probe,
   cudf::detail::semi_map_type::device_view hash_table_view,
   cudf::device_span<bool> left_table_keep_mask,
