@@ -399,6 +399,7 @@ def write_parquet(
     object row_group_size_rows=None,
     object max_page_size_bytes=None,
     object max_page_size_rows=None,
+    object max_dictionary_size=None,
     object partitions_info=None,
     object force_nullable_schema=False,
     header_version="1.0",
@@ -528,6 +529,8 @@ def write_parquet(
         args.set_max_page_size_bytes(max_page_size_bytes)
     if max_page_size_rows is not None:
         args.set_max_page_size_rows(max_page_size_rows)
+    if max_dictionary_size is not None:
+        args.set_max_dictionary_size(max_dictionary_size)
 
     with nogil:
         out_metadata_c = move(parquet_writer(args))
