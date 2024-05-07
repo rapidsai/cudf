@@ -106,15 +106,18 @@ std::string base64_encode(std::string_view string_to_encode)
                     case 0:
                       encoded.push_back(base64_chars[(bytes_to_encode[idx] & 0xfc) >> 2]);
                       break;
+
                     case 1:
                       encoded.push_back(base64_chars[((bytes_to_encode[idx - 1] & 0x03) << 4) +
                                                      ((bytes_to_encode[idx] & 0xf0) >> 4)]);
                       break;
+
                     case 2:
                       encoded.push_back(base64_chars[((bytes_to_encode[idx - 1] & 0x0f) << 2) +
                                                      ((bytes_to_encode[idx] & 0xc0) >> 6)]);
                       encoded.push_back(base64_chars[bytes_to_encode[idx] & 0x3f]);
                       break;
+
                     default:
                       // altered: default case should never be reached
                       CUDF_UNREACHABLE("Invalid modulus");
@@ -125,6 +128,7 @@ std::string base64_encode(std::string_view string_to_encode)
   // altered: encode the remaining 1 or 2 bytes
   switch (remaining_bytes) {
     case 0: break;
+
     case 1:
       // from case 0
       encoded.push_back(base64_chars[(bytes_to_encode[complete_encoding_length] & 0xfc) >> 2]);
@@ -134,6 +138,7 @@ std::string base64_encode(std::string_view string_to_encode)
       encoded.push_back(trailing_char);
       encoded.push_back(trailing_char);
       break;
+
     case 2:
       // from case 0
       encoded.push_back(base64_chars[(bytes_to_encode[complete_encoding_length] & 0xfc) >> 2]);
@@ -221,47 +226,44 @@ std::string base64_decode(std::string_view encoded_string)
           size_t char1_position        = 0;
           size_t char2_position        = 0;
 
+          // Check for data that is not padded with equal
+          // signs (which is allowed by RFC 2045)
+          if (encoded_string[idx] != '=') { return true; }
+
           switch (modulus) {
             case 0:
-              if (encoded_string[idx] != '=') {  // Check for data that is not padded with equal
-                                                 // signs (which is allowed by RFC 2045)
-                current_char_position = base64_position(encoded_string[idx]);
-                char1_position        = base64_position(encoded_string[idx + 1]);
-                if (current_char_position == error_position or char1_position == error_position) {
-                  return false;
-                }
-                // Emit the first output byte that is produced in each chunk:
-                decoded.push_back(static_cast<std::string::value_type>(
-                  (current_char_position << 2) + ((char1_position & 0x30) >> 4)));
+              current_char_position = base64_position(encoded_string[idx]);
+              char1_position        = base64_position(encoded_string[idx + 1]);
+              if (current_char_position == error_position or char1_position == error_position) {
+                return false;
               }
+              // Emit the first output byte that is produced in each chunk:
+              decoded.push_back(static_cast<std::string::value_type>(
+                (current_char_position << 2) + ((char1_position & 0x30) >> 4)));
               break;
+
             case 2:
-              if (encoded_string[idx] != '=') {  // Check for data that is not padded with equal
-                                                 // signs (which is allowed by RFC 2045)
-                char1_position = base64_position(encoded_string[idx - 1]);
-                char2_position = base64_position(encoded_string[idx]);
-                if (char1_position == error_position or char2_position == error_position) {
-                  return false;
-                }
-                // Emit a chunk's second byte (which might not be produced in the last chunk).
-                decoded.push_back(static_cast<std::string::value_type>(
-                  ((char1_position & 0x0f) << 4) + ((char2_position & 0x3c) >> 2)));
+              char1_position = base64_position(encoded_string[idx - 1]);
+              char2_position = base64_position(encoded_string[idx]);
+              if (char1_position == error_position or char2_position == error_position) {
+                return false;
               }
+              // Emit a chunk's second byte (which might not be produced in the last chunk).
+              decoded.push_back(static_cast<std::string::value_type>(
+                ((char1_position & 0x0f) << 4) + ((char2_position & 0x3c) >> 2)));
               break;
 
             case 3:
-              if (encoded_string[idx] != '=') {  // Check for data that is not padded with equal
-                                                 // signs (which is allowed by RFC 2045)
-                char2_position        = base64_position(encoded_string[idx - 1]);
-                current_char_position = base64_position(encoded_string[idx]);
-                if (current_char_position == error_position or char2_position == error_position) {
-                  return false;
-                }
-                // Emit a chunk's third byte (which might not be produced in the last chunk).
-                decoded.push_back(static_cast<std::string::value_type>(
-                  ((char2_position & 0x03) << 6) + current_char_position));
+              char2_position        = base64_position(encoded_string[idx - 1]);
+              current_char_position = base64_position(encoded_string[idx]);
+              if (current_char_position == error_position or char2_position == error_position) {
+                return false;
               }
+              // Emit a chunk's third byte (which might not be produced in the last chunk).
+              decoded.push_back(static_cast<std::string::value_type>(
+                ((char2_position & 0x03) << 6) + current_char_position));
               break;
+
             default:  // case 1 (ignore)
               break;
           }
