@@ -553,7 +553,11 @@ def test_parquet_read_filtered_complex_predicate(
     df.to_parquet(fname, row_group_size=2)
 
     # Check filters
-    df_filtered = cudf.read_parquet(fname, filters=predicate)
+    with pytest.warns(
+        FutureWarning,
+        match="index concatenation will be deprecated in a future release",
+    ):
+        df_filtered = cudf.read_parquet(fname, filters=predicate)
     assert_eq(cudf.io.read_parquet_metadata(fname)[1], 10 / 2)
     assert_eq(len(df_filtered), expected_len)
 
@@ -2155,7 +2159,11 @@ def test_read_parquet_partitioned_filtered(
         row_groups = None
 
     # Filter on partitioned columns
-    expect = pd.read_parquet(read_path, filters=pfilters)
+    with pytest.warns(
+        FutureWarning,
+        match="index concatenation will be deprecated in a future release",
+    ):
+        expect = pd.read_parquet(read_path, filters=pfilters)
     got = cudf.read_parquet(
         read_path,
         filters=pfilters,
