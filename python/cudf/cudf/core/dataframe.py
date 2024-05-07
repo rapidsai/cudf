@@ -1222,7 +1222,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df.dtypes
         float              float64
         int                  int64
-        datetime    datetime64[us]
+        datetime    datetime64[ns]
         string              object
         dtype: object
         """
