@@ -233,7 +233,7 @@ def test_groupby_split_out(split_out, column):
     gddf = dask_cudf.from_cudf(gdf, npartitions=3)
 
     ddf_result = (
-        ddf.groupby(column)
+        ddf.groupby(column, observed=True)
         .a.mean(split_out=split_out)
         .compute()
         .sort_values()
@@ -368,10 +368,10 @@ def test_groupby_dropna_dask(dropna, by):
 
     if dropna is None:
         dask_cudf_result = gddf.groupby(by).e.sum()
-        dask_result = ddf.groupby(by).e.sum()
+        dask_result = ddf.groupby(by, observed=True).e.sum()
     else:
         dask_cudf_result = gddf.groupby(by, dropna=dropna).e.sum()
-        dask_result = ddf.groupby(by, dropna=dropna).e.sum()
+        dask_result = ddf.groupby(by, dropna=dropna, observed=True).e.sum()
 
     dd.assert_eq(dask_cudf_result, dask_result)
 
@@ -505,7 +505,7 @@ def test_groupby_reset_index_dtype():
     a = df.groupby("a").agg({"b": ["count"]})
 
     assert a.index.dtype == "int8"
-    assert a.reset_index().dtypes[0] == "int8"
+    assert a.reset_index().dtypes.iloc[0] == "int8"
 
 
 def test_groupby_reset_index_names():
@@ -563,7 +563,7 @@ def test_groupby_categorical_key():
     # (See: https://github.com/dask/dask/issues/9515)
     expect = (
         ddf.compute()
-        .groupby("name", sort=True)
+        .groupby("name", sort=True, observed=True)
         .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
     )
     dd.assert_eq(expect, got)
