@@ -2964,7 +2964,7 @@ class IntervalIndex(Index):
 
 @_cudf_nvtx_annotate
 def as_index(
-    arbitrary, nan_as_null=None, copy=False, name=no_default, dtype=None
+    arbitrary, nan_as_null=no_default, copy=False, name=no_default, dtype=None
 ) -> BaseIndex:
     """Create an Index from an arbitrary object
 
@@ -3014,6 +3014,10 @@ def as_index(
         - DatetimeIndex for Datetime input.
         - Index for all other inputs.
     """
+    if nan_as_null is no_default:
+        nan_as_null = (
+            False if cudf.get_option("mode.pandas_compatible") else None
+        )
 
     if name is no_default:
         name = getattr(arbitrary, "name", None)
