@@ -17,7 +17,6 @@
 #include "config_utils.hpp"
 
 #include <cudf/detail/utilities/stream_pool.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 
@@ -218,12 +217,6 @@ inline std::mutex& host_mr_lock()
 {
   static std::mutex map_lock;
   return map_lock;
-}
-
-inline rmm::host_async_resource_ref old_default_pinned_mr()
-{
-  static rmm::mr::pinned_host_memory_resource default_mr{};
-  return default_mr;
 }
 
 CUDF_EXPORT inline auto& host_mr()
