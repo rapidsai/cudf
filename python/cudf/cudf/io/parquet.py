@@ -67,7 +67,7 @@ def _write_parquet(
     storage_options=None,
     force_nullable_schema=False,
     header_version="1.0",
-    use_dictionary="ADAPTIVE",
+    use_dictionary=True,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -962,22 +962,6 @@ def to_parquet(
             if partition_offsets is not None
             else None
         )
-
-        # Set up the dictionary policy
-        dict_policy=None
-        if use_dictionary == True or use_dictionary == "ADAPTIVE":
-            dict_policy="ADAPTIVE"
-        elif use_dictionary == False or use_dictionary == "NEVER":
-            dict_policy="NEVER"
-        elif use_dictionary == "ALWAYS":
-            dict_policy="ALWAYS"
-        else:
-            dict_policy="ADAPTIVE"
-            warnings.warn(
-                "invalid value passed for `use_dictionary`."
-                "Using the default value `use_dictionary=True`"
-            )
-
         return _write_parquet(
             df,
             paths=path if is_list_like(path) else [path],
@@ -994,7 +978,7 @@ def to_parquet(
             storage_options=storage_options,
             force_nullable_schema=force_nullable_schema,
             header_version=header_version,
-            use_dictionary=dict_policy,
+            use_dictionary=use_dictionary,
         )
 
     else:
