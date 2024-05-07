@@ -1076,8 +1076,10 @@ class CategoricalColumn(column.ColumnBase):
                     self.codes.dtype
                 )
 
+        # Validation of `fill_value` will have to be performed
+        # before returning self.
         if not self.nullable:
-            return self.copy()
+            return self
 
         return super().fillna(fill_value, method=method)
 
