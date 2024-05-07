@@ -90,8 +90,9 @@ bool is_stable_enabled() { return is_all_enabled() or get_env_policy() == usage_
 
 }  // namespace nvcomp_integration
 
-using rmm_pinned_pool_t = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
+}  // namespace detail
 
+namespace {
 class fixed_pinned_pool_memory_resource {
   using upstream_mr    = rmm::mr::pinned_host_memory_resource;
   using host_pooled_mr = rmm::mr::pool_memory_resource<upstream_mr>;
@@ -99,6 +100,7 @@ class fixed_pinned_pool_memory_resource {
  private:
   upstream_mr upstream_mr_{};
   size_t pool_size_{};
+  // Raw pointer to avoid a segfault when the pool is destroyed on exit
   host_pooled_mr* pool_;
   void* pool_begin_{};
   void* pool_end_{};
@@ -108,8 +110,7 @@ class fixed_pinned_pool_memory_resource {
   fixed_pinned_pool_memory_resource(size_t size)
     : pool_size_{size}, pool_{new host_pooled_mr(upstream_mr_, size, size)}
   {
-    // allocate from the pinned pool the full size to figure out
-    // our beginning and end address.
+    // Allocate full size from the pinned pool to figure out the beginning and end address
     if (pool_size_ != 0) {
       pool_begin_ = pool_->allocate_async(pool_size_, stream_);
       pool_end_   = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size_);
@@ -230,21 +231,20 @@ CUDF_EXPORT inline auto& host_mr()
   static rmm::host_async_resource_ref host_mr = default_pinned_mr();
   return host_mr;
 }
-
-}  // namespace detail
+}  // namespace
 
 rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_ref mr)
 {
-  std::lock_guard lock{detail::host_mr_lock()};
-  auto last_mr      = detail::host_mr();
-  detail::host_mr() = mr;
+  std::lock_guard lock{host_mr_lock()};
+  auto last_mr = host_mr();
+  host_mr()    = mr;
   return last_mr;
 }
 
 rmm::host_async_resource_ref get_host_memory_resource()
 {
-  std::lock_guard lock{detail::host_mr_lock()};
-  return detail::host_mr();
+  std::lock_guard lock{host_mr_lock()};
+  return host_mr();
 }
 
 }  // namespace cudf::io
