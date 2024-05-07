@@ -123,6 +123,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     Parameters
     ----------
     objs : list or dictionary of DataFrame, Series, or Index
+        deprecated:: 24.06
+        concatenating indices is deprecated and will be removed in a future version of cudf.
     axis : {0/'index', 1/'columns'}, default 0
         The axis to concatenate along.
         `axis=1` must be passed if a dictionary is passed.
