@@ -93,24 +93,27 @@ bool is_stable_enabled() { return is_all_enabled() or get_env_policy() == usage_
 using rmm_pinned_pool_t = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
 
 class fixed_pinned_pool_memory_resource {
+  using upstream_mr    = rmm::mr::pinned_host_memory_resource;
+  using host_pooled_mr = rmm::mr::pool_memory_resource<upstream_mr>;
+
  private:
-  rmm_pinned_pool_t* _pool;
+  upstream_mr upstream_mr_{};
+  size_t pool_size_{};
+  host_pooled_mr* pool_;
   void* pool_begin_{};
   void* pool_end_{};
-  size_t pool_size_{};
   cuda::stream_ref stream_{cudf::detail::global_cuda_stream_pool().get_stream(0).value()};
-  rmm::mr::pinned_host_memory_resource fallback_mr_{};
 
  public:
-  fixed_pinned_pool_memory_resource(rmm_pinned_pool_t* pool)
-    : _pool(pool), pool_size_{pool->pool_size()}
+  fixed_pinned_pool_memory_resource(size_t size)
+    : pool_size_{size}, pool_{new host_pooled_mr(upstream_mr_, size, size)}
   {
     // allocate from the pinned pool the full size to figure out
     // our beginning and end address.
     if (pool_size_ != 0) {
-      pool_begin_ = pool->allocate_async(pool_size_, stream_);
+      pool_begin_ = pool_->allocate_async(pool_size_, stream_);
       pool_end_   = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size_);
-      pool->deallocate_async(pool_begin_, pool_size_, stream_);
+      pool_->deallocate_async(pool_begin_, pool_size_, stream_);
     }
   }
 
@@ -118,12 +121,12 @@ class fixed_pinned_pool_memory_resource {
   {
     if (bytes <= pool_size_) {
       try {
-        return _pool->allocate_async(bytes, alignment, stream);
+        return pool_->allocate_async(bytes, alignment, stream);
       } catch (const std::exception& unused) {
       }
     }
 
-    return fallback_mr_.allocate_async(bytes, alignment, stream);
+    return upstream_mr_.allocate_async(bytes, alignment, stream);
   }
   void do_deallocate_async(void* ptr,
                            std::size_t bytes,
@@ -131,9 +134,9 @@ class fixed_pinned_pool_memory_resource {
                            cuda::stream_ref stream) noexcept
   {
     if (bytes <= pool_size_ && ptr >= pool_begin_ && ptr <= pool_end_) {
-      _pool->deallocate_async(ptr, bytes, alignment, stream);
+      pool_->deallocate_async(ptr, bytes, alignment, stream);
     } else {
-      fallback_mr_.deallocate_async(ptr, bytes, alignment, stream);
+      upstream_mr_.deallocate_async(ptr, bytes, alignment, stream);
     }
   }
 
@@ -193,8 +196,6 @@ class fixed_pinned_pool_memory_resource {
 
 inline rmm::host_async_resource_ref default_pinned_mr()
 {
-  using host_pooled_mr = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
-
   auto const size = []() -> size_t {
     if (auto const env_val = getenv("LIBCUDF_PINNED_POOL_SIZE")) { return std::atol(env_val); }
 
@@ -207,13 +208,9 @@ inline rmm::host_async_resource_ref default_pinned_mr()
   CUDF_LOG_INFO("Pinned pool size = {}", size);
 
   // make the pool with max size equal to the initial size
-  static std::shared_ptr<host_pooled_mr> pool_mr = std::make_shared<host_pooled_mr>(
-    std::make_shared<rmm::mr::pinned_host_memory_resource>().get(), size, size);
+  static fixed_pinned_pool_memory_resource mr{size};
 
-  static std::shared_ptr<fixed_pinned_pool_memory_resource> mr =
-    std::make_shared<fixed_pinned_pool_memory_resource>(pool_mr.get());
-
-  return *mr;
+  return mr;
 }
 
 inline std::mutex& host_mr_lock()
