@@ -2,6 +2,7 @@
 
 import datetime
 import glob
+import hashlib
 import math
 import os
 import pathlib
@@ -2804,6 +2805,24 @@ def test_parquet_reader_fixed_bin(datadir):
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname)
 
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_fixed_len_with_dict(tmpdir):
+    def flba(i):
+        hasher = hashlib.sha256()
+        hasher.update(i.to_bytes(4, "little"))
+        return hasher.digest()
+
+    # use pyarrow to write table of fixed_len_byte_array
+    num_rows = 200
+    data = pa.array([flba(i) for i in range(num_rows)], type=pa.binary(32))
+    padf = pa.Table.from_arrays([data], names=["flba"])
+    padf_fname = tmpdir.join("padf.parquet")
+    pq.write_table(padf, padf_fname, use_dictionary=True)
+
+    expect = pd.read_parquet(padf_fname)
+    got = cudf.read_parquet(padf_fname)
     assert_eq(expect, got)
 
 
