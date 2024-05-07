@@ -200,6 +200,8 @@ static void bench_query(nvbench::state& state)
   size_t num_chars = scv.chars_size(stream);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  // This isn't strictly 100% accurate. a given query isn't necessarily
+  // going to visit every single incoming character but in spirit it does.
   state.add_global_memory_reads<nvbench::int8_t>(num_chars);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
