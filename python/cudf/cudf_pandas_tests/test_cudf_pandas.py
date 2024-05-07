@@ -1228,3 +1228,17 @@ def test_apply_slow_path_udf_references_global_module():
     result = df.apply(my_apply, axis=1, unused=True)
     expected = xpd.Series([1])
     tm.assert_series_equal(result, expected)
+
+
+@pytest.mark.parametrize("op", [operator.isub, operator.iadd])
+def test_isub_iadd(op):
+    xarray1 = xpd.array([10, 11, 12])
+    xarray2 = xpd.array([1, 2, 3])
+
+    array1 = pd.array([10, 11, 12])
+    array2 = pd.array([1, 2, 3])
+
+    xarray1 = op(xarray1, xarray2)
+    array1 = op(array1, array2)
+
+    tm.assert_equal(xarray1, array1)
