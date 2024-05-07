@@ -511,9 +511,13 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
     df.to_parquet(fname_2, row_group_size=2)
 
     # Check filter
-    filtered_df = cudf.read_parquet(
-        [fname_0, fname_1, fname_2], filters=[("x", "==", 2)]
-    )
+    with pytest.warns(
+        FutureWarning,
+        match="index concatenation will be deprecated in a future release",
+    ):
+        filtered_df = cudf.read_parquet(
+            [fname_0, fname_1, fname_2], filters=[("x", "==", 2)]
+        )
     assert_eq(
         filtered_df,
         cudf.DataFrame({"x": [2, 2], "y": list("bc")}, index=[2, 2]),
@@ -554,10 +558,13 @@ def test_parquet_read_filtered_complex_predicate(
     df.to_parquet(fname, row_group_size=2)
 
     # Check filters
-    with pytest.warns(
-        FutureWarning,
-        match="index concatenation will be deprecated in a future release",
-    ):
+    if expected_len != 0:
+        with pytest.warns(
+            FutureWarning,
+            match="index concatenation will be deprecated in a future release",
+        ):
+            df_filtered = cudf.read_parquet(fname, filters=predicate)
+    else:
         df_filtered = cudf.read_parquet(fname, filters=predicate)
     assert_eq(cudf.io.read_parquet_metadata(fname)[1], 10 / 2)
     assert_eq(len(df_filtered), expected_len)
@@ -2160,17 +2167,17 @@ def test_read_parquet_partitioned_filtered(
         row_groups = None
 
     # Filter on partitioned columns
+    expect = pd.read_parquet(read_path, filters=pfilters)
     with pytest.warns(
         FutureWarning,
         match="index concatenation will be deprecated in a future release",
     ):
-        expect = pd.read_parquet(read_path, filters=pfilters)
-    got = cudf.read_parquet(
-        read_path,
-        filters=pfilters,
-        row_groups=row_groups,
-        categorical_partitions=use_cat,
-    )
+        got = cudf.read_parquet(
+            read_path,
+            filters=pfilters,
+            row_groups=row_groups,
+            categorical_partitions=use_cat,
+        )
     expect["b"] = expect["b"].astype(str)
     expect["c"] = expect["c"].astype(int)
     if use_cat:
@@ -2188,12 +2195,20 @@ def test_read_parquet_partitioned_filtered(
 
     # Filter on non-partitioned column
     filters = [("a", "==", 10)]
-    got = cudf.read_parquet(read_path, filters=filters)
+    with pytest.warns(
+        FutureWarning,
+        match="index concatenation will be deprecated in a future release",
+    ):
+        got = cudf.read_parquet(read_path, filters=filters)
     expect = pd.read_parquet(read_path, filters=filters)
 
     # Filter on both kinds of columns
     filters = [[("a", "==", 10)], [("c", "==", 1)]]
-    got = cudf.read_parquet(read_path, filters=filters)
+    with pytest.warns(
+        FutureWarning,
+        match="index concatenation will be deprecated in a future release",
+    ):
+        got = cudf.read_parquet(read_path, filters=filters)
     expect = pd.read_parquet(read_path, filters=filters)
 
     # Work-around for pandas bug:

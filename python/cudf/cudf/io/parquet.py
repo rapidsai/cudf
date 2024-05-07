@@ -15,7 +15,6 @@ from uuid import uuid4
 
 import numpy as np
 import pandas as pd
-import pytest
 from pyarrow import dataset as ds
 
 import cudf
@@ -857,16 +856,12 @@ def _read_parquet(
                 "cudf engine doesn't support the "
                 f"following positional arguments: {list(args)}"
             )
-        with pytest.warns(
-            FutureWarning,
-            match="index concatenation will be deprecated in a future release",
-        ):
-            return libparquet.read_parquet(
-                filepaths_or_buffers,
-                columns=columns,
-                row_groups=row_groups,
-                use_pandas_metadata=use_pandas_metadata,
-            )
+        return libparquet.read_parquet(
+            filepaths_or_buffers,
+            columns=columns,
+            row_groups=row_groups,
+            use_pandas_metadata=use_pandas_metadata,
+        )
     else:
         if (
             isinstance(filepaths_or_buffers, list)
