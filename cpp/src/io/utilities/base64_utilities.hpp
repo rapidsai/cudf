@@ -228,7 +228,7 @@ std::string base64_decode(std::string_view encoded_string)
 
           // Check for data that is not padded with equal
           // signs (which is allowed by RFC 2045)
-          if (encoded_string[idx] != '=') { return true; }
+          if (encoded_string[idx] == '=') { return true; }
 
           switch (modulus) {
             case 0:
