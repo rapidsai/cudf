@@ -859,3 +859,19 @@ def test_cat_from_scalar(scalar):
     gs = cudf.Series(scalar, dtype="category")
 
     assert_eq(ps, gs)
+
+
+def test_cat_groupby_fillna():
+    ps = pd.Series(["a", "b", "c"], dtype="category")
+    gs = cudf.from_pandas(ps)
+
+    with pytest.warns(FutureWarning):
+        pg = ps.groupby(ps)
+    gg = gs.groupby(gs)
+
+    assert_exceptions_equal(
+        lfunc=pg.fillna,
+        rfunc=gg.fillna,
+        lfunc_args_and_kwargs=(("d",), {}),
+        rfunc_args_and_kwargs=(("d",), {}),
+    )
