@@ -275,6 +275,7 @@ class BaseIndex(Serializable):
         raise NotImplementedError()
 
     def __contains__(self, item):
+        hash(item)
         return item in self._values
 
     def _copy_type_metadata(
