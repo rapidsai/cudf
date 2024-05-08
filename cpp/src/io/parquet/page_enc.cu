@@ -109,10 +109,10 @@ using rle_page_enc_state_s = page_enc_state_s<rle_buffer_size>;
 /**
  * @brief Returns the size of the type in the Parquet file.
  */
-constexpr uint32_t physical_type_len(Type physical_type, type_id id)
+constexpr uint32_t physical_type_len(Type physical_type, type_id id, int type_length)
 {
-  if (physical_type == FIXED_LEN_BYTE_ARRAY and id == type_id::DECIMAL128) {
-    return sizeof(__int128_t);
+  if (physical_type == FIXED_LEN_BYTE_ARRAY) {
+    return id == type_id::DECIMAL128 ? sizeof(__int128_t) : type_length;
   }
   switch (physical_type) {
     case INT96: return 12u;
@@ -183,7 +183,7 @@ void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
 
   auto const physical_type   = s->col.physical_type;
   auto const leaf_type       = s->col.leaf_column->type().id();
-  auto const dtype_len       = physical_type_len(physical_type, leaf_type);
+  auto const dtype_len       = physical_type_len(physical_type, leaf_type, s->col.type_length);
   auto const nvals           = s->frag.num_leaf_values;
   auto const start_value_idx = s->frag.start_value_idx;
 
@@ -541,7 +541,8 @@ __device__ size_t delta_data_len(Type physical_type,
                                  size_t page_size,
                                  encode_kernel_mask encoding)
 {
-  auto const dtype_len_out = physical_type_len(physical_type, type_id);
+  // dtype_len_out is for the lengths, rather than the char data, so pass sizeof(int32_t)
+  auto const dtype_len_out = physical_type_len(physical_type, type_id, sizeof(int32_t));
   auto const dtype_len     = [&]() -> uint32_t {
     if (physical_type == INT32) { return int32_logical_len(type_id); }
     if (physical_type == INT96) { return sizeof(int64_t); }
@@ -1662,7 +1663,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   __syncthreads();
   auto const physical_type = s->col.physical_type;
   auto const type_id       = s->col.leaf_column->type().id();
-  auto const dtype_len_out = physical_type_len(physical_type, type_id);
+  auto const dtype_len_out = physical_type_len(physical_type, type_id, s->col.type_length);
   auto const dtype_len_in  = [&]() -> uint32_t {
     if (physical_type == INT32) { return int32_logical_len(type_id); }
     if (physical_type == INT96) { return sizeof(int64_t); }
@@ -1837,6 +1838,19 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
                            thrust::make_reverse_iterator(v_char_ptr),
                            dst + pos);
             }
+          } else {
+            auto const elem =
+              get_element<statistics::byte_array_view>(*(s->col.leaf_column), val_idx);
+            if (len != 0 and elem.data() != nullptr) {
+              if (is_split_stream) {
+                auto const v_char_ptr = reinterpret_cast<uint8_t const*>(elem.data());
+                for (int i = 0; i < dtype_len_out; i++, pos += stride) {
+                  dst[pos] = v_char_ptr[i];
+                }
+              } else {
+                memcpy(dst + pos, elem.data(), len);
+              }
+            }
           }
         } break;
       }
@@ -1884,7 +1898,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   // Encode data values
   auto const physical_type = s->col.physical_type;
   auto const type_id       = s->col.leaf_column->type().id();
-  auto const dtype_len_out = physical_type_len(physical_type, type_id);
+  auto const dtype_len_out = physical_type_len(physical_type, type_id, s->col.type_length);
   auto const dtype_len_in  = [&]() -> uint32_t {
     if (physical_type == INT32) { return int32_logical_len(type_id); }
     if (physical_type == INT96) { return sizeof(int64_t); }
@@ -2016,7 +2030,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   // Encode data values
   auto const physical_type = s->col.physical_type;
   auto const type_id       = s->col.leaf_column->type().id();
-  auto const dtype_len_out = physical_type_len(physical_type, type_id);
+  auto const dtype_len_out = physical_type_len(physical_type, type_id, s->col.type_length);
   auto const dtype_len_in  = [&]() -> uint32_t {
     if (physical_type == INT32) { return int32_logical_len(type_id); }
     if (physical_type == INT96) { return sizeof(int64_t); }
@@ -3218,7 +3232,7 @@ __device__ int32_t calculate_boundary_order(statistics_chunk const* s,
 }
 
 // align ptr to an 8-byte boundary. address returned will be <= ptr.
-constexpr __device__ void* align8(void* ptr)
+inline __device__ void* align8(void* ptr)
 {
   // it's ok to round down because we have an extra 7 bytes in the buffer
   auto algn = 3 & reinterpret_cast<std::uintptr_t>(ptr);
