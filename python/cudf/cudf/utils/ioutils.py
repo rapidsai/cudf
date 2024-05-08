@@ -278,7 +278,7 @@ max_page_size_rows: integer or None, default None
     Maximum number of rows of each page of the output.
     If None, 20000 will be used.
 max_dictionary_size: integer or None. default None
-    Maximum size of dictionary page for each output column chunks. Dictionary
+    Maximum size of the dictionary page for each output column chunk. Dictionary
     encoding for column chunks that exceeds this limit will be disabled.
     If None, 1048576 (1MB) will be used.
 storage_options : dict, optional, default None
@@ -295,7 +295,7 @@ return_metadata : bool, default False
     ``return_metadata=True`` instead of specifying ``metadata_file_path``
 use_dictionary : bool, default True
     When ``False``, prevents the use of dictionary encoding for Parquet page
-    data. When ``True``, dictionary encoding is preferred subjected to
+    data. When ``True``, dictionary encoding is preferred subject to
     ``max_dictionary_size`` constraints.
 header_version : {{'1.0', '2.0'}}, default "1.0"
     Controls whether to use version 1.0 or version 2.0 page headers when
