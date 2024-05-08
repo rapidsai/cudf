@@ -115,6 +115,13 @@ class column_buffer_base {
   // preprocessing steps such as in the Parquet reader
   void create(size_type _size, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
+  // like create(), but also takes a `cudf::mask_state` to allow initializing the null mask as
+  // something other than `ALL_NULL`
+  void create_with_mask(size_type _size,
+                        cudf::mask_state null_mask_state,
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr);
+
   // Create a new column_buffer that has empty data but with the same basic information as the
   // input column, including same type, nullability, name, and user_data.
   static string_policy empty_like(string_policy const& input);
