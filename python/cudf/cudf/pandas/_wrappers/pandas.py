@@ -103,6 +103,49 @@ class _AccessorAttr:
             raise AttributeError()
 
 
+def Timestamp_Timedelta__new__(cls, *args, **kwargs):
+    # Call fast/slow constructor
+    # This takes care of running __init__ as well, but must be paired
+    # with a removal of the defaulted __init__ that
+    # make_final_proxy_type provides.
+    # Timestamp & Timedelta don't always return same types as self,
+    # hence this method is needed.
+    self, _ = _fast_slow_function_call(
+        lambda cls, args, kwargs: cls(*args, **kwargs),
+        cls,
+        args,
+        kwargs,
+    )
+    return self
+
+
+Timedelta = make_final_proxy_type(
+    "Timedelta",
+    _Unusable,
+    pd.Timedelta,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "__new__": Timestamp_Timedelta__new__,
+        "__init__": _DELETE,
+    },
+)
+
+
+Timestamp = make_final_proxy_type(
+    "Timestamp",
+    _Unusable,
+    pd.Timestamp,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "__new__": Timestamp_Timedelta__new__,
+        "__init__": _DELETE,
+    },
+)
+
 DatetimeProperties = make_intermediate_proxy_type(
     "DatetimeProperties",
     cudf.core.series.DatetimeProperties,
@@ -308,6 +351,18 @@ TimedeltaIndex = make_final_proxy_type(
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
     additional_attributes={"__init__": _DELETE},
+)
+
+NumpyExtensionArray = make_final_proxy_type(
+    "NumpyExtensionArray",
+    _Unusable,
+    pd.arrays.NumpyExtensionArray,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_ndarray": _FastSlowAttribute("_ndarray"),
+        "_dtype": _FastSlowAttribute("_dtype"),
+    },
 )
 
 TimedeltaArray = make_final_proxy_type(
