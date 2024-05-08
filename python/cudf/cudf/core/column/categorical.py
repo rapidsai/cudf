@@ -718,7 +718,7 @@ class CategoricalColumn(column.ColumnBase):
                 "you can use .as_ordered() to change the Categorical "
                 "to an ordered one."
             )
-        return self._encode(
+        return self._decode(
             self.codes._reduce(op, skipna, min_count, *args, **kwargs)
         )
 
