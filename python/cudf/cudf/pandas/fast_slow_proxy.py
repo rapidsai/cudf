@@ -598,59 +598,6 @@ class _FastSlowProxy:
         return _FastSlowAttribute("__setattr__").__get__(self)(name, value)
 
 
-binary_ops = [
-    "__add__",
-    "__and__",
-    "__divmod__",
-    "__floordiv__",
-    "__lshift__",
-    "__matmul__",
-    "__mod__",
-    "__mul__",
-    "__or__",
-    "__pow__",
-    "__radd__",
-    "__rand__",
-    "__rdivmod__",
-    "__rfloordiv__",
-    "__rlshift__",
-    "__rmatmul__",
-    "__rmod__",
-    "__rmul__",
-    "__ror__",
-    "__rpow__",
-    "__rrshift__",
-    "__rshift__",
-    "__rsub__",
-    "__rtruediv__",
-    "__rxor__",
-    "__sub__",
-    "__truediv__",
-    "__xor__",
-]
-
-
-def create_special_method_impl(special_method):
-    def special_method_impl(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: getattr(x, special_method)(y)
-            if hasattr(x, special_method)
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    return special_method_impl
-
-
-for special_method in binary_ops:
-    setattr(
-        _FastSlowProxy,
-        special_method,
-        create_special_method_impl(special_method),
-    )
-
-
 class _FinalProxy(_FastSlowProxy):
     """
     Proxy type for a pair of fast and slow "final" types for which
@@ -1110,41 +1057,69 @@ def _replace_closurevars(
 
 
 _SPECIAL_METHODS: Set[str] = {
-    "__repr__",
-    "__str__",
-    "__len__",
-    "__contains__",
-    "__getitem__",
-    "__setitem__",
-    "__delitem__",
-    "__getslice__",
-    "__setslice__",
-    "__delslice__",
-    "__iter__",
-    "__lt__",
-    "__le__",
-    "__eq__",
-    "__ne__",
-    "__gt__",
-    "__ge__",
-    "__pos__",
-    "__neg__",
-    "__invert__",
     "__abs__",
-    "__round__",
-    "__format__",
+    "__add__",
+    "__and__",
     "__bool__",
-    "__float__",
-    "__int__",
-    "__complex__",
-    "__enter__",
-    "__exit__",
-    "__next__",
-    "__copy__",
-    "__deepcopy__",
-    "__dataframe__",
     "__call__",
+    "__complex__",
+    "__contains__",
+    "__copy__",
+    "__dataframe__",
+    "__deepcopy__",
+    "__delitem__",
+    "__delslice__",
+    "__divmod__",
+    "__enter__",
+    "__eq__",
+    "__exit__",
+    "__float__",
+    "__floordiv__",
+    "__format__",
+    "__ge__",
+    "__getitem__",
+    "__getslice__",
+    "__gt__",
     # Added on a per-proxy basis
     # https://github.com/rapidsai/xdf/pull/306#pullrequestreview-1636155428
     # "__hash__",
+    "__int__",
+    "__invert__",
+    "__iter__",
+    "__le__",
+    "__len__",
+    "__lshift__",
+    "__lt__",
+    "__matmul__",
+    "__mod__",
+    "__mul__",
+    "__ne__",
+    "__neg__",
+    "__next__",
+    "__or__",
+    "__pos__",
+    "__pow__",
+    "__radd__",
+    "__rand__",
+    "__rdivmod__",
+    "__repr__",
+    "__rfloordiv__",
+    "__rlshift__",
+    "__rmatmul__",
+    "__rmod__",
+    "__rmul__",
+    "__ror__",
+    "__round__",
+    "__rpow__",
+    "__rrshift__",
+    "__rshift__",
+    "__rsub__",
+    "__rtruediv__",
+    "__rxor__",
+    "__setitem__",
+    "__setslice__",
+    "__str__",
+    "__sub__",
+    "__truediv__",
+    "__xor__",
 }
