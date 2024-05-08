@@ -858,7 +858,7 @@ thrust::lower_bound(rmm::exec_policy(stream),
 
 ### Offset-normalizing iterators
 
-Like the [indexalator](#index-normalizing_iterators),
+Like the [indexalator](#index-normalizing-iterators),
 the "offsetalator", or offset-normalizing iterator (`include/cudf/detail/offsetalator.cuh`), can be
 used for offset column types (INT32 or INT64 only) without requiring a type-specific instance.
 This helpful when reading or building [strings columns](#strings-columns). The normalized type is `int64` which means
@@ -1274,8 +1274,8 @@ The parent column's type is `STRING` and its data holds all the characters acros
 but its size represents the number of strings in the column and its null mask represents the
 validity of each string.
 
-The strings column contains a single child column which is a non-nullable column
-of [`size_type`](#cudfsize_type) elements that indicates the offset to the beginning of each
+The strings column contains a single, non-nullable child column
+of offset elements that indicates the byte position offset to the beginning of each
 string in the dense data buffer of all characters. With this representation, `data[offsets[i]]` is the
 first character of string `i`, and the size of string `i` is given by `offsets[i+1] - offsets[i]`.
 The following image shows an example of this compound column representation of strings.
@@ -1283,6 +1283,7 @@ The following image shows an example of this compound column representation of s
 ![strings](strings.png)
 
 The type of the offsets column is either INT32 or INT64 depending on the number of bytes in the data buffer.
+See [`cudf::strings_view`](#cudfstrings_column_view-and-cudfstring_view) for more information on processing individual string rows.
 
 ## Structs columns
 
@@ -1430,7 +1431,7 @@ character can be 1-4 bytes. This means the length of a string is not the same as
 For this reason, it is recommended to use the `cudf::string_view` class to access these characters for
 most operations.
 
-The `string_view.cuh` header also includes some utility methods for reading and writing
+The `cudf/strings/detail/utf8.hpp` header also includes some utility methods for reading and writing
 (`to_char_utf8/from_char_utf8`) individual UTF-8 characters to/from byte arrays.
 
 ### cudf::lists_column_view and cudf::lists_view
