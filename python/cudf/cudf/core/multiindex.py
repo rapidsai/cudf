@@ -24,6 +24,7 @@ from cudf._typing import DataFrameOrSeries
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
 from cudf.core import column
+from cudf.core._base_index import _return_get_indexer_result
 from cudf.core.frame import Frame
 from cudf.core.index import (
     BaseIndex,
@@ -1859,11 +1860,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             dtype=libcudf.types.size_type_dtype,
         )
         if not len(self):
-            return result.values
+            return _return_get_indexer_result(result.values)
         try:
             target = cudf.MultiIndex.from_tuples(target)
         except TypeError:
-            return result.values
+            return _return_get_indexer_result(result.values)
 
         join_keys = [
             _match_join_keys(lcol, rcol, "inner")
@@ -1893,7 +1894,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 "{['ffill'/'pad', 'bfill'/'backfill', None]}"
             )
 
-        return result_series.to_cupy()
+        return _return_get_indexer_result(result_series.to_cupy())
 
     @_cudf_nvtx_annotate
     def get_loc(self, key):
@@ -2112,6 +2113,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             yield from self._split_columns_by_levels(levels, in_levels=True)
 
     def repeat(self, repeats, axis=None):
-        return self._from_columns_like_self(
-            Frame._repeat([*self._columns], repeats, axis), self._column_names
+        return self._from_data(
+            self._data._from_columns_like_self(
+                super()._repeat([*self._columns], repeats, axis)
+            )
         )

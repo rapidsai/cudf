@@ -22,6 +22,7 @@ from typing import (
 import cupy
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from typing_extensions import Self
 
 import cudf
@@ -38,7 +39,7 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
-from cudf.core._base_index import BaseIndex
+from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import (
     CategoricalColumn,
@@ -60,6 +61,7 @@ from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    _NUMPY_SCTYPES,
     _maybe_convert_to_default_type,
     find_common_type,
     is_mixed_with_object_dtype,
@@ -249,6 +251,15 @@ class RangeIndex(BaseIndex, BinaryOperand):
         ), "Invalid ascending flag"
         return search_range(value, self._range, side=side)
 
+    def factorize(self, sort: bool = False, use_na_sentinel: bool = True):
+        if sort and self.step < 0:
+            codes = cupy.arange(len(self) - 1, -1, -1)
+            uniques = self[::-1]
+        else:
+            codes = cupy.arange(len(self), dtype=np.intp)
+            uniques = self
+        return codes, uniques
+
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def name(self):
@@ -261,7 +272,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def start(self):
+    def start(self) -> int:
         """
         The value of the `start` parameter (0 if this was not supplied).
         """
@@ -269,7 +280,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def stop(self):
+    def stop(self) -> int:
         """
         The value of the stop parameter.
         """
@@ -277,7 +288,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def step(self):
+    def step(self) -> int:
         """
         The value of the step parameter.
         """
@@ -285,7 +296,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def _num_rows(self):
+    def _num_rows(self) -> int:
         return len(self)
 
     @cached_property  # type: ignore
@@ -296,33 +307,33 @@ class RangeIndex(BaseIndex, BinaryOperand):
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
-    def _clean_nulls_from_index(self):
+    def _clean_nulls_from_index(self) -> Self:
         return self
 
-    def _is_numeric(self):
+    def _is_numeric(self) -> bool:
         return True
 
-    def _is_boolean(self):
+    def _is_boolean(self) -> bool:
         return False
 
-    def _is_integer(self):
+    def _is_integer(self) -> bool:
         return True
 
-    def _is_floating(self):
+    def _is_floating(self) -> bool:
         return False
 
-    def _is_object(self):
+    def _is_object(self) -> bool:
         return False
 
-    def _is_categorical(self):
+    def _is_categorical(self) -> bool:
         return False
 
-    def _is_interval(self):
+    def _is_interval(self) -> bool:
         return False
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def hasnans(self):
+    def hasnans(self) -> bool:
         return False
 
     @property  # type: ignore
@@ -334,8 +345,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def __contains__(self, item):
+        hash(item)
         if isinstance(item, bool) or not isinstance(
-            item, tuple(np.sctypes["int"] + np.sctypes["float"] + [int, float])
+            item,
+            tuple(
+                _NUMPY_SCTYPES["int"] + _NUMPY_SCTYPES["float"] + [int, float]
+            ),
         ):
             return False
         try:
@@ -370,12 +385,15 @@ class RangeIndex(BaseIndex, BinaryOperand):
             return self
         return self._as_int_index().astype(dtype, copy=copy)
 
+    def fillna(self, value, downcast=None):
+        return self.copy()
+
     @_cudf_nvtx_annotate
     def drop_duplicates(self, keep="first"):
         return self
 
     @_cudf_nvtx_annotate
-    def duplicated(self, keep="first"):
+    def duplicated(self, keep="first") -> cupy.ndarray:
         return cupy.zeros(len(self), dtype=bool)
 
     @_cudf_nvtx_annotate
@@ -390,6 +408,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
             )
             + ")"
         )
+
+    @property
+    @_cudf_nvtx_annotate
+    def size(self) -> int:
+        return len(self)
 
     @_cudf_nvtx_annotate
     def __len__(self):
@@ -479,12 +502,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @property
-    def is_unique(self):
+    def is_unique(self) -> bool:
         return True
 
     @cached_property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_monotonic_increasing(self):
+    def is_monotonic_increasing(self) -> bool:
         return self.step > 0 or len(self) <= 1
 
     @cached_property  # type: ignore
@@ -493,7 +516,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self.step < 0 or len(self) <= 1
 
     @_cudf_nvtx_annotate
-    def memory_usage(self, deep=False):
+    def memory_usage(self, deep: bool = False) -> int:
         if deep:
             warnings.warn(
                 "The deep parameter is ignored and is only included "
@@ -501,7 +524,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             )
         return 0
 
-    def unique(self):
+    def unique(self) -> Self:
         # RangeIndex always has unique values
         return self
 
@@ -824,34 +847,37 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def values_host(self):
-        return self.to_pandas().values
+    def values_host(self) -> np.ndarray:
+        return np.arange(start=self.start, stop=self.stop, step=self.step)
 
     @_cudf_nvtx_annotate
     def argsort(
         self,
         ascending=True,
         na_position="last",
-    ):
+    ) -> cupy.ndarray:
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
-
-        indices = cupy.arange(0, len(self))
         if (ascending and self.step < 0) or (not ascending and self.step > 0):
-            indices = indices[::-1]
-        return indices
+            return cupy.arange(len(self) - 1, -1, -1)
+        else:
+            return cupy.arange(len(self))
 
     @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
         return self._as_int_index().where(cond, other, inplace)
 
     @_cudf_nvtx_annotate
-    def to_numpy(self):
+    def to_numpy(self) -> np.ndarray:
         return self.values_host
 
     @_cudf_nvtx_annotate
-    def to_arrow(self):
-        return self._as_int_index().to_arrow()
+    def to_cupy(self) -> cupy.ndarray:
+        return self.values
+
+    @_cudf_nvtx_annotate
+    def to_arrow(self) -> pa.Array:
+        return pa.array(self._range, type=pa.from_numpy_dtype(self.dtype))
 
     def __array__(self, dtype=None):
         raise TypeError(
@@ -862,17 +888,17 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @_cudf_nvtx_annotate
-    def nunique(self):
+    def nunique(self) -> int:
         return len(self)
 
     @_cudf_nvtx_annotate
-    def isna(self):
+    def isna(self) -> cupy.ndarray:
         return cupy.zeros(len(self), dtype=bool)
 
     isnull = isna
 
     @_cudf_nvtx_annotate
-    def notna(self):
+    def notna(self) -> cupy.ndarray:
         return cupy.ones(len(self), dtype=bool)
 
     notnull = isna
@@ -896,11 +922,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._minmax("max")
 
     @property
-    def values(self):
+    def values(self) -> cupy.ndarray:
         return cupy.arange(self.start, self.stop, self.step)
 
-    def any(self):
+    def any(self) -> bool:
         return any(self._range)
+
+    def all(self) -> bool:
+        return 0 not in self._range
 
     def append(self, other):
         result = self._as_int_index().append(other)
@@ -927,14 +956,20 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
         return self._values.isin(values).values
 
-    def __neg__(self):
-        return -self._as_int_index()
+    def __pos__(self) -> Self:
+        return self.copy()
 
-    def __pos__(self):
-        return +self._as_int_index()
+    def __neg__(self) -> Self:
+        rng = range(-self.start, -self.stop, -self.step)
+        return type(self)(rng, name=self.name)
 
-    def __abs__(self):
-        return abs(self._as_int_index())
+    def __abs__(self) -> Self | Index:
+        if len(self) == 0 or self.min() >= 0:
+            return self.copy()
+        elif self.max() <= 0:
+            return -self
+        else:
+            return abs(self._as_int_index())
 
     def _columns_for_reset_index(
         self, levels: tuple | None
@@ -1093,14 +1128,26 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             assert (
                 PANDAS_LT_300
             ), "Need to drop after pandas-3.0 support is added."
-            warnings.warn(
+            warning_msg = (
                 "The behavior of array concatenation with empty entries is "
                 "deprecated. In a future version, this will no longer exclude "
                 "empty items when determining the result dtype. "
                 "To retain the old behavior, exclude the empty entries before "
-                "the concat operation.",
-                FutureWarning,
+                "the concat operation."
             )
+            # Warn only if the type might _actually_ change
+            if len(non_empties) == 0:
+                if not all(objs[0].dtype == index.dtype for index in objs[1:]):
+                    warnings.warn(warning_msg, FutureWarning)
+            else:
+                common_all_type = find_common_type(
+                    [index.dtype for index in objs]
+                )
+                common_non_empty_type = find_common_type(
+                    [index.dtype for index in non_empties]
+                )
+                if common_all_type != common_non_empty_type:
+                    warnings.warn(warning_msg, FutureWarning)
         if all(isinstance(obj, RangeIndex) for obj in non_empties):
             result = _concat_range_index(non_empties)
         else:
@@ -1218,11 +1265,11 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         )
 
         if not len(self):
-            return result.values
+            return _return_get_indexer_result(result.values)
         try:
             lcol, rcol = _match_join_keys(needle, self._column, "inner")
         except ValueError:
-            return result.values
+            return _return_get_indexer_result(result.values)
 
         scatter_map, indices = libcudf.join.join([lcol], [rcol], how="inner")
         (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
@@ -1249,7 +1296,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 "{['ffill'/'pad', 'bfill'/'backfill', 'nearest', None]}"
             )
 
-        return result_series.to_cupy()
+        return _return_get_indexer_result(result_series.to_cupy())
 
     @_cudf_nvtx_annotate
     def get_loc(self, key):
@@ -1485,6 +1532,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return self._column.values
 
     def __contains__(self, item):
+        hash(item)
         return item in self._values
 
     def _clean_nulls_from_index(self):
@@ -2232,7 +2280,12 @@ class DatetimeIndex(Index):
 
         return self.__class__._from_data({self.name: out_column})
 
-    def tz_localize(self, tz, ambiguous="NaT", nonexistent="NaT"):
+    def tz_localize(
+        self,
+        tz: str | None,
+        ambiguous: Literal["NaT"] = "NaT",
+        nonexistent: Literal["NaT"] = "NaT",
+    ):
         """
         Localize timezone-naive data to timezone-aware data.
 
@@ -2274,17 +2327,12 @@ class DatetimeIndex(Index):
         ambiguous or nonexistent timestamps are converted
         to 'NaT'.
         """  # noqa: E501
-        from cudf.core._internals.timezones import delocalize, localize
-
-        if tz is None:
-            result_col = delocalize(self._column)
-        else:
-            result_col = localize(self._column, tz, ambiguous, nonexistent)
+        result_col = self._column.tz_localize(tz, ambiguous, nonexistent)
         return DatetimeIndex._from_data(
             {self.name: result_col}, freq=self._freq
         )
 
-    def tz_convert(self, tz):
+    def tz_convert(self, tz: str | None):
         """
         Convert tz-aware datetimes from one time zone to another.
 
@@ -2316,12 +2364,7 @@ class DatetimeIndex(Index):
                        '2018-03-03 14:00:00+00:00'],
                       dtype='datetime64[ns, Europe/London]')
         """  # noqa: E501
-        from cudf.core._internals.timezones import convert
-
-        if tz is None:
-            result_col = self._column._utc_time
-        else:
-            result_col = convert(self._column, tz)
+        result_col = self._column.tz_convert(tz)
         return DatetimeIndex._from_data({self.name: result_col})
 
 
@@ -2847,7 +2890,7 @@ class IntervalIndex(Index):
 
     @property
     def closed(self):
-        return self._values.dtype.closed
+        return self.dtype.closed
 
     @classmethod
     @_cudf_nvtx_annotate

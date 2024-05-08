@@ -67,8 +67,8 @@ CUDF_KERNEL void compute_conditional_join_output_size(
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
   std::size_t thread_counter{0};
-  auto const start_idx = cudf::detail::grid_1d::global_thread_id();
-  auto const stride    = cudf::detail::grid_1d::grid_stride();
+  auto const start_idx = cudf::detail::grid_1d::global_thread_id<block_size>();
+  auto const stride    = cudf::detail::grid_1d::grid_stride<block_size>();
 
   cudf::thread_index_type const left_num_rows  = left_table.num_rows();
   cudf::thread_index_type const right_num_rows = right_table.num_rows();
@@ -174,7 +174,7 @@ CUDF_KERNEL void conditional_join(table_device_view left_table,
 
   __syncwarp();
 
-  auto outer_row_index = cudf::detail::grid_1d::global_thread_id();
+  auto outer_row_index = cudf::detail::grid_1d::global_thread_id<block_size>();
 
   unsigned int const activemask = __ballot_sync(0xffff'ffffu, outer_row_index < outer_num_rows);
 
@@ -268,6 +268,100 @@ CUDF_KERNEL void conditional_join(table_device_view left_table,
                                                        join_output_l,
                                                        join_output_r);
     }
+  }
+}
+
+template <cudf::size_type block_size, cudf::size_type output_cache_size, bool has_nulls>
+CUDF_KERNEL void conditional_join_anti_semi(
+  table_device_view left_table,
+  table_device_view right_table,
+  join_kind join_type,
+  cudf::size_type* join_output_l,
+  cudf::size_type* current_idx,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  cudf::size_type const max_size)
+{
+  constexpr int num_warps = block_size / detail::warp_size;
+  __shared__ cudf::size_type current_idx_shared[num_warps];
+  __shared__ cudf::size_type join_shared_l[num_warps][output_cache_size];
+
+  extern __shared__ char raw_intermediate_storage[];
+  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
+    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
+  auto thread_intermediate_storage =
+    &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
+
+  int const warp_id                            = threadIdx.x / detail::warp_size;
+  int const lane_id                            = threadIdx.x % detail::warp_size;
+  cudf::thread_index_type const outer_num_rows = left_table.num_rows();
+  cudf::thread_index_type const inner_num_rows = right_table.num_rows();
+  auto const stride                            = cudf::detail::grid_1d::grid_stride<block_size>();
+  auto const start_idx = cudf::detail::grid_1d::global_thread_id<block_size>();
+
+  if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
+
+  __syncwarp();
+
+  unsigned int const activemask = __ballot_sync(0xffff'ffffu, start_idx < outer_num_rows);
+
+  auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
+    left_table, right_table, device_expression_data);
+
+  for (cudf::thread_index_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
+       outer_row_index += stride) {
+    bool found_match = false;
+    for (thread_index_type inner_row_index(0); inner_row_index < inner_num_rows;
+         ++inner_row_index) {
+      auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
+
+      evaluator.evaluate(
+        output_dest, outer_row_index, inner_row_index, 0, thread_intermediate_storage);
+
+      if (output_dest.is_valid() && output_dest.value()) {
+        if (join_type == join_kind::LEFT_SEMI_JOIN && !found_match) {
+          add_left_to_cache(outer_row_index, current_idx_shared, warp_id, join_shared_l[warp_id]);
+        }
+        found_match = true;
+      }
+
+      __syncwarp(activemask);
+
+      auto const do_flush   = current_idx_shared[warp_id] + detail::warp_size >= output_cache_size;
+      auto const flush_mask = __ballot_sync(activemask, do_flush);
+      if (do_flush) {
+        flush_output_cache<num_warps, output_cache_size>(flush_mask,
+                                                         max_size,
+                                                         warp_id,
+                                                         lane_id,
+                                                         current_idx,
+                                                         current_idx_shared,
+                                                         join_shared_l,
+                                                         join_output_l);
+        __syncwarp(flush_mask);
+        if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
+      }
+      __syncwarp(activemask);
+    }
+
+    if ((join_type == join_kind::LEFT_ANTI_JOIN) && (!found_match)) {
+      add_left_to_cache(outer_row_index, current_idx_shared, warp_id, join_shared_l[warp_id]);
+    }
+
+    __syncwarp(activemask);
+
+    auto const do_flush   = current_idx_shared[warp_id] > 0;
+    auto const flush_mask = __ballot_sync(activemask, do_flush);
+    if (do_flush) {
+      flush_output_cache<num_warps, output_cache_size>(flush_mask,
+                                                       max_size,
+                                                       warp_id,
+                                                       lane_id,
+                                                       current_idx,
+                                                       current_idx_shared,
+                                                       join_shared_l,
+                                                       join_output_l);
+    }
+    if (found_match) break;
   }
 }
 

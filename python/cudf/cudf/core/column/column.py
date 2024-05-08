@@ -1101,11 +1101,27 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         )
 
     @property
-    def __cuda_array_interface__(self):
-        raise NotImplementedError(
-            f"dtype {self.dtype} is not yet supported via "
-            "`__cuda_array_interface__`"
-        )
+    def __cuda_array_interface__(self) -> abc.Mapping[str, Any]:
+        output = {
+            "shape": (len(self),),
+            "strides": (self.dtype.itemsize,),
+            "typestr": self.dtype.str,
+            "data": (self.data_ptr, False),
+            "version": 1,
+        }
+
+        if self.nullable and self.has_nulls():
+            # Create a simple Python object that exposes the
+            # `__cuda_array_interface__` attribute here since we need to modify
+            # some of the attributes from the numba device array
+            output["mask"] = cuda_array_interface_wrapper(
+                ptr=self.mask_ptr,
+                size=len(self),
+                owner=self.mask,
+                readonly=True,
+                typestr="<t1",
+            )
+        return output
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
@@ -2147,6 +2163,19 @@ def as_column(
                     nan_as_null=nan_as_null,
                     length=length,
                 )
+            elif (
+                isinstance(element, (pd.Timestamp, pd.Timedelta))
+                or element is pd.NaT
+            ):
+                # TODO: Remove this after
+                # https://github.com/apache/arrow/issues/26492
+                # is fixed.
+                return as_column(
+                    pd.Series(arbitrary),
+                    dtype=dtype,
+                    nan_as_null=nan_as_null,
+                    length=length,
+                )
             elif not any(element is na for na in (None, pd.NA, np.nan)):
                 # Might have NA + element like above, but short-circuit if
                 # an element pyarrow/pandas might be able to parse
@@ -2195,7 +2224,7 @@ def _mask_from_cuda_array_interface_desc(obj, cai_mask) -> Buffer:
         raise NotImplementedError(f"Cannot infer mask from typestr {typestr}")
 
 
-def serialize_columns(columns) -> Tuple[List[dict], List]:
+def serialize_columns(columns: list[ColumnBase]) -> Tuple[List[dict], List]:
     """
     Return the headers and frames resulting
     from serializing a list of Column

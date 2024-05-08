@@ -326,8 +326,8 @@ struct PageInfo {
   int32_t skipped_leaf_values;
   // for string columns only, the size of all the chars in the string for
   // this page. only valid/computed during the base preprocess pass
+  size_t str_offset;  // offset into string data for this page
   int32_t str_bytes;
-  int32_t str_offset;   // offset into string data for this page
   bool has_page_index;  // true if str_bytes, num_valids, etc are derivable from page indexes
 
   // nesting information (input/output) for each page. this array contains
@@ -420,7 +420,8 @@ struct ColumnChunkDesc {
       src_col_schema(src_col_schema_),
       h_chunk_info(chunk_info_),
       list_bytes_per_row_est(list_bytes_per_row_est_),
-      is_strings_to_cat(strings_to_categorical_)
+      is_strings_to_cat(strings_to_categorical_),
+      is_large_string_col(false)
   {
   }
 
@@ -454,7 +455,8 @@ struct ColumnChunkDesc {
 
   float list_bytes_per_row_est{};  // for LIST columns, an estimate on number of bytes per row
 
-  bool is_strings_to_cat{};  // convert strings to hashes
+  bool is_strings_to_cat{};    // convert strings to hashes
+  bool is_large_string_col{};  // `true` if string data uses 64-bit offsets
 };
 
 /**

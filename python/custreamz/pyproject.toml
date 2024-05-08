@@ -103,3 +103,13 @@ skip = [
     "dist",
     "__init__.py",
 ]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "error",
+    "ignore:unclosed <socket.socket:ResourceWarning",
+    "ignore:Port .* is already in use.:UserWarning:distributed",
+    # Should be fixed in the next streamz release
+    # https://github.com/python-streamz/streamz/commit/2812f1f961dfcb3f17e948d8b12a12472975558e
+    "ignore:pkg_resources is deprecated as an API:DeprecationWarning:streamz",
+]

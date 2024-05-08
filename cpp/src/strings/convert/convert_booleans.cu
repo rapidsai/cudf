@@ -16,23 +16,19 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/detail/converters.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/traits.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
 
-#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -99,13 +95,14 @@ struct from_booleans_fn {
   column_device_view const d_column;
   string_view d_true;
   string_view d_false;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type idx) const
   {
     if (d_column.is_null(idx)) {
-      if (d_chars == nullptr) { d_offsets[idx] = 0; }
+      if (d_chars == nullptr) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -113,7 +110,7 @@ struct from_booleans_fn {
       auto const result = d_column.element<bool>(idx) ? d_true : d_false;
       memcpy(d_chars + d_offsets[idx], result.data(), result.size_bytes());
     } else {
-      d_offsets[idx] = d_column.element<bool>(idx) ? d_true.size_bytes() : d_false.size_bytes();
+      d_sizes[idx] = d_column.element<bool>(idx) ? d_true.size_bytes() : d_false.size_bytes();
     }
   };
 };
@@ -143,8 +140,8 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
   // copy null mask
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(booleans, stream, mr);
 
-  auto [offsets, chars] =
-    make_strings_children(from_booleans_fn{d_column, d_true, d_false}, strings_count, stream, mr);
+  auto [offsets, chars] = experimental::make_strings_children(
+    from_booleans_fn{d_column, d_true, d_false}, strings_count, stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(offsets),

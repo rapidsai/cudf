@@ -12,8 +12,8 @@ from dask.utils import tmpfile
 import dask_cudf
 from dask_cudf.tests.utils import skip_dask_expr
 
-# No dask-expr support for dask_expr<1.0.6
-pytestmark = skip_dask_expr(lt_version="1.0.6")
+# No dask-expr support for dask<2024.4.0
+pytestmark = skip_dask_expr(lt_version="2024.4.0")
 
 
 def test_read_json_backend_dispatch(tmp_path):
@@ -84,9 +84,8 @@ def test_read_json_nested(tmp_path):
         }
     )
     kwargs = dict(orient="records", lines=True)
-    with tmp_path / "data.json" as f, dask.config.set(
-        {"dataframe.convert-string": False}
-    ):
+    f = tmp_path / "data.json"
+    with dask.config.set({"dataframe.convert-string": False}):
         df.to_json(f, **kwargs)
         # Ensure engine='cudf' is tested.
         actual = dask_cudf.read_json(f, engine="cudf", **kwargs)
