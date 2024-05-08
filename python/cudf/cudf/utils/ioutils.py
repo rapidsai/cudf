@@ -278,7 +278,7 @@ max_page_size_rows: integer or None, default None
     Maximum number of rows of each page of the output.
     If None, 20000 will be used.
 max_dictionary_size: integer or None. default None
-    Maximum size of dictionary page for each output column chunks. Dictionary 
+    Maximum size of dictionary page for each output column chunks. Dictionary
     encoding for column chunks that exceeds this limit will be disabled.
     If None, 1048576 (1MB) will be used.
 storage_options : dict, optional, default None
