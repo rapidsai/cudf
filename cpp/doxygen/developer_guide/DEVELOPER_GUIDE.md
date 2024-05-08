@@ -861,8 +861,9 @@ thrust::lower_bound(rmm::exec_policy(stream),
 Like the [indexalator](#index-normalizing-iterators),
 the "offsetalator", or offset-normalizing iterator (`include/cudf/detail/offsetalator.cuh`), can be
 used for offset column types (INT32 or INT64 only) without requiring a type-specific instance.
-This helpful when reading or building [strings columns](#strings-columns). The normalized type is `int64` which means
-an `input_offsetsalator` will return `int64` type values for both INT32 and INT64 offsets columns.
+This is helpful when reading or building [strings columns](#strings-columns).
+The normalized type is `int64` which means an `input_offsetsalator` will return `int64` type values
+for both INT32 and INT64 offsets columns.
 Likewise, an `output_offselator` can accept `int64` type values to store into either an
 INT32 or INT64 output offsets column created appropriately.
 
@@ -881,6 +882,10 @@ Example input iterator usage:
 Example output iterator usage:
 
 ```c++
+    // create offsets column as either INT32 or INT64 depending on the number of bytes
+    auto offsets_column = cudf::strings::detail::create_offsets_child_column(total_bytes,
+                                                                             offsets_count,
+                                                                             stream, mr);
     auto d_offsets =
       cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
     // write appropriate offset values to d_offsets
@@ -1387,7 +1392,7 @@ A `cudf::strings_column_view` wraps a strings column and contains a parent
 `cudf::column_view` as a view of the strings column and an offsets `cudf::column_view`
 which is a child of the parent.
 The parent view contains the offset, size, and validity mask for the strings column.
-The offsets view is non-nullable with an `offset()==0` and its own size.
+The offsets view is non-nullable with `offset()==0` and its own size.
 Since the offset column type can be either INT32 or INT64 it is useful to use the
 offset normalizing iterators [offsetalator](#offset-normalizing-iterators) to access individual offset values.
 
