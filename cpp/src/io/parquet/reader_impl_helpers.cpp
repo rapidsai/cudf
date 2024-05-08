@@ -73,14 +73,24 @@ type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
                    type_id timestamp_type_id)
 {
-  auto const physical = schema.type;
-  auto const arrow    = schema.arrow_type;
-  auto logical_type   = schema.logical_type;
+  auto const physical_type = schema.type;
+  auto const arrow_type    = schema.arrow_type;
+  auto logical_type        = schema.logical_type;
 
   // sanity check, but not worth failing over
   if (schema.converted_type.has_value() and not logical_type.has_value()) {
     CUDF_LOG_WARN("ConvertedType is specified but not LogicalType");
     logical_type = converted_to_logical_type(schema);
+  }
+
+  // check if have set the type through arrow schema?
+  if (arrow_type.has_value()) {
+    // is it duration type? i.e. phyical_type == INT64 and no logical/converted types
+    if (physical_type == Type::INT64 and not logical_type.has_value()) {
+      return arrow_type.value();
+    }
+    // should warn but not fail.
+    CUDF_LOG_WARN("Indeterminable arrow type encountered");
   }
 
   if (logical_type.has_value()) {
@@ -121,11 +131,11 @@ type_id to_type_id(SchemaElement const& schema,
 
       case LogicalType::DECIMAL: {
         int32_t const decimal_precision = logical_type->precision();
-        if (physical == INT32) {
+        if (physical_type == INT32) {
           return type_id::DECIMAL32;
-        } else if (physical == INT64) {
+        } else if (physical_type == INT64) {
           return type_id::DECIMAL64;
-        } else if (physical == FIXED_LEN_BYTE_ARRAY) {
+        } else if (physical_type == FIXED_LEN_BYTE_ARRAY) {
           if (schema.type_length <= static_cast<int32_t>(sizeof(int32_t))) {
             return type_id::DECIMAL32;
           } else if (schema.type_length <= static_cast<int32_t>(sizeof(int64_t))) {
@@ -133,7 +143,7 @@ type_id to_type_id(SchemaElement const& schema,
           } else if (schema.type_length <= static_cast<int32_t>(sizeof(__int128_t))) {
             return type_id::DECIMAL128;
           }
-        } else if (physical == BYTE_ARRAY) {
+        } else if (physical_type == BYTE_ARRAY) {
           CUDF_EXPECTS(decimal_precision <= MAX_DECIMAL128_PRECISION, "Invalid decimal precision");
           if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
             return type_id::DECIMAL32;
@@ -166,10 +176,10 @@ type_id to_type_id(SchemaElement const& schema,
 
   // Physical storage type supported by Parquet; controls the on-disk storage
   // format in combination with the encoding type.
-  switch (physical) {
+  switch (physical_type) {
     case BOOLEAN: return type_id::BOOL8;
     case INT32: return type_id::INT32;
-    case INT64: return arrow.value_or(type_id::INT64);
+    case INT64: return type_id::INT64;
     case FLOAT: return type_id::FLOAT32;
     case DOUBLE: return type_id::FLOAT64;
     case BYTE_ARRAY:
@@ -617,8 +627,7 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
           case flatbuf::Type::Type_List:
           case flatbuf::Type::Type_LargeList:
           case flatbuf::Type::Type_FixedSizeList:
-            schema_elem.children.emplace_back(arrow_schema_data_types{});
-            schema_elem.children.back().children = std::move(schema_children);
+            schema_elem.children.emplace_back(arrow_schema_data_types{std::move(schema_children)});
             break;
           default: schema_elem.children = std::move(schema_children); break;
         }
