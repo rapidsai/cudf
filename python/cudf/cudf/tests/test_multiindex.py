@@ -2153,3 +2153,15 @@ def test_index_to_pandas_arrow_type(scalar):
         levels=[pd.arrays.ArrowExtensionArray(pa_array)], codes=[[0]]
     )
     pd.testing.assert_index_equal(result, expected)
+
+
+def test_multi_index_contains_hashable():
+    gidx = cudf.MultiIndex.from_tuples(zip(["foo", "bar", "baz"], [1, 2, 3]))
+    pidx = gidx.to_pandas()
+
+    assert_exceptions_equal(
+        lambda: [] in gidx,
+        lambda: [] in pidx,
+        lfunc_args_and_kwargs=((),),
+        rfunc_args_and_kwargs=((),),
+    )

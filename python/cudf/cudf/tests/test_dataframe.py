@@ -11006,3 +11006,11 @@ def test_op_preserves_column_metadata(column, operation):
     result = operation(df).columns
     expected = pd.Index(column)
     pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+def test_dataframe_init_with_nans():
+    with cudf.option_context("mode.pandas_compatible", True):
+        gdf = cudf.DataFrame({"a": [1, 2, 3, np.nan]})
+    assert gdf["a"].dtype == np.dtype("float64")
+    pdf = pd.DataFrame({"a": [1, 2, 3, np.nan]})
+    assert_eq(pdf, gdf)

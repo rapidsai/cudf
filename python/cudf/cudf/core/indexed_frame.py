@@ -174,7 +174,7 @@ def _indices_from_labels(obj, labels):
 
         if isinstance(obj.index.dtype, cudf.CategoricalDtype):
             labels = labels.astype("category")
-            codes = labels.codes.astype(obj.index._values.codes.dtype)
+            codes = labels.codes.astype(obj.index.codes.dtype)
             labels = cudf.core.column.build_categorical_column(
                 categories=labels.dtype.categories,
                 codes=codes,

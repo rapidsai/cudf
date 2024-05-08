@@ -1205,9 +1205,30 @@ def test_pickle_groupby(dataframe):
     tm.assert_equal(pgb.sum(), gb.sum())
 
 
+def test_numpy_extension_array():
+    np_array = np.array([0, 1, 2, 3])
+    xarray = xpd.arrays.NumpyExtensionArray(np_array)
+    array = pd.arrays.NumpyExtensionArray(np_array)
+
+    tm.assert_equal(xarray, array)
+
+
 def test_isinstance_base_offset():
     offset = xpd.tseries.frequencies.to_offset("1s")
     assert isinstance(offset, xpd.tseries.offsets.BaseOffset)
+
+
+def test_floordiv_array_vs_df():
+    xarray = xpd.Series([1, 2, 3], dtype="datetime64[ns]").array
+    parray = pd.Series([1, 2, 3], dtype="datetime64[ns]").array
+
+    xdf = xpd.DataFrame(xarray)
+    pdf = pd.DataFrame(parray)
+
+    actual = xarray.__floordiv__(xdf)
+    expected = parray.__floordiv__(pdf)
+
+    tm.assert_equal(actual, expected)
 
 
 def test_apply_slow_path_udf_references_global_module():
@@ -1220,3 +1241,17 @@ def test_apply_slow_path_udf_references_global_module():
     result = df.apply(my_apply, axis=1, unused=True)
     expected = xpd.Series([1])
     tm.assert_series_equal(result, expected)
+
+
+@pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
+def test_timestamp(data):
+    xtimestamp = xpd.Timestamp(data)
+    timestamp = pd.Timestamp(data)
+    tm.assert_equal(xtimestamp, timestamp)
+
+
+@pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
+def test_timedelta(data):
+    xtimedelta = xpd.Timedelta(data)
+    timedelta = pd.Timedelta(data)
+    tm.assert_equal(xtimedelta, timedelta)
