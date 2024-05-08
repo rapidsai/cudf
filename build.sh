@@ -179,6 +179,19 @@ if hasArg -h || hasArg --h || hasArg --help; then
     exit 0
 fi
 
+# TODO: remove before merging (when new rapids-build-backend is released)
+git clone \
+    -b main \
+    https://github.com/rapidsai/rapids-build-backend.git \
+    /tmp/delete-me/rapids-build-backend
+
+pushd /tmp/delete-me/rapids-build-backend
+sed -e 's/^version =.*/version = "0.0.2"/' -i pyproject.toml
+python -m pip install .
+popd
+
+export PIP_FIND_LINKS="file:///tmp/delete-me/rapids-build-backend/dist"
+
 # Check for valid usage
 if (( ${NUMARGS} != 0 )); then
     # Check for cmake args

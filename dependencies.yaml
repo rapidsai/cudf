@@ -274,13 +274,15 @@ dependencies:
     common:
       - output_types: [requirements, pyproject]
         packages:
-          - rapids-build-backend
+          # TODO: change this pin to a floor once we have packages
+          - rapids-build-backend==0.0.2
           - scikit-build-core[pyproject]>=0.7.0
   rapids_build_setuptools:
     common:
       - output_types: [requirements, pyproject]
         packages:
-          - rapids-build-backend
+          # TODO: change this pin to a floor once we have packages
+          - rapids-build-backend==0.0.2
           - setuptools
   build_python_common:
     common:
