@@ -1218,6 +1218,19 @@ def test_isinstance_base_offset():
     assert isinstance(offset, xpd.tseries.offsets.BaseOffset)
 
 
+def test_floordiv_array_vs_df():
+    xarray = xpd.Series([1, 2, 3], dtype="datetime64[ns]").array
+    parray = pd.Series([1, 2, 3], dtype="datetime64[ns]").array
+
+    xdf = xpd.DataFrame(xarray)
+    pdf = pd.DataFrame(parray)
+
+    actual = xarray.__floordiv__(xdf)
+    expected = parray.__floordiv__(pdf)
+
+    tm.assert_equal(actual, expected)
+
+
 def test_apply_slow_path_udf_references_global_module():
     def my_apply(df, unused):
         # `datetime` Raised `KeyError: __import__`

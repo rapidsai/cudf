@@ -37,6 +37,7 @@ def test_profiler():
         "DataFrame.sum",
         "Series.__getitem__",
         "Timedelta",
+        "Timestamp.__add__",
     }
     for name, func in per_function_stats.items():
         assert (
