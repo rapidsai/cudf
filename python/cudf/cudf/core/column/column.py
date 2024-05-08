@@ -2163,6 +2163,19 @@ def as_column(
                     nan_as_null=nan_as_null,
                     length=length,
                 )
+            elif (
+                isinstance(element, (pd.Timestamp, pd.Timedelta))
+                or element is pd.NaT
+            ):
+                # TODO: Remove this after
+                # https://github.com/apache/arrow/issues/26492
+                # is fixed.
+                return as_column(
+                    pd.Series(arbitrary),
+                    dtype=dtype,
+                    nan_as_null=nan_as_null,
+                    length=length,
+                )
             elif not any(element is na for na in (None, pd.NA, np.nan)):
                 # Might have NA + element like above, but short-circuit if
                 # an element pyarrow/pandas might be able to parse
@@ -2211,7 +2224,7 @@ def _mask_from_cuda_array_interface_desc(obj, cai_mask) -> Buffer:
         raise NotImplementedError(f"Cannot infer mask from typestr {typestr}")
 
 
-def serialize_columns(columns) -> Tuple[List[dict], List]:
+def serialize_columns(columns: list[ColumnBase]) -> Tuple[List[dict], List]:
     """
     Return the headers and frames resulting
     from serializing a list of Column
