@@ -425,7 +425,7 @@ CUDF_KERNEL void compute_segment_sizes(device_span<column_device_view const> col
   // current row span - always starts at spanning over `segment_length` rows.
   auto const num_rows             = cols[0].size();
   auto const get_default_row_span = [=] {
-    return row_span{tid * segment_length, cuda::std::min((tid + 1) * segment_length, num_rows)};
+    return row_span{tid * segment_length, std::min((tid + 1) * segment_length, num_rows)};
   };
   auto cur_span = get_default_row_span();
 
@@ -514,7 +514,7 @@ std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
           // Since the number of rows may not divisible by segment_length,
           // the last segment may be shorter than the others.
           auto const current_length =
-            cuda::std::min(segment_length, num_rows - segment_length * segment_idx);
+            std::min(segment_length, num_rows - segment_length * segment_idx);
           return per_row_size * current_length;
         }));
     return output;
