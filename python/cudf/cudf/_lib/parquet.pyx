@@ -623,7 +623,8 @@ cdef class ParquetWriter:
         self.row_group_size_rows = row_group_size_rows
         self.max_page_size_bytes = max_page_size_bytes
         self.max_page_size_rows = max_page_size_rows
-        self.max_dictionary_size = (
+        self.max_dictionary_size = max_dictionary_size
+        self.dict_policy = (
             cudf_io_types.dictionary_policy.ADAPTIVE
             if use_dictionary
             else cudf_io_types.dictionary_policy.NEVER
