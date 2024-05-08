@@ -3223,3 +3223,29 @@ def test_rangeindex_dropna():
     result = ri.dropna()
     expected = ri.copy()
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("data", [range(2), [10, 11, 12]])
+def test_index_contains_hashable(data):
+    gidx = cudf.Index(data)
+    pidx = gidx.to_pandas()
+
+    assert_exceptions_equal(
+        lambda: [] in gidx,
+        lambda: [] in pidx,
+        lfunc_args_and_kwargs=((),),
+        rfunc_args_and_kwargs=((),),
+    )
+
+
+@pytest.mark.parametrize("data", [[0, 1, 2], [1.1, 2.3, 4.5]])
+@pytest.mark.parametrize("dtype", ["int32", "float32", "float64"])
+@pytest.mark.parametrize("needle", [0, 1, 2.3])
+def test_index_contains_float_int(data, dtype, needle):
+    gidx = cudf.Index(data=data, dtype=dtype)
+    pidx = gidx.to_pandas()
+
+    actual = needle in gidx
+    expected = needle in pidx
+
+    assert_eq(actual, expected)

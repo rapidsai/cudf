@@ -1058,8 +1058,7 @@ def _to_iso_calendar(arg):
         )
     if isinstance(arg, cudf.Index):
         iso_params = [
-            arg._column.as_string_column(arg._values.dtype, fmt)
-            for fmt in formats
+            arg._column.as_string_column(arg.dtype, fmt) for fmt in formats
         ]
         index = arg._column
     elif isinstance(arg.series, cudf.Series):

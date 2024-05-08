@@ -202,10 +202,11 @@ CUDF_KERNEL void url_decode_char_counter(column_device_view const in_strings,
   __shared__ char temporary_buffer[num_warps_per_threadblock][char_block_size + halo_size];
   __shared__ typename cub::WarpReduce<int8_t>::TempStorage cub_storage[num_warps_per_threadblock];
 
-  auto const global_thread_id = cudf::detail::grid_1d::global_thread_id();
-  auto const global_warp_id   = static_cast<size_type>(global_thread_id / cudf::detail::warp_size);
-  auto const local_warp_id    = static_cast<size_type>(threadIdx.x / cudf::detail::warp_size);
-  auto const warp_lane        = static_cast<size_type>(threadIdx.x % cudf::detail::warp_size);
+  auto const global_thread_id =
+    cudf::detail::grid_1d::global_thread_id<num_warps_per_threadblock * cudf::detail::warp_size>();
+  auto const global_warp_id = static_cast<size_type>(global_thread_id / cudf::detail::warp_size);
+  auto const local_warp_id  = static_cast<size_type>(threadIdx.x / cudf::detail::warp_size);
+  auto const warp_lane      = static_cast<size_type>(threadIdx.x % cudf::detail::warp_size);
   auto const nwarps     = static_cast<size_type>(gridDim.x * blockDim.x / cudf::detail::warp_size);
   char* in_chars_shared = temporary_buffer[local_warp_id];
 
@@ -287,10 +288,11 @@ CUDF_KERNEL void url_decode_char_replacer(column_device_view const in_strings,
   __shared__ typename cub::WarpScan<int8_t>::TempStorage cub_storage[num_warps_per_threadblock];
   __shared__ size_type out_idx[num_warps_per_threadblock];
 
-  auto const global_thread_id = cudf::detail::grid_1d::global_thread_id();
-  auto const global_warp_id   = static_cast<size_type>(global_thread_id / cudf::detail::warp_size);
-  auto const local_warp_id    = static_cast<size_type>(threadIdx.x / cudf::detail::warp_size);
-  auto const warp_lane        = static_cast<size_type>(threadIdx.x % cudf::detail::warp_size);
+  auto const global_thread_id =
+    cudf::detail::grid_1d::global_thread_id<num_warps_per_threadblock * cudf::detail::warp_size>();
+  auto const global_warp_id = static_cast<size_type>(global_thread_id / cudf::detail::warp_size);
+  auto const local_warp_id  = static_cast<size_type>(threadIdx.x / cudf::detail::warp_size);
+  auto const warp_lane      = static_cast<size_type>(threadIdx.x % cudf::detail::warp_size);
   auto const nwarps     = static_cast<size_type>(gridDim.x * blockDim.x / cudf::detail::warp_size);
   char* in_chars_shared = temporary_buffer[local_warp_id];
 

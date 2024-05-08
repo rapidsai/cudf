@@ -344,6 +344,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def __contains__(self, item):
+        hash(item)
         if isinstance(item, bool) or not isinstance(
             item,
             tuple(
@@ -1523,6 +1524,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return self._column.values
 
     def __contains__(self, item):
+        hash(item)
         return item in self._values
 
     def _clean_nulls_from_index(self):
@@ -2880,7 +2882,7 @@ class IntervalIndex(Index):
 
     @property
     def closed(self):
-        return self._values.dtype.closed
+        return self.dtype.closed
 
     @classmethod
     @_cudf_nvtx_annotate
