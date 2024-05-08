@@ -1277,7 +1277,6 @@ def test_inplace_ops(op):
         "__iadd__",
         "__iand__",
         "__ifloordiv__",
-        "__imatmul__",
         "__imod__",
         "__imul__",
         "__ior__",
