@@ -875,3 +875,23 @@ def test_cat_groupby_fillna():
         lfunc_args_and_kwargs=(("d",), {}),
         rfunc_args_and_kwargs=(("d",), {}),
     )
+
+
+@pytest.mark.parametrize("op", ["min", "max"])
+def test_categorical_maxima(op):
+    ser = cudf.Series(range(10), dtype="category")
+
+    # NOTE: This test assumes that the default categorical
+    # dtype is unordered. If this behavior changes in
+    # cudf/pandas the test should also change
+    assert not ser.cat.ordered
+
+    # Cannot get maxima of unordered Categorical column
+    with pytest.raises(TypeError, match="Categorical is not ordered"):
+        getattr(ser, op)()
+
+    # Maxima should work after converting to "ordered"
+    ser_pd = ser.to_pandas()
+    result = getattr(ser.cat.as_ordered(), op)()
+    result_pd = getattr(ser_pd.cat.as_ordered(), op)()
+    assert_eq(result, result_pd)
