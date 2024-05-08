@@ -1265,10 +1265,10 @@ def test_inplace_ops(op):
     df1 = pd.DataFrame({"a": [10, 11, 12]})
     df2 = pd.DataFrame({"a": [1, 2, 3]})
 
-    xdf1 = getattr(xdf1, op)(xdf2)
-    df1 = getattr(df1, op)(df2)
+    actual = getattr(xdf1, op)(xdf2)
+    expected = getattr(df1, op)(df2)
 
-    tm.assert_equal(xdf1, df1)
+    tm.assert_equal(actual, expected)
 
 
 @pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
