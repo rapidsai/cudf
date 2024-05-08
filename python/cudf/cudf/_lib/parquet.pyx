@@ -810,12 +810,8 @@ cdef cudf_io_types.column_encoding _get_encoding_type(object encoding):
         return cudf_io_types.column_encoding.DELTA_BYTE_ARRAY
     elif enc == "BYTE_STREAM_SPLIT":
         return cudf_io_types.column_encoding.BYTE_STREAM_SPLIT
-    elif enc == "DIRECT":
-        return cudf_io_types.column_encoding.DIRECT
-    elif enc == "DIRECT_V2":
-        return cudf_io_types.column_encoding.DIRECT_V2
-    elif enc == "DICTIONARY_V2":
-        return cudf_io_types.column_encoding.DICTIONARY_V2
+    elif enc == "USE_DEFAULT":
+        return cudf_io_types.column_encoding.USE_DEFAULT
     else:
         raise ValueError("Unsupported `column_encoding` type")
 
