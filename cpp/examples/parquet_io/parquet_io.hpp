@@ -29,6 +29,7 @@
 
 #include <chrono>
 #include <iostream>
+#include <optional>
 #include <string>
 
 /**
@@ -108,6 +109,26 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool poo
                               "BZIP2, BROTLI, ZIP, XZ, ZLIB, LZ4, LZO, ZSTD\n"
                               "\n"
                               "Exiting...\n");
+}
+
+/**
+ * @brief Get the optional page size stat frequency from they keyword
+ *
+ * @param use_stats keyword affirmation string such as: Y, T, YES, TRUE, ON
+ * @return optional page statistics frequency set to full (STATISTICS_COLUMN)
+ */
+[[nodiscard]] std::optional<cudf::io::statistics_freq> get_page_size_stats(std::string use_stats)
+{
+  std::transform(use_stats.begin(), use_stats.end(), use_stats.begin(), ::toupper);
+
+  // Check if the input string matches to any of the following
+  if (not use_stats.compare("ON") or not use_stats.compare("TRUE") or
+      not use_stats.compare("YES") or not use_stats.compare("Y") or not use_stats.compare("T")) {
+    // Full column and offset indices - STATISTICS_COLUMN
+    return std::make_optional(cudf::io::statistics_freq::STATISTICS_COLUMN);
+  }
+
+  return std::nullopt;
 }
 
 /**

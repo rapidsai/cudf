@@ -50,12 +50,14 @@ cudf::io::table_with_metadata read_parquet(std::string filepath)
  * @param input table to write
  * @param metadata metadata of input table read by parquet reader
  * @param filepath path to output parquet file
+ * @param stats_level optional page size stats level
  */
 void write_parquet(cudf::table_view input,
                    cudf::io::table_metadata metadata,
                    std::string filepath,
                    cudf::io::column_encoding encoding,
-                   cudf::io::compression_type compression)
+                   cudf::io::compression_type compression,
+                   std::optional<cudf::io::statistics_freq> stats_level)
 {
   // write the data for inspection
   auto sink_info      = cudf::io::sink_info(filepath);
@@ -69,6 +71,10 @@ void write_parquet(cudf::table_view input,
   builder.metadata(table_metadata);
   auto options = builder.build();
   options.set_compression(compression);
+  // Either use the input stats level or don't write stats
+  options.set_stats_level(stats_level.value_or(cudf::io::statistics_freq::STATISTICS_NONE));
+
+  // write parquet data
   cudf::io::write_parquet(options);
 }
 
@@ -80,6 +86,7 @@ void write_parquet(cudf::table_view input,
  * 2. parquet output file name/path (default: "output.parquet")
  * 3. encoding type for columns (default: "DELTA_BINARY_PACKED")
  * 4. compression type (default: "ZSTD")
+ * 5. optional: use page size stats metadata (default: "NO")
  *
  * Example invocation from directory `cudf/cpp/examples/parquet_io`:
  * ./build/parquet_io example.parquet output.parquet DELTA_BINARY_PACKED ZSTD
@@ -91,58 +98,67 @@ int main(int argc, char const** argv)
   std::string output_filepath;
   cudf::io::column_encoding encoding;
   cudf::io::compression_type compression;
+  std::optional<cudf::io::statistics_freq> page_stats;
 
-  // minimal argument parsing
-  if (argc != 5 && argc != 1) {
-    std::cout << "Either provide all command-line arguments, or none to use defaults" << std::endl;
-    return 1;
+  switch (argc) {
+    case 1:
+      input_filepath  = "example.parquet";
+      output_filepath = "output.parquet";
+      encoding        = get_encoding_type("DELTA_BINARY_PACKED");
+      compression     = get_compression_type("ZSTD");
+      break;
+    case 6: page_stats = get_page_size_stats(argv[5]); [[fallthrough]];
+    case 5:
+      input_filepath  = argv[1];
+      output_filepath = argv[2];
+      encoding        = get_encoding_type(argv[3]);
+      compression     = get_compression_type(argv[4]);
+      break;
+    default:
+      throw std::runtime_error(
+        "Either provide all command-line arguments, or none to use defaults\n");
   }
-  if (argc == 1) {
-    input_filepath  = "example.parquet";
-    output_filepath = "output.parquet";
-    encoding        = get_encoding_type("DELTA_BINARY_PACKED");
-    compression     = get_compression_type("ZSTD");
-  } else {
-    input_filepath  = argv[1];
-    output_filepath = argv[2];
-    encoding        = get_encoding_type(argv[3]);
-    compression     = get_compression_type(argv[4]);
-  };
 
-  // create and use a memory pool
+  // Create and use a memory pool
   bool pool     = true;
   auto resource = create_memory_resource(pool);
   rmm::mr::set_current_device_resource(resource.get());
 
-  // timer is automatically started here
-  Timer timer;
-  // read input parquet file
-  std::cout << "Reading " << input_filepath << "..." << std::endl;
+  // Read input parquet file
+  // We do not want to time the initial read time as it may include
+  // time for nvcomp, cufile loading and RMM growth
+  std::cout << std::endl << "Reading " << input_filepath << "..." << std::endl;
+  std::cout << "Note: Not timing the initial parquet read as it may include\n"
+               "times for nvcomp, cufile loading and RMM growth."
+            << std::endl
+            << std::endl;
   auto [input, metadata] = read_parquet(input_filepath);
+
+  // Status string to indicate if page stats are set to be written or not
+  auto page_stat_string = (page_stats.has_value()) ? "page stats" : "no page stats";
+  // Write parquet file with the specified encoding and compression
+  std::cout << "Writing " << output_filepath << " with encoding, compression and "
+            << page_stat_string << ".." << std::endl;
+
+  // `timer` is automatically started here
+  Timer timer;
+  write_parquet(input->view(), metadata, output_filepath, encoding, compression, page_stats);
   timer.stop();
   timer.print_elapsed_millis();
 
-  // manually restart the timer now
+  // Restart the timer
   timer.start();
-  // write parquet file with the specified encoding and compression
-  std::cout << "Writing " << output_filepath << " with encoding and compression..." << std::endl;
-  write_parquet(input->view(), metadata, output_filepath, encoding, compression);
-  timer.stop();
-  timer.print_elapsed_millis();
-
-  // restart the timer
-  timer.start();
-  // read the parquet file written with encoding and compression
+  // Read the parquet file written with encoding and compression
   std::cout << "Reading " << output_filepath << "..." << std::endl;
   auto [transcoded_input, transcoded_metadata] = read_parquet(output_filepath);
   timer.stop();
   timer.print_elapsed_millis();
 
-  // check for validity
+  // Check for validity
   bool valid = true;
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> indices;
   try {
-    // left anti-join the original and transcoded tables
+    // Left anti-join the original and transcoded tables
     // identical tables should not throw an exception and
     // return an empty indices vector
     indices = cudf::left_anti_join(
@@ -153,7 +169,7 @@ int main(int argc, char const** argv)
     valid = false;
   }
 
-  // no exception thrown, check ofr indices->size
+  // No exception thrown, check for indices->size
   if (valid) {
     bool valid = indices->size() == 0;
     std::cout << "Transcoding valid: " << std::boolalpha << valid << std::endl;
