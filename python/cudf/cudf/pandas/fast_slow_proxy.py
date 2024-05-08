@@ -597,90 +597,6 @@ class _FastSlowProxy:
             return
         return _FastSlowAttribute("__setattr__").__get__(self)(name, value)
 
-    def __add__(self, other):
-        return _fast_slow_function_call(operator.add, self, other)[0]
-
-    def __radd__(self, other):
-        return _fast_slow_function_call(operator.add, other, self)[0]
-
-    def __sub__(self, other):
-        return _fast_slow_function_call(operator.sub, self, other)[0]
-
-    def __rsub__(self, other):
-        return _fast_slow_function_call(operator.sub, other, self)[0]
-
-    def __mul__(self, other):
-        return _fast_slow_function_call(operator.mul, self, other)[0]
-
-    def __rmul__(self, other):
-        return _fast_slow_function_call(operator.mul, other, self)[0]
-
-    def __truediv__(self, other):
-        return _fast_slow_function_call(operator.truediv, self, other)[0]
-
-    def __rtruediv__(self, other):
-        return _fast_slow_function_call(operator.truediv, other, self)[0]
-
-    def __floordiv__(self, other):
-        return _fast_slow_function_call(operator.floordiv, self, other)[0]
-
-    def __rfloordiv__(self, other):
-        return _fast_slow_function_call(operator.floordiv, other, self)[0]
-
-    def __mod__(self, other):
-        return _fast_slow_function_call(operator.mod, self, other)[0]
-
-    def __rmod__(self, other):
-        return _fast_slow_function_call(operator.mod, other, self)[0]
-
-    def __divmod__(self, other):
-        return _fast_slow_function_call(divmod, self, other)[0]
-
-    def __rdivmod__(self, other):
-        return _fast_slow_function_call(divmod, other, self)[0]
-
-    def __pow__(self, other):
-        return _fast_slow_function_call(operator.pow, self, other)[0]
-
-    def __rpow__(self, other):
-        return _fast_slow_function_call(operator.pow, other, self)[0]
-
-    def __lshift__(self, other):
-        return _fast_slow_function_call(operator.lshift, self, other)[0]
-
-    def __rlshift__(self, other):
-        return _fast_slow_function_call(operator.lshift, other, self)[0]
-
-    def __rshift__(self, other):
-        return _fast_slow_function_call(operator.rshift, self, other)[0]
-
-    def __rrshift__(self, other):
-        return _fast_slow_function_call(operator.rshift, other, self)[0]
-
-    def __and__(self, other):
-        return _fast_slow_function_call(operator.and_, self, other)[0]
-
-    def __rand__(self, other):
-        return _fast_slow_function_call(operator.and_, other, self)[0]
-
-    def __xor__(self, other):
-        return _fast_slow_function_call(operator.xor, self, other)[0]
-
-    def __rxor__(self, other):
-        return _fast_slow_function_call(operator.xor, other, self)[0]
-
-    def __or__(self, other):
-        return _fast_slow_function_call(operator.or_, self, other)[0]
-
-    def __ror__(self, other):
-        return _fast_slow_function_call(operator.or_, other, self)[0]
-
-    def __matmul__(self, other):
-        return _fast_slow_function_call(operator.matmul, self, other)[0]
-
-    def __rmatmul__(self, other):
-        return _fast_slow_function_call(operator.matmul, other, self)[0]
-
 
 class _FinalProxy(_FastSlowProxy):
     """
@@ -1093,7 +1009,7 @@ def _replace_closurevars(
     f: types.FunctionType,
     attribute_name: Literal["_fsproxy_slow", "_fsproxy_fast"],
     seen: Set[int],
-) -> types.FunctionType:
+) -> Callable[..., Any]:
     """
     Return a copy of `f` with its closure variables replaced with
     their corresponding slow (or fast) types.
@@ -1133,50 +1049,77 @@ def _replace_closurevars(
         argdefs=f.__defaults__,
         closure=g_closure,
     )
-    g = functools.update_wrapper(
+    return functools.update_wrapper(
         g,
         f,
         assigned=functools.WRAPPER_ASSIGNMENTS + ("__kwdefaults__",),
     )
-    return g
 
 
 _SPECIAL_METHODS: Set[str] = {
-    "__repr__",
-    "__str__",
-    "__len__",
-    "__contains__",
-    "__getitem__",
-    "__setitem__",
-    "__delitem__",
-    "__getslice__",
-    "__setslice__",
-    "__delslice__",
-    "__iter__",
-    "__lt__",
-    "__le__",
-    "__eq__",
-    "__ne__",
-    "__gt__",
-    "__ge__",
-    "__pos__",
-    "__neg__",
-    "__invert__",
     "__abs__",
-    "__round__",
-    "__format__",
+    "__add__",
+    "__and__",
     "__bool__",
-    "__float__",
-    "__int__",
-    "__complex__",
-    "__enter__",
-    "__exit__",
-    "__next__",
-    "__copy__",
-    "__deepcopy__",
-    "__dataframe__",
     "__call__",
+    "__complex__",
+    "__contains__",
+    "__copy__",
+    "__dataframe__",
+    "__deepcopy__",
+    "__delitem__",
+    "__delslice__",
+    "__divmod__",
+    "__enter__",
+    "__eq__",
+    "__exit__",
+    "__float__",
+    "__floordiv__",
+    "__format__",
+    "__ge__",
+    "__getitem__",
+    "__getslice__",
+    "__gt__",
     # Added on a per-proxy basis
     # https://github.com/rapidsai/xdf/pull/306#pullrequestreview-1636155428
     # "__hash__",
+    "__int__",
+    "__invert__",
+    "__iter__",
+    "__le__",
+    "__len__",
+    "__lshift__",
+    "__lt__",
+    "__matmul__",
+    "__mod__",
+    "__mul__",
+    "__ne__",
+    "__neg__",
+    "__next__",
+    "__or__",
+    "__pos__",
+    "__pow__",
+    "__radd__",
+    "__rand__",
+    "__rdivmod__",
+    "__repr__",
+    "__rfloordiv__",
+    "__rlshift__",
+    "__rmatmul__",
+    "__rmod__",
+    "__rmul__",
+    "__ror__",
+    "__round__",
+    "__rpow__",
+    "__rrshift__",
+    "__rshift__",
+    "__rsub__",
+    "__rtruediv__",
+    "__rxor__",
+    "__setitem__",
+    "__setslice__",
+    "__str__",
+    "__sub__",
+    "__truediv__",
+    "__xor__",
 }

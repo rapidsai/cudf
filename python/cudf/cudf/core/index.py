@@ -344,6 +344,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def __contains__(self, item):
+        hash(item)
         if isinstance(item, bool) or not isinstance(
             item,
             tuple(
@@ -1523,6 +1524,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return self._column.values
 
     def __contains__(self, item):
+        hash(item)
         return item in self._values
 
     def _clean_nulls_from_index(self):
@@ -2880,7 +2882,7 @@ class IntervalIndex(Index):
 
     @property
     def closed(self):
-        return self._values.dtype.closed
+        return self.dtype.closed
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -2962,7 +2964,7 @@ class IntervalIndex(Index):
 
 @_cudf_nvtx_annotate
 def as_index(
-    arbitrary, nan_as_null=None, copy=False, name=no_default, dtype=None
+    arbitrary, nan_as_null=no_default, copy=False, name=no_default, dtype=None
 ) -> BaseIndex:
     """Create an Index from an arbitrary object
 
@@ -3012,6 +3014,10 @@ def as_index(
         - DatetimeIndex for Datetime input.
         - Index for all other inputs.
     """
+    if nan_as_null is no_default:
+        nan_as_null = (
+            False if cudf.get_option("mode.pandas_compatible") else None
+        )
 
     if name is no_default:
         name = getattr(arbitrary, "name", None)
