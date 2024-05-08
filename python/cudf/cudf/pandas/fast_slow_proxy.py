@@ -597,257 +597,58 @@ class _FastSlowProxy:
             return
         return _FastSlowAttribute("__setattr__").__get__(self)(name, value)
 
-    def __add__(self, other):
+
+binary_ops = [
+    "__add__",
+    "__and__",
+    "__divmod__",
+    "__floordiv__",
+    "__lshift__",
+    "__matmul__",
+    "__mod__",
+    "__mul__",
+    "__or__",
+    "__pow__",
+    "__radd__",
+    "__rand__",
+    "__rdivmod__",
+    "__rfloordiv__",
+    "__rlshift__",
+    "__rmatmul__",
+    "__rmod__",
+    "__rmul__",
+    "__ror__",
+    "__rpow__",
+    "__rrshift__",
+    "__rshift__",
+    "__rsub__",
+    "__rtruediv__",
+    "__rxor__",
+    "__sub__",
+    "__truediv__",
+    "__xor__",
+]
+
+
+def create_special_method_impl(special_method):
+    def special_method_impl(self, other):
         return _fast_slow_function_call(
-            lambda x, y: x.__add__(y)
-            if hasattr(x, "__add__")
+            lambda x, y: getattr(x, special_method)(y)
+            if hasattr(x, special_method)
             else NotImplemented,
             self,
             other,
         )[0]
 
-    def __radd__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__radd__(y)
-            if hasattr(x, "__radd__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
+    return special_method_impl
 
-    def __sub__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__sub__(y)
-            if hasattr(x, "__sub__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
 
-    def __rsub__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__rsub__(y)
-            if hasattr(x, "__rsub__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __mul__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__mul__(y)
-            if hasattr(x, "__mul__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __rmul__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__rmul__(y)
-            if hasattr(x, "__rmul__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __truediv__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__truediv__(y)
-            if hasattr(x, "__truediv__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __rtruediv__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__rtruediv__(y)
-            if hasattr(x, "__rtruediv__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __floordiv__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__floordiv__(y)
-            if hasattr(x, "__floordiv__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __rfloordiv__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__rfloordiv__(y)
-            if hasattr(x, "__rfloordiv__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __mod__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__mod__(y)
-            if hasattr(x, "__mod__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __rmod__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__rmod__(y)
-            if hasattr(x, "__rmod__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __divmod__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__divmod__(y)
-            if hasattr(x, "__divmod__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __rdivmod__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__rdivmod__(y)
-            if hasattr(x, "__rdivmod__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __pow__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__pow__(y)
-            if hasattr(x, "__pow__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __rpow__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__rpow__(y)
-            if hasattr(x, "__rpow__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __lshift__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__lshift__(y)
-            if hasattr(x, "__lshift__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __rlshift__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__rlshift__(y)
-            if hasattr(x, "__rlshift__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __rshift__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__rshift__(y)
-            if hasattr(x, "__rshift__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __rrshift__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__rrshift__(y)
-            if hasattr(x, "__rrshift__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __and__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__and__(y)
-            if hasattr(x, "__and__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __rand__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__rand__(y)
-            if hasattr(x, "__rand__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __xor__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__xor__(y)
-            if hasattr(x, "__xor__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __rxor__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__rxor__(y)
-            if hasattr(x, "__rxor__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __or__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__or__(y)
-            if hasattr(x, "__or__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __ror__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__ror__(y)
-            if hasattr(x, "__ror__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __matmul__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__matmul__(y)
-            if hasattr(x, "__matmul__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
-
-    def __rmatmul__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__rmatmul__(y)
-            if hasattr(x, "__rmatmul__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
+for special_method in binary_ops:
+    setattr(
+        _FastSlowProxy,
+        special_method,
+        create_special_method_impl(special_method),
+    )
 
 
 class _FinalProxy(_FastSlowProxy):
