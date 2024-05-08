@@ -2846,9 +2846,7 @@ def test_parquet_flba_round_trip(tmpdir):
     data = pa.array([flba(i) for i in range(num_rows)], type=pa.binary(32))
     padf = pa.Table.from_arrays([data], names=["flba"])
     padf_fname = tmpdir.join("padf.parquet")
-    # TODO: cudf cannot read fixed_len_byte_array that is dictionary encoded
-    # remove after merge of #15601
-    pq.write_table(padf, padf_fname, use_dictionary=False)
+    pq.write_table(padf, padf_fname)
 
     # round trip data with cudf
     cdf = cudf.read_parquet(padf_fname)
