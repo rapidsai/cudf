@@ -620,15 +620,12 @@ TEST_F(JsonTest, TokenStream2)
   }
 }
 
-struct JsonParserTest : public cudf::test::BaseFixture, public testing::WithParamInterface<bool> {};
-INSTANTIATE_TEST_SUITE_P(IsFullGPU, JsonParserTest, testing::Bool());
+struct JsonParserTest : public cudf::test::BaseFixture {};
 
-TEST_P(JsonParserTest, ExtractColumn)
+TEST_F(JsonParserTest, ExtractColumn)
 {
   using cuio_json::SymbolT;
-  bool const is_full_gpu = GetParam();
-  auto json_parser       = is_full_gpu ? cuio_json::detail::device_parse_nested_json
-                                       : cuio_json::detail::host_parse_nested_json;
+  auto json_parser = cuio_json::detail::device_parse_nested_json;
 
   // Prepare cuda stream for data transfers & kernels
   auto const stream = cudf::get_default_stream();
@@ -867,14 +864,12 @@ TEST_F(JsonTest, PostProcessTokenStream)
   }
 }
 
-TEST_P(JsonParserTest, UTF_JSON)
+TEST_F(JsonParserTest, UTF_JSON)
 {
   // Prepare cuda stream for data transfers & kernels
-  auto const stream      = cudf::get_default_stream();
-  auto mr                = rmm::mr::get_current_device_resource();
-  bool const is_full_gpu = GetParam();
-  auto json_parser       = is_full_gpu ? cuio_json::detail::device_parse_nested_json
-                                       : cuio_json::detail::host_parse_nested_json;
+  auto const stream = cudf::get_default_stream();
+  auto mr           = rmm::mr::get_current_device_resource();
+  auto json_parser  = cuio_json::detail::device_parse_nested_json;
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
@@ -924,12 +919,10 @@ TEST_P(JsonParserTest, UTF_JSON)
   CUDF_EXPECT_NO_THROW(json_parser(d_utf_pass, default_options, stream, mr));
 }
 
-TEST_P(JsonParserTest, ExtractColumnWithQuotes)
+TEST_F(JsonParserTest, ExtractColumnWithQuotes)
 {
   using cuio_json::SymbolT;
-  bool const is_full_gpu = GetParam();
-  auto json_parser       = is_full_gpu ? cuio_json::detail::device_parse_nested_json
-                                       : cuio_json::detail::host_parse_nested_json;
+  auto json_parser = cuio_json::detail::device_parse_nested_json;
 
   // Prepare cuda stream for data transfers & kernels
   auto const stream = cudf::get_default_stream();
@@ -959,12 +952,10 @@ TEST_P(JsonParserTest, ExtractColumnWithQuotes)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col2, parsed_col2);
 }
 
-TEST_P(JsonParserTest, ExpectFailMixStructAndList)
+TEST_F(JsonParserTest, ExpectFailMixStructAndList)
 {
   using cuio_json::SymbolT;
-  bool const is_full_gpu = GetParam();
-  auto json_parser       = is_full_gpu ? cuio_json::detail::device_parse_nested_json
-                                       : cuio_json::detail::host_parse_nested_json;
+  auto json_parser = cuio_json::detail::device_parse_nested_json;
 
   // Prepare cuda stream for data transfers & kernels
   auto const stream = cudf::get_default_stream();
@@ -1002,12 +993,10 @@ TEST_P(JsonParserTest, ExpectFailMixStructAndList)
   }
 }
 
-TEST_P(JsonParserTest, EmptyString)
+TEST_F(JsonParserTest, EmptyString)
 {
   using cuio_json::SymbolT;
-  bool const is_full_gpu = GetParam();
-  auto json_parser       = is_full_gpu ? cuio_json::detail::device_parse_nested_json
-                                       : cuio_json::detail::host_parse_nested_json;
+  auto json_parser = cuio_json::detail::device_parse_nested_json;
 
   // Prepare cuda stream for data transfers & kernels
   auto const stream = cudf::get_default_stream();
