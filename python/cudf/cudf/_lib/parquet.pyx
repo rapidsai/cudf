@@ -574,7 +574,14 @@ cdef class ParquetWriter:
     max_page_size_rows: int, default 20000
         Maximum number of rows of each page of the output.
         By default, 20000 will be used.
-
+    max_dictionary_size: int, default 1048576
+        Maximum size of the dictionary page for each output column chunk. Dictionary
+        encoding for column chunks that exceeds this limit will be disabled.
+        By default, 1048576 (1MB) will be used.
+    use_dictionary : bool, default True
+        If ``True``, enable dictionary encoding for Parquet page data
+        subject to ``max_dictionary_size`` constraints.
+        If ``False``, disable dictionary encoding for Parquet page data.
     See Also
     --------
     cudf.io.parquet.write_parquet
@@ -591,13 +598,17 @@ cdef class ParquetWriter:
     cdef size_type row_group_size_rows
     cdef size_t max_page_size_bytes
     cdef size_type max_page_size_rows
+    cdef size_t max_dictionary_size
+    cdef cudf_io_types.dictionary_policy dict_policy
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
                   object compression="snappy", str statistics="ROWGROUP",
                   int row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
                   int row_group_size_rows=1000000,
                   int max_page_size_bytes=524288,
-                  int max_page_size_rows=20000):
+                  int max_page_size_rows=20000,
+                  int max_dictionary_size=1048576,
+                  bool use_dictionary=True):
         filepaths_or_buffers = (
             list(filepath_or_buffer)
             if is_list_like(filepath_or_buffer)
@@ -612,6 +623,11 @@ cdef class ParquetWriter:
         self.row_group_size_rows = row_group_size_rows
         self.max_page_size_bytes = max_page_size_bytes
         self.max_page_size_rows = max_page_size_rows
+        self.max_dictionary_size = (
+            cudf_io_types.dictionary_policy.ADAPTIVE
+            if use_dictionary
+            else cudf_io_types.dictionary_policy.NEVER
+        )
 
     def write_table(self, table, object partitions_info=None):
         """ Writes a single table to the file """
@@ -729,8 +745,10 @@ cdef class ParquetWriter:
                 .row_group_size_rows(self.row_group_size_rows)
                 .max_page_size_bytes(self.max_page_size_bytes)
                 .max_page_size_rows(self.max_page_size_rows)
+                .max_dictionary_size(self.max_dictionary_size)
                 .build()
             )
+            args.set_dictionary_policy(self.dict_policy)
             self.writer.reset(new cpp_parquet_chunked_writer(args))
         self.initialized = True
 
