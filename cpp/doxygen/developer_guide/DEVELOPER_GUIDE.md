@@ -1,4 +1,4 @@
-# libcudf C++ Developer Guide {#DEVELOPER_GUIDE}
+# libcudf C++ Developer Guide
 
 This document serves as a guide for contributors to libcudf C++ code. Developers should also refer
 to these additional files for further documentation of libcudf best practices.
@@ -860,13 +860,13 @@ thrust::lower_bound(rmm::exec_policy(stream),
 
 Like the [indexalator](#index-normalizing_iterators),
 the "offsetalator", or offset-normalizing iterator (`include/cudf/detail/offsetalator.cuh`), can be
-used for offsets types (INT32 or INT64 only) without requiring a type-specific instance.
-This helpful when reading or building strings columns. The normalized type is int64 which means
-an `input_offsetsalator` will return int64 type values for both INT32 and INT64 offsets columns.
-Likewise, an `output_offselator` can accept int64 type values to store into either an
+used for offset column types (INT32 or INT64 only) without requiring a type-specific instance.
+This helpful when reading or building [strings columns](#strings-columns). The normalized type is `int64` which means
+an `input_offsetsalator` will return `int64` type values for both INT32 and INT64 offsets columns.
+Likewise, an `output_offselator` can accept `int64` type values to store into either an
 INT32 or INT64 output offsets column created appropriately.
 
-Use the `offsetalator_factory` to create an appropriate input or output iterator from an offsets column_view.
+Use the `cudf::detail::offsetalator_factory` to create an appropriate input or output iterator from an offsets column_view.
 Example input iterator usage:
 
 ```c++
@@ -1271,12 +1271,12 @@ This is related to [Arrow's "Variable-Size List" memory layout](https://arrow.ap
 
 Strings are represented as a column with a data device buffer and a child offsets column.
 The parent column's type is `STRING` and its data holds all the characters across all the strings packed together
-but its size represents the number of strings in the column, and its null mask represents the
+but its size represents the number of strings in the column and its null mask represents the
 validity of each string.
 
 The strings column contains a single child column which is a non-nullable column
 of [`size_type`](#cudfsize_type) elements that indicates the offset to the beginning of each
-string in a dense data buffer of all characters. With this representation, `data[offsets[i]]` is the
+string in the dense data buffer of all characters. With this representation, `data[offsets[i]]` is the
 first character of string `i`, and the size of string `i` is given by `offsets[i+1] - offsets[i]`.
 The following image shows an example of this compound column representation of strings.
 
@@ -1382,25 +1382,27 @@ libcudf provides view types for nested column types as well as for the data elem
 
 ### cudf::strings_column_view and cudf::string_view
 
-A `cudf::strings_column_view` wraps a strings column which contains a parent
-`cudf::column_view` as a view the strings column and an offsets child `cudf::column_view`.
-The parent column contains the offset, size, and validity mask for the strings column.
-The offsets column is non-nullable with an `offset()==0` and its own size.
+A `cudf::strings_column_view` wraps a strings column and contains a parent
+`cudf::column_view` as a view of the strings column and an offsets `cudf::column_view`
+which is a child of the parent.
+The parent view contains the offset, size, and validity mask for the strings column.
+The offsets view is non-nullable with an `offset()==0` and its own size.
 Since the offset column type can be either INT32 or INT64 it is useful to use the
-offset normalizing iterators [offsetalator](#offset-normalizing_iterators) to access individual offset values.
+offset normalizing iterators [offsetalator](#offset-normalizing-iterators) to access individual offset values.
 
 A `cudf::string_view` is a view of a single string and therefore
 is the data type of a `cudf::column` of type `STRING` just like `int32_t` is the
 data type for a `cudf::column` of type INT32. As its name implies, this is a
 read-only object instance that points to device memory inside the strings column.
-It's lifespan is the same (or less) as the column it views.
+Its lifespan is the same (or less) as the column it views.
 An individual strings column row and a `cudf::string_view` is limited to [`size_type`](#cudfsize_type) bytes.
 
 Use the `column_device_view::element` method to access an individual row element. Like any other
 column, do not call `element()` on a row that is null.
 
 ```c++
-   cudf::column_device_view d_strings;
+   cudf::strings_column_view scv;
+   auto d_strings = cudf::column_device_view::create(scv.parent(), stream);
    ...
    if( d_strings.is_valid(row_index) ) {
       string_view d_str = d_strings.element<string_view>(row_index);
@@ -1418,7 +1420,7 @@ otherwise, position and length parameters are specified in characters and not by
 includes a `cudf::string_view::const_iterator` which can be used to navigate through individual characters
 within the string.
 
-`cudf::type_dispatcher` dispatches to the `string_view` data type when invoked on a `STRING` column.
+`cudf::type_dispatcher` dispatches to the `cudf::string_view` data type when invoked on a `STRING` column.
 
 #### UTF-8
 
