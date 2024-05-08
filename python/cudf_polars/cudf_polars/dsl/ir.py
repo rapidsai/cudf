@@ -17,6 +17,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+from typing_extensions import assert_never
+
+import cudf._lib.pylibcudf as plc
+import cudf_polars.dsl.expr as expr
 
 if TYPE_CHECKING:
     from cudf_polars.dsl.expr import Expr
@@ -54,6 +58,9 @@ class PythonScan(IR):
     options: Any
     predicate: Expr | None
 
+    def evaluate(self):
+        raise NotImplementedError
+
 
 @dataclass(slots=True)
 class Scan(IR):
@@ -61,6 +68,36 @@ class Scan(IR):
     paths: list[str]
     file_options: Any
     predicate: Expr | None
+
+    def __post_init__(self):
+        if self.file_options.n_rows is not None:
+            raise NotImplementedError("row limit in scan")
+        if self.typ not in ("csv", "parquet"):
+            raise NotImplementedError(f"Unhandled scan type: {self.typ}")
+    def evaluate(self):
+        options = self.file_options
+        n_rows = options.n_rows
+        with_columns = options.with_columns
+        row_index = options.row_index
+        assert n_rows is None
+        if self.typ == "csv":
+            df = cudf.concat(
+                [cudf.read_csv(p, usecols=with_columns) for p in self.paths]
+            )
+        elif self.typ == "parquet":
+            df = cudf.read_parquet(self.paths, columns=with_columns)
+        else:
+            assert_never(self.typ)
+        if row_index is not None:
+            name, offset = row_index
+            dtype = self.schema[name]
+            index = as_column(
+                ..., dtype=dtype
+            )
+            
+        
+            
+                
 
 
 @dataclass(slots=True)
@@ -90,6 +127,42 @@ class GroupBy(IR):
     keys: list[Expr]
     options: Any
 
+    @staticmethod
+    def check_agg(agg: Expr) -> int:
+        """
+        Determine if we can handle an aggregation expression.
+
+        Parameters
+        ----------
+        agg
+            Expression to check
+
+        Returns
+        -------
+        depth of nesting
+
+        Raises
+        ------
+        NotImplementedError for unsupported expression nodes.
+        """
+        if isinstance(agg, expr.Agg):
+            if agg.name == "implode":
+                raise NotImplementedError("implode in groupby")
+            return 1 + GroupBy.check_agg(agg.column)
+        elif isinstance(agg, (expr.Len, expr.Column, expr.Literal)):
+            return 0
+        elif isinstance(agg, expr.BinOp):
+            return max(GroupBy.check_agg(agg.left), GroupBy.check_agg(agg.right))
+        elif isinstance(agg, expr.Cast):
+            return GroupBy.check_agg(agg.column)
+        else:
+            raise NotImplementedError(f"No handler for {agg=}")
+
+    def __post_init__(self):
+        """Check whether all the aggregations are implemented."""
+        if any(GroupBy.check_agg(a) > 1 for a in self.agg_requests):
+            raise NotImplementedError("Nested aggregations in groupby")
+
 
 @dataclass(slots=True)
 class Join(IR):
@@ -98,6 +171,14 @@ class Join(IR):
     left_on: list[Expr]
     right_on: list[Expr]
     options: Any
+
+    def __post_init__(self):
+        """Raise for unsupported options."""
+        how, coalesce = self.options[0], self.options[-1]
+        if how == "cross":
+            raise NotImplementedError("cross join not implemented")
+        if how == "outer" and not coalesce:
+            raise NotImplementedError("non-coalescing outer join")
 
 
 @dataclass(slots=True)
