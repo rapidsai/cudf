@@ -665,8 +665,8 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
   // decode_ipc_message can lead to unintended nullptr dereferences.
   auto decoded_message = cudf::io::detail::base64_decode(encoded_serialized_message);
 
-  // Decode the ipc message to get a const void pointer to the arrow:Message flatbuffer
-  auto metadata_buf = decode_ipc_message(decoded_message);
+  // Decode the ipc message to get a const void pointer to the ipc:Message flatbuffer
+  const auto metadata_buf = decode_ipc_message(decoded_message);
 
   if (metadata_buf == nullptr) {
     CUDF_LOG_ERROR("Parquet reader encountered an invalid metadata pointer.",
@@ -674,24 +674,22 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
     return std::nullopt;
   }
 
-  // Get an arrow:ipc message object from ipc:message's decoded metadata section
-  auto ipc_message = flatbuf::GetMessage(metadata_buf);
-  if (ipc_message == nullptr) {
+  // Check if the decoded Message flatbuffer is valid
+  if (flatbuf::GetMessage(metadata_buf) == nullptr) {
     CUDF_LOG_ERROR("Parquet reader encountered an invalid ipc_message pointer.",
                    "arrow:schema not processed.");
     return std::nullopt;
   }
 
-  // Get schema object from the arrow:ipc message
-  auto fb_schema = ipc_message->header_as_Schema();
-  if (fb_schema == nullptr) {
+  // Check if the Message flatbuffer has a valid arrow:schema in its header
+  if (flatbuf::GetMessage(metadata_buf)->header_as_Schema() == nullptr) {
     CUDF_LOG_ERROR("Parquet reader encountered an invalid fb_schema pointer.",
                    "arrow:schema not processed.");
     return std::nullopt;
   }
 
-  // Get the vector of fields from arrow:schema object
-  const auto fields = fb_schema->fields();
+  // Get the vector of fields from arrow:schema flatbuffer object
+  const auto fields = flatbuf::GetMessage(metadata_buf)->header_as_Schema()->fields();
   if (fields == nullptr) {
     CUDF_LOG_ERROR("Parquet reader encountered an invalid fields pointer.",
                    "arrow:schema not processed.");
