@@ -1311,8 +1311,19 @@ def test_parquet_delta_byte_array(datadir):
     assert_eq(cudf.read_parquet(fname), pd.read_parquet(fname))
 
 
+# values chosen to exercise:
+#    1 - header only, no bitpacked values
+#    2 - one bitpacked value
+#   23 - one partially filled miniblock
+#   32 - almost full miniblock
+#   33 - one full miniblock
+#   34 - one full miniblock plus one value in new miniblock
+#  128 - almost full block
+#  129 - one full block
+#  130 - one full block plus one value in new block
+# 1000 - multiple blocks
 def delta_num_rows():
-    return [1, 2, 23, 32, 33, 34, 64, 65, 66, 128, 129, 130, 20000, 50000]
+    return [1, 2, 23, 32, 33, 34, 128, 129, 130, 1000]
 
 
 @pytest.mark.parametrize("nrows", delta_num_rows())
@@ -1412,17 +1423,16 @@ def test_delta_byte_array_roundtrip(
     pcdf = cudf.from_pandas(test_pdf)
     assert_eq(cdf, pcdf)
 
-    # Test DELTA_LENGTH_BYTE_ARRAY writing as well
-    if str_encoding == "DELTA_LENGTH_BYTE_ARRAY":
-        cudf_fname = tmpdir.join("cdfdeltaba.parquet")
-        pcdf.to_parquet(
-            cudf_fname,
-            compression="snappy",
-            header_version="2.0",
-            use_dictionary=False,
-        )
-        cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
-        assert_eq(cdf2, cdf)
+    # Write back out with cudf and make sure pyarrow can read it
+    cudf_fname = tmpdir.join("cdfdeltaba.parquet")
+    pcdf.to_parquet(
+        cudf_fname,
+        compression="snappy",
+        header_version="2.0",
+        use_dictionary=False,
+    )
+    cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
+    assert_eq(cdf2, cdf)
 
 
 @pytest.mark.parametrize("nrows", delta_num_rows())
@@ -1479,17 +1489,16 @@ def test_delta_struct_list(tmpdir, nrows, add_nulls, str_encoding):
     pcdf = cudf.from_pandas(test_pdf)
     assert_eq(cdf, pcdf)
 
-    # Test DELTA_LENGTH_BYTE_ARRAY writing as well
-    if str_encoding == "DELTA_LENGTH_BYTE_ARRAY":
-        cudf_fname = tmpdir.join("cdfdeltaba.parquet")
-        pcdf.to_parquet(
-            cudf_fname,
-            compression="snappy",
-            header_version="2.0",
-            use_dictionary=False,
-        )
-        cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
-        assert_eq(cdf2, cdf)
+    # Write back out with cudf and make sure pyarrow can read it
+    cudf_fname = tmpdir.join("cdfdeltaba.parquet")
+    pcdf.to_parquet(
+        cudf_fname,
+        compression="snappy",
+        header_version="2.0",
+        use_dictionary=False,
+    )
+    cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
+    assert_eq(cdf2, cdf)
 
 
 @pytest.mark.parametrize(

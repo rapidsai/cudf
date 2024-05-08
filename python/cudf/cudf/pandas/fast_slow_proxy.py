@@ -681,23 +681,23 @@ class _FastSlowProxy:
     def __rmatmul__(self, other):
         return _fast_slow_function_call(operator.matmul, other, self)[0]
 
-    def __isub__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__isub__(y)
-            if hasattr(x, "__isub__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
+    # def __isub__(self, other):
+    #     return _fast_slow_function_call(
+    #         lambda x, y: x.__isub__(y)
+    #         if hasattr(x, "__isub__")
+    #         else NotImplemented,
+    #         self,
+    #         other,
+    #     )[0]
 
-    def __idd__(self, other):
-        return _fast_slow_function_call(
-            lambda x, y: x.__iadd__(y)
-            if hasattr(x, "__iadd__")
-            else NotImplemented,
-            self,
-            other,
-        )[0]
+    # def __idd__(self, other):
+    #     return _fast_slow_function_call(
+    #         lambda x, y: x.__iadd__(y)
+    #         if hasattr(x, "__iadd__")
+    #         else NotImplemented,
+    #         self,
+    #         other,
+    #     )[0]
 
 
 class _FinalProxy(_FastSlowProxy):
@@ -1196,4 +1196,14 @@ _SPECIAL_METHODS: Set[str] = {
     # Added on a per-proxy basis
     # https://github.com/rapidsai/xdf/pull/306#pullrequestreview-1636155428
     # "__hash__",
+    "__iadd__",
+    "__iand__",
+    "__ifloordiv__",
+    "__imod__",
+    "__imul__",
+    "__ior__",
+    "__ipow__",
+    "__isub__",
+    "__itruediv__",
+    "__ixor__",
 }
