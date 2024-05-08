@@ -143,15 +143,14 @@ int main(int argc, char const** argv)
   // `timer` is automatically started here
   Timer timer;
   write_parquet(input->view(), metadata, output_filepath, encoding, compression, page_stats);
-  timer.stop();
   timer.print_elapsed_millis();
 
-  // Restart the timer
-  timer.start();
   // Read the parquet file written with encoding and compression
   std::cout << "Reading " << output_filepath << "..." << std::endl;
+
+  // Reset the timer
+  timer.reset();
   auto [transcoded_input, transcoded_metadata] = read_parquet(output_filepath);
-  timer.stop();
   timer.print_elapsed_millis();
 
   // Check for validity

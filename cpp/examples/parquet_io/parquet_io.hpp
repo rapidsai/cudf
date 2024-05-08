@@ -143,20 +143,21 @@ class Timer {
   using micros = std::chrono::microseconds;
   using millis = std::chrono::milliseconds;
 
-  Timer() { start(); }
-  ~Timer() { stop(); }
-
-  void start() { start_time = std::chrono::high_resolution_clock::now(); }
-  void stop() { end_time = std::chrono::high_resolution_clock::now(); }
-
-  auto duration_us() { return std::chrono::duration_cast<micros>(end_time - start_time).count(); }
-  auto duration_ms() { return std::chrono::duration_cast<millis>(end_time - start_time).count(); }
-
-  void print_elapsed_micros() { std::cout << "Elapsed Time: " << duration_us() << "us\n\n"; }
-  void print_elapsed_millis() { std::cout << "Elapsed Time: " << duration_ms() << "ms\n\n"; }
+  Timer() { reset(); }
+  void reset() { start_time = std::chrono::high_resolution_clock::now(); }
+  auto elapsed() { return (std::chrono::high_resolution_clock::now() - start_time); }
+  void print_elapsed_micros()
+  {
+    std::cout << "Elapsed Time: " << std::chrono::duration_cast<micros>(elapsed()).count()
+              << "us\n\n";
+  }
+  void print_elapsed_millis()
+  {
+    std::cout << "Elapsed Time: " << std::chrono::duration_cast<millis>(elapsed()).count()
+              << "ms\n\n";
+  }
 
  private:
   using time_point_t = std::chrono::time_point<std::chrono::high_resolution_clock>;
   time_point_t start_time;
-  time_point_t end_time;
 };
