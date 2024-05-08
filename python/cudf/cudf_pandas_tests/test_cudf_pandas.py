@@ -1243,18 +1243,32 @@ def test_apply_slow_path_udf_references_global_module():
     tm.assert_series_equal(result, expected)
 
 
-@pytest.mark.parametrize("op", [operator.isub, operator.iadd])
-def test_isub_iadd(op):
-    xarray1 = xpd.array([10, 11, 12])
-    xarray2 = xpd.array([1, 2, 3])
+@pytest.mark.parametrize(
+    "op",
+    [
+        "__iadd__",
+        "__iand__",
+        "__ifloordiv__",
+        "__imod__",
+        "__imul__",
+        "__ior__",
+        "__ipow__",
+        "__isub__",
+        "__itruediv__",
+        "__ixor__",
+    ],
+)
+def test_inplace_ops(op):
+    xdf1 = xpd.DataFrame({"a": [10, 11, 12]})
+    xdf2 = xpd.DataFrame({"a": [1, 2, 3]})
 
-    array1 = pd.array([10, 11, 12])
-    array2 = pd.array([1, 2, 3])
+    df1 = pd.DataFrame({"a": [10, 11, 12]})
+    df2 = pd.DataFrame({"a": [1, 2, 3]})
 
-    xarray1 = op(xarray1, xarray2)
-    array1 = op(array1, array2)
+    xdf1 = getattr(xdf1, op)(xdf2)
+    df1 = getattr(df1, op)(df2)
 
-    tm.assert_equal(xarray1, array1)
+    tm.assert_equal(xdf1, df1)
 
 
 @pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
