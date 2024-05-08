@@ -58,14 +58,12 @@
 
 #pragma once
 
-// altered: including required std headers
-#include <cudf/utilities/error.hpp>
+// altered: include required cudf and std headers
+#include <cudf/detail/utilities/logger.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
-#include <cstdint>
-#include <functional>
 #include <string>
 
 // altered: merged base64.h and base64.cpp into one file.
