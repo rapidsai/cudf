@@ -10,18 +10,12 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf._lib import filling
 from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
 from cudf._typing import Dtype
 from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.column import (
-    ColumnBase,
-    as_column,
-    column_empty_like,
-    concat_columns,
-)
+from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.utils.dtypes import min_unsigned_type
 
@@ -348,11 +342,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                     if isinstance(result, cudf.DataFrame):
                         result.index = cudf.MultiIndex.from_tuples(
                             [
-                                (k, i)
-                                for k, x in zip(
-                                    keys, [obj.shape[0] for obj in objs]
+                                (k, v)
+                                for k, vh in zip(
+                                    keys,
+                                    [obj.index.values_host for obj in objs],
                                 )
-                                for i in range(x)
+                                for v in vh
                             ]
                         )
             else:
@@ -515,28 +510,15 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 sort=bool(sort),
             )
             if keys is not None:
-                (new_level,) = filling.repeat(
-                    [as_column(keys)], as_column(list(map(len, objs)))
+                result.index = cudf.MultiIndex.from_tuples(
+                    [
+                        (k, v)
+                        for k, vh in zip(
+                            keys, [obj.index.values_host for obj in objs]
+                        )
+                        for v in vh
+                    ]
                 )
-
-                existing_levels = objs[0].index.nlevels
-                assert all(
-                    obj.index.nlevels == existing_levels for obj in objs
-                ), (
-                    f"Indices must have the same number of levels, instead they have "
-                    f"{' '.join([o.index.nlevels for o in objs])}"
-                )
-
-                # Might need to do some dtype checking/coercion here
-                existing = [
-                    concat_columns(
-                        [obj.index.get_level_values(level) for obj in objs]
-                    )
-                    for level in range(existing_levels)
-                ]
-
-                new_index = cudf.MultiIndex.from_arrays([new_level, *existing])
-                result.index = new_index
         return result
 
     elif typ is cudf.Series:
@@ -548,28 +530,15 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 objs, axis=axis, index=None if ignore_index else True
             )
             if keys is not None:
-                (new_level,) = filling.repeat(
-                    [as_column(keys)], as_column(list(map(len, objs)))
+                result.index = cudf.MultiIndex.from_tuples(
+                    [
+                        (k, v)
+                        for k, vh in zip(
+                            keys, [obj.index.values_host for obj in objs]
+                        )
+                        for v in vh
+                    ]
                 )
-
-                existing_levels = objs[0].index.nlevels
-                assert all(
-                    obj.index.nlevels == existing_levels for obj in objs
-                ), (
-                    f"Indices must have the same number of levels, instead they have "
-                    f"{' '.join([o.index.nlevels for o in objs])}"
-                )
-
-                # Might need to do some dtype checking/coercion here
-                existing = [
-                    concat_columns(
-                        [obj.get_level_values(level) for obj in objs]
-                    )
-                    for level in range(existing_levels)
-                ]
-
-                new_index = cudf.MultiIndex.from_arrays([new_level, *existing])
-                result.index = new_index
             return result
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
