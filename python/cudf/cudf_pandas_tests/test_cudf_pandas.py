@@ -1243,6 +1243,62 @@ def test_apply_slow_path_udf_references_global_module():
     tm.assert_series_equal(result, expected)
 
 
+@pytest.mark.parametrize(
+    "op",
+    [
+        "__iadd__",
+        "__iand__",
+        "__ifloordiv__",
+        "__imod__",
+        "__imul__",
+        "__ior__",
+        "__ipow__",
+        "__isub__",
+        "__itruediv__",
+        "__ixor__",
+    ],
+)
+def test_inplace_ops(op):
+    xdf1 = xpd.DataFrame({"a": [10, 11, 12]})
+    xdf2 = xpd.DataFrame({"a": [1, 2, 3]})
+
+    df1 = pd.DataFrame({"a": [10, 11, 12]})
+    df2 = pd.DataFrame({"a": [1, 2, 3]})
+
+    actual = getattr(xdf1, op)(xdf2)
+    expected = getattr(df1, op)(df2)
+
+    tm.assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        "__iadd__",
+        "__iand__",
+        "__ifloordiv__",
+        "__imod__",
+        "__imul__",
+        "__ior__",
+        "__ipow__",
+        "__isub__",
+        "__itruediv__",
+        "__ixor__",
+    ],
+)
+def test_inplace_ops_series(op):
+    xser1 = xpd.Series([10, 11, 12])
+    xser2 = xpd.Series([1, 2, 3])
+
+    ser1 = pd.Series([10, 11, 12])
+    ser2 = pd.Series([1, 2, 3])
+
+    actual = getattr(xser1, op)(xser2)
+    expected = getattr(ser1, op)(ser2)
+
+    tm.assert_equal(actual, expected)
+
+
 @pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
 def test_timestamp(data):
     xtimestamp = xpd.Timestamp(data)
