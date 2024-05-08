@@ -566,7 +566,7 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
 
   // Check the key_value metadata for ARROW:schema, decode and walk it
   // Function to convert from flatbuf::duration type to cudf::type_id
-  auto duration_from_flatbuffer = [](flatbuf::Duration const* duration) {
+  auto const duration_from_flatbuffer = [](flatbuf::Duration const* duration) {
     // TODO: we only need this for arrow::DurationType for now. Else, we can take in a
     // void ptr and typecast it to the corresponding type based on the type_id.
     auto fb_unit = duration->unit();
@@ -643,7 +643,7 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
 
   // Question: Should we check if any file has the "ARROW:schema" key or
   // Or if all files have the same "ARROW:schema"?
-  auto it = keyval_maps[0].find("ARROW:schema");
+  auto const it = keyval_maps[0].find("ARROW:schema");
   if (it == keyval_maps[0].end()) { return std::nullopt; }
 
   // Read arrow schema from flatbuffers
