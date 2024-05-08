@@ -13,14 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "../../io/utilities/hostdevice_vector.hpp"
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/find.hpp>
@@ -380,8 +379,8 @@ CUDF_KERNEL void multi_contains_warp_parallel_fn(column_device_view const d_stri
   auto const num_targets = d_targets.size();
   auto const num_rows    = d_strings.size();
 
-  auto const idx = static_cast<size_type>(threadIdx.x + blockIdx.x * blockDim.x);
-  using warp_reduce   = cub::WarpReduce<bool>;
+  auto const idx    = static_cast<size_type>(threadIdx.x + blockIdx.x * blockDim.x);
+  using warp_reduce = cub::WarpReduce<bool>;
   __shared__ typename warp_reduce::TempStorage temp_storage;
 
   if (idx >= (num_rows * cudf::detail::warp_size * num_targets)) { return; }
@@ -390,13 +389,24 @@ CUDF_KERNEL void multi_contains_warp_parallel_fn(column_device_view const d_stri
   auto const str_idx    = (idx / cudf::detail::warp_size) / num_targets;
   auto const target_idx = (idx / cudf::detail::warp_size) % num_targets;
 
-  if (d_strings.is_null(str_idx)) { return; }
+  if (d_strings.is_null(str_idx)) { return; }  // bitmask will set result to null.
 
   // Identify the target.
   auto const d_target = d_targets[target_idx];
 
+  if (d_target.size_bytes() == 0) {
+    d_results[target_idx][str_idx] = true;  // Empty string is always found.
+    return;
+  }
+
   // get the string for this warp
   auto const d_str = d_strings.element<string_view>(str_idx);
+
+  if (d_target.size_bytes() > d_str.size_bytes()) {
+    d_results[target_idx][str_idx] = false;  // Target can't possibly fit in the input string.
+    return;
+  }
+
   // each thread of the warp will check just part of the string
   auto found = false;
   for (auto i = static_cast<size_type>(idx % cudf::detail::warp_size);
@@ -458,39 +468,41 @@ std::vector<std::unique_ptr<column>> multi_contains_warp_parallel(
                "Target search strings must be valid.");
 
   // Convert targets into string-views for querying. Copy to device.
-  auto host_device_targets = cudf::detail::hostdevice_vector<string_view>(num_targets, stream);
-  std::transform(
-    targets.begin(), targets.end(), host_device_targets.begin(), [&](auto const& target) {
-      return string_view{target.get().data(), target.get().size()};
-    });
-  host_device_targets.host_to_device_sync(stream);
+  auto device_targets = [&] {
+    auto const host_target_iter =
+      thrust::make_transform_iterator(targets.begin(), [](auto const& ref) {
+        return string_view{ref.get().data(), ref.get().size()};
+      });
+    auto const host_targets =
+      std::vector<string_view>(host_target_iter, host_target_iter + targets.size());
+    return cudf::detail::make_device_uvector_async(
+      host_targets, stream, rmm::mr::get_current_device_resource());
+  }();
 
   // Create output columns.
   auto const results_iter =
     thrust::make_transform_iterator(targets.begin(), [&](auto const& target) {
-      auto bool_column      = make_numeric_column(data_type{type_id::BOOL8},
-                                             input.size(),
-                                             cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                                             input.null_count(),
-                                             stream,
-                                             mr);
-      auto bool_column_view = bool_column->mutable_view();
-      thrust::fill(rmm::exec_policy(stream),
-                   bool_column_view.begin<bool>(),
-                   bool_column_view.end<bool>(),
-                   target.get().size() == 0);
-      return bool_column;
+      return make_numeric_column(data_type{type_id::BOOL8},
+                                 input.size(),
+                                 cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                 input.null_count(),
+                                 stream,
+                                 mr);
     });
   auto results_list =
     std::vector<std::unique_ptr<column>>(results_iter, results_iter + targets.size());
-  auto host_device_results_list = cudf::detail::hostdevice_vector<bool*>(num_targets, stream);
-  std::transform(results_list.begin(),
-                 results_list.end(),
-                 host_device_results_list.begin(),
-                 [&](auto const& results_column) {
-                   return results_column->mutable_view().template data<bool>();
-                 });
-  host_device_results_list.host_to_device_sync(stream);
+
+  auto device_results_list = [&] {
+    auto host_results_pointer_iter =
+      thrust::make_transform_iterator(results_list.begin(), [](auto const& results_column) {
+        return results_column->mutable_view().template data<bool>();
+      });
+    auto host_results_pointers = std::vector<bool*>(
+      host_results_pointer_iter, host_results_pointer_iter + results_list.size());
+    return cudf::detail::make_device_uvector_async(host_results_pointers, stream, mr);
+  }();
+
+  // Populate all output vectors,
 
   constexpr int block_size = 256;
   // launch warp per string
@@ -500,7 +512,7 @@ std::vector<std::unique_ptr<column>> multi_contains_warp_parallel(
                                     grid.num_threads_per_block,
                                     0,
                                     stream.value()>>>(
-    *d_strings, host_device_targets, host_device_results_list);
+    *d_strings, device_targets, device_results_list);
 
   return results_list;
 }
