@@ -510,14 +510,18 @@ table_with_metadata reader::impl::read_chunk_internal(
 
   // Create the final output cudf columns.
   for (size_t i = 0; i < _output_buffers.size(); ++i) {
-    auto metadata      = _reader_column_schema.has_value()
-                           ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
-                           : std::nullopt;
-    auto const& schema = _metadata->get_schema(_output_column_schemas[i]);
-    // FIXED_LEN_BYTE_ARRAY never read as string
-    if (schema.type == FIXED_LEN_BYTE_ARRAY and schema.converted_type != DECIMAL) {
+    auto metadata           = _reader_column_schema.has_value()
+                                ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
+                                : std::nullopt;
+    auto const& schema      = _metadata->get_schema(_output_column_schemas[i]);
+    auto const logical_type = schema.logical_type.value_or(LogicalType{});
+    // FIXED_LEN_BYTE_ARRAY never read as string.
+    // TODO: if we ever decide that the default reader behavior is to treat unannotated BINARY as
+    // binary and not strings, this test needs to change.
+    if (schema.type == FIXED_LEN_BYTE_ARRAY and logical_type.type != LogicalType::DECIMAL) {
       metadata = std::make_optional<reader_column_schema>();
       metadata->set_convert_binary_to_strings(false);
+      metadata->set_type_length(schema.type_length);
     }
     // Only construct `out_metadata` if `_output_metadata` has not been cached.
     if (!_output_metadata) {
