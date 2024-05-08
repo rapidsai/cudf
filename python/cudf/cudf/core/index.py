@@ -2882,7 +2882,7 @@ class IntervalIndex(Index):
 
     @property
     def closed(self):
-        return self._values.dtype.closed
+        return self.dtype.closed
 
     @classmethod
     @_cudf_nvtx_annotate
