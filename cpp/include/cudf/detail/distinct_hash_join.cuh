@@ -85,16 +85,10 @@ struct hasher_adapter {
 template <cudf::has_nested HasNested>
 struct distinct_hash_join {
  private:
-  /// Row equality type for nested columns
-  using nested_row_equal = cudf::experimental::row::equality::strong_index_comparator_adapter<
-    cudf::experimental::row::equality::device_row_comparator<true, cudf::nullate::DYNAMIC>>;
-  /// Row equality type for flat columns
-  using flat_row_equal = cudf::experimental::row::equality::strong_index_comparator_adapter<
-    cudf::experimental::row::equality::device_row_comparator<false, cudf::nullate::DYNAMIC>>;
-
   /// Device row equal type
-  using d_equal_type =
-    std::conditional_t<HasNested == cudf::has_nested::YES, nested_row_equal, flat_row_equal>;
+  using d_equal_type = cudf::experimental::row::equality::strong_index_comparator_adapter<
+    cudf::experimental::row::equality::device_row_comparator<HasNested == cudf::has_nested::YES,
+                                                             cudf::nullate::DYNAMIC>>;
   using hasher              = hasher_adapter<thrust::identity<hash_value_type>>;
   using probing_scheme_type = cuco::linear_probing<1, hasher>;
   using cuco_storage_type   = cuco::storage<1>;

@@ -1093,7 +1093,7 @@ def _replace_closurevars(
     f: types.FunctionType,
     attribute_name: Literal["_fsproxy_slow", "_fsproxy_fast"],
     seen: Set[int],
-) -> types.FunctionType:
+) -> Callable[..., Any]:
     """
     Return a copy of `f` with its closure variables replaced with
     their corresponding slow (or fast) types.
@@ -1108,7 +1108,7 @@ def _replace_closurevars(
         if any(c == types.CellType() for c in f.__closure__):
             return f
 
-    f_nonlocals, f_globals, f_builtins, _ = inspect.getclosurevars(f)
+    f_nonlocals, f_globals, _, _ = inspect.getclosurevars(f)
 
     g_globals = _transform_arg(f_globals, attribute_name, seen)
     g_nonlocals = _transform_arg(f_nonlocals, attribute_name, seen)
@@ -1121,21 +1121,23 @@ def _replace_closurevars(
         return f
 
     g_closure = tuple(types.CellType(val) for val in g_nonlocals.values())
-    g_globals["__builtins__"] = f_builtins
+
+    # https://github.com/rapidsai/cudf/issues/15548
+    new_g_globals = f.__globals__.copy()
+    new_g_globals.update(g_globals)
 
     g = types.FunctionType(
         f.__code__,
-        g_globals,
+        new_g_globals,
         name=f.__name__,
         argdefs=f.__defaults__,
         closure=g_closure,
     )
-    g = functools.update_wrapper(
+    return functools.update_wrapper(
         g,
         f,
         assigned=functools.WRAPPER_ASSIGNMENTS + ("__kwdefaults__",),
     )
-    return g
 
 
 _SPECIAL_METHODS: Set[str] = {

@@ -23,7 +23,7 @@
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/replace.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/replace.hpp>
@@ -404,13 +404,14 @@ struct replace_multi_fn {
   column_device_view const d_strings;
   column_device_view const d_targets;
   column_device_view const d_repls;
-  int32_t* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) {
-      if (!d_chars) { d_offsets[idx] = 0; }
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     auto const d_str   = d_strings.element<string_view>(idx);
@@ -443,9 +444,11 @@ struct replace_multi_fn {
       ++spos;
     }
     if (out_ptr)  // copy remainder
+    {
       memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
-    else
-      d_offsets[idx] = bytes;
+    } else {
+      d_sizes[idx] = bytes;
+    }
   }
 };
 
@@ -459,7 +462,7 @@ std::unique_ptr<column> replace_string_parallel(strings_column_view const& input
   auto d_targets      = column_device_view::create(targets.parent(), stream);
   auto d_replacements = column_device_view::create(repls.parent(), stream);
 
-  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
     replace_multi_fn{*d_strings, *d_targets, *d_replacements}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),

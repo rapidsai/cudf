@@ -170,14 +170,14 @@ struct JsonReaderTest : public cudf::test::BaseFixture {};
  */
 enum class json_test_t {
   // Run test with the nested JSON lines reader using record-orient input data
-  json_experimental_record_orient,
+  json_record_orient,
   // Run test with the nested JSON lines reader using row-orient input data
-  json_experimental_row_orient
+  json_row_orient
 };
 
 constexpr bool is_row_orient_test(json_test_t test_opt)
 {
-  return test_opt == json_test_t::json_experimental_row_orient;
+  return test_opt == json_test_t::json_row_orient;
 }
 
 /**
@@ -267,13 +267,13 @@ TYPED_TEST_SUITE(JsonValidFixedPointReaderTest, cudf::test::FixedPointTypes);
 // Parametrize qualifying JSON tests for executing both nested reader and legacy JSON lines reader
 INSTANTIATE_TEST_CASE_P(JsonReaderParamTest,
                         JsonReaderParamTest,
-                        ::testing::Values(json_test_t::json_experimental_record_orient,
-                                          json_test_t::json_experimental_row_orient));
+                        ::testing::Values(json_test_t::json_record_orient,
+                                          json_test_t::json_row_orient));
 
 // Parametrize qualifying JSON tests for executing both nested reader and legacy JSON lines reader
 INSTANTIATE_TEST_CASE_P(JsonReaderRecordTest,
                         JsonReaderRecordTest,
-                        ::testing::Values(json_test_t::json_experimental_record_orient));
+                        ::testing::Values(json_test_t::json_record_orient));
 
 TEST_P(JsonReaderParamTest, BasicJsonLines)
 {
@@ -679,6 +679,111 @@ TEST_F(JsonReaderTest, JsonLinesByteRange)
   EXPECT_EQ(result.metadata.schema_info[0].name, "0");
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{3000, 4000, 5000}});
+}
+
+TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_AcrossFiles)
+{
+  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest1.json";
+  std::ofstream outfile1(file1, std::ofstream::out);
+  outfile1 << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]";
+  outfile1.close();
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file1}})
+      .lines(true)
+      .byte_range_offset(11)
+      .byte_range_size(70);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->num_rows(), 10);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(0),
+    int64_wrapper{{3000, 4000, 5000, 6000, 7000, 8000, 9000, 1000, 2000, 3000}});
+}
+
+TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_ExcessRangeSize)
+{
+  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest1.json";
+  std::ofstream outfile1(file1, std::ofstream::out);
+  outfile1 << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]";
+  outfile1.close();
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file1}})
+      .lines(true)
+      .byte_range_offset(11)
+      .byte_range_size(1000);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->num_rows(), 16);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{3000,
+                                                4000,
+                                                5000,
+                                                6000,
+                                                7000,
+                                                8000,
+                                                9000,
+                                                1000,
+                                                2000,
+                                                3000,
+                                                4000,
+                                                5000,
+                                                6000,
+                                                7000,
+                                                8000,
+                                                9000}});
+}
+
+TEST_F(JsonReaderTest, JsonLinesMultipleFilesByteRange_LoadAllFiles)
+{
+  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesMultipleFilesByteRangeTest1.json";
+  std::ofstream outfile1(file1, std::ofstream::out);
+  outfile1 << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]";
+  outfile1.close();
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file1}}).lines(true);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->num_rows(), 18);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{1000,
+                                                2000,
+                                                3000,
+                                                4000,
+                                                5000,
+                                                6000,
+                                                7000,
+                                                8000,
+                                                9000,
+                                                1000,
+                                                2000,
+                                                3000,
+                                                4000,
+                                                5000,
+                                                6000,
+                                                7000,
+                                                8000,
+                                                9000}});
 }
 
 TEST_P(JsonReaderRecordTest, JsonLinesObjects)
@@ -1223,9 +1328,9 @@ TEST_F(JsonReaderTest, DISABLED_BadDtypeParams)
   EXPECT_THROW(cudf::io::read_json(options_map), cudf::logic_error);
 }
 
-TEST_F(JsonReaderTest, JsonExperimentalBasic)
+TEST_F(JsonReaderTest, JsonBasic)
 {
-  std::string const fname = temp_env->get_temp_dir() + "JsonExperimentalBasic.json";
+  std::string const fname = temp_env->get_temp_dir() + "JsonBasic.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << R"([{"a":"11", "b":"1.1"},{"a":"22", "b":"2.2"}])";
   outfile.close();
@@ -1249,7 +1354,7 @@ TEST_F(JsonReaderTest, JsonExperimentalBasic)
                                  cudf::test::strings_column_wrapper({"1.1", "2.2"}));
 }
 
-TEST_F(JsonReaderTest, JsonExperimentalLines)
+TEST_F(JsonReaderTest, JsonLines)
 {
   std::string const json_string =
     R"({"a":"a0"}
@@ -1416,7 +1521,7 @@ TEST_F(JsonReaderTest, TokenAllocation)
   }
 }
 
-TEST_F(JsonReaderTest, ExperimentalLinesNoOmissions)
+TEST_F(JsonReaderTest, LinesNoOmissions)
 {
   std::array<std::string const, 4> const json_inputs
     // single column
@@ -2128,9 +2233,6 @@ TEST_F(JsonReaderTest, MixedTypes)
         .lines(true);
 
     cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-    static int num_case                  = 0;
-    num_case++;
-    std::cout << "case:" << num_case << "\n";
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), expected);
   };
   // value + string (not mixed type case)
@@ -2330,6 +2432,208 @@ TEST_F(JsonReaderTest, MapTypes)
               [null, { "a": 1 }, 456 ]])",
           false,
           {type_id::LIST, type_id::STRING, type_id::STRING});
+}
+
+// Test case for dtype prune:
+// all paths, only one.
+// one present, another not present, nothing present
+// nested, flat, not-jsonlines
+TEST_F(JsonReaderTest, JsonNestedDtypeFilter)
+{
+  std::string json_stringl = R"(
+    {"a": 1, "b": {"0": "abc", "1": [-1.]}, "c": true}
+    {"a": 1, "b": {"0": "abc"          }, "c": false}
+    {"a": 1, "b": {}}
+    {"a": 1,                              "c": null}
+    )";
+  std::string json_string  = R"([
+    {"a": 1, "b": {"0": "abc", "1": [-1.]}, "c": true},
+    {"a": 1, "b": {"0": "abc"          }, "c": false},
+    {"a": 1, "b": {}},
+    {"a": 1,                              "c": null}
+    ])";
+  for (auto& [json_string, lines] : {std::pair{json_stringl, true}, {json_string, false}}) {
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.data(), json_string.size()})
+        .prune_columns(true)
+        .lines(lines);
+
+    // include all columns
+    //// schema
+    {
+      std::map<std::string, cudf::io::schema_element> dtype_schema{
+        {"b",
+         {data_type{cudf::type_id::STRUCT},
+          {{"0", {data_type{cudf::type_id::STRING}}},
+           {"1", {data_type{cudf::type_id::LIST}, {{"element", {dtype<float>()}}}}}}}},
+        {"a", {dtype<int32_t>()}},
+        {"c", {dtype<bool>()}},
+      };
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have columns "a", "b" and "c"
+      ASSERT_EQ(result.tbl->num_columns(), 3);
+      ASSERT_EQ(result.metadata.schema_info.size(), 3);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+      EXPECT_EQ(result.metadata.schema_info[1].name, "b");
+      EXPECT_EQ(result.metadata.schema_info[2].name, "c");
+      // "b" children checks
+      ASSERT_EQ(result.metadata.schema_info[1].children.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[1].children[0].name, "0");
+      EXPECT_EQ(result.metadata.schema_info[1].children[1].name, "1");
+      ASSERT_EQ(result.metadata.schema_info[1].children[1].children.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[1].children[1].children[0].name, "offsets");
+      EXPECT_EQ(result.metadata.schema_info[1].children[1].children[1].name, "element");
+      // types
+      EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT32);
+      EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRUCT);
+      EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::BOOL8);
+      EXPECT_EQ(result.tbl->get_column(1).child(0).type().id(), cudf::type_id::STRING);
+      EXPECT_EQ(result.tbl->get_column(1).child(1).type().id(), cudf::type_id::LIST);
+      EXPECT_EQ(result.tbl->get_column(1).child(1).child(0).type().id(), cudf::type_id::INT32);
+      EXPECT_EQ(result.tbl->get_column(1).child(1).child(1).type().id(), cudf::type_id::FLOAT32);
+    }
+    //// vector
+    {
+      std::vector<data_type> types{
+        {dtype<int32_t>()}, data_type{cudf::type_id::STRUCT}, {dtype<bool>()}};
+      in_options.set_dtypes(types);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have columns "a", "b" and "c"
+      ASSERT_EQ(result.tbl->num_columns(), 3);
+      ASSERT_EQ(result.metadata.schema_info.size(), 3);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+      EXPECT_EQ(result.metadata.schema_info[1].name, "b");
+      EXPECT_EQ(result.metadata.schema_info[2].name, "c");
+    }
+    //// map
+    {
+      std::map<std::string, data_type> dtype_map{
+        {"b",
+         {
+           data_type{cudf::type_id::STRUCT},
+         }},
+        {"a", {dtype<int32_t>()}},
+        {"c", {dtype<bool>()}},
+      };
+      in_options.set_dtypes(dtype_map);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have columns "a", "b" and "c"
+      ASSERT_EQ(result.tbl->num_columns(), 3);
+      ASSERT_EQ(result.metadata.schema_info.size(), 3);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+      EXPECT_EQ(result.metadata.schema_info[1].name, "b");
+      EXPECT_EQ(result.metadata.schema_info[2].name, "c");
+    }
+
+    // include only one column
+    //// schema
+    {
+      std::map<std::string, cudf::io::schema_element> dtype_schema{
+        {"a", {dtype<int32_t>()}},
+      };
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have column "a"
+      ASSERT_EQ(result.tbl->num_columns(), 1);
+      ASSERT_EQ(result.metadata.schema_info.size(), 1);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+    }
+    //// vector
+    {
+      std::vector<data_type> types{{dtype<int32_t>()}};
+      in_options.set_dtypes(types);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have column "a"
+      ASSERT_EQ(result.tbl->num_columns(), 1);
+      ASSERT_EQ(result.metadata.schema_info.size(), 1);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+    }
+    //// map
+    {
+      std::map<std::string, data_type> dtype_map{
+        {"a", {dtype<int32_t>()}},
+      };
+      in_options.set_dtypes(dtype_map);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have column "a"
+      ASSERT_EQ(result.tbl->num_columns(), 1);
+      ASSERT_EQ(result.metadata.schema_info.size(), 1);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+    }
+
+    // include only one column (nested)
+    {
+      std::map<std::string, cudf::io::schema_element> dtype_schema{
+        {"b",
+         {data_type{cudf::type_id::STRUCT},
+          {{"1", {data_type{cudf::type_id::LIST}, {{"element", {dtype<float>()}}}}}}}},
+      };
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have column "b":"1":[float]
+      ASSERT_EQ(result.tbl->num_columns(), 1);
+      ASSERT_EQ(result.metadata.schema_info.size(), 1);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "b");
+      ASSERT_EQ(result.metadata.schema_info[0].children.size(), 1);
+      EXPECT_EQ(result.metadata.schema_info[0].children[0].name, "1");
+      ASSERT_EQ(result.metadata.schema_info[0].children[0].children.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[0].children[0].children[0].name, "offsets");
+      EXPECT_EQ(result.metadata.schema_info[0].children[0].children[1].name, "element");
+      EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRUCT);
+      EXPECT_EQ(result.tbl->get_column(0).child(0).type().id(), cudf::type_id::LIST);
+      EXPECT_EQ(result.tbl->get_column(0).child(0).child(0).type().id(), cudf::type_id::INT32);
+      EXPECT_EQ(result.tbl->get_column(0).child(0).child(1).type().id(), cudf::type_id::FLOAT32);
+    }
+    // multiple - all present
+    {
+      std::map<std::string, cudf::io::schema_element> dtype_schema{
+        {"a", {dtype<int32_t>()}},
+        {"c", {dtype<bool>()}},
+      };
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have columns "a", and "c"
+      ASSERT_EQ(result.tbl->num_columns(), 2);
+      ASSERT_EQ(result.metadata.schema_info.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+      EXPECT_EQ(result.metadata.schema_info[1].name, "c");
+    }
+    // multiple - not all present
+    {
+      std::map<std::string, cudf::io::schema_element> dtype_schema{
+        {"a", {dtype<int32_t>()}},
+        {"d", {dtype<bool>()}},
+      };
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have column "a"
+      ASSERT_EQ(result.tbl->num_columns(), 1);
+      ASSERT_EQ(result.metadata.schema_info.size(), 1);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+    }
+    // multiple - not all present nested
+    {
+      std::map<std::string, cudf::io::schema_element> dtype_schema{
+
+        {"b",
+         {data_type{cudf::type_id::STRUCT},
+          {
+            {"2", {data_type{cudf::type_id::STRING}}},
+          }}},
+        {"c", {dtype<bool>()}},
+      };
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have columns "b" (empty struct) and "c"
+      ASSERT_EQ(result.tbl->num_columns(), 2);
+      ASSERT_EQ(result.metadata.schema_info.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "b");
+      ASSERT_EQ(result.metadata.schema_info[0].children.size(), 0);
+      EXPECT_EQ(result.metadata.schema_info[1].name, "c");
+    }
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()
