@@ -1271,15 +1271,31 @@ def test_inplace_ops(op):
     tm.assert_equal(actual, expected)
 
 
-def test_inplace_matmul_series(op):
+@pytest.mark.parametrize(
+    "op",
+    [
+        "__iadd__",
+        "__iand__",
+        "__ifloordiv__",
+        "__imatmul__",
+        "__imod__",
+        "__imul__",
+        "__ior__",
+        "__ipow__",
+        "__isub__",
+        "__itruediv__",
+        "__ixor__",
+    ],
+)
+def test_inplace_ops_series(op):
     xser1 = xpd.Series([10, 11, 12])
     xser2 = xpd.Series([1, 2, 3])
 
     ser1 = pd.Series([10, 11, 12])
     ser2 = pd.Series([1, 2, 3])
 
-    actual = getattr(xser1, "__imatmul__")(xser2)
-    expected = getattr(ser1, "__imatmul__")(ser2)
+    actual = getattr(xser1, op)(xser2)
+    expected = getattr(ser1, op)(ser2)
 
     tm.assert_equal(actual, expected)
 
