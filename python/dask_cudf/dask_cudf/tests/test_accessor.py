@@ -276,7 +276,11 @@ def test_categorical_categories():
 def test_categorical_as_known():
     df = dask_cudf.from_cudf(DataFrame({"col_1": [0, 1, 2, 3]}), npartitions=2)
     df["col_1"] = df["col_1"].astype("category")
-    actual = df["col_1"].cat.as_known()
+    with pytest.warns(
+        FutureWarning,
+        match="index concatenation will be deprecated in a future release",
+    ):
+        actual = df["col_1"].cat.as_known()
 
     pdf = dd.from_pandas(pd.DataFrame({"col_1": [0, 1, 2, 3]}), npartitions=2)
     pdf["col_1"] = pdf["col_1"].astype("category")

@@ -570,7 +570,11 @@ def test_nullable_schema_mismatch(tmpdir):
         [path0, path1], split_row_groups=2, aggregate_files=True
     )
     expect = pd.read_parquet([path0, path1])
-    dd.assert_eq(ddf, expect, check_index=False)
+    with pytest.warns(
+        FutureWarning,
+        match="index concatenation will be deprecated in a future release",
+    ):
+        dd.assert_eq(ddf, expect, check_index=False)
 
 
 def test_parquet_read_filter_and_project(tmpdir):
@@ -597,4 +601,8 @@ def test_parquet_read_filter_and_project(tmpdir):
 
     # Check result
     expected = df[(df.a == 5) & (df.c > 20)][columns].reset_index(drop=True)
-    dd.assert_eq(got, expected)
+    with pytest.warns(
+        FutureWarning,
+        match="index concatenation will be deprecated in a future release",
+    ):
+        dd.assert_eq(got, expected)

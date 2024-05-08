@@ -13,6 +13,7 @@ from dask.dataframe.core import make_meta as dask_make_meta, meta_nonempty
 from dask.utils import M
 
 import cudf
+from cudf import BaseIndex
 
 import dask_cudf
 from dask_cudf.tests.utils import skip_dask_expr, xfail_dask_expr
@@ -148,7 +149,11 @@ def test_from_pandas_with_generic_idx():
 
     ddf = dask_cudf.from_cudf(cdf, npartitions=2)
 
-    assert isinstance(ddf.index.compute(), cudf.RangeIndex)
+    with pytest.warns(
+        FutureWarning,
+        match="index concatenation will be deprecated in a future release",
+    ):
+        assert isinstance(ddf.index.compute(), cudf.RangeIndex)
     dd.assert_eq(ddf.loc[1:2, ["a"]], cdf.loc[1:2, ["a"]])
 
 
@@ -610,7 +615,14 @@ def test_unary_ops(func, gdf, gddf):
     p = func(gdf)
     g = func(gddf)
 
-    dd.assert_eq(p, g, check_names=False)
+    if isinstance(p, BaseIndex):
+        with pytest.warns(
+            FutureWarning,
+            match="index concatenation will be deprecated in a future release",
+        ):
+            dd.assert_eq(p, g, check_names=False)
+    else:
+        dd.assert_eq(p, g, check_names=False)
 
 
 @pytest.mark.parametrize("series", [True, False])
