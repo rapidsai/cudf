@@ -3249,3 +3249,11 @@ def test_index_contains_float_int(data, dtype, needle):
     expected = needle in pidx
 
     assert_eq(actual, expected)
+
+
+def test_Index_init_with_nans():
+    with cudf.option_context("mode.pandas_compatible", True):
+        gi = cudf.Index([1, 2, 3, np.nan])
+    assert gi.dtype == np.dtype("float64")
+    pi = pd.Index([1, 2, 3, np.nan])
+    assert_eq(pi, gi)
