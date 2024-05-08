@@ -188,6 +188,11 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
         if (schema_info != nullptr) {
           schema_info->children.push_back(column_name_info{"offsets"});
           schema_info->children.push_back(column_name_info{"binary"});
+          // cuDF type will be list<UINT8>, but remember it was originally binary data
+          schema_info->is_binary = true;
+          if (schema.has_value() and schema->get_type_length() > 0) {
+            schema_info->type_length = schema->get_type_length();
+          }
         }
 
         return make_lists_column(

@@ -472,6 +472,7 @@ struct chunk_page_info {
 struct parquet_column_device_view : stats_column_desc {
   Type physical_type;            //!< physical data type
   ConvertedType converted_type;  //!< logical data type
+  int32_t type_length;           //!< length of fixed_length_byte_array data
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
   constexpr uint8_t num_def_level_bits() const { return level_bits & 0xf; }
