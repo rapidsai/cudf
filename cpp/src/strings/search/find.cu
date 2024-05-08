@@ -638,6 +638,16 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   return results;
 }
 
+std::unique_ptr<column> contains_small_strings_impl(strings_column_view const& input,
+                                                    string_scalar const& target,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
+{
+  auto pfn = [] __device__(string_view d_string, string_view d_target) {
+    return d_string.find(d_target) != string_view::npos;
+  };
+  return contains_fn(input, target, pfn, stream, mr);
+}
 }  // namespace
 
 std::unique_ptr<column> contains(strings_column_view const& input,
@@ -652,10 +662,7 @@ std::unique_ptr<column> contains(strings_column_view const& input,
   }
 
   // benchmark measurements showed this to be faster for smaller strings
-  auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    return d_string.find(d_target) != string_view::npos;
-  };
-  return contains_fn(input, target, pfn, stream, mr);
+  return contains_small_strings_impl(input, target, stream, mr);
 }
 
 std::unique_ptr<table> contains(strings_column_view const& input,
@@ -663,7 +670,21 @@ std::unique_ptr<table> contains(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  auto result_columns = multi_contains_warp_parallel(input, targets, stream, mr);
+  auto result_columns = [&] {
+    if ((input.null_count() < input.size()) &&
+        ((input.chars_size(stream) / input.size()) > AVG_CHAR_BYTES_THRESHOLD)) {
+      // Large strings.
+      // use warp parallel when the average string width is greater than the threshold
+      return multi_contains_warp_parallel(input, targets, stream, mr);
+    } else {
+      // Small strings. Searching for one string at a time seems to work fastest.
+      auto contains_iter =
+        thrust::make_transform_iterator(targets.begin(), [&](auto const& target) {
+          return contains_small_strings_impl(input, target.get(), stream, mr);
+        });
+      return std::vector<std::unique_ptr<column>>(contains_iter, contains_iter + targets.size());
+    }
+  }();
   return std::make_unique<table>(std::move(result_columns));
 }
 
