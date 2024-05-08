@@ -23,7 +23,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -56,13 +56,14 @@ struct replace_multi_regex_fn {
   device_span<reprog_device const> progs;  // array of regex progs
   found_range* d_found_ranges;             // working array matched (begin,end) values
   column_device_view const d_repls;        // replacement strings
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -129,7 +130,7 @@ struct replace_multi_regex_fn {
                      d_str.size_bytes() - last_pos.byte_offset(),
                      out_ptr);
     } else {
-      d_offsets[idx] = nbytes;
+      d_sizes[idx] = nbytes;
     }
   }
 };
@@ -186,7 +187,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
 
   auto found_ranges = rmm::device_uvector<found_range>(d_progs.size() * input.size(), stream);
 
-  auto [offsets_column, chars] = make_strings_children(
+  auto [offsets_column, chars] = experimental::make_strings_children(
     replace_multi_regex_fn{*d_strings, d_progs, found_ranges.data(), *d_repls},
     input.size(),
     stream,
