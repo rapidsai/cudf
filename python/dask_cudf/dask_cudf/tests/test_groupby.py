@@ -14,16 +14,6 @@ import dask_cudf
 from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
 from dask_cudf.tests.utils import QUERY_PLANNING_ON, xfail_dask_expr
 
-# XFAIL "collect" tests for now
-agg_params = [agg for agg in OPTIMIZED_AGGS if agg != "collect"]
-if QUERY_PLANNING_ON:
-    agg_params.append(
-        # TODO: "collect" not supported with dask-expr yet
-        pytest.param("collect", marks=pytest.mark.xfail)
-    )
-else:
-    agg_params.append("collect")
-
 
 def assert_cudf_groupby_layers(ddf):
     for prefix in ("cudf-aggregate-chunk", "cudf-aggregate-agg"):
@@ -57,7 +47,7 @@ def pdf(request):
     return pdf
 
 
-@pytest.mark.parametrize("aggregation", agg_params)
+@pytest.mark.parametrize("aggregation", OPTIMIZED_AGGS)
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation, pdf):
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -110,7 +100,7 @@ def test_groupby_cumulative(aggregation, pdf, series):
     dd.assert_eq(a, b)
 
 
-@pytest.mark.parametrize("aggregation", agg_params)
+@pytest.mark.parametrize("aggregation", OPTIMIZED_AGGS)
 @pytest.mark.parametrize(
     "func",
     [
@@ -243,7 +233,7 @@ def test_groupby_split_out(split_out, column):
     gddf = dask_cudf.from_cudf(gdf, npartitions=3)
 
     ddf_result = (
-        ddf.groupby(column)
+        ddf.groupby(column, observed=True)
         .a.mean(split_out=split_out)
         .compute()
         .sort_values()
@@ -378,10 +368,10 @@ def test_groupby_dropna_dask(dropna, by):
 
     if dropna is None:
         dask_cudf_result = gddf.groupby(by).e.sum()
-        dask_result = ddf.groupby(by).e.sum()
+        dask_result = ddf.groupby(by, observed=True).e.sum()
     else:
         dask_cudf_result = gddf.groupby(by, dropna=dropna).e.sum()
-        dask_result = ddf.groupby(by, dropna=dropna).e.sum()
+        dask_result = ddf.groupby(by, dropna=dropna, observed=True).e.sum()
 
     dd.assert_eq(dask_cudf_result, dask_result)
 
@@ -515,7 +505,7 @@ def test_groupby_reset_index_dtype():
     a = df.groupby("a").agg({"b": ["count"]})
 
     assert a.index.dtype == "int8"
-    assert a.reset_index().dtypes[0] == "int8"
+    assert a.reset_index().dtypes.iloc[0] == "int8"
 
 
 def test_groupby_reset_index_names():
@@ -562,9 +552,9 @@ def test_groupby_reset_index_string_name():
 def test_groupby_categorical_key():
     # See https://github.com/rapidsai/cudf/issues/4608
     df = dask.datasets.timeseries()
-    gddf = dask_cudf.from_dask_dataframe(df)
+    gddf = df.to_backend("cudf")
     gddf["name"] = gddf["name"].astype("category")
-    ddf = gddf.to_dask_dataframe()
+    ddf = gddf.to_backend("pandas")
 
     got = gddf.groupby("name", sort=True).agg(
         {"x": ["mean", "max"], "y": ["mean", "count"]}
@@ -573,14 +563,22 @@ def test_groupby_categorical_key():
     # (See: https://github.com/dask/dask/issues/9515)
     expect = (
         ddf.compute()
-        .groupby("name", sort=True)
+        .groupby("name", sort=True, observed=True)
         .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
     )
     dd.assert_eq(expect, got)
 
 
-@xfail_dask_expr("as_index not supported in dask-expr")
-@pytest.mark.parametrize("as_index", [True, False])
+@pytest.mark.parametrize(
+    "as_index",
+    [
+        True,
+        pytest.param(
+            False,
+            marks=xfail_dask_expr("as_index not supported in dask-expr"),
+        ),
+    ],
+)
 @pytest.mark.parametrize("split_out", ["use_dask_default", 1, 2])
 @pytest.mark.parametrize("split_every", [False, 4])
 @pytest.mark.parametrize("npartitions", [1, 10])
@@ -603,10 +601,19 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     if split_out == "use_dask_default":
         split_kwargs.pop("split_out")
 
+    # Avoid using as_index when query-planning is enabled
+    if QUERY_PLANNING_ON:
+        with pytest.warns(FutureWarning, match="argument is now deprecated"):
+            # Should warn when `as_index` is used
+            ddf.groupby(["name", "a"], sort=False, as_index=as_index)
+        maybe_as_index = {"as_index": as_index} if as_index is False else {}
+    else:
+        maybe_as_index = {"as_index": as_index}
+
     # Check `sort=True` behavior
     if split_out == 1:
         gf = (
-            ddf.groupby(["name", "a"], sort=True, as_index=as_index)
+            ddf.groupby(["name", "a"], sort=True, **maybe_as_index)
             .aggregate(
                 agg_dict,
                 **split_kwargs,
@@ -628,7 +635,7 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
             )
 
     # Full check (`sort=False`)
-    gr = ddf.groupby(["name", "a"], sort=False, as_index=as_index).aggregate(
+    gr = ddf.groupby(["name", "a"], sort=False, **maybe_as_index).aggregate(
         agg_dict,
         **split_kwargs,
     )

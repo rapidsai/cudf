@@ -57,9 +57,8 @@ requirements:
     - {{ compiler('cuda') }}
     {% endif %}
     - cuda-version ={{ cuda_version }}
-    - sysroot_{{ target_platform }} {{ sysroot_version }}
+    - {{ stdlib("c") }}
   host:
-    - protobuf ==4.24.*
     - python
     - cython >=3.0.3
     - rapids-build-backend
@@ -79,10 +78,9 @@ requirements:
     {% endif %}
     - cuda-version ={{ cuda_version }}
   run:
-    - {{ pin_compatible('protobuf', min_pin='x.x', max_pin='x') }}
     - python
     - typing_extensions >=4.0.0
-    - pandas >=2.0,<2.2.2dev0
+    - pandas >=2.0,<2.2.3dev0
     - cupy >=12.0.0
     - numba >=0.57
     - {{ pin_compatible('numpy', max_pin='x') }}

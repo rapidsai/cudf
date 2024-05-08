@@ -2218,7 +2218,7 @@ def test_series_constructor_unbounded_sequence():
 
 
 def test_series_constructor_error_mixed_type():
-    with pytest.raises(pa.ArrowTypeError):
+    with pytest.raises(MixedTypeError):
         cudf.Series(["abc", np.nan, "123"], nan_as_null=False)
 
 
@@ -2537,7 +2537,7 @@ def test_nan_as_null_from_arrow_objects(klass, data):
 @pytest.mark.parametrize("reso", ["M", "ps"])
 @pytest.mark.parametrize("typ", ["M", "m"])
 def test_series_invalid_reso_dtype(reso, typ):
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         cudf.Series([], dtype=f"{typ}8[{reso}]")
 
 
@@ -2637,22 +2637,24 @@ def test_series_setitem_mixed_bool_dtype():
 @pytest.mark.parametrize(
     "nat, value",
     [
-        [np.datetime64("nat"), np.datetime64("2020-01-01")],
-        [np.timedelta64("nat"), np.timedelta64(1)],
+        [np.datetime64("nat", "ns"), np.datetime64("2020-01-01", "ns")],
+        [np.timedelta64("nat", "ns"), np.timedelta64(1, "ns")],
     ],
 )
 @pytest.mark.parametrize("nan_as_null", [True, False])
-def test_series_np_array_nat_nan_as_nulls(nat, value, request, nan_as_null):
+def test_series_np_array_nat_nan_as_nulls(nat, value, nan_as_null):
     expected = np.array([nat, value])
-    if expected.dtype.kind == "m":
-        request.applymarker(
-            pytest.mark.xfail(
-                raises=TypeError, reason="timedelta64 not supported by cupy"
-            )
-        )
     ser = cudf.Series(expected, nan_as_null=nan_as_null)
     assert ser[0] is pd.NaT
     assert ser[1] == value
+
+
+def test_series_unitness_np_datetimelike_units():
+    data = np.array([np.timedelta64(1)])
+    with pytest.raises(TypeError):
+        cudf.Series(data)
+    with pytest.raises(TypeError):
+        pd.Series(data)
 
 
 def test_series_duplicate_index_reindex():
@@ -2784,3 +2786,39 @@ def test_squeeze(axis, data):
 def test_squeeze_invalid_axis(axis):
     with pytest.raises(ValueError):
         cudf.Series([1]).squeeze(axis=axis)
+
+
+def test_series_init_with_nans():
+    with cudf.option_context("mode.pandas_compatible", True):
+        gs = cudf.Series([1, 2, 3, np.nan])
+    assert gs.dtype == np.dtype("float64")
+    ps = pd.Series([1, 2, 3, np.nan])
+    assert_eq(ps, gs)
+
+
+@pytest.mark.parametrize("data", [None, 123, 33243243232423, 0])
+def test_timestamp_series_init(data):
+    scalar = pd.Timestamp(data)
+    expected = pd.Series([scalar])
+    actual = cudf.Series([scalar])
+
+    assert_eq(expected, actual)
+
+    expected = pd.Series(scalar)
+    actual = cudf.Series(scalar)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("data", [None, 123, 33243243232423, 0])
+def test_timedelta_series_init(data):
+    scalar = pd.Timedelta(data)
+    expected = pd.Series([scalar])
+    actual = cudf.Series([scalar])
+
+    assert_eq(expected, actual)
+
+    expected = pd.Series(scalar)
+    actual = cudf.Series(scalar)
+
+    assert_eq(expected, actual)

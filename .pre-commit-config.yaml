@@ -2,7 +2,7 @@
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v4.6.0
     hooks:
       - id: trailing-whitespace
         exclude: |
@@ -24,11 +24,11 @@ repos:
         files: python/.*
         types_or: [python, cython, pyi]
   - repo: https://github.com/MarcoGorelli/cython-lint
-    rev: v0.16.0
+    rev: v0.16.2
     hooks:
       - id: cython-lint
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: 'v1.3.0'
+    rev: 'v1.10.0'
     hooks:
       - id: mypy
         additional_dependencies: [types-cachetools]
@@ -38,20 +38,8 @@ repos:
                "python/cudf_kafka/cudf_kafka",
                "python/dask_cudf/dask_cudf"]
         pass_filenames: false
-  - repo: https://github.com/PyCQA/pydocstyle
-    rev: 6.3.0
-    hooks:
-      - id: pydocstyle
-        # https://github.com/PyCQA/pydocstyle/issues/603
-        additional_dependencies: [tomli]
-        args: ["--config=pyproject.toml"]
-        exclude: |
-          (?x)^(
-            ^python/cudf/cudf/pandas/scripts/.*|
-            ^python/cudf/cudf_pandas_tests/.*
-          )
   - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.7.1
+    rev: 1.8.5
     hooks:
       - id: nbqa-isort
         # Use the cudf_kafka isort orderings in notebooks so that dask
@@ -64,7 +52,7 @@ repos:
         types_or: [c, c++, cuda]
         args: ["-fallback-style=none", "-style=file", "-i"]
   - repo: https://github.com/sirosen/texthooks
-    rev: 0.6.3
+    rev: 0.6.6
     hooks:
       - id: fix-smartquotes
         exclude: |
@@ -125,7 +113,7 @@ repos:
         pass_filenames: false
         verbose: true
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.2
+    rev: v2.2.6
     hooks:
       - id: codespell
         additional_dependencies: [tomli]
@@ -136,19 +124,19 @@ repos:
             ^CHANGELOG.md$
           )
   - repo: https://github.com/rapidsai/dependency-file-generator
-    rev: v1.10.0
+    rev: v1.13.4
     hooks:
       - id: rapids-dependency-file-generator
         args: ["--clean"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.13
+    rev: v0.4.3
     hooks:
       - id: ruff
         files: python/.*$
       - id: ruff-format
         files: python/.*$
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v0.0.1
+    rev: v0.0.3
     hooks:
       - id: verify-copyright
         exclude: |

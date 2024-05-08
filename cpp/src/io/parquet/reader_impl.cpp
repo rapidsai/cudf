@@ -22,11 +22,27 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/strings/detail/utilities.hpp>
+
+#include <rmm/resource_ref.hpp>
 
 #include <bitset>
 #include <numeric>
 
 namespace cudf::io::parquet::detail {
+
+namespace {
+// Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
+// be treated as a string. Currently the only logical type that has special handling is DECIMAL.
+// Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
+// for now would also be treated as a string).
+inline bool is_treat_fixed_length_as_string(thrust::optional<LogicalType> const& logical_type)
+{
+  if (!logical_type.has_value()) { return true; }
+  return logical_type->type != LogicalType::DECIMAL;
+}
+
+}  // namespace
 
 void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_rows, size_t num_rows)
 {
@@ -66,7 +82,8 @@ void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_row
     // TODO: we could probably dummy up size stats for FLBA data since we know the width
     auto const has_flba =
       std::any_of(pass.chunks.begin(), pass.chunks.end(), [](auto const& chunk) {
-        return (chunk.data_type & 7) == FIXED_LEN_BYTE_ARRAY && chunk.converted_type != DECIMAL;
+        return chunk.physical_type == FIXED_LEN_BYTE_ARRAY and
+               is_treat_fixed_length_as_string(chunk.logical_type);
       });
 
     if (!_has_page_index || uses_custom_row_bounds || has_flba) {
@@ -83,10 +100,20 @@ void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_row
     col_string_sizes = calculate_page_string_offsets();
 
     // check for overflow
-    if (std::any_of(col_string_sizes.cbegin(), col_string_sizes.cend(), [](std::size_t sz) {
-          return sz > std::numeric_limits<size_type>::max();
-        })) {
+    auto const threshold         = static_cast<size_t>(strings::detail::get_offset64_threshold());
+    auto const has_large_strings = std::any_of(col_string_sizes.cbegin(),
+                                               col_string_sizes.cend(),
+                                               [=](std::size_t sz) { return sz > threshold; });
+    if (has_large_strings and not strings::detail::is_large_strings_enabled()) {
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
+    }
+
+    // mark any chunks that are large string columns
+    if (has_large_strings) {
+      for (auto& chunk : pass.chunks) {
+        auto const idx = chunk.src_col_index;
+        if (col_string_sizes[idx] > threshold) { chunk.is_large_string_col = true; }
+      }
     }
   }
 
@@ -237,6 +264,28 @@ void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_row
                       streams[s_idx++]);
   }
 
+  // launch byte stream split decoder
+  if (BitAnd(kernel_mask, decode_kernel_mask::BYTE_STREAM_SPLIT_FLAT) != 0) {
+    DecodeSplitPageDataFlat(subpass.pages,
+                            pass.chunks,
+                            num_rows,
+                            skip_rows,
+                            level_type_size,
+                            error_code.data(),
+                            streams[s_idx++]);
+  }
+
+  // launch byte stream split decoder
+  if (BitAnd(kernel_mask, decode_kernel_mask::BYTE_STREAM_SPLIT) != 0) {
+    DecodeSplitPageData(subpass.pages,
+                        pass.chunks,
+                        num_rows,
+                        skip_rows,
+                        level_type_size,
+                        error_code.data(),
+                        streams[s_idx++]);
+  }
+
   if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_NO_DICT) != 0) {
     DecodePageDataFixed(subpass.pages,
                         pass.chunks,
@@ -310,11 +359,13 @@ void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_row
       } else if (out_buf.type.id() == type_id::STRING) {
         // need to cap off the string offsets column
         auto const sz = static_cast<size_type>(col_string_sizes[idx]);
-        CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<size_type*>(out_buf.data()) + out_buf.size,
-                                      &sz,
-                                      sizeof(size_type),
-                                      cudaMemcpyDefault,
-                                      _stream.value()));
+        if (sz <= strings::detail::get_offset64_threshold()) {
+          CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<size_type*>(out_buf.data()) + out_buf.size,
+                                        &sz,
+                                        sizeof(size_type),
+                                        cudaMemcpyDefault,
+                                        _stream.value()));
+        }
       }
     }
   }
@@ -348,7 +399,7 @@ void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_row
 reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    parquet_reader_options const& options,
                    rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
+                   rmm::device_async_resource_ref mr)
   : impl(0 /*chunk_read_limit*/,
          0 /*input_pass_read_limit*/,
          std::forward<std::vector<std::unique_ptr<cudf::io::datasource>>>(sources),
@@ -363,7 +414,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
                    std::vector<std::unique_ptr<datasource>>&& sources,
                    parquet_reader_options const& options,
                    rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
+                   rmm::device_async_resource_ref mr)
   : _stream{stream},
     _mr{mr},
     _sources{std::move(sources)},
@@ -459,14 +510,18 @@ table_with_metadata reader::impl::read_chunk_internal(
 
   // Create the final output cudf columns.
   for (size_t i = 0; i < _output_buffers.size(); ++i) {
-    auto metadata      = _reader_column_schema.has_value()
-                           ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
-                           : std::nullopt;
-    auto const& schema = _metadata->get_schema(_output_column_schemas[i]);
-    // FIXED_LEN_BYTE_ARRAY never read as string
-    if (schema.type == FIXED_LEN_BYTE_ARRAY and schema.converted_type != DECIMAL) {
+    auto metadata           = _reader_column_schema.has_value()
+                                ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
+                                : std::nullopt;
+    auto const& schema      = _metadata->get_schema(_output_column_schemas[i]);
+    auto const logical_type = schema.logical_type.value_or(LogicalType{});
+    // FIXED_LEN_BYTE_ARRAY never read as string.
+    // TODO: if we ever decide that the default reader behavior is to treat unannotated BINARY as
+    // binary and not strings, this test needs to change.
+    if (schema.type == FIXED_LEN_BYTE_ARRAY and logical_type.type != LogicalType::DECIMAL) {
       metadata = std::make_optional<reader_column_schema>();
       metadata->set_convert_binary_to_strings(false);
+      metadata->set_type_length(schema.type_length);
     }
     // Only construct `out_metadata` if `_output_metadata` has not been cached.
     if (!_output_metadata) {
@@ -593,7 +648,8 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
   return parquet_metadata{parquet_schema{walk_schema(&metadata, 0)},
                           metadata.get_num_rows(),
                           metadata.get_num_row_groups(),
-                          metadata.get_key_value_metadata()[0]};
+                          metadata.get_key_value_metadata()[0],
+                          metadata.get_rowgroup_metadata()};
 }
 
 }  // namespace cudf::io::parquet::detail

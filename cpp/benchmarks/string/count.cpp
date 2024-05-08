@@ -25,10 +25,13 @@
 
 #include <nvbench/nvbench.cuh>
 
+static std::string patterns[] = {"\\d+", "a"};
+
 static void bench_count(nvbench::state& state)
 {
-  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
+  auto const num_rows      = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const row_width     = static_cast<cudf::size_type>(state.get_int64("row_width"));
+  auto const pattern_index = static_cast<cudf::size_type>(state.get_int64("pattern"));
 
   if (static_cast<std::size_t>(num_rows) * static_cast<std::size_t>(row_width) >=
       static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
@@ -41,7 +44,7 @@ static void bench_count(nvbench::state& state)
     create_random_table({cudf::type_id::STRING}, row_count{num_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));
 
-  std::string pattern = "\\d+";
+  auto const pattern = patterns[pattern_index];
 
   auto prog = cudf::strings::regex_program::create(pattern);
 
@@ -59,4 +62,5 @@ static void bench_count(nvbench::state& state)
 NVBENCH_BENCH(bench_count)
   .set_name("count")
   .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024, 2048})
-  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216});
+  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216})
+  .add_int64_axis("pattern", {0, 1});

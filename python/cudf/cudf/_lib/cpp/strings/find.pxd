@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -40,6 +40,11 @@ cdef extern from "cudf/strings/find.hpp" namespace "cudf::strings" nogil:
         string_scalar target,
         size_type start,
         size_type stop) except +
+
+    cdef unique_ptr[column] find(
+        column_view source_strings,
+        column_view target,
+        size_type start) except +
 
     cdef unique_ptr[column] rfind(
         column_view source_strings,

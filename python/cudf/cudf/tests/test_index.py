@@ -3,6 +3,7 @@
 """
 Test related to Index
 """
+
 import datetime
 import operator
 import re
@@ -1038,7 +1039,9 @@ def test_index_append(data, other):
         (len(data) == 0 or len(other) == 0) and pd_data.dtype != pd_other.dtype
     ):
         expected = pd_data.append(pd_other)
-    with expect_warning_if(len(data) == 0 or len(other) == 0):
+    with expect_warning_if(
+        (len(data) == 0 or len(other) == 0) and gd_data.dtype != gd_other.dtype
+    ):
         actual = gd_data.append(gd_other)
     if len(data) == 0 and len(other) == 0:
         # Pandas default dtype to "object" for empty list
@@ -1236,7 +1239,10 @@ def test_index_append_list(data, other):
         and (any(d.dtype != data.dtype for d in other))
     ):
         expected = pd_data.append(pd_other)
-    with expect_warning_if(len(data) == 0 or any(len(d) == 0 for d in other)):
+    with expect_warning_if(
+        (len(data) == 0 or any(len(d) == 0 for d in other))
+        and (any(d.dtype != data.dtype for d in other))
+    ):
         actual = gd_data.append(gd_other)
 
     assert_eq(expected, actual)
@@ -1605,7 +1611,7 @@ def test_rangeindex_name_not_hashable():
 def test_index_rangeindex_search_range():
     # step > 0
     ridx = RangeIndex(-13, 17, 4)
-    ri = ridx.as_range
+    ri = ridx._range
     for i in range(len(ridx)):
         assert i == search_range(ridx[i], ri, side="left")
         assert i + 1 == search_range(ridx[i], ri, side="right")
@@ -1735,6 +1741,10 @@ def test_get_indexer_single_unique_numeric(idx, key, method):
 
         assert_eq(expected, got)
 
+        with cudf.option_context("mode.pandas_compatible", True):
+            got = gi.get_indexer(key, method=method)
+        assert_eq(expected, got, check_dtype=True)
+
 
 @pytest.mark.parametrize(
     "idx",
@@ -1763,6 +1773,12 @@ def test_get_indexer_rangeindex(idx, key, method, tolerance):
     )
 
     assert_eq(expected, got)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gi.get_indexer(
+            key, method=method, tolerance=None if method is None else tolerance
+        )
+    assert_eq(expected, got, check_dtype=True)
 
 
 @pytest.mark.parametrize(
@@ -1944,6 +1960,11 @@ def test_get_indexer_single_duplicate_string(idx, key, method):
 
         assert_eq(expected, got)
 
+        with cudf.option_context("mode.pandas_compatible", True):
+            got = gi.get_indexer(key, method=method)
+
+        assert_eq(expected, got, check_dtype=True)
+
 
 @pytest.mark.parametrize(
     "idx",
@@ -2002,6 +2023,11 @@ def test_get_indexer_multi_numeric(idx, key, method):
     got = gi.get_indexer(key, method=method)
 
     assert_eq(expected, got)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gi.get_indexer(key, method=method)
+
+    assert_eq(expected, got, check_dtype=True)
 
 
 @pytest.mark.parametrize(
@@ -2816,8 +2842,7 @@ def test_index_methods(index, func):
 
     if func == "append":
         expected = pidx.append(other=pidx)
-        with expect_warning_if(len(gidx) == 0):
-            actual = gidx.append(other=gidx)
+        actual = gidx.append(other=gidx)
     else:
         expected = getattr(pidx, func)()
         actual = getattr(gidx, func)()
@@ -3175,3 +3200,60 @@ def test_index_to_pandas_arrow_type(scalar):
     result = idx.to_pandas(arrow_type=True)
     expected = pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
     pd.testing.assert_index_equal(result, expected)
+
+
+@pytest.mark.parametrize("data", [range(-3, 3), range(1, 3), range(0)])
+def test_rangeindex_all(data):
+    result = cudf.RangeIndex(data).all()
+    expected = cudf.Index(list(data)).all()
+    assert result == expected
+
+
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("data", [range(2), range(2, -1, -1)])
+def test_rangeindex_factorize(sort, data):
+    res_codes, res_uniques = cudf.RangeIndex(data).factorize(sort=sort)
+    exp_codes, exp_uniques = cudf.Index(list(data)).factorize(sort=sort)
+    assert_eq(res_codes, exp_codes)
+    assert_eq(res_uniques, exp_uniques)
+
+
+def test_rangeindex_dropna():
+    ri = cudf.RangeIndex(range(2))
+    result = ri.dropna()
+    expected = ri.copy()
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("data", [range(2), [10, 11, 12]])
+def test_index_contains_hashable(data):
+    gidx = cudf.Index(data)
+    pidx = gidx.to_pandas()
+
+    assert_exceptions_equal(
+        lambda: [] in gidx,
+        lambda: [] in pidx,
+        lfunc_args_and_kwargs=((),),
+        rfunc_args_and_kwargs=((),),
+    )
+
+
+@pytest.mark.parametrize("data", [[0, 1, 2], [1.1, 2.3, 4.5]])
+@pytest.mark.parametrize("dtype", ["int32", "float32", "float64"])
+@pytest.mark.parametrize("needle", [0, 1, 2.3])
+def test_index_contains_float_int(data, dtype, needle):
+    gidx = cudf.Index(data=data, dtype=dtype)
+    pidx = gidx.to_pandas()
+
+    actual = needle in gidx
+    expected = needle in pidx
+
+    assert_eq(actual, expected)
+
+
+def test_Index_init_with_nans():
+    with cudf.option_context("mode.pandas_compatible", True):
+        gi = cudf.Index([1, 2, 3, np.nan])
+    assert gi.dtype == np.dtype("float64")
+    pi = pd.Index([1, 2, 3, np.nan])
+    assert_eq(pi, gi)

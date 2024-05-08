@@ -36,6 +36,8 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <algorithm>
 
 namespace cudf::io {
@@ -156,8 +158,7 @@ std::vector<std::unique_ptr<data_sink>> make_datasinks(sink_info const& info)
 
 }  // namespace
 
-table_with_metadata read_avro(avro_reader_options const& options,
-                              rmm::mr::device_memory_resource* mr)
+table_with_metadata read_avro(avro_reader_options const& options, rmm::device_async_resource_ref mr)
 {
   namespace avro = cudf::io::detail::avro;
 
@@ -201,7 +202,7 @@ compression_type infer_compression_type(compression_type compression, source_inf
 
 table_with_metadata read_json(json_reader_options options,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -216,7 +217,7 @@ table_with_metadata read_json(json_reader_options options,
 
 void write_json(json_writer_options const& options,
                 rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr)
+                rmm::device_async_resource_ref mr)
 {
   auto sinks = make_datasinks(options.get_sink());
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for JSON writing");
@@ -231,7 +232,7 @@ void write_json(json_writer_options const& options,
 
 table_with_metadata read_csv(csv_reader_options options,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -253,7 +254,7 @@ table_with_metadata read_csv(csv_reader_options options,
 // Freeform API wraps the detail writer class API
 void write_csv(csv_writer_options const& options,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
+               rmm::device_async_resource_ref mr)
 {
   using namespace cudf::io::detail;
 
@@ -413,13 +414,13 @@ orc_metadata read_orc_metadata(source_info const& src_info, rmm::cuda_stream_vie
  */
 table_with_metadata read_orc(orc_reader_options const& options,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
   auto reader = std::make_unique<orc::detail::reader>(std::move(datasources), options, stream, mr);
-  return reader->read(options);
+  return reader->read();
 }
 
 /**
@@ -436,16 +437,65 @@ void write_orc(orc_writer_options const& options, rmm::cuda_stream_view stream)
 
   auto writer = std::make_unique<orc::detail::writer>(
     std::move(sinks[0]), options, io_detail::single_write_mode::YES, stream);
-  try {
-    writer->write(options.get_table());
-  } catch (...) {
-    // If an exception is thrown, the output is incomplete/corrupted.
-    // Make sure the writer will not close with such corrupted data.
-    // In addition, the writer may throw an exception while trying to close, which would terminate
-    // the process.
-    writer->skip_close();
-    throw;
-  }
+  writer->write(options.get_table());
+}
+
+chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
+                                       std::size_t pass_read_limit,
+                                       size_type output_row_granularity,
+                                       orc_reader_options const& options,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+  : reader{std::make_unique<orc::detail::chunked_reader>(chunk_read_limit,
+                                                         pass_read_limit,
+                                                         output_row_granularity,
+                                                         make_datasources(options.get_source()),
+                                                         options,
+                                                         stream,
+                                                         mr)}
+{
+}
+
+chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
+                                       std::size_t pass_read_limit,
+                                       orc_reader_options const& options,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+  : reader{std::make_unique<orc::detail::chunked_reader>(chunk_read_limit,
+                                                         pass_read_limit,
+                                                         make_datasources(options.get_source()),
+                                                         options,
+                                                         stream,
+                                                         mr)}
+{
+}
+
+chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
+                                       orc_reader_options const& options,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+  : chunked_orc_reader(chunk_read_limit, 0UL, options, stream, mr)
+{
+}
+
+// This destructor destroys the internal reader instance.
+// Since the declaration of the internal `reader` object does not exist in the header, this
+// destructor needs to be defined in a separate source file which can access to that object's
+// declaration.
+chunked_orc_reader::~chunked_orc_reader() = default;
+
+bool chunked_orc_reader::has_next() const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
+  return reader->has_next();
+}
+
+table_with_metadata chunked_orc_reader::read_chunk() const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
+  return reader->read_chunk();
 }
 
 /**
@@ -490,7 +540,7 @@ namespace detail_parquet = cudf::io::parquet::detail;
 
 table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -542,6 +592,8 @@ table_input_metadata::table_input_metadata(table_metadata const& metadata)
     [&](column_name_info const& name) {
       auto col_meta = column_in_metadata{name.name};
       if (name.is_nullable.has_value()) { col_meta.set_nullability(name.is_nullable.value()); }
+      if (name.is_binary.value_or(false)) { col_meta.set_output_as_binary(true); }
+      if (name.type_length.has_value()) { col_meta.set_type_length(name.type_length.value()); }
       std::transform(name.children.begin(),
                      name.children.end(),
                      std::back_inserter(col_meta.children),
@@ -578,7 +630,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                parquet_reader_options const& options,
                                                rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+                                               rmm::device_async_resource_ref mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(
       chunk_read_limit, 0, make_datasources(options.get_source()), options, stream, mr)}
 {
@@ -591,7 +643,7 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                std::size_t pass_read_limit,
                                                parquet_reader_options const& options,
                                                rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+                                               rmm::device_async_resource_ref mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
                                                             pass_read_limit,
                                                             make_datasources(options.get_source()),
@@ -809,6 +861,13 @@ parquet_writer_options_builder& parquet_writer_options_builder::write_v2_headers
   return *this;
 }
 
+parquet_writer_options_builder& parquet_writer_options_builder::sorting_columns(
+  std::vector<sorting_column> sorting_columns)
+{
+  options._sorting_columns = std::move(sorting_columns);
+  return *this;
+}
+
 void chunked_parquet_writer_options::set_key_value_metadata(
   std::vector<std::map<std::string, std::string>> metadata)
 {
@@ -894,6 +953,13 @@ chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::
   bool enabled)
 {
   options.enable_write_v2_headers(enabled);
+  return *this;
+}
+
+chunked_parquet_writer_options_builder& chunked_parquet_writer_options_builder::sorting_columns(
+  std::vector<sorting_column> sorting_columns)
+{
+  options._sorting_columns = std::move(sorting_columns);
   return *this;
 }
 

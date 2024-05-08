@@ -636,6 +636,15 @@ void decode_page_headers(pass_intermediate_data& pass,
   stream.synchronize();
 }
 
+constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
+{
+  auto const is_decimal =
+    chunk.logical_type.has_value() and chunk.logical_type->type == LogicalType::DECIMAL;
+  auto const is_binary =
+    chunk.physical_type == BYTE_ARRAY or chunk.physical_type == FIXED_LEN_BYTE_ARRAY;
+  return is_binary and not is_decimal;
+}
+
 struct set_str_dict_index_count {
   device_span<size_t> str_dict_index_count;
   device_span<const ColumnChunkDesc> chunks;
@@ -643,8 +652,8 @@ struct set_str_dict_index_count {
   __device__ void operator()(PageInfo const& page)
   {
     auto const& chunk = chunks[page.chunk_idx];
-    if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) && (chunk.data_type & 0x7) == BYTE_ARRAY &&
-        (chunk.num_dict_pages > 0)) {
+    if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0 and chunk.num_dict_pages > 0 and
+        is_string_chunk(chunk)) {
       // there is only ever one dictionary page per chunk, so this is safe to do in parallel.
       str_dict_index_count[page.chunk_idx] = page.num_input_values;
     }
@@ -659,7 +668,7 @@ struct set_str_dict_index_ptr {
   __device__ void operator()(size_t i)
   {
     auto& chunk = chunks[i];
-    if ((chunk.data_type & 0x7) == BYTE_ARRAY && (chunk.num_dict_pages > 0)) {
+    if (chunk.num_dict_pages > 0 and is_string_chunk(chunk)) {
       chunk.str_dict_index = base + str_dict_index_offsets[i];
     }
   }
@@ -700,16 +709,16 @@ struct set_list_row_count_estimate {
 struct set_final_row_count {
   device_span<PageInfo> pages;
   device_span<const ColumnChunkDesc> chunks;
-  device_span<const size_type> page_offsets;
-  size_t const max_row;
 
   __device__ void operator()(size_t i)
   {
-    auto const last_page_index      = page_offsets[i + 1] - 1;
-    auto const& page                = pages[last_page_index];
-    auto const& chunk               = chunks[page.chunk_idx];
-    size_t const page_start_row     = chunk.start_row + page.chunk_row;
-    pages[last_page_index].num_rows = max_row - page_start_row;
+    auto& page        = pages[i];
+    auto const& chunk = chunks[page.chunk_idx];
+    // only do this for the last page in each chunk
+    if (i < pages.size() - 1 && (pages[i + 1].chunk_idx == page.chunk_idx)) { return; }
+    size_t const page_start_row = chunk.start_row + page.chunk_row;
+    size_t const chunk_last_row = chunk.start_row + chunk.num_rows;
+    page.num_rows               = chunk_last_row - page_start_row;
   }
 };
 
@@ -1169,10 +1178,10 @@ struct page_to_string_size {
 struct page_offset_output_iter {
   PageInfo* p;
 
-  using value_type        = size_type;
-  using difference_type   = size_type;
-  using pointer           = size_type*;
-  using reference         = size_type&;
+  using value_type        = size_t;
+  using difference_type   = size_t;
+  using pointer           = size_t*;
+  using reference         = size_t&;
   using iterator_category = thrust::output_device_iterator_tag;
 
   __host__ __device__ page_offset_output_iter operator+(int i) { return {p + i}; }
@@ -1300,17 +1309,15 @@ void reader::impl::generate_list_column_row_count_estimates()
                                   chunk_row_output_iter{pass.pages.device_ptr()});
   }
 
-  // finally, fudge the last page for each column such that it ends on the real known row count
-  // for the pass. this is so that as we march through the subpasses, we will find that every column
-  // cleanly ends up the expected row count at the row group boundary.
-  auto const& last_chunk = pass.chunks[pass.chunks.size() - 1];
-  auto const num_columns = _input_columns.size();
-  size_t const max_row   = last_chunk.start_row + last_chunk.num_rows;
-  auto iter              = thrust::make_counting_iterator(0);
+  // to compensate for the list row size estimates, force the row count on the last page for each
+  // column chunk (each rowgroup) such that it ends on the real known row count. this is so that as
+  // we march through the subpasses, we will find that every column cleanly ends up the expected row
+  // count at the row group boundary and our split computations work correctly.
+  auto iter = thrust::make_counting_iterator(0);
   thrust::for_each(rmm::exec_policy_nosync(_stream),
                    iter,
-                   iter + num_columns,
-                   set_final_row_count{pass.pages, pass.chunks, pass.page_offsets, max_row});
+                   iter + pass.pages.size(),
+                   set_final_row_count{pass.pages, pass.chunks});
 
   pass.chunks.device_to_host_async(_stream);
   pass.pages.device_to_host_async(_stream);
@@ -1491,8 +1498,10 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
       // if we haven't already processed this column because it is part of a struct hierarchy
       else if (out_buf.size == 0) {
         // add 1 for the offset if this is a list column
-        out_buf.create(
+        // we're going to start null mask as all valid and then turn bits off if necessary
+        out_buf.create_with_mask(
           out_buf.type.id() == type_id::LIST && l_idx < max_depth ? num_rows + 1 : num_rows,
+          cudf::mask_state::ALL_VALID,
           _stream,
           _mr);
       }
@@ -1570,7 +1579,8 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
           if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
 
           // allocate
-          out_buf.create(size, _stream, _mr);
+          // we're going to start null mask as all valid and then turn bits off if necessary
+          out_buf.create_with_mask(size, cudf::mask_state::ALL_VALID, _stream, _mr);
         }
       }
     }
