@@ -781,7 +781,8 @@ void aggregate_reader_metadata::consume_arrow_schema()
                 });
 }
 
-void const* aggregate_reader_metadata::decode_ipc_message(std::string_view serialized_message) const
+void const* aggregate_reader_metadata::decode_ipc_message(
+  std::string_view const serialized_message) const
 {
   // Constants copied from arrow source and renamed to match the case
   constexpr auto MESSAGE_DECODER_NEXT_REQUIRED_SIZE_INITIAL         = sizeof(int32_t);
