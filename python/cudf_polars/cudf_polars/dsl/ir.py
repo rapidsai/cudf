@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cache
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import pyarrow as pa
 from typing_extensions import assert_never
@@ -29,7 +29,7 @@ import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame
-from cudf_polars.utils import dtypes
+from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
     from typing import Literal
@@ -63,7 +63,7 @@ __all__ = [
 class IR:
     schema: dict
 
-    def evaluate(self) -> DataFrame:
+    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         raise NotImplementedError
 
@@ -88,7 +88,7 @@ class Scan(IR):
         if self.typ not in ("csv", "parquet"):
             raise NotImplementedError(f"Unhandled scan type: {self.typ}")
 
-    def evaluate(self) -> DataFrame:
+    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         options = self.file_options
         n_rows = options.n_rows
@@ -132,6 +132,13 @@ class Cache(IR):
     key: int
     value: IR
 
+    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        try:
+            return cache[self.key]
+        except KeyError:
+            return cache.setdefault(self.key, self.value.evaluate(cache=cache))
+
 
 @dataclass(slots=True)
 class DataFrameScan(IR):
@@ -139,7 +146,7 @@ class DataFrameScan(IR):
     projection: list[str]
     predicate: Expr | None
 
-    def evaluate(self) -> DataFrame:
+    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         pdf = pl.DataFrame._from_pydf(self.df)
         if self.projection is not None:
@@ -152,14 +159,8 @@ class DataFrameScan(IR):
                 # TODO: Nested types
                 schema = schema.set(i, pa.field(field.name, pa.string()))
         table = table.cast(schema)
-        df = DataFrame(
-            [
-                Column(col, name)
-                for name, col in zip(
-                    self.schema.keys(), plc.interop.from_arrow(table).columns()
-                )
-            ],
-            [],
+        df = DataFrame.from_table(
+            plc.interop.from_arrow(table), list(self.schema.keys())
         )
         if self.predicate is not None:
             mask = self.predicate.evaluate(df)
@@ -174,9 +175,9 @@ class Select(IR):
     cse: list[Expr]
     expr: list[Expr]
 
-    def evaluate(self):
+    def evaluate(self, *, cache: dict[int, DataFrame]):
         """Evaluate and return a dataframe."""
-        df = self.df.evaluate()
+        df = self.df.evaluate(cache=cache)
         for e in self.cse:
             df = df.with_columns(e.evaluate(df))
         return DataFrame([e.evaluate(df) for e in self.expr], [])
@@ -235,7 +236,7 @@ class Join(IR):
     options: Any
 
     def __post_init__(self):
-        """Raise for unsupported options."""
+        """Validate preconditions."""
         if self.options[0] == "cross":
             raise NotImplementedError("cross join not implemented")
 
@@ -279,10 +280,10 @@ class Join(IR):
         else:
             assert_never(how)
 
-    def evaluate(self) -> DataFrame:
+    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
-        left = self.left.evaluate()
-        right = self.right.evaluate()
+        left = self.left.evaluate(cache=cache)
+        right = self.right.evaluate(cache=cache)
         left_on = DataFrame([e.evaluate(left) for e in self.left_on], [])
         right_on = DataFrame([e.evaluate(right) for e in self.right_on], [])
         how, join_nulls, zlice, suffix, coalesce = self.options
@@ -298,24 +299,18 @@ class Join(IR):
             lg = join_fn(left_on.table, right_on.table, null_equality)
             left = left.replace_columns(*left_on.columns)
             table = plc.copying.gather(left.table, lg, left_policy)
-            result = DataFrame(
-                [
-                    Column(c, col.name)
-                    for col, c in zip(left_on.columns, table.columns())
-                ],
-                [],
-            )
+            result = DataFrame.from_table(table, left.column_names)
         else:
             lg, rg = join_fn(left_on, right_on, null_equality)
             left = left.replace_columns(*left_on.columns)
             right = right.replace_columns(*right_on.columns)
             if coalesce and how != "outer":
                 right = right.discard_columns(set(right_on.names))
-            left = DataFrame(
-                plc.copying.gather(left.table, lg, left_policy).columns(), []
+            left = DataFrame.from_table(
+                plc.copying.gather(left.table, lg, left_policy), left.column_names
             )
-            right = DataFrame(
-                plc.copying.gather(right.table, rg, right_policy).columns(), []
+            right = DataFrame.from_table(
+                plc.copying.gather(right.table, rg, right_policy), right.column_names
             )
             if coalesce and how == "outer":
                 left.replace_columns(
@@ -335,10 +330,7 @@ class Join(IR):
                 {name: f"{name}{suffix}" for name in right.names if name in left.names}
             )
             result = left.with_columns(*right.columns)
-        if zlice is not None:
-            raise NotImplementedError("slicing")
-        else:
-            return result
+        return result.slice(zlice)
 
 
 @dataclass(slots=True)
@@ -346,18 +338,117 @@ class HStack(IR):
     df: IR
     columns: list[Expr]
 
+    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        df = self.df.evaluate(cache=cache)
+        return df.with_columns(*(c.evaluate(df) for c in self.columns))
+
 
 @dataclass(slots=True)
 class Distinct(IR):
     df: IR
-    options: Any
+    keep: plc.stream_compaction.DuplicateKeepOption
+    subset: set[str] | None
+    zlice: tuple[int, int] | None
+    stable: bool
+
+    _KEEP_MAP: ClassVar[dict[str, plc.stream_compaction.DuplicateKeepOption]] = {
+        "first": plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+        "last": plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+        "none": plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
+        "any": plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
+    }
+
+    def __init__(self, schema: dict, df: IR, options: Any):
+        self.schema = schema
+        self.df = df
+        (keep, subset, maintain_order, zlice) = options
+        self.keep = Distinct._KEEP_MAP[keep]
+        self.subset = set(subset) if subset is not None else None
+        self.stable = maintain_order
+        self.zlice = zlice
+
+    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        df = self.df.evaluate(cache=cache)
+        if self.subset is None:
+            indices = list(range(df.num_columns))
+        else:
+            indices = [i for i, k in enumerate(df.names) if k in self.subset]
+        keys_sorted = all(c.is_sorted for c in df.columns)
+        if keys_sorted:
+            table = plc.stream_compaction.unique(
+                df.table,
+                indices,
+                self.keep,
+                plc.types.NullEquality.EQUAL,
+            )
+        else:
+            distinct = (
+                plc.stream_compaction.stable_distinct
+                if self.stable
+                else plc.stream_compaction.distinct
+            )
+            table = distinct(
+                df.table,
+                indices,
+                self.keep,
+                plc.types.NullEquality.EQUAL,
+                plc.types.NanEquality.ALL_EQUAL,
+            )
+        result = DataFrame(
+            [Column(c, old.name) for c, old in zip(table.columns(), df.columns)], []
+        )
+        if keys_sorted or self.stable:
+            result = result.with_sorted(like=df)
+        return result.slice(self.zlice)
 
 
 @dataclass(slots=True)
 class Sort(IR):
     df: IR
     by: list[Expr]
-    options: Any
+    do_sort: Callable[..., plc.Table]
+    zlice: tuple[int, int] | None
+    order: list[plc.types.Order]
+    null_order: list[plc.types.NullOrder]
+
+    def __init__(self, schema: dict, df: IR, by: list[Expr], options: Any):
+        self.schema = schema
+        self.df = df
+        self.by = by
+        stable, nulls_last, descending = options
+        self.order, self.null_order = sorting.sort_order(
+            descending, nulls_last=nulls_last, num_keys=len(by)
+        )
+        self.do_sort = (
+            plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
+        )
+
+    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        df = self.df.evaluate(cache=cache)
+        sort_keys = [k.evaluate(df) for k in self.by]
+        keys_in_result = [
+            i
+            for k in sort_keys
+            if (i := df.names.get(k.name)) is not None and k is df.columns[i]
+        ]
+        table = self.do_sort(
+            df.table,
+            plc.Table([k.obj for k in sort_keys]),
+            self.order,
+            self.null_order,
+        )
+        columns = [Column(c, old.name) for c, old in zip(table.columns(), df.columns)]
+        # If a sort key is in the result table, set the sortedness property
+        for idx in keys_in_result:
+            columns[idx] = columns[idx].set_sorted(
+                is_sorted=plc.types.Sorted.YES,
+                order=self.order[idx],
+                null_order=self.null_order[idx],
+            )
+        return DataFrame(columns, [])
 
 
 @dataclass(slots=True)

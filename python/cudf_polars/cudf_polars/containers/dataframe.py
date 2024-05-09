@@ -56,6 +56,16 @@ class DataFrame:
             return self.columns[i]
 
     @cached_property
+    def column_names(self) -> list[str]:
+        """Return a list of the column names."""
+        return [c.name for c in self.columns]
+
+    @cached_property
+    def num_columns(self):
+        """Number of columns."""
+        return len(self.columns)
+
+    @cached_property
     def num_rows(self):
         """Number of rows."""
         if self.table is None:
@@ -69,6 +79,22 @@ class DataFrame:
             [Column(c.to_pylibcudf(mode="read"), name) for name, c in df._data.items()],
             [],
         )
+
+    @classmethod
+    def from_table(cls, table: plc.Table, names: list[str]) -> Self:
+        """Create from a pylibcudf table."""
+        if table.num_columns != len(names):
+            raise ValueError("Mismatching name and table length.")
+        return cls([Column(c, name) for c, name in zip(table.columns(), names)], [])
+
+    def with_sorted(self, *, like: DataFrame) -> Self:
+        """Copy sortedness from a dataframe onto self."""
+        if like.column_names != self.column_names:
+            raise ValueError("Can only copy from identically named frame")
+        self.columns = [
+            c.with_sorted(like=other) for c, other in zip(self.columns, like.columns)
+        ]
+        return self
 
     def with_columns(self, *columns: Column | Scalar) -> Self:
         """
@@ -85,7 +111,7 @@ class DataFrame:
         return type(self)([c for c in self.columns if c not in names], self.scalars)
 
     def replace_columns(self, *columns: Column) -> Self:
-        """Return a new dataframe with columns replaced by name, maintaining order."""
+        """Return a new dataframe with columns replaced by name."""
         new = {c.name: c for c in columns}
         if set(new).intersection(self.scalar_names):
             raise ValueError("Cannot replace scalars")
@@ -95,11 +121,9 @@ class DataFrame:
 
     def rename_columns(self, mapping: dict[str, str]) -> Self:
         """Rename some columns."""
-        new_columns = [
-            Column(c, mapping.get(c.name, c.name)).with_metadata(like=c)
-            for c in self.columns
-        ]
-        return type(self)(new_columns, self.scalars)
+        return type(self)(
+            [c.rename(mapping.get(c.name, c.name)) for c in self.columns], self.scalars
+        )
 
     def select_columns(self, names: set[str]) -> list[Column]:
         """Select columns by name."""
@@ -108,10 +132,29 @@ class DataFrame:
     def filter(self, mask: Column) -> Self:
         """Return a filtered table given a mask."""
         table = plc.stream_compaction.apply_boolean_mask(self.table, mask.obj)
-        return type(self)(
-            [
-                Column(new, old.name).with_metadata(like=old)
-                for old, new in zip(self.columns, table.columns())
-            ],
-            [],
-        )
+        return type(self).from_table(table, self.column_names).with_sorted(like=self)
+
+    def slice(self, zlice: tuple[int, int] | None) -> Self:
+        """
+        Slice a dataframe.
+
+        Parameters
+        ----------
+        zlice
+            optional, tuple of start and length, negative values of start
+            treated as for python indexing. If not provided, returns self.
+
+        Returns
+        -------
+        New dataframe (if zlice is not None) other self (if it is)
+        """
+        if zlice is None:
+            return self
+        start, length = zlice
+        if start < 0:
+            start += self.num_rows
+        # Polars slice takes an arbitrary positive integer and slice
+        # to the end of the frame if it is larger.
+        end = min(start + length, self.num_rows)
+        (table,) = plc.copying.slice(self.table, [start, end])
+        return type(self).from_table(table, self.column_names).with_sorted(like=self)

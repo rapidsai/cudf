@@ -30,12 +30,15 @@ class Column:
         self.name = name
         self.is_sorted = plc.types.Sorted.NO
 
-    def with_metadata(self, *, like: Column) -> Self:
-        """Copy metadata from a column onto self."""
-        self.is_sorted = like.is_sorted
-        self.order = like.order
-        self.null_order = like.null_order
-        return self
+    def rename(self, name: str) -> Column:
+        """Return a new column sharing data with a new name."""
+        return type(self)(self.obj, name).with_sorted(like=self)
+
+    def with_sorted(self, *, like: Column) -> Self:
+        """Copy sortedness properties from a column onto self."""
+        return self.set_sorted(
+            is_sorted=like.is_sorted, order=like.order, null_order=like.null_order
+        )
 
     def set_sorted(
         self,
