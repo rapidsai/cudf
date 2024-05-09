@@ -218,7 +218,7 @@ rmm::host_async_resource_ref default_pinned_mr()
   return mr;
 }
 
-std::mutex& host_mr_lock()
+std::mutex& host_mr_mutex()
 {
   static std::mutex map_lock;
   return map_lock;
@@ -234,7 +234,7 @@ CUDF_EXPORT auto& host_mr()
 
 rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_ref mr)
 {
-  std::lock_guard lock{host_mr_lock()};
+  std::scoped_lock lock{host_mr_mutex()};
   auto last_mr = host_mr();
   host_mr()    = mr;
   return last_mr;
@@ -242,7 +242,7 @@ rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_r
 
 rmm::host_async_resource_ref get_host_memory_resource()
 {
-  std::lock_guard lock{host_mr_lock()};
+  std::scoped_lock lock{host_mr_mutex()};
   return host_mr();
 }
 
