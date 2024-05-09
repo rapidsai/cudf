@@ -166,9 +166,7 @@ def test_dask_timeseries_from_pandas(tmpdir):
     pdf = ddf2.compute()
     pdf.to_parquet(fn, engine="pyarrow")
     read_df = dask_cudf.read_parquet(fn)
-    # Workaround until following issue is fixed:
-    # https://github.com/apache/arrow/issues/33321
-    dd.assert_eq(ddf2, read_df.compute(), check_index_type=False)
+    dd.assert_eq(ddf2, read_df.compute())
 
 
 @pytest.mark.parametrize("index", [False, None])
