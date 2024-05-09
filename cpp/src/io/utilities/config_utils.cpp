@@ -205,7 +205,7 @@ rmm::host_async_resource_ref default_pinned_mr()
     if (auto const env_val = getenv("LIBCUDF_PINNED_POOL_SIZE")) { return std::atol(env_val); }
 
     size_t free{}, total{};
-    cudaMemGetInfo(&free, &total);
+    CUDF_CUDA_TRY(cudaMemGetInfo(&free, &total));
     // 0.5% of the total device memory, capped at 100MB
     return std::min((total / 200 + 255) & ~255, size_t{100} * 1024 * 1024);
   }();
