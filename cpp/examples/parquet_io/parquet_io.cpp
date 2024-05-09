@@ -25,8 +25,7 @@
  * Encoding Types: DEFAULT, DICTIONARY, PLAIN, DELTA_BINARY_PACKED,
  *                 DELTA_LENGTH_BYTE_ARRAY, DELTA_BYTE_ARRAY
  *
- * Compression Types: NONE, AUTO, SNAPPY, BZIP2, BROTLI, ZIP, XZ,
- *                    ZLIB, LZ4, LZO, ZSTD
+ * Compression Types: NONE, AUTO, SNAPPY, LZ4, ZSTD
  *
  */
 
