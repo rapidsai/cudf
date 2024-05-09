@@ -76,7 +76,6 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   if (compression == compression_type::NONE) {
     std::vector<size_type> delimiter_map{};
     std::vector<size_t> prefsum_source_sizes(sources.size());
-    std::vector<std::unique_ptr<datasource::buffer>> h_buffers;
     delimiter_map.reserve(sources.size());
     size_t bytes_read = 0;
     std::transform_inclusive_scan(sources.begin(),
@@ -99,13 +98,10 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
       if (sources[i]->is_device_read_preferred(data_size)) {
         bytes_read += sources[i]->device_read(range_offset, data_size, destination, stream);
       } else {
-        h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
-        CUDF_CUDA_TRY(cudaMemcpyAsync(destination,
-                                      h_buffers[h_buffers.size() - 1]->data(),
-                                      h_buffers[h_buffers.size() - 1]->size(),
-                                      cudaMemcpyHostToDevice,
-                                      stream.value()));
-        bytes_read += h_buffers[h_buffers.size() - 1]->size();
+        auto h_buffer = sources[i]->host_read(range_offset, data_size);
+        CUDF_CUDA_TRY(cudaMemcpyAsync(
+          destination, h_buffer->data(), h_buffer->size(), cudaMemcpyHostToDevice, stream.value()));
+        bytes_read += h_buffer->size();
       }
       range_offset = 0;
       delimiter_map.push_back(bytes_read + (num_delimiter_chars * delimiter_map.size()));
