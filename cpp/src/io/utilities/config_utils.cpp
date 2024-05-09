@@ -122,7 +122,8 @@ class fixed_pinned_pool_memory_resource {
     if (bytes <= pool_size_) {
       try {
         return pool_->allocate_async(bytes, alignment, stream);
-      } catch (const std::exception& unused) {
+      } catch (...) {
+        // If the pool is exhausted, fall back to the upstream memory resource
       }
     }
 
