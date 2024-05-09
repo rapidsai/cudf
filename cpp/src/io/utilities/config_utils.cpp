@@ -129,6 +129,7 @@ class fixed_pinned_pool_memory_resource {
 
     return upstream_mr_.allocate_async(bytes, alignment, stream);
   }
+
   void do_deallocate_async(void* ptr,
                            std::size_t bytes,
                            std::size_t alignment,
