@@ -666,7 +666,7 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
   auto decoded_message = cudf::io::detail::base64_decode(encoded_serialized_message);
 
   // Decode the ipc message to get a const void pointer to the ipc:Message flatbuffer
-  const auto metadata_buf = decode_ipc_message(decoded_message);
+  auto const metadata_buf = decode_ipc_message(decoded_message);
 
   if (metadata_buf == nullptr) {
     CUDF_LOG_ERROR("Parquet reader encountered an invalid metadata pointer.",
@@ -689,7 +689,7 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
   }
 
   // Get the vector of fields from arrow:schema flatbuffer object
-  const auto fields = flatbuf::GetMessage(metadata_buf)->header_as_Schema()->fields();
+  auto const fields = flatbuf::GetMessage(metadata_buf)->header_as_Schema()->fields();
   if (fields == nullptr) {
     CUDF_LOG_ERROR("Parquet reader encountered an invalid fields pointer.",
                    "arrow:schema not processed.");
@@ -783,11 +783,9 @@ void aggregate_reader_metadata::consume_arrow_schema()
                 [&](auto const& idx) {
                   co_walk_schemas(arrow_schema_root.children[idx], schema_root.children_idx[idx]);
                 });
-
-  return;
 }
 
-const void* aggregate_reader_metadata::decode_ipc_message(std::string& serialized_message) const
+void const* aggregate_reader_metadata::decode_ipc_message(std::string& serialized_message) const
 {
   // Constants copied from arrow source and renamed to match the case
   constexpr auto MESSAGE_DECODER_NEXT_REQUIRED_SIZE_INITIAL         = sizeof(int32_t);
