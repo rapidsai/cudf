@@ -16,6 +16,7 @@ import numpy as np
 import pyarrow as pa
 import pytest
 from numba import NumbaDeprecationWarning
+from pytz import utc
 
 from cudf.pandas import LOADED, Profiler
 from cudf.pandas.fast_slow_proxy import _Unusable
@@ -25,6 +26,19 @@ if not LOADED:
 
 import pandas as xpd
 import pandas._testing as tm
+from pandas.tseries.holiday import (
+    AbstractHolidayCalendar,
+    EasterMonday,
+    GoodFriday,
+    Holiday,
+    USColumbusDay,
+    USLaborDay,
+    USMartinLutherKingJr,
+    USMemorialDay,
+    USPresidentsDay,
+    USThanksgivingDay,
+    get_calendar,
+)
 
 # Accelerated pandas has the real pandas module as an attribute
 pd = xpd._fsproxy_slow
@@ -1243,6 +1257,62 @@ def test_apply_slow_path_udf_references_global_module():
     tm.assert_series_equal(result, expected)
 
 
+@pytest.mark.parametrize(
+    "op",
+    [
+        "__iadd__",
+        "__iand__",
+        "__ifloordiv__",
+        "__imod__",
+        "__imul__",
+        "__ior__",
+        "__ipow__",
+        "__isub__",
+        "__itruediv__",
+        "__ixor__",
+    ],
+)
+def test_inplace_ops(op):
+    xdf1 = xpd.DataFrame({"a": [10, 11, 12]})
+    xdf2 = xpd.DataFrame({"a": [1, 2, 3]})
+
+    df1 = pd.DataFrame({"a": [10, 11, 12]})
+    df2 = pd.DataFrame({"a": [1, 2, 3]})
+
+    actual = getattr(xdf1, op)(xdf2)
+    expected = getattr(df1, op)(df2)
+
+    tm.assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        "__iadd__",
+        "__iand__",
+        "__ifloordiv__",
+        "__imod__",
+        "__imul__",
+        "__ior__",
+        "__ipow__",
+        "__isub__",
+        "__itruediv__",
+        "__ixor__",
+    ],
+)
+def test_inplace_ops_series(op):
+    xser1 = xpd.Series([10, 11, 12])
+    xser2 = xpd.Series([1, 2, 3])
+
+    ser1 = pd.Series([10, 11, 12])
+    ser2 = pd.Series([1, 2, 3])
+
+    actual = getattr(xser1, op)(xser2)
+    expected = getattr(ser1, op)(ser2)
+
+    tm.assert_equal(actual, expected)
+
+
 @pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
 def test_timestamp(data):
     xtimestamp = xpd.Timestamp(data)
@@ -1255,3 +1325,63 @@ def test_timedelta(data):
     xtimedelta = xpd.Timedelta(data)
     timedelta = pd.Timedelta(data)
     tm.assert_equal(xtimedelta, timedelta)
+
+
+def test_abstract_holiday_calendar():
+    class TestCalendar(AbstractHolidayCalendar):
+        def __init__(self, name=None, rules=None) -> None:
+            super().__init__(name=name, rules=rules)
+
+    jan1 = TestCalendar(rules=[Holiday("jan1", year=2015, month=1, day=1)])
+    jan2 = TestCalendar(rules=[Holiday("jan2", year=2015, month=1, day=2)])
+
+    # Getting holidays for Jan 1 should not alter results for Jan 2.
+    expected = xpd.DatetimeIndex(["01-Jan-2015"]).as_unit("ns")
+    tm.assert_index_equal(jan1.holidays(), expected)
+
+    expected2 = xpd.DatetimeIndex(["02-Jan-2015"]).as_unit("ns")
+    tm.assert_index_equal(jan2.holidays(), expected2)
+
+
+@pytest.mark.parametrize(
+    "holiday,start,expected",
+    [
+        (USMemorialDay, datetime.datetime(2015, 7, 1), []),
+        (USLaborDay, "2015-09-07", [xpd.Timestamp("2015-09-07")]),
+        (USColumbusDay, "2015-10-12", [xpd.Timestamp("2015-10-12")]),
+        (USThanksgivingDay, "2015-11-26", [xpd.Timestamp("2015-11-26")]),
+        (USMartinLutherKingJr, "2015-01-19", [xpd.Timestamp("2015-01-19")]),
+        (USPresidentsDay, datetime.datetime(2015, 7, 1), []),
+        (GoodFriday, datetime.datetime(2015, 7, 1), []),
+        (EasterMonday, "2015-04-06", [xpd.Timestamp("2015-04-06")]),
+        ("New Year's Day", "2010-12-31", [xpd.Timestamp("2010-12-31")]),
+        ("Independence Day", "2015-07-03", [xpd.Timestamp("2015-07-03")]),
+        ("Veterans Day", "2012-11-11", []),
+        ("Christmas Day", "2011-12-26", [xpd.Timestamp("2011-12-26")]),
+        (
+            "Juneteenth National Independence Day",
+            "2021-06-18",
+            [xpd.Timestamp("2021-06-18")],
+        ),
+        ("Juneteenth National Independence Day", "2022-06-19", []),
+        (
+            "Juneteenth National Independence Day",
+            "2022-06-20",
+            [xpd.Timestamp("2022-06-20")],
+        ),
+    ],
+)
+def test_holidays_within_dates(holiday, start, expected):
+    if isinstance(holiday, str):
+        calendar = get_calendar("USFederalHolidayCalendar")
+        holiday = calendar.rule_from_name(holiday)
+
+    assert list(holiday.dates(start, start)) == expected
+
+    # Verify that timezone info is preserved.
+    assert list(
+        holiday.dates(
+            utc.localize(xpd.Timestamp(start)),
+            utc.localize(xpd.Timestamp(start)),
+        )
+    ) == [utc.localize(dt) for dt in expected]
