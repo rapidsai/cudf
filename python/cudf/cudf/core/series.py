@@ -39,11 +39,9 @@ from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
     is_dict_like,
-    is_float_dtype,
     is_integer,
     is_integer_dtype,
     is_scalar,
-    is_string_dtype,
 )
 from cudf.core import indexing_utils
 from cudf.core._compat import PANDAS_LT_300
@@ -205,19 +203,10 @@ class _SeriesIlocIndexer(_FrameIndexer):
         if is_scalar(value):
             value = to_cudf_compatible_scalar(value)
             if (
-                not isinstance(
-                    self._frame._column,
-                    (
-                        cudf.core.column.DatetimeColumn,
-                        cudf.core.column.TimeDeltaColumn,
-                    ),
-                )
+                self._frame.dtype.kind not in "mM"
                 and cudf.utils.utils._isnat(value)
                 and not (
-                    isinstance(
-                        self._frame._column, cudf.core.column.StringColumn
-                    )
-                    and isinstance(value, str)
+                    self._frame.dtype == "object" and isinstance(value, str)
                 )
             ):
                 raise MixedTypeError(
@@ -226,14 +215,10 @@ class _SeriesIlocIndexer(_FrameIndexer):
                 )
             elif (
                 not (
-                    is_float_dtype(self._frame._column.dtype)
+                    self._frame.dtype.kind == "f"
                     or (
-                        isinstance(
-                            self._frame._column.dtype, cudf.CategoricalDtype
-                        )
-                        and is_float_dtype(
-                            self._frame._column.dtype.categories.dtype
-                        )
+                        isinstance(self._frame.dtype, cudf.CategoricalDtype)
+                        and self._frame.dtype.categories.dtype.kind == "f"
                     )
                 )
                 and isinstance(value, (np.float32, np.float64))
@@ -241,40 +226,37 @@ class _SeriesIlocIndexer(_FrameIndexer):
             ):
                 raise MixedTypeError(
                     f"Cannot assign {value=} to "
-                    f"non-float dtype={self._frame._column.dtype}"
+                    f"non-float dtype={self._frame.dtype}"
                 )
             elif (
-                is_bool_dtype(self._frame._column.dtype)
+                self._frame.dtype.kind == "b"
                 and not is_bool_dtype(value)
                 and value not in {None, cudf.NA}
             ):
                 raise MixedTypeError(
                     f"Cannot assign {value=} to "
-                    f"bool dtype={self._frame._column.dtype}"
+                    f"bool dtype={self._frame.dtype}"
                 )
         elif not (
             isinstance(value, (list, dict))
             and isinstance(
-                self._frame._column.dtype, (cudf.ListDtype, cudf.StructDtype)
+                self._frame.dtype, (cudf.ListDtype, cudf.StructDtype)
             )
         ):
             value = as_column(value)
 
         if (
-            (
-                _is_non_decimal_numeric_dtype(self._frame._column.dtype)
-                or is_string_dtype(self._frame._column.dtype)
-            )
+            (self._frame.dtype.kind in "uifb" or self._frame.dtype == "object")
             and hasattr(value, "dtype")
-            and _is_non_decimal_numeric_dtype(value.dtype)
+            and value.dtype.kind in "uifb"
         ):
             # normalize types if necessary:
             # In contrast to Column.__setitem__ (which downcasts the value to
             # the dtype of the column) here we upcast the series to the
             # larger data type mimicking pandas
-            to_dtype = np.result_type(value.dtype, self._frame._column.dtype)
+            to_dtype = np.result_type(value.dtype, self._frame.dtype)
             value = value.astype(to_dtype)
-            if to_dtype != self._frame._column.dtype:
+            if to_dtype != self._frame.dtype:
                 # Do not remove until pandas-3.0 support is added.
                 assert (
                     PANDAS_LT_300
@@ -283,7 +265,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
                     f"Setting an item of incompatible dtype is deprecated "
                     "and will raise in a future error of pandas. "
                     f"Value '{value}' has dtype incompatible with "
-                    f"{self._frame._column.dtype}, "
+                    f"{self._frame.dtype}, "
                     "please explicitly cast to a compatible dtype first.",
                     FutureWarning,
                 )
@@ -336,27 +318,27 @@ class _SeriesLocIndexer(_FrameIndexer):
                 and not isinstance(self._frame.index, cudf.MultiIndex)
                 and is_scalar(value)
             ):
-                # TODO: Modifying index in place is bad because
-                # our index are immutable, but columns are not (which
-                # means our index are mutable with internal APIs).
-                # Get rid of the deep copy once columns too are
-                # immutable.
-                idx_copy = self._frame._index.copy(deep=True)
-                if (
-                    isinstance(idx_copy, cudf.RangeIndex)
-                    and isinstance(key, int)
-                    and (key == idx_copy[-1] + idx_copy.step)
-                ):
-                    idx_copy = cudf.RangeIndex(
-                        start=idx_copy.start,
-                        stop=idx_copy.stop + idx_copy.step,
-                        step=idx_copy.step,
-                        name=idx_copy.name,
-                    )
+                idx = self._frame._index
+                if isinstance(idx, cudf.RangeIndex):
+                    if isinstance(key, int) and (key == idx[-1] + idx.step):
+                        idx_copy = cudf.RangeIndex(
+                            start=idx.start,
+                            stop=idx.stop + idx.step,
+                            step=idx.step,
+                            name=idx.name,
+                        )
+                    else:
+                        idx_copy = idx._as_int_index()
+                        _append_new_row_inplace(idx_copy._column, key)
                 else:
-                    if isinstance(idx_copy, cudf.RangeIndex):
-                        idx_copy = idx_copy._as_int_index()
-                    _append_new_row_inplace(idx_copy._values, key)
+                    # TODO: Modifying index in place is bad because
+                    # our index are immutable, but columns are not (which
+                    # means our index are mutable with internal APIs).
+                    # Get rid of the deep copy once columns too are
+                    # immutable.
+                    idx_copy = idx.copy(deep=True)
+                    _append_new_row_inplace(idx_copy._column, key)
+
                 self._frame._index = idx_copy
                 _append_new_row_inplace(self._frame._column, value)
                 return
@@ -599,8 +581,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype=None,
         name=None,
         copy=False,
-        nan_as_null=True,
+        nan_as_null=no_default,
     ):
+        if nan_as_null is no_default:
+            nan_as_null = not cudf.get_option("mode.pandas_compatible")
         index_from_data = None
         name_from_data = None
         if data is None:
@@ -1407,34 +1391,23 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                     cudf.core.dtypes.DecimalDtype,
                 ),
             )
-        ) or isinstance(
-            preprocess._column,
-            cudf.core.column.timedelta.TimeDeltaColumn,
-        ):
+        ) or preprocess.dtype.kind == "m":
             fill_value = (
                 str(cudf.NaT)
-                if isinstance(
-                    preprocess._column,
-                    (
-                        cudf.core.column.TimeDeltaColumn,
-                        cudf.core.column.DatetimeColumn,
-                    ),
-                )
+                if preprocess.dtype.kind in "mM"
                 else str(cudf.NA)
             )
             output = repr(
                 preprocess.astype("str").fillna(fill_value).to_pandas()
             )
-        elif isinstance(
-            preprocess._column, cudf.core.column.CategoricalColumn
-        ):
+        elif isinstance(preprocess.dtype, cudf.CategoricalDtype):
             min_rows = (
                 height
                 if pd.get_option("display.min_rows") == 0
                 else pd.get_option("display.min_rows")
             )
             show_dimensions = pd.get_option("display.show_dimensions")
-            if preprocess._column.categories.dtype.kind == "f":
+            if preprocess.dtype.categories.dtype.kind == "f":
                 pd_series = (
                     preprocess.astype("str")
                     .to_pandas()
@@ -1461,13 +1434,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             output = repr(preprocess.to_pandas())
 
         lines = output.split("\n")
-        if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
+        if isinstance(preprocess.dtype, cudf.CategoricalDtype):
             category_memory = lines[-1]
-            if preprocess._column.categories.dtype.kind == "f":
+            if preprocess.dtype.categories.dtype.kind == "f":
                 category_memory = category_memory.replace("'", "").split(": ")
                 category_memory = (
                     category_memory[0].replace(
-                        "object", preprocess._column.categories.dtype.name
+                        "object", preprocess.dtype.categories.dtype.name
                     )
                     + ": "
                     + category_memory[1]

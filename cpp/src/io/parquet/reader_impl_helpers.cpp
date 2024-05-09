@@ -165,9 +165,10 @@ type_id to_type_id(SchemaElement const& schema,
     case FLOAT: return type_id::FLOAT32;
     case DOUBLE: return type_id::FLOAT64;
     case BYTE_ARRAY:
-    case FIXED_LEN_BYTE_ARRAY:
-      // Can be mapped to INT32 (32-bit hash) or STRING
-      return strings_to_categorical ? type_id::INT32 : type_id::STRING;
+      // strings can be mapped to a 32-bit hash
+      if (strings_to_categorical) { return type_id::INT32; }
+      [[fallthrough]];
+    case FIXED_LEN_BYTE_ARRAY: return type_id::STRING;
     case INT96:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_NANOSECONDS;

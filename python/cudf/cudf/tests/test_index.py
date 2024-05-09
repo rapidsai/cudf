@@ -1039,7 +1039,9 @@ def test_index_append(data, other):
         (len(data) == 0 or len(other) == 0) and pd_data.dtype != pd_other.dtype
     ):
         expected = pd_data.append(pd_other)
-    with expect_warning_if(len(data) == 0 or len(other) == 0):
+    with expect_warning_if(
+        (len(data) == 0 or len(other) == 0) and gd_data.dtype != gd_other.dtype
+    ):
         actual = gd_data.append(gd_other)
     if len(data) == 0 and len(other) == 0:
         # Pandas default dtype to "object" for empty list
@@ -1237,7 +1239,10 @@ def test_index_append_list(data, other):
         and (any(d.dtype != data.dtype for d in other))
     ):
         expected = pd_data.append(pd_other)
-    with expect_warning_if(len(data) == 0 or any(len(d) == 0 for d in other)):
+    with expect_warning_if(
+        (len(data) == 0 or any(len(d) == 0 for d in other))
+        and (any(d.dtype != data.dtype for d in other))
+    ):
         actual = gd_data.append(gd_other)
 
     assert_eq(expected, actual)
@@ -1518,13 +1523,7 @@ def test_index_from_arrow(data):
     arrow_array = pa.Array.from_pandas(pdi)
     expected_index = pd.Index(arrow_array.to_pandas())
     gdi = cudf.Index.from_arrow(arrow_array)
-    if gdi.dtype == cudf.dtype("datetime64[s]"):
-        # Arrow bug:
-        # https://github.com/apache/arrow/issues/33321
-        # arrow cannot convert non-nanosecond
-        # resolution to appropriate type in pandas.
-        # Hence need to type-cast.
-        expected_index = expected_index.astype(gdi.dtype)
+
     assert_eq(expected_index, gdi)
 
 
@@ -1736,6 +1735,10 @@ def test_get_indexer_single_unique_numeric(idx, key, method):
 
         assert_eq(expected, got)
 
+        with cudf.option_context("mode.pandas_compatible", True):
+            got = gi.get_indexer(key, method=method)
+        assert_eq(expected, got, check_dtype=True)
+
 
 @pytest.mark.parametrize(
     "idx",
@@ -1764,6 +1767,12 @@ def test_get_indexer_rangeindex(idx, key, method, tolerance):
     )
 
     assert_eq(expected, got)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gi.get_indexer(
+            key, method=method, tolerance=None if method is None else tolerance
+        )
+    assert_eq(expected, got, check_dtype=True)
 
 
 @pytest.mark.parametrize(
@@ -1945,6 +1954,11 @@ def test_get_indexer_single_duplicate_string(idx, key, method):
 
         assert_eq(expected, got)
 
+        with cudf.option_context("mode.pandas_compatible", True):
+            got = gi.get_indexer(key, method=method)
+
+        assert_eq(expected, got, check_dtype=True)
+
 
 @pytest.mark.parametrize(
     "idx",
@@ -2003,6 +2017,11 @@ def test_get_indexer_multi_numeric(idx, key, method):
     got = gi.get_indexer(key, method=method)
 
     assert_eq(expected, got)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gi.get_indexer(key, method=method)
+
+    assert_eq(expected, got, check_dtype=True)
 
 
 @pytest.mark.parametrize(
@@ -2817,8 +2836,7 @@ def test_index_methods(index, func):
 
     if func == "append":
         expected = pidx.append(other=pidx)
-        with expect_warning_if(len(gidx) == 0):
-            actual = gidx.append(other=gidx)
+        actual = gidx.append(other=gidx)
     else:
         expected = getattr(pidx, func)()
         actual = getattr(gidx, func)()
@@ -3199,3 +3217,37 @@ def test_rangeindex_dropna():
     result = ri.dropna()
     expected = ri.copy()
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("data", [range(2), [10, 11, 12]])
+def test_index_contains_hashable(data):
+    gidx = cudf.Index(data)
+    pidx = gidx.to_pandas()
+
+    assert_exceptions_equal(
+        lambda: [] in gidx,
+        lambda: [] in pidx,
+        lfunc_args_and_kwargs=((),),
+        rfunc_args_and_kwargs=((),),
+    )
+
+
+@pytest.mark.parametrize("data", [[0, 1, 2], [1.1, 2.3, 4.5]])
+@pytest.mark.parametrize("dtype", ["int32", "float32", "float64"])
+@pytest.mark.parametrize("needle", [0, 1, 2.3])
+def test_index_contains_float_int(data, dtype, needle):
+    gidx = cudf.Index(data=data, dtype=dtype)
+    pidx = gidx.to_pandas()
+
+    actual = needle in gidx
+    expected = needle in pidx
+
+    assert_eq(actual, expected)
+
+
+def test_Index_init_with_nans():
+    with cudf.option_context("mode.pandas_compatible", True):
+        gi = cudf.Index([1, 2, 3, np.nan])
+    assert gi.dtype == np.dtype("float64")
+    pi = pd.Index([1, 2, 3, np.nan])
+    assert_eq(pi, gi)

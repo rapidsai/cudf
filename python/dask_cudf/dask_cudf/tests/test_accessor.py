@@ -111,7 +111,7 @@ def test_categorical_accessor_initialization2(data):
         dsr.cat
 
 
-@xfail_dask_expr(lt_version="2024.5.0")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 @pytest.mark.parametrize("data", [data_cat_1()])
 def test_categorical_basic(data):
     cat = data.copy()
@@ -543,7 +543,7 @@ def test_struct_explode(data):
 
 
 def test_tz_localize():
-    data = Series(date_range("2000-04-01", "2000-04-03", freq="H"))
+    data = Series(date_range("2000-04-01", "2000-04-03", freq="h"))
     expect = data.dt.tz_localize(
         "US/Eastern", ambiguous="NaT", nonexistent="NaT"
     )
@@ -560,8 +560,8 @@ def test_tz_localize():
 @pytest.mark.parametrize(
     "data",
     [
-        date_range("2000-04-01", "2000-04-03", freq="H").tz_localize("UTC"),
-        date_range("2000-04-01", "2000-04-03", freq="H").tz_localize(
+        date_range("2000-04-01", "2000-04-03", freq="h").tz_localize("UTC"),
+        date_range("2000-04-01", "2000-04-03", freq="h").tz_localize(
             "US/Eastern"
         ),
     ],

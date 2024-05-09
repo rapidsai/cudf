@@ -233,7 +233,7 @@ def test_groupby_split_out(split_out, column):
     gddf = dask_cudf.from_cudf(gdf, npartitions=3)
 
     ddf_result = (
-        ddf.groupby(column)
+        ddf.groupby(column, observed=True)
         .a.mean(split_out=split_out)
         .compute()
         .sort_values()
@@ -288,64 +288,24 @@ def test_groupby_dropna_cudf(dropna, by):
         (False, "a"),
         (False, "b"),
         (False, "c"),
-        pytest.param(
-            False,
-            "d",
-            marks=pytest.mark.xfail(
-                reason="dropna=False is broken in Dask CPU for groupbys on "
-                "categorical columns"
-            ),
-        ),
-        pytest.param(
-            False,
-            ["a", "b"],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/dask/dask/issues/8817"
-            ),
-        ),
-        pytest.param(
-            False,
-            ["a", "c"],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/dask/dask/issues/8817"
-            ),
-        ),
-        pytest.param(
-            False,
-            ["a", "d"],
-            marks=pytest.mark.xfail(
-                reason="multi-col groupbys on categorical columns are broken "
-                "in Dask CPU"
-            ),
-        ),
+        (False, "d"),
+        (False, ["a", "b"]),
+        (False, ["a", "c"]),
+        (False, ["a", "d"]),
         (True, "a"),
         (True, "b"),
         (True, "c"),
         (True, "d"),
         (True, ["a", "b"]),
         (True, ["a", "c"]),
-        pytest.param(
-            True,
-            ["a", "d"],
-            marks=pytest.mark.xfail(
-                reason="multi-col groupbys on categorical columns are broken "
-                "in Dask CPU"
-            ),
-        ),
+        (True, ["a", "d"]),
         (None, "a"),
         (None, "b"),
         (None, "c"),
         (None, "d"),
         (None, ["a", "b"]),
         (None, ["a", "c"]),
-        pytest.param(
-            None,
-            ["a", "d"],
-            marks=pytest.mark.xfail(
-                reason="multi-col groupbys on categorical columns are broken "
-                "in Dask CPU"
-            ),
-        ),
+        (None, ["a", "d"]),
     ],
 )
 def test_groupby_dropna_dask(dropna, by):
@@ -368,10 +328,10 @@ def test_groupby_dropna_dask(dropna, by):
 
     if dropna is None:
         dask_cudf_result = gddf.groupby(by).e.sum()
-        dask_result = ddf.groupby(by).e.sum()
+        dask_result = ddf.groupby(by, observed=True).e.sum()
     else:
         dask_cudf_result = gddf.groupby(by, dropna=dropna).e.sum()
-        dask_result = ddf.groupby(by, dropna=dropna).e.sum()
+        dask_result = ddf.groupby(by, dropna=dropna, observed=True).e.sum()
 
     dd.assert_eq(dask_cudf_result, dask_result)
 
@@ -505,7 +465,7 @@ def test_groupby_reset_index_dtype():
     a = df.groupby("a").agg({"b": ["count"]})
 
     assert a.index.dtype == "int8"
-    assert a.reset_index().dtypes[0] == "int8"
+    assert a.reset_index().dtypes.iloc[0] == "int8"
 
 
 def test_groupby_reset_index_names():
@@ -563,7 +523,7 @@ def test_groupby_categorical_key():
     # (See: https://github.com/dask/dask/issues/9515)
     expect = (
         ddf.compute()
-        .groupby("name", sort=True)
+        .groupby("name", sort=True, observed=True)
         .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
     )
     dd.assert_eq(expect, got)
@@ -675,7 +635,7 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     dd.assert_eq(gf, pf)
 
 
-@xfail_dask_expr("Newer dask-expr version needed")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 @pytest.mark.parametrize(
     "aggregations", [(sum, "sum"), (max, "max"), (min, "min")]
 )
@@ -714,7 +674,7 @@ def test_is_supported(arg, supported):
     assert _aggs_optimized(arg, OPTIMIZED_AGGS) is supported
 
 
-@xfail_dask_expr("Fails on older versions of dask-expr")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 def test_groupby_unique_lists():
     df = pd.DataFrame({"a": [0, 0, 0, 1, 1, 1], "b": [10, 10, 10, 7, 8, 9]})
     gdf = cudf.from_pandas(df)
@@ -776,7 +736,7 @@ def test_groupby_with_list_of_series():
     )
 
 
-@xfail_dask_expr("Nested renamer not supported in dask-expr")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 @pytest.mark.parametrize(
     "func",
     [

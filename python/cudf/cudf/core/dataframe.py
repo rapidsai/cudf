@@ -684,9 +684,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def __init__(
-        self, data=None, index=None, columns=None, dtype=None, nan_as_null=True
+        self,
+        data=None,
+        index=None,
+        columns=None,
+        dtype=None,
+        nan_as_null=no_default,
     ):
         super().__init__()
+        if nan_as_null is no_default:
+            nan_as_null = not cudf.get_option("mode.pandas_compatible")
 
         if isinstance(columns, (Series, cudf.BaseIndex)):
             columns = columns.to_pandas()
@@ -1215,7 +1222,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df.dtypes
         float              float64
         int                  int64
-        datetime    datetime64[us]
+        datetime    datetime64[ns]
         string              object
         dtype: object
         """
@@ -1768,7 +1775,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 indices[:first_data_column_position],
             )
             if not isinstance(out._index, MultiIndex) and isinstance(
-                out._index._values.dtype, cudf.CategoricalDtype
+                out._index.dtype, cudf.CategoricalDtype
             ):
                 out = out.set_index(
                     cudf.core.index.as_index(out.index._values)
@@ -3185,7 +3192,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_cudf_nvtx_annotate
-    def insert(self, loc, name, value, nan_as_null=None):
+    def insert(self, loc, name, value, nan_as_null=no_default):
         """Add a column to DataFrame at the index specified by loc.
 
         Parameters
@@ -3200,6 +3207,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             ``null`` values.
             If ``False``, leaves ``np.nan`` values as is.
         """
+        if nan_as_null is no_default:
+            nan_as_null = not cudf.get_option("mode.pandas_compatible")
         return self._insert(
             loc=loc,
             name=name,
@@ -3582,7 +3591,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if index:
             if (
                 any(isinstance(item, str) for item in index.values())
-                and type(self.index._values) != cudf.core.column.StringColumn
+                and self.index.dtype != "object"
             ):
                 raise NotImplementedError(
                     "Implicit conversion of index to "
