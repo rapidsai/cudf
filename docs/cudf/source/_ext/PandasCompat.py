@@ -135,10 +135,7 @@ class PandasCompatListProcessor:
                 node.parent.remove(node)
                 continue
 
-            if node.get("ids"):
-                content: list[Element] = [nodes.target()]
-            else:
-                content = []
+            content: list[Elements] = [nodes.target()] if node.get("ids") else []
 
             for pandascompat in pandascompats:
                 # Create a copy of the pandascompat node
