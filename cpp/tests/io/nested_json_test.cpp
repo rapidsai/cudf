@@ -151,8 +151,8 @@ TEST_F(JsonTest, StackContext)
   std::array<char, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distrib(0, delimiter_chars.size());
-  char delimiter          = delimiter_chars[distrib(gen)];
+  std::uniform_int_distribution<> distrib(0, delimiter_chars.size() - 1);
+  char const delimiter    = delimiter_chars[distrib(gen)];
   std::string const input = R"(  [{)"
                             R"("category": "reference",)"
                             R"("index:": [4,12,42],)"
@@ -219,8 +219,8 @@ TEST_F(JsonTest, StackContextUtf8)
   std::array<char, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distrib(0, delimiter_chars.size());
-  char delimiter          = delimiter_chars[distrib(gen)];
+  std::uniform_int_distribution<> distrib(0, delimiter_chars.size() - 1);
+  char const delimiter    = delimiter_chars[distrib(gen)];
   std::string const input = R"([{"a":{"year":1882,"author": "Bharathi"}, {"a":"filip ʒakotɛ"}}])";
 
   // Prepare input & output buffers
@@ -260,8 +260,12 @@ TEST_F(JsonTest, StackContextRecovering)
   auto const stream = cudf::get_default_stream();
 
   // JSON lines input that recovers on invalid lines
-  char delimiter    = 'h';
-  std::string input = R"({"a":-2},
+  std::array<char, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distrib(0, delimiter_chars.size() - 1);
+  char const delimiter = delimiter_chars[distrib(gen)];
+  std::string input    = R"({"a":-2},
   {"a":
   {"a":{"a":[321
   {"a":[1]}
@@ -312,7 +316,7 @@ TEST_F(JsonTest, StackContextRecoveringFuzz)
   std::mt19937 gen(42);
   std::uniform_int_distribution<int> distribution(0, 4);
   constexpr std::size_t input_length = 1024 * 1024;
-  char delimiter                     = '\n';
+  char const delimiter               = '\n';
   std::string input{};
   input.reserve(input_length);
 
@@ -677,8 +681,9 @@ TEST_F(JsonTest, RecoveringTokenStream)
   std::array<char, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distrib(0, delimiter_chars.size());
-  char delimiter    = delimiter_chars[distrib(gen)];
+  std::uniform_int_distribution<> distrib(0, delimiter_chars.size() - 1);
+  char const delimiter = delimiter_chars[distrib(gen)];
+
   std::string input = R"({"a":2 {})"
                       // 9
                       "\n"

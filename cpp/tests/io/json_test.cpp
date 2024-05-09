@@ -2441,8 +2441,8 @@ TEST_F(JsonReaderTest, JsonLinesRandomDelimiter)
   std::array<SymbolT, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distrib(0, delimiter_chars.size());
-  SymbolT random_delimiter = delimiter_chars[distrib(gen)];
+  std::uniform_int_distribution<> distrib(0, delimiter_chars.size() - 1);
+  SymbolT const random_delimiter = delimiter_chars[distrib(gen)];
 
   // Test input
   std::string input             = R"({"col1":100, "col2":1.1, "col3":"aaa"})";
