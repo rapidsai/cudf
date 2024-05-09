@@ -692,7 +692,7 @@ class StringMethods(ColumnMethods):
 
         Returning an Index of booleans using only a literal pattern.
 
-        >>> data = ['Mouse', 'dog', 'house and parrot', '23.0', np.NaN]
+        >>> data = ['Mouse', 'dog', 'house and parrot', '23.0', np.nan]
         >>> idx = cudf.Index(data)
         >>> idx
         Index(['Mouse', 'dog', 'house and parrot', '23.0', None], dtype='object')
