@@ -157,8 +157,24 @@ jobs:
       arch: '["amd64"]'
       cuda: '["12.2"]'
       build_command: |
+        # Tell rapids-cmake to use custom CCCL and cuCollections forks
+        rapids_branch="$(yq '.x-git-defaults.tag' /opt/rapids-build-utils/manifest.yaml)";
+        rapids_version="${rapids_branch#branch-}";
+        curl -fsSL -o- https://raw.githubusercontent.com/trxcllnt/rapids-cmake/branch-24.04-cccl-2.4.0/rapids-cmake/cpm/patches/cccl/revert_pr_211.diff \
+          | tee ~/rapids-cmake-revert_pr_211.diff;
+        curl -fsSL -o- "https://raw.githubusercontent.com/rapidsai/rapids-cmake/${rapids_branch}/rapids-cmake/cpm/versions.json" \
+          | jq -r ".packages.CCCL *= {\"version\": \"2.5.0\", \"git_tag\": \"pull-request/1667\"}" \
+          | jq -r "(.packages.CCCL.patches[] | select(.file == \"cccl/revert_pr_211.diff\")).file = \"${HOME}/rapids-cmake-revert_pr_211.diff\"" \
+          | jq -r ".packages.cuco *= {\"git_url\": \"https://github.com/trxcllnt/cuCollections.git\", \"git_tag\": \"rapids-${rapids_version}-cccl-2.5.0\", \"always_download\": true}" \
+          | tee ~/rapids-cmake-override-versions.json;
         sccache -z;
-        build-all -DBUILD_BENCHMARKS=ON --verbose;
+        build-all \
+          -j$(nproc --ignore=1) -v \
+          -DBUILD_TESTS=ON \
+          -DBUILD_BENCHMARKS=ON \
+          -DCMAKE_CXX_FLAGS="-ftemplate-backtrace-limit=0" \
+          -DCMAKE_CUDA_FLAGS="-ftemplate-backtrace-limit=0" \
+          -DRAPIDS_CMAKE_CPM_DEFAULT_VERSION_FILE="${HOME}/rapids-cmake-override-versions.json";
         sccache -s;
   unit-tests-cudf-pandas:
     needs: wheel-build-cudf
