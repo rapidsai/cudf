@@ -51,7 +51,8 @@ class PandasCompatDirective(SphinxDirective):
 
         PandasCompat_node = PandasCompat("\n".join(self.content))
         PandasCompat_node += nodes.title(
-            _("Pandas Compatibility Note"),
+            translator("Pandas Compatibility Note"),
+            translator("Pandas Compatibility Note"),
         )
         PandasCompat_node["docname"] = self.env.docname
         PandasCompat_node["target"] = targetnode        
