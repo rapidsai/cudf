@@ -160,10 +160,11 @@ class aggregate_reader_metadata {
   void consume_arrow_schema();
 
   /**
-   * @brief Decode an arrow:IPC message and returns a constant void typecasted pointer
-   * to its metadata header
+   * @brief Decode an arrow:IPC message and returns an optional string_view of
+   * its metadata header
    */
-  [[nodiscard]] void const* decode_ipc_message(std::string_view const serialized_message) const;
+  [[nodiscard]] std::optional<std::string_view> decode_ipc_message(
+    std::string_view const serialized_message) const;
 
   /**
    * @brief Sums up the number of rows of each source

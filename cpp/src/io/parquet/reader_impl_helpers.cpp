@@ -661,31 +661,32 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
   // decode_ipc_message can lead to unintended nullptr dereferences.
   auto const decoded_message = cudf::io::detail::base64_decode(it->second);
 
-  // Decode the ipc message to get a constant void pointer to the ipc:Message flatbuffer
+  // Decode the ipc message to get an optional string_view of the ipc:Message flatbuffer
   auto const metadata_buf = decode_ipc_message(decoded_message);
 
-  if (metadata_buf == nullptr) {
-    CUDF_LOG_ERROR("Parquet reader encountered an invalid metadata pointer.",
-                   "arrow:schema not processed.");
+  // Check if the string_view exists
+  if (not metadata_buf.has_value()) {
+    // No need to re-log error here as already logged inside decode_ipc_message
     return std::nullopt;
   }
 
   // Check if the decoded Message flatbuffer is valid
-  if (flatbuf::GetMessage(metadata_buf) == nullptr) {
-    CUDF_LOG_ERROR("Parquet reader encountered an invalid ipc_message pointer.",
+  if (flatbuf::GetMessage(metadata_buf.value().data()) == nullptr) {
+    CUDF_LOG_ERROR("Parquet reader encountered an invalid ipc:Message flatbuffer pointer.",
                    "arrow:schema not processed.");
     return std::nullopt;
   }
 
   // Check if the Message flatbuffer has a valid arrow:schema in its header
-  if (flatbuf::GetMessage(metadata_buf)->header_as_Schema() == nullptr) {
-    CUDF_LOG_ERROR("Parquet reader encountered an invalid fb_schema pointer.",
+  if (flatbuf::GetMessage(metadata_buf.value().data())->header_as_Schema() == nullptr) {
+    CUDF_LOG_ERROR("Parquet reader encountered an invalid arrow:schema flatbuffer pointer.",
                    "arrow:schema not processed.");
     return std::nullopt;
   }
 
   // Get the vector of fields from arrow:schema flatbuffer object
-  auto const fields = flatbuf::GetMessage(metadata_buf)->header_as_Schema()->fields();
+  auto const fields =
+    flatbuf::GetMessage(metadata_buf.value().data())->header_as_Schema()->fields();
   if (fields == nullptr) {
     CUDF_LOG_ERROR("Parquet reader encountered an invalid fields pointer.",
                    "arrow:schema not processed.");
@@ -781,7 +782,7 @@ void aggregate_reader_metadata::consume_arrow_schema()
                 });
 }
 
-void const* aggregate_reader_metadata::decode_ipc_message(
+std::optional<std::string_view> aggregate_reader_metadata::decode_ipc_message(
   std::string_view const serialized_message) const
 {
   // Constants copied from arrow source and renamed to match the case
@@ -798,7 +799,7 @@ void const* aggregate_reader_metadata::decode_ipc_message(
   if (message_size == 0) {
     CUDF_LOG_ERROR("Parquet reader encountered zero length arrow:schema.",
                    "arrow:schema not processed.");
-    return static_cast<void const*>(nullptr);
+    return std::nullopt;
   }
   // Check for improper message.
   if (message_size - MESSAGE_DECODER_NEXT_REQUIRED_SIZE_INITIAL < 0) {
@@ -814,7 +815,7 @@ void const* aggregate_reader_metadata::decode_ipc_message(
   if (continuation != IPC_CONTINUATION_TOKEN) {
     CUDF_LOG_ERROR("Parquet reader encountered unexpected IPC continuation token.",
                    "arrow:schema not processed.");
-    return static_cast<void const*>(nullptr);
+    return std::nullopt;
   } else {
     // Offset the message buf and reduce remaining size
     message_buf += MESSAGE_DECODER_NEXT_REQUIRED_SIZE_INITIAL;
@@ -835,7 +836,7 @@ void const* aggregate_reader_metadata::decode_ipc_message(
   if (metadata_len <= 0) {
     CUDF_LOG_ERROR("Parquet reader encountered unexpected metadata length.",
                    "arrow:schema not processed.");
-    return static_cast<void const*>(nullptr);
+    return std::nullopt;
   } else {
     // Offset the message buf and reduce remaining size
     message_buf += message_decoder_next_required_size_metadata_length;
@@ -847,11 +848,12 @@ void const* aggregate_reader_metadata::decode_ipc_message(
   if (message_size < metadata_len) {
     CUDF_LOG_ERROR("Parquet reader encountered unexpected metadata bytes.",
                    "arrow:schema not processed.");
-    return static_cast<void const*>(nullptr);
+    return std::nullopt;
   }
 
-  // All good, return the current message_buf typecasted as void const*
-  return static_cast<void const*>(message_buf);
+  // All good, return the current message_buf as string_view
+  return std::make_optional(std::string_view{
+    message_buf, static_cast<std::basic_string_view<char>::size_type>(message_size)});
 }
 
 RowGroup const& aggregate_reader_metadata::get_row_group(size_type row_group_index,
