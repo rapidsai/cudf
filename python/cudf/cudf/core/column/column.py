@@ -1949,8 +1949,8 @@ def as_column(
                     f"Cannot convert a {inferred_dtype} of object type"
                 )
             elif (
-                nan_as_null is False
-                and inferred_dtype in {"string"}
+                not nan_as_null
+                and inferred_dtype == "string"
                 and pd.Series(arbitrary)
                 .apply(lambda x: isinstance(x, float) and np.isnan(x))
                 .any()
