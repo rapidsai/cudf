@@ -109,12 +109,12 @@ class fixed_pinned_pool_memory_resource {
   fixed_pinned_pool_memory_resource(size_t size)
     : pool_size_{size}, pool_{new host_pooled_mr(upstream_mr_, size, size)}
   {
+    if (pool_size_ == 0) { return; }
+
     // Allocate full size from the pinned pool to figure out the beginning and end address
-    if (pool_size_ != 0) {
-      pool_begin_ = pool_->allocate_async(pool_size_, stream_);
-      pool_end_   = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size_);
-      pool_->deallocate_async(pool_begin_, pool_size_, stream_);
-    }
+    pool_begin_ = pool_->allocate_async(pool_size_, stream_);
+    pool_end_   = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size_);
+    pool_->deallocate_async(pool_begin_, pool_size_, stream_);
   }
 
   void* do_allocate_async(std::size_t bytes, std::size_t alignment, cuda::stream_ref stream)
@@ -202,7 +202,9 @@ class fixed_pinned_pool_memory_resource {
 rmm::host_async_resource_ref default_pinned_mr()
 {
   auto const size = []() -> size_t {
-    if (auto const env_val = getenv("LIBCUDF_PINNED_POOL_SIZE")) { return std::atol(env_val); }
+    if (auto const env_val = getenv("LIBCUDF_PINNED_POOL_SIZE"); env_val != nullptr) {
+      return std::atol(env_val);
+    }
 
     size_t free{}, total{};
     CUDF_CUDA_TRY(cudaMemGetInfo(&free, &total));
