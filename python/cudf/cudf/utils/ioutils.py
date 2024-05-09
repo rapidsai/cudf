@@ -247,7 +247,8 @@ partition_file_name : str, optional, default None
     File name to use for partitioned datasets. Different partitions
     will be written to different directories, but all files will
     have this name.  If nothing is specified, a random uuid4 hex string
-    will be used for each file.
+    will be used for each file. This parameter is only supported by 'cudf'
+    engine, and will be ignored by other engines.
 partition_offsets : list, optional, default None
     Offsets to partition the dataframe by. Should be used when path is list
     of str. Should be a list of integers of size ``len(path) + 1``
@@ -692,7 +693,6 @@ keep_quotes : bool, default False
 
        This parameter is only supported with ``engine='cudf'``.
 
-    This parameter is only supported in ``cudf`` engine.
     If `True`, any string values are read literally (and wrapped in an
     additional set of quotes).
     If `False` string values are parsed into Python strings.
@@ -703,7 +703,22 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+mixed_types_as_string : bool, default False
 
+    .. admonition:: GPU-accelerated feature
+
+       This parameter is only supported with ``engine='cudf'``.
+
+    If True, mixed type columns are returned as string columns.
+    If `False` parsing mixed type columns will thrown an error.
+prune_columns : bool, default False
+
+    .. admonition:: GPU-accelerated feature
+
+       This parameter is only supported with ``engine='cudf'``.
+
+    If True, only return those columns mentioned in the dtype argument.
+    If `False` dtype argument is used a type inference suggestion.
 Returns
 -------
 result : Series or DataFrame, depending on the value of `typ`.

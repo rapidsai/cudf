@@ -307,7 +307,6 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
     cudf::device_span<char const>(reinterpret_cast<char const*>(bufview.data()), bufview.size());
   stream.synchronize();
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
-  // For debug purposes, use host_parse_nested_json()
 }
 
 }  // namespace cudf::io::json::detail
