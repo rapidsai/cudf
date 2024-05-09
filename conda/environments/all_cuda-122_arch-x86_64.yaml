@@ -37,13 +37,13 @@ dependencies:
 - hypothesis
 - identify>=2.5.20
 - ipython
-- libarrow-acero==14.0.2.*
-- libarrow-dataset==14.0.2.*
-- libarrow==14.0.2.*
+- libarrow-acero==16.0.0.*
+- libarrow-dataset==16.0.0.*
+- libarrow==16.0.0.*
 - libcufile-dev
 - libcurand-dev
 - libkvikio==24.6.*
-- libparquet==14.0.2.*
+- libparquet==16.0.0.*
 - librdkafka>=1.9.0,<1.10.0a0
 - librmm==24.6.*
 - make
@@ -63,7 +63,7 @@ dependencies:
 - pandoc
 - pip
 - pre-commit
-- pyarrow==14.0.2.*
+- pyarrow==16.0.0.*
 - pydata-sphinx-theme!=0.14.2
 - pynvjitlink
 - pytest-benchmark
@@ -90,7 +90,7 @@ dependencies:
 - streamz
 - sysroot_linux-64==2.17
 - tokenizers==0.15.2
-- transformers==4.38.1
+- transformers==4.39.3
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
 - pip:

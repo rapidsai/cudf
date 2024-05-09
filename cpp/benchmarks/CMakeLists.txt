@@ -330,7 +330,7 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
-ConfigureBench(JSON_BENCH json/json.cu)
+ConfigureNVBench(JSON_NVBENCH json/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
 ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
 ConfigureNVBench(JSON_READER_OPTION_NVBENCH io/json/json_reader_option.cpp)

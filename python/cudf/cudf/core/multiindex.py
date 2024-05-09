@@ -8,6 +8,7 @@ import operator
 import pickle
 import warnings
 from collections import abc
+from collections.abc import Generator
 from functools import cached_property
 from numbers import Integral
 from typing import Any, List, MutableMapping, Tuple, Union
@@ -2052,41 +2053,64 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return res
 
     @_cudf_nvtx_annotate
-    def _split_columns_by_levels(self, levels):
+    def _split_columns_by_levels(
+        self, levels: tuple, *, in_levels: bool
+    ) -> Generator[tuple[Any, column.ColumnBase], None, None]:
         # This function assumes that for levels with duplicate names, they are
         # specified by indices, not name by ``levels``. E.g. [None, None] can
         # only be specified by 0, 1, not "None".
-
-        if levels is None:
-            return (
-                list(self._data.columns),
-                [],
-                [
-                    f"level_{i}" if name is None else name
-                    for i, name in enumerate(self.names)
-                ],
-                [],
-            )
-
-        # Normalize named levels into indices
         level_names = list(self.names)
         level_indices = {
             lv if isinstance(lv, int) else level_names.index(lv)
             for lv in levels
         }
-
-        # Split the columns
-        data_columns, index_columns = [], []
-        data_names, index_names = [], []
         for i, (name, col) in enumerate(zip(self.names, self._data.columns)):
-            if i in level_indices:
+            if in_levels and i in level_indices:
                 name = f"level_{i}" if name is None else name
-                data_columns.append(col)
-                data_names.append(name)
-            else:
-                index_columns.append(col)
-                index_names.append(name)
-        return data_columns, index_columns, data_names, index_names
+                yield name, col
+            elif not in_levels and i not in level_indices:
+                yield name, col
+
+    @_cudf_nvtx_annotate
+    def _new_index_for_reset_index(
+        self, levels: tuple | None, name
+    ) -> None | BaseIndex:
+        """Return the new index after .reset_index"""
+        if levels is None:
+            return None
+
+        index_columns, index_names = [], []
+        for name, col in self._split_columns_by_levels(
+            levels, in_levels=False
+        ):
+            index_columns.append(col)
+            index_names.append(name)
+
+        if not index_columns:
+            # None is caught later to return RangeIndex
+            return None
+
+        index = cudf.core.index._index_from_data(
+            dict(enumerate(index_columns)),
+            name=name,
+        )
+        if isinstance(index, type(self)):
+            index.names = index_names
+        else:
+            index.name = index_names[0]
+        return index
+
+    def _columns_for_reset_index(
+        self, levels: tuple | None
+    ) -> Generator[tuple[Any, column.ColumnBase], None, None]:
+        """Return the columns and column names for .reset_index"""
+        if levels is None:
+            for i, (col, name) in enumerate(
+                zip(self._data.columns, self.names)
+            ):
+                yield f"level_{i}" if name is None else name, col
+        else:
+            yield from self._split_columns_by_levels(levels, in_levels=True)
 
     def repeat(self, repeats, axis=None):
         return self._from_data(
