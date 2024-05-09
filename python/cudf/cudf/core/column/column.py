@@ -1951,9 +1951,7 @@ def as_column(
             elif (
                 not nan_as_null
                 and inferred_dtype == "string"
-                and pd.Series(arbitrary)
-                .apply(lambda x: isinstance(x, float) and np.isnan(x))
-                .any()
+                and any(isinstance(x, float) and np.isnan(x) for x in arbitrary)
             ):
                 raise MixedTypeError(f"Cannot have NaN with {inferred_dtype}")
             elif nan_as_null is False and (
