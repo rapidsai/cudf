@@ -19,7 +19,7 @@
 template <typename Key>
 class Join : public cudf::benchmark {};
 
-#define LEFT_ANTI_JOIN_BENCHMARK_DEFINE(name, Key, nullable)   \
+#define LEFT_ANTI_JOIN_BENCHMARK_DEFINE(name, Key, Nullable)   \
   BENCHMARK_TEMPLATE_DEFINE_F(Join, name, Key)                 \
   (::benchmark::State & st)                                    \
   {                                                            \
@@ -28,7 +28,7 @@ class Join : public cudf::benchmark {};
                    cudf::null_equality compare_nulls) {        \
       return cudf::left_anti_join(left, right, compare_nulls); \
     };                                                         \
-    BM_join<Key, nullable>(st, join);                          \
+    BM_join<Key, Nullable>(st, join);                          \
   }
 
 LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_32bit, int32_t, false);
@@ -36,7 +36,7 @@ LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_64bit, int64_t, false);
 LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_32bit_nulls, int32_t, true);
 LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_64bit_nulls, int64_t, true);
 
-#define LEFT_SEMI_JOIN_BENCHMARK_DEFINE(name, Key, nullable)   \
+#define LEFT_SEMI_JOIN_BENCHMARK_DEFINE(name, Key, Nullable)   \
   BENCHMARK_TEMPLATE_DEFINE_F(Join, name, Key)                 \
   (::benchmark::State & st)                                    \
   {                                                            \
@@ -45,7 +45,7 @@ LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_64bit_nulls, int64_t, true);
                    cudf::null_equality compare_nulls) {        \
       return cudf::left_semi_join(left, right, compare_nulls); \
     };                                                         \
-    BM_join<Key, nullable>(st, join);                          \
+    BM_join<Key, Nullable>(st, join);                          \
   }
 
 LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_32bit, int32_t, false);
