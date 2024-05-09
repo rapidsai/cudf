@@ -5,6 +5,7 @@ from __future__ import annotations
 import operator
 import pickle
 import warnings
+from collections.abc import Generator
 from functools import cache, cached_property
 from numbers import Number
 from typing import (
@@ -969,6 +970,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
             return -self
         else:
             return abs(self._as_int_index())
+
+    def _columns_for_reset_index(
+        self, levels: tuple | None
+    ) -> Generator[tuple[Any, ColumnBase], None, None]:
+        """Return the columns and column names for .reset_index"""
+        # We need to explicitly materialize the RangeIndex to a column
+        yield "index" if self.name is None else self.name, as_column(self)
 
     @_warn_no_dask_cudf
     def __dask_tokenize__(self):
