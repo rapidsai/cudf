@@ -1948,9 +1948,17 @@ def as_column(
                 raise TypeError(
                     f"Cannot convert a {inferred_dtype} of object type"
                 )
+            elif (
+                nan_as_null is False
+                and inferred_dtype in {"string"}
+                and pd.Series(arbitrary)
+                .apply(lambda x: isinstance(x, float) and np.isnan(x))
+                .any()
+            ):
+                raise MixedTypeError(f"Cannot have NaN with {inferred_dtype}")
             elif nan_as_null is False and (
                 pd.isna(arbitrary).any()
-                and inferred_dtype not in ("decimal", "empty")
+                and inferred_dtype not in ("decimal", "empty", "string")
             ):
                 # Decimal can hold float("nan")
                 # All np.nan is not restricted by type
