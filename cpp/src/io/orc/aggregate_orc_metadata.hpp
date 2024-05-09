@@ -45,8 +45,6 @@ struct column_hierarchy {
  * to aggregate that metadata from all the files.
  */
 class aggregate_orc_metadata {
-  using OrcStripeInfo = std::pair<StripeInformation const*, StripeFooter const*>;
-
   /**
    * @brief Sums up the number of rows of each source
    */
@@ -114,12 +112,22 @@ class aggregate_orc_metadata {
    * @brief Selects the stripes to read, based on the row/stripe selection parameters.
    *
    * Stripes are potentially selected from multiple files.
+   *
+   * Upon parsing stripes' information, the number of skip rows and reading rows are also updated
+   * to be matched with the actual numbers for reading stripes from data sources.
+   *
+   * @param user_specified_stripes The specified stripe indices to read
+   * @param skip_rows Number of rows to skip from reading
+   * @param num_read_rows Number of rows to read
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return A tuple of the corrected skip_rows and num_rows values along with a vector of
+   *         stripes' metadata such as footer, data information, and source index
    */
-  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>>
-  select_stripes(std::vector<std::vector<size_type>> const& user_specified_stripes,
-                 int64_t skip_rows,
-                 std::optional<size_type> const& num_rows,
-                 rmm::cuda_stream_view stream);
+  [[nodiscard]] std::tuple<int64_t, int64_t, std::vector<metadata::orc_stripe_info>> select_stripes(
+    std::vector<std::vector<size_type>> const& user_specified_stripes,
+    int64_t skip_rows,
+    std::optional<size_type> const& num_read_rows,
+    rmm::cuda_stream_view stream);
 
   /**
    * @brief Filters ORC file to a selection of columns, based on their paths in the file.
