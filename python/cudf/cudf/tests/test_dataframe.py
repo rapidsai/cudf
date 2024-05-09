@@ -3208,6 +3208,14 @@ def test_reset_index_unnamed(
     assert_eq(expect, got)
 
 
+def test_reset_index_invalid_level():
+    with pytest.raises(IndexError):
+        cudf.DataFrame([1]).reset_index(level=2)
+
+    with pytest.raises(IndexError):
+        pd.DataFrame([1]).reset_index(level=2)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -10986,3 +10994,31 @@ def test_squeeze(axis, data):
     result = df.squeeze(axis=axis)
     expected = df.to_pandas().squeeze(axis=axis)
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("column", [range(1), np.array([1], dtype=np.int8)])
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda df: df.where(df < 2, 2),
+        lambda df: df.nans_to_nulls(),
+        lambda df: df.isna(),
+        lambda df: df.notna(),
+        lambda df: abs(df),
+        lambda df: -df,
+        lambda df: ~df,
+    ],
+)
+def test_op_preserves_column_metadata(column, operation):
+    df = cudf.DataFrame([1], columns=cudf.Index(column))
+    result = operation(df).columns
+    expected = pd.Index(column)
+    pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+def test_dataframe_init_with_nans():
+    with cudf.option_context("mode.pandas_compatible", True):
+        gdf = cudf.DataFrame({"a": [1, 2, 3, np.nan]})
+    assert gdf["a"].dtype == np.dtype("float64")
+    pdf = pd.DataFrame({"a": [1, 2, 3, np.nan]})
+    assert_eq(pdf, gdf)

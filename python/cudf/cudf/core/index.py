@@ -5,6 +5,7 @@ from __future__ import annotations
 import operator
 import pickle
 import warnings
+from collections.abc import Generator
 from functools import cache, cached_property
 from numbers import Number
 from typing import (
@@ -38,7 +39,7 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
-from cudf.core._base_index import BaseIndex
+from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import (
     CategoricalColumn,
@@ -344,6 +345,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def __contains__(self, item):
+        hash(item)
         if isinstance(item, bool) or not isinstance(
             item,
             tuple(
@@ -969,6 +971,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
         else:
             return abs(self._as_int_index())
 
+    def _columns_for_reset_index(
+        self, levels: tuple | None
+    ) -> Generator[tuple[Any, ColumnBase], None, None]:
+        """Return the columns and column names for .reset_index"""
+        # We need to explicitly materialize the RangeIndex to a column
+        yield "index" if self.name is None else self.name, as_column(self)
+
     @_warn_no_dask_cudf
     def __dask_tokenize__(self):
         return (type(self), self.start, self.stop, self.step)
@@ -1119,14 +1128,26 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             assert (
                 PANDAS_LT_300
             ), "Need to drop after pandas-3.0 support is added."
-            warnings.warn(
+            warning_msg = (
                 "The behavior of array concatenation with empty entries is "
                 "deprecated. In a future version, this will no longer exclude "
                 "empty items when determining the result dtype. "
                 "To retain the old behavior, exclude the empty entries before "
-                "the concat operation.",
-                FutureWarning,
+                "the concat operation."
             )
+            # Warn only if the type might _actually_ change
+            if len(non_empties) == 0:
+                if not all(objs[0].dtype == index.dtype for index in objs[1:]):
+                    warnings.warn(warning_msg, FutureWarning)
+            else:
+                common_all_type = find_common_type(
+                    [index.dtype for index in objs]
+                )
+                common_non_empty_type = find_common_type(
+                    [index.dtype for index in non_empties]
+                )
+                if common_all_type != common_non_empty_type:
+                    warnings.warn(warning_msg, FutureWarning)
         if all(isinstance(obj, RangeIndex) for obj in non_empties):
             result = _concat_range_index(non_empties)
         else:
@@ -1244,11 +1265,11 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         )
 
         if not len(self):
-            return result.values
+            return _return_get_indexer_result(result.values)
         try:
             lcol, rcol = _match_join_keys(needle, self._column, "inner")
         except ValueError:
-            return result.values
+            return _return_get_indexer_result(result.values)
 
         scatter_map, indices = libcudf.join.join([lcol], [rcol], how="inner")
         (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
@@ -1275,7 +1296,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 "{['ffill'/'pad', 'bfill'/'backfill', 'nearest', None]}"
             )
 
-        return result_series.to_cupy()
+        return _return_get_indexer_result(result_series.to_cupy())
 
     @_cudf_nvtx_annotate
     def get_loc(self, key):
@@ -1511,6 +1532,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return self._column.values
 
     def __contains__(self, item):
+        hash(item)
         return item in self._values
 
     def _clean_nulls_from_index(self):
@@ -2258,7 +2280,12 @@ class DatetimeIndex(Index):
 
         return self.__class__._from_data({self.name: out_column})
 
-    def tz_localize(self, tz, ambiguous="NaT", nonexistent="NaT"):
+    def tz_localize(
+        self,
+        tz: str | None,
+        ambiguous: Literal["NaT"] = "NaT",
+        nonexistent: Literal["NaT"] = "NaT",
+    ):
         """
         Localize timezone-naive data to timezone-aware data.
 
@@ -2300,17 +2327,12 @@ class DatetimeIndex(Index):
         ambiguous or nonexistent timestamps are converted
         to 'NaT'.
         """  # noqa: E501
-        from cudf.core._internals.timezones import delocalize, localize
-
-        if tz is None:
-            result_col = delocalize(self._column)
-        else:
-            result_col = localize(self._column, tz, ambiguous, nonexistent)
+        result_col = self._column.tz_localize(tz, ambiguous, nonexistent)
         return DatetimeIndex._from_data(
             {self.name: result_col}, freq=self._freq
         )
 
-    def tz_convert(self, tz):
+    def tz_convert(self, tz: str | None):
         """
         Convert tz-aware datetimes from one time zone to another.
 
@@ -2342,12 +2364,7 @@ class DatetimeIndex(Index):
                        '2018-03-03 14:00:00+00:00'],
                       dtype='datetime64[ns, Europe/London]')
         """  # noqa: E501
-        from cudf.core._internals.timezones import convert
-
-        if tz is None:
-            result_col = self._column._utc_time
-        else:
-            result_col = convert(self._column, tz)
+        result_col = self._column.tz_convert(tz)
         return DatetimeIndex._from_data({self.name: result_col})
 
 
@@ -2873,7 +2890,7 @@ class IntervalIndex(Index):
 
     @property
     def closed(self):
-        return self._values.dtype.closed
+        return self.dtype.closed
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -2955,7 +2972,7 @@ class IntervalIndex(Index):
 
 @_cudf_nvtx_annotate
 def as_index(
-    arbitrary, nan_as_null=None, copy=False, name=no_default, dtype=None
+    arbitrary, nan_as_null=no_default, copy=False, name=no_default, dtype=None
 ) -> BaseIndex:
     """Create an Index from an arbitrary object
 
@@ -3005,6 +3022,10 @@ def as_index(
         - DatetimeIndex for Datetime input.
         - Index for all other inputs.
     """
+    if nan_as_null is no_default:
+        nan_as_null = (
+            False if cudf.get_option("mode.pandas_compatible") else None
+        )
 
     if name is no_default:
         name = getattr(arbitrary, "name", None)
