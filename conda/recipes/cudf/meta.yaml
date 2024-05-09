@@ -61,8 +61,12 @@ requirements:
   host:
     - python
     - cython >=3.0.3
-    # TODO: change this pin to a floor once we have packages
-    - rapids-build-backend ==0.0.2
+    # TODO: Add rapids-build-backend once the package exists. Then we can remove dependencies up to the next TODO.
+    - tomli
+    - tomli-w
+    - packaging
+    - rapids-dependency-file-generator
+    # TODO: Remove above dependencies after rapids-build-backend packages exist
     - scikit-build-core >=0.7.0
     - setuptools
     - dlpack >=0.8,<1.0
