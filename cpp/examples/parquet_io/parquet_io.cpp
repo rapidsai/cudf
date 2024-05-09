@@ -119,8 +119,8 @@ int main(int argc, char const** argv)
   }
 
   // Create and use a memory pool
-  bool pool     = true;
-  auto resource = create_memory_resource(pool);
+  bool is_pool_used = true;
+  auto resource     = create_memory_resource(is_pool_used);
   rmm::mr::set_current_device_resource(resource.get());
 
   // Read input parquet file
