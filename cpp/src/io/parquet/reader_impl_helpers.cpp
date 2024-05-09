@@ -655,17 +655,13 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
   auto const it = keyval_maps[0].find("ARROW:schema");
   if (it == keyval_maps[0].end()) { return std::nullopt; }
 
-  // Read arrow schema from flatbuffers
-  std::string encoded_serialized_message = it->second;
-
   // Decode the base64 encoded ipc message string
-
   // Note: Store the output from base64_decode in the lvalue here and then pass
   // it to decode_ipc_message. Directly passing rvalue from base64_decode to
   // decode_ipc_message can lead to unintended nullptr dereferences.
-  auto decoded_message = cudf::io::detail::base64_decode(encoded_serialized_message);
+  auto const decoded_message = cudf::io::detail::base64_decode(it->second);
 
-  // Decode the ipc message to get a const void pointer to the ipc:Message flatbuffer
+  // Decode the ipc message to get a constant void pointer to the ipc:Message flatbuffer
   auto const metadata_buf = decode_ipc_message(decoded_message);
 
   if (metadata_buf == nullptr) {
@@ -785,7 +781,7 @@ void aggregate_reader_metadata::consume_arrow_schema()
                 });
 }
 
-void const* aggregate_reader_metadata::decode_ipc_message(std::string& serialized_message) const
+void const* aggregate_reader_metadata::decode_ipc_message(std::string_view serialized_message) const
 {
   // Constants copied from arrow source and renamed to match the case
   constexpr auto MESSAGE_DECODER_NEXT_REQUIRED_SIZE_INITIAL         = sizeof(int32_t);
@@ -801,7 +797,7 @@ void const* aggregate_reader_metadata::decode_ipc_message(std::string& serialize
   if (message_size == 0) {
     CUDF_LOG_ERROR("Parquet reader encountered zero length arrow:schema.",
                    "arrow:schema not processed.");
-    return static_cast<const void*>(nullptr);
+    return static_cast<void const*>(nullptr);
   }
   // Check for improper message.
   if (message_size - MESSAGE_DECODER_NEXT_REQUIRED_SIZE_INITIAL < 0) {
@@ -817,7 +813,7 @@ void const* aggregate_reader_metadata::decode_ipc_message(std::string& serialize
   if (continuation != IPC_CONTINUATION_TOKEN) {
     CUDF_LOG_ERROR("Parquet reader encountered unexpected IPC continuation token.",
                    "arrow:schema not processed.");
-    return static_cast<const void*>(nullptr);
+    return static_cast<void const*>(nullptr);
   } else {
     // Offset the message buf and reduce remaining size
     message_buf += MESSAGE_DECODER_NEXT_REQUIRED_SIZE_INITIAL;
@@ -838,7 +834,7 @@ void const* aggregate_reader_metadata::decode_ipc_message(std::string& serialize
   if (metadata_len <= 0) {
     CUDF_LOG_ERROR("Parquet reader encountered unexpected metadata length.",
                    "arrow:schema not processed.");
-    return static_cast<const void*>(nullptr);
+    return static_cast<void const*>(nullptr);
   } else {
     // Offset the message buf and reduce remaining size
     message_buf += message_decoder_next_required_size_metadata_length;
@@ -850,11 +846,11 @@ void const* aggregate_reader_metadata::decode_ipc_message(std::string& serialize
   if (message_size < metadata_len) {
     CUDF_LOG_ERROR("Parquet reader encountered unexpected metadata bytes.",
                    "arrow:schema not processed.");
-    return static_cast<const void*>(nullptr);
+    return static_cast<void const*>(nullptr);
   }
 
-  // All good, return the current message_buf typecasted as const void*
-  return static_cast<const void*>(message_buf);
+  // All good, return the current message_buf typecasted as void const*
+  return static_cast<void const*>(message_buf);
 }
 
 RowGroup const& aggregate_reader_metadata::get_row_group(size_type row_group_index,
