@@ -159,7 +159,7 @@ int main(int argc, char const** argv)
     // return an empty indices vector
     auto const indices = cudf::left_anti_join(
       input->view(), transcoded_input->view(), cudf::null_equality::EQUAL, resource.get());
-      
+
     // No exception thrown, check indices
     auto const valid = indices->size() == 0;
     std::cout << "Transcoding valid: " << std::boolalpha << valid << std::endl;
