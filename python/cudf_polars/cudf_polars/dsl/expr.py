@@ -16,13 +16,16 @@ In particular, the interpretation of the expression language in a
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from cudf_polars.containers import Column, DataFrame
 
 __all__ = [
     "Expr",
     "NamedExpr",
     "Literal",
-    "Column",
+    "Col",
     "BooleanFunction",
     "Sort",
     "SortBy",
@@ -37,7 +40,10 @@ __all__ = [
 
 @dataclass(slots=True)
 class Expr:
-    pass
+    # TODO: return type is a lie for Literal
+    def evaluate(self, context: DataFrame) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        raise NotImplementedError
 
 
 @dataclass(slots=True)
@@ -53,7 +59,7 @@ class Literal(Expr):
 
 
 @dataclass(slots=True)
-class Column(Expr):
+class Col(Expr):
     name: str
 
 

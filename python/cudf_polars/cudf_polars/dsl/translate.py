@@ -16,6 +16,8 @@ __all__ = ["translate_ir", "translate_expr"]
 
 
 class set_node(AbstractContextManager):
+    """Run a block with current node set in the visitor."""
+
     __slots__ = ("n", "visitor")
 
     def __init__(self, visitor, n):
@@ -242,7 +244,7 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
     elif isinstance(node, pl_expr.Cast):
         return expr.Cast(node.dtype, translate_expr(visitor, n=node.expr))
     elif isinstance(node, pl_expr.Column):
-        return expr.Column(node.name)
+        return expr.Col(node.name)
     elif isinstance(node, pl_expr.Agg):
         return expr.Agg(
             translate_expr(visitor, n=node.arguments),
