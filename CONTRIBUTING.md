@@ -161,8 +161,7 @@ To build all libraries and tests, with Python packages in development mode, simp
 ./build.sh --pydevelop libcudf libcudf_kafka cudf dask_cudf cudf_kafka custreamz
 ```
 
-- **WARNING**: Various changes to files, such as .pyx and .pyd, may cause errors such as
-  circular imports until you build again.
+- **Note**: if Cython files (`*.pxd`) have changed, the Python build must be rerun.
 
 To run the C++ tests, run
 
