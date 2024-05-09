@@ -38,7 +38,7 @@
  * @param pool Whether to use a pool memory resource.
  * @return Memory resource instance
  */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool pool)
+std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used)
 {
   auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
   if (pool) {
