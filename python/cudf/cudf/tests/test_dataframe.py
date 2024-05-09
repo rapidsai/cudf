@@ -3208,6 +3208,14 @@ def test_reset_index_unnamed(
     assert_eq(expect, got)
 
 
+def test_reset_index_invalid_level():
+    with pytest.raises(IndexError):
+        cudf.DataFrame([1]).reset_index(level=2)
+
+    with pytest.raises(IndexError):
+        pd.DataFrame([1]).reset_index(level=2)
+
+
 @pytest.mark.parametrize(
     "data",
     [

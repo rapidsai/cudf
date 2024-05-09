@@ -800,7 +800,7 @@ def test_dataframe_set_index():
         assert_eq(ddf.compute(), pddf.compute())
 
 
-@xfail_dask_expr("Insufficient describe support in dask-expr")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 def test_series_describe():
     random.seed(0)
     sr = cudf.datasets.randomdata(20)["x"]
@@ -816,7 +816,7 @@ def test_series_describe():
     )
 
 
-@xfail_dask_expr("Insufficient describe support in dask-expr")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 def test_dataframe_describe():
     random.seed(0)
     df = cudf.datasets.randomdata(20)
@@ -830,7 +830,7 @@ def test_dataframe_describe():
     )
 
 
-@xfail_dask_expr("Insufficient describe support in dask-expr")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 def test_zero_std_describe():
     num = 84886781
     df = cudf.DataFrame(
