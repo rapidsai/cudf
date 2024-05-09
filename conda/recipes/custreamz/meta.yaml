@@ -43,12 +43,8 @@ requirements:
     {% else %}
     - cuda-nvcc-impl
     {% endif %}
-    # TODO: Add rapids-build-backend once the package exists. Then we can remove dependencies up to the next TODO.
-    - tomli
-    - tomli-w
-    - packaging
-    - rapids-dependency-file-generator
-    # TODO: Remove above dependencies after rapids-build-backend packages exist
+    - rapids-build-backend >= 0.1.1
+    - setuptools
     - python-confluent-kafka >=1.9.0,<1.10.0a0
     - cudf_kafka ={{ version }}
     - cuda-version ={{ cuda_version }}

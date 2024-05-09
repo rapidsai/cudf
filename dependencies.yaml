@@ -274,15 +274,13 @@ dependencies:
     common:
       - output_types: [requirements, pyproject]
         packages:
-          # TODO: change this pin to a floor once we have packages
-          - rapids-build-backend==0.0.2
+          - rapids-build-backend>=0.1.1
           - scikit-build-core[pyproject]>=0.7.0
   rapids_build_setuptools:
     common:
       - output_types: [requirements, pyproject]
         packages:
-          # TODO: change this pin to a floor once we have packages
-          - rapids-build-backend==0.0.2
+          - rapids-build-backend>=0.1.1
           - setuptools
   build_python_common:
     common:
@@ -579,7 +577,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - rapids-dask-dependency==24.6.*
+          - rapids-dask-dependency==24.6.*,>=0.0.0a0
   run_custreamz:
     common:
       - output_types: conda
