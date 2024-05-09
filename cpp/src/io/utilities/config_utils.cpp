@@ -199,7 +199,7 @@ class fixed_pinned_pool_memory_resource {
   }
 };
 
-inline rmm::host_async_resource_ref default_pinned_mr()
+rmm::host_async_resource_ref default_pinned_mr()
 {
   auto const size = []() -> size_t {
     if (auto const env_val = getenv("LIBCUDF_PINNED_POOL_SIZE")) { return std::atol(env_val); }
@@ -218,17 +218,18 @@ inline rmm::host_async_resource_ref default_pinned_mr()
   return mr;
 }
 
-inline std::mutex& host_mr_lock()
+std::mutex& host_mr_lock()
 {
   static std::mutex map_lock;
   return map_lock;
 }
 
-CUDF_EXPORT inline auto& host_mr()
+CUDF_EXPORT auto& host_mr()
 {
   static rmm::host_async_resource_ref host_mr = default_pinned_mr();
   return host_mr;
 }
+
 }  // namespace
 
 rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_ref mr)
