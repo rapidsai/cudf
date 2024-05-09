@@ -266,7 +266,7 @@ dependencies:
           - cython>=3.0.3
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==14.0.2.*
+          - pyarrow==16.0.0.*
       - output_types: conda
         packages:
           - scikit-build-core>=0.7.0
@@ -312,27 +312,25 @@ dependencies:
         packages:
           # Hard pin the Arrow patch version used during the build. This must
           # be kept in sync with the version pinned in get_arrow.cmake.
-          - libarrow-acero==14.0.2.*
-          - libarrow-dataset==14.0.2.*
-          - libarrow==14.0.2.*
-          - libparquet==14.0.2.*
+          - libarrow-acero==16.0.0.*
+          - libarrow-dataset==16.0.0.*
+          - libarrow==16.0.0.*
+          - libparquet==16.0.0.*
   libarrow_run:
     common:
       - output_types: conda
         packages:
           # Allow runtime version to float up to minor version
-          # Disallow libarrow 14.0.0 due to a CVE
-          - libarrow-acero>=14.0.1,<15.0.0a0
-          - libarrow-dataset>=14.0.1,<15.0.0a0
-          - libarrow>=14.0.1,<15.0.0a0
-          - libparquet>=14.0.1,<15.0.0a0
+          - libarrow-acero>=16.0.0,<17.0.0a0
+          - libarrow-dataset>=16.0.0,<17.0.0a0
+          - libarrow>=16.0.0,<17.0.0a0
+          - libparquet>=16.0.0,<17.0.0a0
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           # Allow runtime version to float up to minor version
-          # Disallow pyarrow 14.0.0 due to a CVE
-          - pyarrow>=14.0.1,<15.0.0a0
+          - pyarrow>=16.0.0,<17.0.0a0
   cuda_version:
     specific:
       - output_types: conda
@@ -631,7 +629,7 @@ dependencies:
         packages:
           - msgpack
           - &tokenizers tokenizers==0.15.2
-          - &transformers transformers==4.38.1
+          - &transformers transformers==4.39.3
           - tzdata
     specific:
       - output_types: conda

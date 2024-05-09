@@ -1523,13 +1523,7 @@ def test_index_from_arrow(data):
     arrow_array = pa.Array.from_pandas(pdi)
     expected_index = pd.Index(arrow_array.to_pandas())
     gdi = cudf.Index.from_arrow(arrow_array)
-    if gdi.dtype == cudf.dtype("datetime64[s]"):
-        # Arrow bug:
-        # https://github.com/apache/arrow/issues/33321
-        # arrow cannot convert non-nanosecond
-        # resolution to appropriate type in pandas.
-        # Hence need to type-cast.
-        expected_index = expected_index.astype(gdi.dtype)
+
     assert_eq(expected_index, gdi)
 
 

@@ -472,9 +472,7 @@ def test_parquet_read_filtered(tmpdir, rdg_seed):
     # Because of this, we aren't using PyArrow as a reference for testing our
     # row-group selection method since the only way to only select row groups
     # with PyArrow is with the method we use and intend to test.
-    tbl_filtered = pq.read_table(
-        fname, filters=[("1", ">", 60)], use_legacy_dataset=False
-    )
+    tbl_filtered = pq.read_table(fname, filters=[("1", ">", 60)])
 
     assert_eq(cudf.io.read_parquet_metadata(fname)[1], 2048 / 64)
     print(len(df_filtered))
