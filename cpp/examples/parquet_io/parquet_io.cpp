@@ -153,24 +153,19 @@ int main(int argc, char const** argv)
   timer.print_elapsed_millis();
 
   // Check for validity
-  bool valid = true;
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> indices;
   try {
     // Left anti-join the original and transcoded tables
     // identical tables should not throw an exception and
     // return an empty indices vector
-    indices = cudf::left_anti_join(
+    auto const indices = cudf::left_anti_join(
       input->view(), transcoded_input->view(), cudf::null_equality::EQUAL, resource.get());
+      
+    // No exception thrown, check indices
+    auto const valid = indices->size() == 0;
+    std::cout << "Transcoding valid: " << std::boolalpha << valid << std::endl;
   } catch (std::exception& e) {
     std::cerr << e.what() << std::endl << std::endl;
     std::cout << "Transcoding valid: false" << std::endl;
-    valid = false;
-  }
-
-  // No exception thrown, check for indices->size
-  if (valid) {
-    bool valid = indices->size() == 0;
-    std::cout << "Transcoding valid: " << std::boolalpha << valid << std::endl;
   }
 
   return 0;
