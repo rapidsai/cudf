@@ -731,9 +731,7 @@ dependencies:
           - matrix: {cuda: "11.*"}
             packages: &cupy_packages_cu11
               - cupy-cuda11x>=12.0.0
-          - matrix: null
-            packages:
-              - cupy>=12.0.0
+          - {matrix: null, packages: *cupy_packages_cu11}
   test_python_pandas_cudf:
     common:
       - output_types: pyproject
