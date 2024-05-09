@@ -548,7 +548,7 @@ TEST_F(OrcWriterTest, SlicedTable)
   int32_col col0(seq_col0.begin(), seq_col0.end());
   str_col col1(strings.begin(), strings.end());
   float32_col col2(seq_col2.begin(), seq_col2.end());
-  float32_col col3(seq_col3, seq_col3 + num_rows);
+  dec64_col col3(seq_col3, seq_col3 + num_rows);
 
   list_col<int64_t> col4{
     {9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}};

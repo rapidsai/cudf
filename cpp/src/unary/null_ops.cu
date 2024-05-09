@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,15 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace detail {
 std::unique_ptr<column> is_null(cudf::column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   auto input_device_view = column_device_view::create(input, stream);
   auto device_view       = *input_device_view;
@@ -40,7 +42,7 @@ std::unique_ptr<column> is_null(cudf::column_view const& input,
 
 std::unique_ptr<column> is_valid(cudf::column_view const& input,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   auto input_device_view = column_device_view::create(input, stream);
   auto device_view       = *input_device_view;
@@ -57,7 +59,7 @@ std::unique_ptr<column> is_valid(cudf::column_view const& input,
 
 std::unique_ptr<column> is_null(cudf::column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::is_null(input, stream, mr);
@@ -65,7 +67,7 @@ std::unique_ptr<column> is_null(cudf::column_view const& input,
 
 std::unique_ptr<column> is_valid(cudf::column_view const& input,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::is_valid(input, stream, mr);

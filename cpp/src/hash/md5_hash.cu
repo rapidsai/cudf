@@ -29,6 +29,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -284,7 +285,7 @@ inline bool md5_leaf_type_check(data_type dt)
 
 std::unique_ptr<column> md5(table_view const& input,
                             rmm::cuda_stream_view stream,
-                            rmm::mr::device_memory_resource* mr)
+                            rmm::device_async_resource_ref mr)
 {
   if (input.num_columns() == 0 || input.num_rows() == 0) {
     // Return the MD5 hash of a zero-length input.
@@ -308,7 +309,7 @@ std::unique_ptr<column> md5(table_view const& input,
   // Result column allocation and creation
   auto begin = thrust::make_constant_iterator(digest_size);
   auto [offsets_column, bytes] =
-    cudf::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
+    cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
 
   rmm::device_uvector<char> chars(bytes, stream, mr);
   auto d_chars = chars.data();
@@ -321,7 +322,7 @@ std::unique_ptr<column> md5(table_view const& input,
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(input.num_rows()),
     [d_chars, device_input = *device_input] __device__(auto row_index) {
-      MD5Hasher hasher(d_chars + (row_index * digest_size));
+      MD5Hasher hasher(d_chars + (static_cast<int64_t>(row_index) * digest_size));
       for (auto const& col : device_input) {
         if (col.is_valid(row_index)) {
           if (col.type().id() == type_id::LIST) {
@@ -349,7 +350,7 @@ std::unique_ptr<column> md5(table_view const& input,
 
 std::unique_ptr<column> md5(table_view const& input,
                             rmm::cuda_stream_view stream,
-                            rmm::mr::device_memory_resource* mr)
+                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::md5(input, stream, mr);

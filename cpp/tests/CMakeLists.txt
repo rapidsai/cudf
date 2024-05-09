@@ -55,8 +55,9 @@ function(ConfigureTest CMAKE_TEST_NAME)
   )
 
   target_link_libraries(
-    ${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main nvtx3-cpp
-                               $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIB}"
+    ${CMAKE_TEST_NAME}
+    PRIVATE cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main nvtx3-cpp
+            $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIB}"
   )
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
@@ -267,8 +268,14 @@ ConfigureTest(
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
-  INTEROP_TEST interop/to_arrow_device_test.cpp interop/to_arrow_test.cpp
-  interop/from_arrow_test.cpp interop/dlpack_test.cpp EXTRA_LIB nanoarrow
+  INTEROP_TEST
+  interop/to_arrow_device_test.cpp
+  interop/to_arrow_test.cpp
+  interop/from_arrow_test.cpp
+  interop/from_arrow_device_test.cpp
+  interop/dlpack_test.cpp
+  EXTRA_LIB
+  nanoarrow
 )
 
 # ##################################################################################################
@@ -287,7 +294,7 @@ ConfigureTest(
   PERCENT 30
 )
 ConfigureTest(
-  ORC_TEST io/orc_test.cpp
+  ORC_TEST io/orc_chunked_reader_test.cu io/orc_test.cpp
   GPUS 1
   PERCENT 30
 )
@@ -559,6 +566,15 @@ ConfigureTest(
   strings/strip_tests.cpp
   strings/translate_tests.cpp
   strings/urls_tests.cpp
+)
+
+# ##################################################################################################
+# * large strings test ----------------------------------------------------------------------------
+ConfigureTest(
+  LARGE_STRINGS_TEST large_strings/large_strings_fixture.cpp large_strings/merge_tests.cpp
+  large_strings/concatenate_tests.cpp large_strings/parquet_tests.cpp
+  GPUS 1
+  PERCENT 100
 )
 
 # ##################################################################################################

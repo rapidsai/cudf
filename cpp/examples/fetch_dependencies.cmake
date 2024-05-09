@@ -11,7 +11,10 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 # =============================================================================
-set(CPM_DOWNLOAD_VERSION v0.35.3)
+
+include(${CMAKE_CURRENT_LIST_DIR}/versions.cmake)
+
+set(CPM_DOWNLOAD_VERSION v0.38.5)
 file(
   DOWNLOAD
   https://github.com/cpm-cmake/CPM.cmake/releases/download/${CPM_DOWNLOAD_VERSION}/get_cpm.cmake
@@ -19,9 +22,11 @@ file(
 )
 include(${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake)
 
-set(CUDF_TAG branch-24.06)
+# find or build it via CPM
 CPMFindPackage(
-  NAME cudf GIT_REPOSITORY https://github.com/rapidsai/cudf
+  NAME cudf
+  FIND_PACKAGE_ARGUMENTS "PATHS ${cudf_ROOT} ${cudf_ROOT}/latest" GIT_REPOSITORY
+                         https://github.com/rapidsai/cudf
   GIT_TAG ${CUDF_TAG}
   GIT_SHALLOW
     TRUE
