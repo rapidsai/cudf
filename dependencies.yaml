@@ -323,8 +323,8 @@ dependencies:
               - &rmm_cu12 rmm-cu12==24.6.*,>=0.0.0a0
           - matrix: {cuda: "11.*"}
             packages: &build_python_packages_cu11
-              - &rmm_cu11 rmm-cu11==24.6.*,>=0.0.0a0
-          - {matrix: null, packages: [*rmm_cu11] }
+              - rmm-cu11==24.6.*,>=0.0.0a0
+          - {matrix: null, packages: *build_python_packages_cu11 }
   libarrow_build:
     common:
       - output_types: conda
@@ -572,14 +572,11 @@ dependencies:
               - rmm-cu12==24.6.*,>=0.0.0a0
               - pynvjitlink-cu12
           - matrix: {cuda: "11.*"}
-            packages:
+            packages: &cuda_cu11_pyproj
               - rmm-cu11==24.6.*,>=0.0.0a0
               - cubinlinker-cu11
               - ptxcompiler-cu11
-          - {matrix: null, packages: null}
-      - output_types: pyproject
-        matrices:
-          - {matrix: null, packages: [cubinlinker, ptxcompiler, *rmm_conda] }
+          - {matrix: null, packages: *cuda_cu11_pyproj}
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -690,9 +687,9 @@ dependencies:
             packages:
               - cudf-cu12==24.6.*,>=0.0.0a0
           - matrix: {cuda: "11.*"}
-            packages:
+            packages: &cudf_cu11_pyproj
               - cudf-cu11==24.6.*,>=0.0.0a0
-          - {matrix: null, packages: [*cudf_conda]}
+          - {matrix: null, packages: *cudf_cu11_pyproj}
   depends_on_cudf_kafka:
     common:
       - output_types: conda
@@ -711,9 +708,9 @@ dependencies:
             packages:
               - cudf_kafka-cu12==24.6.*,>=0.0.0a0
           - matrix: {cuda: "11.*"}
-            packages:
+            packages: &cudf_kafka_cu11_pyproj
               - cudf_kafka-cu11==24.6.*,>=0.0.0a0
-          - {matrix: null, packages: [*cudf_kafka_conda]}
+          - {matrix: null, packages: *cudf_kafka_cu11_pyproj}
   depends_on_cupy:
     common:
       - output_types: conda

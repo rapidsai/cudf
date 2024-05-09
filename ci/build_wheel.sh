@@ -3,8 +3,7 @@
 
 set -euo pipefail
 
-package_name=$1
-package_dir=$2
+package_dir=$1
 
 # TODO: remove before merging (when new rapids-build-backend is released)
 if [[ ! -d /tmp/delete-me/rapids-build-backend ]]; then
