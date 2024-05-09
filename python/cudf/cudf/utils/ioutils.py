@@ -247,7 +247,8 @@ partition_file_name : str, optional, default None
     File name to use for partitioned datasets. Different partitions
     will be written to different directories, but all files will
     have this name.  If nothing is specified, a random uuid4 hex string
-    will be used for each file.
+    will be used for each file. This parameter is only supported by 'cudf'
+    engine, and will be ignored by other engines.
 partition_offsets : list, optional, default None
     Offsets to partition the dataframe by. Should be used when path is list
     of str. Should be a list of integers of size ``len(path) + 1``

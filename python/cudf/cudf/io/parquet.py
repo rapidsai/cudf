@@ -993,15 +993,10 @@ def to_parquet(
         if index is None:
             index = True
 
-        # Convert partition_file_name to a call back
-        if partition_file_name:
-            partition_file_name = lambda x: partition_file_name  # noqa: E731
-
         pa_table = df.to_arrow(preserve_index=index)
         return pq.write_to_dataset(
             pa_table,
             root_path=path,
-            partition_filename_cb=partition_file_name,
             partition_cols=partition_cols,
             *args,
             **kwargs,

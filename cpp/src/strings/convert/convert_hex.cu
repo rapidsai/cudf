@@ -19,7 +19,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -123,8 +123,9 @@ struct dispatch_hex_to_integers_fn {
 template <typename IntegerType>
 struct integer_to_hex_fn {
   column_device_view const d_column;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void byte_to_hex(uint8_t byte, char* hex)
   {
@@ -141,7 +142,7 @@ struct integer_to_hex_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_column.is_null(idx)) {
-      if (!d_chars) { d_offsets[idx] = 0; }
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -167,7 +168,7 @@ struct integer_to_hex_fn {
         --byte_index;
       }
     } else {
-      d_offsets[idx] = static_cast<size_type>(bytes) * 2;  // 2 hex characters per byte
+      d_sizes[idx] = static_cast<size_type>(bytes) * 2;  // 2 hex characters per byte
     }
   }
 };
@@ -181,7 +182,7 @@ struct dispatch_integers_to_hex_fn {
   {
     auto const d_column = column_device_view::create(input, stream);
 
-    auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
+    auto [offsets_column, chars] = experimental::make_strings_children(
       integer_to_hex_fn<IntegerType>{*d_column}, input.size(), stream, mr);
 
     return make_strings_column(input.size(),

@@ -15,8 +15,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -28,9 +26,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/random.h>
-
-class JsonPath : public cudf::benchmark {};
+#include <nvbench/nvbench.cuh>
 
 std::vector<std::string> const Books{
   R"json({
@@ -80,8 +76,6 @@ struct json_benchmark_row_builder {
   cudf::size_type* d_sizes{};
   char* d_chars{};
   cudf::detail::input_offsetalator d_offsets;
-  thrust::minstd_rand rng{5236};
-  thrust::uniform_int_distribution<int> dist{};
 
   // internal data structure for {bytes, out_ptr} with operator+=
   struct bytes_and_ptr {
@@ -99,12 +93,10 @@ struct json_benchmark_row_builder {
                                     cudf::size_type num_items,
                                     bytes_and_ptr& output_str)
   {
-    using param_type = thrust::uniform_int_distribution<int>::param_type;
-    dist.param(param_type{0, d_books_bicycles[this_idx].size() - 1});
     cudf::string_view comma(",\n", 2);
     for (int i = 0; i < num_items; i++) {
       if (i > 0) { output_str += comma; }
-      int idx   = dist(rng);
+      int idx   = threadIdx.x % d_books_bicycles[this_idx].size();
       auto item = d_books_bicycles[this_idx].element<cudf::string_view>(idx);
       output_str += item;
     }
@@ -183,41 +175,42 @@ auto build_json_string_column(int desired_bytes, int num_rows)
   return cudf::make_strings_column(num_rows, std::move(offsets), chars.release(), 0, {});
 }
 
-void BM_case(benchmark::State& state, std::string query_arg)
+static std::string queries[] = {"$",
+                                "$.store",
+                                "$.store.book",
+                                "$.store.*",
+                                "$.store.book[*]",
+                                "$.store.book[*].category",
+                                "$.store['bicycle']",
+                                "$.store.book[*]['isbn']",
+                                "$.store.bicycle[1]"};
+
+static void bench_query(nvbench::state& state)
 {
   srand(5236);
-  int num_rows      = state.range(0);
-  int desired_bytes = state.range(1);
+
+  auto const num_rows      = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const desired_bytes = static_cast<cudf::size_type>(state.get_int64("bytes"));
+  auto const query         = state.get_int64("query");
+  auto const json_path     = queries[query];
+
+  auto const stream = cudf::get_default_stream();
   auto input        = build_json_string_column(desired_bytes, num_rows);
   cudf::strings_column_view scv(input->view());
-  size_t num_chars = scv.chars_size(cudf::get_default_stream());
+  size_t num_chars = scv.chars_size(stream);
 
-  std::string json_path(query_arg);
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  // This isn't strictly 100% accurate. a given query isn't necessarily
+  // going to visit every single incoming character but in spirit it does.
+  state.add_global_memory_reads<nvbench::int8_t>(num_chars);
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);
-    auto result = cudf::get_json_object(scv, json_path);
-    CUDF_CUDA_TRY(cudaStreamSynchronize(0));
-  }
-
-  // this isn't strictly 100% accurate. a given query isn't necessarily
-  // going to visit every single incoming character.  but in spirit it does.
-  state.SetBytesProcessed(state.iterations() * num_chars);
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    [[maybe_unused]] auto result = cudf::get_json_object(scv, json_path);
+  });
 }
 
-#define JSON_BENCHMARK_DEFINE(name, query)                                                  \
-  BENCHMARK_DEFINE_F(JsonPath, name)(::benchmark::State & state) { BM_case(state, query); } \
-  BENCHMARK_REGISTER_F(JsonPath, name)                                                      \
-    ->ArgsProduct({{100, 1000, 100000, 400000}, {300, 600, 4096}})                          \
-    ->UseManualTime()                                                                       \
-    ->Unit(benchmark::kMillisecond);
-
-JSON_BENCHMARK_DEFINE(query0, "$");
-JSON_BENCHMARK_DEFINE(query1, "$.store");
-JSON_BENCHMARK_DEFINE(query2, "$.store.book");
-JSON_BENCHMARK_DEFINE(query3, "$.store.*");
-JSON_BENCHMARK_DEFINE(query4, "$.store.book[*]");
-JSON_BENCHMARK_DEFINE(query5, "$.store.book[*].category");
-JSON_BENCHMARK_DEFINE(query6, "$.store['bicycle']");
-JSON_BENCHMARK_DEFINE(query7, "$.store.book[*]['isbn']");
-JSON_BENCHMARK_DEFINE(query8, "$.store.bicycle[1]");
+NVBENCH_BENCH(bench_query)
+  .set_name("json_path")
+  .add_int64_axis("bytes", {300, 600, 4096})
+  .add_int64_axis("num_rows", {100, 1000, 100000, 400000})
+  .add_int64_axis("query", {0, 1, 2, 3, 4, 5, 6, 7, 8});

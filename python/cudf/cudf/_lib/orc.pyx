@@ -472,11 +472,11 @@ cdef int64_t get_skiprows_arg(object arg) except*:
         raise TypeError("skiprows must be an int >= 0")
     return <int64_t> arg
 
-cdef size_type get_num_rows_arg(object arg) except*:
+cdef int64_t get_num_rows_arg(object arg) except*:
     arg = -1 if arg is None else arg
     if not isinstance(arg, int) or arg < -1:
         raise TypeError("num_rows must be an int >= -1")
-    return <size_type> arg
+    return <int64_t> arg
 
 
 cdef orc_reader_options make_orc_reader_options(
@@ -484,7 +484,7 @@ cdef orc_reader_options make_orc_reader_options(
     object column_names,
     object stripes,
     int64_t skip_rows,
-    size_type num_rows,
+    int64_t num_rows,
     type_id timestamp_type,
     bool use_index
 ) except*:
