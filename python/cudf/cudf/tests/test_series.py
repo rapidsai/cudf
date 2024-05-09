@@ -2786,3 +2786,39 @@ def test_squeeze(axis, data):
 def test_squeeze_invalid_axis(axis):
     with pytest.raises(ValueError):
         cudf.Series([1]).squeeze(axis=axis)
+
+
+def test_series_init_with_nans():
+    with cudf.option_context("mode.pandas_compatible", True):
+        gs = cudf.Series([1, 2, 3, np.nan])
+    assert gs.dtype == np.dtype("float64")
+    ps = pd.Series([1, 2, 3, np.nan])
+    assert_eq(ps, gs)
+
+
+@pytest.mark.parametrize("data", [None, 123, 33243243232423, 0])
+def test_timestamp_series_init(data):
+    scalar = pd.Timestamp(data)
+    expected = pd.Series([scalar])
+    actual = cudf.Series([scalar])
+
+    assert_eq(expected, actual)
+
+    expected = pd.Series(scalar)
+    actual = cudf.Series(scalar)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("data", [None, 123, 33243243232423, 0])
+def test_timedelta_series_init(data):
+    scalar = pd.Timedelta(data)
+    expected = pd.Series([scalar])
+    actual = cudf.Series([scalar])
+
+    assert_eq(expected, actual)
+
+    expected = pd.Series(scalar)
+    actual = cudf.Series(scalar)
+
+    assert_eq(expected, actual)

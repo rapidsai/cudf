@@ -1741,6 +1741,10 @@ def test_get_indexer_single_unique_numeric(idx, key, method):
 
         assert_eq(expected, got)
 
+        with cudf.option_context("mode.pandas_compatible", True):
+            got = gi.get_indexer(key, method=method)
+        assert_eq(expected, got, check_dtype=True)
+
 
 @pytest.mark.parametrize(
     "idx",
@@ -1769,6 +1773,12 @@ def test_get_indexer_rangeindex(idx, key, method, tolerance):
     )
 
     assert_eq(expected, got)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gi.get_indexer(
+            key, method=method, tolerance=None if method is None else tolerance
+        )
+    assert_eq(expected, got, check_dtype=True)
 
 
 @pytest.mark.parametrize(
@@ -1950,6 +1960,11 @@ def test_get_indexer_single_duplicate_string(idx, key, method):
 
         assert_eq(expected, got)
 
+        with cudf.option_context("mode.pandas_compatible", True):
+            got = gi.get_indexer(key, method=method)
+
+        assert_eq(expected, got, check_dtype=True)
+
 
 @pytest.mark.parametrize(
     "idx",
@@ -2008,6 +2023,11 @@ def test_get_indexer_multi_numeric(idx, key, method):
     got = gi.get_indexer(key, method=method)
 
     assert_eq(expected, got)
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gi.get_indexer(key, method=method)
+
+    assert_eq(expected, got, check_dtype=True)
 
 
 @pytest.mark.parametrize(
@@ -3203,3 +3223,37 @@ def test_rangeindex_dropna():
     result = ri.dropna()
     expected = ri.copy()
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("data", [range(2), [10, 11, 12]])
+def test_index_contains_hashable(data):
+    gidx = cudf.Index(data)
+    pidx = gidx.to_pandas()
+
+    assert_exceptions_equal(
+        lambda: [] in gidx,
+        lambda: [] in pidx,
+        lfunc_args_and_kwargs=((),),
+        rfunc_args_and_kwargs=((),),
+    )
+
+
+@pytest.mark.parametrize("data", [[0, 1, 2], [1.1, 2.3, 4.5]])
+@pytest.mark.parametrize("dtype", ["int32", "float32", "float64"])
+@pytest.mark.parametrize("needle", [0, 1, 2.3])
+def test_index_contains_float_int(data, dtype, needle):
+    gidx = cudf.Index(data=data, dtype=dtype)
+    pidx = gidx.to_pandas()
+
+    actual = needle in gidx
+    expected = needle in pidx
+
+    assert_eq(actual, expected)
+
+
+def test_Index_init_with_nans():
+    with cudf.option_context("mode.pandas_compatible", True):
+        gi = cudf.Index([1, 2, 3, np.nan])
+    assert gi.dtype == np.dtype("float64")
+    pi = pd.Index([1, 2, 3, np.nan])
+    assert_eq(pi, gi)

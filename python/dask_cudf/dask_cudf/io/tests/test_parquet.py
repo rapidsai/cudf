@@ -443,7 +443,7 @@ def test_create_metadata_file(tmpdir, partition_on):
     dd.assert_eq(ddf1, ddf2)
 
 
-@xfail_dask_expr("dtypes are inconsistent")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 @need_create_meta
 def test_create_metadata_file_inconsistent_schema(tmpdir):
     # NOTE: This test demonstrates that the CudfEngine
