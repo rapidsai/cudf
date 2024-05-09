@@ -66,7 +66,8 @@ requirements:
     {% else %}
     - cuda-nvcc-impl
     {% endif %}
-    - rapids-build-backend
+    # TODO: change this pin to a floor once we have packages
+    - rapids-build-backend ==0.0.2
     - scikit-build-core >=0.7.0
     {% if cuda_major != "11" %}
     - cuda-cudart-dev

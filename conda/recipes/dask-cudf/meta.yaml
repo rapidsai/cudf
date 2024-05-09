@@ -43,7 +43,8 @@ requirements:
     {% else %}
     - cuda-nvcc-impl
     {% endif %}
-    - rapids-build-backend
+    # TODO: change this pin to a floor once we have packages
+    - rapids-build-backend ==0.0.2
     - cuda-version ={{ cuda_version }}
   run:
     - python

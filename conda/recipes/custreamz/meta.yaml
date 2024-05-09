@@ -43,7 +43,8 @@ requirements:
     {% else %}
     - cuda-nvcc-impl
     {% endif %}
-    - rapids-build-backend
+    # TODO: change this pin to a floor once we have packages
+    - rapids-build-backend ==0.0.2
     - python-confluent-kafka >=1.9.0,<1.10.0a0
     - cudf_kafka ={{ version }}
     - cuda-version ={{ cuda_version }}

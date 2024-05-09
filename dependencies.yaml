@@ -324,10 +324,7 @@ dependencies:
           - matrix: {cuda: "11.*"}
             packages: &build_python_packages_cu11
               - &rmm_cu11 rmm-cu11==24.6.*
-          - {matrix: null, packages: null }
-      - output_types: pyproject
-        matrices:
-          - {matrix: null, packages: [*rmm_conda] }
+          - {matrix: null, packages: [*rmm_cu11] }
   libarrow_build:
     common:
       - output_types: conda

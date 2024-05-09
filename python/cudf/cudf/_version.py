@@ -15,11 +15,14 @@
 import importlib.resources
 
 __version__ = (
-    importlib.resources.files("cudf").joinpath("VERSION").read_text().strip()
+    importlib.resources.files(__package__)
+    .joinpath("VERSION")
+    .read_text()
+    .strip()
 )
 try:
     __git_commit__ = (
-        importlib.resources.files("cudf")
+        importlib.resources.files(__package__)
         .joinpath("GIT_COMMIT")
         .read_text()
         .strip()

@@ -94,7 +94,7 @@ regex = "(?P<value>.*)"
 
 [tool.rapids-build-backend]
 build-backend = "scikit_build_core.build"
-commit-file = "cudf_kafka/_version.py"
+commit-file = "cudf_kafka/GIT_COMMIT"
 requires = [
     "cmake>=3.26.4",
     "cython>=3.0.3",

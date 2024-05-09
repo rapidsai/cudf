@@ -56,7 +56,7 @@ Homepage = "https://github.com/rapidsai/cudf"
 
 [tool.rapids-build-backend]
 build-backend = "setuptools.build_meta"
-commit-file = "dask_cudf/_version.py"
+commit-file = "dask_cudf/GIT_COMMIT"
 
 [tool.setuptools]
 license-files = ["LICENSE"]
