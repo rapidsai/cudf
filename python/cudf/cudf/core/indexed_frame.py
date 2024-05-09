@@ -4340,34 +4340,27 @@ class IndexedFrame(Frame):
 
     def _reset_index(self, level, drop, col_level=0, col_fill=""):
         """Shared path for DataFrame.reset_index and Series.reset_index."""
-        if level is not None and not isinstance(level, (tuple, list)):
-            level = (level,)
+        if level is not None:
+            if (
+                isinstance(level, int)
+                and level > 0
+                and not isinstance(self.index, MultiIndex)
+            ):
+                raise IndexError(
+                    f"Too many levels: Index has only 1 level, not {level + 1}"
+                )
+            if not isinstance(level, (tuple, list)):
+                level = (level,)
         _check_duplicate_level_names(level, self._index.names)
 
-        # Split the columns in the index into data and index columns
-        (
-            data_columns,
-            index_columns,
-            data_names,
-            index_names,
-        ) = self._index._split_columns_by_levels(level)
-        if index_columns:
-            index = _index_from_data(
-                dict(enumerate(index_columns)),
-                name=self._index.name,
-            )
-            if isinstance(index, MultiIndex):
-                index.names = index_names
-            else:
-                index.name = index_names[0]
-        else:
+        index = self.index._new_index_for_reset_index(level, self.index.name)
+        if index is None:
             index = RangeIndex(len(self))
-
         if drop:
             return self._data, index
 
         new_column_data = {}
-        for name, col in zip(data_names, data_columns):
+        for name, col in self.index._columns_for_reset_index(level):
             if name == "index" and "index" in self._data:
                 name = "level_0"
             name = (
