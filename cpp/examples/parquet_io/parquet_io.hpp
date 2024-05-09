@@ -92,13 +92,7 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool poo
     {"NONE", compression_type::NONE},
     {"AUTO", compression_type::AUTO},
     {"SNAPPY", compression_type::SNAPPY},
-    {"BZIP2", compression_type::BZIP2},
-    {"BROTLI", compression_type::BROTLI},
-    {"ZIP", compression_type::ZIP},
-    {"XZ", compression_type::XZ},
-    {"ZLIB", compression_type::ZLIB},
     {"LZ4", compression_type::LZ4},
-    {"LZO", compression_type::LZO},
     {"ZSTD", compression_type::ZSTD}};
 
   std::transform(name.begin(), name.end(), name.begin(), ::toupper);
@@ -106,7 +100,7 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool poo
   throw std::invalid_argument("FATAL: " + std::string(name) +
                               " is not a valid compression type.\n\n"
                               "Available compression_type types: NONE, AUTO, SNAPPY,\n"
-                              "BZIP2, BROTLI, ZIP, XZ, ZLIB, LZ4, LZO, ZSTD\n"
+                              "LZ4, ZSTD\n"
                               "\n"
                               "Exiting...\n");
 }
