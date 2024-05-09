@@ -322,17 +322,17 @@ dependencies:
         packages:
           # Allow runtime version to float up to minor version
           # Disallow libarrow 14.0.0 due to a CVE
-          - libarrow-acero>=14.0.1,<15.0.0a0
-          - libarrow-dataset>=14.0.1,<15.0.0a0
-          - libarrow>=14.0.1,<15.0.0a0
-          - libparquet>=14.0.1,<15.0.0a0
+          - libarrow-acero>=16.0.0,<17.0.0a0
+          - libarrow-dataset>=16.0.0,<17.0.0a0
+          - libarrow>=16.0.0,<17.0.0a0
+          - libparquet>=16.0.0,<17.0.0a0
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           # Allow runtime version to float up to minor version
           # Disallow pyarrow 14.0.0 due to a CVE
-          - pyarrow>=14.0.1,<15.0.0a0
+          - pyarrow>=16.0.0,<17.0.0a0
   cuda_version:
     specific:
       - output_types: conda
