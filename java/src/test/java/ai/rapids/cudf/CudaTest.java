@@ -34,13 +34,13 @@ public class CudaTest {
     assertEquals(Cuda.getNativeComputeMode(), Cuda.getComputeMode().nativeId);
   }
 
-  @Tag("noSanitizer")
   @Test
   public void testCudaException() {
     assertThrows(CudaException.class, () -> {
           try {
-            Cuda.memset(Long.MAX_VALUE, (byte) 0, 1024);
-          } catch (CudaFatalException ignored) {
+            Cuda.freePinned(-1L);
+          } catch (CudaFatalException fatalEx) {
+            throw new AssertionError("Expected UnFatalError but got FatalError: " + fatalEx);
           } catch (CudaException ex) {
             assertEquals(CudaException.CudaError.cudaErrorInvalidValue, ex.getCudaError());
             throw ex;
