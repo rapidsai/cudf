@@ -227,7 +227,7 @@ std::mutex& host_mr_mutex()
   return map_lock;
 }
 
-CUDF_EXPORT auto& host_mr()
+auto& host_mr()
 {
   static rmm::host_async_resource_ref host_mr = default_pinned_mr();
   return host_mr;
