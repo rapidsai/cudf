@@ -50,7 +50,10 @@ size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
 }
 
 /**
- * @brief Read from array of data sources into RMM buffer
+ * @brief Read from array of data sources into RMM buffer. The size of the returned device span
+          can be larger than the number of bytes requested from the list of sources when
+          the range to be read spans across multiple sources. This is due to the delimiter
+          characters inserted after the end of each accessed source.
  *
  * @param buffer Device span buffer to which data is read
  * @param sources Array of data sources
@@ -106,7 +109,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
       range_offset = 0;
       delimiter_map.push_back(bytes_read + (num_delimiter_chars * delimiter_map.size()));
     }
-    // In the case where all sources are empty, we needn't insert a delimiter
+    // Removing delimiter inserted after last non-empty source is read
     if (!delimiter_map.empty()) delimiter_map.pop_back();
 
     // If this is a multi-file source, we scatter the JSON line delimiters between files
