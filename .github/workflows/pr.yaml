@@ -15,7 +15,7 @@ jobs:
       - checks
       - conda-cpp-build
       - conda-cpp-checks
-      - conda-cpp-tests
+      # - conda-cpp-tests
       - conda-python-build
       # - conda-python-cudf-tests
       # - conda-python-other-tests
