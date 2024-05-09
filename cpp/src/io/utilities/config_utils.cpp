@@ -103,7 +103,7 @@ class fixed_pinned_pool_memory_resource {
   host_pooled_mr* pool_{nullptr};
   void* pool_begin_{nullptr};
   void* pool_end_{nullptr};
-  cuda::stream_ref stream_{cudf::detail::global_cuda_stream_pool().get_stream(0).value()};
+  cuda::stream_ref stream_{cudf::detail::global_cuda_stream_pool().get_stream().value()};
 
  public:
   fixed_pinned_pool_memory_resource(size_t size)
