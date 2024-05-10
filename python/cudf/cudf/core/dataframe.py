@@ -357,7 +357,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     # as join is not assigning any names to index,
                     # update it over here
                     df.index.name = columns_df.index.name
-                    if not columns_df._data.multiindex and is_numeric_dtype(
+                    if not isinstance(df.index, cudf.MultiIndex) and is_numeric_dtype(
                         df.index.dtype
                     ):
                         # Preserve the original index type.
