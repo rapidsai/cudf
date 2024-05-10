@@ -71,7 +71,7 @@ TEST(IoUtilitiesTest, HostMemoryGetAndSet)
 
 TEST(IoUtilitiesTest, Base64EncodeAndDecode)
 {
-  // a vector oflorem ipsum strings
+  // a vector of lorem ipsum strings
   std::vector<std::string> strings = {
     "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut ",
     "labore et dolore magna aliqua. Id ornare arcu odio ut sem. Ultrices neque ornare aenean ",

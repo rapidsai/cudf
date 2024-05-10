@@ -852,8 +852,8 @@ std::optional<std::string_view> aggregate_reader_metadata::decode_ipc_message(
   }
 
   // All good, return the current message_buf as string_view
-  return std::make_optional(std::string_view{
-    message_buf, static_cast<std::basic_string_view<char>::size_type>(message_size)});
+  return std::string_view{message_buf,
+                          static_cast<std::basic_string_view<char>::size_type>(message_size)};
 }
 
 RowGroup const& aggregate_reader_metadata::get_row_group(size_type row_group_index,
