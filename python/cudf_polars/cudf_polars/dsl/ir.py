@@ -61,7 +61,7 @@ __all__ = [
 
 @dataclass(slots=True)
 class IR:
-    schema: dict
+    schema: dict[str, Any]
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -305,7 +305,7 @@ class Join(IR):
             left = left.replace_columns(*left_on.columns)
             right = right.replace_columns(*right_on.columns)
             if coalesce and how != "outer":
-                right = right.discard_columns(set(right_on.names))
+                right = right.discard_columns(right_on.column_names_set)
             left = DataFrame.from_table(
                 plc.copying.gather(left.table, lg, left_policy), left.column_names
             )
@@ -320,14 +320,18 @@ class Join(IR):
                             left_col.name,
                         )
                         for left_col, right_col in zip(
-                            left.select_columns(set(left_on.names)),
-                            right.select_columns(set(right_on.names)),
+                            left.select_columns(left_on.column_names_set),
+                            right.select_columns(right_on.column_names_set),
                         )
                     )
                 )
-                right.discard_columns(set(right_on.names))
+                right.discard_columns(right_on.column_names_set)
             right = right.rename_columns(
-                {name: f"{name}{suffix}" for name in right.names if name in left.names}
+                {
+                    name: f"{name}{suffix}"
+                    for name in right.column_names
+                    if name in left.column_names_set
+                }
             )
             result = left.with_columns(right.columns)
         return result.slice(zlice)
@@ -374,7 +378,7 @@ class Distinct(IR):
         if self.subset is None:
             indices = list(range(df.num_columns))
         else:
-            indices = [i for i, k in enumerate(df.names) if k in self.subset]
+            indices = [i for i, k in enumerate(df.column_names) if k in self.subset]
         keys_sorted = all(c.is_sorted for c in df.columns)
         if keys_sorted:
             table = plc.stream_compaction.unique(
@@ -429,10 +433,11 @@ class Sort(IR):
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         sort_keys = [k.evaluate(df) for k in self.by]
+        names = {c.name: i for i, c in enumerate(df.columns)}
         keys_in_result = [
             i
             for k in sort_keys
-            if (i := df.names.get(k.name)) is not None and k is df.columns[i]
+            if (i := names.get(k.name)) is not None and k is df.columns[i]
         ]
         table = self.do_sort(
             df.table,
@@ -442,11 +447,11 @@ class Sort(IR):
         )
         columns = [Column(c, old.name) for c, old in zip(table.columns(), df.columns)]
         # If a sort key is in the result table, set the sortedness property
-        for idx in keys_in_result:
-            columns[idx] = columns[idx].set_sorted(
+        for i in keys_in_result:
+            columns[i] = columns[i].set_sorted(
                 is_sorted=plc.types.Sorted.YES,
-                order=self.order[idx],
-                null_order=self.null_order[idx],
+                order=self.order[i],
+                null_order=self.null_order[i],
             )
         return DataFrame(columns, [])
 
@@ -481,7 +486,7 @@ class Projection(IR):
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        return df.select(set(self.schema.keys()))
+        return df.select(list(self.schema.keys()))
 
 
 @dataclass(slots=True)

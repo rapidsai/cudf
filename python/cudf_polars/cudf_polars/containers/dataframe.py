@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import itertools
 from functools import cached_property
 from typing import TYPE_CHECKING
 
@@ -14,6 +13,8 @@ import cudf._lib.pylibcudf as plc
 from cudf_polars.containers.column import Column
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from typing_extensions import Self
 
     import cudf
@@ -30,14 +31,10 @@ class DataFrame:
     __slots__ = ("columns", "scalars", "names", "scalar_names", "table")
     columns: list[Column]
     scalars: list[Scalar]
-    names: dict[str, int]
     scalar_names: frozenset[str]
     table: plc.Table | None
 
     def __init__(self, columns: list[Column], scalars: list[Scalar]) -> None:
-        self.names = dict(zip((c.name for c in columns), itertools.count(0))) | dict(
-            zip((s.name for s in columns), itertools.count(0))
-        )
         self.scalar_names = frozenset(s.name for s in scalars)
         self.columns = columns
         self.scalars = scalars
@@ -47,14 +44,6 @@ class DataFrame:
             self.table = None
 
     __iter__ = None
-
-    def __getitem__(self, name: str) -> Column | Scalar:
-        """Return column with given name."""
-        i = self.names[name]
-        if name in self.scalar_names:
-            return self.scalars[i]
-        else:
-            return self.columns[i]
 
     @cached_property
     def column_names_set(self) -> set[str]:
@@ -104,7 +93,7 @@ class DataFrame:
         ]
         return self
 
-    def with_columns(self, columns: list[Column]) -> Self:
+    def with_columns(self, columns: Sequence[Column]) -> Self:
         """
         Return a new dataframe with extra columns.
 
@@ -118,16 +107,17 @@ class DataFrame:
             [c for c in self.columns if c.name not in names], self.scalars
         )
 
-    def select(self, names: set[str]) -> Self:
+    def select(self, names: Sequence[str]) -> Self:
         """Select columns by name returning DataFrame."""
-        return type(self)([c for c in self.columns if c.name in names], self.scalars)
+        want = set(names)
+        return type(self)([c for c in self.columns if c.name in want], self.scalars)
 
     def replace_columns(self, *columns: Column) -> Self:
         """Return a new dataframe with columns replaced by name."""
         new = {c.name: c for c in columns}
         if set(new).intersection(self.scalar_names):
             raise ValueError("Cannot replace scalars")
-        if not set(new).issubset(self.names):
+        if not set(new).issubset(self.column_names_set):
             raise ValueError("Cannot replace with non-existing names")
         return type(self)([new.get(c.name, c) for c in self.columns], self.scalars)
 
