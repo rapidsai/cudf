@@ -3193,20 +3193,22 @@ def test_parquet_reader_roundtrip_with_arrow_schema():
             "ms": pd.Series([1234, 3456, 32442], dtype="timedelta64[ms]"),
             "us": pd.Series([1234, 3456, 32442], dtype="timedelta64[us]"),
             "ns": pd.Series([1234, 3456, 32442], dtype="timedelta64[ns]"),
-            "duration_list": [
+            "duration_list": list(
                 [
-                    datetime.timedelta(minutes=7, seconds=4),
-                    datetime.timedelta(minutes=7),
-                ],
-                [
-                    datetime.timedelta(minutes=7, seconds=4),
-                    datetime.timedelta(minutes=7),
-                ],
-                [
-                    datetime.timedelta(minutes=7, seconds=4),
-                    datetime.timedelta(minutes=7),
-                ],
-            ],
+                    [
+                        datetime.timedelta(minutes=7, seconds=4),
+                        datetime.timedelta(minutes=7),
+                    ],
+                    [
+                        datetime.timedelta(minutes=7, seconds=4),
+                        datetime.timedelta(minutes=7),
+                    ],
+                    [
+                        datetime.timedelta(minutes=7, seconds=4),
+                        datetime.timedelta(minutes=7),
+                    ],
+                ]
+            ),
             "int64": pd.Series([1234, 123, 4123], dtype="int64"),
             "list": list([[1, 2], [1, 2], [1, 2]]),
             "datetime": pd.Series([1234, 123, 4123], dtype="datetime64[ms]"),
@@ -3256,7 +3258,7 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema():
                         {
                             "Name": "ZoneName",
                             "Value": "RAPIDS",
-                            "Duration": datetime.timedelta(minutes=1),
+                            "Duration": datetime.timedelta(seconds=1),
                         }
                     ],
                 }
