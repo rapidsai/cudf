@@ -303,7 +303,20 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
         "
       )
     endif()
-
+    rapids_cmake_install_lib_dir(lib_dir)
+    if(TARGET arrow_static)
+      get_target_property(interface_libs arrow_static INTERFACE_LINK_LIBRARIES)
+      # The `arrow_static` library is leaking a dependency on the object libraries it was built with
+      # we need to remove this from the interface, since keeping them around would cause duplicate
+      # symbols and CMake export errors
+      if(interface_libs MATCHES "arrow_array" AND interface_libs MATCHES "arrow_compute")
+        string(REPLACE "BUILD_INTERFACE:" "BUILD_LOCAL_INTERFACE:" interface_libs
+                       "${interface_libs}"
+        )
+        set_target_properties(arrow_static PROPERTIES INTERFACE_LINK_LIBRARIES "${interface_libs}")
+        get_target_property(interface_libs arrow_static INTERFACE_LINK_LIBRARIES)
+      endif()
+    endif()
     rapids_export(
       BUILD Arrow
       VERSION ${VERSION}
@@ -390,14 +403,11 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     BUILD Arrow [=[${CMAKE_CURRENT_LIST_DIR}]=] EXPORT_SET cudf-exports
   )
   rapids_export_find_package_root(
-    BUILD Parquet [=[${CMAKE_CURRENT_LIST_DIR}]=]
-    EXPORT_SET cudf-exports
-    CONDITION ENABLE_PARQUET
+    BUILD Parquet [=[${CMAKE_CURRENT_LIST_DIR}]=] EXPORT_SET cudf-exports CONDITION ENABLE_PARQUET
   )
   rapids_export_find_package_root(
-    BUILD ArrowDataset [=[${CMAKE_CURRENT_LIST_DIR}]=]
-    EXPORT_SET cudf-exports
-    CONDITION ENABLE_PARQUET
+    BUILD ArrowDataset [=[${CMAKE_CURRENT_LIST_DIR}]=] EXPORT_SET cudf-exports CONDITION
+    ENABLE_PARQUET
   )
 
   set(ARROW_LIBRARIES
