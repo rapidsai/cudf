@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,42 +16,42 @@
 
 #include <benchmarks/join/join_common.hpp>
 
-template <typename key_type, typename payload_type>
+template <typename Key>
 class Join : public cudf::benchmark {};
 
-#define LEFT_ANTI_JOIN_BENCHMARK_DEFINE(name, key_type, payload_type, nullable) \
-  BENCHMARK_TEMPLATE_DEFINE_F(Join, name, key_type, payload_type)               \
-  (::benchmark::State & st)                                                     \
-  {                                                                             \
-    auto join = [](cudf::table_view const& left,                                \
-                   cudf::table_view const& right,                               \
-                   cudf::null_equality compare_nulls) {                         \
-      return cudf::left_anti_join(left, right, compare_nulls);                  \
-    };                                                                          \
-    BM_join<key_type, payload_type, nullable>(st, join);                        \
+#define LEFT_ANTI_JOIN_BENCHMARK_DEFINE(name, Key, Nullable)   \
+  BENCHMARK_TEMPLATE_DEFINE_F(Join, name, Key)                 \
+  (::benchmark::State & st)                                    \
+  {                                                            \
+    auto join = [](cudf::table_view const& left,               \
+                   cudf::table_view const& right,              \
+                   cudf::null_equality compare_nulls) {        \
+      return cudf::left_anti_join(left, right, compare_nulls); \
+    };                                                         \
+    BM_join<Key, Nullable>(st, join);                          \
   }
 
-LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_32bit, int32_t, int32_t, false);
-LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_64bit, int64_t, int64_t, false);
-LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_32bit_nulls, int32_t, int32_t, true);
-LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_64bit_nulls, int64_t, int64_t, true);
+LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_32bit, int32_t, false);
+LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_64bit, int64_t, false);
+LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_32bit_nulls, int32_t, true);
+LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_64bit_nulls, int64_t, true);
 
-#define LEFT_SEMI_JOIN_BENCHMARK_DEFINE(name, key_type, payload_type, nullable) \
-  BENCHMARK_TEMPLATE_DEFINE_F(Join, name, key_type, payload_type)               \
-  (::benchmark::State & st)                                                     \
-  {                                                                             \
-    auto join = [](cudf::table_view const& left,                                \
-                   cudf::table_view const& right,                               \
-                   cudf::null_equality compare_nulls) {                         \
-      return cudf::left_semi_join(left, right, compare_nulls);                  \
-    };                                                                          \
-    BM_join<key_type, payload_type, nullable>(st, join);                        \
+#define LEFT_SEMI_JOIN_BENCHMARK_DEFINE(name, Key, Nullable)   \
+  BENCHMARK_TEMPLATE_DEFINE_F(Join, name, Key)                 \
+  (::benchmark::State & st)                                    \
+  {                                                            \
+    auto join = [](cudf::table_view const& left,               \
+                   cudf::table_view const& right,              \
+                   cudf::null_equality compare_nulls) {        \
+      return cudf::left_semi_join(left, right, compare_nulls); \
+    };                                                         \
+    BM_join<Key, Nullable>(st, join);                          \
   }
 
-LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_32bit, int32_t, int32_t, false);
-LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_64bit, int64_t, int64_t, false);
-LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_32bit_nulls, int32_t, int32_t, true);
-LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_64bit_nulls, int64_t, int64_t, true);
+LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_32bit, int32_t, false);
+LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_64bit, int64_t, false);
+LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_32bit_nulls, int32_t, true);
+LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_64bit_nulls, int64_t, true);
 
 // left anti-join -------------------------------------------------------------
 BENCHMARK_REGISTER_F(Join, left_anti_join_32bit)
