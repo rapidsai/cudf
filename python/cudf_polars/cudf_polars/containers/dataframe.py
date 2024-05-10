@@ -12,12 +12,13 @@ from typing import TYPE_CHECKING
 import cudf._lib.pylibcudf as plc
 
 from cudf_polars.containers.column import Column
-from cudf_polars.containers.scalar import Scalar
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
     import cudf
+
+    from cudf_polars.containers.scalar import Scalar
 
 
 __all__: list[str] = ["DataFrame"]
@@ -56,6 +57,11 @@ class DataFrame:
             return self.columns[i]
 
     @cached_property
+    def column_names_set(self) -> set[str]:
+        """Return the column names as a set."""
+        return {c.name for c in self.columns}
+
+    @cached_property
     def column_names(self) -> list[str]:
         """Return a list of the column names."""
         return [c.name for c in self.columns]
@@ -87,28 +93,34 @@ class DataFrame:
             raise ValueError("Mismatching name and table length.")
         return cls([Column(c, name) for c, name in zip(table.columns(), names)], [])
 
-    def with_sorted(self, *, like: DataFrame) -> Self:
+    def with_sorted(self, *, like: DataFrame, subset: set[str] | None = None) -> Self:
         """Copy sortedness from a dataframe onto self."""
         if like.column_names != self.column_names:
             raise ValueError("Can only copy from identically named frame")
+        subset = self.column_names_set if subset is None else subset
         self.columns = [
-            c.with_sorted(like=other) for c, other in zip(self.columns, like.columns)
+            c.with_sorted(like=other) if c.name in subset else c
+            for c, other in zip(self.columns, like.columns)
         ]
         return self
 
-    def with_columns(self, *columns: Column | Scalar) -> Self:
+    def with_columns(self, columns: list[Column]) -> Self:
         """
         Return a new dataframe with extra columns.
 
         Data is shared.
         """
-        cols = [c for c in columns if isinstance(c, Column)]
-        scalars = [c for c in columns if isinstance(c, Scalar)]
-        return type(self)([*self.columns, *cols], [*self.scalars, *scalars])
+        return type(self)([*self.columns, *columns], self.scalars)
 
     def discard_columns(self, names: set[str]) -> Self:
         """Drop columns by name."""
-        return type(self)([c for c in self.columns if c not in names], self.scalars)
+        return type(self)(
+            [c for c in self.columns if c.name not in names], self.scalars
+        )
+
+    def select(self, names: set[str]) -> Self:
+        """Select columns by name returning DataFrame."""
+        return type(self)([c for c in self.columns if c.name in names], self.scalars)
 
     def replace_columns(self, *columns: Column) -> Self:
         """Return a new dataframe with columns replaced by name."""

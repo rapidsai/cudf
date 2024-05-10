@@ -119,7 +119,7 @@ class Scan(IR):
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.null_order.AFTER,
             )
-            df = df.with_columns(index)
+            df = df.with_columns([index])
         if self.predicate is None:
             return df
         else:
@@ -179,7 +179,7 @@ class Select(IR):
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         for e in self.cse:
-            df = df.with_columns(e.evaluate(df))
+            df = df.with_columns([e.evaluate(df)])
         return DataFrame([e.evaluate(df) for e in self.expr], [])
 
 
@@ -329,7 +329,7 @@ class Join(IR):
             right = right.rename_columns(
                 {name: f"{name}{suffix}" for name in right.names if name in left.names}
             )
-            result = left.with_columns(*right.columns)
+            result = left.with_columns(right.columns)
         return result.slice(zlice)
 
 
@@ -341,7 +341,7 @@ class HStack(IR):
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        return df.with_columns(*(c.evaluate(df) for c in self.columns))
+        return df.with_columns([c.evaluate(df) for c in self.columns])
 
 
 @dataclass(slots=True)
@@ -457,16 +457,31 @@ class Slice(IR):
     offset: int
     length: int
 
+    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        df = self.df.evaluate(cache=cache)
+        return df.slice((self.offset, self.length))
+
 
 @dataclass(slots=True)
 class Filter(IR):
     df: IR
     mask: Expr
 
+    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        df = self.df.evaluate(cache=cache)
+        return df.filter(self.mask.evaluate(df))
+
 
 @dataclass(slots=True)
 class Projection(IR):
     df: IR
+
+    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        df = self.df.evaluate(cache=cache)
+        return df.select(set(self.schema.keys()))
 
 
 @dataclass(slots=True)
@@ -474,6 +489,84 @@ class MapFunction(IR):
     df: IR
     name: str
     options: Any
+
+    _NAMES: ClassVar[frozenset[str]] = frozenset(
+        [
+            "drop_nulls",
+            "rechunk",
+            "merge_sorted",
+            "rename",
+            "explode",
+        ]
+    )
+
+    def __post_init__(self):
+        """Validate preconditions."""
+        if self.name not in MapFunction._NAMES:
+            raise NotImplementedError(f"Unhandled map function {self.name}")
+        if self.name == "explode":
+            (to_explode,) = self.options
+            if len(to_explode) > 1:
+                # TODO: straightforward, but need to error check
+                # polars requires that all to-explode columns have the
+                # same sub-shapes
+                raise NotImplementedError("Explode with more than one column")
+        elif self.name == "merge_sorted":
+            assert isinstance(self.df, Union)
+            (key_column,) = self.options
+            if key_column not in self.df.dfs[0].schema:
+                raise ValueError(f"Key column {key_column} not found")
+
+    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        if self.name == "merge_sorted":
+            # merge_sorted operates on Union inputs
+            # but if we evaluate the Union then we can't unpick the
+            # pieces, so we dive inside and evaluate the pieces by hand
+            assert isinstance(self.df, Union)
+            first, *rest = (c.evaluate(cache=cache) for c in self.df.dfs)
+            (key_column,) = self.options
+            if not all(first.column_names == r.column_names for r in rest):
+                raise ValueError("DataFrame shapes/column names don't match")
+            # Already validated that key_column is in column names
+            index = first.column_names.index(key_column)
+            return DataFrame.from_table(
+                plc.merge.merge_sorted(
+                    [first.table, *(df.table for df in rest)],
+                    [index],
+                    [plc.types.Order.ASCENDING],
+                    [plc.types.NullOrder.BEFORE],
+                ),
+                first.column_names,
+            ).with_sorted(like=first, subset={key_column})
+        elif self.name == "rechunk":
+            # No-op in our data model
+            return self.df.evaluate(cache=cache)
+        elif self.name == "drop_nulls":
+            df = self.df.evaluate(cache=cache)
+            (subset,) = self.options
+            subset = set(subset)
+            indices = [i for i, name in enumerate(df.column_names) if name in subset]
+            return DataFrame.from_table(
+                plc.stream_compaction.drop_nulls(df.table, indices, len(indices)),
+                df.column_names,
+            ).with_sorted(like=df)
+        elif self.name == "rename":
+            df = self.df.evaluate(cache=cache)
+            # final tag is "swapping" which is useful for the
+            # optimiser (it blocks some pushdown operations)
+            old, new, _ = self.options
+            return df.rename_columns(dict(zip(old, new)))
+        elif self.name == "explode":
+            df = self.df.evaluate(cache=cache)
+            ((to_explode,),) = self.options
+            index = df.column_names.index(to_explode)
+            subset = df.column_names_set - {to_explode}
+            return DataFrame.from_table(
+                plc.lists.explode_outer(df.table, index), df.column_names
+            ).with_sorted(like=df, subset=subset)
+        else:
+            raise AssertionError("Should never be reached")
 
 
 @dataclass(slots=True)
