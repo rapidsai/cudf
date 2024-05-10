@@ -34,6 +34,7 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <cub/cub.cuh>
 #include <cuda/atomic>
 #include <cuda/functional>
 #include <thrust/for_each.h>
@@ -260,6 +261,40 @@ struct ascii_converter_fn {
   __device__ char operator()(char chr) { return converter.process_ascii(chr); }
 };
 
+constexpr int64_t block_size = 512;
+
+/**
+ * @brief Checks the chars data for any multibyte characters
+ *
+ * The output count is not accurate but it is only checked for > 0.
+ */
+CUDF_KERNEL void has_multibytes_kernel(char const* d_input_chars,
+                                       int64_t first_offset,
+                                       int64_t last_offset,
+                                       int64_t* d_output)
+{
+  auto const idx = cudf::detail::grid_1d::global_thread_id();
+  // read only every 2nd byte; all bytes in a multibyte char have high bit set
+  auto const byte_idx = (static_cast<int64_t>(idx) * 2L) + first_offset;
+  auto const lane_idx = static_cast<cudf::size_type>(threadIdx.x);
+  if (byte_idx >= last_offset) { return; }
+
+  using block_reduce = cub::BlockReduce<int64_t, block_size>;
+  __shared__ typename block_reduce::TempStorage temp_storage;
+
+  u_char const chr = static_cast<u_char>(d_input_chars[byte_idx]);
+  int64_t mb_count = ((chr & 0x80) > 0);  // high bit indicates multibyte
+
+  auto const mb_total = block_reduce(temp_storage).Reduce(mb_count, cub::Sum());
+
+  if (lane_idx == 0) {
+    if (mb_total > 0) {
+      cuda::atomic_ref<int64_t, cuda::thread_scope_block> ref{*d_output};
+      ref.fetch_add(mb_total, cuda::std::memory_order_relaxed);
+    }
+  }
+}
+
 /**
  * @brief Utility method for converting upper and lower case characters
  * in a strings column
@@ -289,7 +324,8 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
                                                       input.offsets(), input.offset(), stream);
   auto const last_offset =
     cudf::strings::detail::get_offset_value(input.offsets(), input.size() + input.offset(), stream);
-  auto const chars_size = last_offset - first_offset;
+  auto const chars_size  = last_offset - first_offset;
+  auto const input_chars = input.chars_begin(stream);
 
   convert_char_fn ccfn{case_flag, d_flags, d_cases, d_special};
   upper_lower_fn converter{ccfn, *d_strings};
@@ -307,16 +343,15 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
 
   // Check if the input contains any multi-byte characters.
   // This check incurs ~20% performance hit for smaller strings and so we only use it
-  // after the threshold check above. The check makes very little impact for larger strings
+  // after the threshold check above. The check makes very little impact for long strings
   // but results in a large performance gain when the input contains only single-byte characters.
-  // The count_if is faster than any_of or all_of: https://github.com/NVIDIA/thrust/issues/1016
-  bool const multi_byte_chars =
-    thrust::count_if(rmm::exec_policy(stream),
-                     input.chars_begin(stream),
-                     input.chars_end(stream),
-                     cuda::proclaim_return_type<bool>(
-                       [] __device__(auto chr) { return is_utf8_continuation_char(chr); })) > 0;
-  if (!multi_byte_chars) {
+  rmm::device_scalar<int64_t> mb_count(0, stream);
+  // cudf::detail::grid_1d is limited to size_type elements
+  auto const num_blocks = util::div_rounding_up_safe(chars_size / 2L, block_size);
+  // we only need to check every other byte since either will contain high bit
+  has_multibytes_kernel<<<num_blocks, block_size, 0, stream.value()>>>(
+    input_chars, first_offset, last_offset, mb_count.data());
+  if (mb_count.value(stream) == 0) {
     // optimization for ASCII-only case: copy the input column and inplace replace each character
     auto result  = std::make_unique<column>(input.parent(), stream, mr);
     auto d_chars = result->mutable_view().head<char>();
@@ -330,21 +365,21 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   // note: tried to use segmented-reduce approach instead here and it was consistently slower
   auto [offsets, bytes] = [&] {
     rmm::device_uvector<size_type> sizes(input.size(), stream);
-    constexpr int block_size = 512;
-    cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
-    count_bytes_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+    // cudf::detail::grid_1d is limited to size_type threads
+    auto const num_blocks = util::div_rounding_up_safe(
+      static_cast<int64_t>(input.size()) * cudf::detail::warp_size, block_size);
+    count_bytes_kernel<<<num_blocks, block_size, 0, stream.value()>>>(
       ccfn, *d_strings, sizes.data());
     // convert sizes to offsets
     return cudf::strings::detail::make_offsets_child_column(sizes.begin(), sizes.end(), stream, mr);
   }();
 
   // build sub-offsets
-  auto const input_chars = input.chars_begin(stream);
-  auto const sub_count   = chars_size / LS_SUB_BLOCK_SIZE;
-  auto tmp_offsets       = rmm::device_uvector<int64_t>(sub_count + input.size() + 1, stream);
+  auto const sub_count = chars_size / LS_SUB_BLOCK_SIZE;
+  auto tmp_offsets     = rmm::device_uvector<int64_t>(sub_count + input.size() + 1, stream);
   {
-    rmm::device_uvector<size_type> sub_offsets(sub_count, stream);
-    auto const count_itr = thrust::make_counting_iterator<size_type>(0);
+    rmm::device_uvector<int64_t> sub_offsets(sub_count, stream);
+    auto const count_itr = thrust::make_counting_iterator<int64_t>(0);
     thrust::transform(rmm::exec_policy_nosync(stream),
                       count_itr,
                       count_itr + sub_count,
@@ -360,6 +395,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
                   sub_offsets.begin(),
                   sub_offsets.end(),
                   tmp_offsets.begin());
+    stream.synchronize();  // protect against destruction of sub_offsets
   }
 
   // run case conversion over the new sub-strings
