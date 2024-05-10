@@ -38,20 +38,20 @@ def title_data():
 
 def test_capitalize(title_data):
     plc_col = plc.interop.from_arrow(title_data)
-    got = plc.strings.capitalize(plc_col)
+    got = plc.strings.capitalize.capitalize(plc_col)
     expected = pa.compute.utf8_capitalize(title_data)
     assert_column_eq(got, expected)
 
 
 def test_title(title_data):
     plc_col = plc.interop.from_arrow(title_data)
-    got = plc.strings.title(plc_col)
+    got = plc.strings.capitalize.title(plc_col)
     expected = pa.compute.utf8_title(title_data)
     assert_column_eq(got, expected)
 
 
 def test_is_title(is_title_data):
     plc_col = plc.interop.from_arrow(is_title_data)
-    got = plc.strings.is_title(plc_col)
+    got = plc.strings.capitalize.is_title(plc_col)
     expected = pa.compute.utf8_is_title(is_title_data)
     assert_column_eq(got, expected)
