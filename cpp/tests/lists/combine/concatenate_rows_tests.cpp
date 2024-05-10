@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/lists/combine.hpp>
+#include <cudf/utilities/error.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -53,7 +54,7 @@ TEST_F(ListConcatenateRowsTest, InvalidInput)
     auto const col1 = IntListsCol{}.release();
     auto const col2 = StrListsCol{}.release();
     EXPECT_THROW(cudf::lists::concatenate_rows(TView{{col1->view(), col2->view()}}),
-                 cudf::logic_error);
+                 cudf::data_type_error);
   }
 }
 

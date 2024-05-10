@@ -543,11 +543,6 @@ struct ListGetStructValueTest : public cudf::test::BaseFixture {
   }
 
   /**
-   * @brief Create a 0-length structs column
-   */
-  SCW zero_length_struct() { return SCW{}; }
-
-  /**
    * @brief Concatenate structs columns, allow specifying inputs in `initializer_list`
    */
   std::unique_ptr<cudf::column> concat(std::initializer_list<SCW> rows)
@@ -653,7 +648,7 @@ TYPED_TEST(ListGetStructValueTest, NonNestedGetNonNullEmpty)
   cudf::size_type index = 2;
   // For well-formed list column, an empty list still holds the complete structure of
   // a 0-length structs column
-  auto expected_data = this->zero_length_struct();
+  auto expected_data = this->make_test_structs_column({}, {}, {}, no_nulls());
 
   auto s       = cudf::get_element(list_column->view(), index);
   auto typed_s = static_cast<cudf::list_scalar const*>(s.get());
@@ -757,8 +752,8 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNonNullEmpty)
   auto list_column_nested =
     this->make_test_lists_column(3, {0, 1, 1, 2}, std::move(list_column), {1, 1, 1});
 
-  auto expected_data =
-    this->make_test_lists_column(0, {0}, this->zero_length_struct().release(), {});
+  auto expected_data = this->make_test_lists_column(
+    0, {0}, this->make_test_structs_column({}, {}, {}, no_nulls()).release(), {});
 
   cudf::size_type index = 1;
   auto s                = cudf::get_element(list_column_nested->view(), index);

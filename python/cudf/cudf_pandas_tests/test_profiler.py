@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -30,11 +30,14 @@ def test_profiler():
 
     per_function_stats = profiler.per_function_stats
     assert set(per_function_stats) == {
+        "Timestamp",
         "DataFrame",
         "DataFrame.groupby",
         "DataFrameGroupBy.sum",
         "DataFrame.sum",
         "Series.__getitem__",
+        "Timedelta",
+        "Timestamp.__add__",
     }
     for name, func in per_function_stats.items():
         assert (
