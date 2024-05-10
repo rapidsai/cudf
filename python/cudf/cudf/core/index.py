@@ -1515,9 +1515,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         )
 
     def repeat(self, repeats, axis=None):
-        return self._from_columns_like_self(
+        res = self._from_columns_like_self(
             Frame._repeat([*self._columns], repeats, axis), self._column_names
         )
+        if isinstance(res, DatetimeIndex):
+            res._freq = None
+        return res
 
     @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
