@@ -1949,16 +1949,17 @@ def as_column(
                     f"Cannot convert a {inferred_dtype} of object type"
                 )
             elif (
-                not nan_as_null
-                and inferred_dtype == "string"
-                and any(
-                    isinstance(x, float) and np.isnan(x) for x in arbitrary
-                )
+                cudf.get_option("mode.pandas_compatible")
+                and inferred_dtype == "boolean"
             ):
                 raise MixedTypeError(f"Cannot have NaN with {inferred_dtype}")
             elif nan_as_null is False and (
-                pd.isna(arbitrary).any()
-                and inferred_dtype not in ("decimal", "empty", "string")
+                any(
+                    (isinstance(x, (np.floating, float)) and np.isnan(x))
+                    or (inferred_dtype == "boolean" and pd.isna(arbitrary))
+                    for x in np.asarray(arbitrary)
+                )
+                and inferred_dtype not in ("decimal", "empty")
             ):
                 # Decimal can hold float("nan")
                 # All np.nan is not restricted by type

@@ -2360,10 +2360,11 @@ def test_bool_series_mixed_dtype_error():
     ps = pd.Series([True, False, None])
     # ps now has `object` dtype, which
     # isn't supported by `cudf`.
-    with pytest.raises(TypeError):
-        cudf.Series(ps, nan_as_null=False)
-    with pytest.raises(TypeError):
-        cudf.from_pandas(ps, nan_as_null=False)
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(TypeError):
+            cudf.Series(ps)
+        with pytest.raises(TypeError):
+            cudf.from_pandas(ps)
 
 
 @pytest.mark.parametrize(
