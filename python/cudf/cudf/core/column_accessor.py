@@ -273,7 +273,7 @@ class ColumnAccessor(abc.MutableMapping):
             except AttributeError:
                 pass
 
-        # nrows should only be cleared if no data is before/after the op.
+        # nrows should only be cleared if empty before/after the op.
         if (old_ncols == 0 or new_ncols == 0) and hasattr(self, "nrows"):
             del self.nrows
 
