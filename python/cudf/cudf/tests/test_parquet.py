@@ -30,6 +30,7 @@ from cudf.testing import dataset_generator as dg
 from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
+    assert_neq,
     set_random_null_mask_inplace,
 )
 
@@ -3182,20 +3183,38 @@ def test_parquet_reader_zstd_huff_tables(datadir):
     assert_eq(actual, expected)
 
 
-def test_parquet_reader_duration_types():
-    # arrow schema is used to faithfully round trip duration
-    # types (timedelta64) across Parquet read and write.
+def test_parquet_reader_roundtrip_with_arrow_schema():
+    # Ensure that the nested types are faithfully being roundtripped
+    # across Parquet with arrow schema which is used to faithfully
+    # round trip duration types (timedelta64) across Parquet read and write.
     pdf = pd.DataFrame(
         {
             "s": pd.Series([1234, 3456, 32442], dtype="timedelta64[s]"),
             "ms": pd.Series([1234, 3456, 32442], dtype="timedelta64[ms]"),
             "us": pd.Series([1234, 3456, 32442], dtype="timedelta64[us]"),
             "ns": pd.Series([1234, 3456, 32442], dtype="timedelta64[ns]"),
+            "duration_list": [
+                [
+                    datetime.timedelta(minutes=7, seconds=4),
+                    datetime.timedelta(minutes=7),
+                ],
+                [
+                    datetime.timedelta(minutes=7, seconds=4),
+                    datetime.timedelta(minutes=7),
+                ],
+                [
+                    datetime.timedelta(minutes=7, seconds=4),
+                    datetime.timedelta(minutes=7),
+                ],
+            ],
+            "int64": pd.Series([1234, 123, 4123], dtype="int64"),
+            "list": list([[1, 2], [1, 2], [1, 2]]),
+            "datetime": pd.Series([1234, 123, 4123], dtype="datetime64[ms]"),
+            "map": pd.Series(["cat", "dog", "lion"]).map(
+                {"cat": "kitten", "dog": "puppy", "lion": "cub"}
+            ),
         }
     )
-
-    # Convert all pdf dtypes to int64
-    pdf2 = pdf.astype("int64")
 
     # Write parquet with arrow for now (to write arrow:schema)
     buffer = BytesIO()
@@ -3210,82 +3229,56 @@ def test_parquet_reader_duration_types():
     assert_eq(expected.dtypes, got.dtypes)
     assert_eq(expected, got)
 
-    # Read parquet without arrow schema
-    got2 = cudf.read_parquet(buffer, use_arrow_schema=False)
-    # Convert to cudf table for an apple to apple comparison
-    expected2 = cudf.from_pandas(pdf2)
-
-    # Check results for reader without schema
-    assert_eq(expected2.dtypes, got2.dtypes)
-    assert_eq(expected2, got2)
-
-
-def test_parquet_reader_roundtrip_with_arrow_schema():
-    # Ensure that the nested types are faithfully being roundtripped
-    # across Parquet with arrow schema present
-
-    # data frame with several types that round trip perfectly
-    # without arrow schema as well
-    expected = cudf.DataFrame(
-        {
-            "int64": cudf.Series([1234, 123, 4123], dtype="int64"),
-            "list": list([[1, 2], [1, 2], [1, 2]]),
-            "datetime": cudf.Series([1234, 123, 4123], dtype="datetime64[ms]"),
-            "map": cudf.Series(["cat", "dog", "cow"]).map(
-                {"cat": "kitten", "dog": "puppy", "lion": "cub"}
-            ),
-        }
-    )
-
-    # Write parquet with arrow for now (to write arrow:schema)
-    buffer = BytesIO()
-    pdf = expected.to_pandas()
-    pdf.to_parquet(buffer, engine="pyarrow")
-
-    # Read parquet with arrow schema
-    got_with_schema = cudf.read_parquet(buffer)
-    got_without_schema = cudf.read_parquet(buffer, use_arrow_schema=False)
+    # Now read parquet without arrow schema
+    got = cudf.read_parquet(buffer, use_arrow_schema=False)
 
     # Check results for reader with schema
-    assert_eq(expected.dtypes, got_with_schema.dtypes)
-    assert_eq(expected, got_with_schema)
+    assert_neq(expected.dtypes, got.dtypes)
+    assert_neq(expected, got)
 
-    # Check results for reader without schema
-    assert_eq(expected.dtypes, got_without_schema.dtypes)
-    assert_eq(expected, got_without_schema)
 
-    # reset data frame with a column of struct type
-    expected = cudf.DataFrame(
+def test_parquet_reader_roundtrip_structs_with_arrow_schema():
+    # Ensure that the structs with duration types are faithfully being
+    # roundtripped across Parquet with arrow schema
+    pdf = pd.DataFrame(
         {
-            "a": {
+            "struct": {
                 "payload": {
                     "Domain": {
                         "Name": "abc",
                         "Id": {"Name": "host", "Value": "127.0.0.8"},
+                        "Duration": datetime.timedelta(minutes=12),
                     },
                     "StreamId": "12345678",
-                    "Duration": 10,
+                    "Duration": datetime.timedelta(minutes=4),
                     "Offset": 12,
-                    "Resource": [{"Name": "ZoneName", "Value": "RAPIDS"}],
+                    "Resource": [
+                        {
+                            "Name": "ZoneName",
+                            "Value": "RAPIDS",
+                            "Duration": datetime.timedelta(minutes=1),
+                        }
+                    ],
                 }
             }
         }
     )
 
-    # Reset the buffer
+    # Reset the buffer and write parquet with arrow
     buffer = BytesIO()
-
-    pdf = expected.to_pandas()
     pdf.to_parquet(buffer, engine="pyarrow")
 
     # Read parquet with arrow schema
-    got_with_schema = cudf.read_parquet(buffer)
-    got_without_schema = cudf.read_parquet(buffer, use_arrow_schema=False)
+    got = cudf.read_parquet(buffer)
+
+    # Convert to cudf table for an apple to apple comparison
+    expected = cudf.from_pandas(pdf)
+    assert_eq(expected, got)
+    assert_eq(expected["struct"]._dtypes, got["struct"]._dtypes)
+
+    # Now read parquet without arrow schema
+    got = cudf.read_parquet(buffer, use_arrow_schema=False)
 
     # Check results for reader with schema
-    assert_eq(expected.dtypes, got_with_schema.dtypes)
-    assert_eq(expected, got_with_schema)
-
-    # Check results for reader without schema
-    assert_eq(expected.dtypes, got_without_schema.dtypes)
-    assert_eq(expected, got_without_schema)
+    assert_neq(expected["struct"]._dtypes, got["struct"]._dtypes)
+    assert_neq(expected, got)

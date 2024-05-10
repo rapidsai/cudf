@@ -639,7 +639,7 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
       return true;
     };
 
-  // Question: Should we check if any file has the "ARROW:schema" key or
+  // TODO: Should we check if any file has the "ARROW:schema" key or
   // Or if all files have the same "ARROW:schema"?
   auto const it = keyval_maps[0].find("ARROW:schema");
   if (it == keyval_maps[0].end()) { return {}; }
@@ -754,7 +754,7 @@ void aggregate_reader_metadata::apply_arrow_schema()
 
   // verify equal number of children for both schemas at root level
   if (pq_schema_root.num_children != static_cast<int32_t>(arrow_schema_root.children.size())) {
-    CUDF_LOG_DEBUG("Parquet reader encountered a mismatch between Parquet and arrow schema.",
+    CUDF_LOG_ERROR("Parquet reader encountered a mismatch between Parquet and arrow schema.",
                    "arrow:schema not processed.");
     return;
   }
@@ -766,7 +766,7 @@ void aggregate_reader_metadata::apply_arrow_schema()
                         return validate_schemas(arrow_schema_root.children[idx],
                                                 pq_schema_root.children_idx[idx]);
                       })) {
-    CUDF_LOG_DEBUG("Parquet reader encountered a mismatch between Parquet and arrow schema.",
+    CUDF_LOG_ERROR("Parquet reader encountered a mismatch between Parquet and arrow schema.",
                    "arrow:schema not processed.");
     return;
   }
@@ -785,7 +785,7 @@ std::optional<std::string_view> aggregate_reader_metadata::decode_ipc_message(
 {
   // Constants copied from arrow source and renamed to match the case
   constexpr auto MESSAGE_DECODER_NEXT_REQUIRED_SIZE_INITIAL         = sizeof(int32_t);
-  constexpr auto message_decoder_next_required_size_metadata_length = sizeof(int32_t);
+  constexpr auto MESSAGE_DECODER_NEXT_REQUIRED_SIZE_METADATA_LENGTH = sizeof(int32_t);
   constexpr int32_t IPC_CONTINUATION_TOKEN                          = -1;
 
   // message buffer
@@ -821,14 +821,14 @@ std::optional<std::string_view> aggregate_reader_metadata::decode_ipc_message(
   }
 
   // Check for improper message.
-  if (message_size - message_decoder_next_required_size_metadata_length < 0) {
+  if (message_size - MESSAGE_DECODER_NEXT_REQUIRED_SIZE_METADATA_LENGTH < 0) {
     CUDF_LOG_ERROR("Parquet reader encountered unexpected arrow:schema message length.",
                    "arrow:schema not processed.");
   }
 
   // Get the next 4 bytes (metadata_len) of the ipc message
   int32_t metadata_len;
-  std::memcpy(&metadata_len, message_buf, message_decoder_next_required_size_metadata_length);
+  std::memcpy(&metadata_len, message_buf, MESSAGE_DECODER_NEXT_REQUIRED_SIZE_METADATA_LENGTH);
 
   // Check if the continuation matches the expected token
   if (metadata_len <= 0) {
@@ -837,8 +837,8 @@ std::optional<std::string_view> aggregate_reader_metadata::decode_ipc_message(
     return std::nullopt;
   } else {
     // Offset the message buf and reduce remaining size
-    message_buf += message_decoder_next_required_size_metadata_length;
-    message_size -= message_decoder_next_required_size_metadata_length;
+    message_buf += MESSAGE_DECODER_NEXT_REQUIRED_SIZE_METADATA_LENGTH;
+    message_size -= MESSAGE_DECODER_NEXT_REQUIRED_SIZE_METADATA_LENGTH;
   }
 
   // TODO: Since the arrow:schema message doesn't have a body,
