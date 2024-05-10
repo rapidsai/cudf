@@ -5,6 +5,7 @@ from __future__ import annotations
 import operator
 import pickle
 import warnings
+from collections.abc import Generator
 from functools import cache, cached_property
 from numbers import Number
 from typing import (
@@ -38,7 +39,7 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
-from cudf.core._base_index import BaseIndex
+from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import (
     CategoricalColumn,
@@ -111,10 +112,16 @@ def _lexsorted_equal_range(
         sort_inds = None
         sort_vals = idx
     lower_bound = search_sorted(
-        [*sort_vals._data.columns], [*key_as_table._columns], side="left"
+        [*sort_vals._data.columns],
+        [*key_as_table._columns],
+        side="left",
+        ascending=sort_vals.is_monotonic_increasing,
     ).element_indexing(0)
     upper_bound = search_sorted(
-        [*sort_vals._data.columns], [*key_as_table._columns], side="right"
+        [*sort_vals._data.columns],
+        [*key_as_table._columns],
+        side="right",
+        ascending=sort_vals.is_monotonic_increasing,
     ).element_indexing(0)
 
     return lower_bound, upper_bound, sort_inds
@@ -344,6 +351,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def __contains__(self, item):
+        hash(item)
         if isinstance(item, bool) or not isinstance(
             item,
             tuple(
@@ -969,6 +977,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
         else:
             return abs(self._as_int_index())
 
+    def _columns_for_reset_index(
+        self, levels: tuple | None
+    ) -> Generator[tuple[Any, ColumnBase], None, None]:
+        """Return the columns and column names for .reset_index"""
+        # We need to explicitly materialize the RangeIndex to a column
+        yield "index" if self.name is None else self.name, as_column(self)
+
     @_warn_no_dask_cudf
     def __dask_tokenize__(self):
         return (type(self), self.start, self.stop, self.step)
@@ -1256,11 +1271,11 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         )
 
         if not len(self):
-            return result.values
+            return _return_get_indexer_result(result.values)
         try:
             lcol, rcol = _match_join_keys(needle, self._column, "inner")
         except ValueError:
-            return result.values
+            return _return_get_indexer_result(result.values)
 
         scatter_map, indices = libcudf.join.join([lcol], [rcol], how="inner")
         (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
@@ -1287,7 +1302,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 "{['ffill'/'pad', 'bfill'/'backfill', 'nearest', None]}"
             )
 
-        return result_series.to_cupy()
+        return _return_get_indexer_result(result_series.to_cupy())
 
     @_cudf_nvtx_annotate
     def get_loc(self, key):
@@ -1523,6 +1538,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return self._column.values
 
     def __contains__(self, item):
+        hash(item)
         return item in self._values
 
     def _clean_nulls_from_index(self):
@@ -2880,7 +2896,7 @@ class IntervalIndex(Index):
 
     @property
     def closed(self):
-        return self._values.dtype.closed
+        return self.dtype.closed
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -2962,7 +2978,7 @@ class IntervalIndex(Index):
 
 @_cudf_nvtx_annotate
 def as_index(
-    arbitrary, nan_as_null=None, copy=False, name=no_default, dtype=None
+    arbitrary, nan_as_null=no_default, copy=False, name=no_default, dtype=None
 ) -> BaseIndex:
     """Create an Index from an arbitrary object
 
@@ -3012,6 +3028,10 @@ def as_index(
         - DatetimeIndex for Datetime input.
         - Index for all other inputs.
     """
+    if nan_as_null is no_default:
+        nan_as_null = (
+            False if cudf.get_option("mode.pandas_compatible") else None
+        )
 
     if name is no_default:
         name = getattr(arbitrary, "name", None)

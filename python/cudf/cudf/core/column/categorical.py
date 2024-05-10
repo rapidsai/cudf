@@ -515,6 +515,10 @@ class CategoricalColumn(column.ColumnBase):
     dtype: cudf.core.dtypes.CategoricalDtype
     _codes: Optional[NumericalColumn]
     _children: Tuple[NumericalColumn]
+    _VALID_REDUCTIONS = {
+        "max",
+        "min",
+    }
     _VALID_BINARY_OPERATIONS = {
         "__eq__",
         "__ne__",
@@ -697,6 +701,25 @@ class CategoricalColumn(column.ColumnBase):
                 size=codes.size,
                 offset=codes.offset,
             ),
+        )
+
+    def _reduce(
+        self,
+        op: str,
+        skipna: Optional[bool] = None,
+        min_count: int = 0,
+        *args,
+        **kwargs,
+    ) -> ScalarLike:
+        # Only valid reductions are min and max
+        if not self.ordered:
+            raise TypeError(
+                f"Categorical is not ordered for operation {op} "
+                "you can use .as_ordered() to change the Categorical "
+                "to an ordered one."
+            )
+        return self._decode(
+            self.codes._reduce(op, skipna, min_count, *args, **kwargs)
         )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
@@ -1045,9 +1068,6 @@ class CategoricalColumn(column.ColumnBase):
         """
         Fill null values with *fill_value*
         """
-        if not self.nullable:
-            return self
-
         if fill_value is not None:
             fill_is_scalar = np.isscalar(fill_value)
 
@@ -1078,6 +1098,11 @@ class CategoricalColumn(column.ColumnBase):
                 fill_value = column.as_column(fill_value.codes).astype(
                     self.codes.dtype
                 )
+
+        # Validation of `fill_value` will have to be performed
+        # before returning self.
+        if not self.nullable:
+            return self
 
         return super().fillna(fill_value, method=method)
 
