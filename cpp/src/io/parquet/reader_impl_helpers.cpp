@@ -603,7 +603,7 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
               thrust::make_counting_iterator(0),
               thrust::make_counting_iterator(static_cast<int32_t>(field_children->size())),
               [&](auto const& idx) {
-                return walk_field(*(field_children->begin() + idx), schema_children[idx]);
+                return walk_field((*field_children)[idx], schema_children[idx]);
               })) {
           return false;
         }
