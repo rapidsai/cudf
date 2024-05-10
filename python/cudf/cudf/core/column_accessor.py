@@ -517,12 +517,19 @@ class ColumnAccessor(abc.MutableMapping):
             )
         else:
             data = {k: self._grouped_data[k] for k in key}
+        is_rangeindex = False
         if self.multiindex:
             data = dict(_to_flat_dict_inner(data))
-        return self.__class__(
+        elif self.rangeindex:
+            # TODO: Any contiguous key of labels should return True
+            is_rangeindex = len(key) in {0, len(self)}
+        return type(self)(
             data,
             multiindex=self.multiindex,
             level_names=self.level_names,
+            rangeindex=is_rangeindex,
+            label_dtype=self.label_dtype,
+            verify=False,
         )
 
     def _select_by_label_grouped(self, key: Any) -> ColumnAccessor:

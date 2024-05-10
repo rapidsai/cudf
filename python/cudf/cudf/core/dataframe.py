@@ -494,13 +494,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return s._getitem_preprocessed(row_spec)
         if column_names != list(self._frame._column_names):
             frame = self._frame._from_data(
-                data=ColumnAccessor(
-                    {key: ca._data[key] for key in column_names},
-                    multiindex=ca.multiindex,
-                    level_names=ca.level_names,
-                ),
-                index=index,
+                ca.select_by_label(column_names), index=index
             )
+
         else:
             frame = self._frame
         if isinstance(row_spec, indexing_utils.MapIndexer):
@@ -6614,8 +6610,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if not isinstance(exclude, (list, tuple)):
             exclude = (exclude,) if exclude is not None else ()
 
-        df = DataFrame(index=self.index)
-
         # cudf_dtype_from_pydata_dtype can distinguish between
         # np.float and np.number
         selection = tuple(map(frozenset, (include, exclude)))
@@ -6671,12 +6665,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # remove all exclude types
         inclusion = inclusion - exclude_subtypes
 
-        for k, col in self._data.items():
+        selected_locs = []
+        for i, col in enumerate(self._data.columns):
             infered_type = cudf_dtype_from_pydata_dtype(col.dtype)
             if infered_type in inclusion:
-                df._insert(len(df._data), k, col)
+                selected_locs.append(i)
 
-        return df
+        return self.iloc[:, selected_locs].copy()
 
     @ioutils.doc_to_parquet()
     def to_parquet(

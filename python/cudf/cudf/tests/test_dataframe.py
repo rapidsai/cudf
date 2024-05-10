@@ -4725,7 +4725,19 @@ def test_dataframe_fillna_preserves_column_rangeindex():
     result = cudf.DataFrame([1, None], columns=range(1))
     result = result.fillna(2).columns
     expected = pd.RangeIndex(1)
-    assert_eq(result, expected)
+    pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+@pytest.mark.parametrize("column", [range(1), np.array([1], dtype=np.int8)])
+def test_select_dtypes_preserves_column_dtypes(column):
+    df = cudf.DataFrame([1], columns=column)
+    result = df.select_dtypes(include="integer").columns
+    expected = pd.Index(column)
+    pd.testing.assert_index_equal(result, expected, exact=True)
+
+    result = df.select_dtypes(include="string").columns
+    expected = pd.Index(column)[:0]
+    pd.testing.assert_index_equal(result, expected, exact=True)
 
 
 @pytest.mark.parametrize(
