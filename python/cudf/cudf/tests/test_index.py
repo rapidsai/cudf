@@ -1523,13 +1523,7 @@ def test_index_from_arrow(data):
     arrow_array = pa.Array.from_pandas(pdi)
     expected_index = pd.Index(arrow_array.to_pandas())
     gdi = cudf.Index.from_arrow(arrow_array)
-    if gdi.dtype == cudf.dtype("datetime64[s]"):
-        # Arrow bug:
-        # https://github.com/apache/arrow/issues/33321
-        # arrow cannot convert non-nanosecond
-        # resolution to appropriate type in pandas.
-        # Hence need to type-cast.
-        expected_index = expected_index.astype(gdi.dtype)
+
     assert_eq(expected_index, gdi)
 
 
@@ -1812,12 +1806,13 @@ def test_get_loc_rangeindex(idx, key):
 @pytest.mark.parametrize(
     "idx",
     [
-        pd.Index([1, 3, 3, 6]),  # monotonic
+        pd.Index([1, 3, 3, 6]),  # monotonic increasing
         pd.Index([6, 1, 3, 3]),  # non-monotonic
+        pd.Index([4, 3, 2, 1, 0]),  # monotonic decreasing
     ],
 )
-@pytest.mark.parametrize("key", [0, 3, 6, 7])
-def test_get_loc_single_duplicate_numeric(idx, key):
+@pytest.mark.parametrize("key", [0, 3, 6, 7, 4])
+def test_get_loc_duplicate_numeric(idx, key):
     pi = idx
     gi = cudf.from_pandas(pi)
 
@@ -3249,3 +3244,11 @@ def test_index_contains_float_int(data, dtype, needle):
     expected = needle in pidx
 
     assert_eq(actual, expected)
+
+
+def test_Index_init_with_nans():
+    with cudf.option_context("mode.pandas_compatible", True):
+        gi = cudf.Index([1, 2, 3, np.nan])
+    assert gi.dtype == np.dtype("float64")
+    pi = pd.Index([1, 2, 3, np.nan])
+    assert_eq(pi, gi)
