@@ -274,8 +274,11 @@ class ColumnAccessor(abc.MutableMapping):
                 pass
 
         # nrows should only be cleared if empty before/after the op.
-        if (old_ncols == 0 or new_ncols == 0) and hasattr(self, "nrows"):
-            del self.nrows
+        if (old_ncols == 0) ^ (new_ncols == 0):
+            try:
+                del self.nrows
+            except AttributeError:
+                pass
 
     def to_pandas_index(self) -> pd.Index:
         """Convert the keys of the ColumnAccessor to a Pandas Index object."""
@@ -353,8 +356,7 @@ class ColumnAccessor(abc.MutableMapping):
             new_keys = self.names[:loc] + (name,) + self.names[loc:]
             new_values = self.columns[:loc] + (value,) + self.columns[loc:]
             self._data = self._data.__class__(zip(new_keys, new_values))
-        new_ncols = len(self._data)
-        self._clear_cache(old_ncols, new_ncols)
+        self._clear_cache(old_ncols, old_ncols + 1)
 
     def copy(self, deep=False) -> ColumnAccessor:
         """
