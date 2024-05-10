@@ -322,7 +322,7 @@ dependencies:
           - matrix: {cuda: "11.*"}
             packages: &build_python_packages_cu11
               - rmm-cu11==24.6.*,>=0.0.0a0
-          - {matrix: null, packages: ["test-if-rbb-is-falling-back-here==1.1.1"]}
+          - {matrix: null, packages: [*rmm_conda]}
   libarrow_build:
     common:
       - output_types: conda
