@@ -486,6 +486,7 @@ class Projection(IR):
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
+        # This can reorder things.
         return df.select(list(self.schema.keys()))
 
 
@@ -577,14 +578,49 @@ class MapFunction(IR):
 @dataclass(slots=True)
 class Union(IR):
     dfs: list[IR]
+    zlice: tuple[int, int] | None
+
+    def __post_init__(self):
+        """Validated preconditions."""
+        schema = self.dfs[0].schema
+        if not all(s == schema for s in self.dfs[1:]):
+            raise ValueError("Schema mismatch")
+
+    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        dfs = [df.evaluate(cache=cache) for df in self.dfs]
+        return DataFrame.from_table(
+            plc.concatenate.concatenate([df.table for df in dfs]), dfs[0].column_names
+        ).slice(self.zlice)
 
 
 @dataclass(slots=True)
 class HConcat(IR):
     dfs: list[IR]
 
+    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        dfs = [df.evaluate(cache=cache) for df in self.dfs]
+        columns, scalars = zip(*((df.columns, df.scalars) for df in dfs))
+        return DataFrame(columns, scalars)
+
 
 @dataclass(slots=True)
 class ExtContext(IR):
     df: IR
     extra: list[IR]
+
+    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        # TODO: polars optimizer doesn't do projection pushdown
+        # through extcontext AFAICT.
+        df = self.df.evaluate(cache=cache)
+        # extra contexts are added in order, if they have any
+        # overlapping column names, those are ignored.
+        names = df.column_names_set.copy()
+        # TODO: scalars
+        for ir in self.extra:
+            extra = ir.evaluate(cache=cache).discard_columns(names)
+            names |= extra.column_names_set
+            df = df.with_columns(extra.columns)
+        return df

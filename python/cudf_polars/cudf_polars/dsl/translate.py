@@ -157,7 +157,9 @@ def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
                 options,
             )
         elif isinstance(node, pl_ir.Union):
-            return ir.Union(schema, [translate_ir(visitor, n=n) for n in node.inputs])
+            return ir.Union(
+                schema, [translate_ir(visitor, n=n) for n in node.inputs], node.options
+            )
         elif isinstance(node, pl_ir.HConcat):
             return ir.HConcat(schema, [translate_ir(visitor, n=n) for n in node.inputs])
         elif isinstance(node, pl_ir.ExtContext):

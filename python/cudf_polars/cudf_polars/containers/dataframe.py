@@ -13,7 +13,7 @@ import cudf._lib.pylibcudf as plc
 from cudf_polars.containers.column import Column
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence, Set
 
     from typing_extensions import Self
 
@@ -34,10 +34,10 @@ class DataFrame:
     scalar_names: frozenset[str]
     table: plc.Table | None
 
-    def __init__(self, columns: list[Column], scalars: list[Scalar]) -> None:
+    def __init__(self, columns: Sequence[Column], scalars: Sequence[Scalar]) -> None:
         self.scalar_names = frozenset(s.name for s in scalars)
-        self.columns = columns
-        self.scalars = scalars
+        self.columns = list(columns)
+        self.scalars = list(scalars)
         if len(scalars) == 0:
             self.table = plc.Table([c.obj for c in columns])
         else:
@@ -46,9 +46,9 @@ class DataFrame:
     __iter__ = None
 
     @cached_property
-    def column_names_set(self) -> set[str]:
+    def column_names_set(self) -> frozenset[str]:
         """Return the column names as a set."""
-        return {c.name for c in self.columns}
+        return frozenset(c.name for c in self.columns)
 
     @cached_property
     def column_names(self) -> list[str]:
@@ -76,13 +76,14 @@ class DataFrame:
         )
 
     @classmethod
-    def from_table(cls, table: plc.Table, names: list[str]) -> Self:
+    def from_table(cls, table: plc.Table, names: Sequence[str]) -> Self:
         """Create from a pylibcudf table."""
+        # TODO: strict=True when we drop py39
         if table.num_columns != len(names):
             raise ValueError("Mismatching name and table length.")
         return cls([Column(c, name) for c, name in zip(table.columns(), names)], [])
 
-    def with_sorted(self, *, like: DataFrame, subset: set[str] | None = None) -> Self:
+    def with_sorted(self, *, like: DataFrame, subset: Set[str] | None = None) -> Self:
         """Copy sortedness from a dataframe onto self."""
         if like.column_names != self.column_names:
             raise ValueError("Can only copy from identically named frame")
@@ -101,7 +102,7 @@ class DataFrame:
         """
         return type(self)([*self.columns, *columns], self.scalars)
 
-    def discard_columns(self, names: set[str]) -> Self:
+    def discard_columns(self, names: Set[str]) -> Self:
         """Drop columns by name."""
         return type(self)(
             [c for c in self.columns if c.name not in names], self.scalars
@@ -121,13 +122,13 @@ class DataFrame:
             raise ValueError("Cannot replace with non-existing names")
         return type(self)([new.get(c.name, c) for c in self.columns], self.scalars)
 
-    def rename_columns(self, mapping: dict[str, str]) -> Self:
+    def rename_columns(self, mapping: Mapping[str, str]) -> Self:
         """Rename some columns."""
         return type(self)(
             [c.rename(mapping.get(c.name, c.name)) for c in self.columns], self.scalars
         )
 
-    def select_columns(self, names: set[str]) -> list[Column]:
+    def select_columns(self, names: Set[str]) -> list[Column]:
         """Select columns by name."""
         return [c for c in self.columns if c.name in names]
 
