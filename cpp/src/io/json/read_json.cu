@@ -91,7 +91,8 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
       std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
     size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
 
-    auto total_bytes_to_read = std::min(range_size, prefsum_source_sizes.back() - range_offset);
+    auto const total_bytes_to_read =
+      std::min(range_size, prefsum_source_sizes.back() - range_offset);
     range_offset -= start_source ? prefsum_source_sizes[start_source - 1] : 0;
     for (size_t i = start_source; i < sources.size() && bytes_read < total_bytes_to_read; i++) {
       if (sources[i]->is_empty()) continue;
@@ -112,7 +113,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
       delimiter_map.push_back(bytes_read + (num_delimiter_chars * delimiter_map.size()));
     }
     // Removing delimiter inserted after last non-empty source is read
-    if (!delimiter_map.empty()) delimiter_map.pop_back();
+    if (!delimiter_map.empty()) { delimiter_map.pop_back(); }
 
     // If this is a multi-file source, we scatter the JSON line delimiters between files
     if (sources.size() > 1) {
@@ -120,9 +121,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                     "Currently only single-character delimiters are supported");
       auto const delimiter_source = thrust::make_constant_iterator('\n');
       auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
-        host_span<size_type const>{delimiter_map.data(), delimiter_map.size()},
-        stream,
-        rmm::mr::get_current_device_resource());
+        delimiter_map, stream, rmm::mr::get_current_device_resource());
       thrust::scatter(rmm::exec_policy_nosync(stream),
                       delimiter_source,
                       delimiter_source + d_delimiter_map.size(),
