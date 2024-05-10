@@ -592,9 +592,9 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
   // return boolean walk success status
   std::function<bool(const flatbuf::Field*, arrow_schema_data_types&)> walk_field =
     [&walk_field, &duration_from_flatbuffer, &arrow_type_col_seen](
-      const flatbuf::Field* field, arrow_schema_data_types& schema_elem) {
+      flatbuf::Field const* field, arrow_schema_data_types& schema_elem) {
       // DFS: recursively walk over the children first
-      auto const& field_children = field->children();
+      auto const field_children = field->children();
 
       if (field_children != nullptr) {
         auto schema_children = std::vector<arrow_schema_data_types>(field->children()->size());
@@ -642,7 +642,7 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
   // Question: Should we check if any file has the "ARROW:schema" key or
   // Or if all files have the same "ARROW:schema"?
   auto const it = keyval_maps[0].find("ARROW:schema");
-  if (it == keyval_maps[0].end()) { return arrow_schema_data_types{}; }
+  if (it == keyval_maps[0].end()) { return {}; }
 
   // Decode the base64 encoded ipc message string
   // Note: Store the output from base64_decode in the lvalue here and then pass
