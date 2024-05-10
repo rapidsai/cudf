@@ -20,3 +20,5 @@ rapids_cython_create_modules(
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_ ASSOCIATED_TARGETS cudf
 )
+
+link_to_pyarrow_headers(pylibcudf_capitalize)
