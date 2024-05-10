@@ -2858,20 +2858,55 @@ def test_parquet_flba_round_trip(tmpdir):
     assert_eq(padf2.schema[0].type, padf3.schema[0].type)
 
 
-def test_per_column_options(tmpdir):
-    pdf = pd.DataFrame({"ilist": [[1, 2, 3]], "i1": [1]})
+@pytest.mark.parametrize(
+    "encoding",
+    [
+        "PLAIN",
+        "DICTIONARY",
+        "DELTA_BINARY_PACKED",
+        "BYTE_STREAM_SPLIT",
+        "USE_DEFAULT",
+    ],
+)
+def test_per_column_options(tmpdir, encoding):
+    pdf = pd.DataFrame({"ilist": [[1, 2, 3, 1, 2, 3]], "i1": [1]})
     cdf = cudf.from_pandas(pdf)
     fname = tmpdir.join("ilist.parquet")
     cdf.to_parquet(
         fname,
-        column_encoding={"ilist.list.element": "DELTA_BINARY_PACKED"},
+        column_encoding={"ilist.list.element": encoding},
         compression="SNAPPY",
         skip_compression={"ilist.list.element"},
     )
+    # DICTIONARY and USE_DEFAULT should both result in a PLAIN_DICTIONARY encoding in parquet
+    encoding_name = (
+        "PLAIN_DICTIONARY"
+        if encoding == "DICTIONARY" or encoding == "USE_DEFAULT"
+        else encoding
+    )
     pf = pq.ParquetFile(fname)
     fmd = pf.metadata
-    assert "DELTA_BINARY_PACKED" in fmd.row_group(0).column(0).encodings
+    assert encoding_name in fmd.row_group(0).column(0).encodings
     assert fmd.row_group(0).column(0).compression == "UNCOMPRESSED"
+    assert fmd.row_group(0).column(1).compression == "SNAPPY"
+
+
+@pytest.mark.parametrize(
+    "encoding",
+    ["DELTA_LENGTH_BYTE_ARRAY", "DELTA_BYTE_ARRAY"],
+)
+def test_per_column_options_string_col(tmpdir, encoding):
+    pdf = pd.DataFrame({"s": ["a string"], "i1": [1]})
+    cdf = cudf.from_pandas(pdf)
+    fname = tmpdir.join("strcol.parquet")
+    cdf.to_parquet(
+        fname,
+        column_encoding={"s": encoding},
+        compression="SNAPPY",
+    )
+    pf = pq.ParquetFile(fname)
+    fmd = pf.metadata
+    assert encoding in fmd.row_group(0).column(0).encodings
 
 
 def test_parquet_reader_rle_boolean(datadir):
