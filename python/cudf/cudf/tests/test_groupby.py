@@ -559,9 +559,12 @@ def test_groupby_apply_jit_reductions_special_vals(
     func, dtype, dataset, groupby_jit_datasets, special_val
 ):
     dataset = groupby_jit_datasets[dataset]
-    groupby_apply_jit_reductions_special_vals_inner(
-        func, dataset, dtype, special_val
-    )
+    with expect_warning_if(
+        func in {"var", "std"} and not np.isnan(special_val), RuntimeWarning
+    ):
+        groupby_apply_jit_reductions_special_vals_inner(
+            func, dataset, dtype, special_val
+        )
 
 
 @pytest.mark.parametrize("dtype", ["float64"])
