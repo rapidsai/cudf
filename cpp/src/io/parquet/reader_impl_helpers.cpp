@@ -536,7 +536,6 @@ aggregate_reader_metadata::aggregate_reader_metadata(
   host_span<std::unique_ptr<datasource> const> sources, bool use_arrow_schema)
   : per_file_metadata(metadatas_from_sources(sources)),
     keyval_maps(collect_keyval_metadata()),
-    arrow_schema(collect_arrow_schema(use_arrow_schema)),
     num_rows(calc_num_rows()),
     num_row_groups(calc_num_row_groups())
 {
@@ -556,24 +555,16 @@ aggregate_reader_metadata::aggregate_reader_metadata(
     }
   }
 
-  if (arrow_schema.has_value()) {
-    // consume arrow schema into the parquet schema
-    consume_arrow_schema();
-    // we no longer keep arrow schema alive
-    arrow_schema.reset();
-  }
+  // Collect and apply arrow:schema from Parquet's key value metadata section
+  if (use_arrow_schema) { apply_arrow_schema(); }
 
-  // erase "ARROW:schema" from the output pfm if exists
+  // Erase "ARROW:schema" from the output pfm if exists
   std::for_each(
     keyval_maps.begin(), keyval_maps.end(), [](auto& pfm) { pfm.erase("ARROW:schema"); });
 }
 
-[[nodiscard]] std::optional<arrow_schema_data_types>
-aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
+arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
 {
-  // Check if we want to collect the arrow_schema
-  if (not use_arrow_schema) { return std::nullopt; }
-
   // Check the key_value metadata for ARROW:schema, decode and walk it
   // Function to convert from flatbuf::duration type to cudf::type_id
   auto const duration_from_flatbuffer = [](flatbuf::Duration const* duration) {
@@ -589,10 +580,8 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
         return cudf::data_type{cudf::type_id::DURATION_MICROSECONDS};
       case flatbuf::TimeUnit::TimeUnit_NANOSECOND:
         return cudf::data_type{cudf::type_id::DURATION_NANOSECONDS};
-      default: break;
+      default: return cudf::data_type{};
     }
-    // 0 is simply a dummy value for the scalar
-    return cudf::data_type{};
   };
 
   // variable that tracks if an arrow_type specific column is seen
@@ -653,7 +642,7 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
   // Question: Should we check if any file has the "ARROW:schema" key or
   // Or if all files have the same "ARROW:schema"?
   auto const it = keyval_maps[0].find("ARROW:schema");
-  if (it == keyval_maps[0].end()) { return std::nullopt; }
+  if (it == keyval_maps[0].end()) { return arrow_schema_data_types{}; }
 
   // Decode the base64 encoded ipc message string
   // Note: Store the output from base64_decode in the lvalue here and then pass
@@ -667,21 +656,21 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
   // Check if the string_view exists
   if (not metadata_buf.has_value()) {
     // No need to re-log error here as already logged inside decode_ipc_message
-    return std::nullopt;
+    return arrow_schema_data_types{};
   }
 
   // Check if the decoded Message flatbuffer is valid
   if (flatbuf::GetMessage(metadata_buf.value().data()) == nullptr) {
     CUDF_LOG_ERROR("Parquet reader encountered an invalid ipc:Message flatbuffer pointer.",
                    "arrow:schema not processed.");
-    return std::nullopt;
+    return arrow_schema_data_types{};
   }
 
   // Check if the Message flatbuffer has a valid arrow:schema in its header
   if (flatbuf::GetMessage(metadata_buf.value().data())->header_as_Schema() == nullptr) {
     CUDF_LOG_ERROR("Parquet reader encountered an invalid arrow:schema flatbuffer pointer.",
                    "arrow:schema not processed.");
-    return std::nullopt;
+    return arrow_schema_data_types{};
   }
 
   // Get the vector of fields from arrow:schema flatbuffer object
@@ -690,7 +679,7 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
   if (fields == nullptr) {
     CUDF_LOG_ERROR("Parquet reader encountered an invalid fields pointer.",
                    "arrow:schema not processed.");
-    return std::nullopt;
+    return arrow_schema_data_types{};
   }
 
   // arrow schema structure to return
@@ -705,18 +694,26 @@ aggregate_reader_metadata::collect_arrow_schema(bool use_arrow_schema) const
                         [&](auto const& idx) {
                           return walk_field(*(fields->begin() + idx), schema.children[idx]);
                         })) {
-      return std::nullopt;
+      return arrow_schema_data_types{};
     }
 
     // if no arrow type column seen, return nullopt.
-    if (not arrow_type_col_seen) { return std::nullopt; }
+    if (not arrow_type_col_seen) { return arrow_schema_data_types{}; }
   }
 
-  return std::make_optional(std::move(schema));
+  return schema;
 }
 
-void aggregate_reader_metadata::consume_arrow_schema()
+void aggregate_reader_metadata::apply_arrow_schema()
 {
+  // Collect the arrow schema from the key value section of Parquet metadata
+  auto arrow_schema_root = collect_arrow_schema();
+
+  // Check if empty arrow schema collected
+  if (arrow_schema_root.type.id() == type_id::EMPTY and arrow_schema_root.children.size() == 0) {
+    return;
+  }
+
   // Function to verify equal num_children at each level in Parquet and arrow schemas.
   std::function<bool(arrow_schema_data_types&, int)> validate_schemas =
     [&](arrow_schema_data_types& arrow_schema, int schema_idx) {
@@ -739,24 +736,24 @@ void aggregate_reader_metadata::consume_arrow_schema()
   // Function to co-walk arrow and parquet schemas
   std::function<void(arrow_schema_data_types&, int)> co_walk_schemas =
     [&](arrow_schema_data_types& arrow_schema, int schema_idx) {
-      auto& schema_elem = per_file_metadata[0].schema[schema_idx];
+      auto& pq_schema_elem = per_file_metadata[0].schema[schema_idx];
       std::for_each(thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(schema_elem.num_children),
+                    thrust::make_counting_iterator(pq_schema_elem.num_children),
                     [&](auto const& idx) {
-                      co_walk_schemas(arrow_schema.children[idx], schema_elem.children_idx[idx]);
+                      co_walk_schemas(arrow_schema.children[idx], pq_schema_elem.children_idx[idx]);
                     });
 
       // true for DurationType columns only for now.
       if (arrow_schema.type.id() != type_id::EMPTY) {
-        schema_elem.arrow_type = arrow_schema.type.id();
+        pq_schema_elem.arrow_type = arrow_schema.type.id();
       }
     };
 
-  auto schema_root       = get_schema(0);
-  auto arrow_schema_root = arrow_schema.value();
+  // Get Parquet schema root
+  auto pq_schema_root = get_schema(0);
 
-  // verify equal number of children at root level
-  if (schema_root.num_children != static_cast<int32_t>(arrow_schema_root.children.size())) {
+  // verify equal number of children for both schemas at root level
+  if (pq_schema_root.num_children != static_cast<int32_t>(arrow_schema_root.children.size())) {
     CUDF_LOG_DEBUG("Parquet reader encountered a mismatch between Parquet and arrow schema.",
                    "arrow:schema not processed.");
     return;
@@ -764,10 +761,10 @@ void aggregate_reader_metadata::consume_arrow_schema()
 
   // Verify equal number of children at all sub-levels
   if (not std::all_of(thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(schema_root.num_children),
+                      thrust::make_counting_iterator(pq_schema_root.num_children),
                       [&](auto const& idx) {
                         return validate_schemas(arrow_schema_root.children[idx],
-                                                schema_root.children_idx[idx]);
+                                                pq_schema_root.children_idx[idx]);
                       })) {
     CUDF_LOG_DEBUG("Parquet reader encountered a mismatch between Parquet and arrow schema.",
                    "arrow:schema not processed.");
@@ -776,9 +773,10 @@ void aggregate_reader_metadata::consume_arrow_schema()
 
   // All good, now co-walk schemas
   std::for_each(thrust::make_counting_iterator(0),
-                thrust::make_counting_iterator(schema_root.num_children),
+                thrust::make_counting_iterator(pq_schema_root.num_children),
                 [&](auto const& idx) {
-                  co_walk_schemas(arrow_schema_root.children[idx], schema_root.children_idx[idx]);
+                  co_walk_schemas(arrow_schema_root.children[idx],
+                                  pq_schema_root.children_idx[idx]);
                 });
 }
 

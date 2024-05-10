@@ -129,7 +129,6 @@ struct arrow_schema_data_types {
 class aggregate_reader_metadata {
   std::vector<metadata> per_file_metadata;
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
-  std::optional<arrow_schema_data_types> arrow_schema;
 
   int64_t num_rows;
   size_type num_row_groups;
@@ -150,14 +149,13 @@ class aggregate_reader_metadata {
    * @brief Decodes and constructs the arrow schema from the "ARROW:schema" IPC message
    * in key value metadata section of Parquet file footer
    */
-  [[nodiscard]] std::optional<arrow_schema_data_types> collect_arrow_schema(
-    bool use_arrow_schema) const;
+  [[nodiscard]] arrow_schema_data_types collect_arrow_schema() const;
 
   /**
    * @brief Co-walks the collected arrow and Parquet schema, updates
    * dtypes and destroys the no longer needed arrow schema object(s).
    */
-  void consume_arrow_schema();
+  void apply_arrow_schema();
 
   /**
    * @brief Decode an arrow:IPC message and returns an optional string_view of
@@ -211,7 +209,6 @@ class aggregate_reader_metadata {
   }
 
   [[nodiscard]] auto const& get_key_value_metadata() const& { return keyval_maps; }
-  [[nodiscard]] auto const& get_arrow_schema() const& { return arrow_schema; }
   [[nodiscard]] auto&& get_key_value_metadata() && { return std::move(keyval_maps); }
 
   /**
