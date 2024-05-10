@@ -3,7 +3,7 @@ from functools import singledispatch
 
 from pandas.errors import DataError
 
-from cudf.api.types import is_string_dtype
+from cudf.api.types import _is_categorical_dtype, is_string_dtype
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -167,6 +167,38 @@ cdef class GroupBy:
             included_aggregations_i = []
             col_aggregations = []
             for agg in aggs:
+                if (
+                    is_string_dtype(col)
+                    and agg not in _STRING_AGGS
+                    and not (
+                        agg in {
+                            "count",
+                            "max",
+                            "min",
+                            "first",
+                            "last",
+                            "nunique",
+                            "unique",
+                        }
+                        or "count" in str(agg)
+                        or (agg is list)
+                        or "nth" in str(agg)
+                    )
+                ):
+                    raise TypeError(
+                        f"function is not supported for this dtype: {agg}"
+                    )
+                elif (
+                    _is_categorical_dtype(col)
+                    and agg not in _CATEGORICAL_AGGS
+                    and not (
+                        agg in {"count", "max", "min", "unique"} or "count" in str(agg)
+                    )
+                ):
+                    raise TypeError(
+                        f"{col.dtype} type does not support {agg} operations"
+                    )
+
                 agg_obj = make_aggregation(agg)
                 if valid_aggregations == "ALL" or agg_obj.kind in valid_aggregations:
                     included_aggregations_i.append((agg, agg_obj.kind))

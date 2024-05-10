@@ -504,7 +504,6 @@ def test_groupby_apply_jit_unary_reductions(
     func, dtype, dataset, groupby_jit_datasets
 ):
     dataset = groupby_jit_datasets[dataset]
-
     groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
 
 
@@ -560,12 +559,9 @@ def test_groupby_apply_jit_reductions_special_vals(
     func, dtype, dataset, groupby_jit_datasets, special_val
 ):
     dataset = groupby_jit_datasets[dataset]
-    with expect_warning_if(
-        func in {"var", "std"} and not np.isnan(special_val), RuntimeWarning
-    ):
-        groupby_apply_jit_reductions_special_vals_inner(
-            func, dataset, dtype, special_val
-        )
+    groupby_apply_jit_reductions_special_vals_inner(
+        func, dataset, dtype, special_val
+    )
 
 
 @pytest.mark.parametrize("dtype", ["float64"])
@@ -1891,9 +1887,6 @@ def test_groupby_nth(n, by):
     assert_groupby_results_equal(expect, got, check_dtype=False)
 
 
-@pytest.mark.xfail(
-    reason="https://github.com/pandas-dev/pandas/issues/43209",
-)
 def test_raise_data_error():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
     gdf = cudf.from_pandas(pdf)
@@ -1904,12 +1897,13 @@ def test_raise_data_error():
     )
 
 
-def test_drop_unsupported_multi_agg():
+def test_multi_agg():
     gdf = cudf.DataFrame(
         {"a": [1, 1, 2, 2], "b": [1, 2, 3, 4], "c": ["a", "b", "c", "d"]}
     )
+    pdf = gdf.to_pandas()
     assert_groupby_results_equal(
-        gdf.groupby("a").agg(["count", "mean"]),
+        pdf.groupby("a").agg({"b": ["count", "mean"], "c": ["count"]}),
         gdf.groupby("a").agg({"b": ["count", "mean"], "c": ["count"]}),
     )
 
