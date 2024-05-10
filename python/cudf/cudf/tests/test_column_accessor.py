@@ -302,7 +302,7 @@ def test_clear_nrows_empty_before():
     assert ca.nrows == 1
 
 
-def test_clear_nrows_after_before():
+def test_clear_nrows_empty_after():
     ca = ColumnAccessor({"new": [1]})
     assert ca.nrows == 1
     del ca["new"]
