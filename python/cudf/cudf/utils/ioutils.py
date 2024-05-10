@@ -308,7 +308,8 @@ skip_compression : set, optional, default None
 column_encoding : dict, optional, default None
     Sets the page encoding to use on a per-column basis. The key is a column
     name, and the value is one of: 'PLAIN', 'DICTIONARY', 'DELTA_BINARY_PACKED',
-    'DELTA_LENGTH_BYTE_ARRAY', 'DELTA_BYTE_ARRAY', or 'BYTE_STREAM_SPLIT'.
+    'DELTA_LENGTH_BYTE_ARRAY', 'DELTA_BYTE_ARRAY', 'BYTE_STREAM_SPLIT', or
+    'USE_DEFAULT'.
 column_type_length : dict, optional, default None
     Specifies the width in bytes of ``FIXED_LEN_BYTE_ARRAY`` column elements.
     The key is a column name and the value is an integer. The named column
