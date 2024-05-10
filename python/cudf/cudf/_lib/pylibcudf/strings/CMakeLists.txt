@@ -12,7 +12,8 @@
 # the License.
 # =============================================================================
 
-set(cython_sources case.pyx capitalize.pyx)
+set(cython_sources capitalize.pyx case.pyx find.pyx)
+
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
   CXX

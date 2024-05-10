@@ -165,9 +165,10 @@ type_id to_type_id(SchemaElement const& schema,
     case FLOAT: return type_id::FLOAT32;
     case DOUBLE: return type_id::FLOAT64;
     case BYTE_ARRAY:
-    case FIXED_LEN_BYTE_ARRAY:
-      // Can be mapped to INT32 (32-bit hash) or STRING
-      return strings_to_categorical ? type_id::INT32 : type_id::STRING;
+      // strings can be mapped to a 32-bit hash
+      if (strings_to_categorical) { return type_id::INT32; }
+      [[fallthrough]];
+    case FIXED_LEN_BYTE_ARRAY: return type_id::STRING;
     case INT96:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_NANOSECONDS;
@@ -205,7 +206,6 @@ void metadata::sanitize_schema()
   // This code attempts to make this less messy for the code that follows.
 
   std::function<void(size_t)> process = [&](size_t schema_idx) -> void {
-    if (schema_idx < 0) { return; }
     auto& schema_elem = schema[schema_idx];
     if (schema_idx != 0 && schema_elem.type == UNDEFINED_TYPE) {
       auto const parent_type = schema[schema_elem.parent_idx].converted_type;
@@ -560,6 +560,26 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
   return col->meta_data;
 }
 
+std::vector<std::unordered_map<std::string, int64_t>>
+aggregate_reader_metadata::get_rowgroup_metadata() const
+{
+  std::vector<std::unordered_map<std::string, int64_t>> rg_metadata;
+
+  std::for_each(
+    per_file_metadata.cbegin(), per_file_metadata.cend(), [&rg_metadata](auto const& pfm) {
+      std::transform(pfm.row_groups.cbegin(),
+                     pfm.row_groups.cend(),
+                     std::back_inserter(rg_metadata),
+                     [](auto const& rg) {
+                       std::unordered_map<std::string, int64_t> rg_meta_map;
+                       rg_meta_map["num_rows"]        = rg.num_rows;
+                       rg_meta_map["total_byte_size"] = rg.total_byte_size;
+                       return rg_meta_map;
+                     });
+    });
+  return rg_metadata;
+}
+
 std::string aggregate_reader_metadata::get_pandas_index() const
 {
   // Assumes that all input files have the same metadata
@@ -631,7 +651,10 @@ aggregate_reader_metadata::select_row_groups(
     if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
     auto const from_opts = cudf::io::detail::skip_rows_num_rows_from_options(
       skip_rows_opt, num_rows_opt, get_num_rows());
-    return std::pair{static_cast<int64_t>(from_opts.first), from_opts.second};
+    CUDF_EXPECTS(from_opts.second <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+                 "Number of reading rows exceeds cudf's column size limit.");
+    return std::pair{static_cast<int64_t>(from_opts.first),
+                     static_cast<size_type>(from_opts.second)};
   }();
 
   if (!row_group_indices.empty()) {
@@ -703,7 +726,6 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
                        int schema_idx,
                        std::vector<cudf::io::detail::inline_column_buffer>& out_col_array,
                        bool has_list_parent) {
-      if (schema_idx < 0) { return false; }
       auto const& schema_elem = get_schema(schema_idx);
 
       // if schema_elem is a stub then it does not exist in the column_name_info and column_buffer

@@ -8,7 +8,6 @@ channels:
 - nvidia
 dependencies:
 - aiobotocore>=2.2.0
-- benchmark==1.8.0
 - boto3>=1.21.21
 - botocore>=1.24.21
 - breathe>=4.35.0
@@ -34,20 +33,18 @@ dependencies:
 - fmt>=10.1.1,<11
 - fsspec>=0.6.0
 - gcc_linux-64=11.*
-- gmock>=1.13.0
-- gtest>=1.13.0
 - hypothesis
 - identify>=2.5.20
 - ipython
-- libarrow-acero==14.0.2.*
-- libarrow-dataset==14.0.2.*
-- libarrow==14.0.2.*
+- libarrow-acero==16.0.0.*
+- libarrow-dataset==16.0.0.*
+- libarrow==16.0.0.*
 - libcufile-dev=1.4.0.31
 - libcufile=1.4.0.31
 - libcurand-dev=10.3.0.86
 - libcurand=10.3.0.86
 - libkvikio==24.6.*
-- libparquet==14.0.2.*
+- libparquet==16.0.0.*
 - librdkafka>=1.9.0,<1.10.0a0
 - librmm==24.6.*
 - make
@@ -64,13 +61,12 @@ dependencies:
 - nvcomp==3.0.6
 - nvtx>=0.2.1
 - packaging
-- pandas>=2.0,<2.2.2dev0
+- pandas>=2.0,<2.2.3dev0
 - pandoc
 - pip
 - pre-commit
-- protobuf>=3.20,<5
 - ptxcompiler
-- pyarrow==14.0.2.*
+- pyarrow==16.0.0.*
 - pydata-sphinx-theme!=0.14.2
 - pytest-benchmark
 - pytest-cases>=3.8.2
@@ -96,7 +92,7 @@ dependencies:
 - streamz
 - sysroot_linux-64==2.17
 - tokenizers==0.15.2
-- transformers==4.38.1
+- transformers==4.39.3
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
 - pip:
