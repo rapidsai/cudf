@@ -73,18 +73,29 @@ select = [
   "D213", # Augment NumPy docstring convention: Multi-line docstring summary should start at the second line
   "D417", # Augment NumPy docstring convention: Missing argument descriptions
   "I", # isort
+  "ISC", # flake8-implicit-str-concat
+  "INP", # flake8-no-pep420 (namespace packages)
   "SIM", # flake8-simplify
   "TCH", # flake8-type-checking
   "TID", # flake8-tidy-imports
+  "PLC", # pylint-convention
+  "PLE", # pylint-error
+  # Not enabling PLR (pylint-refactor) since it conflicts with other rules
+  "PLW", # pylint-warning
+  "PERF", # perflint
   "UP", # pyupgrade
   "PT", # flake8-pytest-style
+  # https://docs.astral.sh/ruff/rules/#flake8-return-ret
+  "RET502", # no implicit return
+  "RET503", # no implicit return
+  "RET504", # no implicit return
   "RUF", # Ruff-specific rules
   "PTH", # flake8-use-pathlib
   "FA", # flake8-future-annotations
   "PIE", # flake8-pie
   "TD", # flake8-todos
   "TRY", # tryceratops
-  "FBT001", # flake8-boolean-trap
+  "FBT", # flake8-boolean-trap
 ]
 
 ignore = [
@@ -101,11 +112,33 @@ ignore = [
   "TD003", # Missing issue link on the line following this TODO
   # tryceratops
   "TRY003", # Avoid specifying long messages outside the exception class
-  # Lints below are turned off because of conflicts with the ruff formatter
-  "D206",
-  "W191",
+  # Lints below are turned off because of conflicts with the ruff
+  # formatter
+  # See https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
+  "W191", # tab-indentation
+  "E111", # indentation-with-invalid-multiple
+  "E114", # indentation-with-invalid-multiple-comment
+  "E117", # over-indented
+  "D206", # indent-with-spaces
+  "D300", # triple-single-quotes
+  "Q000", # bad-quotes-inline-string
+  "Q001", # bad-quotes-multiline-string
+  "Q002", # bad-quotes-docstring
+  "Q003", # avoidable-escaped-quote
+  "COM812", # missing-trailing-comma
+  "COM819", # prohibited-trailing-comma
+  "ISC001", # single-line-implicit-string-concatenation
+  "ISC002", # multi-line-implicit-string-concatenation
 ]
 fixable = ["ALL"]
+
+[tool.ruff.lint.flake8-pytest-style]
+# https://docs.astral.sh/ruff/settings/#lintflake8-pytest-style
+fixture-parentheses = false
+mark-parentheses = false
+parametrize-names-type = "csv"
+parametrize-values-type = "list"
+parametrize-values-row-type = "tuple"
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
