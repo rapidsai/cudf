@@ -1222,7 +1222,8 @@ void reader::impl::preprocess_file(
 
   std::tie(
     _file_itm_data.global_skip_rows, _file_itm_data.global_num_rows, _file_itm_data.row_groups) =
-    _metadata->select_row_groups(row_group_indices, skip_rows, num_rows, filter, _stream);
+    _metadata->select_row_groups(
+      row_group_indices, skip_rows, num_rows, _output_column_schemas, filter, _stream);
 
   // check for page indexes
   _has_page_index = std::all_of(_file_itm_data.row_groups.begin(),

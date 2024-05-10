@@ -23,8 +23,9 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
 #include <rmm/resource_ref.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
 #include <numeric>
@@ -417,8 +418,9 @@ reader::impl::impl(std::size_t chunk_read_limit,
                               _strings_to_categorical,
                               _timestamp_type.id());
 
-  // Find the name, and dtypes of parquet root level schema. (save it in _metadata.)
-  _metadata->cache_root_dtypes_names(_strings_to_categorical, _timestamp_type.id());
+  // Find the dtypes of output columns (save it in _metadata).
+  _metadata->cache_output_dtypes(
+    _output_column_schemas, _strings_to_categorical, _timestamp_type.id());
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   for (auto const& buff : _output_buffers) {
@@ -570,7 +572,7 @@ table_with_metadata reader::impl::read(
   auto expr_conv     = named_to_reference_converter(filter, metadata);
   auto output_filter = expr_conv.get_converted_expr();
 
-  prepare_data(skip_rows, num_rows, uses_custom_row_bounds, row_group_indices, filter);
+  prepare_data(skip_rows, num_rows, uses_custom_row_bounds, row_group_indices, output_filter);
   return read_chunk_internal(uses_custom_row_bounds, output_filter);
 }
 

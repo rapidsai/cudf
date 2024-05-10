@@ -129,7 +129,7 @@ struct stats_caster {
   // Creates device columns from column statistics (min, max)
   template <typename T>
   std::pair<std::unique_ptr<column>, std::unique_ptr<column>> operator()(
-    size_t col_idx,
+    int schema_idx,
     cudf::data_type dtype,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const
@@ -208,22 +208,31 @@ struct stats_caster {
       };  // local struct host_column
       host_column min(total_row_groups);
       host_column max(total_row_groups);
-
       size_type stats_idx = 0;
       for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
         for (auto const rg_idx : row_group_indices[src_idx]) {
           auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
-          auto const& colchunk  = row_group.columns[col_idx];
-          // To support deprecated min, max fields.
-          auto const& min_value = colchunk.meta_data.statistics.min_value.has_value()
-                                    ? colchunk.meta_data.statistics.min_value
-                                    : colchunk.meta_data.statistics.min;
-          auto const& max_value = colchunk.meta_data.statistics.max_value.has_value()
-                                    ? colchunk.meta_data.statistics.max_value
-                                    : colchunk.meta_data.statistics.max;
-          // translate binary data to Type then to <T>
-          min.set_index(stats_idx, min_value, colchunk.meta_data.type);
-          max.set_index(stats_idx, max_value, colchunk.meta_data.type);
+          auto col              = std::find_if(
+            row_group.columns.begin(),
+            row_group.columns.end(),
+            [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
+          if (col != std::end(row_group.columns)) {
+            auto const& colchunk = *col;
+            // To support deprecated min, max fields.
+            auto const& min_value = colchunk.meta_data.statistics.min_value.has_value()
+                                      ? colchunk.meta_data.statistics.min_value
+                                      : colchunk.meta_data.statistics.min;
+            auto const& max_value = colchunk.meta_data.statistics.max_value.has_value()
+                                      ? colchunk.meta_data.statistics.max_value
+                                      : colchunk.meta_data.statistics.max;
+            // translate binary data to Type then to <T>
+            min.set_index(stats_idx, min_value, colchunk.meta_data.type);
+            max.set_index(stats_idx, max_value, colchunk.meta_data.type);
+          } else {
+            // Marking it null, if column present in row group
+            min.set_index(stats_idx, thrust::nullopt, {});
+            max.set_index(stats_idx, thrust::nullopt, {});
+          }
           stats_idx++;
         }
       };
@@ -377,17 +386,17 @@ class stats_expression_converter : public ast::detail::expression_transformer {
 };
 }  // namespace
 
-void aggregate_reader_metadata::cache_root_dtypes_names(bool strings_to_categorical,
-                                                        type_id timestamp_type_id)
+void aggregate_reader_metadata::cache_output_dtypes(host_span<int const> output_schemas,
+                                                    bool strings_to_categorical,
+                                                    type_id timestamp_type_id)
 {
-  // TODO, get types and names for only names present in filter.? and their col_idx.
-  // create root column types and names as vector
-  if (!_root_level_types.empty()) return;
+  // store output column types as vector
+  if (!_output_types.empty()) return;
   std::function<cudf::data_type(int)> get_dtype = [strings_to_categorical,
                                                    timestamp_type_id,
                                                    &get_dtype,
                                                    this](int schema_idx) -> cudf::data_type {
-    // returns type of root level columns only.
+    // returns type of columns by using schema_idx.
     auto const& schema_elem = get_schema(schema_idx);
     if (schema_elem.is_stub()) {
       CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
@@ -400,20 +409,19 @@ void aggregate_reader_metadata::cache_root_dtypes_names(bool strings_to_categori
                             ? type_id::LIST
                             : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
     auto const dtype    = to_data_type(col_type, schema_elem);
-    // path_is_valid is skipped for nested columns here. TODO: more test cases where no leaf.
+    // path_is_valid is skipped for nested columns here.
     return dtype;
   };
 
-  auto const& root = get_schema(0);
-  for (auto const& schema_idx : root.children_idx) {
+  for (auto const& schema_idx : output_schemas) {
     if (schema_idx < 0) { continue; }
-    _root_level_types.push_back(get_dtype(schema_idx));
-    _root_level_names.push_back(get_schema(schema_idx).name);
+    _output_types.push_back(get_dtype(schema_idx));
   }
 }
 
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::filter_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
+  host_span<int const> output_column_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
@@ -447,8 +455,9 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   // For each column, it contains #sources * #column_chunks_per_src rows.
   std::vector<std::unique_ptr<column>> columns;
   stats_caster stats_col{total_row_groups, per_file_metadata, input_row_group_indices};
-  for (size_t col_idx = 0; col_idx < _root_level_types.size(); col_idx++) {
-    auto const& dtype = _root_level_types[col_idx];
+  for (size_t col_idx = 0; col_idx < _output_types.size(); col_idx++) {
+    auto const schema_idx = output_column_schemas[col_idx];
+    auto const& dtype     = _output_types[col_idx];
     // Only comparable types except fixed point are supported.
     if (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING) {
       // placeholder only for unsupported types.
@@ -459,18 +468,14 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
       continue;
     }
     auto [min_col, max_col] =
-      cudf::type_dispatcher<dispatch_storage_type>(dtype, stats_col, col_idx, dtype, stream, mr);
+      cudf::type_dispatcher<dispatch_storage_type>(dtype, stats_col, schema_idx, dtype, stream, mr);
     columns.push_back(std::move(min_col));
     columns.push_back(std::move(max_col));
   }
   auto stats_table = cudf::table(std::move(columns));
-  // named filter to reference filter w.r.t parquet schema order.
-  auto expr_conv        = named_to_reference_converter(filter, _root_level_names);
-  auto reference_filter = expr_conv.get_converted_expr();
 
   // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
-  stats_expression_converter stats_expr{reference_filter.value().get(),
-                                        static_cast<size_type>(_root_level_types.size())};
+  stats_expression_converter stats_expr{filter.get(), static_cast<size_type>(_output_types.size())};
   auto stats_ast     = stats_expr.get_stats_expr();
   auto predicate_col = cudf::detail::compute_column(stats_table, stats_ast.get(), stream, mr);
   auto predicate     = predicate_col->view();
@@ -527,20 +532,6 @@ named_to_reference_converter::named_to_reference_converter(
                  [](auto const& sch, auto index) { return std::make_pair(sch.name, index); });
 
   expr.value().get().accept(*this);
-}
-
-named_to_reference_converter::named_to_reference_converter(
-  std::reference_wrapper<ast::expression const> expr,
-  host_span<std::string const> root_column_names)
-{
-  // create map for column name.
-  std::transform(root_column_names.begin(),
-                 root_column_names.end(),
-                 thrust::counting_iterator<size_t>(0),
-                 std::inserter(column_name_to_index, column_name_to_index.end()),
-                 [](auto const& name, auto index) { return std::make_pair(name, index); });
-
-  expr.get().accept(*this);
 }
 
 std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
