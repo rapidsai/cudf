@@ -1952,7 +1952,7 @@ def as_column(
                 cudf.get_option("mode.pandas_compatible")
                 and inferred_dtype == "boolean"
             ):
-                raise MixedTypeError(f"Cannot have NaN with {inferred_dtype}")
+                raise MixedTypeError(f"Cannot have mixed values with {inferred_dtype}")
             elif nan_as_null is False and (
                 any(
                     (isinstance(x, (np.floating, float)) and np.isnan(x))
