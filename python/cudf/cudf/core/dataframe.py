@@ -494,7 +494,12 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return s._getitem_preprocessed(row_spec)
         if column_names != list(self._frame._column_names):
             frame = self._frame._from_data(
-                ca.select_by_label(column_names), index=index
+                data=ColumnAccessor(
+                    {key: ca._data[key] for key in column_names},
+                    multiindex=ca.multiindex,
+                    level_names=ca.level_names,
+                ),
+                index=index,
             )
 
         else:
@@ -6665,13 +6670,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # remove all exclude types
         inclusion = inclusion - exclude_subtypes
 
-        selected_locs = []
-        for i, col in enumerate(self._data.columns):
+        selected_labels = []
+        for k, col in self._data.items():
             infered_type = cudf_dtype_from_pydata_dtype(col.dtype)
             if infered_type in inclusion:
-                selected_locs.append(i)
+                selected_labels.append(k)
 
-        return self.iloc[:, selected_locs].copy()
+        return self.loc[:, selected_labels].copy()
 
     @ioutils.doc_to_parquet()
     def to_parquet(
