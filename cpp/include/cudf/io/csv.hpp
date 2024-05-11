@@ -106,6 +106,8 @@ class csv_reader_options {
   char _quotechar = '"';
   // Whether a quote inside a value is double-quoted
   bool _doublequote = true;
+  // Detect quotes even if surrounded by spaces e.g. `   "data"   `
+  bool _updated_quotes_detection = false;
   // Names of columns to read as datetime
   std::vector<std::string> _parse_dates_names;
   // Indexes of columns to read as datetime
@@ -374,6 +376,13 @@ class csv_reader_options {
    * @return `true` if a quote inside a value is double-quoted
    */
   [[nodiscard]] bool is_enabled_doublequote() const { return _doublequote; }
+
+  /**
+   * @brief Detect quotes even if surrounded by spaces e.g. `   "data"   `
+   *
+   * @return `true` if updated_quotes_detection is enabled
+   */
+  [[nodiscard]] bool is_enabled_updated_quotes_detection() const { return _updated_quotes_detection; }
 
   /**
    * @brief Returns names of columns to read as datetime.
@@ -697,6 +706,13 @@ class csv_reader_options {
    * @param val Boolean value to enable/disable
    */
   void enable_doublequote(bool val) { _doublequote = val; }
+
+  /**
+   * @brief Sets whether to use updated_quotes_detection
+   *
+   * @param val Boolean value to enable/disable
+   */
+  void enable_updated_quotes_detection(bool val) { _updated_quotes_detection = val; }
 
   /**
    * @brief Sets names of columns to read as datetime.
@@ -1123,6 +1139,18 @@ class csv_reader_options_builder {
   csv_reader_options_builder& doublequote(bool val)
   {
     options._doublequote = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets whether to use updated_quotes_detection
+   *
+   * @param val Boolean value to enable/disable
+   * @return this for chaining
+   */
+  csv_reader_options_builder& updated_quotes_detection(bool val)
+  {
+    options._updated_quotes_detection = val;
     return *this;
   }
 

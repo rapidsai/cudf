@@ -49,7 +49,7 @@ cdef extern from "cudf/io/csv.hpp" \
         bool is_enabled_skip_blank_lines() except +
         cudf_io_types.quote_style get_quoting() except +
         char get_quotechar() except +
-        bool is_enabled_doublequote() except +
+        bool is_enabled_updated_quotes_detection() except +
         vector[string] get_parse_dates_names() except +
         vector[int] get_parse_dates_indexes() except +
         vector[string] get_parse_hex_names() except +
@@ -95,6 +95,7 @@ cdef extern from "cudf/io/csv.hpp" \
         void set_quoting(cudf_io_types.quote_style style) except +
         void set_quotechar(char val) except +
         void set_doublequote(bool val) except +
+        void set_updated_quotes_detection(bool val) except +
         void set_parse_dates(vector[string]) except +
         void set_parse_dates(vector[int]) except +
         void set_parse_hex(vector[string]) except +
@@ -163,6 +164,7 @@ cdef extern from "cudf/io/csv.hpp" \
         ) except +
         csv_reader_options_builder& quotechar(char val) except +
         csv_reader_options_builder& doublequote(bool val) except +
+        csv_reader_options_builder& updated_quotes_detection(bool val) except +
         csv_reader_options_builder& parse_dates(vector[string]) except +
         csv_reader_options_builder& parse_dates(vector[int]) except +
 

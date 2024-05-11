@@ -63,6 +63,7 @@ struct parse_options_view {
   char thousands;
   char comment;
   bool keepquotes;
+  bool updatedquotesdetection;
   bool doublequote;
   bool dayfirst;
   bool skipblanklines;
@@ -80,6 +81,7 @@ struct parse_options {
   char thousands;
   char comment;
   bool keepquotes;
+  bool updatedquotesdetection;
   bool doublequote;
   bool dayfirst;
   bool skipblanklines;
@@ -105,6 +107,7 @@ struct parse_options {
             thousands,
             comment,
             keepquotes,
+            updatedquotesdetection,
             doublequote,
             dayfirst,
             skipblanklines,
