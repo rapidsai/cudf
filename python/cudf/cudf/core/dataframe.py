@@ -501,7 +501,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 ),
                 index=index,
             )
-
         else:
             frame = self._frame
         if isinstance(row_spec, indexing_utils.MapIndexer):
