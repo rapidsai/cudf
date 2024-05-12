@@ -74,6 +74,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         size_type get_row_group_size_rows() except +
         size_t get_max_page_size_bytes() except +
         size_type get_max_page_size_rows() except +
+        size_t get_max_dictionary_size() except +
 
         void set_partitions(
             vector[cudf_io_types.partition_info] partitions
@@ -103,8 +104,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_row_group_size_rows(size_type val) except +
         void set_max_page_size_bytes(size_t val) except +
         void set_max_page_size_rows(size_type val) except +
+        void set_max_dictionary_size(size_t val) except +
         void enable_write_v2_headers(bool val) except +
-        void set_dictionary_policy(cudf_io_types.dictionary_policy policy)except +
+        void set_dictionary_policy(cudf_io_types.dictionary_policy policy) except +
 
         @staticmethod
         parquet_writer_options_builder builder(
@@ -155,6 +157,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_writer_options_builder& max_page_size_rows(
             size_type val
         ) except +
+        parquet_writer_options_builder& max_dictionary_size(
+            size_t val
+        ) except +
         parquet_writer_options_builder& write_v2_headers(
             bool val
         ) except +
@@ -179,6 +184,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         size_type get_row_group_size_rows() except +
         size_t get_max_page_size_bytes() except +
         size_type get_max_page_size_rows() except +
+        size_t get_max_dictionary_size() except +
 
         void set_metadata(
             cudf_io_types.table_input_metadata m
@@ -202,8 +208,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_row_group_size_rows(size_type val) except +
         void set_max_page_size_bytes(size_t val) except +
         void set_max_page_size_rows(size_type val) except +
+        void set_max_dictionary_size(size_t val) except +
         void enable_write_v2_headers(bool val) except +
-        void set_dictionary_policy(cudf_io_types.dictionary_policy policy)except +
+        void set_dictionary_policy(cudf_io_types.dictionary_policy policy) except +
 
         @staticmethod
         chunked_parquet_writer_options_builder builder(
@@ -244,6 +251,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
         chunked_parquet_writer_options_builder& max_page_size_rows(
             size_type val
+        ) except +
+        chunked_parquet_writer_options_builder& max_dictionary_size(
+            size_t val
         ) except +
         parquet_writer_options_builder& write_v2_headers(
             bool val
