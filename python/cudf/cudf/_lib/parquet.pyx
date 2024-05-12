@@ -37,6 +37,7 @@ cimport cudf._lib.cpp.types as cudf_types
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.expressions cimport expression
 from cudf._lib.cpp.io.parquet cimport (
+    chunked_parquet_reader as cpp_chunked_parquet_reader,
     chunked_parquet_writer_options,
     merge_row_group_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
@@ -752,6 +753,73 @@ cdef class ParquetWriter:
             args.set_dictionary_policy(self.dict_policy)
             self.writer.reset(new cpp_parquet_chunked_writer(args))
         self.initialized = True
+
+
+cdef class ParquetReader:
+    cdef bool initialized
+    cdef unique_ptr[cpp_chunked_parquet_reader] reader
+    cdef cudf_io_types.source_info source
+    cdef table_input_metadata tbl_meta
+    cdef cudf_io_types.sink_info sink
+    cdef vector[unique_ptr[cudf_io_data_sink.data_sink]] _data_sink
+    cdef cudf_io_types.statistics_freq stat_freq
+    cdef cudf_io_types.compression_type comp_type
+    cdef object index
+    cdef size_t chunk_read_limit
+    cdef size_t row_group_size_bytes
+    cdef size_type row_group_size_rows
+    cdef size_t max_page_size_bytes
+    cdef size_type max_page_size_rows
+    cdef size_t max_dictionary_size
+    cdef cudf_io_types.dictionary_policy dict_policy
+
+    def __cinit__(self, object filepath_or_buffer, int chunk_read_limit):
+        filepaths_or_buffers = (
+            list(filepath_or_buffer)
+            if is_list_like(filepath_or_buffer)
+            else [filepath_or_buffer]
+        )
+
+        self.chunk_read_limit = chunk_read_limit
+        source = make_source_info(filepaths_or_buffers)
+        # Setup parquet reader arguments
+        cdef parquet_reader_options args
+        cdef parquet_reader_options_builder builder
+        cdef vector[vector[size_type]] cpp_row_groups
+        cdef bool cpp_use_pandas_metadata = True
+        cdef data_type cpp_timestamp_type = cudf_types.data_type(
+            cudf_types.type_id.EMPTY
+        )
+        builder = (
+            parquet_reader_options.builder(source)
+            .row_groups(cpp_row_groups)
+            .use_pandas_metadata(cpp_use_pandas_metadata)
+            .timestamp_type(cpp_timestamp_type)
+        )
+
+        args = move(builder.build())
+
+        with nogil:
+            self.reader.reset(new cpp_chunked_parquet_reader(chunk_read_limit, args))
+
+    def has_next(self):
+        cdef bool res
+        with nogil:
+            res = self.reader.get()[0].has_next()
+        return res
+
+    def read_chunk(self):
+        # Read Parquet
+        cdef cudf_io_types.table_with_metadata c_result
+
+        with nogil:
+            c_result = move(self.reader.get()[0].read_chunk())
+
+        df = cudf.DataFrame._from_data(*data_from_unique_ptr(
+            move(c_result.tbl),
+            column_names=['a', 'b']
+        ))
+        return df
 
 
 cpdef merge_filemetadata(object filemetadata_list):
