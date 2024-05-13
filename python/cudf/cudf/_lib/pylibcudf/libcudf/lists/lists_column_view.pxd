@@ -1,7 +1,10 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport (
+    column_view,
+    mutable_column_view,
+)
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 
 cdef extern from "cudf/lists/lists_column_view.hpp" namespace "cudf" nogil:

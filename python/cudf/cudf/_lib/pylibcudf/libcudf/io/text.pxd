@@ -1,11 +1,11 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint64_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 
-from cudf._lib.cpp.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
 
 
 cdef extern from "cudf/io/text/byte_range_info.hpp" \

@@ -1,11 +1,11 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.optional cimport optional
 from libcpp.string cimport string
 
-from cudf._lib.cpp.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
 
 
 cdef extern from "cudf/timezone.hpp" namespace "cudf" nogil:

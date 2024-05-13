@@ -5,9 +5,9 @@ from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport device_buffer
 
-from cudf._lib.cpp.column.column cimport column, column_view
-from cudf._lib.cpp.table.table cimport table, table_view
-from cudf._lib.cpp.utilities.host_span cimport host_span
+from cudf._lib.pylibcudf.libcudf.column.column cimport column, column_view
+from cudf._lib.pylibcudf.libcudf.table.table cimport table, table_view
+from cudf._lib.pylibcudf.libcudf.utilities.host_span cimport host_span
 
 
 cdef extern from "cudf/concatenate.hpp" namespace "cudf" nogil:

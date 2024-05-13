@@ -1,6 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.reduce cimport scan_type
+from cudf._lib.pylibcudf.libcudf.reduce cimport scan_type
 
 from .aggregation cimport Aggregation
 from .column cimport Column

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
@@ -7,9 +7,9 @@ from pyarrow.lib cimport CScalar, CTable
 
 from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
 
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
 
 
 cdef extern from "dlpack/dlpack.h" nogil:

@@ -7,10 +7,10 @@ from libcpp.vector cimport vector
 
 from rmm._lib.device_uvector cimport device_uvector
 
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport null_equality, size_type
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.types cimport null_equality, size_type
 
 ctypedef unique_ptr[device_uvector[size_type]] gather_map_type
 ctypedef pair[gather_map_type, gather_map_type] gather_map_pair_type

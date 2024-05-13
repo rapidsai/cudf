@@ -1,13 +1,17 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t
 from libcpp.pair cimport pair
 
 from rmm._lib.device_buffer cimport device_buffer
 
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport bitmask_type, mask_state, size_type
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.types cimport (
+    bitmask_type,
+    mask_state,
+    size_type,
+)
 
 ctypedef int32_t underlying_type_t_mask_state
 

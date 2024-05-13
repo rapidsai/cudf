@@ -6,7 +6,7 @@ from libcpp.optional cimport optional
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-cimport cudf._lib.cpp.io.types as cudf_io_types
+cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
 from cudf._lib.variant cimport monostate, variant
 
 

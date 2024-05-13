@@ -5,8 +5,8 @@ from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.vector cimport vector
 
-cimport cudf._lib.cpp.io.types as cudf_io_types
-from cudf._lib.cpp.types cimport size_type
+cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 
 cdef extern from "cudf/io/parquet_metadata.hpp" namespace "cudf::io" nogil:

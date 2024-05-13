@@ -1,8 +1,8 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, int64_t
 
-from cudf._lib.cpp.types cimport int128
+from cudf._lib.pylibcudf.libcudf.types cimport int128
 
 
 cdef extern from "cudf/fixed_point/fixed_point.hpp" namespace "numeric" nogil:

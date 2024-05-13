@@ -8,9 +8,9 @@ from libcpp.optional cimport optional
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-cimport cudf._lib.cpp.io.types as cudf_io_types
-cimport cudf._lib.cpp.table.table_view as cudf_table_view
-from cudf._lib.cpp.types cimport data_type, size_type
+cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
+cimport cudf._lib.pylibcudf.libcudf.table.table_view as cudf_table_view
+from cudf._lib.pylibcudf.libcudf.types cimport data_type, size_type
 
 
 cdef extern from "cudf/io/orc.hpp" \

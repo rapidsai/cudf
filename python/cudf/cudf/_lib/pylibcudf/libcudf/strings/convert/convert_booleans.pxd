@@ -1,9 +1,9 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
 
 
 cdef extern from "cudf/strings/convert/convert_booleans.hpp" namespace \

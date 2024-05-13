@@ -6,12 +6,12 @@ from libcpp.vector cimport vector
 
 from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
 
-cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.cpp.aggregation cimport rank_method
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
+cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
+from cudf._lib.pylibcudf.libcudf.aggregation cimport rank_method
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
 
 
 cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:

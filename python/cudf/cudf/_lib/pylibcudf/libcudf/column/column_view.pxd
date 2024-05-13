@@ -1,9 +1,13 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.vector cimport vector
 
-from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type
+from cudf._lib.pylibcudf.libcudf.types cimport (
+    bitmask_type,
+    data_type,
+    size_type,
+)
 
 
 cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:

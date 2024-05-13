@@ -1,16 +1,16 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.scalar.scalar cimport (
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport (
     duration_scalar,
     numeric_scalar,
     timestamp_scalar,
 )
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 
 cdef extern from "cudf/ast/expressions.hpp" namespace "cudf::ast" nogil:

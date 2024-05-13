@@ -4,9 +4,9 @@ from libc.stdint cimport uint32_t, uint64_t
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
 
 
 cdef extern from "cudf/hashing.hpp" namespace "cudf::hashing" nogil:

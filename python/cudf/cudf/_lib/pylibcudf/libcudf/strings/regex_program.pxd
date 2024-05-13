@@ -1,9 +1,9 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 
-from cudf._lib.cpp.strings.regex_flags cimport regex_flags
+from cudf._lib.pylibcudf.libcudf.strings.regex_flags cimport regex_flags
 
 
 cdef extern from "cudf/strings/regex/regex_program.hpp" \

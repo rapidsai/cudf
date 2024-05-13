@@ -4,11 +4,14 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport pair
 
-from cudf._lib.cpp.aggregation cimport reduce_aggregation, scan_aggregation
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.types cimport data_type
+from cudf._lib.pylibcudf.libcudf.aggregation cimport (
+    reduce_aggregation,
+    scan_aggregation,
+)
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+from cudf._lib.pylibcudf.libcudf.types cimport data_type
 
 
 cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:

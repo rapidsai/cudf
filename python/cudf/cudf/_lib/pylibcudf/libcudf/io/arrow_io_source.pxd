@@ -1,10 +1,10 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport shared_ptr
 from libcpp.string cimport string
 from pyarrow.includes.libarrow cimport CRandomAccessFile
 
-cimport cudf._lib.cpp.io.datasource as cudf_io_datasource
+cimport cudf._lib.pylibcudf.libcudf.io.datasource as cudf_io_datasource
 
 
 cdef extern from "cudf/io/arrow_io_source.hpp" \
