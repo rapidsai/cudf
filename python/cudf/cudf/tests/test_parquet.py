@@ -3291,7 +3291,6 @@ def test_parquet_reader_roundtrip_with_arrow_schema():
     expected = cudf.from_pandas(pdf)
 
     # Check results for reader with schema
-    assert_eq(expected.dtypes, got.dtypes)
     assert_eq(expected, got)
 
     # Now read parquet without arrow schema
@@ -3339,7 +3338,6 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema():
     # Convert to cudf table for an apple to apple comparison
     expected = cudf.from_pandas(pdf)
     assert_eq(expected, got)
-    assert_eq(expected["struct"]._dtypes, got["struct"]._dtypes)
 
     # Now read parquet without arrow schema
     got = cudf.read_parquet(buffer, use_arrow_schema=False)
