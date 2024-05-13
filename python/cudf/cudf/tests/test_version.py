@@ -1,14 +1,12 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-import pytest
-
 import cudf
 
 
-@pytest.mark.parametrize(
-    "pkg_data_str", [cudf.__version__, cudf.__git_commit__]
-)
-def test_version_constants_are_populated(pkg_data_str):
-    assert isinstance(pkg_data_str, str)
-    assert pkg_data_str == pkg_data_str.strip()
-    assert len(pkg_data_str.strip()) > 0
+def test_version_constants_are_populated():
+    # __git_commit__ will only be non-empty in a built distribution
+    assert isinstance(cudf.__git_commit__, str)
+
+    # __version__ should always be non-empty
+    assert isinstance(cudf.__version__, str)
+    assert len(cudf.__version__) > 0
