@@ -12,16 +12,12 @@
 # the License.
 # =============================================================================
 
-# This function finds NVTX and sets any additional necessary environment variables.
-function(find_and_configure_nvtx)
-  rapids_cpm_find(
-    NVTX3 3.1.0
-    GLOBAL_TARGETS nvtx3-c nvtx3-cpp
-    CPM_ARGS
-    GIT_REPOSITORY https://github.com/NVIDIA/NVTX.git
-    GIT_TAG v3.1.0
-    GIT_SHALLOW TRUE SOURCE_SUBDIR c
-  )
+# Use CPM to find or clone NVTX3
+function(find_and_configure_nvtx3)
+
+  include(${rapids-cmake-dir}/cpm/nvtx3.cmake)
+  rapids_cpm_nvtx3(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
+
 endfunction()
 
-find_and_configure_nvtx()
+find_and_configure_nvtx3()
