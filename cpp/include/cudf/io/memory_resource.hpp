@@ -41,4 +41,13 @@ rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_r
  */
 rmm::host_async_resource_ref get_host_memory_resource();
 
+/**
+ * @brief Configure the size of the default host memory resource.
+ *
+ * Must be called before any other function in this header.
+ *
+ * @param size The size of the default host memory resource
+ */
+void config_host_memory_resource(size_t size);
+
 }  // namespace cudf::io

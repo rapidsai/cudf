@@ -206,13 +206,15 @@ static_assert(cuda::mr::resource_with<fixed_pinned_pool_memory_resource,
                                       cuda::mr::host_accessible>,
               "");
 
-rmm::host_async_resource_ref default_pinned_mr()
+rmm::host_async_resource_ref make_default_pinned_mr(std::optional<size_t> config_size)
 {
-  static fixed_pinned_pool_memory_resource mr = []() {
-    auto const size = []() -> size_t {
+  static fixed_pinned_pool_memory_resource mr = [config_size]() {
+    auto const size = [&config_size]() -> size_t {
       if (auto const env_val = getenv("LIBCUDF_PINNED_POOL_SIZE"); env_val != nullptr) {
         return std::atol(env_val);
       }
+
+      if (config_size.has_value()) { return *config_size; }
 
       size_t free{}, total{};
       CUDF_CUDA_TRY(cudaMemGetInfo(&free, &total));
@@ -228,6 +230,12 @@ rmm::host_async_resource_ref default_pinned_mr()
   return mr;
 }
 
+rmm::host_async_resource_ref make_host_mr(std::optional<size_t> size)
+{
+  static rmm::host_async_resource_ref mr_ref = make_default_pinned_mr(size);
+  return mr_ref;
+}
+
 std::mutex& host_mr_mutex()
 {
   static std::mutex map_lock;
@@ -236,8 +244,8 @@ std::mutex& host_mr_mutex()
 
 rmm::host_async_resource_ref& host_mr()
 {
-  static rmm::host_async_resource_ref host_mr = default_pinned_mr();
-  return host_mr;
+  static rmm::host_async_resource_ref mr_ref = make_host_mr(std::nullopt);
+  return mr_ref;
 }
 
 }  // namespace
@@ -254,6 +262,12 @@ rmm::host_async_resource_ref get_host_memory_resource()
 {
   std::scoped_lock lock{host_mr_mutex()};
   return host_mr();
+}
+
+void config_host_memory_resource(size_t size)
+{
+  std::scoped_lock lock{host_mr_mutex()};
+  make_host_mr(size);
 }
 
 }  // namespace cudf::io
