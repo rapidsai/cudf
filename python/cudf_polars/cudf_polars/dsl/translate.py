@@ -11,6 +11,7 @@ from typing import Any
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 from cudf_polars.dsl import expr, ir
+from cudf_polars.utils import dtypes
 
 __all__ = ["translate_ir", "translate_expr"]
 
@@ -62,7 +63,7 @@ def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
     )
     with ctx:
         node = visitor.view_current_node()
-        schema = visitor.get_schema()
+        schema = {k: dtypes.from_polars(v) for k, v in visitor.get_schema().items()}
         if isinstance(node, pl_ir.PythonScan):
             return ir.PythonScan(
                 schema,
@@ -222,7 +223,7 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
             node.options,
         )
     elif isinstance(node, pl_expr.Literal):
-        return expr.Literal(node.dtype, node.value)
+        return expr.Literal(dtypes.from_polars(node.dtype), node.value)
     elif isinstance(node, pl_expr.Sort):
         # TODO: raise in groupby
         return expr.Sort(translate_expr(visitor, n=node.expr), node.options)
@@ -244,7 +245,13 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
             translate_expr(visitor, n=node.by),
         )
     elif isinstance(node, pl_expr.Cast):
-        return expr.Cast(node.dtype, translate_expr(visitor, n=node.expr))
+        inner = translate_expr(visitor, n=node.expr)
+        # Push casts into literals so we can handle Cast(Literal(Null))
+        dtype = dtypes.from_polars(node.dtype)
+        if isinstance(inner, expr.Literal):
+            return expr.Literal(dtype, inner.value)
+        else:
+            return expr.Cast(dtype, inner)
     elif isinstance(node, pl_expr.Column):
         return expr.Col(node.name)
     elif isinstance(node, pl_expr.Agg):
@@ -257,7 +264,9 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
         return expr.BinOp(
             translate_expr(visitor, n=node.left),
             translate_expr(visitor, n=node.right),
-            node.op,
+            expr.BinOp._MAPPING[node.op],
+            # TODO: Should lay dtype onto every node, but visitor.get_dtype is O(n) not O(1)
+            dtypes.from_polars(visitor.get_dtype(n)),
         )
     elif isinstance(node, pl_expr.Len):
         return expr.Len()

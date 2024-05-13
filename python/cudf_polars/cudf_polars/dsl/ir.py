@@ -29,7 +29,7 @@ import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame
-from cudf_polars.utils import dtypes, sorting
+from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
     from typing import Literal
@@ -61,7 +61,7 @@ __all__ = [
 
 @dataclass(slots=True)
 class IR:
-    schema: dict[str, Any]
+    schema: dict[str, plc.DataType]
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -109,7 +109,7 @@ class Scan(IR):
             assert_never(self.typ)
         if row_index is not None:
             name, offset = row_index
-            dtype = dtypes.from_polars(self.schema[name])
+            dtype = self.schema[name]
             step = plc.interop.from_arrow(pa.scalar(1), data_type=dtype)
             init = plc.interop.from_arrow(pa.scalar(offset), data_type=dtype)
             index = Column(
@@ -120,6 +120,10 @@ class Scan(IR):
                 null_order=plc.types.null_order.AFTER,
             )
             df = df.with_columns([index])
+        assert all(
+            c.obj.data_type() == dtype
+            for c, dtype in zip(df.columns, self.schema.values())
+        )
         if self.predicate is None:
             return df
         else:
@@ -161,6 +165,10 @@ class DataFrameScan(IR):
         table = table.cast(schema)
         df = DataFrame.from_table(
             plc.interop.from_arrow(table), list(self.schema.keys())
+        )
+        assert all(
+            c.obj.data_type() == dtype
+            for c, dtype in zip(df.columns, self.schema.values())
         )
         if self.predicate is not None:
             mask = self.predicate.evaluate(df)

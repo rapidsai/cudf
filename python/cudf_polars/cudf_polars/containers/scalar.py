@@ -18,8 +18,6 @@ class Scalar:
 
     __slots__ = ("obj", "name")
     obj: plc.Scalar
-    name: str
 
-    def __init__(self, scalar: plc.Column, name: str):
+    def __init__(self, scalar: plc.Scalar):
         self.obj = scalar
-        self.name = name

@@ -28,15 +28,13 @@ __all__: list[str] = ["DataFrame"]
 class DataFrame:
     """A representation of a dataframe."""
 
-    __slots__ = ("columns", "scalars", "names", "scalar_names", "table")
     columns: list[Column]
     scalars: list[Scalar]
-    scalar_names: frozenset[str]
     table: plc.Table | None
 
     def __init__(self, columns: Sequence[Column], scalars: Sequence[Scalar]) -> None:
-        self.scalar_names = frozenset(s.name for s in scalars)
         self.columns = list(columns)
+        self._column_map = {c.name: c for c in self.columns}
         self.scalars = list(scalars)
         if len(scalars) == 0:
             self.table = plc.Table([c.obj for c in columns])
@@ -116,8 +114,6 @@ class DataFrame:
     def replace_columns(self, *columns: Column) -> Self:
         """Return a new dataframe with columns replaced by name."""
         new = {c.name: c for c in columns}
-        if set(new).intersection(self.scalar_names):
-            raise ValueError("Cannot replace scalars")
         if not set(new).issubset(self.column_names_set):
             raise ValueError("Cannot replace with non-existing names")
         return type(self)([new.get(c.name, c) for c in self.columns], self.scalars)
