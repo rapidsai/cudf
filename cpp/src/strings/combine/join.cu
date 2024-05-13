@@ -22,7 +22,7 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/combine.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -150,7 +150,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
     if ((input.size() == input.null_count()) ||
         ((input.chars_size(stream) / (input.size() - input.null_count())) <=
          AVG_CHAR_BYTES_THRESHOLD)) {
-      return std::get<1>(experimental::make_strings_children(
+      return std::get<1>(make_strings_children(
                            join_fn{*d_strings, d_separator, d_narep}, input.size(), stream, mr))
         .release();
     }

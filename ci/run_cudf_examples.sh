@@ -23,4 +23,7 @@ compute-sanitizer --tool memcheck custom_optimized names.csv
 compute-sanitizer --tool memcheck custom_prealloc names.csv
 compute-sanitizer --tool memcheck custom_with_malloc names.csv
 
+compute-sanitizer --tool memcheck parquet_io
+compute-sanitizer --tool memcheck parquet_io example.parquet output.parquet DELTA_BINARY_PACKED ZSTD TRUE
+
 exit ${EXITCODE}
