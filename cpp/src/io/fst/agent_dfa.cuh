@@ -15,11 +15,12 @@
  */
 #pragma once
 
-#include "cub/util_type.cuh"
 #include "in_reg_array.cuh"
 
 #include <cub/cub.cuh>
+#include <cuda/std/type_traits>
 #include <thrust/execution_policy.h>
+#include <thrust/iterator/discard_iterator.h>
 #include <thrust/sequence.h>
 
 namespace cudf::io::fst::detail {
@@ -202,19 +203,26 @@ class DFASWriteCallbackWrapper {
   uint32_t in_offset;
 };
 
-template <int maxc,
+template <bool discard_idx,
+          bool discard_out,
+          int maxc,
           int cache_size,
           typename out_t,
           typename TransducerTableT,
           typename TransducedOutItT,
           typename TransducedIndexOutItT>
 class WriteCoalescingCallbackWrapper {
-  struct TempStorage_ {
+  struct TempStorage_Offsets {
     uint16_t compacted_offset[cache_size];
+  };
+  struct TempStorage_Symbols {
     out_t compacted_symbols[cache_size];
   };
-
-  struct TempStorage : cub::Uninitialized<TempStorage_> {};
+  using offset_cache_t =
+    ::cuda::std::conditional_t<discard_idx, cub::NullType, TempStorage_Offsets>;
+  using symbol_cache_t =
+    ::cuda::std::conditional_t<discard_out, cub::Uninitialized<cub::NullType>, TempStorage_Symbols>;
+  struct TempStorage_ : offset_cache_t, symbol_cache_t {};
 
   __device__ __forceinline__ TempStorage_& PrivateStorage()
   {
@@ -224,6 +232,8 @@ class WriteCoalescingCallbackWrapper {
   TempStorage_& temp_storage;
 
  public:
+  struct TempStorage : cub::Uninitialized<TempStorage_> {};
+
   __device__ __forceinline__ WriteCoalescingCallbackWrapper(TransducerTableT transducer_table,
                                                             TransducedOutItT out_it,
                                                             TransducedIndexOutItT out_idx_it,
@@ -257,10 +267,14 @@ class WriteCoalescingCallbackWrapper {
   {
     uint32_t const count = transducer_table(old_state, symbol_id, read_symbol);
     for (uint32_t out_char = 0; out_char < count; out_char++) {
-      temp_storage.compacted_offset[thread_out_offset + out_char - tile_out_offset] =
-        in_offset + character_index - tile_in_offset;
-      temp_storage.compacted_symbols[thread_out_offset + out_char - tile_out_offset] =
-        transducer_table(old_state, symbol_id, out_char, read_symbol);
+      if constexpr (!discard_idx) {
+        temp_storage.compacted_offset[thread_out_offset + out_char - tile_out_offset] =
+          in_offset + character_index - tile_in_offset;
+      }
+      if constexpr (!discard_out) {
+        temp_storage.compacted_symbols[thread_out_offset + out_char - tile_out_offset] =
+          transducer_table(old_state, symbol_id, out_char, read_symbol);
+      }
     }
     thread_out_offset += count;
   }
@@ -268,12 +282,16 @@ class WriteCoalescingCallbackWrapper {
   __device__ __forceinline__ void TearDown()
   {
     __syncthreads();
-    for (uint32_t out_char = threadIdx.x; out_char < tile_out_count; out_char += blockDim.x) {
-      out_it[tile_out_offset + out_char] = temp_storage.compacted_symbols[out_char];
+    if constexpr (!discard_out) {
+      for (uint32_t out_char = threadIdx.x; out_char < tile_out_count; out_char += blockDim.x) {
+        out_it[tile_out_offset + out_char] = temp_storage.compacted_symbols[out_char];
+      }
     }
-    for (uint32_t out_char = threadIdx.x; out_char < tile_out_count; out_char += blockDim.x) {
-      out_idx_it[tile_out_offset + out_char] =
-        temp_storage.compacted_offset[out_char] + tile_in_offset;
+    if constexpr (!discard_idx) {
+      for (uint32_t out_char = threadIdx.x; out_char < tile_out_count; out_char += blockDim.x) {
+        out_idx_it[tile_out_offset + out_char] =
+          temp_storage.compacted_offset[out_char] + tile_in_offset;
+      }
     }
     __syncthreads();
   }
@@ -717,6 +735,10 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
   using OutSymbolT = typename DfaT::OutSymbolT;
   // static constexpr int32_t MIN_TRANSLATED_OUT = DfaT::MIN_TRANSLATED_OUT;
   static constexpr int32_t MAX_TRANSLATED_OUT = DfaT::MAX_TRANSLATED_OUT;
+  static constexpr bool discard_out_index =
+    ::cuda::std::is_same<TransducedIndexOutItT, thrust::discard_iterator<>>::value;
+  static constexpr bool discard_out_it =
+    ::cuda::std::is_same<TransducedOutItT, thrust::discard_iterator<>>::value;
   using NonWriteCoalescingT =
     DFASWriteCallbackWrapper<MAX_TRANSLATED_OUT,
                              decltype(dfa.InitTranslationTable(transducer_table_storage)),
@@ -724,7 +746,9 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
                              TransducedIndexOutItT>;
 
   using WriteCoalescingT =
-    WriteCoalescingCallbackWrapper<MAX_TRANSLATED_OUT,
+    WriteCoalescingCallbackWrapper<discard_out_index,
+                                   discard_out_it,
+                                   MAX_TRANSLATED_OUT,
                                    MAX_TRANSLATED_OUT * SYMBOLS_PER_BLOCK,
                                    OutSymbolT,
                                    decltype(dfa.InitTranslationTable(transducer_table_storage)),
@@ -736,7 +760,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
 
   // Use write-coalescing only if it's
   static constexpr bool use_shmem_cache =
-    is_translation_pass and (sizeof(OutSymbolT) * MAX_TRANSLATED_OUT <= 4);
+    is_translation_pass and (sizeof(typename WriteCoalescingT::TempStorage) <= 24 * 1024);
 
   using DFASimulationCallbackWrapperT =
     typename cub::If<use_shmem_cache, WriteCoalescingT, NonWriteCoalescingT>::Type;
