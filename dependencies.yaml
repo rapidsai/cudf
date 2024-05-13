@@ -119,6 +119,29 @@ files:
       key: cudf-pandas-tests
     includes:
       - test_python_cudf_pandas
+  py_build_cudf_polars:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: build-system
+    includes:
+      - build_wheels
+  py_run_cudf_polars:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project
+    includes:
+      - run_cudf_polars
+      - depends_on_cudf
+  py_test_cudf_polars:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project.optional-dependencies
+      key: test
+    includes:
+      - test_python_common
   py_build_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -559,6 +582,11 @@ dependencies:
       - output_types: pyproject
         matrices:
           - {matrix: null, packages: [cubinlinker, ptxcompiler, *rmm_conda] }
+  run_cudf_polars:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - polars>=0.20.24
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
