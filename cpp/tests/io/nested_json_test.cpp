@@ -312,16 +312,19 @@ TEST_F(JsonTest, StackContextRecoveringFuzz)
   using SymbolT      = char;
   using StackSymbolT = char;
 
+  std::array<char, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
   std::random_device rd;
-  std::mt19937 gen(42);
-  std::uniform_int_distribution<int> distribution(0, 4);
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> distrib(0, delimiter_chars.size() - 1);
+  char const delimiter = delimiter_chars[distrib(gen)];
+
   constexpr std::size_t input_length = 1024 * 1024;
-  char const delimiter               = '\n';
   std::string input{};
   input.reserve(input_length);
 
   bool inside_quotes = false;
   std::stack<StackSymbolT> host_stack{};
+  std::uniform_int_distribution<int> distribution(0, 4);
   for (std::size_t i = 0; i < input_length; ++i) {
     bool is_ok = true;
     char current{};
@@ -333,36 +336,29 @@ TEST_F(JsonTest, StackContextRecoveringFuzz)
         case 1: current = '['; break;
         case 2: current = '}'; break;
         case 3: current = '"'; break;
-        case 4: current = '\n'; break;
+        case 4: current = delimiter; break;
       }
-      switch (current) {
-        case '"': inside_quotes = !inside_quotes; break;
-        case '{':
-          if (!inside_quotes) { host_stack.push('{'); }
-          break;
-        case '[':
-          if (!inside_quotes) { host_stack.push('['); }
-          break;
-        case '}':
-          if (!inside_quotes) {
-            if (host_stack.size() > 0) {
-              // Get the proper 'pop' stack symbol
-              current = (host_stack.top() == '{' ? '}' : ']');
-              host_stack.pop();
-            } else
-              is_ok = false;
-          }
-          break;
-        case '\n':
-          // Increase chance to have longer lines
-          if (distribution(gen) == 0) {
-            is_ok = false;
-            break;
-          } else {
-            host_stack    = {};
-            inside_quotes = false;
-            break;
-          }
+      if (current == '"')
+        inside_quotes = !inside_quotes;
+      else if (current == '{' && !inside_quotes)
+        host_stack.push('{');
+      else if (current == '[' && !inside_quotes)
+        host_stack.push('[');
+      else if (current == '}' && !inside_quotes) {
+        if (host_stack.size() > 0) {
+          // Get the proper 'pop' stack symbol
+          current = (host_stack.top() == '{' ? '}' : ']');
+          host_stack.pop();
+        } else
+          is_ok = false;
+      } else if (current == delimiter) {
+        // Increase chance to have longer lines
+        if (distribution(gen) == 0) {
+          is_ok = false;
+        } else {
+          host_stack    = {};
+          inside_quotes = false;
+        }
       }
     } while (!is_ok);
     input += current;
@@ -380,24 +376,19 @@ TEST_F(JsonTest, StackContextRecoveringFuzz)
       expected_stack_context += host_stack.top();
     }
 
-    switch (current) {
-      case '"': inside_quotes = !inside_quotes; break;
-      case '{':
-        if (!inside_quotes) { host_stack.push('{'); }
-        break;
-      case '[':
-        if (!inside_quotes) { host_stack.push('['); }
-        break;
-      case '}':
-        if (!inside_quotes && host_stack.size() > 0) { host_stack.pop(); }
-        break;
-      case ']':
-        if (!inside_quotes && host_stack.size() > 0) { host_stack.pop(); }
-        break;
-      case '\n':
-        host_stack    = {};
-        inside_quotes = false;
-        break;
+    if (current == '"')
+      inside_quotes = !inside_quotes;
+    else if (current == '{' && !inside_quotes)
+      host_stack.push('{');
+    else if (current == '[' && !inside_quotes)
+      host_stack.push('[');
+    else if (current == '}' && !inside_quotes && host_stack.size() > 0)
+      host_stack.pop();
+    else if (current == ']' && !inside_quotes && host_stack.size() > 0)
+      host_stack.pop();
+    else if (current == delimiter) {
+      host_stack    = {};
+      inside_quotes = false;
     }
   }
 
