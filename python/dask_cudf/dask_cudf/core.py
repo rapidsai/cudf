@@ -55,9 +55,20 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
 
     @_dask_cudf_nvtx_annotate
     def to_dask_dataframe(self, **kwargs):
-        """Create a dask.dataframe object from a dask_cudf object"""
-        nullable = kwargs.get("nullable", False)
-        return self.map_partitions(M.to_pandas, nullable=nullable)
+        """Create a dask.dataframe object from a dask_cudf object
+
+        WARNING: This API is deprecated, and may not work properly
+        when query-planning is active. Please use `*.to_backend("pandas")`
+        to convert the underlying data to pandas.
+        """
+
+        warnings.warn(
+            "The `to_dask_dataframe` API is now deprecated. "
+            "Please use `*.to_backend('pandas')` instead.",
+            FutureWarning,
+        )
+
+        return self.to_backend("pandas", **kwargs)
 
 
 concat = dd.concat
@@ -733,6 +744,10 @@ def from_dask_dataframe(df):
     Convert a Dask :class:`dask.dataframe.DataFrame` to a Dask-cuDF
     one.
 
+    WARNING: This API is deprecated, and may not work properly
+    when query-planning is active. Please use `*.to_backend("cudf")`
+    to convert the underlying data to cudf.
+
     Parameters
     ----------
     df : dask.dataframe.DataFrame
@@ -742,7 +757,14 @@ def from_dask_dataframe(df):
     -------
     dask_cudf.DataFrame : A new Dask collection backed by cuDF objects
     """
-    return df.map_partitions(cudf.from_pandas)
+
+    warnings.warn(
+        "The `from_dask_dataframe` API is now deprecated. "
+        "Please use `*.to_backend('cudf')` instead.",
+        FutureWarning,
+    )
+
+    return df.to_backend("cudf")
 
 
 for name in (

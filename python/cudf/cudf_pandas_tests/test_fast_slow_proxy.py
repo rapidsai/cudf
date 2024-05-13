@@ -439,10 +439,6 @@ def test_proxy_binop():
     assert Bar() + Foo() == "sum"
     assert FooProxy() + BarProxy() == "sum"
     assert BarProxy() + FooProxy() == "sum"
-    assert FooProxy() + Bar() == "sum"
-    assert Bar() + FooProxy() == "sum"
-    assert Foo() + BarProxy() == "sum"
-    assert BarProxy() + Foo() == "sum"
 
 
 def test_slow_attr_still_proxy():

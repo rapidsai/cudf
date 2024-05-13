@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 namespace cudf {
 namespace reduction {
 namespace detail {
@@ -45,7 +47,7 @@ bool need_handle_nulls(column_view const& input, null_policy null_handling)
 std::unique_ptr<scalar> collect_list(column_view const& col,
                                      null_policy null_handling,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   if (need_handle_nulls(col, null_handling)) {
     auto d_view             = column_device_view::create(col, stream);
@@ -61,7 +63,7 @@ std::unique_ptr<scalar> collect_list(column_view const& col,
 
 std::unique_ptr<scalar> merge_lists(lists_column_view const& col,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   auto flatten_col = col.get_sliced_child(stream);
   return make_list_scalar(flatten_col, stream, mr);
@@ -72,7 +74,7 @@ std::unique_ptr<scalar> collect_set(column_view const& col,
                                     null_equality nulls_equal,
                                     nan_equality nans_equal,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   // `input_as_collect_list` is the result of the input column that has been processed to obey
   // the given null handling behavior.
@@ -101,7 +103,7 @@ std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
                                    null_equality nulls_equal,
                                    nan_equality nans_equal,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   auto flatten_col    = col.get_sliced_child(stream);
   auto distinct_table = cudf::detail::distinct(table_view{{flatten_col}},

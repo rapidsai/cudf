@@ -166,13 +166,7 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
                                                    ColumnChunkDesc const& chunk)
 {
   if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return decode_kernel_mask::NONE; }
-  if (!is_string_col(chunk) && !is_nested(chunk) && !is_byte_array(chunk) && !is_boolean(chunk)) {
-    if (page.encoding == Encoding::PLAIN) {
-      return decode_kernel_mask::FIXED_WIDTH_NO_DICT;
-    } else if (page.encoding == Encoding::PLAIN_DICTIONARY) {
-      return decode_kernel_mask::FIXED_WIDTH_DICT;
-    }
-  }
+
   if (page.encoding == Encoding::DELTA_BINARY_PACKED) {
     return decode_kernel_mask::DELTA_BINARY;
   } else if (page.encoding == Encoding::DELTA_BYTE_ARRAY) {
@@ -180,10 +174,26 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
   } else if (page.encoding == Encoding::DELTA_LENGTH_BYTE_ARRAY) {
     return decode_kernel_mask::DELTA_LENGTH_BA;
   } else if (is_string_col(chunk)) {
+    // check for string before byte_stream_split so FLBA will go to the right kernel
     return decode_kernel_mask::STRING;
   }
 
-  // non-string, non-delta
+  if (!is_nested(chunk) && !is_byte_array(chunk) && !is_boolean(chunk)) {
+    if (page.encoding == Encoding::PLAIN) {
+      return decode_kernel_mask::FIXED_WIDTH_NO_DICT;
+    } else if (page.encoding == Encoding::PLAIN_DICTIONARY ||
+               page.encoding == Encoding::RLE_DICTIONARY) {
+      return decode_kernel_mask::FIXED_WIDTH_DICT;
+    } else if (page.encoding == Encoding::BYTE_STREAM_SPLIT) {
+      return decode_kernel_mask::BYTE_STREAM_SPLIT_FLAT;
+    }
+  }
+
+  if (page.encoding == Encoding::BYTE_STREAM_SPLIT) {
+    return decode_kernel_mask::BYTE_STREAM_SPLIT;
+  }
+
+  // non-string, non-delta, non-split_stream
   return decode_kernel_mask::GENERAL;
 }
 
@@ -528,17 +538,28 @@ CUDF_KERNEL void __launch_bounds__(128)
     int pos = 0, cur = 0;
     for (int i = 0; i < num_entries; i++) {
       int len = 0;
-      if (cur + 4 <= dict_size) {
-        len = dict[cur + 0] | (dict[cur + 1] << 8) | (dict[cur + 2] << 16) | (dict[cur + 3] << 24);
-        if (len >= 0 && cur + 4 + len <= dict_size) {
+      if (ck->physical_type == FIXED_LEN_BYTE_ARRAY) {
+        if (cur + ck->type_length <= dict_size) {
+          len = ck->type_length;
           pos = cur;
-          cur = cur + 4 + len;
+          cur += len;
         } else {
           cur = dict_size;
         }
+      } else {
+        if (cur + 4 <= dict_size) {
+          len =
+            dict[cur + 0] | (dict[cur + 1] << 8) | (dict[cur + 2] << 16) | (dict[cur + 3] << 24);
+          if (len >= 0 && cur + 4 + len <= dict_size) {
+            pos = cur + 4;
+            cur = pos + len;
+          } else {
+            cur = dict_size;
+          }
+        }
       }
       // TODO: Could store 8 entries in shared mem, then do a single warp-wide store
-      dict_index[i].first  = reinterpret_cast<char const*>(dict + pos + 4);
+      dict_index[i].first  = reinterpret_cast<char const*>(dict + pos);
       dict_index[i].second = len;
     }
   }
