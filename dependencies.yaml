@@ -309,6 +309,7 @@ dependencies:
         packages:
           - rapids-build-backend>=0.1.1
           - setuptools
+          - wheel
   build_python_common:
     common:
       - output_types: [conda, requirements, pyproject]
