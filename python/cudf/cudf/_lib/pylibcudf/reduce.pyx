@@ -18,6 +18,9 @@ from .column cimport Column
 from .scalar cimport Scalar
 from .types cimport DataType
 
+from cudf._lib.pylibcudf.libcudf.reduce import \
+    scan_type as ScanType  # no-cython-lint
+
 
 cpdef Scalar reduce(Column col, Aggregation agg, DataType data_type):
     """Perform a reduction on a column
