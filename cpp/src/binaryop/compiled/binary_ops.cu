@@ -356,6 +356,7 @@ case binary_operator::LOG_BASE:             apply_binary_op<ops::LogBase>(out, l
 case binary_operator::ATAN2:                apply_binary_op<ops::ATan2>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::PMOD:                 apply_binary_op<ops::PMod>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::NULL_EQUALS:          apply_binary_op<ops::NullEquals>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
+case binary_operator::NULL_NOT_EQUALS:      apply_binary_op<ops::NullNotEquals>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::NULL_MAX:             apply_binary_op<ops::NullMax>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::NULL_MIN:             apply_binary_op<ops::NullMin>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::NULL_LOGICAL_AND:     apply_binary_op<ops::NullLogicalAnd>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
@@ -413,7 +414,8 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
   switch (op) {
     case binary_operator::EQUAL: [[fallthrough]];
     case binary_operator::NULL_EQUALS: [[fallthrough]];
-    case binary_operator::NOT_EQUAL:
+    case binary_operator::NOT_EQUAL: [[fallthrough]];
+    case binary_operator::NULL_NOT_EQUALS:
       detail::apply_struct_equality_op(
         out,
         lhs,

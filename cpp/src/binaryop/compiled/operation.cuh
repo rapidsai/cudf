@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -429,6 +429,21 @@ struct NullEquals {
   // To allow std::is_invocable_v = true
   template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x == y);
+};
+
+struct NullNotEquals {
+  template <typename TypeLhs, typename TypeRhs>
+  __device__ inline auto operator()(
+    TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x != y)
+  {
+    output_valid = true;
+    if (!lhs_valid && !rhs_valid) return false;
+    if (lhs_valid && rhs_valid) return x != y;
+    return true;
+  }
+  // To allow std::is_invocable_v = true
+  template <typename TypeLhs, typename TypeRhs>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x != y);
 };
 
 struct NullMax {
