@@ -202,21 +202,22 @@ class fixed_pinned_pool_memory_resource {
 
 rmm::host_async_resource_ref default_pinned_mr()
 {
-  auto const size = []() -> size_t {
-    if (auto const env_val = getenv("LIBCUDF_PINNED_POOL_SIZE"); env_val != nullptr) {
-      return std::atol(env_val);
-    }
+  static fixed_pinned_pool_memory_resource mr = []() {
+    auto const size = []() -> size_t {
+      if (auto const env_val = getenv("LIBCUDF_PINNED_POOL_SIZE"); env_val != nullptr) {
+        return std::atol(env_val);
+      }
 
-    size_t free{}, total{};
-    CUDF_CUDA_TRY(cudaMemGetInfo(&free, &total));
-    // 0.5% of the total device memory, capped at 100MB
-    return std::min((total / 200 + 255) & ~255, size_t{100} * 1024 * 1024);
+      size_t free{}, total{};
+      CUDF_CUDA_TRY(cudaMemGetInfo(&free, &total));
+      // 0.5% of the total device memory, capped at 100MB
+      return std::min((total / 200 + 255) & ~255, size_t{100} * 1024 * 1024);
+    }();
+    CUDF_LOG_INFO("Pinned pool size = {}", size);
+
+    // make the pool with max size equal to the initial size
+    return fixed_pinned_pool_memory_resource{size};
   }();
-
-  CUDF_LOG_INFO("Pinned pool size = {}", size);
-
-  // make the pool with max size equal to the initial size
-  static fixed_pinned_pool_memory_resource mr{size};
 
   return mr;
 }
@@ -227,7 +228,7 @@ std::mutex& host_mr_mutex()
   return map_lock;
 }
 
-auto& host_mr()
+rmm::host_async_resource_ref host_mr()
 {
   static rmm::host_async_resource_ref host_mr = default_pinned_mr();
   return host_mr;
