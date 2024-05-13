@@ -22,8 +22,6 @@ repos:
         # project can specify its own first/third-party packages.
         args: ["--config-root=python/", "--resolve-all-configs"]
         files: python/.*
-        exclude: |
-          (?x)^(^python/cudf_polars/.*)
         types_or: [python, cython, pyi]
   - repo: https://github.com/MarcoGorelli/cython-lint
     rev: v0.16.2
