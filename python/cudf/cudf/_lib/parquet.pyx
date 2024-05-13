@@ -51,7 +51,11 @@ from cudf._lib.cpp.io.parquet_metadata cimport (
     parquet_metadata,
     read_parquet_metadata as parquet_metadata_reader,
 )
-from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
+from cudf._lib.cpp.io.types cimport (
+    column_in_metadata,
+    table_input_metadata,
+    table_metadata,
+)
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.expressions cimport Expression
@@ -772,55 +776,218 @@ cdef class ParquetReader:
     cdef size_type max_page_size_rows
     cdef size_t max_dictionary_size
     cdef cudf_io_types.dictionary_policy dict_policy
+    cdef table_metadata result_meta
+    cdef vector[unordered_map[string, string]] per_file_user_data
+    cdef object pandas_meta
 
-    def __cinit__(self, object filepath_or_buffer, int chunk_read_limit):
-        filepaths_or_buffers = (
-            list(filepath_or_buffer)
-            if is_list_like(filepath_or_buffer)
-            else [filepath_or_buffer]
-        )
+    def __cinit__(self, filepaths_or_buffers, columns=None, row_groups=None,
+                  use_pandas_metadata=True,
+                  Expression filters=None, int chunk_read_limit=100000):
 
-        self.chunk_read_limit = chunk_read_limit
-        source = make_source_info(filepaths_or_buffers)
-        # Setup parquet reader arguments
-        cdef parquet_reader_options args
-        cdef parquet_reader_options_builder builder
+        # Convert NativeFile buffers to NativeFileDatasource,
+        # but save original buffers in case we need to use
+        # pyarrow for metadata processing
+        # (See: https://github.com/rapidsai/cudf/issues/9599)
+
+        pa_buffers = []
+        for i, datasource in enumerate(filepaths_or_buffers):
+            if isinstance(datasource, NativeFile):
+                pa_buffers.append(datasource)
+                filepaths_or_buffers[i] = NativeFileDatasource(datasource)
+        self.pa_buffers = pa_buffers
+        cdef cudf_io_types.source_info source = make_source_info(
+            filepaths_or_buffers)
+
+        cdef bool cpp_use_pandas_metadata = use_pandas_metadata
+
         cdef vector[vector[size_type]] cpp_row_groups
-        cdef bool cpp_use_pandas_metadata = True
         cdef data_type cpp_timestamp_type = cudf_types.data_type(
             cudf_types.type_id.EMPTY
         )
+        if row_groups is not None:
+            cpp_row_groups = row_groups
+
+        # Setup parquet reader arguments
+        cdef parquet_reader_options args
+        cdef parquet_reader_options_builder builder
         builder = (
             parquet_reader_options.builder(source)
             .row_groups(cpp_row_groups)
             .use_pandas_metadata(cpp_use_pandas_metadata)
             .timestamp_type(cpp_timestamp_type)
         )
+        if filters is not None:
+            builder = builder.filter(<expression &>dereference(filters.c_obj.get()))
 
         args = move(builder.build())
+        cdef vector[string] cpp_columns
+        self.allow_range_index = True
+        if columns is not None:
+            cpp_columns.reserve(len(columns))
+            self.allow_range_index = len(columns) > 0
+            for col in columns:
+                cpp_columns.push_back(str(col).encode())
+            args.set_columns(cpp_columns)
+        # Filters don't handle the range index correctly
+        self.allow_range_index &= filters is None
+
+        self.chunk_read_limit = chunk_read_limit
 
         with nogil:
             self.reader.reset(new cpp_chunked_parquet_reader(chunk_read_limit, args))
+        self.initialized = False
+        self.row_groups = row_groups
+        self.filepaths_or_buffers = filepaths_or_buffers
 
-    def has_next(self):
+    def _has_next(self):
         cdef bool res
         with nogil:
             res = self.reader.get()[0].has_next()
         return res
 
-    def read_chunk(self):
+    def _read_chunk(self):
         # Read Parquet
         cdef cudf_io_types.table_with_metadata c_result
 
         with nogil:
             c_result = move(self.reader.get()[0].read_chunk())
 
+        if not self.initialized:
+            self.names = [info.name.decode() for info in c_result.metadata.schema_info]
+            self.result_meta = c_result.metadata
+            self.per_file_user_data = c_result.metadata.per_file_user_data
+
+            # Access the Parquet per_file_user_data to find the index
+
+            self.column_index_type = None
+            self.index_col_names = None
+            self.is_range_index = True
+            for single_file in self.per_file_user_data:
+                json_str = single_file[b'pandas'].decode('utf-8')
+                if json_str != "":
+                    self.pandas_meta = json.loads(json_str)
+                    file_is_range_index, self.index_col, self.column_index_type = \
+                        _parse_metadata(self.pandas_meta)
+                    self.is_range_index &= file_is_range_index
+
+                    if not file_is_range_index and self.index_col is not None \
+                            and self.index_col_names is None:
+                        self.index_col_names = {}
+                        for idx_col in self.index_col:
+                            for c in self.pandas_meta['columns']:
+                                if c['field_name'] == idx_col:
+                                    self.index_col_names[idx_col] = c['name']
+
         df = cudf.DataFrame._from_data(*data_from_unique_ptr(
             move(c_result.tbl),
-            column_names=['a', 'b']
+            column_names=self.names,
         ))
+        if not self.initialized:
+            self.initialized = True
         return df
 
+    def read(self):
+        dfs = []
+        while self._has_next():
+            dfs.append(self._read_chunk())
+        df = cudf.concat(dfs)
+        update_struct_field_names(df, self.result_meta.schema_info)
+        if self.pandas_meta is not None:
+            # Book keep each column metadata as the order
+            # of `meta["columns"]` and `column_names` are not
+            # guaranteed to be deterministic and same always.
+            meta_data_per_column = {
+                col_meta['name']: col_meta for col_meta in self.pandas_meta["columns"]
+            }
+
+            # update the decimal precision of each column
+            for col in self.names:
+                if isinstance(df._data[col].dtype, cudf.core.dtypes.DecimalDtype):
+                    df._data[col].dtype.precision = (
+                        meta_data_per_column[col]["metadata"]["precision"]
+                    )
+
+        # Set the index column
+        if self.index_col is not None and len(self.index_col) > 0:
+            if self.is_range_index:
+                if not self.allow_range_index:
+                    return df
+
+                if len(self.per_file_user_data) > 1:
+                    range_index_meta = {
+                        "kind": "range",
+                        "name": None,
+                        "start": 0,
+                        "stop": len(df),
+                        "step": 1
+                    }
+                else:
+                    range_index_meta = self.index_col[0]
+
+                if self.row_groups is not None:
+                    per_file_metadata = [
+                        pa.parquet.read_metadata(
+                            # Pyarrow cannot read directly from bytes
+                            io.BytesIO(s) if isinstance(s, bytes) else s
+                        ) for s in (
+                            self.pa_buffers or self.filepaths_or_buffers
+                        )
+                    ]
+
+                    filtered_idx = []
+                    for i, file_meta in enumerate(per_file_metadata):
+                        row_groups_i = []
+                        start = 0
+                        for row_group in range(file_meta.num_row_groups):
+                            stop = start + file_meta.row_group(row_group).num_rows
+                            row_groups_i.append((start, stop))
+                            start = stop
+
+                        for rg in self.row_groups[i]:
+                            filtered_idx.append(
+                                cudf.RangeIndex(
+                                    start=row_groups_i[rg][0],
+                                    stop=row_groups_i[rg][1],
+                                    step=range_index_meta['step']
+                                )
+                            )
+
+                    if len(filtered_idx) > 0:
+                        idx = cudf.concat(filtered_idx)
+                    else:
+                        idx = cudf.Index(cudf.core.column.column_empty(0))
+                else:
+                    idx = cudf.RangeIndex(
+                        start=range_index_meta['start'],
+                        stop=range_index_meta['stop'],
+                        step=range_index_meta['step'],
+                        name=range_index_meta['name']
+                    )
+
+                df._index = idx
+            elif set(self.index_col).issubset(self.names):
+                index_data = df[self.index_col]
+                actual_index_names = list(self.index_col_names.values())
+                if len(index_data._data) == 1:
+                    idx = cudf.Index(
+                        index_data._data.columns[0],
+                        name=actual_index_names[0]
+                    )
+                else:
+                    idx = cudf.MultiIndex.from_frame(
+                        index_data,
+                        names=actual_index_names
+                    )
+                df.drop(columns=self.index_col, inplace=True)
+                df._index = idx
+            else:
+                if self.cpp_use_pandas_metadata:
+                    df.index.names = self.index_col
+
+        # Set column dtype for empty types.
+        if len(df._data.names) == 0 and self.column_index_type is not None:
+            df._data.label_dtype = cudf.dtype(self.column_index_type)
+        return df
 
 cpdef merge_filemetadata(object filemetadata_list):
     """
