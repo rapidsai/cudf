@@ -238,13 +238,16 @@ CUDF_KERNEL void count_bytes_kernel(convert_char_fn converter,
   auto const d_str   = d_strings.element<string_view>(str_idx);
   auto const str_ptr = d_str.data();
 
+  // each thread processes 4 bytes
   size_type size = 0;
-  for (auto i = lane_idx; i < d_str.size_bytes(); i += cudf::detail::warp_size) {
-    auto const chr = str_ptr[i];
-    if (is_utf8_continuation_char(chr)) { continue; }
-    char_utf8 u8 = 0;
-    to_char_utf8(str_ptr + i, u8);
-    size += converter.process_character(u8);
+  for (auto i = lane_idx * 4; i < d_str.size_bytes(); i += cudf::detail::warp_size * 4) {
+    for (auto j = i; (j < (i + 4)) && (j < d_str.size_bytes()); j++) {
+      auto const chr = str_ptr[j];
+      if (is_utf8_continuation_char(chr)) { continue; }
+      char_utf8 u8 = 0;
+      to_char_utf8(str_ptr + j, u8);
+      size += converter.process_character(u8);
+    }
   }
   // this is slightly faster than using the cub::warp_reduce
   if (size > 0) {
@@ -275,15 +278,19 @@ CUDF_KERNEL void has_multibytes_kernel(char const* d_input_chars,
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
   // read only every 2nd byte; all bytes in a multibyte char have high bit set
-  auto const byte_idx = (static_cast<int64_t>(idx) * 2L) + first_offset;
+  auto const byte_idx = (static_cast<int64_t>(idx) * 8L) + first_offset;
   auto const lane_idx = static_cast<cudf::size_type>(threadIdx.x);
   if (byte_idx >= last_offset) { return; }
 
   using block_reduce = cub::BlockReduce<int64_t, block_size>;
   __shared__ typename block_reduce::TempStorage temp_storage;
 
-  u_char const chr = static_cast<u_char>(d_input_chars[byte_idx]);
-  int64_t mb_count = ((chr & 0x80) > 0);  // high bit indicates multibyte
+  // each thread processes 4 bytes
+  int64_t mb_count = 0;
+  for (auto i = byte_idx; (i < (byte_idx + 8L)) && (i < last_offset); i += 2) {
+    u_char const chr = static_cast<u_char>(d_input_chars[i]);
+    mb_count += ((chr & 0x80) > 0);
+  }
 
   auto const mb_total = block_reduce(temp_storage).Reduce(mb_count, cub::Sum());
 
@@ -346,7 +353,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   // but results in a large performance gain when the input contains only single-byte characters.
   rmm::device_scalar<int64_t> mb_count(0, stream);
   // cudf::detail::grid_1d is limited to size_type elements
-  auto const num_blocks = util::div_rounding_up_safe(chars_size / 2L, block_size);
+  auto const num_blocks = util::div_rounding_up_safe(chars_size / 8L, block_size);
   // we only need to check every other byte since either will contain high bit
   has_multibytes_kernel<<<num_blocks, block_size, 0, stream.value()>>>(
     input_chars, first_offset, last_offset, mb_count.data());
