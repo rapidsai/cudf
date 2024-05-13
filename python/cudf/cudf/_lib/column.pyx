@@ -46,7 +46,7 @@ from cudf._lib.types import dtype_from_pylibcudf_column
 cimport cudf._lib.pylibcudf.libcudf.copying as cpp_copying
 cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
 cimport cudf._lib.pylibcudf.libcudf.unary as libcudf_unary
-from cudf._lib cimport pylibcudf
+from cudf._lib.pylibcudf cimport Column as plc_Column
 from cudf._lib.pylibcudf.libcudf.column.column cimport column, column_contents
 from cudf._lib.pylibcudf.libcudf.column.column_factories cimport (
     make_column_from_scalar as cpp_make_column_from_scalar,
@@ -633,7 +633,7 @@ cdef class Column:
             # TODO: This function call is what requires cimporting pylibcudf.
             # We can remove the cimport once we can directly do
             # pylibcudf.column_factories.make_numeric_column or equivalent.
-            col = pylibcudf.Column.from_libcudf(
+            col = plc_Column.from_libcudf(
                 move(
                     make_numeric_column(
                         new_dtype, col.size(), libcudf_types.mask_state.ALL_NULL
