@@ -17,6 +17,7 @@
 #include "config_utils.hpp"
 
 #include <cudf/detail/utilities/stream_pool.hpp>
+#include <cudf/io/memory_resource.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 
@@ -219,12 +220,15 @@ rmm::host_async_resource_ref make_default_pinned_mr(std::optional<size_t> config
       size_t free{}, total{};
       CUDF_CUDA_TRY(cudaMemGetInfo(&free, &total));
       // 0.5% of the total device memory, capped at 100MB
-      return std::min((total / 200 + 255) & ~255, size_t{100} * 1024 * 1024);
+      return std::min(total / 200, size_t{100} * 1024 * 1024);
     }();
-    CUDF_LOG_INFO("Pinned pool size = {}", size);
+
+    // rmm requires the pool size to be a multiple of 256 bytes
+    auto const aligned_size = (size + 255) & ~255;
+    CUDF_LOG_INFO("Pinned pool size = {}", aligned_size);
 
     // make the pool with max size equal to the initial size
-    return fixed_pinned_pool_memory_resource{size};
+    return fixed_pinned_pool_memory_resource{aligned_size};
   }();
 
   return mr;
