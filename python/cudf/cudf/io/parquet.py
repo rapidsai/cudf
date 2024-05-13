@@ -63,6 +63,7 @@ def _write_parquet(
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,
+    max_dictionary_size=None,
     partitions_info=None,
     storage_options=None,
     force_nullable_schema=False,
@@ -96,6 +97,7 @@ def _write_parquet(
         "row_group_size_rows": row_group_size_rows,
         "max_page_size_bytes": max_page_size_bytes,
         "max_page_size_rows": max_page_size_rows,
+        "max_dictionary_size": max_dictionary_size,
         "partitions_info": partitions_info,
         "force_nullable_schema": force_nullable_schema,
         "header_version": header_version,
@@ -902,6 +904,7 @@ def to_parquet(
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,
+    max_dictionary_size=None,
     storage_options=None,
     return_metadata=False,
     force_nullable_schema=False,
@@ -978,6 +981,7 @@ def to_parquet(
             row_group_size_rows=row_group_size_rows,
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
+            max_dictionary_size=max_dictionary_size,
             partitions_info=partition_info,
             storage_options=storage_options,
             force_nullable_schema=force_nullable_schema,
@@ -997,15 +1001,10 @@ def to_parquet(
         if index is None:
             index = True
 
-        # Convert partition_file_name to a call back
-        if partition_file_name:
-            partition_file_name = lambda x: partition_file_name  # noqa: E731
-
         pa_table = df.to_arrow(preserve_index=index)
         return pq.write_to_dataset(
             pa_table,
             root_path=path,
-            partition_filename_cb=partition_file_name,
             partition_cols=partition_cols,
             *args,
             **kwargs,

@@ -2824,13 +2824,7 @@ def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
     ]
     pa_chunk_array = pa.chunked_array(np_list_data)
 
-    expect = pd.Series(pa_chunk_array.to_pandas())
-    if cudf.api.types.is_datetime64_dtype(
-        data_type
-    ) or cudf.api.types.is_timedelta64_dtype(data_type):
-        # Workaround for an Arrow Bug:
-        # https://github.com/apache/arrow/issues/34462
-        expect = expect.astype(data_type)
+    expect = pa_chunk_array.to_pandas()
     got = cudf.Series(pa_chunk_array)
 
     assert_eq(expect, got)
@@ -2845,12 +2839,6 @@ def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
     )
 
     expect = pa_table.to_pandas()
-    if cudf.api.types.is_datetime64_dtype(
-        data_type
-    ) or cudf.api.types.is_timedelta64_dtype(data_type):
-        # Workaround for an Arrow Bug:
-        # https://github.com/apache/arrow/issues/34462
-        expect = expect.astype(data_type)
     got = cudf.DataFrame.from_arrow(pa_table)
 
     assert_eq(expect, got)
@@ -3206,6 +3194,14 @@ def test_reset_index_unnamed(
         expect = pdf
         got = gdf
     assert_eq(expect, got)
+
+
+def test_reset_index_invalid_level():
+    with pytest.raises(IndexError):
+        cudf.DataFrame([1]).reset_index(level=2)
+
+    with pytest.raises(IndexError):
+        pd.DataFrame([1]).reset_index(level=2)
 
 
 @pytest.mark.parametrize(
@@ -11006,3 +11002,29 @@ def test_op_preserves_column_metadata(column, operation):
     result = operation(df).columns
     expected = pd.Index(column)
     pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+def test_dataframe_init_with_nans():
+    with cudf.option_context("mode.pandas_compatible", True):
+        gdf = cudf.DataFrame({"a": [1, 2, 3, np.nan]})
+    assert gdf["a"].dtype == np.dtype("float64")
+    pdf = pd.DataFrame({"a": [1, 2, 3, np.nan]})
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("dtype1", ["int16", "float32"])
+@pytest.mark.parametrize("dtype2", ["int16", "float32"])
+def test_dataframe_loc_int_float(dtype1, dtype2):
+    df = cudf.DataFrame(
+        {"a": [10, 11, 12, 13, 14]},
+        index=cudf.Index([1, 2, 3, 4, 5], dtype=dtype1),
+    )
+    pdf = df.to_pandas()
+
+    gidx = cudf.Index([2, 3, 4], dtype=dtype2)
+    pidx = gidx.to_pandas()
+
+    actual = df.loc[gidx]
+    expected = pdf.loc[pidx]
+
+    assert_eq(actual, expected, check_index_type=True, check_dtype=True)

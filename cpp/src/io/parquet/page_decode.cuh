@@ -1298,9 +1298,13 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       // be made to is_supported_encoding() in reader_impl_preprocess.cu
       switch (s->page.encoding) {
         case Encoding::PLAIN_DICTIONARY:
-        case Encoding::RLE_DICTIONARY:
+        case Encoding::RLE_DICTIONARY: {
           // RLE-packed dictionary indices, first byte indicates index length in bits
-          if (s->col.physical_type == BYTE_ARRAY && s->col.str_dict_index != nullptr) {
+          auto const is_decimal =
+            s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
+          if ((s->col.physical_type == BYTE_ARRAY or
+               s->col.physical_type == FIXED_LEN_BYTE_ARRAY) and
+              not is_decimal and s->col.str_dict_index != nullptr) {
             // String dictionary: use index
             s->dict_base = reinterpret_cast<uint8_t const*>(s->col.str_dict_index);
             s->dict_size = s->col.dict_page->num_input_values * sizeof(string_index_pair);
@@ -1314,7 +1318,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           if (s->dict_bits > 32 || (!s->dict_base && s->col.dict_page->num_input_values > 0)) {
             s->set_error_code(decode_error::INVALID_DICT_WIDTH);
           }
-          break;
+        } break;
         case Encoding::PLAIN:
         case Encoding::BYTE_STREAM_SPLIT:
           s->dict_size = static_cast<int32_t>(end - cur);

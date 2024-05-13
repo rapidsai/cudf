@@ -2,6 +2,7 @@
 
 import datetime
 import glob
+import hashlib
 import math
 import os
 import pathlib
@@ -472,9 +473,7 @@ def test_parquet_read_filtered(tmpdir, rdg_seed):
     # Because of this, we aren't using PyArrow as a reference for testing our
     # row-group selection method since the only way to only select row groups
     # with PyArrow is with the method we use and intend to test.
-    tbl_filtered = pq.read_table(
-        fname, filters=[("1", ">", 60)], use_legacy_dataset=False
-    )
+    tbl_filtered = pq.read_table(fname, filters=[("1", ">", 60)])
 
     assert_eq(cudf.io.read_parquet_metadata(fname)[1], 2048 / 64)
     print(len(df_filtered))
@@ -1311,8 +1310,19 @@ def test_parquet_delta_byte_array(datadir):
     assert_eq(cudf.read_parquet(fname), pd.read_parquet(fname))
 
 
+# values chosen to exercise:
+#    1 - header only, no bitpacked values
+#    2 - one bitpacked value
+#   23 - one partially filled miniblock
+#   32 - almost full miniblock
+#   33 - one full miniblock
+#   34 - one full miniblock plus one value in new miniblock
+#  128 - almost full block
+#  129 - one full block
+#  130 - one full block plus one value in new block
+# 1000 - multiple blocks
 def delta_num_rows():
-    return [1, 2, 23, 32, 33, 34, 64, 65, 66, 128, 129, 130, 20000, 50000]
+    return [1, 2, 23, 32, 33, 34, 128, 129, 130, 1000]
 
 
 @pytest.mark.parametrize("nrows", delta_num_rows())
@@ -1412,17 +1422,16 @@ def test_delta_byte_array_roundtrip(
     pcdf = cudf.from_pandas(test_pdf)
     assert_eq(cdf, pcdf)
 
-    # Test DELTA_LENGTH_BYTE_ARRAY writing as well
-    if str_encoding == "DELTA_LENGTH_BYTE_ARRAY":
-        cudf_fname = tmpdir.join("cdfdeltaba.parquet")
-        pcdf.to_parquet(
-            cudf_fname,
-            compression="snappy",
-            header_version="2.0",
-            use_dictionary=False,
-        )
-        cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
-        assert_eq(cdf2, cdf)
+    # Write back out with cudf and make sure pyarrow can read it
+    cudf_fname = tmpdir.join("cdfdeltaba.parquet")
+    pcdf.to_parquet(
+        cudf_fname,
+        compression="snappy",
+        header_version="2.0",
+        use_dictionary=False,
+    )
+    cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
+    assert_eq(cdf2, cdf)
 
 
 @pytest.mark.parametrize("nrows", delta_num_rows())
@@ -1479,17 +1488,16 @@ def test_delta_struct_list(tmpdir, nrows, add_nulls, str_encoding):
     pcdf = cudf.from_pandas(test_pdf)
     assert_eq(cdf, pcdf)
 
-    # Test DELTA_LENGTH_BYTE_ARRAY writing as well
-    if str_encoding == "DELTA_LENGTH_BYTE_ARRAY":
-        cudf_fname = tmpdir.join("cdfdeltaba.parquet")
-        pcdf.to_parquet(
-            cudf_fname,
-            compression="snappy",
-            header_version="2.0",
-            use_dictionary=False,
-        )
-        cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
-        assert_eq(cdf2, cdf)
+    # Write back out with cudf and make sure pyarrow can read it
+    cudf_fname = tmpdir.join("cdfdeltaba.parquet")
+    pcdf.to_parquet(
+        cudf_fname,
+        compression="snappy",
+        header_version="2.0",
+        use_dictionary=False,
+    )
+    cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
+    assert_eq(cdf2, cdf)
 
 
 @pytest.mark.parametrize(
@@ -1881,6 +1889,43 @@ def test_parquet_writer_max_page_size(tmpdir, max_page_size_kwargs):
 
     assert_eq(cudf.read_parquet(fname), gdf)
     assert s1 > s2
+
+
+@pytest.mark.parametrize("use_dict", [False, True])
+@pytest.mark.parametrize("max_dict_size", [0, 1048576])
+def test_parquet_writer_dictionary_setting(use_dict, max_dict_size):
+    # Simple test for checking the validity of dictionary encoding setting
+    # and behavior of ParquetWriter in cudf.
+    # Write a table with repetitive data with varying dictionary settings.
+    # Make sure the written columns are dictionary-encoded accordingly.
+
+    # Table with repetitive data
+    table = cudf.DataFrame(
+        {
+            "int32": cudf.Series([1024] * 1024, dtype="int64"),
+        }
+    )
+
+    # Write to Parquet using ParquetWriter
+    buffer = BytesIO()
+    writer = ParquetWriter(
+        buffer,
+        use_dictionary=use_dict,
+        max_dictionary_size=max_dict_size,
+    )
+    writer.write_table(table)
+    writer.close()
+
+    # Read encodings from parquet file
+    got = pq.ParquetFile(buffer)
+    encodings = got.metadata.row_group(0).column(0).encodings
+
+    # Check for `PLAIN_DICTIONARY` encoding if dictionary encoding enabled
+    # and dictionary page limit > 0
+    if use_dict is True and max_dict_size > 0:
+        assert "PLAIN_DICTIONARY" in encodings
+    else:
+        assert "PLAIN_DICTIONARY" not in encodings
 
 
 @pytest.mark.parametrize("filename", ["myfile.parquet", None])
@@ -2805,6 +2850,24 @@ def test_parquet_reader_fixed_bin(datadir):
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname)
 
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_fixed_len_with_dict(tmpdir):
+    def flba(i):
+        hasher = hashlib.sha256()
+        hasher.update(i.to_bytes(4, "little"))
+        return hasher.digest()
+
+    # use pyarrow to write table of fixed_len_byte_array
+    num_rows = 200
+    data = pa.array([flba(i) for i in range(num_rows)], type=pa.binary(32))
+    padf = pa.Table.from_arrays([data], names=["flba"])
+    padf_fname = tmpdir.join("padf.parquet")
+    pq.write_table(padf, padf_fname, use_dictionary=True)
+
+    expect = pd.read_parquet(padf_fname)
+    got = cudf.read_parquet(padf_fname)
     assert_eq(expect, got)
 
 

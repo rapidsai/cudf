@@ -302,9 +302,16 @@ reduce_to_column_tree(tree_meta_t& tree,
 cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options,
                                         rmm::cuda_stream_view stream);
 
-/** @copydoc host_parse_nested_json
+/**
+ * @brief Parses the given JSON string and generates table from the given input.
+ *
  * All processing is done in device memory.
  *
+ * @param input The JSON input
+ * @param options Parsing options specifying the parsing behaviour
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr Optional, resource with which to allocate
+ * @return The data parsed from the given JSON input
  */
 table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
                                              cudf::io::json_reader_options const& options,
@@ -336,20 +343,6 @@ struct path_from_tree {
   using path_rep = std::pair<std::string, cudf::io::json::NodeT>;
   std::vector<path_rep> get_path(NodeIndexT this_col_id);
 };
-
-/**
- * @brief Parses the given JSON string and generates table from the given input.
- *
- * @param input The JSON input
- * @param options Parsing options specifying the parsing behaviour
- * @param stream The CUDA stream to which kernels are dispatched
- * @param mr Optional, resource with which to allocate
- * @return The data parsed from the given JSON input
- */
-table_with_metadata host_parse_nested_json(device_span<SymbolT const> input,
-                                           cudf::io::json_reader_options const& options,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 
