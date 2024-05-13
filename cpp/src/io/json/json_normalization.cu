@@ -302,11 +302,14 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<Symbo
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
-  auto parser = fst::detail::make_fst(
-    fst::detail::make_symbol_group_lut(normalize_quotes::qna_sgs),
-    fst::detail::make_transition_table(normalize_quotes::qna_state_tt),
-    fst::detail::make_translation_functor(normalize_quotes::TransduceToNormalizedQuotes{}),
-    stream);
+  static constexpr std::int32_t min_out = 0;
+  static constexpr std::int32_t max_out = 2;
+  auto parser =
+    fst::detail::make_fst(fst::detail::make_symbol_group_lut(normalize_quotes::qna_sgs),
+                          fst::detail::make_transition_table(normalize_quotes::qna_state_tt),
+                          fst::detail::make_translation_functor<SymbolT, min_out, max_out>(
+                            normalize_quotes::TransduceToNormalizedQuotes{}),
+                          stream);
 
   rmm::device_uvector<SymbolT> outbuf(indata.size() * 2, stream, mr);
   rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
@@ -327,11 +330,14 @@ void normalize_whitespace(datasource::owning_buffer<rmm::device_uvector<SymbolT>
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
 {
-  auto parser = fst::detail::make_fst(
-    fst::detail::make_symbol_group_lut(normalize_whitespace::wna_sgs),
-    fst::detail::make_transition_table(normalize_whitespace::wna_state_tt),
-    fst::detail::make_translation_functor(normalize_whitespace::TransduceToNormalizedWS{}),
-    stream);
+  static constexpr std::int32_t min_out = 0;
+  static constexpr std::int32_t max_out = 2;
+  auto parser =
+    fst::detail::make_fst(fst::detail::make_symbol_group_lut(normalize_whitespace::wna_sgs),
+                          fst::detail::make_transition_table(normalize_whitespace::wna_state_tt),
+                          fst::detail::make_translation_functor<SymbolT, min_out, max_out>(
+                            normalize_whitespace::TransduceToNormalizedWS{}),
+                          stream);
 
   rmm::device_uvector<SymbolT> outbuf(indata.size(), stream, mr);
   rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
