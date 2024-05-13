@@ -860,12 +860,12 @@ thrust::lower_bound(rmm::exec_policy(stream),
 
 Like the [indexalator](#index-normalizing-iterators),
 the "offsetalator", or offset-normalizing iterator (`include/cudf/detail/offsetalator.cuh`), can be
-used for offset column types (INT32 or INT64 only) without requiring a type-specific instance.
+used for offset column types (`INT32` or `INT64` only) without requiring a type-specific instance.
 This is helpful when reading or building [strings columns](#strings-columns).
 The normalized type is `int64` which means an `input_offsetsalator` will return `int64` type values
-for both INT32 and INT64 offsets columns.
+for both `INT32` and `INT64` offsets columns.
 Likewise, an `output_offselator` can accept `int64` type values to store into either an
-INT32 or INT64 output offsets column created appropriately.
+`INT32` or `INT64` output offsets column created appropriately.
 
 Use the `cudf::detail::offsetalator_factory` to create an appropriate input or output iterator from an offsets column_view.
 Example input iterator usage:
@@ -1287,7 +1287,7 @@ The following image shows an example of this compound column representation of s
 
 ![strings](strings.png)
 
-The type of the offsets column is either INT32 or INT64 depending on the number of bytes in the data buffer.
+The type of the offsets column is either `INT32` or `INT64` depending on the number of bytes in the data buffer.
 See [`cudf::strings_view`](#cudfstrings_column_view-and-cudfstring_view) for more information on processing individual string rows.
 
 ## Structs columns
@@ -1332,7 +1332,7 @@ struct column's layout is as follows. (Note that null masks should be read from 
 }
 ```
 
-The last struct row (index 3) is not null, but has a null value in the INT32 field. Also, row 2 of
+The last struct row (index 3) is not null, but has a null value in the `INT32` field. Also, row 2 of
 the struct column is null, making its corresponding fields also null. Therefore, bit 2 is unset in
 the null masks of both struct fields.
 
@@ -1393,12 +1393,12 @@ A `cudf::strings_column_view` wraps a strings column and contains a parent
 which is a child of the parent.
 The parent view contains the offset, size, and validity mask for the strings column.
 The offsets view is non-nullable with `offset()==0` and its own size.
-Since the offset column type can be either INT32 or INT64 it is useful to use the
+Since the offset column type can be either `INT32` or `INT64` it is useful to use the
 offset normalizing iterators [offsetalator](#offset-normalizing-iterators) to access individual offset values.
 
 A `cudf::string_view` is a view of a single string and therefore
 is the data type of a `cudf::column` of type `STRING` just like `int32_t` is the
-data type for a `cudf::column` of type INT32. As its name implies, this is a
+data type for a `cudf::column` of type `INT32`. As its name implies, this is a
 read-only object instance that points to device memory inside the strings column.
 Its lifespan is the same (or less) as the column it views.
 An individual strings column row and a `cudf::string_view` is limited to [`size_type`](#cudfsize_type) bytes.
