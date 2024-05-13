@@ -200,6 +200,11 @@ class fixed_pinned_pool_memory_resource {
   }
 };
 
+static_assert(cuda::mr::resource_with<fixed_pinned_pool_memory_resource,
+                                      cuda::mr::device_accessible,
+                                      cuda::mr::host_accessible>,
+              "");
+
 rmm::host_async_resource_ref default_pinned_mr()
 {
   static fixed_pinned_pool_memory_resource mr = []() {
