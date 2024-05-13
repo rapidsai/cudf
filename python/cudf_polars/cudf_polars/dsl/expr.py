@@ -30,6 +30,8 @@ from cudf_polars.containers import Column, Scalar
 from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
+    from typing import Callable
+
     from cudf_polars.containers import DataFrame
 
 __all__ = [
@@ -236,6 +238,31 @@ class Agg(Expr):
     column: Expr
     name: str
     options: Any
+
+    _MAPPING: ClassVar[dict[str, Callable[..., plc.aggregation.Aggregation]]] = {
+        "min": plc.aggregation.min,
+        "max": plc.aggregation.max,
+        "median": plc.aggregation.median,
+        "nunique": plc.aggregation.nunique,
+        "first": lambda: plc.aggregation.nth_element(0),
+        "last": lambda: plc.aggregation.nth_element(-1),  # TODO: check
+        "mean": plc.aggregation.mean,
+        "sum": plc.aggregation.sum,
+        "count": lambda include_null: plc.aggregation.count(
+            plc.types.NullPolicy.INCLUDE
+            if include_null
+            else plc.types.NullPolicy.EXCLUDE
+        ),
+        "std": plc.aggregation.std,
+        "var": plc.aggregation.var,
+        "agg_groups": lambda: None,
+    }
+
+    def evaluate(
+        self, df, *, context: ExecutionContext = ExecutionContext.FRAME
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        raise NotImplementedError("Agg")
 
 
 @dataclass(slots=True)
