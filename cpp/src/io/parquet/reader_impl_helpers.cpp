@@ -639,7 +639,7 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
       return true;
     };
 
-  // TODO: Should we check if any file has the "ARROW:schema" key or
+  // TODO: Should we check if any file has the "ARROW:schema" key
   // Or if all files have the same "ARROW:schema"?
   auto const it = keyval_maps[0].find("ARROW:schema");
   if (it == keyval_maps[0].end()) { return {}; }
@@ -656,21 +656,21 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
   // Check if the string_view exists
   if (not metadata_buf.has_value()) {
     // No need to re-log error here as already logged inside decode_ipc_message
-    return arrow_schema_data_types{};
+    return {};
   }
 
   // Check if the decoded Message flatbuffer is valid
   if (flatbuf::GetMessage(metadata_buf.value().data()) == nullptr) {
     CUDF_LOG_ERROR("Parquet reader encountered an invalid ipc:Message flatbuffer pointer.",
                    "arrow:schema not processed.");
-    return arrow_schema_data_types{};
+    return {};
   }
 
   // Check if the Message flatbuffer has a valid arrow:schema in its header
   if (flatbuf::GetMessage(metadata_buf.value().data())->header_as_Schema() == nullptr) {
     CUDF_LOG_ERROR("Parquet reader encountered an invalid arrow:schema flatbuffer pointer.",
                    "arrow:schema not processed.");
-    return arrow_schema_data_types{};
+    return {};
   }
 
   // Get the vector of fields from arrow:schema flatbuffer object
@@ -679,7 +679,7 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
   if (fields == nullptr) {
     CUDF_LOG_ERROR("Parquet reader encountered an invalid fields pointer.",
                    "arrow:schema not processed.");
-    return arrow_schema_data_types{};
+    return {};
   }
 
   // arrow schema structure to return
@@ -692,13 +692,13 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
     if (not std::all_of(thrust::make_counting_iterator(0),
                         thrust::make_counting_iterator(static_cast<int32_t>(fields->size())),
                         [&](auto const& idx) {
-                          return walk_field(*(fields->begin() + idx), schema.children[idx]);
+                          return walk_field((*fields)[idx], schema.children[idx]);
                         })) {
-      return arrow_schema_data_types{};
+      return {};
     }
 
     // if no arrow type column seen, return nullopt.
-    if (not arrow_type_col_seen) { return arrow_schema_data_types{}; }
+    if (not arrow_type_col_seen) { return {}; }
   }
 
   return schema;
