@@ -36,7 +36,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/converters.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
@@ -171,8 +171,8 @@ struct escape_strings_fn {
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
   {
-    auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
-      *this, column_v.size(), stream, mr);
+    auto [offsets_column, chars] =
+      cudf::strings::detail::make_strings_children(*this, column_v.size(), stream, mr);
 
     return make_strings_column(column_v.size(),
                                std::move(offsets_column),
