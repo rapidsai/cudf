@@ -376,8 +376,7 @@ auto get_transition_table(stack_behavior_t stack_behavior)
                                                                 : transition_table;
 }
 
-template <typename SymbolT>
-auto get_translation_table(SymbolT delim, stack_behavior_t stack_behavior)
+auto get_translation_table(stack_behavior_t stack_behavior)
 {
   // Translation table for the default JSON and JSON lines formats
   std::array<std::array<std::vector<char>, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const
@@ -619,7 +618,7 @@ struct PdaSymbolToSymbolGroupId {
     // The relative symbol group id of the current input symbol
     constexpr auto pda_sgid_lookup_size =
       static_cast<int32_t>(sizeof(tos_sg_to_pda_sgid) / sizeof(tos_sg_to_pda_sgid[0]));
-    auto symbol_position =
+    auto const symbol_position =
       symbol == delimiter ? static_cast<int32_t>('\n') : static_cast<int32_t>(symbol);
     PdaSymbolGroupIdT symbol_gid =
       tos_sg_to_pda_sgid[min(symbol_position, pda_sgid_lookup_size - 1)];
@@ -1456,7 +1455,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
     fst::detail::make_symbol_group_lut(to_stack_op::get_sgid_lut(delimiter)),
     fst::detail::make_transition_table(to_stack_op::get_transition_table(stack_behavior)),
     fst::detail::make_translation_table<max_translation_table_size>(
-      to_stack_op::get_translation_table(delimiter, stack_behavior)),
+      to_stack_op::get_translation_table(stack_behavior)),
     stream);
 
   // "Search" for relevant occurrence of brackets and braces that indicate the beginning/end
@@ -1591,10 +1590,9 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   // fixes the stack context for those excess characters. That is, that all those excess characters
   // will be interpreted in the root stack context
   if (recover_from_error) {
-    auto symbol_groups             = fix_stack_of_excess_chars::SymbolPairToSymbolGroupId{};
-    symbol_groups.delimiter        = delimiter;
     auto fix_stack_of_excess_chars = fst::detail::make_fst(
-      fst::detail::make_symbol_group_lookup_op(symbol_groups),
+      fst::detail::make_symbol_group_lookup_op(
+        fix_stack_of_excess_chars::SymbolPairToSymbolGroupId{delimiter}),
       fst::detail::make_transition_table(fix_stack_of_excess_chars::transition_table),
       fst::detail::make_translation_functor(fix_stack_of_excess_chars::TransduceInputOp{}),
       stream);
@@ -1614,10 +1612,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
     tokenizer_pda::NUM_PDA_SGIDS *
     static_cast<tokenizer_pda::StateT>(tokenizer_pda::pda_state_t::PD_NUM_STATES);
 
-  auto symbol_groups      = tokenizer_pda::PdaSymbolToSymbolGroupId{};
-  symbol_groups.delimiter = delimiter;
   auto json_to_tokens_fst = fst::detail::make_fst(
-    fst::detail::make_symbol_group_lookup_op(symbol_groups),
+    fst::detail::make_symbol_group_lookup_op(tokenizer_pda::PdaSymbolToSymbolGroupId{delimiter}),
     fst::detail::make_transition_table(tokenizer_pda::get_transition_table(format)),
     fst::detail::make_translation_table<max_translation_table_size>(
       tokenizer_pda::get_translation_table(recover_from_error)),
