@@ -16,8 +16,14 @@ cpp/libcudf_kafka/CMakeLists.txt @rapidsai/cudf-cmake-codeowners
 #java code owners
 java/              @rapidsai/cudf-java-codeowners
 
-#build/ops code owners
-.github/           @rapidsai/ops-codeowners
-/ci/               @rapidsai/ops-codeowners
-conda/             @rapidsai/ops-codeowners
-dependencies.yaml  @rapidsai/ops-codeowners
+#CI code owners
+/.github/                @rapidsai/ci-codeowners
+/ci/                     @rapidsai/ci-codeowners
+/.pre-commit-config.yaml @rapidsai/ci-codeowners
+
+#packaging code owners
+/.devcontainers/   @rapidsai/packaging-codeowners
+/conda/            @rapidsai/packaging-codeowners
+/dependencies.yaml @rapidsai/packaging-codeowners
+/build.sh          @rapidsai/packaging-codeowners
+pyproject.toml     @rapidsai/packaging-codeowners

@@ -22,7 +22,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -309,8 +309,8 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& in
                                targets_column->end<cudf::string_view>(),
                                *replacements_column};
     // this utility calls replacer to build the offsets and chars columns
-    auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
-      replacer, strings_count, stream, mr);
+    auto [offsets_column, chars] =
+      cudf::strings::detail::make_strings_children(replacer, strings_count, stream, mr);
     // return new strings column
     return cudf::make_strings_column(strings_count,
                                      std::move(offsets_column),
@@ -379,8 +379,8 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& in
                              *replacements_column,
                              indices.data(),
                              d_sizes.data()};
-  auto chars          = std::get<1>(cudf::strings::detail::experimental::make_strings_children(
-    replacer, tmp_strings.size(), stream, mr));
+  auto chars = std::get<1>(
+    cudf::strings::detail::make_strings_children(replacer, tmp_strings.size(), stream, mr));
   auto offsets_column = std::get<0>(
     cudf::strings::detail::make_offsets_child_column(d_sizes.begin(), d_sizes.end(), stream, mr));
   return cudf::make_strings_column(strings_count,
@@ -413,7 +413,7 @@ std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& str
 
   // this utility calls filterer to build the offsets and chars columns
   auto [offsets_column, chars] =
-    cudf::strings::detail::experimental::make_strings_children(filterer, strings_count, stream, mr);
+    cudf::strings::detail::make_strings_children(filterer, strings_count, stream, mr);
 
   // return new strings column
   return cudf::make_strings_column(strings_count,

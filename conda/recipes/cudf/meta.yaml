@@ -65,7 +65,7 @@ requirements:
     - setuptools
     - dlpack >=0.8,<1.0
     - numpy 1.23
-    - pyarrow ==14.0.2.*
+    - pyarrow ==16.0.0.*
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}

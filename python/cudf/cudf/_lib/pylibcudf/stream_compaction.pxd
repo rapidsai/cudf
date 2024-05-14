@@ -1,7 +1,9 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.stream_compaction cimport duplicate_keep_option
-from cudf._lib.cpp.types cimport (
+from cudf._lib.pylibcudf.libcudf.stream_compaction cimport (
+    duplicate_keep_option,
+)
+from cudf._lib.pylibcudf.libcudf.types cimport (
     nan_equality,
     nan_policy,
     null_equality,
