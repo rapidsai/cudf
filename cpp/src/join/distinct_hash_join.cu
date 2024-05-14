@@ -181,8 +181,12 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
   auto const probe_indices_begin =
     thrust::make_transform_output_iterator(probe_indices->begin(), output_fn{});
 
-  auto const [probe_indices_end, _] = this->_hash_table.retrieve(
-    iter, iter + probe_table_num_rows, probe_indices_begin, build_indices_begin, stream.value());
+  auto const [probe_indices_end, _] =
+    this->_hash_table.retrieve(iter,
+                               iter + probe_table_num_rows,
+                               probe_indices_begin,
+                               build_indices_begin,
+                               cuco::cuda_stream_ref{stream.value()});
 
   auto const actual_size = std::distance(probe_indices_begin, probe_indices_end);
   build_indices->resize(actual_size, stream);
