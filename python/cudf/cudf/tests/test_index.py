@@ -1806,12 +1806,13 @@ def test_get_loc_rangeindex(idx, key):
 @pytest.mark.parametrize(
     "idx",
     [
-        pd.Index([1, 3, 3, 6]),  # monotonic
+        pd.Index([1, 3, 3, 6]),  # monotonic increasing
         pd.Index([6, 1, 3, 3]),  # non-monotonic
+        pd.Index([4, 3, 2, 1, 0]),  # monotonic decreasing
     ],
 )
-@pytest.mark.parametrize("key", [0, 3, 6, 7])
-def test_get_loc_single_duplicate_numeric(idx, key):
+@pytest.mark.parametrize("key", [0, 3, 6, 7, 4])
+def test_get_loc_duplicate_numeric(idx, key):
     pi = idx
     gi = cudf.from_pandas(pi)
 
