@@ -45,22 +45,23 @@ static void bench_find_string(nvbench::state& state)
     state.skip("Skip benchmarks greater than size_type limit");
   }
 
-  auto stream = cudf::get_default_stream();
-  auto col    = build_input_column(n_rows, row_width, hit_rate);
-  auto input  = cudf::strings_column_view(col->view());
+  auto const stream = cudf::get_default_stream();
+  auto const col    = build_input_column(n_rows, row_width, hit_rate);
+  auto const input  = cudf::strings_column_view(col->view());
 
   std::vector<std::string> h_targets({"5W", "5W43", "0987 5W43"});
   cudf::string_scalar target(h_targets[2]);
   cudf::test::strings_column_wrapper targets(h_targets.begin(), h_targets.end());
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  auto chars_size = input.chars_size(stream);
+  auto const chars_size = input.chars_size(stream);
   state.add_element_count(chars_size, "chars_size");
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);
-  if (api.substr(0, 4) == "find")
+  if (api.substr(0, 4) == "find") {
     state.add_global_memory_writes<nvbench::int32_t>(input.size());
-  else
+  } else {
     state.add_global_memory_writes<nvbench::int8_t>(input.size());
+  }
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     if (api == "find") {

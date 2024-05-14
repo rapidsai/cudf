@@ -358,17 +358,18 @@ CUDF_KERNEL void contains_warp_parallel_fn(column_device_view const d_strings,
 
   auto const str_idx  = idx / cudf::detail::warp_size;
   auto const lane_idx = idx % cudf::detail::warp_size;
-  if (lane_idx) { d_results[str_idx] = false; }
   if (d_strings.is_null(str_idx)) { return; }
   // get the string for this warp
   auto const d_str = d_strings.element<string_view>(str_idx);
   // each warp processes 4 starting bytes
-  auto found = false;
-  for (auto i = lane_idx * 4; !found && ((i + d_target.size_bytes()) <= d_str.size_bytes());
-       i += cudf::detail::warp_size * 4) {
+  auto constexpr bytes_per_warp = 4;
+  auto found                    = false;
+  for (auto i = lane_idx * bytes_per_warp;
+       !found && ((i + d_target.size_bytes()) <= d_str.size_bytes());
+       i += cudf::detail::warp_size * bytes_per_warp) {
     // check the target matches this part of the d_str data
     // this is definitely faster for very long strings > 128B
-    for (auto j = 0; j < 4; j++) {
+    for (auto j = 0; j < bytes_per_warp; j++) {
       if (((i + j + d_target.size_bytes()) <= d_str.size_bytes()) &&
           d_target.compare(d_str.data() + i + j, d_target.size_bytes()) == 0) {
         found = true;
