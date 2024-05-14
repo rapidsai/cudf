@@ -31,7 +31,6 @@ from cudf.testing import dataset_generator as dg
 from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
-    assert_neq,
     set_random_null_mask_inplace,
 )
 
@@ -3293,12 +3292,47 @@ def test_parquet_reader_roundtrip_with_arrow_schema():
     # Check results for reader with schema
     assert_eq(expected, got)
 
+    # Reset pdf by changing all duration andtimedelta data to dummy int64 data. Dummy int64 data
+    # are used as the time units used by Arrow to convert durations to int64 may be
+    # different for different columns and/or source time units
+    pdf = pd.DataFrame(
+        {
+            "s": pd.Series([0, 0, 0], dtype="int64"),
+            "ms": pd.Series([0, 0, 0], dtype="int64"),
+            "us": pd.Series([0, 0, 0], dtype="int64"),
+            "ns": pd.Series([0, 0, 0], dtype="int64"),
+            "duration_list": list(
+                [
+                    [
+                        np.int64(0),
+                        np.int64(0),
+                    ],
+                    [
+                        np.int64(0),
+                        np.int64(0),
+                    ],
+                    [
+                        np.int64(0),
+                        np.int64(0),
+                    ],
+                ]
+            ),
+            "int64": pd.Series([0, 0, 0], dtype="int64"),
+            "list": list([[0, 0], [0, 0], [0, 0]]),
+            "datetime": pd.Series([0, 0, 0], dtype="datetime64[ms]"),
+            "map": pd.Series(["cat", "dog", "lion"]).map(
+                {"cat": "kitten", "dog": "puppy", "lion": "cub"}
+            ),
+        }
+    )
+
     # Now read parquet without arrow schema
     got = cudf.read_parquet(buffer, use_arrow_schema=False)
+    # Convert to cudf table for an apple to apple comparison
+    expected = cudf.from_pandas(pdf)
 
-    # Check results for reader with schema
-    assert_neq(expected.dtypes, got.dtypes)
-    assert_neq(expected, got)
+    # Check only the dtypes
+    assert_eq(expected.dtypes, got.dtypes)
 
 
 def test_parquet_reader_roundtrip_structs_with_arrow_schema():
@@ -3334,14 +3368,43 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema():
 
     # Read parquet with arrow schema
     got = cudf.read_parquet(buffer)
-
     # Convert to cudf table for an apple to apple comparison
     expected = cudf.from_pandas(pdf)
+
+    # Check results
     assert_eq(expected, got)
+
+    # Reset pdf by to changing all timedelta data to dummy int64 data. Dummy int64 data
+    # are used as the time units used by Arrow to convert durations to int64 may be
+    # different for different columns and/or source time units
+    pdf = pd.DataFrame(
+        {
+            "struct": {
+                "payload": {
+                    "Domain": {
+                        "Name": "abc",
+                        "Id": {"Name": "host", "Value": "127.0.0.8"},
+                        "Duration": np.int64(0),  # 12m
+                    },
+                    "StreamId": "12345678",
+                    "Duration": np.int64(0),  # 4m
+                    "Offset": 12,
+                    "Resource": [
+                        {
+                            "Name": "ZoneName",
+                            "Value": "RAPIDS",
+                            "Duration": np.int64(0),  # 1s
+                        }
+                    ],
+                }
+            }
+        }
+    )
 
     # Now read parquet without arrow schema
     got = cudf.read_parquet(buffer, use_arrow_schema=False)
+    # Convert to cudf table for an apple to apple comparison
+    expected = cudf.from_pandas(pdf)
 
-    # Check results for reader with schema
-    assert_neq(expected["struct"]._dtypes, got["struct"]._dtypes)
-    assert_neq(expected, got)
+    # Check only the dtypes
+    assert_eq(expected.dtypes, got.dtypes)
