@@ -252,4 +252,15 @@ public final class PinnedMemoryPool implements AutoCloseable {
   private synchronized void free(long address, long size) {
     Rmm.freeFromPinnedPool(this.poolHandle, address, size);
   }
+
+  /**
+   * Sets the size of the cuDF default pinned pool.
+   *
+   * @note This has to be called before cuDF functions are executed.
+   * @param size
+   */
+  public static synchronized void configureDefaultCudfPinnedPoolSize(long size) {
+    Rmm.configureDefaultCudfPinnedPoolSize(size);
+  }
+
 }

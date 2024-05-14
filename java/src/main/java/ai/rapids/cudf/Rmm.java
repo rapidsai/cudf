@@ -267,6 +267,14 @@ public class Rmm {
   }
 
   /**
+   * Sets the size of the cuDF default pinned pool.
+   *
+   * @note This has to be called before cuDF functions are executed.
+   * @param size
+   */
+  public static synchronized native void configureDefaultCudfPinnedPoolSize(long size);
+
+  /**
    * Get the most recently set pool size or -1 if RMM has not been initialized or pooling is
    * not enabled.
    */
