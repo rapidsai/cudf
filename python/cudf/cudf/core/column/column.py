@@ -1411,6 +1411,13 @@ def column_empty_like(
     return column_empty(row_count, dtype, masked)
 
 
+def _has_any_nan(arbitrary):
+    return any(
+        ((isinstance(x, float) or isinstance(x, np.floating)) and np.isnan(x))
+        for x in np.asarray(arbitrary)
+    )
+
+
 def column_empty_like_same_mask(
     column: ColumnBase, dtype: Dtype
 ) -> ColumnBase:
@@ -1950,10 +1957,7 @@ def as_column(
                 )
             elif inferred_dtype == "boolean":
                 if cudf.get_option("mode.pandas_compatible"):
-                    if not (
-                        dtype == np.dtype("bool")
-                        and not pd.isna(arbitrary).any()
-                    ):
+                    if dtype != np.dtype("bool") or pd.isna(arbitrary).any():
                         raise MixedTypeError(
                             f"Cannot have mixed values with {inferred_dtype}"
                         )
@@ -2343,10 +2347,3 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
 
     # Filter out inputs that have 0 length, then concatenate.
     return libcudf.concat.concat_columns([o for o in objs if len(o)])
-
-
-def _has_any_nan(arbitrary):
-    return any(
-        ((isinstance(x, float) or isinstance(x, np.floating)) and np.isnan(x))
-        for x in np.asarray(arbitrary)
-    )
