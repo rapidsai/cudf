@@ -1948,19 +1948,25 @@ def as_column(
                 raise TypeError(
                     f"Cannot convert a {inferred_dtype} of object type"
                 )
+            elif inferred_dtype == "boolean":
+                if cudf.get_option("mode.pandas_compatible"):
+                    if (
+                        dtype is not None
+                        and dtype == np.dtype("bool")
+                        and not pd.isna(arbitrary).any()
+                    ):
+                        pass
+                    else:
+                        raise MixedTypeError(
+                            f"Cannot have mixed values with {inferred_dtype}"
+                        )
+                elif nan_as_null is False and _has_any_nan(arbitrary):
+                    raise MixedTypeError(
+                        f"Cannot have mixed values with {inferred_dtype}"
+                    )
             elif (
-                cudf.get_option("mode.pandas_compatible")
-                and inferred_dtype == "boolean"
-            ):
-                raise MixedTypeError(
-                    f"Cannot have mixed values with {inferred_dtype}"
-                )
-            elif nan_as_null is False and (
-                any(
-                    (isinstance(x, (np.floating, float)) and np.isnan(x))
-                    or (inferred_dtype == "boolean" and pd.isna(arbitrary))
-                    for x in np.asarray(arbitrary)
-                )
+                nan_as_null is False
+                and _has_any_nan(arbitrary)
                 and inferred_dtype not in ("decimal", "empty")
             ):
                 # Decimal can hold float("nan")
@@ -2338,3 +2344,10 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
 
     # Filter out inputs that have 0 length, then concatenate.
     return libcudf.concat.concat_columns([o for o in objs if len(o)])
+
+
+def _has_any_nan(arbitrary):
+    return any(
+        (isinstance(x, (np.floating, float)) and np.isnan(x))
+        for x in np.asarray(arbitrary)
+    )

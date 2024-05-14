@@ -2358,6 +2358,7 @@ def test_multi_dim_series_error():
 
 def test_bool_series_mixed_dtype_error():
     ps = pd.Series([True, False, None])
+    all_bool_ps = pd.Series([True, False, True], dtype="object")
     # ps now has `object` dtype, which
     # isn't supported by `cudf`.
     with cudf.option_context("mode.pandas_compatible", True):
@@ -2365,6 +2366,15 @@ def test_bool_series_mixed_dtype_error():
             cudf.Series(ps)
         with pytest.raises(TypeError):
             cudf.from_pandas(ps)
+        with pytest.raises(TypeError):
+            cudf.Series(ps, dtype=bool)
+        expected = cudf.Series(all_bool_ps, dtype=bool)
+        assert_eq(expected, all_bool_ps.astype(bool))
+    nan_bools_mix = pd.Series([True, False, True, np.nan], dtype="object")
+    gs = cudf.Series(nan_bools_mix, nan_as_null=True)
+    assert_eq(gs.to_pandas(nullable=True), nan_bools_mix.astype("boolean"))
+    with pytest.raises(TypeError):
+        cudf.Series(nan_bools_mix, nan_as_null=False)
 
 
 @pytest.mark.parametrize(
