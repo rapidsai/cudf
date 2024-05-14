@@ -4,9 +4,9 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib.cpp cimport search as cpp_search
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.types cimport null_order, order
+from cudf._lib.pylibcudf.libcudf cimport search as cpp_search
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.types cimport null_order, order
 
 from .column cimport Column
 from .table cimport Table

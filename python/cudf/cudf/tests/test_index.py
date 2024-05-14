@@ -3252,3 +3252,17 @@ def test_Index_init_with_nans():
     assert gi.dtype == np.dtype("float64")
     pi = pd.Index([1, 2, 3, np.nan])
     assert_eq(pi, gi)
+
+
+def test_index_datetime_repeat():
+    gidx = cudf.date_range("2021-01-01", periods=3, freq="D")
+    pidx = gidx.to_pandas()
+
+    actual = gidx.repeat(5)
+    expected = pidx.repeat(5)
+
+    assert_eq(actual, expected)
+
+    actual = gidx.to_frame().repeat(5)
+
+    assert_eq(actual.index, expected)

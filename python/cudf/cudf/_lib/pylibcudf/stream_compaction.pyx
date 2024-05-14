@@ -4,11 +4,15 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib.cpp cimport stream_compaction as cpp_stream_compaction
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.stream_compaction cimport duplicate_keep_option
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.types cimport (
+from cudf._lib.pylibcudf.libcudf cimport (
+    stream_compaction as cpp_stream_compaction,
+)
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.stream_compaction cimport (
+    duplicate_keep_option,
+)
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.types cimport (
     nan_equality,
     nan_policy,
     null_equality,
@@ -16,7 +20,7 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 
-from cudf._lib.cpp.stream_compaction import \
+from cudf._lib.pylibcudf.libcudf.stream_compaction import \
     duplicate_keep_option as DuplicateKeepOption  # no-cython-lint, isort:skip
 
 from .column cimport Column
