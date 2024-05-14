@@ -43,18 +43,18 @@ from cudf._lib.types import dtype_from_pylibcudf_column
 # from_pylibcudf by instead creating an empty numeric column. We will be able
 # to remove this once column factories are exposed to pylibcudf.
 
-cimport cudf._lib.cpp.copying as cpp_copying
-cimport cudf._lib.cpp.types as libcudf_types
-cimport cudf._lib.cpp.unary as libcudf_unary
-from cudf._lib cimport pylibcudf
-from cudf._lib.cpp.column.column cimport column, column_contents
-from cudf._lib.cpp.column.column_factories cimport (
+cimport cudf._lib.pylibcudf.libcudf.copying as cpp_copying
+cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
+cimport cudf._lib.pylibcudf.libcudf.unary as libcudf_unary
+from cudf._lib.pylibcudf cimport Column as plc_Column
+from cudf._lib.pylibcudf.libcudf.column.column cimport column, column_contents
+from cudf._lib.pylibcudf.libcudf.column.column_factories cimport (
     make_column_from_scalar as cpp_make_column_from_scalar,
     make_numeric_column,
 )
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.null_mask cimport null_count as cpp_null_count
-from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.null_mask cimport null_count as cpp_null_count
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
 
 
@@ -633,7 +633,7 @@ cdef class Column:
             # TODO: This function call is what requires cimporting pylibcudf.
             # We can remove the cimport once we can directly do
             # pylibcudf.column_factories.make_numeric_column or equivalent.
-            col = pylibcudf.Column.from_libcudf(
+            col = plc_Column.from_libcudf(
                 move(
                     make_numeric_column(
                         new_dtype, col.size(), libcudf_types.mask_state.ALL_NULL
