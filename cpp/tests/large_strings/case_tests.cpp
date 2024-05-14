@@ -21,7 +21,6 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/strings/case.hpp>
-#include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <vector>
@@ -31,21 +30,15 @@ struct CaseTest : public cudf::test::StringsLargeTest {};
 TEST_F(CaseTest, ToLower)
 {
   auto const wide = this->wide_column();
-  std::vector<cudf::column_view> input_cols;
-  for (int i = 0; i < 120000; ++i) {
-    input_cols.push_back(wide);
-  }
-  auto input    = cudf::concatenate(input_cols);  // 230MB
-  auto expected = cudf::strings::to_lower(cudf::strings_column_view(input->view()));
+  auto input      = cudf::concatenate(std::vector<cudf::column_view>(120000, wide));  // 230MB
+  auto expected   = cudf::strings::to_lower(cudf::strings_column_view(input->view()));
 
-  input_cols.clear();
-  std::vector<cudf::size_type> splits;
   int const multiplier = 12;
-  for (int i = 0; i < multiplier; ++i) {
-    input_cols.push_back(input->view());
-    splits.push_back(input->view().size() * (i + 1));
-  }
-  splits.pop_back();  // remove last entry
+  std::vector<cudf::column_view> input_cols(multiplier, input->view());
+  std::vector<cudf::size_type> splits;
+  std::generate_n(std::back_inserter(splits), multiplier - 1, [&input, n = 1]() mutable {
+    return input->view().size() * (n++);
+  });
 
   auto large_input = cudf::concatenate(input_cols);  // 2700MB > 2GB
   auto const sv    = cudf::strings_column_view(large_input->view());

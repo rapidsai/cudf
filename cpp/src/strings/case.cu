@@ -264,7 +264,8 @@ struct ascii_converter_fn {
   __device__ char operator()(char chr) { return converter.process_ascii(chr); }
 };
 
-constexpr int64_t block_size = 512;
+constexpr int64_t block_size       = 512;
+constexpr int64_t bytes_per_thread = 8;
 
 /**
  * @brief Checks the chars data for any multibyte characters
@@ -278,16 +279,16 @@ CUDF_KERNEL void has_multibytes_kernel(char const* d_input_chars,
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
   // read only every 2nd byte; all bytes in a multibyte char have high bit set
-  auto const byte_idx = (static_cast<int64_t>(idx) * 8L) + first_offset;
+  auto const byte_idx = (static_cast<int64_t>(idx) * bytes_per_thread) + first_offset;
   auto const lane_idx = static_cast<cudf::size_type>(threadIdx.x);
   if (byte_idx >= last_offset) { return; }
 
   using block_reduce = cub::BlockReduce<int64_t, block_size>;
   __shared__ typename block_reduce::TempStorage temp_storage;
 
-  // each thread processes 4 bytes
+  // each thread processes 8 bytes (only 4 need to be checked)
   int64_t mb_count = 0;
-  for (auto i = byte_idx; (i < (byte_idx + 8L)) && (i < last_offset); i += 2) {
+  for (auto i = byte_idx; (i < (byte_idx + bytes_per_thread)) && (i < last_offset); i += 2) {
     u_char const chr = static_cast<u_char>(d_input_chars[i]);
     mb_count += ((chr & 0x80) > 0);
   }
@@ -353,7 +354,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   // but results in a large performance gain when the input contains only single-byte characters.
   rmm::device_scalar<int64_t> mb_count(0, stream);
   // cudf::detail::grid_1d is limited to size_type elements
-  auto const num_blocks = util::div_rounding_up_safe(chars_size / 8L, block_size);
+  auto const num_blocks = util::div_rounding_up_safe(chars_size / bytes_per_thread, block_size);
   // we only need to check every other byte since either will contain high bit
   has_multibytes_kernel<<<num_blocks, block_size, 0, stream.value()>>>(
     input_chars, first_offset, last_offset, mb_count.data());

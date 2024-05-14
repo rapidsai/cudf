@@ -66,13 +66,10 @@ TEST_F(ConcatenateTest, ConcatenateVertical)
 
 TEST_F(ConcatenateTest, ManyColumns)
 {
-  auto input = this->wide_column();
-  auto view  = cudf::column_view(input);
-  std::vector<cudf::column_view> input_cols;
+  auto input           = this->wide_column();
+  auto view            = cudf::column_view(input);
   int const multiplier = 1200000;
-  for (int i = 0; i < multiplier; ++i) {  // 2500MB > 2GB
-    input_cols.push_back(view);
-  }
+  std::vector<cudf::column_view> input_cols(multiplier, view);  // 2500MB > 2GB
   // this tests a unique path through the code
   auto result = cudf::concatenate(input_cols);
   auto sv     = cudf::strings_column_view(result->view());
