@@ -148,11 +148,7 @@ TEST_F(JsonTest, StackContext)
   auto const stream = cudf::get_default_stream();
 
   // Test input
-  std::array<char, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distrib(0, delimiter_chars.size() - 1);
-  char const delimiter    = delimiter_chars[distrib(gen)];
+  char const delimiter    = 'h';
   std::string const input = R"(  [{)"
                             R"("category": "reference",)"
                             R"("index:": [4,12,42],)"
@@ -216,11 +212,7 @@ TEST_F(JsonTest, StackContextUtf8)
   auto const stream = cudf::get_default_stream();
 
   // Test input
-  std::array<char, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distrib(0, delimiter_chars.size() - 1);
-  char const delimiter    = delimiter_chars[distrib(gen)];
+  char const delimiter    = 'h';
   std::string const input = R"([{"a":{"year":1882,"author": "Bharathi"}, {"a":"filip ʒakotɛ"}}])";
 
   // Prepare input & output buffers
@@ -250,7 +242,18 @@ TEST_F(JsonTest, StackContextUtf8)
   CUDF_TEST_EXPECT_VECTOR_EQUAL(golden_stack_context, stack_context, stack_context.size());
 }
 
-TEST_F(JsonTest, StackContextRecovering)
+/**
+ * @brief Test fixture for parametrized JSON reader tests
+ */
+struct JsonDelimiterParamTest : public cudf::test::BaseFixture,
+                                public testing::WithParamInterface<char> {};
+
+// Parametrize qualifying JSON tests for executing both nested reader and legacy JSON lines reader
+INSTANTIATE_TEST_SUITE_P(JsonDelimiterParamTest,
+                         JsonDelimiterParamTest,
+                         ::testing::Values('\n', '\b', '\v', '\f', 'h'));
+
+TEST_P(JsonDelimiterParamTest, StackContextRecovering)
 {
   // Type used to represent the atomic symbol type used within the finite-state machine
   using SymbolT      = char;
@@ -260,11 +263,7 @@ TEST_F(JsonTest, StackContextRecovering)
   auto const stream = cudf::get_default_stream();
 
   // JSON lines input that recovers on invalid lines
-  std::array<char, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distrib(0, delimiter_chars.size() - 1);
-  char const delimiter = delimiter_chars[distrib(gen)];
+  char const delimiter = GetParam();
   std::string input    = R"({"a":-2},
   {"a":
   {"a":{"a":[321
@@ -306,17 +305,15 @@ TEST_F(JsonTest, StackContextRecovering)
   CUDF_TEST_EXPECT_VECTOR_EQUAL(golden_stack_context, stack_context, stack_context.size());
 }
 
-TEST_F(JsonTest, StackContextRecoveringFuzz)
+TEST_P(JsonDelimiterParamTest, StackContextRecoveringFuzz)
 {
   // Type used to represent the atomic symbol type used within the finite-state machine
   using SymbolT      = char;
   using StackSymbolT = char;
 
-  std::array<char, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distrib(0, delimiter_chars.size() - 1);
-  char const delimiter = delimiter_chars[distrib(gen)];
+  char const delimiter = GetParam();
+  std::mt19937 gen(42);
+  std::uniform_int_distribution<int> distribution(0, 4);
 
   constexpr std::size_t input_length = 1024 * 1024;
   std::string input{};
@@ -324,7 +321,6 @@ TEST_F(JsonTest, StackContextRecoveringFuzz)
 
   bool inside_quotes = false;
   std::stack<StackSymbolT> host_stack{};
-  std::uniform_int_distribution<int> distribution(0, 4);
   for (std::size_t i = 0; i < input_length; ++i) {
     bool is_ok = true;
     char current{};
@@ -416,7 +412,9 @@ TEST_F(JsonTest, StackContextRecoveringFuzz)
   CUDF_TEST_EXPECT_VECTOR_EQUAL(expected_stack_context, stack_context, stack_context.size());
 }
 
-TEST_F(JsonTest, TokenStream)
+struct JsonNewlineDelimiterTest : public cudf::test::BaseFixture {};
+
+TEST_F(JsonNewlineDelimiterTest, TokenStream)
 {
   using cuio_json::PdaTokenT;
   using cuio_json::SymbolOffsetT;
@@ -561,7 +559,7 @@ TEST_F(JsonTest, TokenStream)
   }
 }
 
-TEST_F(JsonTest, TokenStream2)
+TEST_F(JsonNewlineDelimiterTest, TokenStream2)
 {
   using cuio_json::PdaTokenT;
   using cuio_json::SymbolOffsetT;
@@ -665,15 +663,11 @@ TEST_F(JsonParserTest, ExtractColumn)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col2, parsed_col2);
 }
 
-TEST_F(JsonTest, RecoveringTokenStream)
+TEST_P(JsonDelimiterParamTest, RecoveringTokenStream)
 {
   // Test input. Inline comments used to indicate character indexes
   //                           012345678 <= line 0
-  std::array<char, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distrib(0, delimiter_chars.size() - 1);
-  char const delimiter = delimiter_chars[distrib(gen)];
+  char const delimiter = GetParam();
 
   std::string input = R"({"a":2 {})"
                       // 9
@@ -885,25 +879,29 @@ TEST_F(JsonTest, PostProcessTokenStream)
   }
 }
 
-TEST_F(JsonParserTest, UTF_JSON)
+TEST_P(JsonDelimiterParamTest, UTF_JSON)
 {
   // Prepare cuda stream for data transfers & kernels
-  auto const stream = cudf::get_default_stream();
-  auto mr           = rmm::mr::get_current_device_resource();
-  auto json_parser  = cuio_json::detail::device_parse_nested_json;
+  auto const stream    = cudf::get_default_stream();
+  auto mr              = rmm::mr::get_current_device_resource();
+  auto json_parser     = cuio_json::detail::device_parse_nested_json;
+  char const delimiter = GetParam();
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
+  default_options.set_delimiter(delimiter);
 
   // Only ASCII string
-  std::string const ascii_pass = R"([
+  std::string ascii_pass = R"([
   {"a":1,"b":2,"c":[3], "d": {}},
   {"a":1,"b":4.0,"c":[], "d": {"year":1882,"author": "Bharathi"}},
   {"a":1,"b":6.0,"c":[5, 7], "d": null},
   {"a":1,"b":8.0,"c":null, "d": {}},
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}}])";
-  auto const d_ascii_pass      = cudf::detail::make_device_uvector_sync(
+  std::replace(ascii_pass.begin(), ascii_pass.end(), '\n', delimiter);
+
+  auto const d_ascii_pass = cudf::detail::make_device_uvector_sync(
     cudf::host_span<char const>{ascii_pass.c_str(), ascii_pass.size()},
     stream,
     rmm::mr::get_current_device_resource());
@@ -911,21 +909,23 @@ TEST_F(JsonParserTest, UTF_JSON)
   CUDF_EXPECT_NO_THROW(json_parser(d_ascii_pass, default_options, stream, mr));
 
   // utf-8 string that fails parsing.
-  std::string const utf_failed = R"([
+  std::string utf_failed = R"([
   {"a":1,"b":2,"c":[3], "d": {}},
   {"a":1,"b":4.0,"c":[], "d": {"year":1882,"author": "Bharathi"}},
   {"a":1,"b":6.0,"c":[5, 7], "d": null},
   {"a":1,"b":8.0,"c":null, "d": {}},
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "filip ʒakotɛ"}}])";
-  auto const d_utf_failed      = cudf::detail::make_device_uvector_sync(
+  std::replace(utf_failed.begin(), utf_failed.end(), '\n', delimiter);
+
+  auto const d_utf_failed = cudf::detail::make_device_uvector_sync(
     cudf::host_span<char const>{utf_failed.c_str(), utf_failed.size()},
     stream,
     rmm::mr::get_current_device_resource());
   CUDF_EXPECT_NO_THROW(json_parser(d_utf_failed, default_options, stream, mr));
 
   // utf-8 string that passes parsing.
-  std::string const utf_pass = R"([
+  std::string utf_pass = R"([
   {"a":1,"b":2,"c":[3], "d": {}},
   {"a":1,"b":4.0,"c":[], "d": {"year":1882,"author": "Bharathi"}},
   {"a":1,"b":6.0,"c":[5, 7], "d": null},
@@ -933,7 +933,9 @@ TEST_F(JsonParserTest, UTF_JSON)
   {"a":1,"b":null,"c":null},
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}},
   {"a":1,"b":NaN,"c":[null, null], "d": {"year": 2, "author": "filip ʒakotɛ"}}])";
-  auto const d_utf_pass      = cudf::detail::make_device_uvector_sync(
+  std::replace(utf_pass.begin(), utf_pass.end(), '\n', delimiter);
+
+  auto const d_utf_pass = cudf::detail::make_device_uvector_sync(
     cudf::host_span<char const>{utf_pass.c_str(), utf_pass.size()},
     stream,
     rmm::mr::get_current_device_resource());

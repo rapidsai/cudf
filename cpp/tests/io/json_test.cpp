@@ -2434,15 +2434,22 @@ TEST_F(JsonReaderTest, MapTypes)
           {type_id::LIST, type_id::STRING, type_id::STRING});
 }
 
-TEST_F(JsonReaderTest, JsonLinesRandomDelimiter)
+/**
+ * @brief Test fixture for parametrized JSON reader tests
+ */
+struct JsonDelimiterParamTest : public cudf::test::BaseFixture,
+                                public testing::WithParamInterface<char> {};
+
+// Parametrize qualifying JSON tests for executing both nested reader and legacy JSON lines reader
+INSTANTIATE_TEST_SUITE_P(JsonDelimiterParamTest,
+                         JsonDelimiterParamTest,
+                         ::testing::Values('\n', '\b', '\v', '\f', 'h'));
+
+TEST_P(JsonDelimiterParamTest, JsonLinesDelimiter)
 {
   using SymbolT = char;
 
-  std::array<SymbolT, 4> delimiter_chars{{'\n', '\b', '\v', '\f'}};
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> distrib(0, delimiter_chars.size() - 1);
-  SymbolT const random_delimiter = delimiter_chars[distrib(gen)];
+  SymbolT const random_delimiter = GetParam();
 
   // Test input
   std::string input             = R"({"col1":100, "col2":1.1, "col3":"aaa"})";
