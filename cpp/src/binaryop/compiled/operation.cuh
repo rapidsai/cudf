@@ -422,9 +422,8 @@ struct NullEquals {
     TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x == y)
   {
     output_valid = true;
-    if (!lhs_valid && !rhs_valid) return true;
     if (lhs_valid && rhs_valid) return x == y;
-    return false;
+    return !lhs_valid && !rhs_valid;
   }
   // To allow std::is_invocable_v = true
   template <typename TypeLhs, typename TypeRhs>
@@ -436,10 +435,7 @@ struct NullNotEquals {
   __device__ inline auto operator()(
     TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x != y)
   {
-    output_valid = true;
-    if (!lhs_valid && !rhs_valid) return false;
-    if (lhs_valid && rhs_valid) return x != y;
-    return true;
+    return !NullEquals{}(x, y, lhs_valid, rhs_valid, output_valid);
   }
   // To allow std::is_invocable_v = true
   template <typename TypeLhs, typename TypeRhs>
