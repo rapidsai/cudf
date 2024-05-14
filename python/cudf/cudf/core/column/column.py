@@ -1950,13 +1950,11 @@ def as_column(
                 )
             elif inferred_dtype == "boolean":
                 if cudf.get_option("mode.pandas_compatible"):
-                    if (
+                    if not (
                         dtype is not None
                         and dtype == np.dtype("bool")
                         and not pd.isna(arbitrary).any()
                     ):
-                        pass
-                    else:
                         raise MixedTypeError(
                             f"Cannot have mixed values with {inferred_dtype}"
                         )
