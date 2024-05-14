@@ -48,6 +48,6 @@ rmm::host_async_resource_ref get_host_memory_resource();
  *
  * @param size The size of the default host memory resource
  */
-void config_host_memory_resource(size_t size);
+void config_default_host_memory_resource(size_t size);
 
 }  // namespace cudf::io
