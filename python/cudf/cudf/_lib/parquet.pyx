@@ -31,12 +31,19 @@ from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-cimport cudf._lib.cpp.io.data_sink as cudf_io_data_sink
-cimport cudf._lib.cpp.io.types as cudf_io_types
-cimport cudf._lib.cpp.types as cudf_types
+cimport cudf._lib.pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
+cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
+cimport cudf._lib.pylibcudf.libcudf.types as cudf_types
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.expressions cimport expression
-from cudf._lib.cpp.io.parquet cimport (
+from cudf._lib.expressions cimport Expression
+from cudf._lib.io.datasource cimport NativeFileDatasource
+from cudf._lib.io.utils cimport (
+    make_sinks_info,
+    make_source_info,
+    update_struct_field_names,
+)
+from cudf._lib.pylibcudf.libcudf.expressions cimport expression
+from cudf._lib.pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_writer_options,
     merge_row_group_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
@@ -46,20 +53,16 @@ from cudf._lib.cpp.io.parquet cimport (
     read_parquet as parquet_reader,
     write_parquet as parquet_writer,
 )
-from cudf._lib.cpp.io.parquet_metadata cimport (
+from cudf._lib.pylibcudf.libcudf.io.parquet_metadata cimport (
     parquet_metadata,
     read_parquet_metadata as parquet_metadata_reader,
 )
-from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport data_type, size_type
-from cudf._lib.expressions cimport Expression
-from cudf._lib.io.datasource cimport NativeFileDatasource
-from cudf._lib.io.utils cimport (
-    make_sinks_info,
-    make_source_info,
-    update_struct_field_names,
+from cudf._lib.pylibcudf.libcudf.io.types cimport (
+    column_in_metadata,
+    table_input_metadata,
 )
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.types cimport data_type, size_type
 from cudf._lib.utils cimport table_view_from_table
 
 from pyarrow.lib import NativeFile
@@ -399,6 +402,7 @@ def write_parquet(
     object row_group_size_rows=None,
     object max_page_size_bytes=None,
     object max_page_size_rows=None,
+    object max_dictionary_size=None,
     object partitions_info=None,
     object force_nullable_schema=False,
     header_version="1.0",
@@ -478,7 +482,7 @@ def write_parquet(
         )
 
     dict_policy = (
-        cudf_io_types.dictionary_policy.ALWAYS
+        cudf_io_types.dictionary_policy.ADAPTIVE
         if use_dictionary
         else cudf_io_types.dictionary_policy.NEVER
     )
@@ -528,6 +532,8 @@ def write_parquet(
         args.set_max_page_size_bytes(max_page_size_bytes)
     if max_page_size_rows is not None:
         args.set_max_page_size_rows(max_page_size_rows)
+    if max_dictionary_size is not None:
+        args.set_max_dictionary_size(max_dictionary_size)
 
     with nogil:
         out_metadata_c = move(parquet_writer(args))
@@ -571,7 +577,14 @@ cdef class ParquetWriter:
     max_page_size_rows: int, default 20000
         Maximum number of rows of each page of the output.
         By default, 20000 will be used.
-
+    max_dictionary_size: int, default 1048576
+        Maximum size of the dictionary page for each output column chunk. Dictionary
+        encoding for column chunks that exceeds this limit will be disabled.
+        By default, 1048576 (1MB) will be used.
+    use_dictionary : bool, default True
+        If ``True``, enable dictionary encoding for Parquet page data
+        subject to ``max_dictionary_size`` constraints.
+        If ``False``, disable dictionary encoding for Parquet page data.
     See Also
     --------
     cudf.io.parquet.write_parquet
@@ -588,13 +601,17 @@ cdef class ParquetWriter:
     cdef size_type row_group_size_rows
     cdef size_t max_page_size_bytes
     cdef size_type max_page_size_rows
+    cdef size_t max_dictionary_size
+    cdef cudf_io_types.dictionary_policy dict_policy
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
                   object compression="snappy", str statistics="ROWGROUP",
                   int row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
                   int row_group_size_rows=1000000,
                   int max_page_size_bytes=524288,
-                  int max_page_size_rows=20000):
+                  int max_page_size_rows=20000,
+                  int max_dictionary_size=1048576,
+                  bool use_dictionary=True):
         filepaths_or_buffers = (
             list(filepath_or_buffer)
             if is_list_like(filepath_or_buffer)
@@ -609,6 +626,12 @@ cdef class ParquetWriter:
         self.row_group_size_rows = row_group_size_rows
         self.max_page_size_bytes = max_page_size_bytes
         self.max_page_size_rows = max_page_size_rows
+        self.max_dictionary_size = max_dictionary_size
+        self.dict_policy = (
+            cudf_io_types.dictionary_policy.ADAPTIVE
+            if use_dictionary
+            else cudf_io_types.dictionary_policy.NEVER
+        )
 
     def write_table(self, table, object partitions_info=None):
         """ Writes a single table to the file """
@@ -726,8 +749,10 @@ cdef class ParquetWriter:
                 .row_group_size_rows(self.row_group_size_rows)
                 .max_page_size_bytes(self.max_page_size_bytes)
                 .max_page_size_rows(self.max_page_size_rows)
+                .max_dictionary_size(self.max_dictionary_size)
                 .build()
             )
+            args.set_dictionary_policy(self.dict_policy)
             self.writer.reset(new cpp_parquet_chunked_writer(args))
         self.initialized = True
 

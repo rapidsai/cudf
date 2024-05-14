@@ -18,4 +18,4 @@ rapids-dependency-file-generator \
 python -m pip install -r "${REQUIREMENTS_FILE}"
 pyenv rehash
 
-cmake -S cpp -B build_static -GNinja -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=OFF
+cmake -S cpp -B build_static -GNinja -DBUILD_SHARED_LIBS=OFF -DCUDF_USE_ARROW_STATIC=ON -DBUILD_TESTS=OFF
