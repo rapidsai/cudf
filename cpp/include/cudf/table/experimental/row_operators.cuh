@@ -63,32 +63,55 @@ namespace experimental {
 template <typename T>
 using type_identity = T;
 
+/// Type identity helper
 template <typename T, template <typename U> typename... c_rest>
 struct nested_conditional_t;
 
+/**
+ * @brief Nested type dispatcher helper
+ */
 template <typename T>
 struct nested_conditional_t<T> {
-  using type = type_identity<T>;
+  using type = type_identity<T>;  ///< The underlying type
 };
 
+/**
+ * @brief Nested type dispatcher helper
+ */
 template <typename T,
           template <typename U>
           typename c_first,
           template <typename V>
           typename... c_rest>
 struct nested_condtional_t {
+  /// The underlying type
   using type = c_first<typename nested_conditional_t<T, c_rest...>::type>;
 };
 
+/**
+ * @brief Void dispatcher helper
+ */
 template <bool B, typename T>
 using dispatch_void_conditional_t = std::conditional_t<B, void, T>;
 
+/**
+ * @brief Void dispatcher generator
+ */
 template <typename... Types>
 struct dispatch_void_conditional_generator {
+  /// The underlying type
   template <typename T>
   using type = dispatch_void_conditional_t<std::disjunction<std::is_same<T, Types>...>::value, T>;
 };
 
+/**
+ * @brief Returns `void` if it's a nested type
+ */
+template <typename T>
+using dispatch_void_if_nested_t =
+  dispatch_void_conditional_t<std::is_same_v<cudf::struct_view, T> or
+                                std::is_same_v<cudf::list_view, T>,
+                              T>;
 /**
  * @brief A map from cudf::type_id to cudf type that excludes LIST and STRUCT types.
  *
@@ -104,14 +127,9 @@ struct dispatch_void_conditional_generator {
  * type_dispatcher<dispatch_nested_to_void>(data_type(), functor{});
  * @endcode
  */
-template <typename T>
-using dispatch_void_if_nested_t =
-  dispatch_void_conditional_t<std::is_same_v<cudf::struct_view, T> or
-                                std::is_same_v<cudf::list_view, T>,
-                              T>;
-
 template <cudf::type_id t>
 struct dispatch_void_if_nested {
+  /// The underlying type
   using type = dispatch_void_if_nested_t<id_to_type<t>>;
 };
 
