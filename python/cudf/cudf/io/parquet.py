@@ -479,7 +479,6 @@ def read_parquet(
     open_file_options=None,
     bytes_per_thread=None,
     dataset_kwargs=None,
-    use_arrow_schema=True,
     *args,
     **kwargs,
 ):
@@ -615,7 +614,6 @@ def read_parquet(
         partition_keys=partition_keys,
         partition_categories=partition_categories,
         dataset_kwargs=dataset_kwargs,
-        use_arrow_schema=use_arrow_schema,
         **kwargs,
     )
 
@@ -844,7 +842,6 @@ def _read_parquet(
     columns=None,
     row_groups=None,
     use_pandas_metadata=None,
-    use_arrow_schema=None,
     *args,
     **kwargs,
 ):
@@ -866,7 +863,6 @@ def _read_parquet(
             columns=columns,
             row_groups=row_groups,
             use_pandas_metadata=use_pandas_metadata,
-            use_arrow_schema=use_arrow_schema,
         )
     else:
         if (
