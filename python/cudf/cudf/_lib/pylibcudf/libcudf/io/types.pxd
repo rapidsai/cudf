@@ -57,17 +57,18 @@ cdef extern from "cudf/io/types.hpp" \
         ADAPTIVE = 1,
         ALWAYS = 2,
 
-    ctypedef enum column_encoding:
-        USE_DEFAULT "cudf::io::column_encoding::USE_DEFAULT"
-        DICTIONARY "cudf::io::column_encoding::DICTIONARY"
-        PLAIN "cudf::io::column_encoding::PLAIN"
-        DELTA_BINARY_PACKED "cudf::io::column_encoding::DELTA_BINARY_PACKED"
-        DELTA_LENGTH_BYTE_ARRAY "cudf::io::column_encoding::DELTA_LENGTH_BYTE_ARRAY"
-        DELTA_BYTE_ARRAY "cudf::io::column_encoding::DELTA_BYTE_ARRAY"
-        BYTE_STREAM_SPLIT "cudf::io::column_encoding::BYTE_STREAM_SPLIT"
-        DIRECT "cudf::io::column_encoding::DIRECT"
-        DIRECT_V2 "cudf::io::column_encoding::DIRECT_V2"
-        DICTIONARY_V2 "cudf::io::column_encoding::DICTIONARY_V2"
+    cdef extern from "cudf/io/types.hpp" namespace "cudf::io" nogil:
+        cpdef enum class column_encoding:
+            USE_DEFAULT = -1
+            DICTIONARY = 0
+            PLAIN = 1
+            DELTA_BINARY_PACKED = 2
+            DELTA_LENGTH_BYTE_ARRAY =3
+            DELTA_BYTE_ARRAY = 4
+            BYTE_STREAM_SPLIT = 5
+            DIRECT = 6
+            DIRECT_V2 = 7
+            DICTIONARY_V2 = 8
 
     cdef cppclass column_name_info:
         string name
