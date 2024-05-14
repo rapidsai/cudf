@@ -26,6 +26,8 @@
 #include <cooperative_groups.h>
 #include <cuda/atomic>
 
+#include <numba_cuda_runtime.cuh>
+
 #include <limits>
 #include <type_traits>
 
@@ -345,6 +347,8 @@ extern "C" __device__ int concat(int* nb_retval, void* udf_str, void* const* lhs
 
   udf_string result;
   result.append(*lhs_ptr).append(*rhs_ptr);
+  // TODO
+  // move result into where udf_str_ptr points to
   *udf_str_ptr = result;
   return 0;
 }
@@ -719,4 +723,45 @@ make_definition_corr(BlockCorr, int32, int32_t);
 make_definition_corr(BlockCorr, int64, int64_t);
 
 #undef make_definition_corr
+}
+
+/*
+NRT CUDA functions
+*/
+
+// Only used to allocate the right amount of space, see below
+struct meminfo_and_str {
+  NRT_MemInfo mi;
+  udf_string st;
+};
+
+/*
+Create a new MemInfo object holding the reference count of a udf_string. When returning
+new strings, shim functions expect a pointer to a stack allocated buffer into which it
+will construct the udf_string it returns. Since one can not safely build a MemInfo object
+around this stack memory, we store a copy of the udf_string itself next to the MemInfo
+which manages the lifetime of the udf_string.
+*/
+extern "C" __device__ int meminfo_from_new_udf_str(void** nb_retval, void* udf_str, void* memsys)
+{
+  NRT_MemSys* TheMSys = reinterpret_cast<NRT_MemSys*>(memsys);
+  // allocate enough room for both the meminfo and udf_string
+  meminfo_and_str* mi_and_str = (meminfo_and_str*)NRT_Allocate(sizeof(meminfo_and_str), TheMSys);
+  if (mi_and_str != NULL) {
+    auto mi_ptr        = &(mi_and_str->mi);
+    udf_string* st_ptr = &(mi_and_str->st);
+
+    // We pass a null size here because the udf_string actually exists on the stack
+    // and tracks the size of the string data that it points to.
+    NRT_MemInfo_init(mi_ptr, st_ptr, NULL, udf_str_dtor, NULL, TheMSys);
+
+    // copy the udf_string to the extra heap space
+    udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);
+    memcpy(st_ptr, in_str_ptr, sizeof(udf_string));
+    *nb_retval = &(mi_and_str->mi);
+  } else {
+    *nb_retval = NULL;
+  }
+
+  return 0;
 }

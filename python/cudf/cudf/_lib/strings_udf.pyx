@@ -1,11 +1,15 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint8_t, uint16_t, uintptr_t
+from libc.stdint cimport uint8_t, uint16_t, uint64_t, uintptr_t
 
 from cudf._lib.cpp.strings_udf cimport (
+    NRT_MemSys_new as cpp_NRT_MemSys_new,
+    column_from_managed_udf_string_array as cpp_column_from_managed_udf_string_array,
+    free_managed_udf_string_array as cpp_free_managed_udf_string_array,
     get_character_cases_table as cpp_get_character_cases_table,
     get_character_flags_table as cpp_get_character_flags_table,
     get_special_case_mapping_table as cpp_get_special_case_mapping_table,
+    managed_udf_string,
 )
 
 import numpy as np
@@ -51,6 +55,20 @@ def column_from_udf_string_array(DeviceBuffer d_buffer):
     return result
 
 
+def column_from_managed_udf_string_array(DeviceBuffer d_buffer, memsys):
+    cdef size_t size = int(d_buffer.c_size() / sizeof(managed_udf_string))
+    cdef managed_udf_string* data = <managed_udf_string*>d_buffer.c_data()
+    cdef unique_ptr[column] c_result
+    cdef uint64_t memsys_p = <uint64_t>memsys
+
+    with nogil:
+        c_result = move(cpp_column_from_managed_udf_string_array(data, size))
+        cpp_free_managed_udf_string_array(data, size, memsys_p)
+
+    result = Column.from_unique_ptr(move(c_result))
+    return result
+
+
 def get_character_flags_table_ptr():
     cdef const uint8_t* tbl_ptr = cpp_get_character_flags_table()
     return np.uintp(<uintptr_t>tbl_ptr)
@@ -64,3 +82,8 @@ def get_character_cases_table_ptr():
 def get_special_case_mapping_table_ptr():
     cdef const void* tbl_ptr = cpp_get_special_case_mapping_table()
     return np.uintp(<uintptr_t>tbl_ptr)
+
+
+def NRT_MemSys_new():
+    cdef const void* memsys_ptr = cpp_NRT_MemSys_new()
+    return np.uintp(<uintptr_t>memsys_ptr)

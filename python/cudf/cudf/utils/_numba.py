@@ -138,6 +138,20 @@ def _setup_numba():
 
                 patch_numba_linker()
 
+        from cudf.core.udf._nrt_cuda import numba_cuda_runtime
+
+        def include_nrt_ptx(linker_new):
+            def inner(*args, **kwargs):
+                res = linker_new(*args, **kwargs)
+                res.add_ptx(numba_cuda_runtime)
+                return res
+
+            return inner
+
+        from numba.cuda.cudadrv.driver import Linker
+
+        Linker.new = include_nrt_ptx(Linker.new)
+
 
 def _get_cuda_version_from_ptx_file(path):
     """
