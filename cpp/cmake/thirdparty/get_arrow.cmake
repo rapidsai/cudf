@@ -41,8 +41,6 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
 
   set(PYARROW_LIB "libarrow.so.${PYARROW_MAJOR_VER}${PYARROW_MINOR_VER}")
 
-  message("The pyarrow lib is ${PYARROW_LIB}")
-
   string(
     APPEND
     initial_code_block
