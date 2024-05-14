@@ -762,27 +762,25 @@ cdef class ParquetWriter:
 cdef class ParquetReader:
     cdef bool initialized
     cdef unique_ptr[cpp_chunked_parquet_reader] reader
-    cdef cudf_io_types.source_info source
-    cdef table_input_metadata tbl_meta
-    cdef cudf_io_types.sink_info sink
-    cdef vector[unique_ptr[cudf_io_data_sink.data_sink]] _data_sink
-    cdef cudf_io_types.statistics_freq stat_freq
-    cdef cudf_io_types.compression_type comp_type
-    cdef object index
     cdef size_t chunk_read_limit
     cdef size_t row_group_size_bytes
-    cdef size_type row_group_size_rows
-    cdef size_t max_page_size_bytes
-    cdef size_type max_page_size_rows
-    cdef size_t max_dictionary_size
-    cdef cudf_io_types.dictionary_policy dict_policy
     cdef table_metadata result_meta
     cdef vector[unordered_map[string, string]] per_file_user_data
     cdef object pandas_meta
+    cdef list pa_buffers
+    cdef bool allow_range_index
+    cdef object row_groups
+    cdef object filepaths_or_buffers
+    cdef object names
+    cdef object column_index_type
+    cdef object index_col_names
+    cdef bool is_range_index
+    cdef object index_col
+    cdef bool cpp_use_pandas_metadata
 
     def __cinit__(self, filepaths_or_buffers, columns=None, row_groups=None,
                   use_pandas_metadata=True,
-                  Expression filters=None, int chunk_read_limit=100000):
+                  Expression filters=None, int chunk_read_limit=1024000000):
 
         # Convert NativeFile buffers to NativeFileDatasource,
         # but save original buffers in case we need to use
@@ -798,7 +796,7 @@ cdef class ParquetReader:
         cdef cudf_io_types.source_info source = make_source_info(
             filepaths_or_buffers)
 
-        cdef bool cpp_use_pandas_metadata = use_pandas_metadata
+        self.cpp_use_pandas_metadata = use_pandas_metadata
 
         cdef vector[vector[size_type]] cpp_row_groups
         cdef data_type cpp_timestamp_type = cudf_types.data_type(
@@ -813,7 +811,7 @@ cdef class ParquetReader:
         builder = (
             parquet_reader_options.builder(source)
             .row_groups(cpp_row_groups)
-            .use_pandas_metadata(cpp_use_pandas_metadata)
+            .use_pandas_metadata(self.cpp_use_pandas_metadata)
             .timestamp_type(cpp_timestamp_type)
         )
         if filters is not None:
@@ -882,8 +880,8 @@ cdef class ParquetReader:
             move(c_result.tbl),
             column_names=self.names,
         ))
-        if not self.initialized:
-            self.initialized = True
+
+        self.initialized = True
         return df
 
     def read(self):
