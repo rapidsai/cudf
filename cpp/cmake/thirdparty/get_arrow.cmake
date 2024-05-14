@@ -28,7 +28,19 @@ function(find_libarrow_in_python_wheel PYARROW_VERSION)
   string(REPLACE "." ";" PYARROW_VER_COMPONENTS "${PYARROW_VERSION}")
   list(GET PYARROW_VER_COMPONENTS 0 PYARROW_MAJOR_VER)
   list(GET PYARROW_VER_COMPONENTS 1 PYARROW_MINOR_VER)
+
+  # Ensure that the major and minor versions are two digits long
+  string(LENGTH ${PYARROW_MAJOR_VER} PYARROW_MAJOR_LENGTH)
+  string(LENGTH ${PYARROW_MINOR_VER} PYARROW_MINOR_LENGTH)
+  if(${PYARROW_MAJOR_LENGTH} EQUAL 1)
+    set(PYARROW_MAJOR_VER "0${PYARROW_MAJOR_VER}")
+  endif()
+  if(${PYARROW_MINOR_LENGTH} EQUAL 1)
+    set(PYARROW_MINOR_VER "0${PYARROW_MINOR_VER}")
+  endif()
+
   set(PYARROW_LIB "libarrow.so.${PYARROW_MAJOR_VER}${PYARROW_MINOR_VER}")
+
   message("The pyarrow lib is ${PYARROW_LIB}")
 
   string(
