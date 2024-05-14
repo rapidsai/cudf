@@ -7,24 +7,33 @@ from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
 from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.lists.combine cimport (
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
     concatenate_list_elements as cpp_concatenate_list_elements,
     concatenate_null_policy,
     concatenate_rows as cpp_concatenate_rows,
 )
-from cudf._lib.cpp.lists.contains cimport contains, index_of as cpp_index_of
-from cudf._lib.cpp.lists.count_elements cimport (
+from cudf._lib.pylibcudf.libcudf.lists.contains cimport (
+    contains,
+    index_of as cpp_index_of,
+)
+from cudf._lib.pylibcudf.libcudf.lists.count_elements cimport (
     count_elements as cpp_count_elements,
 )
-from cudf._lib.cpp.lists.extract cimport extract_list_element
-from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
-from cudf._lib.cpp.lists.sorting cimport sort_lists as cpp_sort_lists
-from cudf._lib.cpp.lists.stream_compaction cimport distinct as cpp_distinct
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport (
+from cudf._lib.pylibcudf.libcudf.lists.extract cimport extract_list_element
+from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
+    lists_column_view,
+)
+from cudf._lib.pylibcudf.libcudf.lists.sorting cimport (
+    sort_lists as cpp_sort_lists,
+)
+from cudf._lib.pylibcudf.libcudf.lists.stream_compaction cimport (
+    distinct as cpp_distinct,
+)
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.types cimport (
     nan_equality,
     null_equality,
     null_order,
