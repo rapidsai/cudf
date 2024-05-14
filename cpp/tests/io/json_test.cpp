@@ -2457,8 +2457,9 @@ TEST_P(JsonDelimiterParamTest, JsonLinesDelimiter)
   std::size_t const log_repetitions =
     static_cast<std::size_t>(std::ceil(std::log2(string_size / input.size())));
   std::size_t const repetitions = 1UL << log_repetitions;
-  for (std::size_t i = 0; i < log_repetitions; i++)
+  for (std::size_t i = 0; i < log_repetitions; i++) {
     input = input + random_delimiter + input;
+  }
 
   cudf::io::json_reader_options json_parser_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{input.c_str(), input.size()})
