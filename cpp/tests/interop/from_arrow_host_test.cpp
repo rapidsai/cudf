@@ -40,6 +40,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
+// create a cudf::table and equivalent arrow table with host memory
 std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, nanoarrow::UniqueArray>
 get_nanoarrow_host_tables(cudf::size_type length)
 {
@@ -274,6 +275,7 @@ TEST_F(FromArrowHostDeviceTest, DateTimeTable)
     data.begin(), data.end());
   cudf::table_view expected_table_view({col});
 
+  // construct equivalent arrow schema with nanoarrow
   nanoarrow::UniqueSchema input_schema;
   ArrowSchemaInit(input_schema.get());
   NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
@@ -282,6 +284,7 @@ TEST_F(FromArrowHostDeviceTest, DateTimeTable)
     input_schema->children[0], NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_MILLI, nullptr));
   NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
 
+  // equivalent arrow record batch
   nanoarrow::UniqueArray input_array;
   NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
   input_array->length     = 6;
@@ -297,9 +300,13 @@ TEST_F(FromArrowHostDeviceTest, DateTimeTable)
   input.device_id   = -1;
   input.device_type = ARROW_DEVICE_CPU;
 
+  // test that we get the same cudf table as we expect by converting the
+  // host arrow memory to a cudf table
   auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
 
+  // test that we get a cudf table with a single struct column that is equivalent
+  // if we use from_arrow_host_column
   auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
   EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
   auto got_cudf_col_view = got_cudf_col->view();
@@ -351,9 +358,12 @@ TYPED_TEST(FromArrowHostDeviceTestDurationsTest, DurationTable)
   input.device_id   = -1;
   input.device_type = ARROW_DEVICE_CPU;
 
+  // converting arrow host memory to cudf table gives us the expected table
   auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
 
+  // converting to a cudf table with a single struct column gives us the expected
+  // result column
   auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
   EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
   auto got_cudf_col_view = got_cudf_col->view();
@@ -389,9 +399,11 @@ TEST_F(FromArrowHostDeviceTest, NestedList)
     ArrowSchemaSetName(input_schema->children[0]->children[0]->children[0], "element"));
   input_schema->children[0]->children[0]->children[0]->flags = ARROW_FLAG_NULLABLE;
 
+  // create the base arrow list array
   auto list_arr = get_nanoarrow_list_array<int64_t>({6, 7, 8, 9}, {0, 1, 4}, {1, 0, 1, 1});
   std::vector<int32_t> offset{0, 0, 2};
 
+  // populate the bitmask we're going to use for the top level list
   ArrowBitmap mask;
   ArrowBitmapInit(&mask);
   NANOARROW_THROW_NOT_OK(ArrowBitmapReserve(&mask, 2));
@@ -412,6 +424,8 @@ TEST_F(FromArrowHostDeviceTest, NestedList)
     ArrowBufferAppend(
       offset_buf, reinterpret_cast<const void*>(offset.data()), offset.size() * sizeof(int32_t)));
 
+  // move our base list to be the child of the one we just created
+  // so that we now have an equivalent value to what we created for cudf
   list_arr.move(input_array->children[0]->children[0]);
   NANOARROW_THROW_NOT_OK(
     ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
@@ -421,9 +435,11 @@ TEST_F(FromArrowHostDeviceTest, NestedList)
   input.device_id   = -1;
   input.device_type = ARROW_DEVICE_CPU;
 
+  // converting from arrow host memory to cudf gives us the expected table
   auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
 
+  // converting to a single column cudf table gives us the expected struct column
   auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
   EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
   auto got_cudf_col_view = got_cudf_col->view();
@@ -474,6 +490,7 @@ TEST_F(FromArrowHostDeviceTest, StructColumn)
   auto metadata              = cudf::column_metadata{"a"};
   metadata.children_meta     = {{"string"}, {"integral"}, {"bool"}, {"nested_list"}, sub_metadata};
 
+  // create the equivalent arrow schema using nanoarrow
   nanoarrow::UniqueSchema input_schema;
   ArrowSchemaInit(input_schema.get());
   NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
@@ -521,6 +538,7 @@ TEST_F(FromArrowHostDeviceTest, StructColumn)
   NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(child->children[4]->children[1], "integral2"));
 
   // create nanoarrow table
+  // first our underlying arrays
   std::vector<std::string> str{"Samuel Vimes", "Carrot Ironfoundersson", "Angua von Überwald"};
   std::vector<std::string> str2{"CUDF", "ROCKS", "EVERYWHERE"};
   auto str_array  = get_nanoarrow_array<cudf::string_view>(str);
@@ -532,6 +550,7 @@ TEST_F(FromArrowHostDeviceTest, StructColumn)
     get_nanoarrow_list_array<int64_t>({1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 2, 4, 5, 6, 7, 9});
   std::vector<int32_t> offset{0, 3, 4, 6};
 
+  // create the struct array
   nanoarrow::UniqueArray input_array;
   NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
 
@@ -541,7 +560,7 @@ TEST_F(FromArrowHostDeviceTest, StructColumn)
   auto view_a         = expected_table_view.column(0);
   array_a->length     = view_a.size();
   array_a->null_count = view_a.null_count();
-
+  // populate the children of our struct by moving them from the original arrays
   str_array.move(array_a->children[0]);
   int_array.move(array_a->children[1]);
   bool_array.move(array_a->children[2]);
@@ -556,6 +575,7 @@ TEST_F(FromArrowHostDeviceTest, StructColumn)
 
   list_arr.move(array_a->children[3]->children[0]);
 
+  // set our struct bitmap validity mask
   ArrowBitmap mask;
   ArrowBitmapInit(&mask);
   NANOARROW_THROW_NOT_OK(ArrowBitmapReserve(&mask, 3));
@@ -579,9 +599,11 @@ TEST_F(FromArrowHostDeviceTest, StructColumn)
   input.device_id   = -1;
   input.device_type = ARROW_DEVICE_CPU;
 
+  // test we get the expected cudf::table from the arrow host memory data
   auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, got_cudf_table->view());
 
+  // test we get the expected cudf struct column
   auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
   EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
   auto got_cudf_col_view = got_cudf_col->view();
@@ -592,6 +614,8 @@ TEST_F(FromArrowHostDeviceTest, StructColumn)
 
 TEST_F(FromArrowHostDeviceTest, DictionaryIndicesType)
 {
+  // test dictionary arrays with different index types
+  // cudf asserts that the index type must be unsigned
   auto array1 =
     get_nanoarrow_dict_array<int64_t, uint8_t>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
   auto array2 =
@@ -599,6 +623,7 @@ TEST_F(FromArrowHostDeviceTest, DictionaryIndicesType)
   auto array3 =
     get_nanoarrow_dict_array<int64_t, uint64_t>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
 
+  // create equivalent cudf dictionary columns
   auto keys_col = cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 5, 7});
   auto ind1_col = cudf::test::fixed_width_column_wrapper<uint8_t>({0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
   auto ind2_col =
@@ -652,9 +677,11 @@ TEST_F(FromArrowHostDeviceTest, DictionaryIndicesType)
   input.device_id   = -1;
   input.device_type = ARROW_DEVICE_CPU;
 
+  // test we get the expected cudf table when we convert from Arrow host memory
   auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table.view(), got_cudf_table->view());
 
+  // test we get the expected cudf::column as a struct column
   auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
   EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
   auto got_cudf_col_view = got_cudf_col->view();
@@ -666,6 +693,7 @@ TEST_F(FromArrowHostDeviceTest, DictionaryIndicesType)
 void slice_host_nanoarrow(ArrowArray* arr, int64_t start, int64_t end)
 {
   auto op = [&](ArrowArray* array) {
+    // slicing only needs to happen at the top level of an array
     array->offset = start;
     array->length = end - start;
     if (array->null_count != 0) {
@@ -680,6 +708,8 @@ void slice_host_nanoarrow(ArrowArray* arr, int64_t start, int64_t end)
     return;
   }
 
+  // since we want to simulate a sliced table where the children are sliced,
+  // we slice each individual child of the record batch
   arr->length = end - start;
   for (int64_t i = 0; i < arr->n_children; ++i) {
     op(arr->children[i]);

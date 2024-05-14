@@ -16,6 +16,10 @@
 
 #pragma once
 
+#include <cudf/types.hpp>
+
+#include <nanoarrow/nanoarrow.h>
+
 namespace cudf {
 namespace detail {
 
@@ -25,6 +29,8 @@ namespace detail {
  */
 static constexpr int validity_buffer_idx         = 0;
 static constexpr int fixed_width_data_buffer_idx = 1;
+
+data_type arrow_to_cudf_type(const ArrowSchemaView* arrow_view);
 
 }  // namespace detail
 }  // namespace cudf
