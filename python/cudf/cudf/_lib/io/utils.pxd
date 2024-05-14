@@ -1,11 +1,15 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.io.data_sink cimport data_sink
-from cudf._lib.cpp.io.types cimport column_name_info, sink_info, source_info
+from cudf._lib.pylibcudf.libcudf.io.data_sink cimport data_sink
+from cudf._lib.pylibcudf.libcudf.io.types cimport (
+    column_name_info,
+    sink_info,
+    source_info,
+)
 
 
 cdef source_info make_source_info(list src) except*
