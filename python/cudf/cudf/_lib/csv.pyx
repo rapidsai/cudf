@@ -7,9 +7,9 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.cpp.types cimport data_type
+cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
 from cudf._lib.io.datasource cimport Datasource, NativeFileDatasource
+from cudf._lib.pylibcudf.libcudf.types cimport data_type
 from cudf._lib.types cimport dtype_to_data_type
 
 import numpy as np
@@ -18,7 +18,7 @@ import pandas as pd
 import cudf
 from cudf.core.buffer import acquire_spill_lock
 
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 import errno
 import os
@@ -29,22 +29,22 @@ from io import BytesIO, StringIO
 from libc.stdint cimport int32_t
 from libcpp cimport bool
 
-from cudf._lib.cpp.io.csv cimport (
+from cudf._lib.io.utils cimport make_sink_info, make_source_info
+from cudf._lib.pylibcudf.libcudf.io.csv cimport (
     csv_reader_options,
     csv_writer_options,
     read_csv as cpp_read_csv,
     write_csv as cpp_write_csv,
 )
-from cudf._lib.cpp.io.data_sink cimport data_sink
-from cudf._lib.cpp.io.types cimport (
+from cudf._lib.pylibcudf.libcudf.io.data_sink cimport data_sink
+from cudf._lib.pylibcudf.libcudf.io.types cimport (
     compression_type,
     quote_style,
     sink_info,
     source_info,
     table_with_metadata,
 )
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.io.utils cimport make_sink_info, make_source_info
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
 from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 from pyarrow.lib import NativeFile
