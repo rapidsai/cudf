@@ -2,14 +2,14 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.strings cimport find as cpp_find
 from cudf._lib.pylibcudf.column cimport Column
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.strings cimport find as cpp_find
 from cudf._lib.pylibcudf.scalar cimport Scalar
 
 from cython.operator import dereference
 
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
 
 
 cpdef Column find(
