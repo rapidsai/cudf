@@ -3251,9 +3251,9 @@ def test_parquet_reader_roundtrip_with_arrow_schema():
     # round trip duration types (timedelta64) across Parquet read and write.
     pdf = pd.DataFrame(
         {
-            "s": pd.Series([1234, 3456, 32442], dtype="timedelta64[s]"),
-            "ms": pd.Series([1234, 3456, 32442], dtype="timedelta64[ms]"),
-            "us": pd.Series([1234, 3456, 32442], dtype="timedelta64[us]"),
+            "s": pd.Series([None, None, None], dtype="timedelta64[s]"),
+            "ms": pd.Series([1234, None, 32442], dtype="timedelta64[ms]"),
+            "us": pd.Series([None, 3456, None], dtype="timedelta64[us]"),
             "ns": pd.Series([1234, 3456, 32442], dtype="timedelta64[ns]"),
             "duration_list": list(
                 [
@@ -3262,12 +3262,12 @@ def test_parquet_reader_roundtrip_with_arrow_schema():
                         datetime.timedelta(minutes=7),
                     ],
                     [
-                        datetime.timedelta(minutes=7, seconds=4),
-                        datetime.timedelta(minutes=7),
+                        None,
+                        None,
                     ],
                     [
                         datetime.timedelta(minutes=7, seconds=4),
-                        datetime.timedelta(minutes=7),
+                        None,
                     ],
                 ]
             ),
@@ -3307,7 +3307,7 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema():
                     },
                     "StreamId": "12345678",
                     "Duration": datetime.timedelta(minutes=4),
-                    "Offset": 12,
+                    "Offset": None,
                     "Resource": [
                         {
                             "Name": "ZoneName",
