@@ -43,7 +43,7 @@ requirements:
     {% else %}
     - cuda-nvcc-impl
     {% endif %}
-    - rapids-build-backend >=0.1.1
+    - rapids-build-backend ~=0.1.1
     - setuptools
     - python-confluent-kafka >=1.9.0,<1.10.0a0
     - cudf_kafka ={{ version }}
