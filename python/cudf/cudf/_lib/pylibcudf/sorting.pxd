@@ -2,8 +2,13 @@
 
 from libcpp cimport bool
 
-from cudf._lib.cpp.aggregation cimport rank_method
-from cudf._lib.cpp.types cimport null_order, null_policy, order, size_type
+from cudf._lib.pylibcudf.libcudf.aggregation cimport rank_method
+from cudf._lib.pylibcudf.libcudf.types cimport (
+    null_order,
+    null_policy,
+    order,
+    size_type,
+)
 
 from .column cimport Column
 from .table cimport Table

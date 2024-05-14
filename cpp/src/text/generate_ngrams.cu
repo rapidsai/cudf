@@ -22,7 +22,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -142,7 +142,7 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
   // compute the number of strings of ngrams
   auto const ngrams_count = strings_count - ngrams + 1;
 
-  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     ngram_generator_fn{d_strings, ngrams, d_separator}, ngrams_count, stream, mr);
 
   // make the output strings column from the offsets and chars column
@@ -235,7 +235,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                "Insufficient number of characters in each string to generate ngrams");
 
   character_ngram_generator_fn generator{*d_strings, ngrams, d_offsets};
-  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     generator, strings_count, total_ngrams, stream, mr);
 
   auto output = cudf::make_strings_column(
