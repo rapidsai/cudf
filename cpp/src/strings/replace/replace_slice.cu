@@ -19,7 +19,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/replace.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -95,7 +95,7 @@ std::unique_ptr<column> replace_slice(strings_column_view const& input,
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // this utility calls the given functor to build the offsets and chars columns
-  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
+  auto [offsets_column, chars] = make_strings_children(
     replace_slice_fn{*d_strings, d_repl, start, stop}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
