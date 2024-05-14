@@ -167,11 +167,12 @@ cdef class GroupBy:
             included_aggregations_i = []
             col_aggregations = []
             for agg in aggs:
+                str_agg = str(agg)
                 if (
                     is_string_dtype(col)
                     and agg not in _STRING_AGGS
                     and not (
-                        agg in {
+                        any(a in str_agg for a in {
                             "count",
                             "max",
                             "min",
@@ -179,10 +180,9 @@ cdef class GroupBy:
                             "last",
                             "nunique",
                             "unique",
-                        }
-                        or "count" in str(agg)
+                            "nth"
+                        })
                         or (agg is list)
-                        or "nth" in str(agg)
                     )
                 ):
                     raise TypeError(
@@ -192,7 +192,7 @@ cdef class GroupBy:
                     _is_categorical_dtype(col)
                     and agg not in _CATEGORICAL_AGGS
                     and not (
-                        agg in {"count", "max", "min", "unique"} or "count" in str(agg)
+                        any(a in str_agg for a in {"count", "max", "min", "unique"})
                     )
                 ):
                     raise TypeError(
