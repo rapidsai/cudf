@@ -1890,6 +1890,43 @@ def test_parquet_writer_max_page_size(tmpdir, max_page_size_kwargs):
     assert s1 > s2
 
 
+@pytest.mark.parametrize("use_dict", [False, True])
+@pytest.mark.parametrize("max_dict_size", [0, 1048576])
+def test_parquet_writer_dictionary_setting(use_dict, max_dict_size):
+    # Simple test for checking the validity of dictionary encoding setting
+    # and behavior of ParquetWriter in cudf.
+    # Write a table with repetitive data with varying dictionary settings.
+    # Make sure the written columns are dictionary-encoded accordingly.
+
+    # Table with repetitive data
+    table = cudf.DataFrame(
+        {
+            "int32": cudf.Series([1024] * 1024, dtype="int64"),
+        }
+    )
+
+    # Write to Parquet using ParquetWriter
+    buffer = BytesIO()
+    writer = ParquetWriter(
+        buffer,
+        use_dictionary=use_dict,
+        max_dictionary_size=max_dict_size,
+    )
+    writer.write_table(table)
+    writer.close()
+
+    # Read encodings from parquet file
+    got = pq.ParquetFile(buffer)
+    encodings = got.metadata.row_group(0).column(0).encodings
+
+    # Check for `PLAIN_DICTIONARY` encoding if dictionary encoding enabled
+    # and dictionary page limit > 0
+    if use_dict is True and max_dict_size > 0:
+        assert "PLAIN_DICTIONARY" in encodings
+    else:
+        assert "PLAIN_DICTIONARY" not in encodings
+
+
 @pytest.mark.parametrize("filename", ["myfile.parquet", None])
 @pytest.mark.parametrize("cols", [["b"], ["c", "b"]])
 def test_parquet_partitioned(tmpdir_factory, cols, filename):

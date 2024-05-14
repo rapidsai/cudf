@@ -22,6 +22,8 @@ repos:
         # project can specify its own first/third-party packages.
         args: ["--config-root=python/", "--resolve-all-configs"]
         files: python/.*
+        exclude: |
+          (?x)^(^python/cudf_polars/.*)
         types_or: [python, cython, pyi]
   - repo: https://github.com/MarcoGorelli/cython-lint
     rev: v0.16.2
@@ -36,6 +38,7 @@ repos:
                "python/cudf/cudf",
                "python/custreamz/custreamz",
                "python/cudf_kafka/cudf_kafka",
+               "python/cudf_polars/cudf_polars",
                "python/dask_cudf/dask_cudf"]
         pass_filenames: false
   - repo: https://github.com/nbQA-dev/nbQA
