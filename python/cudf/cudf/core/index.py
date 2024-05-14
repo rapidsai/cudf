@@ -1521,12 +1521,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         )
 
     def repeat(self, repeats, axis=None):
-        res = self._from_columns_like_self(
+        return self._from_columns_like_self(
             Frame._repeat([*self._columns], repeats, axis), self._column_names
         )
-        if isinstance(res, DatetimeIndex):
-            res._freq = None
-        return res
 
     @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
@@ -2375,6 +2372,11 @@ class DatetimeIndex(Index):
         """  # noqa: E501
         result_col = self._column.tz_convert(tz)
         return DatetimeIndex._from_data({self.name: result_col})
+
+    def repeat(self, repeats, axis=None):
+        res = super().repeat(repeats, axis=axis)
+        res._freq = None
+        return res
 
 
 class TimedeltaIndex(Index):
