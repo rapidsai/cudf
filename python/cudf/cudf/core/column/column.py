@@ -1951,8 +1951,7 @@ def as_column(
             elif inferred_dtype == "boolean":
                 if cudf.get_option("mode.pandas_compatible"):
                     if not (
-                        dtype is not None
-                        and dtype == np.dtype("bool")
+                        dtype == np.dtype("bool")
                         and not pd.isna(arbitrary).any()
                     ):
                         raise MixedTypeError(
@@ -1964,8 +1963,8 @@ def as_column(
                     )
             elif (
                 nan_as_null is False
-                and _has_any_nan(arbitrary)
                 and inferred_dtype not in ("decimal", "empty")
+                and _has_any_nan(arbitrary)
             ):
                 # Decimal can hold float("nan")
                 # All np.nan is not restricted by type
@@ -2348,6 +2347,6 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
 
 def _has_any_nan(arbitrary):
     return any(
-        (isinstance(x, (np.floating, float)) and np.isnan(x))
+        ((isinstance(x, float) or isinstance(x, np.floating)) and np.isnan(x))
         for x in np.asarray(arbitrary)
     )
