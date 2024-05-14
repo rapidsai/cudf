@@ -3,9 +3,9 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.strings cimport case as cpp_case
 from cudf._lib.pylibcudf.column cimport Column
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.strings cimport case as cpp_case
 
 
 cpdef Column to_lower(Column input):

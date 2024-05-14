@@ -2070,8 +2070,15 @@ def as_column(
         except (ValueError, TypeError):
             arbitrary = np.asarray(arbitrary)
         return as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null)
+    elif not isinstance(arbitrary, (abc.Iterable, abc.Sequence)):
+        raise TypeError(
+            f"{type(arbitrary).__name__} must be an iterable or sequence."
+        )
+    elif isinstance(arbitrary, abc.Iterator):
+        arbitrary = list(arbitrary)
+
     # Start of arbitrary that's not handed above but dtype provided
-    elif isinstance(dtype, pd.DatetimeTZDtype):
+    if isinstance(dtype, pd.DatetimeTZDtype):
         raise NotImplementedError(
             "Use `tz_localize()` to construct timezone aware data."
         )
@@ -2127,11 +2134,7 @@ def as_column(
                 return cudf.core.column.ListColumn.from_sequences(arbitrary)
             raise
         return as_column(data, nan_as_null=nan_as_null)
-    elif not isinstance(arbitrary, (abc.Iterable, abc.Sequence)):
-        # TODO: This validation should probably be done earlier?
-        raise TypeError(
-            f"{type(arbitrary).__name__} must be an iterable or sequence."
-        )
+
     from_pandas = nan_as_null is None or nan_as_null
     if dtype is not None:
         dtype = cudf.dtype(dtype)
@@ -2147,7 +2150,6 @@ def as_column(
             arbitrary = pd.Series(arbitrary, dtype=dtype)
         return as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
     else:
-        arbitrary = list(arbitrary)
         for element in arbitrary:
             # Carve-outs that cannot be parsed by pyarrow/pandas
             if is_column_like(element):
