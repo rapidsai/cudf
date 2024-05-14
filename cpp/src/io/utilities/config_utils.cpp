@@ -207,7 +207,9 @@ static_assert(cuda::mr::resource_with<fixed_pinned_pool_memory_resource,
                                       cuda::mr::host_accessible>,
               "");
 
-rmm::host_async_resource_ref make_default_pinned_mr(std::optional<size_t> config_size)
+}  // namespace
+
+CUDF_EXPORT rmm::host_async_resource_ref make_default_pinned_mr(std::optional<size_t> config_size)
 {
   static fixed_pinned_pool_memory_resource mr = [config_size]() {
     auto const size = [&config_size]() -> size_t {
@@ -234,25 +236,23 @@ rmm::host_async_resource_ref make_default_pinned_mr(std::optional<size_t> config
   return mr;
 }
 
-rmm::host_async_resource_ref make_host_mr(std::optional<size_t> size)
+CUDF_EXPORT rmm::host_async_resource_ref make_host_mr(std::optional<size_t> size)
 {
   static rmm::host_async_resource_ref mr_ref = make_default_pinned_mr(size);
   return mr_ref;
 }
 
-std::mutex& host_mr_mutex()
+CUDF_EXPORT std::mutex& host_mr_mutex()
 {
   static std::mutex map_lock;
   return map_lock;
 }
 
-rmm::host_async_resource_ref& host_mr()
+CUDF_EXPORT rmm::host_async_resource_ref& host_mr()
 {
   static rmm::host_async_resource_ref mr_ref = make_host_mr(std::nullopt);
   return mr_ref;
 }
-
-}  // namespace
 
 rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_ref mr)
 {
