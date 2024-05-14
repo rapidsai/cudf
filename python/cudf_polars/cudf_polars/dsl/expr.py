@@ -306,7 +306,10 @@ class Agg(Expr):
         )
 
     def _nunique(self, column: Column) -> Column:
-        return plc.Col
+        return plc.Column.from_scalar(
+            plc.reduce.reduce(column.obj, plc.aggregation.nunique(null_handling=plc.types.NullPolicy.INCLUDE), ),
+            1,
+        )
 
     def evaluate(
         self, df, *, context: ExecutionContext = ExecutionContext.FRAME
