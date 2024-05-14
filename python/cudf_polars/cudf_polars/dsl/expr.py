@@ -254,9 +254,59 @@ class Agg(Expr):
             else plc.types.NullPolicy.EXCLUDE
         ),
         "std": plc.aggregation.std,
-        "var": plc.aggregation.var,
+        "var": plc.aggregation.variance,
         "agg_groups": lambda: None,
     }
+
+    def _min(self, column: Column, *, propagate_nans: bool) -> plc.Column:
+        if propagate_nans and column.nan_count > 0:
+            return plc.Column.from_scalar(
+                plc.interop.from_arrow(
+                    pa.scalar(float("nan")), data_type=column.obj.type()
+                ),
+                1,
+            )
+        if column.nan_count > 0:
+            column = column.mask_nans()
+        return plc.Column.from_scalar(
+            plc.reduce.reduce(column.obj, plc.aggregation.min(), column.obj.type()), 1
+        )
+
+    def _max(self, column: Column, *, propagate_nans: bool) -> plc.Column:
+        if propagate_nans and column.nan_count > 0:
+            return plc.Column.from_scalar(
+                plc.interop.from_arrow(
+                    pa.scalar(float("nan")), data_type=column.obj.type()
+                ),
+                1,
+            )
+        if column.nan_count > 0:
+            column = column.mask_nans()
+        return plc.Column.from_scalar(
+            plc.reduce.reduce(column.obj, plc.aggregation.max(), column.obj.type()), 1
+        )
+
+    def _median(self, column: Column) -> plc.Column:
+        return plc.Column.from_scalar(
+            plc.reduce.reduce(column.obj, plc.aggregation.median(), column.obj.type()),
+            1,
+        )
+
+    def _first(self, column: Column) -> plc.Column:
+        return plc.copying.slice(column.obj, [0, 1])[0]
+
+    def _last(self, column: Column) -> plc.Column:
+        n = column.obj.size()
+        return plc.copying.slice(column.obj, [n - 1, n])[0]
+
+    def _mean(self, column: Column) -> plc.Column:
+        return plc.Column.from_scalar(
+            plc.reduce.reduce(column.obj, plc.aggregation.mean(), column.obj.type()),
+            1,
+        )
+
+    def _nunique(self, column: Column) -> Column:
+        return plc.Col
 
     def evaluate(
         self, df, *, context: ExecutionContext = ExecutionContext.FRAME

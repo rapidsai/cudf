@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING
 
 import cudf._lib.pylibcudf as plc
@@ -67,3 +68,27 @@ class Column:
         self.order = order
         self.null_order = null_order
         return self
+
+    def copy(self) -> Self:
+        """Return a shallow copy of the column."""
+        return type(self)(self.obj, self.name).with_sorted(like=self)
+
+    def mask_nans(self) -> Self:
+        """Return a copy of self with nans masked out."""
+        if self.nan_count > 0:
+            raise NotImplementedError
+        else:
+            return self.copy()
+
+    @functools.cached_property
+    def nan_count(self) -> int:
+        """Return the number of NaN values in the column."""
+        if self.obj.type().id() not in (plc.TypeId.FLOAT32, plc.TypeId.FLOAT64):
+            return 0
+        else:
+            return plc.reduce.reduce(
+                plc.unary.is_nan(self.obj),
+                plc.aggregation.sum(),
+                # TODO: pylibcudf needs to have a SizeType DataType singleton
+                plc.DataType(plc.TypeId.INT32),
+            )
