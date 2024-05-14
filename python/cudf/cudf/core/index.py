@@ -511,14 +511,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def is_unique(self) -> bool:
         return True
 
-    @cached_property  # type: ignore
+    @cached_property
     @_cudf_nvtx_annotate
     def is_monotonic_increasing(self) -> bool:
         return self.step > 0 or len(self) <= 1
 
-    @cached_property  # type: ignore
+    @cached_property
     @_cudf_nvtx_annotate
-    def is_monotonic_decreasing(self):
+    def is_monotonic_decreasing(self) -> bool:
         return self.step < 0 or len(self) <= 1
 
     @_cudf_nvtx_annotate
@@ -1066,14 +1066,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             # Try interpreting object as a MultiIndex before failing.
             return cudf.MultiIndex.from_arrow(obj)
 
-    @cached_property
-    def is_monotonic_increasing(self):
-        return super().is_monotonic_increasing
-
-    @cached_property
-    def is_monotonic_decreasing(self):
-        return super().is_monotonic_decreasing
-
     def _binaryop(
         self,
         other: Frame,
@@ -1173,9 +1165,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def memory_usage(self, deep=False):
         return self._column.memory_usage
 
-    @cached_property  # type: ignore
+    @cached_property
     @_cudf_nvtx_annotate
-    def is_unique(self):
+    def is_unique(self) -> bool:
         return self._column.is_unique
 
     @_cudf_nvtx_annotate

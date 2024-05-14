@@ -1449,7 +1449,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def _is_sorted(self, ascending=None, null_position=None):
+    def _is_sorted(self, ascending=None, null_position=None) -> bool:
         """
         Returns a boolean indicating whether the data of the Frame are sorted
         based on the parameters given. Does not account for the index.

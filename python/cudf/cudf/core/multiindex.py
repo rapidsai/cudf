@@ -1626,27 +1626,27 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             levels=levels, codes=multiindex.codes, names=multiindex.names
         )
 
-    @cached_property  # type: ignore
+    @cached_property
     @_cudf_nvtx_annotate
-    def is_unique(self):
+    def is_unique(self) -> bool:
         return len(self) == len(self.unique())
 
     @property
     def dtype(self):
         return np.dtype("O")
 
-    @cached_property  # type: ignore
+    @cached_property
     @_cudf_nvtx_annotate
-    def is_monotonic_increasing(self):
+    def is_monotonic_increasing(self) -> bool:
         """
         Return if the index is monotonic increasing
         (only equal or increasing) values.
         """
         return self._is_sorted(ascending=None, null_position=None)
 
-    @cached_property  # type: ignore
+    @cached_property
     @_cudf_nvtx_annotate
-    def is_monotonic_decreasing(self):
+    def is_monotonic_decreasing(self) -> bool:
         """
         Return if the index is monotonic decreasing
         (only equal or decreasing) values.

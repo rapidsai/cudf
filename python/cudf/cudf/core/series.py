@@ -733,9 +733,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             result = cls(s, nan_as_null=nan_as_null)
         return result
 
-    @property  # type: ignore
+    @functools.cached_property
     @_cudf_nvtx_annotate
-    def is_unique(self):
+    def is_unique(self) -> bool:
         """Return boolean if values in the object are unique.
 
         Returns

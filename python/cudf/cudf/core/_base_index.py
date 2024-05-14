@@ -110,8 +110,8 @@ class BaseIndex(Serializable):
     def empty(self):
         return self.size == 0
 
-    @property
-    def is_unique(self):
+    @cached_property
+    def is_unique(self) -> bool:
         """Return if the index has unique values."""
         raise NotImplementedError
 
@@ -368,8 +368,8 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    @property
-    def is_monotonic_increasing(self):
+    @cached_property
+    def is_monotonic_increasing(self) -> bool:
         """Return boolean if values in the object are monotonically increasing.
 
         Returns
@@ -378,8 +378,8 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    @property
-    def is_monotonic_decreasing(self):
+    @cached_property
+    def is_monotonic_decreasing(self) -> bool:
         """Return boolean if values in the object are monotonically decreasing.
 
         Returns

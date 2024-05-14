@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from functools import cached_property
 from typing import Any, Dict, Optional, Tuple, Union
 
 import cupy
@@ -194,9 +195,9 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.to_arrow()
 
-    @property  # type: ignore
+    @cached_property
     @_cudf_nvtx_annotate
-    def is_unique(self):
+    def is_unique(self) -> bool:
         """Return boolean if values in the object are unique.
 
         Returns
@@ -205,9 +206,9 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.is_unique
 
-    @property  # type: ignore
+    @cached_property
     @_cudf_nvtx_annotate
-    def is_monotonic_increasing(self):
+    def is_monotonic_increasing(self) -> bool:
         """Return boolean if values in the object are monotonically increasing.
 
         Returns
@@ -216,9 +217,9 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.is_monotonic_increasing
 
-    @property  # type: ignore
+    @cached_property
     @_cudf_nvtx_annotate
-    def is_monotonic_decreasing(self):
+    def is_monotonic_decreasing(self) -> bool:
         """Return boolean if values in the object are monotonically decreasing.
 
         Returns
