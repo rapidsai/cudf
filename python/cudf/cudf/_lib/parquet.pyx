@@ -124,9 +124,9 @@ def _parse_metadata(meta):
 
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
-                   use_arrow_schema=True,
                    use_pandas_metadata=True,
-                   Expression filters=None):
+                   Expression filters=None,
+                   use_arrow_schema=True):
     """
     Cython function to call into libcudf API, see `read_parquet`.
 
