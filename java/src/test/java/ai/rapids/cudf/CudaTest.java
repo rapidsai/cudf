@@ -16,6 +16,7 @@
 
 package ai.rapids.cudf;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -33,13 +34,14 @@ public class CudaTest {
     assertEquals(Cuda.getNativeComputeMode(), Cuda.getComputeMode().nativeId);
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testCudaException() {
     assertThrows(CudaException.class, () -> {
           try {
             Cuda.freePinned(-1L);
           } catch (CudaFatalException fatalEx) {
-            throw new AssertionError("Expected UnFatalError but got FatalError: " + fatalEx);
+            throw new AssertionError("Expected CudaException but got fatal error", fatalEx);
           } catch (CudaException ex) {
             assertEquals(CudaException.CudaError.cudaErrorInvalidValue, ex.getCudaError());
             throw ex;
