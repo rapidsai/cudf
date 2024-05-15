@@ -1411,6 +1411,13 @@ def column_empty_like(
     return column_empty(row_count, dtype, masked)
 
 
+def _has_any_nan(arbitrary):
+    return any(
+        ((isinstance(x, float) or isinstance(x, np.floating)) and np.isnan(x))
+        for x in np.asarray(arbitrary)
+    )
+
+
 def column_empty_like_same_mask(
     column: ColumnBase, dtype: Dtype
 ) -> ColumnBase:
@@ -1948,9 +1955,20 @@ def as_column(
                 raise TypeError(
                     f"Cannot convert a {inferred_dtype} of object type"
                 )
-            elif nan_as_null is False and (
-                pd.isna(arbitrary).any()
+            elif inferred_dtype == "boolean":
+                if cudf.get_option("mode.pandas_compatible"):
+                    if dtype != np.dtype("bool") or pd.isna(arbitrary).any():
+                        raise MixedTypeError(
+                            f"Cannot have mixed values with {inferred_dtype}"
+                        )
+                elif nan_as_null is False and _has_any_nan(arbitrary):
+                    raise MixedTypeError(
+                        f"Cannot have mixed values with {inferred_dtype}"
+                    )
+            elif (
+                nan_as_null is False
                 and inferred_dtype not in ("decimal", "empty")
+                and _has_any_nan(arbitrary)
             ):
                 # Decimal can hold float("nan")
                 # All np.nan is not restricted by type
@@ -2070,8 +2088,15 @@ def as_column(
         except (ValueError, TypeError):
             arbitrary = np.asarray(arbitrary)
         return as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null)
+    elif not isinstance(arbitrary, (abc.Iterable, abc.Sequence)):
+        raise TypeError(
+            f"{type(arbitrary).__name__} must be an iterable or sequence."
+        )
+    elif isinstance(arbitrary, abc.Iterator):
+        arbitrary = list(arbitrary)
+
     # Start of arbitrary that's not handed above but dtype provided
-    elif isinstance(dtype, pd.DatetimeTZDtype):
+    if isinstance(dtype, pd.DatetimeTZDtype):
         raise NotImplementedError(
             "Use `tz_localize()` to construct timezone aware data."
         )
@@ -2127,11 +2152,7 @@ def as_column(
                 return cudf.core.column.ListColumn.from_sequences(arbitrary)
             raise
         return as_column(data, nan_as_null=nan_as_null)
-    elif not isinstance(arbitrary, (abc.Iterable, abc.Sequence)):
-        # TODO: This validation should probably be done earlier?
-        raise TypeError(
-            f"{type(arbitrary).__name__} must be an iterable or sequence."
-        )
+
     from_pandas = nan_as_null is None or nan_as_null
     if dtype is not None:
         dtype = cudf.dtype(dtype)
@@ -2147,7 +2168,6 @@ def as_column(
             arbitrary = pd.Series(arbitrary, dtype=dtype)
         return as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
     else:
-        arbitrary = list(arbitrary)
         for element in arbitrary:
             # Carve-outs that cannot be parsed by pyarrow/pandas
             if is_column_like(element):

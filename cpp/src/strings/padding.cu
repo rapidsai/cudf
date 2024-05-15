@@ -19,7 +19,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/pad_impl.cuh>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -117,13 +117,13 @@ std::unique_ptr<column> pad(strings_column_view const& input,
   auto [offsets_column, chars] = [&] {
     if (side == side_type::LEFT) {
       auto fn = pad_fn<side_type::LEFT>{*d_strings, width, fill_char_size, d_fill_char};
-      return experimental::make_strings_children(fn, input.size(), stream, mr);
+      return make_strings_children(fn, input.size(), stream, mr);
     } else if (side == side_type::RIGHT) {
       auto fn = pad_fn<side_type::RIGHT>{*d_strings, width, fill_char_size, d_fill_char};
-      return experimental::make_strings_children(fn, input.size(), stream, mr);
+      return make_strings_children(fn, input.size(), stream, mr);
     }
     auto fn = pad_fn<side_type::BOTH>{*d_strings, width, fill_char_size, d_fill_char};
-    return experimental::make_strings_children(fn, input.size(), stream, mr);
+    return make_strings_children(fn, input.size(), stream, mr);
   }();
 
   return make_strings_column(input.size(),
@@ -154,7 +154,7 @@ std::unique_ptr<column> zfill(strings_column_view const& input,
 
   auto d_strings = column_device_view::create(input.parent(), stream);
   auto [offsets_column, chars] =
-    experimental::make_strings_children(zfill_fn{*d_strings, width}, input.size(), stream, mr);
+    make_strings_children(zfill_fn{*d_strings, width}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),

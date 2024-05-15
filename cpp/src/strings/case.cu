@@ -23,7 +23,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/case.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -296,8 +296,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
 
   // For smaller strings, use the regular string-parallel algorithm
   if ((chars_size / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
-    auto [offsets, chars] = cudf::strings::detail::experimental::make_strings_children(
-      converter, input.size(), stream, mr);
+    auto [offsets, chars] = make_strings_children(converter, input.size(), stream, mr);
     return make_strings_column(input.size(),
                                std::move(offsets),
                                chars.release(),
@@ -365,8 +364,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   // run case conversion over the new sub-strings
   auto const tmp_size = static_cast<size_type>(tmp_offsets.size()) - 1;
   upper_lower_ls_fn sub_conv{ccfn, input_chars, tmp_offsets.data()};
-  auto chars = std::get<1>(
-    cudf::strings::detail::experimental::make_strings_children(sub_conv, tmp_size, stream, mr));
+  auto chars = std::get<1>(make_strings_children(sub_conv, tmp_size, stream, mr));
 
   return make_strings_column(input.size(),
                              std::move(offsets),
