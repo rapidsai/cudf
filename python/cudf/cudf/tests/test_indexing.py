@@ -2266,3 +2266,12 @@ def test_iloc_loc_no_circular_reference(klass, indexer):
     getattr(obj, indexer)[0]
     del obj
     assert ref() is None
+
+
+def test_loc_setitem_empty_dataframe():
+    pdf = pd.DataFrame(index=["index_1", "index_2", "index_3"])
+    gdf = cudf.from_pandas(pdf)
+    pdf.loc[["index_1"], "new_col"] = "A"
+    gdf.loc[["index_1"], "new_col"] = "A"
+
+    assert_eq(pdf, gdf)
