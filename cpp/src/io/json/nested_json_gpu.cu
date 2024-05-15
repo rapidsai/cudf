@@ -618,11 +618,13 @@ struct PdaSymbolToSymbolGroupId {
     constexpr auto pda_sgid_lookup_size =
       static_cast<int32_t>(sizeof(tos_sg_to_pda_sgid) / sizeof(tos_sg_to_pda_sgid[0]));
     /*
-    // Note that delimiter cannot be any of opening(closing) brace, bracket, quote, escape, 
+    // Note that delimiter cannot be any of opening(closing) brace, bracket, quote, escape,
     // comma, colon or whitespace characters.
     */
     auto const symbol_position =
-      symbol == delimiter ? static_cast<int32_t>('\n') : (symbol == '\n' ? static_cast<int32_t>(delimiter) : static_cast<int32_t>(symbol));
+      symbol == delimiter
+        ? static_cast<int32_t>('\n')
+        : (symbol == '\n' ? static_cast<int32_t>(delimiter) : static_cast<int32_t>(symbol));
     PdaSymbolGroupIdT symbol_gid =
       tos_sg_to_pda_sgid[min(symbol_position, pda_sgid_lookup_size - 1)];
     return stack_idx * static_cast<PdaSymbolGroupIdT>(symbol_group_id::NUM_PDA_INPUT_SGS) +

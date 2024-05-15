@@ -1053,7 +1053,8 @@ TEST_P(JsonDelimiterParamTest, RecoveringTokenStreamNewlineAndDelimiter)
    * <delimiter>{"b":123}
    * {"b":123}
    */
-  std::string input = R"({"a":2})" "\n";
+  std::string input = R"({"a":2})"
+                      "\n";
   // starting position 8 (zero indexed)
   input += R"({"a":)" + std::string(1, delimiter);
   // starting position 14 (zero indexed)
@@ -1061,108 +1062,104 @@ TEST_P(JsonDelimiterParamTest, RecoveringTokenStreamNewlineAndDelimiter)
   // starting position 29 (zero indexed)
   input += R"({"a":[1]})" + std::string("\n\n") + std::string(1, delimiter);
   // starting position 41 (zero indexed)
-  input += R"({"b":123})" "\n";
+  input += R"({"b":123})"
+           "\n";
   // starting position 51 (zero indexed)
   input += R"({"b":123})";
 
   // Golden token stream sample
   using token_t = cuio_json::token_t;
   std::vector<std::pair<std::size_t, cuio_json::PdaTokenT>> golden_token_stream;
-  if(delimiter != '\n') {
+  if (delimiter != '\n') {
     golden_token_stream.resize(28);
-    golden_token_stream = {
-      // Line 0 (valid)
-      {0, token_t::StructBegin},
-      {1, token_t::StructMemberBegin},
-      {1, token_t::FieldNameBegin},
-      {3, token_t::FieldNameEnd},
-      {5, token_t::ValueBegin},
-      {6, token_t::ValueEnd},
-      {6, token_t::StructMemberEnd},
-      {6, token_t::StructEnd},
-      // Line 1 (invalid)
-      {0, token_t::StructBegin},
-      {0, token_t::StructEnd},
-      // Line 2 (valid)
-      {29, token_t::StructBegin},
-      {30, token_t::StructMemberBegin},
-      {30, token_t::FieldNameBegin},
-      {32, token_t::FieldNameEnd},
-      {34, token_t::ListBegin},
-      {35, token_t::ValueBegin},
-      {36, token_t::ValueEnd},
-      {36, token_t::ListEnd},
-      {37, token_t::StructMemberEnd},
-      {37, token_t::StructEnd},
-      // Line 3 (valid)
-      {41, token_t::StructBegin},
-      {42, token_t::StructMemberBegin},
-      {42, token_t::FieldNameBegin},
-      {44, token_t::FieldNameEnd},
-      {46, token_t::ValueBegin},
-      {49, token_t::ValueEnd},
-      {49, token_t::StructMemberEnd},
-      {49, token_t::StructEnd}
-    };
-  }
-  else {
+    golden_token_stream = {// Line 0 (valid)
+                           {0, token_t::StructBegin},
+                           {1, token_t::StructMemberBegin},
+                           {1, token_t::FieldNameBegin},
+                           {3, token_t::FieldNameEnd},
+                           {5, token_t::ValueBegin},
+                           {6, token_t::ValueEnd},
+                           {6, token_t::StructMemberEnd},
+                           {6, token_t::StructEnd},
+                           // Line 1 (invalid)
+                           {0, token_t::StructBegin},
+                           {0, token_t::StructEnd},
+                           // Line 2 (valid)
+                           {29, token_t::StructBegin},
+                           {30, token_t::StructMemberBegin},
+                           {30, token_t::FieldNameBegin},
+                           {32, token_t::FieldNameEnd},
+                           {34, token_t::ListBegin},
+                           {35, token_t::ValueBegin},
+                           {36, token_t::ValueEnd},
+                           {36, token_t::ListEnd},
+                           {37, token_t::StructMemberEnd},
+                           {37, token_t::StructEnd},
+                           // Line 3 (valid)
+                           {41, token_t::StructBegin},
+                           {42, token_t::StructMemberBegin},
+                           {42, token_t::FieldNameBegin},
+                           {44, token_t::FieldNameEnd},
+                           {46, token_t::ValueBegin},
+                           {49, token_t::ValueEnd},
+                           {49, token_t::StructMemberEnd},
+                           {49, token_t::StructEnd}};
+  } else {
     /* Input:
      * {"a":2}
      * {"a":
      * {"a":{"a":[321
      * {"a":[1]}
      *
-     * 
+     *
      * {"b":123}
      * {"b":123}
      */
     golden_token_stream.resize(38);
-    golden_token_stream = {
-      // Line 0 (valid)
-      {0, token_t::StructBegin},
-      {1, token_t::StructMemberBegin},
-      {1, token_t::FieldNameBegin},
-      {3, token_t::FieldNameEnd},
-      {5, token_t::ValueBegin},
-      {6, token_t::ValueEnd},
-      {6, token_t::StructMemberEnd},
-      {6, token_t::StructEnd},
-      // Line 1 (invalid)
-      {0, token_t::StructBegin},
-      {0, token_t::StructEnd},
-      // Line 2 (invalid)
-      {0, token_t::StructBegin},
-      {0, token_t::StructEnd},
-      // Line 3 (valid)
-      {29, token_t::StructBegin},
-      {30, token_t::StructMemberBegin},
-      {30, token_t::FieldNameBegin},
-      {32, token_t::FieldNameEnd},
-      {34, token_t::ListBegin},
-      {35, token_t::ValueBegin},
-      {36, token_t::ValueEnd},
-      {36, token_t::ListEnd},
-      {37, token_t::StructMemberEnd},
-      {37, token_t::StructEnd},
-      // Line 4 (valid)
-      {41, token_t::StructBegin},
-      {42, token_t::StructMemberBegin},
-      {42, token_t::FieldNameBegin},
-      {44, token_t::FieldNameEnd},
-      {46, token_t::ValueBegin},
-      {49, token_t::ValueEnd},
-      {49, token_t::StructMemberEnd},
-      {49, token_t::StructEnd},
-      // Line 5 (valid)
-      {51, token_t::StructBegin},
-      {52, token_t::StructMemberBegin},
-      {52, token_t::FieldNameBegin},
-      {54, token_t::FieldNameEnd},
-      {56, token_t::ValueBegin},
-      {59, token_t::ValueEnd},
-      {59, token_t::StructMemberEnd},
-      {59, token_t::StructEnd}
-    };
+    golden_token_stream = {// Line 0 (valid)
+                           {0, token_t::StructBegin},
+                           {1, token_t::StructMemberBegin},
+                           {1, token_t::FieldNameBegin},
+                           {3, token_t::FieldNameEnd},
+                           {5, token_t::ValueBegin},
+                           {6, token_t::ValueEnd},
+                           {6, token_t::StructMemberEnd},
+                           {6, token_t::StructEnd},
+                           // Line 1 (invalid)
+                           {0, token_t::StructBegin},
+                           {0, token_t::StructEnd},
+                           // Line 2 (invalid)
+                           {0, token_t::StructBegin},
+                           {0, token_t::StructEnd},
+                           // Line 3 (valid)
+                           {29, token_t::StructBegin},
+                           {30, token_t::StructMemberBegin},
+                           {30, token_t::FieldNameBegin},
+                           {32, token_t::FieldNameEnd},
+                           {34, token_t::ListBegin},
+                           {35, token_t::ValueBegin},
+                           {36, token_t::ValueEnd},
+                           {36, token_t::ListEnd},
+                           {37, token_t::StructMemberEnd},
+                           {37, token_t::StructEnd},
+                           // Line 4 (valid)
+                           {41, token_t::StructBegin},
+                           {42, token_t::StructMemberBegin},
+                           {42, token_t::FieldNameBegin},
+                           {44, token_t::FieldNameEnd},
+                           {46, token_t::ValueBegin},
+                           {49, token_t::ValueEnd},
+                           {49, token_t::StructMemberEnd},
+                           {49, token_t::StructEnd},
+                           // Line 5 (valid)
+                           {51, token_t::StructBegin},
+                           {52, token_t::StructMemberBegin},
+                           {52, token_t::FieldNameBegin},
+                           {54, token_t::FieldNameEnd},
+                           {56, token_t::ValueBegin},
+                           {59, token_t::ValueEnd},
+                           {59, token_t::StructMemberEnd},
+                           {59, token_t::StructEnd}};
   }
 
   auto const stream = cudf::get_default_stream();
