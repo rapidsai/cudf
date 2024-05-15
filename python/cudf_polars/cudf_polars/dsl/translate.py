@@ -94,35 +94,36 @@ def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
                 else None,
             )
         elif isinstance(node, pl_ir.Select):
-            return ir.Select(
-                schema,
-                translate_ir(visitor, n=node.input),
-                [translate_expr(visitor, n=e) for e in node.cse_expr],
-                [translate_expr(visitor, n=e) for e in node.expr],
-            )
+            with set_node(visitor, node.input):
+                inp = translate_ir(visitor, n=None)
+                cse_exprs = [translate_expr(visitor, n=e) for e in node.cse_expr]
+                exprs = [translate_expr(visitor, n=e) for e in node.expr]
+            return ir.Select(schema, inp, cse_exprs, exprs)
         elif isinstance(node, pl_ir.GroupBy):
+            with set_node(visitor, node.input):
+                inp = translate_ir(visitor, n=None)
+                aggs = [translate_expr(visitor, n=e) for e in node.aggs]
+                keys = [translate_expr(visitor, n=e) for e in node.keys]
             return ir.GroupBy(
                 schema,
-                translate_ir(visitor, n=node.input),
-                [translate_expr(visitor, n=e) for e in node.aggs],
-                [translate_expr(visitor, n=e) for e in node.keys],
+                inp,
+                aggs,
+                keys,
                 node.options,
             )
         elif isinstance(node, pl_ir.Join):
-            return ir.Join(
-                schema,
-                translate_ir(visitor, n=node.input_left),
-                translate_ir(visitor, n=node.input_right),
-                [translate_expr(visitor, n=e) for e in node.left_on],
-                [translate_expr(visitor, n=e) for e in node.right_on],
-                node.options,
-            )
+            with set_node(visitor, node.input_left):
+                inp_left = translate_ir(visitor, n=None)
+                left_on = [translate_expr(visitor, n=e) for e in node.left_on]
+            with set_node(visitor, node.input_right):
+                inp_right = translate_ir(visitor, n=None)
+                right_on = [translate_expr(visitor, n=e) for e in node.right_on]
+            return ir.Join(schema, inp_left, inp_right, left_on, right_on, node.options)
         elif isinstance(node, pl_ir.HStack):
-            return ir.HStack(
-                schema,
-                translate_ir(visitor, n=node.input),
-                [translate_expr(visitor, n=e) for e in node.exprs],
-            )
+            with set_node(visitor, n=None):
+                inp = translate_ir(visitor, n=node.input)
+                exprs = [translate_expr(visitor, n=e) for e in node.exprs]
+            return ir.HStack(schema, inp, exprs)
         elif isinstance(node, pl_ir.Distinct):
             return ir.Distinct(
                 schema,
@@ -130,22 +131,19 @@ def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
                 node.options,
             )
         elif isinstance(node, pl_ir.Sort):
-            return ir.Sort(
-                schema,
-                translate_ir(visitor, n=node.input),
-                [translate_expr(visitor, n=e) for e in node.by_column],
-                node.sort_options,
-            )
+            with set_node(visitor, n=None):
+                inp = translate_ir(visitor, n=node.input)
+                by = [translate_expr(visitor, n=e) for e in node.by_column]
+            return ir.Sort(schema, inp, by, node.sort_options)
         elif isinstance(node, pl_ir.Slice):
             return ir.Slice(
                 schema, translate_ir(visitor, n=node.input), node.offset, node.len
             )
         elif isinstance(node, pl_ir.Filter):
-            return ir.Filter(
-                schema,
-                translate_ir(visitor, n=node.input),
-                translate_expr(visitor, n=node.predicate),
-            )
+            with set_node(visitor, n=None):
+                inp = translate_ir(visitor, n=node.input)
+                mask = translate_expr(visitor, n=node.predicate)
+            return ir.Filter(schema, inp, mask)
         elif isinstance(node, pl_ir.SimpleProjection):
             return ir.Projection(schema, translate_ir(visitor, n=node.input))
         elif isinstance(node, pl_ir.MapFunction):
@@ -201,12 +199,15 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
     if isinstance(n, pl_expr.PyExprIR):
         # TODO: type narrowing didn't work because PyExprIR is Unknown
         assert not isinstance(n, int)
-        return expr.NamedExpr(n.output_name, translate_expr(visitor, n=n.node))
+        e = translate_expr(visitor, n=n.node)
+        return expr.NamedExpr(e.dtype, n.output_name, e)
     node = visitor.view_expression(n)
+    dtype = dtypes.from_polars(visitor.get_dtype(n))
     if isinstance(node, pl_expr.Function):
         name, *options = node.function_data
         if name in BOOLEAN_FUNCTIONS:
             return expr.BooleanFunction(
+                dtype,
                 name,
                 options,
                 [translate_expr(visitor, n=n) for n in node.input],
@@ -216,6 +217,7 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
     elif isinstance(node, pl_expr.Window):
         # TODO: raise in groupby?
         return expr.Window(
+            dtype,
             translate_expr(visitor, n=node.function),
             [translate_expr(visitor, n=n) for n in node.partition_by]
             if node.partition_by is not None
@@ -223,52 +225,54 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
             node.options,
         )
     elif isinstance(node, pl_expr.Literal):
-        return expr.Literal(dtypes.from_polars(node.dtype), node.value)
+        return expr.Literal(dtype, node.value)
     elif isinstance(node, pl_expr.Sort):
         # TODO: raise in groupby
-        return expr.Sort(translate_expr(visitor, n=node.expr), node.options)
+        return expr.Sort(dtype, translate_expr(visitor, n=node.expr), node.options)
     elif isinstance(node, pl_expr.SortBy):
         # TODO: raise in groupby
         return expr.SortBy(
+            dtype,
             translate_expr(visitor, n=node.expr),
             [translate_expr(visitor, n=n) for n in node.by],
             node.descending,
         )
     elif isinstance(node, pl_expr.Gather):
         return expr.Gather(
+            dtype,
             translate_expr(visitor, n=node.expr),
             translate_expr(visitor, n=node.idx),
         )
     elif isinstance(node, pl_expr.Filter):
         return expr.Filter(
+            dtype,
             translate_expr(visitor, n=node.input),
             translate_expr(visitor, n=node.by),
         )
     elif isinstance(node, pl_expr.Cast):
         inner = translate_expr(visitor, n=node.expr)
         # Push casts into literals so we can handle Cast(Literal(Null))
-        dtype = dtypes.from_polars(node.dtype)
         if isinstance(inner, expr.Literal):
             return expr.Literal(dtype, inner.value)
         else:
             return expr.Cast(dtype, inner)
     elif isinstance(node, pl_expr.Column):
-        return expr.Col(node.name)
+        return expr.Col(dtype, node.name)
     elif isinstance(node, pl_expr.Agg):
         return expr.Agg(
+            dtype,
             translate_expr(visitor, n=node.arguments),
             node.name,
             node.options,
         )
     elif isinstance(node, pl_expr.BinaryExpr):
         return expr.BinOp(
+            dtype,
             translate_expr(visitor, n=node.left),
             translate_expr(visitor, n=node.right),
             expr.BinOp._MAPPING[node.op],
-            # TODO: Should lay dtype onto every node, but visitor.get_dtype is O(n) not O(1)
-            dtypes.from_polars(visitor.get_dtype(n)),
         )
     elif isinstance(node, pl_expr.Len):
-        return expr.Len()
+        return expr.Len(dtype)
     else:
         raise NotImplementedError(f"No handler for expression node with {type(node)=}")

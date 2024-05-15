@@ -18,6 +18,7 @@ from __future__ import annotations
 import enum
 from dataclasses import dataclass
 from enum import IntEnum
+from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import pyarrow as pa
@@ -59,6 +60,8 @@ class ExecutionContext(IntEnum):
 
 @dataclass(slots=True)
 class Expr:
+    dtype: plc.DataType
+
     # TODO: return type is a lie for Literal
     def evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -76,12 +79,11 @@ class NamedExpr(Expr):
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        return Column(self.value.evaluate(df, context=context), self.name)
+        return Column(self.value.evaluate(df, context=context).obj, self.name)
 
 
 @dataclass(slots=True)
 class Literal(Expr):
-    dtype: plc.Datatype
     value: Any
 
     def evaluate(
@@ -135,7 +137,7 @@ class Sort(Expr):
             [descending], nulls_last=nulls_last, num_keys=1
         )
         do_sort = plc.sorting.stable_sort if stable else plc.sorting.sort
-        table = do_sort(plc.Table([column], order, null_order))
+        table = do_sort(plc.Table([column.obj]), order, null_order)
         return Column(table.columns()[0], column.name).set_sorted(
             is_sorted=plc.types.Sorted.YES, order=order[0], null_order=null_order[0]
         )
@@ -228,7 +230,7 @@ class Cast(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         column = self.column.evaluate(df, context=context)
-        return Column(plc.unary.cast(column, self.dtype), column.name).with_sorted(
+        return Column(plc.unary.cast(column.obj, self.dtype), column.name).with_sorted(
             like=column
         )
 
@@ -236,86 +238,171 @@ class Cast(Expr):
 @dataclass(slots=True)
 class Agg(Expr):
     column: Expr
+    op: Callable[..., plc.Column]
     name: str
-    options: Any
 
-    _MAPPING: ClassVar[dict[str, Callable[..., plc.aggregation.Aggregation]]] = {
-        "min": plc.aggregation.min,
-        "max": plc.aggregation.max,
-        "median": plc.aggregation.median,
-        "nunique": plc.aggregation.nunique,
-        "first": lambda: plc.aggregation.nth_element(0),
-        "last": lambda: plc.aggregation.nth_element(-1),  # TODO: check
-        "mean": plc.aggregation.mean,
-        "sum": plc.aggregation.sum,
-        "count": lambda include_null: plc.aggregation.count(
-            plc.types.NullPolicy.INCLUDE
-            if include_null
-            else plc.types.NullPolicy.EXCLUDE
-        ),
-        "std": plc.aggregation.std,
-        "var": plc.aggregation.variance,
-        "agg_groups": lambda: None,
-    }
+    _SUPPORTED: ClassVar[frozenset[str]] = frozenset(
+        [
+            "min",
+            "max",
+            "median",
+            "nunique",
+            "first",
+            "last",
+            "mean",
+            "sum",
+            "count",
+            "std",
+            "var",
+            "agg_groups",
+        ]
+    )
 
-    def _min(self, column: Column, *, propagate_nans: bool) -> plc.Column:
-        if propagate_nans and column.nan_count > 0:
-            return plc.Column.from_scalar(
-                plc.interop.from_arrow(
-                    pa.scalar(float("nan")), data_type=column.obj.type()
+    def __init__(
+        self, dtype: plc.DataType, column: Expr, name: str, options: Any
+    ) -> None:
+        if name not in Agg._SUPPORTED:
+            raise NotImplementedError(f"Unsupported aggregation {name}")
+        self.dtype = dtype
+        self.column = column
+        self.name = name
+        op = getattr(self, f"_{name}")
+        if name in {"min", "max"}:
+            op = partial(op, propagate_nans=options)
+        elif name in {"std", "var"}:
+            op = partial(op, ddof=options)
+        self.op = op
+
+    def _std(self, column: Column, *, ddof: int) -> Column:
+        # TODO: handle nans
+        return Column(
+            plc.Column.from_scalar(
+                plc.reduce.reduce(
+                    column.obj, plc.aggregation.std(ddof=ddof), self.dtype
                 ),
                 1,
+            ),
+            column.name,
+        )
+
+    def _var(self, column: Column, *, ddof: int) -> Column:
+        # TODO: handle nans
+        return Column(
+            plc.Column.from_scalar(
+                plc.reduce.reduce(
+                    column.obj, plc.aggregation.variance(ddof=ddof), self.dtype
+                ),
+                1,
+            ),
+            column.name,
+        )
+
+    def _sum(self, column: Column) -> Column:
+        return Column(
+            plc.Column.from_scalar(
+                plc.reduce.reduce(column.obj, plc.aggregation.sum(), self.dtype), 1
+            ),
+            column.name,
+        )
+
+    def _count(self, column: Column) -> Column:
+        return Column(
+            plc.Column.from_scalar(
+                plc.reduce.reduce(
+                    column.obj,
+                    plc.aggregation.count(plc.types.NullPolicy.EXCLUDE),
+                    self.dtype,
+                ),
+                1,
+            ),
+            column.name,
+        )
+
+    def _min(self, column: Column, *, propagate_nans: bool) -> Column:
+        if propagate_nans and column.nan_count > 0:
+            return Column(
+                plc.Column.from_scalar(
+                    plc.interop.from_arrow(
+                        pa.scalar(float("nan")), data_type=self.dtype
+                    ),
+                    1,
+                ),
+                column.name,
             )
         if column.nan_count > 0:
             column = column.mask_nans()
-        return plc.Column.from_scalar(
-            plc.reduce.reduce(column.obj, plc.aggregation.min(), column.obj.type()), 1
+        return Column(
+            plc.Column.from_scalar(
+                plc.reduce.reduce(column.obj, plc.aggregation.min(), self.dtype), 1
+            ),
+            column.name,
         )
 
-    def _max(self, column: Column, *, propagate_nans: bool) -> plc.Column:
+    def _max(self, column: Column, *, propagate_nans: bool) -> Column:
         if propagate_nans and column.nan_count > 0:
-            return plc.Column.from_scalar(
-                plc.interop.from_arrow(
-                    pa.scalar(float("nan")), data_type=column.obj.type()
+            return Column(
+                plc.Column.from_scalar(
+                    plc.interop.from_arrow(
+                        pa.scalar(float("nan")), data_type=self.dtype
+                    ),
+                    1,
                 ),
-                1,
+                column.name,
             )
         if column.nan_count > 0:
             column = column.mask_nans()
-        return plc.Column.from_scalar(
-            plc.reduce.reduce(column.obj, plc.aggregation.max(), column.obj.type()), 1
+        return Column(
+            plc.Column.from_scalar(
+                plc.reduce.reduce(column.obj, plc.aggregation.max(), self.dtype), 1
+            ),
+            column.name,
         )
 
-    def _median(self, column: Column) -> plc.Column:
-        return plc.Column.from_scalar(
-            plc.reduce.reduce(column.obj, plc.aggregation.median(), column.obj.type()),
-            1,
+    def _median(self, column: Column) -> Column:
+        return Column(
+            plc.Column.from_scalar(
+                plc.reduce.reduce(column.obj, plc.aggregation.median(), self.dtype),
+                1,
+            ),
+            column.name,
         )
 
-    def _first(self, column: Column) -> plc.Column:
-        return plc.copying.slice(column.obj, [0, 1])[0]
+    def _first(self, column: Column) -> Column:
+        return Column(plc.copying.slice(column.obj, [0, 1])[0], column.name)
 
-    def _last(self, column: Column) -> plc.Column:
+    def _last(self, column: Column) -> Column:
         n = column.obj.size()
-        return plc.copying.slice(column.obj, [n - 1, n])[0]
+        return Column(plc.copying.slice(column.obj, [n - 1, n])[0], column.name)
 
-    def _mean(self, column: Column) -> plc.Column:
-        return plc.Column.from_scalar(
-            plc.reduce.reduce(column.obj, plc.aggregation.mean(), column.obj.type()),
-            1,
+    def _mean(self, column: Column) -> Column:
+        return Column(
+            plc.Column.from_scalar(
+                plc.reduce.reduce(column.obj, plc.aggregation.mean(), self.dtype),
+                1,
+            ),
+            column.name,
         )
 
     def _nunique(self, column: Column) -> Column:
-        return plc.Column.from_scalar(
-            plc.reduce.reduce(column.obj, plc.aggregation.nunique(null_handling=plc.types.NullPolicy.INCLUDE), ),
-            1,
+        return Column(
+            plc.Column.from_scalar(
+                plc.reduce.reduce(
+                    column.obj,
+                    plc.aggregation.nunique(null_handling=plc.types.NullPolicy.INCLUDE),
+                    self.dtype,
+                ),
+                1,
+            ),
+            column.name,
         )
 
     def evaluate(
         self, df, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        raise NotImplementedError("Agg")
+        if context is not ExecutionContext.FRAME:
+            raise NotImplementedError(f"Agg in context {context}")
+        return self.op(self.column.evaluate(df, context=context))
 
 
 @dataclass(slots=True)
@@ -323,7 +410,6 @@ class BinOp(Expr):
     left: Expr
     right: Expr
     op: plc.binaryop.BinaryOperator
-    dtype: plc.DataType
 
     _MAPPING: ClassVar[dict[pl_expr.PyOperator, plc.binaryop.BinaryOperator]] = {
         pl_expr.PyOperator.Eq: plc.binaryop.BinaryOperator.EQUAL,

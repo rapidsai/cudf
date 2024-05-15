@@ -30,6 +30,8 @@ class Column:
         self.obj = column
         self.name = name
         self.is_sorted = plc.types.Sorted.NO
+        self.order = plc.types.Order.ASCENDING
+        self.null_order = plc.types.NullOrder.BEFORE
 
     def rename(self, name: str) -> Column:
         """Return a new column sharing data with a new name."""

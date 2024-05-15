@@ -120,10 +120,13 @@ class Scan(IR):
                 null_order=plc.types.null_order.AFTER,
             )
             df = df.with_columns([index])
-        assert all(
-            c.obj.data_type() == dtype
-            for c, dtype in zip(df.columns, self.schema.values())
-        )
+        # TODO: should be true, but not the case until we get
+        # cudf-classic out of the loop for IO since it converts date32
+        # to datetime.
+        # assert all(
+        #     c.obj.type() == dtype
+        #     for c, dtype in zip(df.columns, self.schema.values())
+        # )
         if self.predicate is None:
             return df
         else:
@@ -167,8 +170,7 @@ class DataFrameScan(IR):
             plc.interop.from_arrow(table), list(self.schema.keys())
         )
         assert all(
-            c.obj.data_type() == dtype
-            for c, dtype in zip(df.columns, self.schema.values())
+            c.obj.type() == dtype for c, dtype in zip(df.columns, self.schema.values())
         )
         if self.predicate is not None:
             mask = self.predicate.evaluate(df)

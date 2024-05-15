@@ -8,6 +8,8 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING
 
+import polars as pl
+
 import cudf._lib.pylibcudf as plc
 
 from cudf_polars.containers.column import Column
@@ -43,6 +45,16 @@ class DataFrame:
 
     __iter__ = None
 
+    def to_polars(self) -> pl.DataFrame:
+        """Convert to a polars DataFrame."""
+        assert len(self.scalars) == 0
+        return pl.from_arrow(
+            plc.interop.to_arrow(
+                self.table,
+                [plc.interop.ColumnMetadata(name=c.name) for c in self.columns],
+            )
+        )
+
     @cached_property
     def column_names_set(self) -> frozenset[str]:
         """Return the column names as a set."""
@@ -77,7 +89,7 @@ class DataFrame:
     def from_table(cls, table: plc.Table, names: Sequence[str]) -> Self:
         """Create from a pylibcudf table."""
         # TODO: strict=True when we drop py39
-        if table.num_columns != len(names):
+        if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
         return cls([Column(c, name) for c, name in zip(table.columns(), names)], [])
 
