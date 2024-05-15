@@ -121,9 +121,15 @@ struct metadata : public FileMetaData {
   void sanitize_schema();
 };
 
+struct arrow_schema_data_types {
+  std::vector<arrow_schema_data_types> children;
+  data_type type{type_id::EMPTY};
+};
+
 class aggregate_reader_metadata {
   std::vector<metadata> per_file_metadata;
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
+
   int64_t num_rows;
   size_type num_row_groups;
 
@@ -138,6 +144,25 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] std::vector<std::unordered_map<std::string, std::string>> collect_keyval_metadata()
     const;
+
+  /**
+   * @brief Decodes and constructs the arrow schema from the "ARROW:schema" IPC message
+   * in key value metadata section of Parquet file footer
+   */
+  [[nodiscard]] arrow_schema_data_types collect_arrow_schema() const;
+
+  /**
+   * @brief Co-walks the collected arrow and Parquet schema, updates
+   * dtypes and destroys the no longer needed arrow schema object(s).
+   */
+  void apply_arrow_schema();
+
+  /**
+   * @brief Decode an arrow:IPC message and returns an optional string_view of
+   * its metadata header
+   */
+  [[nodiscard]] std::optional<std::string_view> decode_ipc_message(
+    std::string_view const serialized_message) const;
 
   /**
    * @brief Sums up the number of rows of each source
@@ -158,7 +183,8 @@ class aggregate_reader_metadata {
   void column_info_for_row_group(row_group_info& rg_info, size_type chunk_start_row) const;
 
  public:
-  aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources);
+  aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
+                            bool use_arrow_schema);
 
   [[nodiscard]] RowGroup const& get_row_group(size_type row_group_index, size_type src_idx) const;
 
@@ -183,7 +209,6 @@ class aggregate_reader_metadata {
   }
 
   [[nodiscard]] auto const& get_key_value_metadata() const& { return keyval_maps; }
-
   [[nodiscard]] auto&& get_key_value_metadata() && { return std::move(keyval_maps); }
 
   /**
