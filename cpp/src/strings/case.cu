@@ -281,7 +281,6 @@ CUDF_KERNEL void has_multibytes_kernel(char const* d_input_chars,
   // read only every 2nd byte; all bytes in a multibyte char have high bit set
   auto const byte_idx = (static_cast<int64_t>(idx) * bytes_per_thread) + first_offset;
   auto const lane_idx = static_cast<cudf::size_type>(threadIdx.x);
-  if (byte_idx >= last_offset) { return; }
 
   using block_reduce = cub::BlockReduce<int64_t, block_size>;
   __shared__ typename block_reduce::TempStorage temp_storage;
@@ -292,7 +291,6 @@ CUDF_KERNEL void has_multibytes_kernel(char const* d_input_chars,
     u_char const chr = static_cast<u_char>(d_input_chars[i]);
     mb_count += ((chr & 0x80) > 0);
   }
-
   auto const mb_total = block_reduce(temp_storage).Reduce(mb_count, cub::Sum());
 
   if ((lane_idx == 0) && (mb_total > 0)) {
