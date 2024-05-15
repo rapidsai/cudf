@@ -34,7 +34,7 @@ dependencies = [
     "packaging",
     "pandas>=2.0,<2.2.3dev0",
     "ptxcompiler",
-    "pyarrow>=16.0.0,<17.0.0a0",
+    "pyarrow>=16.0.0,<16.1.0a0",
     "rich",
     "rmm==24.6.*",
     "typing_extensions>=4.0.0",
