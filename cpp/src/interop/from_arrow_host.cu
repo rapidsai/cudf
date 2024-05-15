@@ -118,7 +118,7 @@ struct dispatch_copy_from_arrow_host {
 };
 
 // forward declaration is needed because `type_dispatch` instantiates the
-// dispatch_from_arrow_device struct causing a recursive situation for struct,
+// dispatch_copy_from_arrow_host struct causing a recursive situation for struct,
 // dictionary and list_view types.
 std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
                                         ArrowArray const* input,
