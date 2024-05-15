@@ -2,7 +2,7 @@
 
 from libcpp.memory cimport unique_ptr
 
-from cudf._lib.cpp.aggregation cimport (
+from cudf._lib.pylibcudf.libcudf.aggregation cimport (
     Kind as kind_t,
     aggregation,
     correlation_type,
@@ -14,7 +14,7 @@ from cudf._lib.cpp.aggregation cimport (
     rolling_aggregation,
     scan_aggregation,
 )
-from cudf._lib.cpp.types cimport (
+from cudf._lib.pylibcudf.libcudf.types cimport (
     interpolation,
     nan_equality,
     null_equality,

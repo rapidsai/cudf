@@ -7,17 +7,17 @@ from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib.cpp.groupby cimport (
+from cudf._lib.pylibcudf.libcudf.groupby cimport (
     aggregation_request,
     aggregation_result,
     groupby,
     groups,
     scan_request,
 )
-from cudf._lib.cpp.replace cimport replace_policy
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.replace cimport replace_policy
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 from .aggregation cimport Aggregation
 from .column cimport Column

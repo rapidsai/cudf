@@ -5,7 +5,7 @@ from libcpp.cast cimport dynamic_cast
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp.aggregation cimport (
+from cudf._lib.pylibcudf.libcudf.aggregation cimport (
     aggregation,
     correlation_type,
     groupby_aggregation,
@@ -39,7 +39,7 @@ from cudf._lib.cpp.aggregation cimport (
     rolling_aggregation,
     scan_aggregation,
 )
-from cudf._lib.cpp.types cimport (
+from cudf._lib.pylibcudf.libcudf.types cimport (
     interpolation,
     nan_equality,
     null_equality,
@@ -49,14 +49,16 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 
-from cudf._lib.cpp.aggregation import Kind  # no-cython-lint
-from cudf._lib.cpp.aggregation import \
+from cudf._lib.pylibcudf.libcudf.aggregation import Kind  # no-cython-lint
+from cudf._lib.pylibcudf.libcudf.aggregation import \
     correlation_type as CorrelationType  # no-cython-lint
-from cudf._lib.cpp.aggregation import \
+from cudf._lib.pylibcudf.libcudf.aggregation import \
     rank_method as RankMethod  # no-cython-lint
-from cudf._lib.cpp.aggregation import \
+from cudf._lib.pylibcudf.libcudf.aggregation import \
     rank_percentage as RankPercentage  # no-cython-lint
-from cudf._lib.cpp.aggregation import udf_type as UdfType  # no-cython-lint
+from cudf._lib.pylibcudf.libcudf.aggregation import (  # no-cython-lint
+    udf_type as UdfType,
+)
 
 from .types cimport DataType
 

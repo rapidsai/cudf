@@ -7,9 +7,14 @@ from libcpp.utility cimport move
 
 from rmm._lib.device_buffer cimport device_buffer
 
-from cudf._lib.cpp cimport join as cpp_join
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.types cimport data_type, null_equality, size_type, type_id
+from cudf._lib.pylibcudf.libcudf cimport join as cpp_join
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.types cimport (
+    data_type,
+    null_equality,
+    size_type,
+    type_id,
+)
 
 from .column cimport Column
 from .table cimport Table

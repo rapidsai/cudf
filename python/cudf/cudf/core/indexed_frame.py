@@ -4871,13 +4871,16 @@ class IndexedFrame(Frame):
         1    2
         dtype: int64
         """
-        return self._from_columns_like_self(
+        res = self._from_columns_like_self(
             Frame._repeat(
                 [*self._index._data.columns, *self._columns], repeats, axis
             ),
             self._column_names,
             self._index_names,
         )
+        if isinstance(res.index, cudf.DatetimeIndex):
+            res.index._freq = None
+        return res
 
     def astype(
         self,

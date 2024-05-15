@@ -112,10 +112,16 @@ def _lexsorted_equal_range(
         sort_inds = None
         sort_vals = idx
     lower_bound = search_sorted(
-        [*sort_vals._data.columns], [*key_as_table._columns], side="left"
+        [*sort_vals._data.columns],
+        [*key_as_table._columns],
+        side="left",
+        ascending=sort_vals.is_monotonic_increasing,
     ).element_indexing(0)
     upper_bound = search_sorted(
-        [*sort_vals._data.columns], [*key_as_table._columns], side="right"
+        [*sort_vals._data.columns],
+        [*key_as_table._columns],
+        side="right",
+        ascending=sort_vals.is_monotonic_increasing,
     ).element_indexing(0)
 
     return lower_bound, upper_bound, sort_inds
@@ -2366,6 +2372,11 @@ class DatetimeIndex(Index):
         """  # noqa: E501
         result_col = self._column.tz_convert(tz)
         return DatetimeIndex._from_data({self.name: result_col})
+
+    def repeat(self, repeats, axis=None):
+        res = super().repeat(repeats, axis=axis)
+        res._freq = None
+        return res
 
 
 class TimedeltaIndex(Index):
