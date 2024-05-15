@@ -29,6 +29,7 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         LESS_EQUAL
         GREATER_EQUAL
         NULL_EQUALS
+        NULL_NOT_EQUALS
         BITWISE_AND
         BITWISE_OR
         BITWISE_XOR
