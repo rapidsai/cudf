@@ -4008,44 +4008,28 @@ def test_diff(dtype, period, data_empty):
 
 @pytest.mark.parametrize("df", _dataframe_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
-def test_dataframe_isnull_isna(df, nan_as_null):
+@pytest.mark.parametrize("api_call", ["isnull", "isna", "notna", "notnull"])
+def test_dataframe_isnull_isna_and_reverse(df, nan_as_null, api_call):
+    def detect_nan(x):
+        # Check if the input is a float and if it is nan
+        return x.apply(lambda v: isinstance(v, float) and np.isnan(v))
+
+    nan_contains = df.select_dtypes(object).apply(detect_nan)
     if nan_as_null is False and (
-        df.select_dtypes(object).isna().any().any()
-        and not df.select_dtypes(object).isna().all().all()
+        nan_contains.any().any() and not nan_contains.all().all()
     ):
         with pytest.raises(MixedTypeError):
             cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
     else:
         gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
 
-        assert_eq(df.isnull(), gdf.isnull())
-        assert_eq(df.isna(), gdf.isna())
+        assert_eq(getattr(df, api_call)(), getattr(gdf, api_call)())
 
         # Test individual columns
         for col in df:
-            assert_eq(df[col].isnull(), gdf[col].isnull())
-            assert_eq(df[col].isna(), gdf[col].isna())
-
-
-@pytest.mark.parametrize("df", _dataframe_na_data())
-@pytest.mark.parametrize("nan_as_null", [True, False, None])
-def test_dataframe_notna_notnull(df, nan_as_null):
-    if nan_as_null is False and (
-        df.select_dtypes(object).isna().any().any()
-        and not df.select_dtypes(object).isna().all().all()
-    ):
-        with pytest.raises(MixedTypeError):
-            cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
-    else:
-        gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
-
-        assert_eq(df.notnull(), gdf.notnull())
-        assert_eq(df.notna(), gdf.notna())
-
-        # Test individual columns
-        for col in df:
-            assert_eq(df[col].notnull(), gdf[col].notnull())
-            assert_eq(df[col].notna(), gdf[col].notna())
+            assert_eq(
+                getattr(df[col], api_call)(), getattr(gdf[col], api_call)()
+            )
 
 
 def test_ndim():

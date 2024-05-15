@@ -2373,6 +2373,11 @@ class DatetimeIndex(Index):
         result_col = self._column.tz_convert(tz)
         return DatetimeIndex._from_data({self.name: result_col})
 
+    def repeat(self, repeats, axis=None):
+        res = super().repeat(repeats, axis=axis)
+        res._freq = None
+        return res
+
 
 class TimedeltaIndex(Index):
     """
