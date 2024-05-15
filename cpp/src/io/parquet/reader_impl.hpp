@@ -90,6 +90,13 @@ class reader::impl {
    *    // Process chunk
    *  } while (reader.has_next());
    *
+   * // Alternatively
+   *
+   *  while (reader.has_next()) {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  }
+   *
    * ```
    *
    * Reading the whole given file at once through `read()` function is still supported if
@@ -387,6 +394,7 @@ class reader::impl {
 
   file_intermediate_data _file_itm_data;
   bool _file_preprocessed{false};
+  bool _first_pass_in_empty_table{false};
 
   std::unique_ptr<pass_intermediate_data> _pass_itm_data;
 

@@ -1409,3 +1409,61 @@ TEST_F(ParquetChunkedReaderInputLimitTest, Mixed)
   constexpr int expected_c[] = {20, 21, 15, 14};
   input_limit_test_read(test_filenames, tbl, 128 * 1024 * 1024, 512 * 1024 * 1024, expected_c);
 }
+
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithWhileLoop)
+{
+  auto const generate_input = [](int num_rows, bool nullable, bool use_delta) {
+    std::vector<std::unique_ptr<cudf::column>> input_columns;
+    auto const value_iter = thrust::make_counting_iterator(0);
+    input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
+    input_columns.emplace_back(int64s_col(value_iter, value_iter + num_rows).release());
+
+    auto filename = "chunked_out_of_bounds_" + std::to_string(num_rows);
+
+    return write_file(input_columns, filename, nullable, false);
+  };
+
+  auto read_chunks_with_while_loop = [](cudf::io::chunked_parquet_reader& reader) {
+    auto out_tables = std::vector<std::unique_ptr<cudf::table>>{};
+    int num_chunks  = 0;
+    while (reader.has_next()) {
+      auto chunk = reader.read_chunk();
+      out_tables.emplace_back(std::move(chunk.tbl));
+      num_chunks++;
+    }
+    auto out_tviews = std::vector<cudf::table_view>{};
+    for (auto const& tbl : out_tables) {
+      out_tviews.emplace_back(tbl->view());
+    }
+
+    return std::pair(cudf::concatenate(out_tviews), num_chunks);
+  };
+
+  auto const [expected40k, filepath40k] = generate_input(40'000, false, false);
+
+  {
+    auto const [expected, filepath]  = generate_input(0, false, false);
+    auto constexpr output_read_limit = 1'000;
+    auto options =
+      cudf::io::parquet_reader_options_builder(cudf::io::source_info{filepath}).build();
+    auto reader =
+      cudf::io::chunked_parquet_reader(output_read_limit, 0, options, cudf::get_default_stream());
+    auto const [result, num_chunks] = read_chunks_with_while_loop(reader);
+
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  {
+    auto constexpr num_rows          = 40'000;
+    auto constexpr output_read_limit = 240'000;
+    auto const [expected, filepath]  = generate_input(num_rows, false, false);
+    auto options =
+      cudf::io::parquet_reader_options_builder(cudf::io::source_info{filepath}).build();
+    auto reader =
+      cudf::io::chunked_parquet_reader(output_read_limit, 0, options, cudf::get_default_stream());
+    auto const [result, num_chunks] = read_chunks_with_while_loop(reader);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+}

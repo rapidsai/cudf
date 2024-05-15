@@ -464,8 +464,11 @@ void reader::impl::prepare_data(int64_t skip_rows,
   }
 
   // handle any chunking work (ratcheting through the subpasses and chunks within
-  // our current pass)
-  if (_file_itm_data.num_passes() > 0) { handle_chunking(uses_custom_row_bounds); }
+  // our current pass) if still in bounds
+  if (_file_itm_data.num_passes() > 0 and
+      _file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
+    handle_chunking(uses_custom_row_bounds);
+  }
 }
 
 void reader::impl::populate_metadata(table_metadata& out_metadata)
@@ -563,6 +566,10 @@ table_with_metadata reader::impl::finalize_output(
     auto& subpass = *pass.subpass;
     subpass.current_output_chunk++;
     _file_itm_data._output_chunk_count++;
+  } else {
+    // We have completed the first pass in the empty table here,
+    // disable any more passes.
+    _first_pass_in_empty_table = false;
   }
 
   if (filter.has_value()) {
@@ -611,6 +618,14 @@ table_with_metadata reader::impl::read_chunk()
                true /*uses_custom_row_bounds*/,
                {} /*row_group_indices, empty means read all row groups*/,
                std::nullopt /*filter*/);
+
+  // Throw an error if reading an out of bound chunk. Don't check this before
+  // calling `prepare_data` as _first_pass_in_empty_table is set in there.
+  CUDF_EXPECTS((_file_itm_data.num_passes() == 0 and _first_pass_in_empty_table) or
+                 (_file_itm_data.num_passes() > 0 and
+                  _file_itm_data._current_input_pass < _file_itm_data.num_passes()),
+               "Parquet Reader does not have any more chunks to read");
+
   return read_chunk_internal(true, std::nullopt);
 }
 
@@ -624,7 +639,9 @@ bool reader::impl::has_next()
 
   // current_input_pass will only be incremented to be == num_passes after
   // the last chunk in the last subpass in the last pass has been returned
-  return has_more_work();
+  // if not has_more_work then check if this is the first pass in an empty
+  // table and return true so it could be read once.
+  return has_more_work() or _first_pass_in_empty_table;
 }
 
 namespace {
