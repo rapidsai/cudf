@@ -40,6 +40,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -278,8 +279,9 @@ size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
     return size_of(column.type()) * column.size();
   } else if (column.type().id() == type_id::STRING) {
     auto const scol = strings_column_view(column);
-    return cudf::detail::get_value<size_type>(scol.offsets(), column.size(), stream) -
-           cudf::detail::get_value<size_type>(scol.offsets(), 0, stream);
+    return cudf::strings::detail::get_offset_value(
+             scol.offsets(), column.size() + column.offset(), stream) -
+           cudf::strings::detail::get_offset_value(scol.offsets(), column.offset(), stream);
   } else if (column.type().id() == type_id::STRUCT) {
     auto const scol = structs_column_view(column);
     size_t ret      = 0;
@@ -753,7 +755,14 @@ std::vector<schema_tree_node> construct_schema_tree(
         }
 
         schema_tree_node col_schema{};
-        col_schema.type            = Type::BYTE_ARRAY;
+        // test if this should be output as FIXED_LEN_BYTE_ARRAY
+        if (col_meta.is_type_length_set()) {
+          col_schema.type        = Type::FIXED_LEN_BYTE_ARRAY;
+          col_schema.type_length = col_meta.get_type_length();
+        } else {
+          col_schema.type = Type::BYTE_ARRAY;
+        }
+
         col_schema.converted_type  = thrust::nullopt;
         col_schema.stats_dtype     = statistics_dtype::dtype_byte_array;
         col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
@@ -1073,6 +1082,7 @@ parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_stream
   auto desc        = parquet_column_device_view{};  // Zero out all fields
   desc.stats_dtype = schema_node.stats_dtype;
   desc.ts_scale    = schema_node.ts_scale;
+  desc.type_length = schema_node.type_length;
 
   if (is_list()) {
     desc.level_offsets = _dremel_offsets.data();
@@ -1315,8 +1325,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
       chunk_col_desc.requested_encoding != column_encoding::USE_DEFAULT &&
       chunk_col_desc.requested_encoding != column_encoding::DICTIONARY;
     auto const is_type_non_dict =
-      chunk_col_desc.physical_type == Type::BOOLEAN ||
-      (chunk_col_desc.output_as_byte_array && chunk_col_desc.physical_type == Type::BYTE_ARRAY);
+      chunk_col_desc.physical_type == Type::BOOLEAN || chunk_col_desc.output_as_byte_array;
 
     if (is_type_non_dict || is_requested_non_dict) {
       chunk.use_dictionary = false;

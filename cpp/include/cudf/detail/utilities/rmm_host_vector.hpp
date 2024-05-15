@@ -110,30 +110,6 @@ class rmm_host_allocator {
   }
 
   /**
-   * @brief Copy constructor
-   */
-  rmm_host_allocator(rmm_host_allocator const& other) = default;
-
-  /**
-   * @brief Move constructor
-   */
-  rmm_host_allocator(rmm_host_allocator&& other) = default;
-
-  /**
-   * @brief Assignment operator
-   */
-  rmm_host_allocator& operator=(rmm_host_allocator const& other)
-  {
-    mr = other.mr;
-    return *this;
-  }
-
-  /**
-   * @brief rmm_host_allocator's null destructor does nothing.
-   */
-  inline ~rmm_host_allocator() {}
-
-  /**
    * @brief This method allocates storage for objects in host memory.
    *
    *  @param cnt The number of objects to allocate.
@@ -183,7 +159,10 @@ class rmm_host_allocator {
    *  @param x The other \p rmm_host_allocator of interest.
    *  @return This method always returns \c true.
    */
-  inline bool operator==(rmm_host_allocator const& x) const { return x.mr == mr; }
+  inline bool operator==(rmm_host_allocator const& x) const
+  {
+    return x.mr == mr && x.stream == stream;
+  }
 
   /**
    * @brief This method tests this \p rmm_host_allocator for inequality
