@@ -143,9 +143,11 @@ repos:
     hooks:
       - id: verify-copyright
         exclude: |
-          (?x)
-              cpp/include/cudf_test/cxxopts[.]hpp$
-
+          (?x)^(
+            cpp/include/cudf_test/cxxopts[.]hpp$|
+            cpp/src/io/parquet/ipc/Message_generated[.]h$|
+            cpp/src/io/parquet/ipc/Schema_generated[.]h$
+          )
 
 default_language_version:
       python: python3
