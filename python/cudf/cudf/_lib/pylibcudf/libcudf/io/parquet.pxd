@@ -23,11 +23,13 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         const optional[reference_wrapper[expression]]& get_filter() except +
         data_type get_timestamp_type() except +
         bool is_enabled_use_pandas_metadata() except +
+        bool is_enabled_arrow_schema() except +
 
         # setter
 
         void set_columns(vector[string] col_names) except +
         void set_row_groups(vector[vector[size_type]] row_grp) except +
+        void enable_use_arrow_schema(bool val) except +
         void enable_use_pandas_metadata(bool val) except +
         void set_timestamp_type(data_type type) except +
 
@@ -48,6 +50,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             vector[vector[size_type]] row_grp
         ) except +
         parquet_reader_options_builder& use_pandas_metadata(
+            bool val
+        ) except +
+        parquet_reader_options_builder& use_arrow_schema(
             bool val
         ) except +
         parquet_reader_options_builder& timestamp_type(

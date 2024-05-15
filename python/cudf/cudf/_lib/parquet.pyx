@@ -170,6 +170,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         parquet_reader_options.builder(source)
         .row_groups(cpp_row_groups)
         .use_pandas_metadata(cpp_use_pandas_metadata)
+        .use_arrow_schema(True)
         .timestamp_type(cpp_timestamp_type)
     )
     if filters is not None:

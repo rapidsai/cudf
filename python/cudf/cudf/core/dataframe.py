@@ -405,12 +405,12 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 value = as_column(value, length=length)
 
             new_col = cudf.Series(value, index=idx)
-            if not self._frame.empty:
+            if len(self._frame.index) != 0:
                 new_col = new_col._align_to_index(
                     self._frame.index, how="right"
                 )
 
-            if self._frame.empty:
+            if len(self._frame.index) == 0:
                 self._frame.index = (
                     idx if idx is not None else cudf.RangeIndex(len(new_col))
                 )
