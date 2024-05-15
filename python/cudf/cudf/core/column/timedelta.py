@@ -163,6 +163,7 @@ class TimeDeltaColumn(ColumnBase):
                 "__le__",
                 "__ge__",
                 "NULL_EQUALS",
+                "NULL_NOT_EQUALS",
             }:
                 out_dtype = cudf.dtype(np.bool_)
             elif op == "__mod__":
@@ -185,15 +186,18 @@ class TimeDeltaColumn(ColumnBase):
         elif other.dtype.kind in {"f", "i", "u"}:
             if op in {"__mul__", "__mod__", "__truediv__", "__floordiv__"}:
                 out_dtype = self.dtype
-            elif op in {"__eq__", "NULL_EQUALS", "__ne__"}:
+            elif op in {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}:
                 if isinstance(other, ColumnBase) and not isinstance(
                     other, TimeDeltaColumn
                 ):
+                    fill_value = op in ("__ne__", "NULL_NOT_EQUALS")
                     result = _all_bools_with_nulls(
-                        self, other, bool_fill_value=op == "__ne__"
+                        self,
+                        other,
+                        bool_fill_value=fill_value,
                     )
                     if cudf.get_option("mode.pandas_compatible"):
-                        result = result.fillna(op == "__ne__")
+                        result = result.fillna(fill_value)
                     return result
 
         if out_dtype is None:

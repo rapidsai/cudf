@@ -248,6 +248,7 @@ class NumericalColumn(NumericalBaseColumn):
             "__eq__",
             "__ne__",
             "NULL_EQUALS",
+            "NULL_NOT_EQUALS",
         }:
             out_dtype = "bool"
 

@@ -422,7 +422,8 @@ reader::impl::impl(std::size_t chunk_read_limit,
     _input_pass_read_limit{pass_read_limit}
 {
   // Open and parse the source dataset metadata
-  _metadata = std::make_unique<aggregate_reader_metadata>(_sources);
+  _metadata =
+    std::make_unique<aggregate_reader_metadata>(_sources, options.is_enabled_use_arrow_schema());
 
   // Override output timestamp resolution if requested
   if (options.get_timestamp_type().id() != type_id::EMPTY) {
@@ -642,8 +643,11 @@ parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
 
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources)
 {
+  // do not use arrow schema when reading information from parquet metadata.
+  static constexpr auto use_arrow_schema = false;
+
   // Open and parse the source dataset metadata
-  auto metadata = aggregate_reader_metadata(sources);
+  auto metadata = aggregate_reader_metadata(sources, use_arrow_schema);
 
   return parquet_metadata{parquet_schema{walk_schema(&metadata, 0)},
                           metadata.get_num_rows(),
