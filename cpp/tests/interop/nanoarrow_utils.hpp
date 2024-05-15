@@ -192,7 +192,7 @@ get_nanoarrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask
   ArrowBufferInit(&buf);
   NANOARROW_THROW_NOT_OK(
     ArrowBufferAppend(&buf, reinterpret_cast<void const*>(data.data()), sizeof(T) * data.size()));
-  ArrowArraySetBuffer(tmp.get(), 1, &buf);
+  NANOARROW_THROW_NOT_OK(ArrowArraySetBuffer(tmp.get(), 1, &buf));
 
   tmp->length = data.size();
 
@@ -229,7 +229,7 @@ std::enable_if_t<std::is_same_v<T, bool>, nanoarrow::UniqueArray> get_nanoarrow_
   }
 
   auto raw_buffer = to_arrow_bitmap(data);
-  ArrowArraySetBuffer(tmp.get(), 1, &raw_buffer.buffer);
+  NANOARROW_THROW_NOT_OK(ArrowArraySetBuffer(tmp.get(), 1, &raw_buffer.buffer));
   tmp->length = data.size();
 
   return tmp;
@@ -310,7 +310,7 @@ nanoarrow::UniqueArray get_nanoarrow_list_array(std::vector<T> const& data,
   ArrowBufferInit(&buf);
   NANOARROW_THROW_NOT_OK(ArrowBufferAppend(
     &buf, reinterpret_cast<void const*>(offsets.data()), sizeof(int32_t) * offsets.size()));
-  ArrowArraySetBuffer(tmp.get(), 1, &buf);
+  NANOARROW_THROW_NOT_OK(ArrowArraySetBuffer(tmp.get(), 1, &buf));
 
   return tmp;
 }
