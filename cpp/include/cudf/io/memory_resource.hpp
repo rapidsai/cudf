@@ -43,9 +43,12 @@ rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_r
  */
 rmm::host_async_resource_ref get_host_memory_resource();
 
-// Options to configure the default host memory resource
+/**
+ * @brief Options to configure the default host memory resource
+ */
 struct host_mr_options {
-  std::optional<size_t> pool_size;
+  std::optional<size_t> pool_size;  ///< The size of the pool to use for the default host memory
+                                    ///< resource. If not set, the default pool size is used.
 };
 
 /**
