@@ -2454,6 +2454,12 @@ TEST_P(JsonDelimiterParamTest, JsonLinesDelimiter)
   // Test input
   std::string input             = R"({"col1":100, "col2":1.1, "col3":"aaa"})";
   std::size_t const string_size = 400;
+  /*
+   * We are constructing a JSON lines string where each row is {"col1":100, "col2":1.1,
+   * "col3":"aaa"} and rows are separated by random_delimiter. Instead of concatenating lines
+   * linearly in O(n), we can do it in O(log n) by doubling the input in each iteration. The total
+   * number of such iterations is log_repetitions.
+   */
   std::size_t const log_repetitions =
     static_cast<std::size_t>(std::ceil(std::log2(string_size / input.size())));
   std::size_t const repetitions = 1UL << log_repetitions;
