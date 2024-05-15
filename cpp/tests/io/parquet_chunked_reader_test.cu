@@ -1410,7 +1410,7 @@ TEST_F(ParquetChunkedReaderInputLimitTest, Mixed)
   input_limit_test_read(test_filenames, tbl, 128 * 1024 * 1024, 512 * 1024 * 1024, expected_c);
 }
 
-TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithWhileLoop)
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadOutOfBoundChunks)
 {
   auto const generate_input = [](int num_rows, bool nullable, bool use_delta) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
@@ -1451,6 +1451,8 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithWhileLoop)
     auto const [result, num_chunks] = read_chunks_with_while_loop(reader);
 
     EXPECT_EQ(num_chunks, 1);
+    EXPECT_EQ(reader.has_next(), false);
+    EXPECT_THROW([[maybe_unused]] auto chunk = reader.read_chunk(), cudf::logic_error);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
@@ -1463,7 +1465,10 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithWhileLoop)
     auto reader =
       cudf::io::chunked_parquet_reader(output_read_limit, 0, options, cudf::get_default_stream());
     auto const [result, num_chunks] = read_chunks_with_while_loop(reader);
+
     EXPECT_EQ(num_chunks, 2);
+    EXPECT_EQ(reader.has_next(), false);
+    EXPECT_THROW([[maybe_unused]] auto chunk = reader.read_chunk(), cudf::logic_error);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 }
