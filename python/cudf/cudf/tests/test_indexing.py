@@ -1,5 +1,6 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
+import weakref
 from datetime import datetime
 from itertools import combinations
 
@@ -2255,3 +2256,22 @@ def test_scalar_loc_row_categoricalindex():
     result = df.loc["a"]
     expected = df.to_pandas().loc["a"]
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("klass", [cudf.DataFrame, cudf.Series])
+@pytest.mark.parametrize("indexer", ["iloc", "loc"])
+def test_iloc_loc_no_circular_reference(klass, indexer):
+    obj = klass([0])
+    ref = weakref.ref(obj)
+    getattr(obj, indexer)[0]
+    del obj
+    assert ref() is None
+
+
+def test_loc_setitem_empty_dataframe():
+    pdf = pd.DataFrame(index=["index_1", "index_2", "index_3"])
+    gdf = cudf.from_pandas(pdf)
+    pdf.loc[["index_1"], "new_col"] = "A"
+    gdf.loc[["index_1"], "new_col"] = "A"
+
+    assert_eq(pdf, gdf)

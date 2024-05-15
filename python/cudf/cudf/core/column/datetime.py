@@ -570,18 +570,20 @@ class DatetimeColumn(column.ColumnBase):
                 out_dtype = _resolve_mixed_dtypes(lhs, rhs, "datetime64")
         elif op in {
             "__eq__",
-            "NULL_EQUALS",
             "__ne__",
+            "NULL_EQUALS",
+            "NULL_NOT_EQUALS",
         }:
             out_dtype = cudf.dtype(np.bool_)
             if isinstance(other, ColumnBase) and not isinstance(
                 other, DatetimeColumn
             ):
+                fill_value = op in ("__ne__", "NULL_NOT_EQUALS")
                 result = _all_bools_with_nulls(
-                    self, other, bool_fill_value=op == "__ne__"
+                    self, other, bool_fill_value=fill_value
                 )
                 if cudf.get_option("mode.pandas_compatible"):
-                    result = result.fillna(op == "__ne__")
+                    result = result.fillna(fill_value)
                 return result
 
         if out_dtype is None:
