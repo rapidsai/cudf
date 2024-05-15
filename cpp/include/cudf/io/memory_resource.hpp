@@ -18,6 +18,8 @@
 
 #include <rmm/resource_ref.hpp>
 
+#include <optional>
+
 namespace cudf::io {
 
 /**
@@ -41,13 +43,18 @@ rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_r
  */
 rmm::host_async_resource_ref get_host_memory_resource();
 
+// Options to configure the default host memory resource
+struct host_mr_options {
+  std::optional<size_t> pool_size;
+};
+
 /**
  * @brief Configure the size of the default host memory resource.
  *
- * Must be called before any other function in this header.
+ * @throws cudf::logic_error if called after the default host memory resource has been created
  *
- * @param size The size of the default host memory resource
+ * @param opts Options to configure the default host memory resource
  */
-void config_default_host_memory_resource(size_t size);
+void config_default_host_memory_resource(host_mr_options const& opts);
 
 }  // namespace cudf::io

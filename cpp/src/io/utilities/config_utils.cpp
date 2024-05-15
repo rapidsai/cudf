@@ -244,11 +244,15 @@ CUDF_EXPORT std::mutex& host_mr_mutex()
 }
 
 // Must be called with the host_mr_mutex mutex held
-CUDF_EXPORT rmm::host_async_resource_ref& make_host_mr(std::optional<size_t> size)
+CUDF_EXPORT rmm::host_async_resource_ref& make_host_mr(std::optional<host_mr_options> const& opts)
 {
   static rmm::host_async_resource_ref* mr_ref = nullptr;
-  CUDF_EXPECTS(mr_ref == nullptr, "The default host memory resource has already been created");
-  mr_ref = &make_default_pinned_mr(size);
+  if (mr_ref == nullptr) {
+    mr_ref = &make_default_pinned_mr(opts ? opts->pool_size : std::nullopt);
+  } else {
+    // Throw an error if the user tries to reconfigure the default host resource
+    CUDF_EXPECTS(opts == std::nullopt, "The default host memory resource has already been created");
+  }
 
   return *mr_ref;
 }
@@ -274,10 +278,10 @@ rmm::host_async_resource_ref get_host_memory_resource()
   return host_mr();
 }
 
-void config_default_host_memory_resource(size_t size)
+void config_default_host_memory_resource(host_mr_options const& opts)
 {
   std::scoped_lock lock{host_mr_mutex()};
-  make_host_mr(size);
+  make_host_mr(opts);
 }
 
 }  // namespace cudf::io
