@@ -559,14 +559,15 @@ table_with_metadata reader::impl::finalize_output(
     _output_metadata = std::make_unique<table_metadata>(out_metadata);
   }
 
-  // advance output chunk/subpass/pass info
-  if (_file_itm_data.num_passes() > 0) {
+  // advance output chunk/subpass/pass info for non-empty tables if and only if we are in bounds
+  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
     auto& pass    = *_pass_itm_data;
     auto& subpass = *pass.subpass;
     subpass.current_output_chunk++;
     _file_itm_data._output_chunk_count++;
-  } else {
-    // The first pass into the empty table is completed. Disable any more passes.
+  }
+  // The first pass into the empty table is completed. Disable any more passes.
+  else if (_first_pass_in_empty_table) {
     _first_pass_in_empty_table = false;
   }
 
@@ -616,13 +617,6 @@ table_with_metadata reader::impl::read_chunk()
                true /*uses_custom_row_bounds*/,
                {} /*row_group_indices, empty means read all row groups*/,
                std::nullopt /*filter*/);
-
-  // Throw an error if attempting to read an invalid chunk. Check this after
-  // `prepare_data()` as `_first_pass_in_empty_table` is set in there.
-  CUDF_EXPECTS((_file_itm_data.num_passes() == 0 and _first_pass_in_empty_table) or
-                 (_file_itm_data.num_passes() > 0 and
-                  _file_itm_data._current_input_pass < _file_itm_data.num_passes()),
-               "Parquet Reader does not have any more chunks to read");
 
   return read_chunk_internal(true, std::nullopt);
 }

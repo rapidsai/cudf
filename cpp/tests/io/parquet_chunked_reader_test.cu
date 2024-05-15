@@ -1439,20 +1439,23 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadOutOfBoundChunks)
     return std::pair(cudf::concatenate(out_tviews), num_chunks);
   };
 
-  auto const [expected40k, filepath40k] = generate_input(40'000, false, false);
+  // empty table to compare with the out of bound chunks
+  auto const empty_table = generate_input(0, false, false).first;
 
   {
-    auto const [expected, filepath]  = generate_input(0, false, false);
+    auto constexpr num_rows          = 0;
+    auto const [expected, filepath]  = generate_input(num_rows, false, false);
     auto constexpr output_read_limit = 1'000;
     auto options =
       cudf::io::parquet_reader_options_builder(cudf::io::source_info{filepath}).build();
     auto reader =
       cudf::io::chunked_parquet_reader(output_read_limit, 0, options, cudf::get_default_stream());
-    auto const [result, num_chunks] = read_chunks_with_while_loop(reader);
+    auto const [result, num_chunks]     = read_chunks_with_while_loop(reader);
+    auto const out_of_bound_table_chunk = reader.read_chunk().tbl;
 
     EXPECT_EQ(num_chunks, 1);
     EXPECT_EQ(reader.has_next(), false);
-    EXPECT_THROW([[maybe_unused]] auto chunk = reader.read_chunk(), cudf::logic_error);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*out_of_bound_table_chunk, *empty_table);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
@@ -1464,11 +1467,12 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadOutOfBoundChunks)
       cudf::io::parquet_reader_options_builder(cudf::io::source_info{filepath}).build();
     auto reader =
       cudf::io::chunked_parquet_reader(output_read_limit, 0, options, cudf::get_default_stream());
-    auto const [result, num_chunks] = read_chunks_with_while_loop(reader);
+    auto const [result, num_chunks]     = read_chunks_with_while_loop(reader);
+    auto const out_of_bound_table_chunk = reader.read_chunk().tbl;
 
     EXPECT_EQ(num_chunks, 2);
     EXPECT_EQ(reader.has_next(), false);
-    EXPECT_THROW([[maybe_unused]] auto chunk = reader.read_chunk(), cudf::logic_error);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*out_of_bound_table_chunk, *empty_table);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 }
