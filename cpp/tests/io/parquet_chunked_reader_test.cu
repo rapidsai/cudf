@@ -1426,6 +1426,8 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadOutOfBoundChunks)
   auto read_chunks_with_while_loop = [](cudf::io::chunked_parquet_reader& reader) {
     auto out_tables = std::vector<std::unique_ptr<cudf::table>>{};
     int num_chunks  = 0;
+    // should always be true
+    EXPECT_EQ(reader.has_next(), true);
     while (reader.has_next()) {
       auto chunk = reader.read_chunk();
       out_tables.emplace_back(std::move(chunk.tbl));

@@ -354,6 +354,8 @@ class reader::impl {
   }
 
  private:
+  bool is_first_output_chunk() { return _file_itm_data._output_chunk_count == 0; }
+
   rmm::cuda_stream_view _stream;
   rmm::device_async_resource_ref _mr{rmm::mr::get_current_device_resource()};
 
@@ -394,7 +396,6 @@ class reader::impl {
 
   file_intermediate_data _file_itm_data;
   bool _file_preprocessed{false};
-  bool _first_pass_in_empty_table{false};
 
   std::unique_ptr<pass_intermediate_data> _pass_itm_data;
 

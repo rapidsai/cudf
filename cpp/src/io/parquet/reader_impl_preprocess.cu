@@ -1255,9 +1255,6 @@ void reader::impl::preprocess_file(
 
     // compute schedule of input reads.
     compute_input_passes();
-  } else {
-    // enable first pass in the empty table
-    _first_pass_in_empty_table = true;
   }
 
 #if defined(PARQUET_CHUNK_LOGGING)
