@@ -352,8 +352,8 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          # Allow runtime version to float up to minor version
-          - pyarrow>=16.0.0,<17.0.0a0
+          # Allow runtime version to float up to patch version
+          - pyarrow>=16.0.0,<16.1.0a0
   cuda_version:
     specific:
       - output_types: conda
