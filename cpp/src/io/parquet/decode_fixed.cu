@@ -389,8 +389,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   __shared__ rle_run<level_t> def_runs[rle_run_buffer_size];
   rle_stream<level_t, decode_block_size, rolling_buf_size> def_decoder{def_runs};
 
-  bool const nullable = s->col.max_level[level_type::DEFINITION] > 0;
-
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
   //
   // corner case: in the case of lists, we can have pages that contain "0" rows if the current row
@@ -514,8 +512,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   __shared__ rle_run<uint32_t> dict_runs[rle_run_buffer_size];
   rle_stream<uint32_t, decode_block_size, rolling_buf_size> dict_stream{dict_runs};
-
-  bool const nullable = s->col.max_level[level_type::DEFINITION] > 0;
 
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
   //

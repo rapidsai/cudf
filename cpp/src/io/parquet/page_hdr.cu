@@ -170,7 +170,7 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
   // TODO: once we remove `use_fixed_op` we should also simplify this
   // to use some functions (e.g. is_fixed_width, is_dictionary)
   if (use_fixed_op != 0 && !is_string_col(chunk) && chunk.max_nesting_depth == 1 &&
-      (chunk.data_type & 7) != BYTE_ARRAY && (chunk.data_type & 7) != BOOLEAN) {
+      chunk.physical_type != BYTE_ARRAY && chunk.physical_type != BOOLEAN) {
     if (page.encoding == Encoding::PLAIN) {
       return decode_kernel_mask::FIXED_WIDTH_NO_DICT;
     } else if (use_fixed_op == 2 && page.encoding == Encoding::PLAIN_DICTIONARY) {
