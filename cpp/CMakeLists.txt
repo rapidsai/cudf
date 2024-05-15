@@ -264,6 +264,7 @@ add_library(
   src/binaryop/compiled/Mod.cu
   src/binaryop/compiled/Mul.cu
   src/binaryop/compiled/NullEquals.cu
+  src/binaryop/compiled/NullNotEquals.cu
   src/binaryop/compiled/NullLogicalAnd.cu
   src/binaryop/compiled/NullLogicalOr.cu
   src/binaryop/compiled/NullMax.cu
