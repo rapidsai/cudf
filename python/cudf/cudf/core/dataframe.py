@@ -2950,7 +2950,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if len(keys) == 0:
             raise ValueError("No valid columns to be added to index.")
         if append:
-            keys = list(itertools.chain([self.index], keys))
+            keys = [self.index] + keys
 
         # Preliminary type check
         labels_not_found = []
@@ -2989,15 +2989,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if labels_not_found:
             raise KeyError(f"None of {labels_not_found} are in the columns")
-
-        # if append:
-        #     idx_cols = [self.index._data[x] for x in self.index._data]
-        #     if isinstance(self.index, MultiIndex):
-        #         idx_names = self.index.names
-        #     else:
-        #         idx_names = [self.index.name]
-        #     columns_to_add = idx_cols + columns_to_add
-        #     names = idx_names + names
 
         if (
             len(data_to_add) == 1
