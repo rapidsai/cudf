@@ -5957,6 +5957,7 @@ class StringColumn(column.ColumnBase):
                 "__ge__",
                 "__le__",
                 "NULL_EQUALS",
+                "NULL_NOT_EQUALS",
             }:
                 lhs, rhs = (other, self) if reflect else (self, other)
                 return libcudf.binaryop.binaryop(

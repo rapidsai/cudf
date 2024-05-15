@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -148,7 +148,7 @@ void apply_struct_equality_op(mutable_column_view& out,
                               rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL ||
-                 op == binary_operator::NULL_EQUALS,
+                 op == binary_operator::NULL_EQUALS || op == binary_operator::NULL_NOT_EQUALS,
                "Unsupported operator for these types",
                cudf::data_type_error);
 

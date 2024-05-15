@@ -192,6 +192,8 @@ include(cmake/thirdparty/get_cccl.cmake)
 include(cmake/thirdparty/get_rmm.cmake)
 # find arrow
 include(cmake/thirdparty/get_arrow.cmake)
+# find flatbuffers
+include(cmake/thirdparty/get_flatbuffers.cmake)
 # find dlpack
 include(cmake/thirdparty/get_dlpack.cmake)
 # find cuCollections, should come after including CCCL
@@ -262,6 +264,7 @@ add_library(
   src/binaryop/compiled/Mod.cu
   src/binaryop/compiled/Mul.cu
   src/binaryop/compiled/NullEquals.cu
+  src/binaryop/compiled/NullNotEquals.cu
   src/binaryop/compiled/NullLogicalAnd.cu
   src/binaryop/compiled/NullLogicalOr.cu
   src/binaryop/compiled/NullMax.cu
@@ -429,6 +432,7 @@ add_library(
   src/io/text/bgzip_utils.cpp
   src/io/text/multibyte_split.cu
   src/io/utilities/arrow_io_source.cpp
+  src/io/utilities/base64_utilities.cpp
   src/io/utilities/column_buffer.cpp
   src/io/utilities/column_buffer_strings.cu
   src/io/utilities/config_utils.cpp
@@ -742,6 +746,7 @@ target_include_directories(
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
+          "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
