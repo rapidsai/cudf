@@ -463,10 +463,9 @@ void reader::impl::prepare_data(int64_t skip_rows,
     preprocess_file(skip_rows, num_rows, row_group_indices, filter);
   }
 
-  // handle any chunking work (ratcheting through the subpasses and chunks within
-  // our current pass) if still in bounds
-  if (_file_itm_data.num_passes() > 0 and
-      _file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
+  // handle any chunking work (ratcheting through the subpasses and
+  // chunks within our current pass) if in bounds
+  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
     handle_chunking(uses_custom_row_bounds);
   }
 }
