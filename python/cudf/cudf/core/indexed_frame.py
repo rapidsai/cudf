@@ -8,7 +8,6 @@ import operator
 import textwrap
 import warnings
 from collections import Counter, abc
-from functools import cached_property
 from typing import (
     Any,
     Callable,
@@ -2266,7 +2265,7 @@ class IndexedFrame(Frame):
         slicer[axis] = slice(before, after)
         return self.loc[tuple(slicer)].copy()
 
-    @cached_property
+    @property
     def loc(self):
         """Select rows and columns by label or boolean mask.
 
@@ -2332,7 +2331,7 @@ class IndexedFrame(Frame):
         """
         return self._loc_indexer_type(self)
 
-    @cached_property
+    @property
     def iloc(self):
         """Select values by position.
 
