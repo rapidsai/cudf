@@ -183,6 +183,9 @@ struct SchemaElement {
   // extra cudf specific fields
   bool output_as_byte_array = false;
 
+  // cudf type determined from arrow:schema
+  thrust::optional<type_id> arrow_type;
+
   // The following fields are filled in later during schema initialization
   int max_definition_level = 0;
   int max_repetition_level = 0;
