@@ -332,7 +332,7 @@ enum class dfa_symbol_group_id : uint8_t {
   CLOSING_BRACKET,   ///< Closing bracket SG: ]
   QUOTE_CHAR,        ///< Quote character SG: "
   ESCAPE_CHAR,       ///< Escape character SG: '\'
-  DELIMITER_CHAR,    ///< Delimiter character SG: default '\n'
+  DELIMITER_CHAR,    ///< Delimiter character SG
   OTHER_SYMBOLS,     ///< SG implicitly matching all other characters
   NUM_SYMBOL_GROUPS  ///< Total number of symbol groups
 };
@@ -350,7 +350,6 @@ auto get_sgid_lut(SymbolT delim)
   std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> symbol_groups{
     {{'{'}, {'['}, {'}'}, {']'}, {'"'}, {'\\'}, {delim}}};
 
-  // symbol_groups[static_cast<std::uint8_t>(dfa_symbol_group_id::DELIMITER_CHAR)] = {delim};
   return symbol_groups;
 }
 
@@ -618,8 +617,12 @@ struct PdaSymbolToSymbolGroupId {
     // The relative symbol group id of the current input symbol
     constexpr auto pda_sgid_lookup_size =
       static_cast<int32_t>(sizeof(tos_sg_to_pda_sgid) / sizeof(tos_sg_to_pda_sgid[0]));
+    /*
+    // Note that delimiter cannot be any of opening(closing) brace, bracket, quote, escape, 
+    // comma, colon or whitespace characters.
+    */
     auto const symbol_position =
-      symbol == delimiter ? static_cast<int32_t>('\n') : static_cast<int32_t>(symbol);
+      symbol == delimiter ? static_cast<int32_t>('\n') : (symbol == '\n' ? static_cast<int32_t>(delimiter) : static_cast<int32_t>(symbol));
     PdaSymbolGroupIdT symbol_gid =
       tos_sg_to_pda_sgid[min(symbol_position, pda_sgid_lookup_size - 1)];
     return stack_idx * static_cast<PdaSymbolGroupIdT>(symbol_group_id::NUM_PDA_INPUT_SGS) +
