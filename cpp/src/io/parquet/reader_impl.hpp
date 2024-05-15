@@ -115,12 +115,19 @@ class reader::impl {
   /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next
    */
-  bool has_next();
+  bool has_next(int64_t skip_rows,
+                std::optional<size_type> const& num_rows,
+                host_span<std::vector<size_type> const> row_group_indices,
+                std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   /**
    * @copydoc cudf::io::chunked_parquet_reader::read_chunk
    */
-  table_with_metadata read_chunk();
+  table_with_metadata read_chunk(
+    int64_t skip_rows,
+    std::optional<size_type> const& num_rows,
+    host_span<std::vector<size_type> const> row_group_indices,
+    std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   // top level functions involved with ratcheting through the passes, subpasses
   // and output chunks of the read process

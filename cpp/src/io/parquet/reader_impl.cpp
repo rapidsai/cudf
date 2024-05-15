@@ -596,7 +596,11 @@ table_with_metadata reader::impl::read(
   return read_chunk_internal(uses_custom_row_bounds, output_filter);
 }
 
-table_with_metadata reader::impl::read_chunk()
+table_with_metadata reader::impl::read_chunk(
+  int64_t skip_rows,
+  std::optional<size_type> const& num_rows,
+  host_span<std::vector<size_type> const> row_group_indices,
+  std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
   // Reset the output buffers to their original states (right after reader construction).
   // Don't need to do it if we read the file all at once.
@@ -607,21 +611,26 @@ table_with_metadata reader::impl::read_chunk()
     }
   }
 
-  prepare_data(0 /*skip_rows*/,
-               std::nullopt /*num_rows, `nullopt` means unlimited*/,
-               true /*uses_custom_row_bounds*/,
-               {} /*row_group_indices, empty means read all row groups*/,
-               std::nullopt /*filter*/);
-  return read_chunk_internal(true, std::nullopt);
+  table_metadata metadata;
+  populate_metadata(metadata);
+  auto expr_conv     = named_to_reference_converter(filter, metadata);
+  auto output_filter = expr_conv.get_converted_expr();
+
+  prepare_data(skip_rows, num_rows, true, row_group_indices, output_filter);
+  return read_chunk_internal(true, output_filter);
 }
 
-bool reader::impl::has_next()
+bool reader::impl::has_next(int64_t skip_rows,
+                            std::optional<size_type> const& num_rows,
+                            host_span<std::vector<size_type> const> row_group_indices,
+                            std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
-  prepare_data(0 /*skip_rows*/,
-               std::nullopt /*num_rows, `nullopt` means unlimited*/,
-               true /*uses_custom_row_bounds*/,
-               {} /*row_group_indices, empty means read all row groups*/,
-               std::nullopt /*filter*/);
+  table_metadata metadata;
+  populate_metadata(metadata);
+  auto expr_conv     = named_to_reference_converter(filter, metadata);
+  auto output_filter = expr_conv.get_converted_expr();
+
+  prepare_data(skip_rows, num_rows, true, row_group_indices, output_filter);
 
   // current_input_pass will only be incremented to be == num_passes after
   // the last chunk in the last subpass in the last pass has been returned
