@@ -171,7 +171,10 @@ cdef class GroupBy:
                 if (
                     is_string_dtype(col)
                     and agg not in _STRING_AGGS
-                    and not (
+                    and
+                    (
+                        str_agg in {"cumsum", "cummin", "cummax"}
+                        or not (
                         any(a in str_agg for a in {
                             "count",
                             "max",
@@ -183,6 +186,7 @@ cdef class GroupBy:
                             "nth"
                         })
                         or (agg is list)
+                        )
                     )
                 ):
                     raise TypeError(
@@ -191,8 +195,12 @@ cdef class GroupBy:
                 elif (
                     _is_categorical_dtype(col)
                     and agg not in _CATEGORICAL_AGGS
-                    and not (
-                        any(a in str_agg for a in {"count", "max", "min", "unique"})
+                    and (
+                        str_agg in {"cumsum", "cummin", "cummax"}
+                        or
+                        not (
+                            any(a in str_agg for a in {"count", "max", "min", "unique"})
+                        )
                     )
                 ):
                     raise TypeError(
