@@ -21,7 +21,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator.cuh>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -166,8 +166,8 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   auto const strings_dv_ptr = column_device_view::create(input.parent(), stream);
   auto const fn = compute_size_and_repeat_fn{*strings_dv_ptr, repeat_times, input.has_nulls()};
 
-  auto [offsets_column, chars] = experimental::make_strings_children(
-    fn, strings_count * repeat_times, strings_count, stream, mr);
+  auto [offsets_column, chars] =
+    make_strings_children(fn, strings_count * repeat_times, strings_count, stream, mr);
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              chars.release(),
@@ -251,7 +251,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                                              input.has_nulls(),
                                                              repeat_times.has_nulls()};
 
-  auto [offsets_column, chars] = experimental::make_strings_children(fn, strings_count, stream, mr);
+  auto [offsets_column, chars] = make_strings_children(fn, strings_count, stream, mr);
 
   // We generate new bitmask by AND of the two input columns' bitmasks.
   // Note that if either of the input columns are nullable, the output column will also be nullable

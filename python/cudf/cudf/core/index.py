@@ -5,6 +5,7 @@ from __future__ import annotations
 import operator
 import pickle
 import warnings
+from collections.abc import Generator
 from functools import cache, cached_property
 from numbers import Number
 from typing import (
@@ -111,10 +112,16 @@ def _lexsorted_equal_range(
         sort_inds = None
         sort_vals = idx
     lower_bound = search_sorted(
-        [*sort_vals._data.columns], [*key_as_table._columns], side="left"
+        [*sort_vals._data.columns],
+        [*key_as_table._columns],
+        side="left",
+        ascending=sort_vals.is_monotonic_increasing,
     ).element_indexing(0)
     upper_bound = search_sorted(
-        [*sort_vals._data.columns], [*key_as_table._columns], side="right"
+        [*sort_vals._data.columns],
+        [*key_as_table._columns],
+        side="right",
+        ascending=sort_vals.is_monotonic_increasing,
     ).element_indexing(0)
 
     return lower_bound, upper_bound, sort_inds
@@ -969,6 +976,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
             return -self
         else:
             return abs(self._as_int_index())
+
+    def _columns_for_reset_index(
+        self, levels: tuple | None
+    ) -> Generator[tuple[Any, ColumnBase], None, None]:
+        """Return the columns and column names for .reset_index"""
+        # We need to explicitly materialize the RangeIndex to a column
+        yield "index" if self.name is None else self.name, as_column(self)
 
     @_warn_no_dask_cudf
     def __dask_tokenize__(self):
@@ -2358,6 +2372,11 @@ class DatetimeIndex(Index):
         """  # noqa: E501
         result_col = self._column.tz_convert(tz)
         return DatetimeIndex._from_data({self.name: result_col})
+
+    def repeat(self, repeats, axis=None):
+        res = super().repeat(repeats, axis=axis)
+        res._freq = None
+        return res
 
 
 class TimedeltaIndex(Index):

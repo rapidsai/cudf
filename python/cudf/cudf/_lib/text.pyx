@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from io import TextIOBase
 
@@ -9,8 +9,8 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.io.text cimport (
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.io.text cimport (
     byte_range_info,
     data_chunk_source,
     make_source,
