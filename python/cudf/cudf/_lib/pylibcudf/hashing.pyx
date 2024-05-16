@@ -33,7 +33,6 @@ cpdef Column murmurhash3_x86_32(
 
     Parameters
     ----------
-
     input : Table
         The table of columns to hash
     seed : uint32_t
@@ -41,7 +40,6 @@ cpdef Column murmurhash3_x86_32(
 
     Returns
     -------
-
     pylibcudf.Column
         A column where each row is the hash of a row from the input
     """
@@ -67,7 +65,6 @@ cpdef Table murmurhash3_x64_128(
 
     Parameters
     ----------
-
     input : Table
         The table of columns to hash
     seed : uint32_t
@@ -75,7 +72,6 @@ cpdef Table murmurhash3_x64_128(
 
     Returns
     -------
-
     pylibcudf.Table
         A table of two UINT64 columns
     """
@@ -131,7 +127,6 @@ cpdef Column md5(Table input):
 
     Parameters
     ----------
-
     input : Table
         The table of columns to hash
 
@@ -154,13 +149,11 @@ cpdef Column sha1(Table input):
 
     Parameters
     ----------
-
     input : Table
         The table of columns to hash
 
     Returns
     -------
-
     pylibcudf.Column
         A column where each row is the hash of a row from the input
     """
@@ -177,7 +170,6 @@ cpdef Column sha224(Table input):
 
     Parameters
     ----------
-
     input : Table
         The table of columns to hash
 
@@ -199,7 +191,6 @@ cpdef Column sha256(Table input):
 
     Parameters
     ----------
-
     input : Table
         The table of columns to hash
 
@@ -221,7 +212,6 @@ cpdef Column sha384(Table input):
 
     Parameters
     ----------
-
     input : Table
         The table of columns to hash
 
@@ -243,7 +233,6 @@ cpdef Column sha512(Table input):
 
     Parameters
     ----------
-
     input : Table
         The table of columns to hash
 
