@@ -47,9 +47,9 @@ cdef class DataType:
         return self.c_obj.scale()
 
     def __eq__(self, other):
-        if not isinstance(other, DataType):
-            return False
-        return self.id() == other.id() and self.scale() == other.scale()
+        return type(self) is type(other) and (
+            self.c_obj == (<DataType>other).c_obj
+        )
 
     @staticmethod
     cdef DataType from_libcudf(data_type dt):
