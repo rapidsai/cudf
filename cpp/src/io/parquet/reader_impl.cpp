@@ -476,8 +476,10 @@ void reader::impl::prepare_data(int64_t skip_rows,
   }
 
   // handle any chunking work (ratcheting through the subpasses and chunks within
-  // our current pass)
-  if (_file_itm_data.num_passes() > 0) { handle_chunking(uses_custom_row_bounds); }
+  // our current pass) if in bounds
+  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
+    handle_chunking(uses_custom_row_bounds);
+  }
 }
 
 void reader::impl::populate_metadata(table_metadata& out_metadata)
@@ -569,13 +571,15 @@ table_with_metadata reader::impl::finalize_output(
     _output_metadata = std::make_unique<table_metadata>(out_metadata);
   }
 
-  // advance output chunk/subpass/pass info
-  if (_file_itm_data.num_passes() > 0) {
+  // advance output chunk/subpass/pass info for non-empty tables if and only if we are in bounds
+  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
     auto& pass    = *_pass_itm_data;
     auto& subpass = *pass.subpass;
     subpass.current_output_chunk++;
-    _file_itm_data._output_chunk_count++;
   }
+
+  // increment the output chunk count
+  _file_itm_data._output_chunk_count++;
 
   if (filter.has_value()) {
     auto read_table = std::make_unique<table>(std::move(out_columns));
@@ -616,7 +620,8 @@ table_with_metadata reader::impl::read_chunk()
 {
   // Reset the output buffers to their original states (right after reader construction).
   // Don't need to do it if we read the file all at once.
-  if (_file_itm_data._output_chunk_count > 0) {
+  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes() and
+      not is_first_output_chunk()) {
     _output_buffers.resize(0);
     for (auto const& buff : _output_buffers_template) {
       _output_buffers.emplace_back(cudf::io::detail::inline_column_buffer::empty_like(buff));
@@ -628,6 +633,7 @@ table_with_metadata reader::impl::read_chunk()
                true /*uses_custom_row_bounds*/,
                {} /*row_group_indices, empty means read all row groups*/,
                std::nullopt /*filter*/);
+
   return read_chunk_internal(true, std::nullopt);
 }
 
@@ -641,7 +647,9 @@ bool reader::impl::has_next()
 
   // current_input_pass will only be incremented to be == num_passes after
   // the last chunk in the last subpass in the last pass has been returned
-  return has_more_work();
+  // if not has_more_work then check if this is the first pass in an empty
+  // table and return true so it could be read once.
+  return has_more_work() or is_first_output_chunk();
 }
 
 namespace {
