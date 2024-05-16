@@ -7,22 +7,15 @@ from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-cimport cudf._lib.cpp.types as libcudf_types
+cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
 from cudf._lib cimport pylibcudf
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.partitioning cimport hash_partition as cpp_hash_partition
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.pylibcudf.hashing cimport (
-    md5,
-    murmurhash3_x86_32,
-    sha1,
-    sha224,
-    sha256,
-    sha384,
-    sha512,
-    xxhash_64,
+from cudf._lib.pylibcudf.libcudf.partitioning cimport (
+    hash_partition as cpp_hash_partition,
 )
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.table cimport Table
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
@@ -51,25 +44,25 @@ def hash_partition(list source_columns, object columns_to_hash,
 
 @acquire_spill_lock()
 def hash(list source_columns, str method, int seed=0):
-    cdef pylibcudf.Table ctbl = pylibcudf.Table(
+    cdef Table ctbl = Table(
         [c.to_pylibcudf(mode="read") for c in source_columns]
     )
     if method == "murmur3":
-        return Column.from_pylibcudf(murmurhash3_x86_32(ctbl, seed))
+        return Column.from_pylibcudf(pylibcudf.hashing.murmurhash3_x86_32(ctbl, seed))
     elif method == "xxhash64":
-        return Column.from_pylibcudf(xxhash_64(ctbl, seed))
+        return Column.from_pylibcudf(pylibcudf.hashing.xxhash_64(ctbl, seed))
     elif method == "md5":
-        return Column.from_pylibcudf(md5(ctbl))
+        return Column.from_pylibcudf(pylibcudf.hashing.md5(ctbl))
     elif method == "sha1":
-        return Column.from_pylibcudf(sha1(ctbl))
+        return Column.from_pylibcudf(pylibcudf.hashing.sha1(ctbl))
     elif method == "sha224":
-        return Column.from_pylibcudf(sha224(ctbl))
+        return Column.from_pylibcudf(pylibcudf.hashing.sha224(ctbl))
     elif method == "sha256":
-        return Column.from_pylibcudf(sha256(ctbl))
+        return Column.from_pylibcudf(pylibcudf.hashing.sha256(ctbl))
     elif method == "sha384":
-        return Column.from_pylibcudf(sha384(ctbl))
+        return Column.from_pylibcudf(pylibcudf.hashing.sha384(ctbl))
     elif method == "sha512":
-        return Column.from_pylibcudf(sha512(ctbl))
+        return Column.from_pylibcudf(pylibcudf.hashing.sha512(ctbl))
     else:
         raise ValueError(
             f"Unsupported hashing algorithm {method}."

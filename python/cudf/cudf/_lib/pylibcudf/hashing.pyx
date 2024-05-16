@@ -3,8 +3,8 @@ from libc.stdint cimport uint32_t, uint64_t
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.hash cimport (
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.hash cimport (
     DEFAULT_HASH_SEED,
     md5 as cpp_md5,
     murmurhash3_x64_128 as cpp_murmurhash3_x64_128,
@@ -16,7 +16,7 @@ from cudf._lib.cpp.hash cimport (
     sha512 as cpp_sha512,
     xxhash_64 as cpp_xxhash_64,
 )
-from cudf._lib.cpp.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
 
 from .column cimport Column
 from .table cimport Table
