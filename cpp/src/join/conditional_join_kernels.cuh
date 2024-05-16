@@ -67,8 +67,8 @@ CUDF_KERNEL void compute_conditional_join_output_size(
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
   std::size_t thread_counter{0};
-  auto const start_idx = cudf::detail::grid_1d::global_thread_id();
-  auto const stride    = cudf::detail::grid_1d::grid_stride();
+  auto const start_idx = cudf::detail::grid_1d::global_thread_id<block_size>();
+  auto const stride    = cudf::detail::grid_1d::grid_stride<block_size>();
 
   cudf::thread_index_type const left_num_rows  = left_table.num_rows();
   cudf::thread_index_type const right_num_rows = right_table.num_rows();
@@ -174,7 +174,7 @@ CUDF_KERNEL void conditional_join(table_device_view left_table,
 
   __syncwarp();
 
-  auto outer_row_index = cudf::detail::grid_1d::global_thread_id();
+  auto outer_row_index = cudf::detail::grid_1d::global_thread_id<block_size>();
 
   unsigned int const activemask = __ballot_sync(0xffff'ffffu, outer_row_index < outer_num_rows);
 
@@ -295,8 +295,8 @@ CUDF_KERNEL void conditional_join_anti_semi(
   int const lane_id                            = threadIdx.x % detail::warp_size;
   cudf::thread_index_type const outer_num_rows = left_table.num_rows();
   cudf::thread_index_type const inner_num_rows = right_table.num_rows();
-  auto const stride                            = cudf::detail::grid_1d::grid_stride();
-  auto const start_idx                         = cudf::detail::grid_1d::global_thread_id();
+  auto const stride                            = cudf::detail::grid_1d::grid_stride<block_size>();
+  auto const start_idx = cudf::detail::grid_1d::global_thread_id<block_size>();
 
   if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
 

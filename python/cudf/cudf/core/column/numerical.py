@@ -108,12 +108,8 @@ class NumericalColumn(NumericalBaseColumn):
         # Fails if item is of type None, so the handler.
         try:
             search_item = self.dtype.type(item)
-            if search_item != item and not is_float_dtype(self.dtype):
+            if search_item != item and self.dtype.kind != "f":
                 return False
-            # if np.can_cast(item, self.dtype):
-            #     item = self.dtype.type(item)
-            # else:
-            #     return False
         except (TypeError, ValueError):
             return False
         # TODO: Use `scalar`-based `contains` wrapper
@@ -252,6 +248,7 @@ class NumericalColumn(NumericalBaseColumn):
             "__eq__",
             "__ne__",
             "NULL_EQUALS",
+            "NULL_NOT_EQUALS",
         }:
             out_dtype = "bool"
 

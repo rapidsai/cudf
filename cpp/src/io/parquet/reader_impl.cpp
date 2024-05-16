@@ -422,7 +422,8 @@ reader::impl::impl(std::size_t chunk_read_limit,
     _input_pass_read_limit{pass_read_limit}
 {
   // Open and parse the source dataset metadata
-  _metadata = std::make_unique<aggregate_reader_metadata>(_sources);
+  _metadata =
+    std::make_unique<aggregate_reader_metadata>(_sources, options.is_enabled_use_arrow_schema());
 
   // Override output timestamp resolution if requested
   if (options.get_timestamp_type().id() != type_id::EMPTY) {
@@ -510,14 +511,18 @@ table_with_metadata reader::impl::read_chunk_internal(
 
   // Create the final output cudf columns.
   for (size_t i = 0; i < _output_buffers.size(); ++i) {
-    auto metadata      = _reader_column_schema.has_value()
-                           ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
-                           : std::nullopt;
-    auto const& schema = _metadata->get_schema(_output_column_schemas[i]);
-    // FIXED_LEN_BYTE_ARRAY never read as string
-    if (schema.type == FIXED_LEN_BYTE_ARRAY and schema.converted_type != DECIMAL) {
+    auto metadata           = _reader_column_schema.has_value()
+                                ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
+                                : std::nullopt;
+    auto const& schema      = _metadata->get_schema(_output_column_schemas[i]);
+    auto const logical_type = schema.logical_type.value_or(LogicalType{});
+    // FIXED_LEN_BYTE_ARRAY never read as string.
+    // TODO: if we ever decide that the default reader behavior is to treat unannotated BINARY as
+    // binary and not strings, this test needs to change.
+    if (schema.type == FIXED_LEN_BYTE_ARRAY and logical_type.type != LogicalType::DECIMAL) {
       metadata = std::make_optional<reader_column_schema>();
       metadata->set_convert_binary_to_strings(false);
+      metadata->set_type_length(schema.type_length);
     }
     // Only construct `out_metadata` if `_output_metadata` has not been cached.
     if (!_output_metadata) {
@@ -638,8 +643,11 @@ parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
 
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources)
 {
+  // do not use arrow schema when reading information from parquet metadata.
+  static constexpr auto use_arrow_schema = false;
+
   // Open and parse the source dataset metadata
-  auto metadata = aggregate_reader_metadata(sources);
+  auto metadata = aggregate_reader_metadata(sources, use_arrow_schema);
 
   return parquet_metadata{parquet_schema{walk_schema(&metadata, 0)},
                           metadata.get_num_rows(),

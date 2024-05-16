@@ -1,13 +1,13 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.transpose cimport transpose as cpp_transpose
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.transpose cimport transpose as cpp_transpose
 from cudf._lib.utils cimport columns_from_table_view, table_view_from_columns
 
 

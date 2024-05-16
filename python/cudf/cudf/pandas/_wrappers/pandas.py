@@ -52,7 +52,6 @@ from pandas.io.sas.sas_xport import (  # isort: skip
     XportReader as pd_XportReader,
 )
 
-
 # TODO(pandas2.1): Can import from pandas.api.typing
 from pandas.core.resample import (  # isort: skip
     Resampler as pd_Resampler,
@@ -119,6 +118,49 @@ class _AccessorAttr:
         else:
             return _FastSlowAttribute(self._name).__get__(obj, type(obj))
 
+
+def Timestamp_Timedelta__new__(cls, *args, **kwargs):
+    # Call fast/slow constructor
+    # This takes care of running __init__ as well, but must be paired
+    # with a removal of the defaulted __init__ that
+    # make_final_proxy_type provides.
+    # Timestamp & Timedelta don't always return same types as self,
+    # hence this method is needed.
+    self, _ = _fast_slow_function_call(
+        lambda cls, args, kwargs: cls(*args, **kwargs),
+        cls,
+        args,
+        kwargs,
+    )
+    return self
+
+
+Timedelta = make_final_proxy_type(
+    "Timedelta",
+    _Unusable,
+    pd.Timedelta,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "__new__": Timestamp_Timedelta__new__,
+        "__init__": _DELETE,
+    },
+)
+
+
+Timestamp = make_final_proxy_type(
+    "Timestamp",
+    _Unusable,
+    pd.Timestamp,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "__new__": Timestamp_Timedelta__new__,
+        "__init__": _DELETE,
+    },
+)
 
 DatetimeProperties = make_intermediate_proxy_type(
     "DatetimeProperties",
@@ -341,6 +383,18 @@ TimedeltaIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "_data": _FastSlowAttribute("_data"),
         "_mask": _FastSlowAttribute("_mask"),
+    },
+)
+
+NumpyExtensionArray = make_final_proxy_type(
+    "NumpyExtensionArray",
+    _Unusable,
+    pd.arrays.NumpyExtensionArray,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_ndarray": _FastSlowAttribute("_ndarray"),
+        "_dtype": _FastSlowAttribute("_dtype"),
     },
 )
 
@@ -936,6 +990,125 @@ _SAS7BDATReader = make_intermediate_proxy_type(
     "_SAS7BDATReader", _Unusable, pd_SAS7BDATReader
 )
 
+USFederalHolidayCalendar = make_final_proxy_type(
+    "USFederalHolidayCalendar",
+    _Unusable,
+    pd_USFederalHolidayCalendar,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+HolidayCalendarMetaClass = make_final_proxy_type(
+    "HolidayCalendarMetaClass",
+    _Unusable,
+    pd_HolidayCalendarMetaClass,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+
+@register_proxy_func(pd_HolidayCalendarFactory)
+def holiday_calendar_factory_wrapper(*args, **kwargs):
+    # Call the original HolidayCalendarFactory
+    result = _FunctionProxy(_Unusable(), pd_HolidayCalendarFactory)(
+        *args, **kwargs
+    )
+    # Return the slow proxy of the result
+    return result._fsproxy_slow
+
+
+AbstractHolidayCalendar = make_final_proxy_type(
+    "AbstractHolidayCalendar",
+    _Unusable,
+    pd_AbstractHolidayCalendar,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    meta_class=pd_HolidayCalendarMetaClass,
+)
+
+Holiday = make_final_proxy_type(
+    "Holiday",
+    _Unusable,
+    pd_Holiday,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+USThanksgivingDay = make_final_proxy_type(
+    "USThanksgivingDay",
+    _Unusable,
+    pd_USThanksgivingDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+USColumbusDay = make_final_proxy_type(
+    "USColumbusDay",
+    _Unusable,
+    pd_USColumbusDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+USLaborDay = make_final_proxy_type(
+    "USLaborDay",
+    _Unusable,
+    pd_USLaborDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+USMemorialDay = make_final_proxy_type(
+    "USMemorialDay",
+    _Unusable,
+    pd_USMemorialDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+USMartinLutherKingJr = make_final_proxy_type(
+    "USMartinLutherKingJr",
+    _Unusable,
+    pd_USMartinLutherKingJr,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+USPresidentsDay = make_final_proxy_type(
+    "USPresidentsDay",
+    _Unusable,
+    pd_USPresidentsDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+
+GoodFriday = make_final_proxy_type(
+    "GoodFriday",
+    _Unusable,
+    pd_GoodFriday,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+EasterMonday = make_final_proxy_type(
+    "EasterMonday",
+    _Unusable,
+    pd_EasterMonday,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
 
 FY5253 = make_final_proxy_type(
     "FY5253",

@@ -19,6 +19,11 @@
           "fixed_in" : ""
         },
         {
+          "file": "cccl/kernel_pointer_hiding.diff",
+          "issue": "Hide APIs that accept kernel pointers [https://github.com/NVIDIA/cccl/pull/1395]",
+          "fixed_in": "2.4"
+        },
+        {
           "file" : "${current_json_dir}/thrust_disable_64bit_dispatching.diff",
           "issue" : "Remove 64bit dispatching as not needed by libcudf and results in compiling twice as many kernels [https://github.com/rapidsai/cudf/pull/11437]",
           "fixed_in" : ""

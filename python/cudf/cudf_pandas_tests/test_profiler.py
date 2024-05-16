@@ -30,11 +30,14 @@ def test_profiler():
 
     per_function_stats = profiler.per_function_stats
     assert set(per_function_stats) == {
+        "Timestamp",
         "DataFrame",
         "DataFrame.groupby",
         "GroupBy.sum",
         "DataFrame.sum",
         "Series.__getitem__",
+        "Timedelta",
+        "Timestamp.__add__",
     }
     for name, func in per_function_stats.items():
         assert (

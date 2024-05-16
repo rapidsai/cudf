@@ -636,6 +636,15 @@ void decode_page_headers(pass_intermediate_data& pass,
   stream.synchronize();
 }
 
+constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
+{
+  auto const is_decimal =
+    chunk.logical_type.has_value() and chunk.logical_type->type == LogicalType::DECIMAL;
+  auto const is_binary =
+    chunk.physical_type == BYTE_ARRAY or chunk.physical_type == FIXED_LEN_BYTE_ARRAY;
+  return is_binary and not is_decimal;
+}
+
 struct set_str_dict_index_count {
   device_span<size_t> str_dict_index_count;
   device_span<const ColumnChunkDesc> chunks;
@@ -643,8 +652,8 @@ struct set_str_dict_index_count {
   __device__ void operator()(PageInfo const& page)
   {
     auto const& chunk = chunks[page.chunk_idx];
-    if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) && chunk.physical_type == BYTE_ARRAY &&
-        (chunk.num_dict_pages > 0)) {
+    if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0 and chunk.num_dict_pages > 0 and
+        is_string_chunk(chunk)) {
       // there is only ever one dictionary page per chunk, so this is safe to do in parallel.
       str_dict_index_count[page.chunk_idx] = page.num_input_values;
     }
@@ -659,7 +668,7 @@ struct set_str_dict_index_ptr {
   __device__ void operator()(size_t i)
   {
     auto& chunk = chunks[i];
-    if (chunk.physical_type == BYTE_ARRAY && (chunk.num_dict_pages > 0)) {
+    if (chunk.num_dict_pages > 0 and is_string_chunk(chunk)) {
       chunk.str_dict_index = base + str_dict_index_offsets[i];
     }
   }
@@ -1489,8 +1498,10 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
       // if we haven't already processed this column because it is part of a struct hierarchy
       else if (out_buf.size == 0) {
         // add 1 for the offset if this is a list column
-        out_buf.create(
+        // we're going to start null mask as all valid and then turn bits off if necessary
+        out_buf.create_with_mask(
           out_buf.type.id() == type_id::LIST && l_idx < max_depth ? num_rows + 1 : num_rows,
+          cudf::mask_state::ALL_VALID,
           _stream,
           _mr);
       }
@@ -1568,7 +1579,8 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
           if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
 
           // allocate
-          out_buf.create(size, _stream, _mr);
+          // we're going to start null mask as all valid and then turn bits off if necessary
+          out_buf.create_with_mask(size, cudf::mask_state::ALL_VALID, _stream, _mr);
         }
       }
     }

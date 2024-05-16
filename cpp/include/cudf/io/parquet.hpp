@@ -71,6 +71,8 @@ class parquet_reader_options {
   bool _convert_strings_to_categories = false;
   // Whether to use PANDAS metadata to load columns
   bool _use_pandas_metadata = true;
+  // Whether to read and use ARROW schema
+  bool _use_arrow_schema = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
@@ -125,6 +127,13 @@ class parquet_reader_options {
    * @return `true` if pandas metadata is used while reading
    */
   [[nodiscard]] bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
+
+  /**
+   * @brief Returns true/false depending whether to use arrow schema while reading.
+   *
+   * @return `true` if arrow schema is used while reading
+   */
+  [[nodiscard]] bool is_enabled_use_arrow_schema() const { return _use_arrow_schema; }
 
   /**
    * @brief Returns optional tree of metadata.
@@ -213,6 +222,13 @@ class parquet_reader_options {
    * @param val Boolean value whether to use pandas metadata
    */
   void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
+
+  /**
+   * @brief Sets to enable/disable use of arrow schema to read.
+   *
+   * @param val Boolean value whether to use arrow schema
+   */
+  void enable_use_arrow_schema(bool val) { _use_arrow_schema = val; }
 
   /**
    * @brief Sets reader column schema.
@@ -325,6 +341,18 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& use_pandas_metadata(bool val)
   {
     options._use_pandas_metadata = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets to enable/disable use of arrow schema to read.
+   *
+   * @param val Boolean value whether to use arrow schema
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& use_arrow_schema(bool val)
+  {
+    options._use_arrow_schema = val;
     return *this;
   }
 
@@ -564,7 +592,7 @@ class parquet_writer_options {
   // Maximum size of min or max values in column index
   int32_t _column_index_truncate_length = default_column_index_truncate_length;
   // When to use dictionary encoding for data
-  dictionary_policy _dictionary_policy = dictionary_policy::ALWAYS;
+  dictionary_policy _dictionary_policy = dictionary_policy::ADAPTIVE;
   // Maximum size of column chunk dictionary (in bytes)
   size_t _max_dictionary_size = default_max_dictionary_size;
   // Maximum number of rows in a page fragment
@@ -1095,7 +1123,7 @@ class parquet_writer_options_builder {
    * dictionary_policy::ALWAYS will allow the use of dictionary encoding even if it will result in
    * the disabling of compression for columns that would otherwise be compressed.
    *
-   * The default value is dictionary_policy::ALWAYS.
+   * The default value is dictionary_policy::ADAPTIVE.
    *
    * @param val policy for dictionary use
    * @return this for chaining
@@ -1258,7 +1286,7 @@ class chunked_parquet_writer_options {
   // Maximum size of min or max values in column index
   int32_t _column_index_truncate_length = default_column_index_truncate_length;
   // When to use dictionary encoding for data
-  dictionary_policy _dictionary_policy = dictionary_policy::ALWAYS;
+  dictionary_policy _dictionary_policy = dictionary_policy::ADAPTIVE;
   // Maximum size of column chunk dictionary (in bytes)
   size_t _max_dictionary_size = default_max_dictionary_size;
   // Maximum number of rows in a page fragment
@@ -1751,7 +1779,7 @@ class chunked_parquet_writer_options_builder {
    * dictionary_policy::ALWAYS will allow the use of dictionary encoding even if it will result in
    * the disabling of compression for columns that would otherwise be compressed.
    *
-   * The default value is dictionary_policy::ALWAYS.
+   * The default value is dictionary_policy::ADAPTIVE.
    *
    * @param val policy for dictionary use
    * @return this for chaining
