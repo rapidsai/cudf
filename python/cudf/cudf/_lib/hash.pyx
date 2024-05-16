@@ -8,7 +8,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
-from cudf._lib cimport pylibcudf
+from cudf._lib import pylibcudf
 from cudf._lib.column cimport Column
 from cudf._lib.pylibcudf.libcudf.partitioning cimport (
     hash_partition as cpp_hash_partition,
