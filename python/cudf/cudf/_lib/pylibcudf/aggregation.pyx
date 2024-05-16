@@ -79,6 +79,14 @@ cdef class Aggregation:
             "Aggregations should not be constructed directly. Use one of the factories."
         )
 
+    def __eq__(self, other):
+        return type(self) is type(other) and (
+            dereference(self.c_obj).is_equal(dereference((<Aggregation>other).c_obj))
+        )
+
+    def __hash__(self):
+        return dereference(self.c_obj).do_hash()
+
     # TODO: Ideally we would include the return type here, but we need to do so
     # in a way that Sphinx understands (currently have issues due to
     # https://github.com/cython/cython/issues/5609).

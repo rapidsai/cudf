@@ -88,8 +88,9 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         data_type(const data_type&) except +
         data_type(type_id id) except +
         data_type(type_id id, int32_t scale) except +
-        type_id id() except +
-        int32_t scale() except +
+        type_id id() noexcept
+        int32_t scale() noexcept
+        bool operator==(const data_type&, const data_type&) noexcept
 
     cpdef enum class interpolation(int32_t):
         LINEAR

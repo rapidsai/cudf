@@ -1230,17 +1230,23 @@ void reader::impl::preprocess_file(
   CUDF_EXPECTS(!_file_preprocessed, "Attempted to preprocess file more than once");
 
   // if filter is not empty, then create output types as vector and pass for filtering.
-  std::vector<data_type> output_types;
+  std::vector<data_type> output_dtypes;
   if (filter.has_value()) {
-    std::transform(_output_buffers.cbegin(),
-                   _output_buffers.cend(),
-                   std::back_inserter(output_types),
+    std::transform(_output_buffers_template.cbegin(),
+                   _output_buffers_template.cend(),
+                   std::back_inserter(output_dtypes),
                    [](auto const& col) { return col.type; });
   }
+
   std::tie(
     _file_itm_data.global_skip_rows, _file_itm_data.global_num_rows, _file_itm_data.row_groups) =
-    _metadata->select_row_groups(
-      row_group_indices, skip_rows, num_rows, output_types, filter, _stream);
+    _metadata->select_row_groups(row_group_indices,
+                                 skip_rows,
+                                 num_rows,
+                                 output_dtypes,
+                                 _output_column_schemas,
+                                 filter,
+                                 _stream);
 
   // check for page indexes
   _has_page_index = std::all_of(_file_itm_data.row_groups.begin(),
