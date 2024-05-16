@@ -32,7 +32,7 @@ def from_polars(dtype: pl.DataType) -> plc.DataType:
     ------
     NotImplementedError for unsupported conversions.
     """
-    if isinstance(dtype, pl.Int8):
+    if isinstance(dtype, pl.Boolean):
         return plc.DataType(plc.TypeId.BOOL8)
     elif isinstance(dtype, pl.Int8):
         return plc.DataType(plc.TypeId.INT8)
@@ -86,4 +86,5 @@ def from_polars(dtype: pl.DataType) -> plc.DataType:
         # TODO: Hopefully
         return plc.DataType(plc.TypeId.EMPTY)
     else:
+        breakpoint()
         raise NotImplementedError(f"{dtype=} conversion not supported")

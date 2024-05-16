@@ -19,7 +19,6 @@ __all__: list[str] = ["Column"]
 class Column:
     """A column, a name, and sortedness."""
 
-    __slots__ = ("obj", "name", "is_sorted", "order", "null_order")
     obj: plc.Column
     name: str
     is_sorted: plc.types.Sorted

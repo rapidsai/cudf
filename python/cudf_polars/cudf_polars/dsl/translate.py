@@ -8,6 +8,8 @@ from __future__ import annotations
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any
 
+import nvtx
+
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 from cudf_polars.dsl import expr, ir
@@ -37,6 +39,7 @@ class set_node(AbstractContextManager):
 noop_context: nullcontext = nullcontext()
 
 
+@nvtx.annotate(domain="cudf_polars")
 def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
     """
     Translate a polars-internal IR node to our representation.
@@ -109,6 +112,7 @@ def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
                 inp,
                 aggs,
                 keys,
+                node.maintain_order,
                 node.options,
             )
         elif isinstance(node, pl_ir.Join):
@@ -120,8 +124,8 @@ def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
                 right_on = [translate_expr(visitor, n=e) for e in node.right_on]
             return ir.Join(schema, inp_left, inp_right, left_on, right_on, node.options)
         elif isinstance(node, pl_ir.HStack):
-            with set_node(visitor, n=None):
-                inp = translate_ir(visitor, n=node.input)
+            with set_node(visitor, node.input):
+                inp = translate_ir(visitor, n=None)
                 exprs = [translate_expr(visitor, n=e) for e in node.exprs]
             return ir.HStack(schema, inp, exprs)
         elif isinstance(node, pl_ir.Distinct):
@@ -131,17 +135,17 @@ def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
                 node.options,
             )
         elif isinstance(node, pl_ir.Sort):
-            with set_node(visitor, n=None):
-                inp = translate_ir(visitor, n=node.input)
+            with set_node(visitor, node.input):
+                inp = translate_ir(visitor, n=None)
                 by = [translate_expr(visitor, n=e) for e in node.by_column]
-            return ir.Sort(schema, inp, by, node.sort_options)
+            return ir.Sort(schema, inp, by, node.sort_options, node.slice)
         elif isinstance(node, pl_ir.Slice):
             return ir.Slice(
                 schema, translate_ir(visitor, n=node.input), node.offset, node.len
             )
         elif isinstance(node, pl_ir.Filter):
-            with set_node(visitor, n=None):
-                inp = translate_ir(visitor, n=node.input)
+            with set_node(visitor, node.input):
+                inp = translate_ir(visitor, n=None)
                 mask = translate_expr(visitor, n=node.predicate)
             return ir.Filter(schema, inp, mask)
         elif isinstance(node, pl_ir.SimpleProjection):
@@ -176,6 +180,7 @@ def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
 BOOLEAN_FUNCTIONS: frozenset[str] = frozenset()
 
 
+@nvtx.annotate(domain="cudf_polars")
 def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
     """
     Translate a polars-internal expression IR into our representation.
@@ -210,7 +215,7 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
                 dtype,
                 name,
                 options,
-                [translate_expr(visitor, n=n) for n in node.input],
+                tuple(translate_expr(visitor, n=n) for n in node.input),
             )
         else:
             raise NotImplementedError(f"No handler for Expr function node with {name=}")
@@ -219,7 +224,7 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
         return expr.Window(
             dtype,
             translate_expr(visitor, n=node.function),
-            [translate_expr(visitor, n=n) for n in node.partition_by]
+            tuple(translate_expr(visitor, n=n) for n in node.partition_by)
             if node.partition_by is not None
             else None,
             node.options,
@@ -231,11 +236,12 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
         return expr.Sort(dtype, translate_expr(visitor, n=node.expr), node.options)
     elif isinstance(node, pl_expr.SortBy):
         # TODO: raise in groupby
+        stable, nulls_last, descending = node.sort_options
         return expr.SortBy(
             dtype,
             translate_expr(visitor, n=node.expr),
-            [translate_expr(visitor, n=n) for n in node.by],
-            node.descending,
+            tuple(translate_expr(visitor, n=n) for n in node.by),
+            (stable, nulls_last, tuple(descending)),
         )
     elif isinstance(node, pl_expr.Gather):
         return expr.Gather(

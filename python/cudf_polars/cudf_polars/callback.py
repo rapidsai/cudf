@@ -27,7 +27,11 @@ def _callback(
     assert with_columns is None
     assert pyarrow_predicate is None
     assert n_rows is None
-    return ir.evaluate(cache={}).to_polars()
+    try:
+        return ir.evaluate(cache={}).to_polars()
+    except Exception as e:
+        print("Unable to evaluate", e)
+        raise
 
 
 def execute_with_cudf(nt) -> None:
@@ -43,7 +47,8 @@ def execute_with_cudf(nt) -> None:
     """
     try:
         callback = partial(_callback, translate_ir(nt))
-    except NotImplementedError:
+    except NotImplementedError as e:
+        print("Unable to translate", e)
         return
 
     nt.set_udf(callback)

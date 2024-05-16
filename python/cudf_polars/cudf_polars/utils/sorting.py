@@ -5,11 +5,16 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import cudf._lib.pylibcudf as plc
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def sort_order(
-    descending: list[bool], *, nulls_last: bool, num_keys: int
+    descending: Sequence[bool], *, nulls_last: bool, num_keys: int
 ) -> tuple[list[plc.types.Order], list[plc.types.NullOrder]]:
     """
     Produce sort order arguments.
