@@ -16,6 +16,7 @@
 
 #include "reader_impl_helpers.hpp"
 
+#include "compact_protocol_reader.hpp"
 #include "io/parquet/parquet.hpp"
 #include "io/utilities/base64_utilities.hpp"
 #include "io/utilities/row_selection.hpp"
@@ -25,6 +26,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
+#include <functional>
 #include <numeric>
 #include <regex>
 
@@ -954,13 +956,15 @@ aggregate_reader_metadata::select_row_groups(
   int64_t skip_rows_opt,
   std::optional<size_type> const& num_rows_opt,
   host_span<data_type const> output_dtypes,
+  host_span<int const> output_column_schemas,
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
   std::optional<std::vector<std::vector<size_type>>> filtered_row_group_indices;
+  // if filter is not empty, then gather row groups to read after predicate pushdown
   if (filter.has_value()) {
-    filtered_row_group_indices =
-      filter_row_groups(row_group_indices, output_dtypes, filter.value(), stream);
+    filtered_row_group_indices = filter_row_groups(
+      row_group_indices, output_dtypes, output_column_schemas, filter.value(), stream);
     if (filtered_row_group_indices.has_value()) {
       row_group_indices =
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
@@ -1017,10 +1021,12 @@ aggregate_reader_metadata::select_row_groups(
 std::tuple<std::vector<input_column_info>,
            std::vector<cudf::io::detail::inline_column_buffer>,
            std::vector<size_type>>
-aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>> const& use_names,
-                                          bool include_index,
-                                          bool strings_to_categorical,
-                                          type_id timestamp_type_id) const
+aggregate_reader_metadata::select_columns(
+  std::optional<std::vector<std::string>> const& use_names,
+  std::optional<std::vector<std::string>> const& filter_columns_names,
+  bool include_index,
+  bool strings_to_categorical,
+  type_id timestamp_type_id) const
 {
   auto find_schema_child = [&](SchemaElement const& schema_elem, std::string const& name) {
     auto const& col_schema_idx =
@@ -1184,13 +1190,18 @@ aggregate_reader_metadata::select_columns(std::optional<std::vector<std::string>
 
     // Find which of the selected paths are valid and get their schema index
     std::vector<path_info> valid_selected_paths;
-    for (auto const& selected_path : *use_names) {
-      auto found_path =
-        std::find_if(all_paths.begin(), all_paths.end(), [&](path_info& valid_path) {
-          return valid_path.full_path == selected_path;
-        });
-      if (found_path != all_paths.end()) {
-        valid_selected_paths.push_back({selected_path, found_path->schema_idx});
+    // vector reference pushback (*use_names). If filter names passed.
+    std::vector<std::reference_wrapper<std::vector<std::string> const>> column_names{
+      *use_names, *filter_columns_names};
+    for (auto const& used_column_names : column_names) {
+      for (auto const& selected_path : used_column_names.get()) {
+        auto found_path =
+          std::find_if(all_paths.begin(), all_paths.end(), [&](path_info& valid_path) {
+            return valid_path.full_path == selected_path;
+          });
+        if (found_path != all_paths.end()) {
+          valid_selected_paths.push_back({selected_path, found_path->schema_idx});
+        }
       }
     }
 
