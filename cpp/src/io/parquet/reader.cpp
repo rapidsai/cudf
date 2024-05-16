@@ -32,7 +32,7 @@ reader::reader(std::vector<std::unique_ptr<datasource>>&& sources,
 
 reader::~reader() = default;
 
-table_with_metadata reader::read(parquet_reader_options const& options) { return _impl->read(); }
+table_with_metadata reader::read() { return _impl->read(); }
 
 chunked_reader::chunked_reader(std::size_t chunk_read_limit,
                                std::size_t pass_read_limit,
