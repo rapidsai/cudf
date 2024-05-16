@@ -160,12 +160,12 @@ class chunked_reader : private reader {
   /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next
    */
-  [[nodiscard]] bool has_next(parquet_reader_options const& options) const;
+  [[nodiscard]] bool has_next() const;
 
   /**
    * @copydoc cudf::io::chunked_parquet_reader::read_chunk
    */
-  [[nodiscard]] table_with_metadata read_chunk(parquet_reader_options const& options) const;
+  [[nodiscard]] table_with_metadata read_chunk() const;
 };
 
 /**

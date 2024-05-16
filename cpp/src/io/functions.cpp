@@ -632,8 +632,7 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(
-      chunk_read_limit, 0, make_datasources(options.get_source()), options, stream, mr)},
-    _options{options}
+      chunk_read_limit, 0, make_datasources(options.get_source()), options, stream, mr)}
 {
 }
 
@@ -650,8 +649,7 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                             make_datasources(options.get_source()),
                                                             options,
                                                             stream,
-                                                            mr)},
-    _options{options}
+                                                            mr)}
 {
 }
 
@@ -667,7 +665,7 @@ bool chunked_parquet_reader::has_next() const
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
-  return reader->has_next(_options);
+  return reader->has_next();
 }
 
 /**
@@ -677,7 +675,7 @@ table_with_metadata chunked_parquet_reader::read_chunk() const
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
-  return reader->read_chunk(_options);
+  return reader->read_chunk();
 }
 
 /**

@@ -32,17 +32,7 @@ reader::reader(std::vector<std::unique_ptr<datasource>>&& sources,
 
 reader::~reader() = default;
 
-table_with_metadata reader::read(parquet_reader_options const& options)
-{
-  // if the user has specified custom row bounds
-  bool const uses_custom_row_bounds =
-    options.get_num_rows().has_value() || options.get_skip_rows() != 0;
-  return _impl->read(options.get_skip_rows(),
-                     options.get_num_rows(),
-                     uses_custom_row_bounds,
-                     options.get_row_groups(),
-                     options.get_filter());
-}
+table_with_metadata reader::read(parquet_reader_options const& options) { return _impl->read(); }
 
 chunked_reader::chunked_reader(std::size_t chunk_read_limit,
                                std::size_t pass_read_limit,
@@ -57,20 +47,8 @@ chunked_reader::chunked_reader(std::size_t chunk_read_limit,
 
 chunked_reader::~chunked_reader() = default;
 
-bool chunked_reader::has_next(parquet_reader_options const& options) const
-{
-  return _impl->has_next(options.get_skip_rows(),
-                         options.get_num_rows(),
-                         options.get_row_groups(),
-                         options.get_filter());
-}
+bool chunked_reader::has_next() const { return _impl->has_next(); }
 
-table_with_metadata chunked_reader::read_chunk(parquet_reader_options const& options) const
-{
-  return _impl->read_chunk(options.get_skip_rows(),
-                           options.get_num_rows(),
-                           options.get_row_groups(),
-                           options.get_filter());
-}
+table_with_metadata chunked_reader::read_chunk() const { return _impl->read_chunk(); }
 
 }  // namespace cudf::io::parquet::detail

@@ -535,7 +535,6 @@ class chunked_parquet_reader {
 
  private:
   std::unique_ptr<cudf::io::parquet::detail::chunked_reader> reader;
-  parquet_reader_options _options;
 };
 
 /** @} */  // end of group
