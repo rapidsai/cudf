@@ -265,15 +265,15 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     // Use a heuristic to guess when the fused kernel will be faster than memcpy
     if (use_fused_kernel_heuristic(has_nulls, total_bytes, columns.size())) {
       // Use single kernel launch to copy chars columns
-      constexpr size_type block_size{256};
-      cudf::detail::grid_1d config(total_bytes, block_size);
-      auto const kernel = fused_concatenate_string_chars_kernel;
-      kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-        d_views,
-        d_partition_offsets.data(),
-        static_cast<size_type>(columns.size()),
-        total_bytes,
-        d_new_chars);
+      constexpr size_t block_size{256};
+      // cudf::detail::grid_1d limited to size_type elements
+      auto const num_blocks = util::div_rounding_up_safe(total_bytes, block_size);
+      auto const kernel     = fused_concatenate_string_chars_kernel;
+      kernel<<<num_blocks, block_size, 0, stream.value()>>>(d_views,
+                                                            d_partition_offsets.data(),
+                                                            static_cast<size_type>(columns.size()),
+                                                            total_bytes,
+                                                            d_new_chars);
     } else {
       // Memcpy each input chars column (more efficient for very large strings)
       for (auto column = columns.begin(); column != columns.end(); ++column) {
