@@ -90,6 +90,13 @@ class reader::impl {
    *    // Process chunk
    *  } while (reader.has_next());
    *
+   * // Alternatively
+   *
+   *  while (reader.has_next()) {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  }
+   *
    * ```
    *
    * Reading the whole given file at once through `read()` function is still supported if
@@ -347,6 +354,11 @@ class reader::impl {
   }
 
  private:
+  [[nodiscard]] bool is_first_output_chunk() const
+  {
+    return _file_itm_data._output_chunk_count == 0;
+  }
+
   rmm::cuda_stream_view _stream;
   rmm::device_async_resource_ref _mr{rmm::mr::get_current_device_resource()};
 
