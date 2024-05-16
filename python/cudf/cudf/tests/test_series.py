@@ -1724,6 +1724,7 @@ def test_series_truncate_datetimeindex():
     "values",
     [
         np.random.randint(-100, 100, 10),
+        np.fromiter([12, 14, None, 100], dtype=object),
         [],
         [np.nan, None, -1, 2, 3],
         [1.0, 12.0, None, None, 120],

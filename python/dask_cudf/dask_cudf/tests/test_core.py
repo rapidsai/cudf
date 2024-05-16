@@ -971,3 +971,13 @@ def test_implicit_array_conversion_cupy_sparse():
     # NOTE: The calculation here doesn't need to make sense.
     # We just need to make sure we get the right type back.
     assert type(result) == type(expect)
+
+
+def test_isin():
+    ser = cudf.Series([1, 2, 3])
+    ds = dd.from_pandas(ser, npartitions=1)
+    values = [1, 5]
+    dd.assert_eq(
+        ser.isin(values),
+        ds.isin(values),
+    )

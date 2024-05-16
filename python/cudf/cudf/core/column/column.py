@@ -1951,6 +1951,7 @@ def as_column(
                 "string",
                 "empty",
                 "boolean",
+                "integer",
             ):
                 raise TypeError(
                     f"Cannot convert a {inferred_dtype} of object type"
