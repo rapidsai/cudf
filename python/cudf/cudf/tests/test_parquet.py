@@ -3243,3 +3243,91 @@ def test_parquet_reader_zstd_huff_tables(datadir):
     expected = pa.parquet.read_table(fname).to_pandas()
     actual = cudf.read_parquet(fname)
     assert_eq(actual, expected)
+
+
+def test_parquet_reader_roundtrip_with_arrow_schema():
+    # Ensure that the nested types are faithfully being roundtripped
+    # across Parquet with arrow schema which is used to faithfully
+    # round trip duration types (timedelta64) across Parquet read and write.
+    pdf = pd.DataFrame(
+        {
+            "s": pd.Series([None, None, None], dtype="timedelta64[s]"),
+            "ms": pd.Series([1234, None, 32442], dtype="timedelta64[ms]"),
+            "us": pd.Series([None, 3456, None], dtype="timedelta64[us]"),
+            "ns": pd.Series([1234, 3456, 32442], dtype="timedelta64[ns]"),
+            "duration_list": list(
+                [
+                    [
+                        datetime.timedelta(minutes=7, seconds=4),
+                        datetime.timedelta(minutes=7),
+                    ],
+                    [
+                        None,
+                        None,
+                    ],
+                    [
+                        datetime.timedelta(minutes=7, seconds=4),
+                        None,
+                    ],
+                ]
+            ),
+            "int64": pd.Series([1234, 123, 4123], dtype="int64"),
+            "list": list([[1, 2], [1, 2], [1, 2]]),
+            "datetime": pd.Series([1234, 123, 4123], dtype="datetime64[ms]"),
+            "map": pd.Series(["cat", "dog", "lion"]).map(
+                {"cat": "kitten", "dog": "puppy", "lion": "cub"}
+            ),
+        }
+    )
+
+    # Write parquet with arrow for now (to write arrow:schema)
+    buffer = BytesIO()
+    pdf.to_parquet(buffer, engine="pyarrow")
+
+    # Read parquet with arrow schema
+    got = cudf.read_parquet(buffer)
+    # Convert to cudf table for an apple to apple comparison
+    expected = cudf.from_pandas(pdf)
+
+    # Check results for reader with schema
+    assert_eq(expected, got)
+
+
+def test_parquet_reader_roundtrip_structs_with_arrow_schema():
+    # Ensure that the structs with duration types are faithfully being
+    # roundtripped across Parquet with arrow schema
+    pdf = pd.DataFrame(
+        {
+            "struct": {
+                "payload": {
+                    "Domain": {
+                        "Name": "abc",
+                        "Id": {"Name": "host", "Value": "127.0.0.8"},
+                        "Duration": datetime.timedelta(minutes=12),
+                    },
+                    "StreamId": "12345678",
+                    "Duration": datetime.timedelta(minutes=4),
+                    "Offset": None,
+                    "Resource": [
+                        {
+                            "Name": "ZoneName",
+                            "Value": "RAPIDS",
+                            "Duration": datetime.timedelta(seconds=1),
+                        }
+                    ],
+                }
+            }
+        }
+    )
+
+    # Reset the buffer and write parquet with arrow
+    buffer = BytesIO()
+    pdf.to_parquet(buffer, engine="pyarrow")
+
+    # Read parquet with arrow schema
+    got = cudf.read_parquet(buffer)
+    # Convert to cudf table for an apple to apple comparison
+    expected = cudf.from_pandas(pdf)
+
+    # Check results
+    assert_eq(expected, got)
