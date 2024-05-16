@@ -194,7 +194,6 @@ def _get_label_range_or_mask(index, start, stop, step):
     if (
         not (start is None and stop is None)
         and type(index) is cudf.core.index.DatetimeIndex
-        and index.is_monotonic_increasing is False
     ):
         start = pd.to_datetime(start)
         stop = pd.to_datetime(stop)
@@ -205,8 +204,8 @@ def _get_label_range_or_mask(index, start, stop, step):
                 # when we have a non-monotonic datetime index, return
                 # values in the slice defined by index_of(start) and
                 # index_of(end)
-                start_loc = index.get_loc(start.to_datetime64())
-                stop_loc = index.get_loc(stop.to_datetime64()) + 1
+                start_loc = index.get_loc(start)
+                stop_loc = index.get_loc(stop) + 1
                 return slice(start_loc, stop_loc)
             else:
                 raise KeyError(
@@ -214,10 +213,19 @@ def _get_label_range_or_mask(index, start, stop, step):
                     "DatetimeIndexes with non-existing keys is not allowed.",
                 )
         elif start is not None:
-            boolean_mask = index >= start
+            if index.is_monotonic_increasing:
+                return index >= start
+            elif index.is_monotonic_decreasing:
+                return index <= start
+            else:
+                return index.find_label_range(slice(start, stop, step))
         else:
-            boolean_mask = index <= stop
-        return boolean_mask
+            if index.is_monotonic_increasing:
+                return index <= stop
+            elif index.is_monotonic_decreasing:
+                return index >= stop
+            else:
+                return index.find_label_range(slice(start, stop, step))
     else:
         return index.find_label_range(slice(start, stop, step))
 
