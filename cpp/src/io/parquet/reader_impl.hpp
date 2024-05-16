@@ -113,7 +113,13 @@ class reader::impl {
                 rmm::device_async_resource_ref mr);
 
   /**
-   * @copydoc cudf::io::chunked_parquet_reader::has_next
+   * @brief Check if there is any data in the given file has not yet read.
+   *
+   * @param skip_rows Minimum number of rows from start
+   * @param num_rows Number of rows to output
+   * @param row_group_indices Lists of row groups to read (one per source), or empty if read all
+   * @param filter Optional AST expression to filter row groups based on column chunk statistics
+   * @return A boolean value indicating if there is any data left to read
    */
   bool has_next(int64_t skip_rows,
                 std::optional<size_type> const& num_rows,
@@ -121,7 +127,19 @@ class reader::impl {
                 std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   /**
-   * @copydoc cudf::io::chunked_parquet_reader::read_chunk
+   * @brief Read a chunk of rows in the given Parquet file.
+   *
+   * The sequence of returned tables, if concatenated by their order, guarantees to form a complete
+   * dataset as reading the entire given file at once.
+   *
+   * An empty table will be returned if the given file is empty, or all the data in the file has
+   * been read and returned by the previous calls.
+   *
+   * @param skip_rows Minimum number of rows from start
+   * @param num_rows Number of rows to output
+   * @param row_group_indices Lists of row groups to read (one per source), or empty if read all
+   * @param filter Optional AST expression to filter row groups based on column chunk statistics
+   * @return An output `cudf::table` along with its metadata
    */
   table_with_metadata read_chunk(
     int64_t skip_rows,
