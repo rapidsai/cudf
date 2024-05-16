@@ -635,6 +635,7 @@ aggregate_reader_metadata::select_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
   std::optional<size_type> const& num_rows_opt,
+  host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
@@ -642,8 +643,8 @@ aggregate_reader_metadata::select_row_groups(
   std::optional<std::vector<std::vector<size_type>>> filtered_row_group_indices;
   // if filter is not empty, then gather row groups to read after predicate pushdown
   if (filter.has_value()) {
-    filtered_row_group_indices =
-      filter_row_groups(row_group_indices, output_column_schemas, filter.value(), stream);
+    filtered_row_group_indices = filter_row_groups(
+      row_group_indices, output_dtypes, output_column_schemas, filter.value(), stream);
     if (filtered_row_group_indices.has_value()) {
       row_group_indices =
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());

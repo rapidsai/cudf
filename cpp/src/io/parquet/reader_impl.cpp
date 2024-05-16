@@ -453,10 +453,6 @@ reader::impl::impl(std::size_t chunk_read_limit,
                               _strings_to_categorical,
                               _timestamp_type.id());
 
-  // Find the dtypes of output columns (save it in _metadata).
-  _metadata->cache_output_dtypes(
-    _output_column_schemas, _strings_to_categorical, _timestamp_type.id());
-
   // Save the states of the output buffers for reuse in `chunk_read()`.
   for (auto const& buff : _output_buffers) {
     _output_buffers_template.emplace_back(cudf::io::detail::inline_column_buffer::empty_like(buff));
