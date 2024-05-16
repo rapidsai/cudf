@@ -64,8 +64,9 @@ struct base_fn {
   character_cases_table_type const* d_case_table;
   special_case_mapping const* d_special_case_mapping;
   column_device_view const d_column;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   base_fn(column_device_view const& d_column)
     : d_flags(get_character_flags_table()),
@@ -108,7 +109,7 @@ struct base_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_column.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -137,7 +138,7 @@ struct base_fn {
       // capitalize the next char if this one is a delimiter
       capitalize = derived.capitalize_next(chr, flag);
     }
-    if (!d_chars) d_offsets[idx] = bytes;
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 
@@ -230,8 +231,7 @@ std::unique_ptr<column> capitalizer(CapitalFn cfn,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr)
 {
-  auto [offsets_column, chars] =
-    cudf::strings::detail::make_strings_children(cfn, input.size(), stream, mr);
+  auto [offsets_column, chars] = make_strings_children(cfn, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import cudf
 
@@ -8,14 +8,14 @@ from libcpp.utility cimport move
 from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.strings.convert.convert_fixed_point cimport (
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.strings.convert.convert_fixed_point cimport (
     from_fixed_point as cpp_from_fixed_point,
     is_fixed_point as cpp_is_fixed_point,
     to_fixed_point as cpp_to_fixed_point,
 )
-from cudf._lib.cpp.types cimport data_type, type_id
+from cudf._lib.pylibcudf.libcudf.types cimport data_type, type_id
 
 
 @acquire_spill_lock()

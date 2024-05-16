@@ -113,7 +113,7 @@ def test_roundtrip_from_dask_none_index_false(tmpdir):
 @pytest.mark.parametrize("write_meta", [True, False])
 def test_roundtrip_from_dask_cudf(tmpdir, write_meta):
     tmpdir = str(tmpdir)
-    gddf = dask_cudf.from_dask_dataframe(ddf)
+    gddf = ddf.to_backend("cudf")
     gddf.to_parquet(tmpdir, write_metadata_file=write_meta)
 
     gddf2 = dask_cudf.read_parquet(tmpdir, calculate_divisions=True)
@@ -166,9 +166,7 @@ def test_dask_timeseries_from_pandas(tmpdir):
     pdf = ddf2.compute()
     pdf.to_parquet(fn, engine="pyarrow")
     read_df = dask_cudf.read_parquet(fn)
-    # Workaround until following issue is fixed:
-    # https://github.com/apache/arrow/issues/33321
-    dd.assert_eq(ddf2, read_df.compute(), check_index_type=False)
+    dd.assert_eq(ddf2, read_df.compute())
 
 
 @pytest.mark.parametrize("index", [False, None])
@@ -443,7 +441,7 @@ def test_create_metadata_file(tmpdir, partition_on):
     dd.assert_eq(ddf1, ddf2)
 
 
-@xfail_dask_expr("dtypes are inconsistent")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 @need_create_meta
 def test_create_metadata_file_inconsistent_schema(tmpdir):
     # NOTE: This test demonstrates that the CudfEngine
@@ -536,7 +534,7 @@ def test_check_file_size(tmpdir):
         dask_cudf.io.read_parquet(fn, check_file_size=1).compute()
 
 
-@xfail_dask_expr("HivePartitioning cannot be hashed", lt_version="1.0")
+@xfail_dask_expr("HivePartitioning cannot be hashed", lt_version="2024.3.0")
 def test_null_partition(tmpdir):
     import pyarrow as pa
     from pyarrow.dataset import HivePartitioning

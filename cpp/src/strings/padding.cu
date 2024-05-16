@@ -47,8 +47,9 @@ struct base_fn {
   column_device_view const d_column;
   size_type const width;
   size_type const fill_char_size;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   base_fn(column_device_view const& d_column, size_type width, size_type fill_char_size)
     : d_column(d_column), width(width), fill_char_size(fill_char_size)
@@ -58,7 +59,7 @@ struct base_fn {
   __device__ void operator()(size_type idx) const
   {
     if (d_column.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -67,7 +68,7 @@ struct base_fn {
     if (d_chars) {
       derived.pad(d_str, d_chars + d_offsets[idx]);
     } else {
-      d_offsets[idx] = compute_padded_size(d_str, width, fill_char_size);
+      d_sizes[idx] = compute_padded_size(d_str, width, fill_char_size);
     }
   };
 };

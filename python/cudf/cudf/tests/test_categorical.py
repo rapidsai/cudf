@@ -460,7 +460,7 @@ def test_categorical_dataframe_slice_copy():
         pd.Series(["1.0", "2.5", "3.001", None, "9"], dtype="category"),
         pd.Series(["a", "b", "c", "c", "b", "a", "b", "b"]),
         pd.Series(["aa", "b", "c", "c", "bb", "bb", "a", "b", "b"]),
-        pd.Series([1, 2, 3, 89, None, np.nan, np.NaN], dtype="float64"),
+        pd.Series([1, 2, 3, 89, None, np.nan, np.nan], dtype="float64"),
         pd.Series([1, 2, 3, 89], dtype="float64"),
         pd.Series([1, 2.5, 3.001, 89], dtype="float64"),
         pd.Series([None, None, None]),
@@ -493,7 +493,7 @@ def test_categorical_typecast(data, cat_type):
         pd.Series([1, 2, 3, 89]),
         pd.Series(["a", "b", "c", "c", "b", "a", "b", "b"]),
         pd.Series(["aa", "b", "c", "c", "bb", "bb", "a", "b", "b"]),
-        pd.Series([1, 2, 3, 89, None, np.nan, np.NaN], dtype="float64"),
+        pd.Series([1, 2, 3, 89, None, np.nan, np.nan], dtype="float64"),
         pd.Series([1, 2, 3, 89], dtype="float64"),
         pd.Series([1, 2.5, 3.001, 89], dtype="float64"),
         pd.Series([None, None, None]),
@@ -859,3 +859,38 @@ def test_cat_from_scalar(scalar):
     gs = cudf.Series(scalar, dtype="category")
 
     assert_eq(ps, gs)
+
+
+def test_cat_groupby_fillna():
+    ps = pd.Series(["a", "b", "c"], dtype="category")
+    gs = cudf.from_pandas(ps)
+
+    with pytest.warns(FutureWarning):
+        pg = ps.groupby(ps)
+    gg = gs.groupby(gs)
+
+    assert_exceptions_equal(
+        lfunc=pg.fillna,
+        rfunc=gg.fillna,
+        lfunc_args_and_kwargs=(("d",), {}),
+        rfunc_args_and_kwargs=(("d",), {}),
+    )
+
+
+@pytest.mark.parametrize("op", ["min", "max"])
+def test_categorical_maxima(op):
+    ser = cudf.Series(
+        ["a", "d", "c", "z", "g"],
+        dtype=cudf.CategoricalDtype(["z", "c", "g", "d", "a"], ordered=False),
+    )
+    assert not ser.cat.ordered
+
+    # Cannot get extrema of unordered Categorical column
+    with pytest.raises(TypeError, match="Categorical is not ordered"):
+        getattr(ser, op)()
+
+    # Max/min should work after converting to "ordered"
+    ser_pd = ser.to_pandas()
+    result = getattr(ser.cat.as_ordered(), op)()
+    result_pd = getattr(ser_pd.cat.as_ordered(), op)()
+    assert_eq(result, result_pd)
