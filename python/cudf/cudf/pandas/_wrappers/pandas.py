@@ -278,8 +278,8 @@ Index = make_final_proxy_type(
         "_constructor": _FastSlowAttribute("_constructor"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_accessors": set(),
-        "_data": _FastSlowAttribute("_data"),
-        "_mask": _FastSlowAttribute("_mask"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -346,8 +346,8 @@ DatetimeIndex = make_final_proxy_type(
     bases=(Index,),
     additional_attributes={
         "__init__": _DELETE,
-        "_data": _FastSlowAttribute("_data"),
-        "_mask": _FastSlowAttribute("_mask"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -358,8 +358,8 @@ DatetimeArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "_data": _FastSlowAttribute("_data"),
-        "_mask": _FastSlowAttribute("_mask"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -381,8 +381,8 @@ TimedeltaIndex = make_final_proxy_type(
     bases=(Index,),
     additional_attributes={
         "__init__": _DELETE,
-        "_data": _FastSlowAttribute("_data"),
-        "_mask": _FastSlowAttribute("_mask"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -405,8 +405,8 @@ TimedeltaArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "_data": _FastSlowAttribute("_data"),
-        "_mask": _FastSlowAttribute("_mask"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -419,8 +419,8 @@ PeriodIndex = make_final_proxy_type(
     bases=(Index,),
     additional_attributes={
         "__init__": _DELETE,
-        "_data": _FastSlowAttribute("_data"),
-        "_mask": _FastSlowAttribute("_mask"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -431,8 +431,8 @@ PeriodArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "_data": _FastSlowAttribute("_data"),
-        "_mask": _FastSlowAttribute("_mask"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
@@ -497,8 +497,8 @@ StringArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "_data": _FastSlowAttribute("_data"),
-        "_mask": _FastSlowAttribute("_mask"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -521,8 +521,8 @@ BooleanArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "_data": _FastSlowAttribute("_data"),
-        "_mask": _FastSlowAttribute("_mask"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
@@ -544,8 +544,8 @@ IntegerArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
-        "_data": _FastSlowAttribute("_data"),
-        "_mask": _FastSlowAttribute("_mask"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -631,8 +631,8 @@ IntervalIndex = make_final_proxy_type(
     bases=(Index,),
     additional_attributes={
         "__init__": _DELETE,
-        "_data": _FastSlowAttribute("_data"),
-        "_mask": _FastSlowAttribute("_mask"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -643,8 +643,8 @@ IntervalArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "_data": _FastSlowAttribute("_data"),
-        "_mask": _FastSlowAttribute("_mask"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -674,8 +674,8 @@ FloatingArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
-        "_data": _FastSlowAttribute("_data"),
-        "_mask": _FastSlowAttribute("_mask"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
