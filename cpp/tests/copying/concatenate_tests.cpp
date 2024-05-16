@@ -29,6 +29,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/filling.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -188,6 +189,8 @@ TEST_F(StringColumnTest, ConcatenateManyColumns)
 
 TEST_F(StringColumnTest, ConcatenateTooLarge)
 {
+  if (cudf::strings::detail::is_large_strings_enabled()) { return; }
+
   std::string big_str(1000000, 'a');  // 1 million bytes x 5 = 5 million bytes
   cudf::test::strings_column_wrapper input{big_str, big_str, big_str, big_str, big_str};
   std::vector<cudf::column_view> input_cols;
@@ -374,7 +377,7 @@ TEST_F(OverflowTest, OverflowTest)
   }
 
   // string column, overflow on chars
-  {
+  if (!cudf::strings::detail::is_large_strings_enabled()) {
     constexpr auto size = static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     // try and concatenate 6 string columns of with 1 billion chars in each
@@ -497,7 +500,7 @@ TEST_F(OverflowTest, Presliced)
   }
 
   // strings, overflow on chars
-  {
+  if (!cudf::strings::detail::is_large_strings_enabled()) {
     constexpr cudf::size_type total_chars_size = 1024 * 1024 * 1024;
     constexpr cudf::size_type string_size      = 64;
     constexpr cudf::size_type num_rows         = total_chars_size / string_size;

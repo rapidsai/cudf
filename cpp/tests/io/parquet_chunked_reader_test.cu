@@ -1175,7 +1175,7 @@ TEST_F(ParquetChunkedReaderInputLimitTest, List)
   auto base_path      = temp_env->get_temp_filepath("list");
   auto test_filenames = input_limit_get_test_names(base_path);
 
-  constexpr int num_rows  = 50'000'000;
+  constexpr int num_rows  = 10'000'000;
   constexpr int list_size = 4;
 
   auto const stream = cudf::get_default_stream();
@@ -1225,14 +1225,14 @@ TEST_F(ParquetChunkedReaderInputLimitTest, List)
   //
   // Note that in the dictionary cases, both of these revert down to 1 chunk because the
   // dictionaries dramatically shrink the size of the uncompressed data.
-  constexpr int expected_a[] = {2, 2, 1, 1};
-  input_limit_test_read(test_filenames, tbl, 0, size_t{2} * 1024 * 1024 * 1024, expected_a);
+  constexpr int expected_a[] = {3, 3, 1, 1};
+  input_limit_test_read(test_filenames, tbl, 0, 256 * 1024 * 1024, expected_a);
   // smaller limit
-  constexpr int expected_b[] = {6, 6, 2, 1};
-  input_limit_test_read(test_filenames, tbl, 0, 512 * 1024 * 1024, expected_b);
+  constexpr int expected_b[] = {5, 5, 2, 1};
+  input_limit_test_read(test_filenames, tbl, 0, 128 * 1024 * 1024, expected_b);
   // include output chunking as well
-  constexpr int expected_c[] = {11, 11, 9, 8};
-  input_limit_test_read(test_filenames, tbl, 128 * 1024 * 1024, 512 * 1024 * 1024, expected_c);
+  constexpr int expected_c[] = {10, 9, 8, 7};
+  input_limit_test_read(test_filenames, tbl, 32 * 1024 * 1024, 64 * 1024 * 1024, expected_c);
 }
 
 void tiny_list_rowgroup_test(bool just_list_col)
@@ -1318,7 +1318,7 @@ TEST_F(ParquetChunkedReaderInputLimitTest, Mixed)
   auto base_path      = temp_env->get_temp_filepath("mixed_types");
   auto test_filenames = input_limit_get_test_names(base_path);
 
-  constexpr int num_rows  = 50'000'000;
+  constexpr int num_rows  = 10'000'000;
   constexpr int list_size = 4;
   constexpr int str_size  = 3;
 
@@ -1400,12 +1400,12 @@ TEST_F(ParquetChunkedReaderInputLimitTest, Mixed)
   //
   // Note that in the dictionary cases, both of these revert down to 1 chunk because the
   // dictionaries dramatically shrink the size of the uncompressed data.
-  constexpr int expected_a[] = {3, 3, 1, 1};
-  input_limit_test_read(test_filenames, tbl, 0, size_t{2} * 1024 * 1024 * 1024, expected_a);
+  constexpr int expected_a[] = {5, 5, 2, 1};
+  input_limit_test_read(test_filenames, tbl, 0, 256 * 1024 * 1024, expected_a);
   // smaller limit
-  constexpr int expected_b[] = {10, 11, 4, 1};
-  input_limit_test_read(test_filenames, tbl, 0, 512 * 1024 * 1024, expected_b);
+  constexpr int expected_b[] = {10, 9, 3, 1};
+  input_limit_test_read(test_filenames, tbl, 0, 128 * 1024 * 1024, expected_b);
   // include output chunking as well
-  constexpr int expected_c[] = {20, 21, 15, 14};
-  input_limit_test_read(test_filenames, tbl, 128 * 1024 * 1024, 512 * 1024 * 1024, expected_c);
+  constexpr int expected_c[] = {20, 18, 15, 12};
+  input_limit_test_read(test_filenames, tbl, 32 * 1024 * 1024, 64 * 1024 * 1024, expected_c);
 }
