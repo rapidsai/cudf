@@ -48,6 +48,12 @@ def list_struct_table():
     return data
 
 
+def libcudf_mmh3_x86_32(binary):
+    seed = plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
+    hashval = mmh3.hash(binary, seed)
+    return seed ^ (hashval + 0x9E3779B9 + (seed << 6) + (seed >> 2))
+
+
 def python_hash_value(x, method):
     if isinstance(x, str):
         binary = str(x).encode()
@@ -62,10 +68,7 @@ def python_hash_value(x, method):
     else:
         raise NotImplementedError
     if method == "murmurhash3_x86_32":
-        # reimplement libcudf hash combine for a single colum
-        seed = plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
-        hashval = mmh3.hash(binary, seed)
-        return seed ^ (hashval + 0x9E3779B9 + (seed << 6) + (seed >> 2))
+        return libcudf_mmh3_x86_32(binary)
     elif method == "murmurhash3_x64_128":
         hasher = mmh3.mmh3_x64_128(seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED)
         hasher.update(binary)
