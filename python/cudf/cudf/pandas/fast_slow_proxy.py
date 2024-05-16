@@ -727,10 +727,10 @@ class _FunctionProxy(_CallableProxyMixin):
     ):
         self._fsproxy_fast = fast
         self._fsproxy_slow = slow
-        assigned = (
-            functools.WRAPPER_ASSIGNMENTS if assigned is None else assigned
-        )
-        updated = functools.WRAPPER_UPDATES if updated is None else updated
+        if assigned is None:
+            assigned = functools.WRAPPER_ASSIGNMENTS
+        if updated is None:
+            updated = functools.WRAPPER_UPDATES
         functools.update_wrapper(
             self,
             slow,
