@@ -2275,3 +2275,77 @@ def test_loc_setitem_empty_dataframe():
     gdf.loc[["index_1"], "new_col"] = "A"
 
     assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [15, 14, 12, 10, 1],
+        [1, 10, 12, 14, 15],
+    ],
+)
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        10,
+        15,
+        14,
+        0,
+        2,
+    ],
+)
+def test_loc_datetime_monotonic_with_ts(data, scalar):
+    gdf = cudf.DataFrame(
+        {"a": [1, 1, 1, 2, 2], "b": [1, 2, 3, 4, 5]},
+        index=cudf.Index(data, dtype="datetime64[ns]"),
+    )
+    pdf = gdf.to_pandas()
+
+    i = pd.Timestamp(scalar)
+
+    actual = gdf.loc[i:]
+    expected = pdf.loc[i:]
+
+    assert_eq(actual, expected)
+
+    actual = gdf.loc[:i]
+    expected = pdf.loc[:i]
+
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("data", [[15, 14, 3, 10, 1]])
+@pytest.mark.parametrize("scalar", [1, 10, 15, 14, 0, 2])
+def test_loc_datetime_random_with_ts(data, scalar):
+    gdf = cudf.DataFrame(
+        {"a": [1, 1, 1, 2, 2], "b": [1, 2, 3, 4, 5]},
+        index=cudf.Index(data, dtype="datetime64[ns]"),
+    )
+    pdf = gdf.to_pandas()
+
+    i = pd.Timestamp(scalar)
+
+    if i not in pdf.index:
+        assert_exceptions_equal(
+            lambda: pdf.loc[i:],
+            lambda: gdf.loc[i:],
+            lfunc_args_and_kwargs=([],),
+            rfunc_args_and_kwargs=([],),
+        )
+        assert_exceptions_equal(
+            lambda: pdf.loc[:i],
+            lambda: gdf.loc[:i],
+            lfunc_args_and_kwargs=([],),
+            rfunc_args_and_kwargs=([],),
+        )
+    else:
+        actual = gdf.loc[i:]
+        expected = pdf.loc[i:]
+
+        assert_eq(actual, expected)
+
+        actual = gdf.loc[:i]
+        expected = pdf.loc[:i]
+
+        assert_eq(actual, expected)
