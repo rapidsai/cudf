@@ -325,9 +325,6 @@ dependencies:
           - matrix: {cuda: "11.*"}
             packages: &build_python_packages_cu11
               - &rmm_cu11 rmm-cu11==24.6.*
-          - {matrix: null, packages: null }
-      - output_types: pyproject
-        matrices:
           - {matrix: null, packages: [*rmm_conda] }
   libarrow_build:
     common:
@@ -578,10 +575,7 @@ dependencies:
               - rmm-cu11==24.6.*
               - cubinlinker-cu11
               - ptxcompiler-cu11
-          - {matrix: null, packages: null}
-      - output_types: pyproject
-        matrices:
-          - {matrix: null, packages: [cubinlinker, ptxcompiler, *rmm_conda] }
+          - {matrix: null, packages: [cubinlinker, ptxcompiler, *rmm_conda]}
   run_cudf_polars:
     common:
       - output_types: [conda, requirements, pyproject]
