@@ -63,19 +63,23 @@ static void bench_find_string(nvbench::state& state)
     state.add_global_memory_writes<nvbench::int8_t>(input.size());
   }
 
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    if (api == "find") {
-      cudf::strings::find(input, target);
-    } else if (api == "find_multi") {
+  if (api == "find") {
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::find(input, target); });
+  } else if (api == "find_multi") {
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::strings::find_multiple(input, cudf::strings_column_view(targets));
-    } else if (api == "contains") {
-      cudf::strings::contains(input, target);
-    } else if (api == "starts_with") {
-      cudf::strings::starts_with(input, target);
-    } else if (api == "ends_with") {
-      cudf::strings::ends_with(input, target);
-    }
-  });
+    });
+  } else if (api == "contains") {
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::contains(input, target); });
+  } else if (api == "starts_with") {
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::starts_with(input, target); });
+  } else if (api == "ends_with") {
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::ends_with(input, target); });
+  }
 }
 
 NVBENCH_BENCH(bench_find_string)
