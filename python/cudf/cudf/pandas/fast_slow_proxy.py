@@ -800,16 +800,8 @@ class _FastSlowAttribute:
                     owner._fsproxy_fast, self._name, _Unusable()
                 )
 
-            # if self._name in {"_data", "_mask", "storage", "css", "ctx"}:
-            #     return _maybe_wrap_result(
-            #             getattr(instance._fsproxy_slow, self._name),
-            #             None,  # type: ignore
-            #         )
-            # else:
             try:
                 slow_attr = getattr(owner._fsproxy_slow, self._name)
-                # if is_bound_method(slow_attr) and instance is not None:
-                #     slow_attr = getattr(slow_attr, "__func__", slow_attr)
             except AttributeError as e:
                 if instance is not None:
                     return _maybe_wrap_result(

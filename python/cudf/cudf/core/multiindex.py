@@ -1857,9 +1857,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         result = column.as_column(
             -1,
             length=len(target),
-            dtype=libcudf.types.size_type_dtype
-            if not cudf.get_option("cudf.pandas_compatible")
-            else np.dtype("int64"),
+            dtype=libcudf.types.size_type_dtype,
         )
         if not len(self):
             return _return_get_indexer_result(result.values)

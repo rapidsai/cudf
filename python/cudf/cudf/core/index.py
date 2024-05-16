@@ -1267,9 +1267,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         result = as_column(
             -1,
             length=len(needle),
-            dtype=libcudf.types.size_type_dtype
-            if not cudf.get_option("cudf.pandas_compatible")
-            else np.dtype("int64"),
+            dtype=libcudf.types.size_type_dtype,
         )
 
         if not len(self):
@@ -1321,8 +1319,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         )
 
         if lower_bound == upper_bound:
-            if is_sorted:
-                return lower_bound
             raise KeyError(key)
 
         if lower_bound + 1 == upper_bound:
@@ -1525,12 +1521,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         )
 
     def repeat(self, repeats, axis=None):
-        res = self._from_columns_like_self(
+        return self._from_columns_like_self(
             Frame._repeat([*self._columns], repeats, axis), self._column_names
         )
-        if isinstance(res, DatetimeIndex):
-            res._freq = None
-        return res
 
     @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):

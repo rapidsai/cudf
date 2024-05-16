@@ -3,7 +3,7 @@ from functools import singledispatch
 
 from pandas.errors import DataError
 
-from cudf.api.types import _is_categorical_dtype, is_string_dtype
+from cudf.api.types import is_string_dtype
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -167,52 +167,15 @@ cdef class GroupBy:
             included_aggregations_i = []
             col_aggregations = []
             for agg in aggs:
-                if (
-                    is_string_dtype(col)
-                    and agg not in _STRING_AGGS
-                    and not (
-                        agg in {
-                            "count",
-                            "max",
-                            "min",
-                            "first",
-                            "last",
-                            "nunique",
-                            "unique",
-                        }
-                        or "count" in str(agg)
-                        or (agg is list)
-                        or "nth" in str(agg)
-                    )
-                ):
-                    raise NotImplementedError(
-                        f"function is not implemented for this dtype: {agg}"
-                    )
-                elif (
-                    _is_categorical_dtype(col)
-                    and agg not in _CATEGORICAL_AGGS
-                    and not (
-                        agg in {"count", "max", "min", "unique"} or "count" in str(agg)
-                    )
-                ):
-                    raise TypeError(
-                        f"{col.dtype} type does not support {agg} operations"
-                    )
-                # elif str(col.dtype).startswith("timedelta64") and agg in {
-                #    "prod", "cumprod", "skew", "var"}:
-                #    raise TypeError(
-                #    f"timedelta64 type does not support {agg} operations")
                 agg_obj = make_aggregation(agg)
                 if valid_aggregations == "ALL" or agg_obj.kind in valid_aggregations:
                     included_aggregations_i.append((agg, agg_obj.kind))
                     col_aggregations.append(agg_obj.c_obj)
             included_aggregations.append(included_aggregations_i)
             if col_aggregations:
-                requests.append(
-                    pylibcudf.groupby.GroupByRequest(
-                        col.to_pylibcudf(mode="read"), col_aggregations
-                    )
-                )
+                requests.append(pylibcudf.groupby.GroupByRequest(
+                    col.to_pylibcudf(mode="read"), col_aggregations
+                ))
                 column_included.append(i)
 
         if not requests and any(len(v) > 0 for v in aggregations):

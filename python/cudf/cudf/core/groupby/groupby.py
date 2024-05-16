@@ -2290,7 +2290,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         -------
         DataFrame or Series
         """
-        # import pdb;pdb.set_trace()
         warnings.warn(
             "groupby fillna is deprecated and "
             "will be removed in a future version. Use groupby ffill "
