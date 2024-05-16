@@ -473,9 +473,7 @@ void reader::impl::prepare_data(read_mode mode)
 
   // handle any chunking work (ratcheting through the subpasses and chunks within
   // our current pass) if in bounds
-  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
-    handle_chunking(mode);
-  }
+  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) { handle_chunking(mode); }
 }
 
 void reader::impl::populate_metadata(table_metadata& out_metadata)
