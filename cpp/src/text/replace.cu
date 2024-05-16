@@ -29,7 +29,6 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <nvtext/detail/tokenize.hpp>
 #include <nvtext/replace.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -50,11 +49,13 @@ namespace {
 using replace_result = thrust::pair<bool, cudf::string_view>;
 
 struct base_token_replacer_fn {
-  cudf::column_device_view const d_strings;  ///< strings to tokenize
-  cudf::string_view const d_delimiter;       ///< delimiter characters for tokenizing
-  cudf::size_type* d_sizes{};                ///< for output string size
-  char* d_chars{};                           ///< output buffer
-  cudf::detail::input_offsetalator d_offsets;
+  cudf::column_device_view d_strings;          ///< strings to tokenize
+  cudf::string_view const d_delimiter;         ///< delimiter characters for tokenizing
+  cudf::size_type* d_sizes{};                  ///< for output string size
+  char* d_chars{};                             ///< output buffer
+  cudf::detail::input_offsetalator d_offsets;  ///< offsets for output buffer
+  cudf::size_type const* d_indices{};          ///< indices for long strings
+  cudf::size_type* d_output_sizes{};           ///< output sizes for long strings
 
   /**
    * @brief Tokenizes each string and calls the provided `replacer` function
@@ -65,7 +66,7 @@ struct base_token_replacer_fn {
    * @param replacer Function to call for each token to determined its replacement
    */
   template <typename ReplaceFn>
-  __device__ void process_string(cudf::size_type idx, ReplaceFn replacer)
+  __device__ void process_string(cudf::size_type idx, ReplaceFn replacer) const
   {
     if (d_strings.is_null(idx)) {
       if (!d_chars) { d_sizes[idx] = 0; }
@@ -104,6 +105,13 @@ struct base_token_replacer_fn {
       memcpy(out_ptr, in_ptr + last_pos, d_str.size_bytes() - last_pos);
     } else {
       d_sizes[idx] = nbytes;
+      // handles output size calculation for long strings
+      if (nbytes > 0 && d_indices) {
+        auto out_idx = d_indices[idx] - 1;  // adjust for upper_bound
+        cuda::atomic_ref<cudf::size_type, cuda::thread_scope_block> ref{
+          *(d_output_sizes + out_idx)};
+        ref.fetch_add(nbytes, cuda::std::memory_order_relaxed);
+      }
     }
   }
 };
@@ -123,7 +131,7 @@ using strings_iterator = cudf::column_device_view::const_iterator<cudf::string_v
 struct replace_tokens_fn : base_token_replacer_fn {
   strings_iterator d_targets_begin;  ///< strings to search for
   strings_iterator d_targets_end;
-  cudf::column_device_view const d_replacements;  ///< replacement strings
+  cudf::column_device_view const d_replacements;
 
   replace_tokens_fn(cudf::column_device_view const& d_strings,
                     cudf::string_view const& d_delimiter,
@@ -143,7 +151,7 @@ struct replace_tokens_fn : base_token_replacer_fn {
    * @param token Token candidate to be replaced.
    * @return result pair specifies replacement condition and new string
    */
-  __device__ replace_result token_replacement(cudf::string_view const& token)
+  __device__ replace_result token_replacement(cudf::string_view const& token) const
   {
     // check if the token matches any of the targets
     auto const found_itr = thrust::find(thrust::seq, d_targets_begin, d_targets_end, token);
@@ -161,49 +169,23 @@ struct replace_tokens_fn : base_token_replacer_fn {
     return replace_result{false, cudf::string_view()};
   }
 
-  __device__ void operator()(cudf::size_type idx)
+  __device__ void operator()(cudf::size_type idx) const
   {
     process_string(
       idx, [this] __device__(cudf::string_view const& token) { return token_replacement(token); });
   }
 };
 
-struct replace_tokens_ls : replace_tokens_fn {
-  cudf::size_type const* d_indices;
-  cudf::size_type* d_output_sizes;
-  replace_tokens_ls(cudf::column_device_view const& d_strings,
-                    cudf::string_view const& d_delimiter,
-                    strings_iterator d_targets_begin,
-                    strings_iterator d_targets_end,
-                    cudf::column_device_view const& d_replacements,
-                    cudf::size_type* d_indices,
-                    cudf::size_type* d_output_sizes)
-    : replace_tokens_fn{d_strings, d_delimiter, d_targets_begin, d_targets_end, d_replacements},
-      d_indices{d_indices},
-      d_output_sizes{d_output_sizes}
-  {
-  }
-
-  __device__ void operator()(cudf::size_type idx)
-  {
-    process_string(
-      idx, [this] __device__(cudf::string_view const& token) { return token_replacement(token); });
-    if (!d_chars) {
-      // accumulate sub-row sizes into output row size
-      auto const size = d_sizes[idx];
-      if (size > 0) {
-        auto out_idx = d_indices[idx] - 1;  // adjust for upper_bound
-        cuda::atomic_ref<cudf::size_type, cuda::thread_scope_block> ref{
-          *(d_output_sizes + out_idx)};
-        ref.fetch_add(size, cuda::std::memory_order_relaxed);
-      }
-    }
-  }
-};
-
+// For determining long strings processing
 constexpr cudf::size_type AVG_CHAR_BYTES_THRESHOLD = 64;
-constexpr cudf::size_type LS_SUB_BLOCK_SIZE        = 64;
+// For computing sub-block sizes of long strings
+constexpr cudf::size_type LS_SUB_BLOCK_SIZE = 64;
 
+/**
+ * @brief Locate delimiters to produce sub-offsets in the input device array
+ *
+ * The sub-offsets provide additional tokenize boundaries within longer strings.
+ */
 struct sub_offset_fn {
   char const* d_input_chars;
   int64_t first_offset;
@@ -214,24 +196,24 @@ struct sub_offset_fn {
   {
     auto end      = d_input_chars + last_offset;
     auto position = (idx + 1) * LS_SUB_BLOCK_SIZE;
-    auto begin    = d_input_chars + first_offset + position;
-    while ((begin < end) &&
-           cudf::strings::detail::is_utf8_continuation_char(static_cast<u_char>(*begin))) {
-      ++begin;
+    auto itr      = d_input_chars + first_offset + position;
+    while ((itr < end) &&
+           cudf::strings::detail::is_utf8_continuation_char(static_cast<u_char>(*itr))) {
+      ++itr;
       ++position;
     }
-    if (begin >= end) { return 0; }  // or last_offset
+    if (itr >= end) { return 0; }  // 0s will be filtered out
     // keep delimiter search within this sub-block
     end = d_input_chars + std::min(last_offset, (idx + 2) * LS_SUB_BLOCK_SIZE + first_offset);
     auto tokenizer = characters_tokenizer(cudf::string_view{}, d_delimiter);
-    while (begin < end) {
+    while (itr < end) {
       auto chr      = cudf::char_utf8{};
-      auto chr_size = cudf::strings::detail::to_char_utf8(begin, chr);
+      auto chr_size = cudf::strings::detail::to_char_utf8(itr, chr);
       if (tokenizer.is_delimiter(chr)) { break; }
-      begin += chr_size;
+      itr += chr_size;
       position += chr_size;
     }
-    return (begin < end) ? position + first_offset : 0;
+    return (itr < end) ? position + first_offset : 0;
   }
 };
 
@@ -258,43 +240,24 @@ struct remove_small_tokens_fn : base_token_replacer_fn {
   {
   }
 
-  __device__ void operator()(cudf::size_type idx)
+  __device__ replace_result token_replacement(cudf::string_view token) const
   {
-    auto replacer = [this] __device__(cudf::string_view const& token) {
-      return replace_result{token.length() < min_token_length, d_replacement};
-    };
-    process_string(idx, replacer);
+    return replace_result{token.length() < min_token_length, d_replacement};
+  }
+
+  __device__ void operator()(cudf::size_type idx) const
+  {
+    process_string(
+      idx, [this] __device__(cudf::string_view const& token) { return token_replacement(token); });
   }
 };
 
-}  // namespace
-
-// detail APIs
-
-std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& input,
-                                             cudf::strings_column_view const& targets,
-                                             cudf::strings_column_view const& replacements,
-                                             cudf::string_scalar const& delimiter,
+template <typename ReplacerFn>
+std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
+                                             cudf::strings_column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(!targets.has_nulls(), "Parameter targets must not have nulls");
-  CUDF_EXPECTS(!replacements.has_nulls(), "Parameter replacements must not have nulls");
-  if (replacements.size() != 1)
-    CUDF_EXPECTS(replacements.size() == targets.size(),
-                 "Parameter targets and replacements must be the same size");
-  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
-
-  cudf::size_type const strings_count = input.size();
-  if (strings_count == 0) {
-    return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
-  }
-
-  auto strings_column      = cudf::column_device_view::create(input.parent(), stream);
-  auto targets_column      = cudf::column_device_view::create(targets.parent(), stream);
-  auto replacements_column = cudf::column_device_view::create(replacements.parent(), stream);
-  cudf::string_view d_delimiter(delimiter.data(), delimiter.size());
-
   auto const first_offset = (input.offset() == 0) ? 0L
                                                   : cudf::strings::detail::get_offset_value(
                                                       input.offsets(), input.offset(), stream);
@@ -303,16 +266,11 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& in
   auto const chars_size = last_offset - first_offset;
 
   if ((chars_size / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
-    replace_tokens_fn replacer{*strings_column,
-                               d_delimiter,
-                               targets_column->begin<cudf::string_view>(),
-                               targets_column->end<cudf::string_view>(),
-                               *replacements_column};
     // this utility calls replacer to build the offsets and chars columns
     auto [offsets_column, chars] =
-      cudf::strings::detail::make_strings_children(replacer, strings_count, stream, mr);
+      cudf::strings::detail::make_strings_children(replacer, input.size(), stream, mr);
     // return new strings column
-    return cudf::make_strings_column(strings_count,
+    return cudf::make_strings_column(input.size(),
                                      std::move(offsets_column),
                                      chars.release(),
                                      input.null_count(),
@@ -320,9 +278,10 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& in
   }
 
   auto const input_chars = input.chars_begin(stream);
-  auto input_offsets =
+  auto const input_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
 
+  // divide up long strings into shorter strings by finding new sub-offsets at delimiters
   auto sub_count   = chars_size / LS_SUB_BLOCK_SIZE;
   auto tmp_offsets = rmm::device_uvector<int64_t>(sub_count + input.size() + 1, stream);
   {
@@ -350,18 +309,15 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& in
     stream.synchronize();  // protect against destruction of sub_offsets
   }
 
-  auto const tmp_size = static_cast<cudf::size_type>(tmp_offsets.size());
-  auto tmp_strings    = cudf::column_view(
-    cudf::data_type{cudf::type_id::STRING},
-    tmp_size - 1,
-    input_chars,
-    nullptr,
-    0,
-    0,
-    {cudf::column_view(
-      cudf::data_type{cudf::type_id::INT64}, tmp_size, tmp_offsets.data(), nullptr, 0)});
-  auto d_strings = cudf::column_device_view::create(tmp_strings, stream);
+  // cobble together a column_view of type STRING
+  auto const tmp_size    = static_cast<cudf::size_type>(tmp_offsets.size()) - 1;
+  auto const children    = std::vector<cudf::column_view>({cudf::column_view(
+    cudf::data_type{cudf::type_id::INT64}, tmp_size + 1, tmp_offsets.data(), nullptr, 0)});
+  auto const tmp_strings = cudf::column_view(
+    cudf::data_type{cudf::type_id::STRING}, tmp_size, input_chars, nullptr, 0, 0, children);
+  auto const d_tmp_strings = cudf::column_device_view::create(tmp_strings, stream);
 
+  // compute indices of actual output rows
   auto indices = rmm::device_uvector<cudf::size_type>(tmp_offsets.size(), stream);
   thrust::upper_bound(rmm::exec_policy_nosync(stream),
                       input_offsets,
@@ -372,25 +328,56 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& in
 
   auto d_sizes = rmm::device_uvector<cudf::size_type>(input.size(), stream);
   thrust::fill(rmm::exec_policy_nosync(stream), d_sizes.begin(), d_sizes.end(), 0);
-  replace_tokens_ls replacer{*d_strings,
-                             d_delimiter,
-                             targets_column->begin<cudf::string_view>(),
-                             targets_column->end<cudf::string_view>(),
-                             *replacements_column,
-                             indices.data(),
-                             d_sizes.data()};
+
+  replacer.d_strings      = *d_tmp_strings;
+  replacer.d_indices      = indices.data();
+  replacer.d_output_sizes = d_sizes.data();
+
   auto chars = std::get<1>(
     cudf::strings::detail::make_strings_children(replacer, tmp_strings.size(), stream, mr));
   auto offsets_column = std::get<0>(
     cudf::strings::detail::make_offsets_child_column(d_sizes.begin(), d_sizes.end(), stream, mr));
-  return cudf::make_strings_column(strings_count,
+  return cudf::make_strings_column(input.size(),
                                    std::move(offsets_column),
                                    chars.release(),
                                    input.null_count(),
                                    cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
+}  // namespace
 
-std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& strings,
+// detail APIs
+
+std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& input,
+                                             cudf::strings_column_view const& targets,
+                                             cudf::strings_column_view const& replacements,
+                                             cudf::string_scalar const& delimiter,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(!targets.has_nulls(), "Parameter targets must not have nulls");
+  CUDF_EXPECTS(!replacements.has_nulls(), "Parameter replacements must not have nulls");
+  if (replacements.size() != 1)
+    CUDF_EXPECTS(replacements.size() == targets.size(),
+                 "Parameter targets and replacements must be the same size");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
+
+  if (input.is_empty()) { return cudf::make_empty_column(cudf::type_id::STRING); }
+
+  auto const d_strings      = cudf::column_device_view::create(input.parent(), stream);
+  auto const d_targets      = cudf::column_device_view::create(targets.parent(), stream);
+  auto const d_replacements = cudf::column_device_view::create(replacements.parent(), stream);
+  auto const d_delimiter    = cudf::string_view(delimiter.data(), delimiter.size());
+
+  replace_tokens_fn replacer{*d_strings,
+                             d_delimiter,
+                             d_targets->begin<cudf::string_view>(),
+                             d_targets->end<cudf::string_view>(),
+                             *d_replacements};
+
+  return replace_helper(replacer, input, stream, mr);
+}
+
+std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& input,
                                             cudf::size_type min_token_length,
                                             cudf::string_scalar const& replacement,
                                             cudf::string_scalar const& delimiter,
@@ -400,27 +387,15 @@ std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& str
   CUDF_EXPECTS(replacement.is_valid(stream), "Parameter replacement must be valid");
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
-  cudf::size_type const strings_count = strings.size();
-  if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
+  if (input.is_empty()) { return cudf::make_empty_column(cudf::type_id::STRING); }
 
-  auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
-  cudf::string_view d_replacement(replacement.data(), replacement.size());
-  cudf::string_view d_delimiter(delimiter.data(), delimiter.size());
-  remove_small_tokens_fn filterer{*strings_column, d_delimiter, min_token_length, d_replacement};
+  auto const d_strings     = cudf::column_device_view::create(input.parent(), stream);
+  auto const d_replacement = cudf::string_view(replacement.data(), replacement.size());
+  auto const d_delimiter   = cudf::string_view(delimiter.data(), delimiter.size());
 
-  // copy null mask from input column
-  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
+  remove_small_tokens_fn filterer{*d_strings, d_delimiter, min_token_length, d_replacement};
 
-  // this utility calls filterer to build the offsets and chars columns
-  auto [offsets_column, chars] =
-    cudf::strings::detail::make_strings_children(filterer, strings_count, stream, mr);
-
-  // return new strings column
-  return cudf::make_strings_column(strings_count,
-                                   std::move(offsets_column),
-                                   chars.release(),
-                                   strings.null_count(),
-                                   std::move(null_mask));
+  return replace_helper(filterer, input, stream, mr);
 }
 
 }  // namespace detail
