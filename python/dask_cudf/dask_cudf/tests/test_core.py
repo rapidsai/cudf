@@ -971,3 +971,25 @@ def test_implicit_array_conversion_cupy_sparse():
     # NOTE: The calculation here doesn't need to make sense.
     # We just need to make sure we get the right type back.
     assert type(result) == type(expect)
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3], [1.1, 2.3, 4.5]])
+@pytest.mark.parametrize("values", [[1, 5], [1.1, 2.4, 2.3]])
+def test_series_isin(data, values):
+    ser = cudf.Series(data)
+    pddf = dd.from_pandas(ser.to_pandas(), 1)
+    ddf = dask_cudf.from_cudf(ser, 1)
+
+    actual = ddf.isin(values)
+    expected = pddf.isin(values)
+
+    dd.assert_eq(actual, expected)
+
+
+def test_series_isin_error():
+    ser = cudf.Series([1, 2, 3])
+    ddf = dask_cudf.from_cudf(ser, 1)
+    with pytest.raises(TypeError):
+        ser.isin([1, 5, "a"])
+    with pytest.raises(TypeError):
+        ddf.isin([1, 5, "a"]).compute()
