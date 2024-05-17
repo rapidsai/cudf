@@ -282,8 +282,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                         filtered_idx.append(
                             {
                                 "start": row_groups_i[rg][0],
-                                "stop": row_groups_i[rg][1],
-                                "step": range_index_meta['step']
+                                "stop": row_groups_i[rg][1]
                             }
                         )
 
@@ -295,7 +294,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                             for n in range(
                                 f_idx["start"],
                                 f_idx["stop"],
-                                f_idx["step"]
+                                range_index_meta['step']
                             )
                          ]
                     )
