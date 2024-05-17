@@ -984,3 +984,12 @@ def test_series_isin(data, values):
     expected = pddf.isin(values)
 
     dd.assert_eq(actual, expected)
+
+
+def test_series_isin_error():
+    ser = cudf.Series([1, 2, 3])
+    ddf = dask_cudf.from_cudf(ser, 1)
+    with pytest.raises(TypeError):
+        ser.isin([1, 5, "a"])
+    with pytest.raises(TypeError):
+        ddf.isin([1, 5, "a"]).compute()
