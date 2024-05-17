@@ -24,28 +24,28 @@ def metadata_from_arrow_array(
     return metadata
 
 
-def assert_column_eq(plc_column: plc.Column, pa_array: pa.Array) -> None:
+def assert_column_eq(expect: pa.Array, got: plc.Column) -> None:
     """Verify that the pylibcudf array and PyArrow array are equal."""
     # Nested types require children metadata to be passed to the conversion function.
     plc_pa = plc.interop.to_arrow(
-        plc_column, metadata=metadata_from_arrow_array(pa_array)
+        got, metadata=metadata_from_arrow_array(expect)
     )
 
     if isinstance(plc_pa, pa.ChunkedArray):
         plc_pa = plc_pa.combine_chunks()
-    if isinstance(pa_array, pa.ChunkedArray):
-        pa_array = pa_array.combine_chunks()
+    if isinstance(expect, pa.ChunkedArray):
+        expect = expect.combine_chunks()
 
-    assert plc_pa.equals(pa_array)
+    assert plc_pa.equals(expect)
 
 
 def assert_table_eq(plc_table: plc.Table, pa_table: pa.Table) -> None:
-    """Verify that the pylibcudf array and PyArrow array are equal."""
+    """Verify that the pylibcudf table and PyArrow table are equal."""
     plc_shape = (plc_table.num_rows(), plc_table.num_columns())
     assert plc_shape == pa_table.shape
 
     for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
-        assert_column_eq(plc_col, pa_col)
+        assert_column_eq(pa_col, plc_col)
 
 
 def cudf_raises(expected_exception: BaseException, *args, **kwargs):
