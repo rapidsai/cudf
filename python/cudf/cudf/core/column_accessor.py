@@ -346,6 +346,7 @@ class ColumnAccessor(abc.MutableMapping):
         # TODO: we should move all insert logic here
         if name in self._data:
             raise ValueError(f"Cannot insert '{name}', already exists")
+        breakpoint()
         if loc == old_ncols:
             if validate:
                 value = column.as_column(value)
