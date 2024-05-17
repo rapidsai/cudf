@@ -123,7 +123,7 @@ ndarray = make_final_proxy_type(
         "__iter__": custom_iter,
         # Special wrapping to handle scalar values
         "_fsproxy_wrap": classmethod(wrap_ndarray),
-        "base": _FastSlowAttribute("base", True),
+        "base": _FastSlowAttribute("base", private=True),
     },
 )
 

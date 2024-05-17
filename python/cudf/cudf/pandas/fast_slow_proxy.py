@@ -782,7 +782,7 @@ class _FastSlowAttribute:
 
     _attr: Any
 
-    def __init__(self, name: str, private=False):
+    def __init__(self, name: str, *, private: bool = False):
         self._name = name
         self._private = private
         self._attr = None
