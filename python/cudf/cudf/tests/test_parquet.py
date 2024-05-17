@@ -553,11 +553,7 @@ def test_parquet_read_filtered_complex_predicate(
 
     # Check filters
     if expected_len != 0:
-        with pytest.warns(
-            FutureWarning,
-            match="index concatenation will be deprecated in a future release",
-        ):
-            df_filtered = cudf.read_parquet(fname, filters=predicate)
+        df_filtered = cudf.read_parquet(fname, filters=predicate)
     else:
         df_filtered = cudf.read_parquet(fname, filters=predicate)
     assert_eq(cudf.io.read_parquet_metadata(fname)[1], 10 / 2)
@@ -2208,16 +2204,12 @@ def test_read_parquet_partitioned_filtered(
 
     # Filter on partitioned columns
     expect = pd.read_parquet(read_path, filters=pfilters)
-    with pytest.warns(
-        FutureWarning,
-        match="index concatenation will be deprecated in a future release",
-    ):
-        got = cudf.read_parquet(
-            read_path,
-            filters=pfilters,
-            row_groups=row_groups,
-            categorical_partitions=use_cat,
-        )
+    got = cudf.read_parquet(
+        read_path,
+        filters=pfilters,
+        row_groups=row_groups,
+        categorical_partitions=use_cat,
+    )
     expect["b"] = expect["b"].astype(str)
     expect["c"] = expect["c"].astype(int)
     if use_cat:
@@ -2235,20 +2227,12 @@ def test_read_parquet_partitioned_filtered(
 
     # Filter on non-partitioned column
     filters = [("a", "==", 10)]
-    with pytest.warns(
-        FutureWarning,
-        match="index concatenation will be deprecated in a future release",
-    ):
-        got = cudf.read_parquet(read_path, filters=filters)
+    got = cudf.read_parquet(read_path, filters=filters)
     expect = pd.read_parquet(read_path, filters=filters)
 
     # Filter on both kinds of columns
     filters = [[("a", "==", 10)], [("c", "==", 1)]]
-    with pytest.warns(
-        FutureWarning,
-        match="index concatenation will be deprecated in a future release",
-    ):
-        got = cudf.read_parquet(read_path, filters=filters)
+    got = cudf.read_parquet(read_path, filters=filters)
     expect = pd.read_parquet(read_path, filters=filters)
 
     # Work-around for pandas bug:
