@@ -75,8 +75,9 @@ namespace {
 struct escape_strings_fn {
   column_device_view const d_column;
   string_view const d_delimiter;  // check for column delimiter
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void write_char(char_utf8 chr, char*& d_buffer, size_type& bytes)
   {
@@ -89,7 +90,7 @@ struct escape_strings_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_column.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -115,7 +116,7 @@ struct escape_strings_fn {
     }
     if (quote_row) write_char(quote, d_buffer, bytes);
 
-    if (!d_chars) d_offsets[idx] = bytes;
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 

@@ -8,7 +8,6 @@ import operator
 import textwrap
 import warnings
 from collections import Counter, abc
-from functools import cached_property
 from typing import (
     Any,
     Callable,
@@ -174,7 +173,7 @@ def _indices_from_labels(obj, labels):
 
         if isinstance(obj.index.dtype, cudf.CategoricalDtype):
             labels = labels.astype("category")
-            codes = labels.codes.astype(obj.index._values.codes.dtype)
+            codes = labels.codes.astype(obj.index.codes.dtype)
             labels = cudf.core.column.build_categorical_column(
                 categories=labels.dtype.categories,
                 codes=codes,
@@ -195,7 +194,6 @@ def _get_label_range_or_mask(index, start, stop, step):
     if (
         not (start is None and stop is None)
         and type(index) is cudf.core.index.DatetimeIndex
-        and index.is_monotonic_increasing is False
     ):
         start = pd.to_datetime(start)
         stop = pd.to_datetime(stop)
@@ -206,8 +204,8 @@ def _get_label_range_or_mask(index, start, stop, step):
                 # when we have a non-monotonic datetime index, return
                 # values in the slice defined by index_of(start) and
                 # index_of(end)
-                start_loc = index.get_loc(start.to_datetime64())
-                stop_loc = index.get_loc(stop.to_datetime64()) + 1
+                start_loc = index.get_loc(start)
+                stop_loc = index.get_loc(stop) + 1
                 return slice(start_loc, stop_loc)
             else:
                 raise KeyError(
@@ -215,10 +213,19 @@ def _get_label_range_or_mask(index, start, stop, step):
                     "DatetimeIndexes with non-existing keys is not allowed.",
                 )
         elif start is not None:
-            boolean_mask = index >= start
+            if index.is_monotonic_increasing:
+                return index >= start
+            elif index.is_monotonic_decreasing:
+                return index <= start
+            else:
+                return index.find_label_range(slice(start, stop, step))
         else:
-            boolean_mask = index <= stop
-        return boolean_mask
+            if index.is_monotonic_increasing:
+                return index <= stop
+            elif index.is_monotonic_decreasing:
+                return index >= stop
+            else:
+                return index.find_label_range(slice(start, stop, step))
     else:
         return index.find_label_range(slice(start, stop, step))
 
@@ -1903,13 +1910,15 @@ class IndexedFrame(Frame):
         1  <NA>  3.14
         2  <NA>  <NA>
         """
-        result_data = {}
-        for name, col in self._data.items():
-            try:
-                result_data[name] = col.nans_to_nulls()
-            except AttributeError:
-                result_data[name] = col.copy()
-        return self._from_data_like_self(result_data)
+        result = (
+            col.nans_to_nulls()
+            if isinstance(col, cudf.core.column.NumericalColumn)
+            else col.copy()
+            for col in self._data.columns
+        )
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(result)
+        )
 
     def _copy_type_metadata(
         self,
@@ -2264,7 +2273,7 @@ class IndexedFrame(Frame):
         slicer[axis] = slice(before, after)
         return self.loc[tuple(slicer)].copy()
 
-    @cached_property
+    @property
     def loc(self):
         """Select rows and columns by label or boolean mask.
 
@@ -2330,7 +2339,7 @@ class IndexedFrame(Frame):
         """
         return self._loc_indexer_type(self)
 
-    @cached_property
+    @property
     def iloc(self):
         """Select values by position.
 
@@ -4338,34 +4347,27 @@ class IndexedFrame(Frame):
 
     def _reset_index(self, level, drop, col_level=0, col_fill=""):
         """Shared path for DataFrame.reset_index and Series.reset_index."""
-        if level is not None and not isinstance(level, (tuple, list)):
-            level = (level,)
+        if level is not None:
+            if (
+                isinstance(level, int)
+                and level > 0
+                and not isinstance(self.index, MultiIndex)
+            ):
+                raise IndexError(
+                    f"Too many levels: Index has only 1 level, not {level + 1}"
+                )
+            if not isinstance(level, (tuple, list)):
+                level = (level,)
         _check_duplicate_level_names(level, self._index.names)
 
-        # Split the columns in the index into data and index columns
-        (
-            data_columns,
-            index_columns,
-            data_names,
-            index_names,
-        ) = self._index._split_columns_by_levels(level)
-        if index_columns:
-            index = _index_from_data(
-                dict(enumerate(index_columns)),
-                name=self._index.name,
-            )
-            if isinstance(index, MultiIndex):
-                index.names = index_names
-            else:
-                index.name = index_names[0]
-        else:
+        index = self.index._new_index_for_reset_index(level, self.index.name)
+        if index is None:
             index = RangeIndex(len(self))
-
         if drop:
             return self._data, index
 
         new_column_data = {}
-        for name, col in zip(data_names, data_columns):
+        for name, col in self.index._columns_for_reset_index(level):
             if name == "index" and "index" in self._data:
                 name = "level_0"
             name = (
@@ -4876,13 +4878,16 @@ class IndexedFrame(Frame):
         1    2
         dtype: int64
         """
-        return self._from_columns_like_self(
+        res = self._from_columns_like_self(
             Frame._repeat(
                 [*self._index._data.columns, *self._columns], repeats, axis
             ),
             self._column_names,
             self._index_names,
         )
+        if isinstance(res.index, cudf.DatetimeIndex):
+            res.index._freq = None
+        return res
 
     def astype(
         self,
@@ -6308,7 +6313,12 @@ class IndexedFrame(Frame):
 
         return [
             type(self),
-            normalize_token(self._dtypes),
+            str(self._dtypes),
+            *[
+                normalize_token(cat.categories)
+                for cat in self._dtypes.values()
+                if cat == "category"
+            ],
             normalize_token(self.index),
             normalize_token(self.hash_values().values_host),
         ]

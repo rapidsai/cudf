@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
@@ -9,16 +9,16 @@ from libcpp.vector cimport vector
 from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
-from cudf._lib.cpp.strings.regex_flags cimport regex_flags
-from cudf._lib.cpp.strings.regex_program cimport regex_program
-from cudf._lib.cpp.strings.replace_re cimport (
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from cudf._lib.pylibcudf.libcudf.strings.regex_flags cimport regex_flags
+from cudf._lib.pylibcudf.libcudf.strings.regex_program cimport regex_program
+from cudf._lib.pylibcudf.libcudf.strings.replace_re cimport (
     replace_re as cpp_replace_re,
     replace_with_backrefs as cpp_replace_with_backrefs,
 )
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 

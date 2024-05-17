@@ -11,14 +11,17 @@ from functools import singledispatch
 
 from pyarrow import lib as pa
 
-from cudf._lib.cpp.interop cimport (
+from cudf._lib.pylibcudf.libcudf.interop cimport (
     column_metadata,
     from_arrow as cpp_from_arrow,
     to_arrow as cpp_to_arrow,
 )
-from cudf._lib.cpp.scalar.scalar cimport fixed_point_scalar, scalar
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.wrappers.decimals cimport (
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport (
+    fixed_point_scalar,
+    scalar,
+)
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.wrappers.decimals cimport (
     decimal32,
     decimal64,
     decimal128,

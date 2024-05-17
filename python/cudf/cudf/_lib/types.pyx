@@ -7,9 +7,11 @@ import pandas as pd
 
 from libcpp.memory cimport make_shared, shared_ptr
 
-cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
+cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
+    lists_column_view,
+)
 from cudf._lib.types cimport (
     underlying_type_t_interpolation,
     underlying_type_t_order,

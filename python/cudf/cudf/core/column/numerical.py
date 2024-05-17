@@ -107,15 +107,14 @@ class NumericalColumn(NumericalBaseColumn):
         # Handles improper item types
         # Fails if item is of type None, so the handler.
         try:
-            if np.can_cast(item, self.dtype):
-                item = self.dtype.type(item)
-            else:
+            search_item = self.dtype.type(item)
+            if search_item != item and self.dtype.kind != "f":
                 return False
         except (TypeError, ValueError):
             return False
         # TODO: Use `scalar`-based `contains` wrapper
         return libcudf.search.contains(
-            self, column.as_column([item], dtype=self.dtype)
+            self, column.as_column([search_item], dtype=self.dtype)
         ).any()
 
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
@@ -249,6 +248,7 @@ class NumericalColumn(NumericalBaseColumn):
             "__eq__",
             "__ne__",
             "NULL_EQUALS",
+            "NULL_NOT_EQUALS",
         }:
             out_dtype = "bool"
 

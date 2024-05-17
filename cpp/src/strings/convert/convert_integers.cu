@@ -34,9 +34,7 @@
 #include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
-#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/pair.h>
 #include <thrust/transform.h>
@@ -314,8 +312,9 @@ namespace {
 template <typename IntegerType>
 struct from_integers_fn {
   column_device_view d_integers;
-  size_type* d_offsets;
+  size_type* d_sizes;
   char* d_chars;
+  cudf::detail::input_offsetalator d_offsets;
 
   /**
    * @brief Converts an integer element into a string.
@@ -334,13 +333,13 @@ struct from_integers_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_integers.is_null(idx)) {
-      if (d_chars == nullptr) { d_offsets[idx] = 0; }
+      if (d_chars == nullptr) { d_sizes[idx] = 0; }
       return;
     }
     if (d_chars != nullptr) {
       integer_element_to_string(idx);
     } else {
-      d_offsets[idx] = count_digits(d_integers.element<IntegerType>(idx));
+      d_sizes[idx] = count_digits(d_integers.element<IntegerType>(idx));
     }
   }
 };

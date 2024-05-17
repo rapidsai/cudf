@@ -4,8 +4,8 @@ from libcpp.utility cimport move
 
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_factories cimport (
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_factories cimport (
     make_duration_column as cpp_make_duration_column,
     make_empty_column as cpp_make_empty_column,
     make_fixed_point_column as cpp_make_fixed_point_column,
@@ -13,7 +13,7 @@ from cudf._lib.cpp.column.column_factories cimport (
     make_numeric_column as cpp_make_numeric_column,
     make_timestamp_column as cpp_make_timestamp_column,
 )
-from cudf._lib.cpp.types cimport mask_state, size_type
+from cudf._lib.pylibcudf.libcudf.types cimport mask_state, size_type
 
 from .types cimport DataType, type_id
 

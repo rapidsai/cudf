@@ -538,17 +538,28 @@ CUDF_KERNEL void __launch_bounds__(128)
     int pos = 0, cur = 0;
     for (int i = 0; i < num_entries; i++) {
       int len = 0;
-      if (cur + 4 <= dict_size) {
-        len = dict[cur + 0] | (dict[cur + 1] << 8) | (dict[cur + 2] << 16) | (dict[cur + 3] << 24);
-        if (len >= 0 && cur + 4 + len <= dict_size) {
+      if (ck->physical_type == FIXED_LEN_BYTE_ARRAY) {
+        if (cur + ck->type_length <= dict_size) {
+          len = ck->type_length;
           pos = cur;
-          cur = cur + 4 + len;
+          cur += len;
         } else {
           cur = dict_size;
         }
+      } else {
+        if (cur + 4 <= dict_size) {
+          len =
+            dict[cur + 0] | (dict[cur + 1] << 8) | (dict[cur + 2] << 16) | (dict[cur + 3] << 24);
+          if (len >= 0 && cur + 4 + len <= dict_size) {
+            pos = cur + 4;
+            cur = pos + len;
+          } else {
+            cur = dict_size;
+          }
+        }
       }
       // TODO: Could store 8 entries in shared mem, then do a single warp-wide store
-      dict_index[i].first  = reinterpret_cast<char const*>(dict + pos + 4);
+      dict_index[i].first  = reinterpret_cast<char const*>(dict + pos);
       dict_index[i].second = len;
     }
   }
