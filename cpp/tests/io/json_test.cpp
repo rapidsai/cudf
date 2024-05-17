@@ -2509,7 +2509,7 @@ TEST_F(JsonReaderTest, ViableDelimiter)
   json_parser_options.set_delimiter('\f');
   CUDF_EXPECT_NO_THROW(cudf::io::read_json(json_parser_options));
 
-  EXPECT_THROW(json_parser_options.set_delimiter('\t'), std::runtime_error);
+  EXPECT_THROW(json_parser_options.set_delimiter('\t'), std::invalid_argument);
 }
 
 // Test case for dtype prune:

@@ -357,18 +357,18 @@ class json_reader_options {
   void set_delimiter(char delimiter)
   {
     switch (delimiter) {
-      case '{': [[fallthrough]];
-      case '[': [[fallthrough]];
-      case '}': [[fallthrough]];
-      case ']': [[fallthrough]];
-      case ',': [[fallthrough]];
-      case ':': [[fallthrough]];
-      case '"': [[fallthrough]];
-      case '\'': [[fallthrough]];
-      case '\\': [[fallthrough]];
-      case ' ': [[fallthrough]];
-      case '\t': [[fallthrough]];
-      case '\r': CUDF_FAIL("Unsupported delimiter character.", std::runtime_error); break;
+      case '{':
+      case '[':
+      case '}':
+      case ']':
+      case ',':
+      case ':':
+      case '"':
+      case '\'':
+      case '\\':
+      case ' ':
+      case '\t':
+      case '\r': CUDF_FAIL("Unsupported delimiter character.", std::invalid_argument); break;
     }
     _delimiter = delimiter;
   }
