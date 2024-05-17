@@ -20,7 +20,6 @@ from dataclasses import dataclass
 from functools import cache
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
-import nvtx
 import pyarrow as pa
 from typing_extensions import assert_never
 
@@ -90,7 +89,6 @@ class Scan(IR):
         if self.typ not in ("csv", "parquet"):
             raise NotImplementedError(f"Unhandled scan type: {self.typ}")
 
-    @nvtx.annotate(message="Scan", domain="cudf_polars")
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         options = self.file_options
@@ -156,7 +154,6 @@ class DataFrameScan(IR):
     projection: list[str]
     predicate: Expr | None
 
-    @nvtx.annotate(message="from_dataframe", domain="cudf_polars")
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         pdf = pl.DataFrame._from_pydf(self.df)
@@ -189,7 +186,6 @@ class Select(IR):
     cse: list[Expr]
     expr: list[Expr]
 
-    @nvtx.annotate(message="Select", domain="cudf_polars")
     def evaluate(self, *, cache: dict[int, DataFrame]):
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
@@ -273,7 +269,6 @@ class GroupBy(IR):
             raise NotImplementedError("Nested aggregations in groupby")
         self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
 
-    @nvtx.annotate(message="GroupBy", domain="cudf_polars")
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
@@ -367,7 +362,6 @@ class Join(IR):
         else:
             assert_never(how)
 
-    @nvtx.annotate(message="Join", domain="cudf_polars")
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         left = self.left.evaluate(cache=cache)
@@ -430,7 +424,6 @@ class HStack(IR):
     df: IR
     columns: list[Expr]
 
-    @nvtx.annotate(message="HStack", domain="cudf_polars")
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
@@ -461,7 +454,6 @@ class Distinct(IR):
         self.stable = maintain_order
         self.zlice = zlice
 
-    @nvtx.annotate(message="Distinct", domain="cudf_polars")
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
@@ -527,7 +519,6 @@ class Sort(IR):
             plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
         )
 
-    @nvtx.annotate(message="Sort", domain="cudf_polars")
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
@@ -561,7 +552,6 @@ class Slice(IR):
     offset: int
     length: int
 
-    @nvtx.annotate(message="Slice", domain="cudf_polars")
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
@@ -573,7 +563,6 @@ class Filter(IR):
     df: IR
     mask: Expr
 
-    @nvtx.annotate(message="Filter", domain="cudf_polars")
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
@@ -584,7 +573,6 @@ class Filter(IR):
 class Projection(IR):
     df: IR
 
-    @nvtx.annotate(message="Projection", domain="cudf_polars")
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
@@ -625,7 +613,6 @@ class MapFunction(IR):
             if key_column not in self.df.dfs[0].schema:
                 raise ValueError(f"Key column {key_column} not found")
 
-    @nvtx.annotate(message="MapFunction", domain="cudf_polars")
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         if self.name == "merge_sorted":
@@ -689,7 +676,6 @@ class Union(IR):
         if not all(s == schema for s in self.dfs[1:]):
             raise ValueError("Schema mismatch")
 
-    @nvtx.annotate(message="Union", domain="cudf_polars")
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
@@ -702,7 +688,6 @@ class Union(IR):
 class HConcat(IR):
     dfs: list[IR]
 
-    @nvtx.annotate(message="HConcat", domain="cudf_polars")
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
@@ -715,7 +700,6 @@ class ExtContext(IR):
     df: IR
     extra: list[IR]
 
-    @nvtx.annotate(message="ExtContext", domain="cudf_polars")
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         # TODO: polars optimizer doesn't do projection pushdown

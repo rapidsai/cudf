@@ -139,8 +139,8 @@ class Expr:
         try:
             return self.repr_value
         except AttributeError:
-            args = ", ".join(f"{arg}" for arg in self._ctor_arguments(self.children))
-            self.repr_value = f"{type(self)}({args})"
+            args = ", ".join(f"{arg!r}" for arg in self._ctor_arguments(self.children))
+            self.repr_value = f"{type(self).__name__}({args})"
             return self.repr_value
 
     # TODO: return type is a lie for Literal
@@ -168,8 +168,8 @@ def with_mapping(fn):
         *,
         context=ExecutionContext.FRAME,
         mapping: dict[Expr, Column] | None = None,
-    ):
-        """Look up the self in the mapping before evaluating it."""
+    ) -> Column:
+        """Look up self in the mapping before evaluating it."""
         if mapping is None:
             return fn(self, df, context=context, mapping=mapping)
         else:

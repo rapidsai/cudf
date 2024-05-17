@@ -8,8 +8,6 @@ from __future__ import annotations
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any
 
-import nvtx
-
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 from cudf_polars.dsl import expr, ir
@@ -39,7 +37,6 @@ class set_node(AbstractContextManager):
 noop_context: nullcontext = nullcontext()
 
 
-@nvtx.annotate(domain="cudf_polars")
 def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
     """
     Translate a polars-internal IR node to our representation.
@@ -180,7 +177,6 @@ def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
 BOOLEAN_FUNCTIONS: frozenset[str] = frozenset()
 
 
-@nvtx.annotate(domain="cudf_polars")
 def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
     """
     Translate a polars-internal expression IR into our representation.
