@@ -382,7 +382,10 @@ class csv_reader_options {
    *
    * @return `true` if updated_quotes_detection is enabled
    */
-  [[nodiscard]] bool is_enabled_updated_quotes_detection() const { return _updated_quotes_detection; }
+  [[nodiscard]] bool is_enabled_updated_quotes_detection() const
+  {
+    return _updated_quotes_detection;
+  }
 
   /**
    * @brief Returns names of columns to read as datetime.

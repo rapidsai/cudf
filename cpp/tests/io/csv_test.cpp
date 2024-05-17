@@ -1026,15 +1026,16 @@ TEST_F(CsvReaderTest, StringsQuotesWhitespace)
   {
     std::ofstream outfile(filepath, std::ofstream::out);
     outfile << names[0] << ',' << names[1] << '\n';
-    outfile << "A,a" << '\n';         // unquoted no whitespace
-    outfile << "    B,b" << '\n';     // unquoted leading whitespace
-    outfile << "C    ,c" << '\n';     // unquoted trailing whitespace
-    outfile << "    D    ,d" << '\n'; // unquoted leading and trailing whitespace
-    outfile << "\"E\",e" << '\n';             // quoted no whitespace
-    outfile << "\"F\"    ,f" << '\n';         // quoted trailing whitespace
-    outfile << "    \"G\",g" << '\n';         // quoted leading whitespace
-    outfile << "    \"H\"    ,h" << '\n';     // quoted leading and trailing whitespace
-    outfile << "    \"    I    \"    ,i" << '\n'; // quoted leading and trailing whitespace with spaces inside quotes
+    outfile << "A,a" << '\n';              // unquoted no whitespace
+    outfile << "    B,b" << '\n';          // unquoted leading whitespace
+    outfile << "C    ,c" << '\n';          // unquoted trailing whitespace
+    outfile << "    D    ,d" << '\n';      // unquoted leading and trailing whitespace
+    outfile << "\"E\",e" << '\n';          // quoted no whitespace
+    outfile << "\"F\"    ,f" << '\n';      // quoted trailing whitespace
+    outfile << "    \"G\",g" << '\n';      // quoted leading whitespace
+    outfile << "    \"H\"    ,h" << '\n';  // quoted leading and trailing whitespace
+    outfile << "    \"    I    \"    ,i"
+            << '\n';  // quoted leading and trailing whitespace with spaces inside quotes
   }
 
   cudf::io::csv_reader_options in_opts =
@@ -1054,9 +1055,8 @@ TEST_F(CsvReaderTest, StringsQuotesWhitespace)
   expect_column_data_equal(
     std::vector<std::string>{"A", "    B", "C    ", "    D    ", "E", "F", "G", "H", "    I    "},
     view.column(0));
-  expect_column_data_equal(
-    std::vector<std::string>{"a", "b", "c", "d", "e", "f", "g", "h", "i"},
-    view.column(1));
+  expect_column_data_equal(std::vector<std::string>{"a", "b", "c", "d", "e", "f", "g", "h", "i"},
+                           view.column(1));
 }
 
 TEST_F(CsvReaderTest, SkiprowsNrows)
