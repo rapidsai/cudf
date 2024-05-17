@@ -1228,7 +1228,7 @@ void reader::impl::preprocess_file(read_mode mode)
   // if filter is not empty, then create output types as vector and pass for filtering.
 
   std::vector<data_type> output_dtypes;
-  if (_output_filter.has_value()) {
+  if (_expr_conv.get_converted_expr().has_value()) {
     std::transform(_output_buffers_template.cbegin(),
                    _output_buffers_template.cend(),
                    std::back_inserter(output_dtypes),
@@ -1242,7 +1242,7 @@ void reader::impl::preprocess_file(read_mode mode)
                                  _options.num_rows,
                                  output_dtypes,
                                  _output_column_schemas,
-                                 _output_filter,
+                                 _expr_conv.get_converted_expr(),
                                  _stream);
 
   // check for page indexes

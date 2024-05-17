@@ -423,10 +423,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
              options.get_skip_rows(),
              options.get_num_rows(),
              options.get_row_groups(),
-             (options.get_filter().has_value())
-               ? std::make_optional(std::reference_wrapper<ast::expression const>{
-                   options.get_filter().value().get()})
-               : std::nullopt},
+             options.get_filter()},
     _sources{std::move(sources)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
@@ -461,6 +458,12 @@ reader::impl::impl(std::size_t chunk_read_limit,
   for (auto const& buff : _output_buffers) {
     _output_buffers_template.emplace_back(cudf::io::detail::inline_column_buffer::empty_like(buff));
   }
+
+  // Save the name to reference converter to extract output filter AST in
+  // `preprocess_file()` and `finalize_output()`
+  table_metadata metadata;
+  populate_metadata(metadata);
+  _expr_conv = named_to_reference_converter(_options.filter, metadata);
 }
 
 void reader::impl::prepare_data(read_mode mode)
@@ -575,10 +578,12 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
   // increment the output chunk count
   _file_itm_data._output_chunk_count++;
 
-  if (_output_filter.has_value()) {
+  if (_expr_conv.get_converted_expr().has_value()) {
     auto read_table = std::make_unique<table>(std::move(out_columns));
-    auto predicate  = cudf::detail::compute_column(
-      *read_table, _output_filter.value().get(), _stream, rmm::mr::get_current_device_resource());
+    auto predicate  = cudf::detail::compute_column(*read_table,
+                                                  _expr_conv.get_converted_expr().value().get(),
+                                                  _stream,
+                                                  rmm::mr::get_current_device_resource());
     CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
                  "Predicate filter should return a boolean");
     // Exclude columns present in filter only in output
@@ -597,12 +602,6 @@ table_with_metadata reader::impl::read()
   CUDF_EXPECTS(_output_chunk_read_limit == 0,
                "Reading the whole file must not have non-zero byte_limit.");
 
-  // Save the output filter for use in `finalize_output()`
-  table_metadata metadata;
-  populate_metadata(metadata);
-  auto expr_conv = named_to_reference_converter(_options.filter, metadata);
-  _output_filter = expr_conv.get_converted_expr();
-
   prepare_data(read_mode::READ_ALL);
   return read_chunk_internal(read_mode::READ_ALL);
 }
@@ -619,28 +618,12 @@ table_with_metadata reader::impl::read_chunk()
     }
   }
 
-  // Save the output filter for use in `finalize_output()`
-  if (not _output_filter.has_value() and _options.filter.has_value()) {
-    table_metadata metadata;
-    populate_metadata(metadata);
-    auto expr_conv = named_to_reference_converter(_options.filter, metadata);
-    _output_filter = expr_conv.get_converted_expr();
-  }
-
   prepare_data(read_mode::CHUNKED_READ);
   return read_chunk_internal(read_mode::CHUNKED_READ);
 }
 
 bool reader::impl::has_next()
 {
-  // Save the output filter for use in `finalize_output()`
-  if (not _output_filter.has_value() and _options.filter.has_value()) {
-    table_metadata metadata;
-    populate_metadata(metadata);
-    auto expr_conv = named_to_reference_converter(_options.filter, metadata);
-    _output_filter = expr_conv.get_converted_expr();
-  }
-
   prepare_data(read_mode::CHUNKED_READ);
 
   // current_input_pass will only be incremented to be == num_passes after

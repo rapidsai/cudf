@@ -359,6 +359,9 @@ class reader::impl {
     std::optional<std::reference_wrapper<ast::expression const>> filter;
   } const _options;
 
+  // name to reference converter to extract AST output filter
+  named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}};
+
   std::vector<std::unique_ptr<datasource>> _sources;
   std::unique_ptr<aggregate_reader_metadata> _metadata;
 
@@ -376,9 +379,6 @@ class reader::impl {
 
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;
-
-  // Predicate filter as AST to filter output rows.
-  std::optional<std::reference_wrapper<const ast::expression>> _output_filter;
 
   // number of extra filter columns
   std::size_t _num_filter_only_columns{0};
