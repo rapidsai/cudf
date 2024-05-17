@@ -440,11 +440,11 @@ reader::impl::impl(std::size_t chunk_read_limit,
 
   // Select only columns required by the options and filter
   std::optional<std::vector<std::string>> filter_columns_names;
-  if (options.get_filter().has_value() and options.get_columns().has_value()) {
+  if (_options.filter.has_value() and options.get_columns().has_value()) {
     // list, struct, dictionary are not supported by AST filter yet.
     // extract columns not present in get_columns() & keep count to remove at end.
     filter_columns_names =
-      get_column_names_in_expression(options.get_filter(), *(options.get_columns()));
+      get_column_names_in_expression(_options.filter, *(options.get_columns()));
     _num_filter_only_columns = filter_columns_names->size();
   }
   std::tie(_input_columns, _output_buffers, _output_column_schemas) =
@@ -617,10 +617,12 @@ table_with_metadata reader::impl::read_chunk()
   }
 
   // Save the output filter for use in `finalize_output()`
-  table_metadata metadata;
-  populate_metadata(metadata);
-  auto expr_conv = named_to_reference_converter(_options.filter, metadata);
-  _output_filter = expr_conv.get_converted_expr();
+  if (not _output_filter.has_value()) {
+    table_metadata metadata;
+    populate_metadata(metadata);
+    auto expr_conv = named_to_reference_converter(_options.filter, metadata);
+    _output_filter = expr_conv.get_converted_expr();
+  }
 
   prepare_data(read_mode::CHUNKED_READ);
   return read_chunk_internal(read_mode::CHUNKED_READ);
@@ -629,10 +631,12 @@ table_with_metadata reader::impl::read_chunk()
 bool reader::impl::has_next()
 {
   // Save the output filter for use in `finalize_output()`
-  table_metadata metadata;
-  populate_metadata(metadata);
-  auto expr_conv = named_to_reference_converter(_options.filter, metadata);
-  _output_filter = expr_conv.get_converted_expr();
+  if (not _output_filter.has_value()) {
+    table_metadata metadata;
+    populate_metadata(metadata);
+    auto expr_conv = named_to_reference_converter(_options.filter, metadata);
+    _output_filter = expr_conv.get_converted_expr();
+  }
 
   prepare_data(read_mode::CHUNKED_READ);
 
