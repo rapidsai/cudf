@@ -288,7 +288,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
                 if len(filtered_idx) > 0:
                     idx = cudf.Index(
-                        "data": [
+                        data=[
                             n
                             for f_idx in filtered_idx
                             for n in range(
