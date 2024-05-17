@@ -60,32 +60,41 @@ namespace cudf {
 
 namespace experimental {
 
+/// Type identity type from C++20
 template <typename T>
-using type_identity = T;
+using type_identity_t = T;
 
-/// Type identity helper
-template <typename T, template <typename> typename... REST>
+/**
+ * @brief Recursive template to recursively apply conditional types
+ *
+ * @tparam T Base type
+ * @tparam Rest Chained conditional_t to apply
+ */
+template <typename T, template <typename> typename... Rest>
 struct nested_conditional;
 
 /**
- * @brief Nested type dispatcher helper
+ * @brief Primary template
  */
-template <typename T, template <typename> typename FIRST, template <typename> typename... REST>
-struct nested_conditional<T, FIRST, REST...> {
+template <typename T, template <typename> typename First, template <typename> typename... Rest>
+struct nested_conditional<T, First, Rest...> {
   /// The underlying type
-  using type = typename nested_conditional<FIRST<T>, REST...>::type;
+  using type = typename nested_conditional<First<T>, Rest...>::type;
 };
 
 /**
- * @brief Nested type dispatcher helper
+ * @brief Base case specialization
  */
 template <typename T>
 struct nested_conditional<T> {
   using type = T;  ///< The underlying type
 };
 
-template <typename T, template <typename> typename... REST>
-using nested_conditional_t = typename nested_conditional<T, REST...>::type;
+/**
+ * @brief Helper alias for nested_conditional
+ */
+template <typename T, template <typename> typename... Rest>
+using nested_conditional_t = typename nested_conditional<T, Rest...>::type;
 
 /**
  * @brief Void dispatcher helper
@@ -2071,7 +2080,7 @@ class row_hasher {
    * @param seed The seed to use for the hash function
    * @return A hash operator to use on the device
    */
-  template <template <typename> typename dispatch_cond = type_identity,
+  template <template <typename> typename dispatch_cond = type_identity_t,
             template <typename> class hash_function    = cudf::hashing::detail::default_hash,
             template <template <typename> class, typename, template <typename> typename>
             class DeviceRowHasher = device_row_hasher,

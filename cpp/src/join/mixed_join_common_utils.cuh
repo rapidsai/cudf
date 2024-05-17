@@ -32,7 +32,7 @@ namespace detail {
 using row_hash =
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                    cudf::nullate::DYNAMIC,
-                                                   cudf::experimental::type_identity>;
+                                                   cudf::experimental::type_identity_t>;
 
 using row_hash_no_nested = cudf::experimental::row::hash::device_row_hasher<
   cudf::hashing::detail::default_hash,
