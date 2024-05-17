@@ -72,7 +72,7 @@ def test_sort_repartition():
     dd.assert_eq(len(new_ddf), len(ddf))
 
 
-@xfail_dask_expr("dask-expr code path fails with nulls")
+@xfail_dask_expr("missing null support", lt_version="2024.5.1")
 @pytest.mark.parametrize("na_position", ["first", "last"])
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])

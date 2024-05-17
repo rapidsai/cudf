@@ -45,4 +45,5 @@ rapids_cython_create_modules(
 )
 link_to_pyarrow_headers(pylibcudf_interop)
 
+add_subdirectory(libcudf)
 add_subdirectory(strings)

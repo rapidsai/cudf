@@ -158,8 +158,10 @@ class ColumnAccessor(abc.MutableMapping):
         self.set_by_label(key, value)
 
     def __delitem__(self, key: Any):
+        old_ncols = len(self._data)
         del self._data[key]
-        self._clear_cache()
+        new_ncols = len(self._data)
+        self._clear_cache(old_ncols, new_ncols)
 
     def __len__(self) -> int:
         return len(self._data)
@@ -253,7 +255,17 @@ class ColumnAccessor(abc.MutableMapping):
         else:
             return self._data
 
-    def _clear_cache(self):
+    def _clear_cache(self, old_ncols: int, new_ncols: int):
+        """
+        Clear cached attributes.
+
+        Parameters
+        ----------
+        old_ncols: int
+            len(self._data) before self._data was modified
+        new_ncols: int
+            len(self._data) after self._data was modified
+        """
         cached_properties = ("columns", "names", "_grouped_data")
         for attr in cached_properties:
             try:
@@ -261,9 +273,12 @@ class ColumnAccessor(abc.MutableMapping):
             except AttributeError:
                 pass
 
-        # nrows should only be cleared if no data is present.
-        if len(self._data) == 0 and hasattr(self, "nrows"):
-            del self.nrows
+        # nrows should only be cleared if empty before/after the op.
+        if (old_ncols == 0) ^ (new_ncols == 0):
+            try:
+                del self.nrows
+            except AttributeError:
+                pass
 
     def to_pandas_index(self) -> pd.Index:
         """Convert the keys of the ColumnAccessor to a Pandas Index object."""
@@ -321,27 +336,27 @@ class ColumnAccessor(abc.MutableMapping):
         """
         name = self._pad_key(name)
 
-        ncols = len(self._data)
+        old_ncols = len(self._data)
         if loc == -1:
-            loc = ncols
-        if not (0 <= loc <= ncols):
+            loc = old_ncols
+        if not (0 <= loc <= old_ncols):
             raise ValueError(
-                "insert: loc out of bounds: must be  0 <= loc <= ncols"
+                f"insert: loc out of bounds: must be  0 <= loc <= {old_ncols}"
             )
         # TODO: we should move all insert logic here
         if name in self._data:
             raise ValueError(f"Cannot insert '{name}', already exists")
-        if loc == len(self._data):
+        if loc == old_ncols:
             if validate:
                 value = column.as_column(value)
-                if len(self._data) > 0 and len(value) != self.nrows:
+                if old_ncols > 0 and len(value) != self.nrows:
                     raise ValueError("All columns must be of equal length")
             self._data[name] = value
         else:
             new_keys = self.names[:loc] + (name,) + self.names[loc:]
             new_values = self.columns[:loc] + (value,) + self.columns[loc:]
             self._data = self._data.__class__(zip(new_keys, new_values))
-        self._clear_cache()
+        self._clear_cache(old_ncols, old_ncols + 1)
 
     def copy(self, deep=False) -> ColumnAccessor:
         """
@@ -498,8 +513,10 @@ class ColumnAccessor(abc.MutableMapping):
             if len(self._data) > 0 and len(value) != self.nrows:
                 raise ValueError("All columns must be of equal length")
 
+        old_ncols = len(self._data)
         self._data[key] = value
-        self._clear_cache()
+        new_ncols = len(self._data)
+        self._clear_cache(old_ncols, new_ncols)
 
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
         # Might be a generator
@@ -673,10 +690,12 @@ class ColumnAccessor(abc.MutableMapping):
         if level < 0:
             level += self.nlevels
 
+        old_ncols = len(self._data)
         self._data = {
             _remove_key_level(key, level): value
             for key, value in self._data.items()
         }
+        new_ncols = len(self._data)
         self._level_names = (
             self._level_names[:level] + self._level_names[level + 1 :]
         )
@@ -685,7 +704,7 @@ class ColumnAccessor(abc.MutableMapping):
             len(self._level_names) == 1
         ):  # can't use nlevels, as it depends on multiindex
             self.multiindex = False
-        self._clear_cache()
+        self._clear_cache(old_ncols, new_ncols)
 
 
 def _keys_equal(target: Any, key: Any) -> bool:

@@ -33,7 +33,7 @@
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/replace.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
@@ -183,7 +183,7 @@ struct column_to_strings_fn {
     auto d_column = column_device_view::create(column_v, stream_);
     escape_strings_fn fn{*d_column, delimiter.value(stream_)};
     auto [offsets_column, chars] =
-      cudf::strings::detail::experimental::make_strings_children(fn, column_v.size(), stream_, mr_);
+      cudf::strings::detail::make_strings_children(fn, column_v.size(), stream_, mr_);
 
     return make_strings_column(column_v.size(),
                                std::move(offsets_column),
