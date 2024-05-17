@@ -577,6 +577,7 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
   // increment the output chunk count
   _file_itm_data._output_chunk_count++;
 
+  // check if the output filter AST expression (= _expr_conv.get_converted_expr()) exists
   if (_expr_conv.get_converted_expr().has_value()) {
     auto read_table = std::make_unique<table>(std::move(out_columns));
     auto predicate  = cudf::detail::compute_column(*read_table,
