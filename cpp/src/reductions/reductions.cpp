@@ -208,20 +208,21 @@ std::unique_ptr<scalar> reduce(column_view const& col,
 std::unique_ptr<scalar> reduce(column_view const& col,
                                reduce_aggregation const& agg,
                                data_type output_dtype,
+                               rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return reduction::detail::reduce(
-    col, agg, output_dtype, std::nullopt, cudf::get_default_stream(), mr);
+  return reduction::detail::reduce(col, agg, output_dtype, std::nullopt, stream, mr);
 }
 
 std::unique_ptr<scalar> reduce(column_view const& col,
                                reduce_aggregation const& agg,
                                data_type output_dtype,
                                std::optional<std::reference_wrapper<scalar const>> init,
+                               rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return reduction::detail::reduce(col, agg, output_dtype, init, cudf::get_default_stream(), mr);
+  return reduction::detail::reduce(col, agg, output_dtype, init, stream, mr);
 }
 }  // namespace cudf
