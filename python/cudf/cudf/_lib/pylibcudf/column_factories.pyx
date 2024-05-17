@@ -2,8 +2,6 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
-
 from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.column.column_factories cimport (
     make_duration_column as cpp_make_duration_column,
@@ -66,9 +64,6 @@ cpdef Column make_numeric_column(
 
     cdef unique_ptr[column] result
     cdef mask_state state
-    cdef DeviceBuffer mask_buf
-    cdef device_buffer mask
-    cdef size_type null_count
 
     if MaskArg is object:
         if isinstance(mstate, MaskState):
@@ -84,18 +79,7 @@ cpdef Column make_numeric_column(
         else:
             raise TypeError("Invalid mask argument")
     elif MaskArg is tuple:
-        mask_buf, null_count = mstate
-        mask = move(mask_buf.c_release())
-
-        with nogil:
-            result = move(
-                cpp_make_numeric_column(
-                    type_.c_obj,
-                    size,
-                    move(mask),
-                    null_count
-                )
-            )
+        raise TypeError("Passing preallocated mask not yet supported.")
     else:
         raise TypeError("Invalid mask argument")
 
@@ -109,9 +93,6 @@ cpdef Column make_fixed_point_column(
 
     cdef unique_ptr[column] result
     cdef mask_state state
-    cdef DeviceBuffer mask_buf
-    cdef device_buffer mask
-    cdef size_type null_count
 
     if MaskArg is object:
         if isinstance(mstate, MaskState):
@@ -127,18 +108,7 @@ cpdef Column make_fixed_point_column(
         else:
             raise TypeError("Invalid mask argument")
     elif MaskArg is tuple:
-        mask_buf, null_count = mstate
-        mask = move(mask_buf.c_release())
-
-        with nogil:
-            result = move(
-                cpp_make_fixed_point_column(
-                    type_.c_obj,
-                    size,
-                    move(mask),
-                    null_count
-                )
-            )
+        raise TypeError("Passing preallocated mask not yet supported.")
     else:
         raise TypeError("Invalid mask argument")
 
@@ -152,9 +122,6 @@ cpdef Column make_timestamp_column(
 
     cdef unique_ptr[column] result
     cdef mask_state state
-    cdef DeviceBuffer mask_buf
-    cdef device_buffer mask
-    cdef size_type null_count
 
     if MaskArg is object:
         if isinstance(mstate, MaskState):
@@ -170,18 +137,7 @@ cpdef Column make_timestamp_column(
         else:
             raise TypeError("Invalid mask argument")
     elif MaskArg is tuple:
-        mask_buf, null_count = mstate
-        mask = move(mask_buf.c_release())
-
-        with nogil:
-            result = move(
-                cpp_make_timestamp_column(
-                    type_.c_obj,
-                    size,
-                    move(mask),
-                    null_count
-                )
-            )
+        raise TypeError("Passing preallocated mask not yet supported.")
     else:
         raise TypeError("Invalid mask argument")
 
@@ -195,9 +151,6 @@ cpdef Column make_duration_column(
 
     cdef unique_ptr[column] result
     cdef mask_state state
-    cdef DeviceBuffer mask_buf
-    cdef device_buffer mask
-    cdef size_type null_count
 
     if MaskArg is object:
         if isinstance(mstate, MaskState):
@@ -213,18 +166,7 @@ cpdef Column make_duration_column(
         else:
             raise TypeError("Invalid mask argument")
     elif MaskArg is tuple:
-        mask_buf, null_count = mstate
-        mask = move(mask_buf.c_release())
-
-        with nogil:
-            result = move(
-                cpp_make_duration_column(
-                    type_.c_obj,
-                    size,
-                    move(mask),
-                    null_count
-                )
-            )
+        raise TypeError("Passing preallocated mask not yet supported.")
     else:
         raise TypeError("Invalid mask argument")
 
@@ -238,9 +180,6 @@ cpdef Column make_fixed_width_column(
 
     cdef unique_ptr[column] result
     cdef mask_state state
-    cdef DeviceBuffer mask_buf
-    cdef device_buffer mask
-    cdef size_type null_count
 
     if MaskArg is object:
         if isinstance(mstate, MaskState):
@@ -256,18 +195,7 @@ cpdef Column make_fixed_width_column(
         else:
             raise TypeError("Invalid mask argument")
     elif MaskArg is tuple:
-        mask_buf, null_count = mstate
-        mask = move(mask_buf.c_release())
-
-        with nogil:
-            result = move(
-                cpp_make_fixed_width_column(
-                    type_.c_obj,
-                    size,
-                    move(mask),
-                    null_count
-                )
-            )
+        raise TypeError("Passing preallocated mask not yet supported.")
     else:
         raise TypeError("Invalid mask argument")
 
