@@ -167,16 +167,6 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
                                                    int use_fixed_op)
 {
   if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return decode_kernel_mask::NONE; }
-  // TODO: once we remove `use_fixed_op` we should also simplify this
-  // to use some functions (e.g. is_fixed_width, is_dictionary)
-  if (use_fixed_op != 0 && !is_string_col(chunk) && chunk.max_nesting_depth == 1 &&
-      chunk.physical_type != BYTE_ARRAY && chunk.physical_type != BOOLEAN) {
-    if (page.encoding == Encoding::PLAIN) {
-      return decode_kernel_mask::FIXED_WIDTH_NO_DICT;
-    } else if (use_fixed_op == 2 && page.encoding == Encoding::PLAIN_DICTIONARY) {
-      return decode_kernel_mask::FIXED_WIDTH_DICT;
-    }
-  }
   if (page.encoding == Encoding::DELTA_BINARY_PACKED) {
     return decode_kernel_mask::DELTA_BINARY;
   } else if (page.encoding == Encoding::DELTA_BYTE_ARRAY) {
@@ -584,12 +574,6 @@ void __host__ DecodePageHeaders(ColumnChunkDesc* chunks,
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-
-  // TODO: note we will no longer need this env variable and use_fixed_op
-  // once it's enabled by default.
-  char* opt        = std::getenv("USE_FIXED_OP");
-  int use_fixed_op = (opt == nullptr || opt[0] == '0') ? 0 : (opt[0] == '1' ? 1 : 2);
-
   gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(
     chunks, chunk_pages, num_chunks, error_code, use_fixed_op);
 }

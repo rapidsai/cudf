@@ -129,7 +129,6 @@ static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(
     if (is_valid) {
       int const dst_pos = (value_count + thread_value_count) - 1;
       int const src_pos = (valid_count + thread_valid_count) - 1;
-      auto ix           = rolling_index<state_buf::nz_buf_size>(src_pos);
       sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)] = dst_pos;
     }
 
@@ -169,7 +168,6 @@ __device__ inline void gpuDecodeValues(
     int const src_pos    = pos + t;
 
     // the position in the output column/buffer
-    auto nz_idx = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)];
     int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)] - s->first_row;
 
     // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
