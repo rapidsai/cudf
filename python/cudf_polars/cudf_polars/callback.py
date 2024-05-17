@@ -37,7 +37,7 @@ def _callback(
         raise
 
 
-def execute_with_cudf(nt) -> None:
+def execute_with_cudf(nt, *, raise_on_fail: bool = False) -> None:
     """
     A post optimization callback that attempts to execute the plan with cudf.
 
@@ -46,13 +46,18 @@ def execute_with_cudf(nt) -> None:
     nt
         NodeTraverser
 
+    raise_on_fail
+        Should conversion raise an exception rather than continuing
+        without setting a callback.
+
     The NodeTraverser is mutated if the libcudf executor can handle the plan.
     """
     try:
         with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
             callback = partial(_callback, translate_ir(nt))
-    except NotImplementedError as e:
-        print("Unable to translate", e)
+    except NotImplementedError:
+        if raise_on_fail:
+            raise
         return
 
     nt.set_udf(callback)
