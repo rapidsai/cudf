@@ -620,7 +620,7 @@ table_with_metadata reader::impl::read_chunk()
   }
 
   // Save the output filter for use in `finalize_output()`
-  if (not _output_filter.has_value()) {
+  if (not _output_filter.has_value() and _options.filter.has_value()) {
     table_metadata metadata;
     populate_metadata(metadata);
     auto expr_conv = named_to_reference_converter(_options.filter, metadata);
@@ -634,7 +634,7 @@ table_with_metadata reader::impl::read_chunk()
 bool reader::impl::has_next()
 {
   // Save the output filter for use in `finalize_output()`
-  if (not _output_filter.has_value()) {
+  if (not _output_filter.has_value() and _options.filter.has_value()) {
     table_metadata metadata;
     populate_metadata(metadata);
     auto expr_conv = named_to_reference_converter(_options.filter, metadata);
