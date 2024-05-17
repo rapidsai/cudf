@@ -254,18 +254,14 @@ class GroupBy(IR):
         ------
         NotImplementedError for unsupported expression nodes.
         """
-        if isinstance(agg, expr.NamedExpr):
-            return GroupBy.check_agg(agg.value)
+        if isinstance(agg, (expr.NamedExpr, expr.BinOp, expr.Cast)):
+            return max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, expr.Agg):
             if agg.name == "implode":
                 raise NotImplementedError("implode in groupby")
-            return 1 + GroupBy.check_agg(agg.column)
+            return 1 + max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, (expr.Len, expr.Col, expr.Literal)):
             return 0
-        elif isinstance(agg, expr.BinOp):
-            return max(GroupBy.check_agg(agg.left), GroupBy.check_agg(agg.right))
-        elif isinstance(agg, expr.Cast):
-            return GroupBy.check_agg(agg.column)
         else:
             raise NotImplementedError(f"No handler for {agg=}")
 

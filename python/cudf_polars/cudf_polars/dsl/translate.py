@@ -215,33 +215,35 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
                 dtype,
                 name,
                 options,
-                tuple(translate_expr(visitor, n=n) for n in node.input),
+                *(translate_expr(visitor, n=n) for n in node.input),
             )
         else:
             raise NotImplementedError(f"No handler for Expr function node with {name=}")
     elif isinstance(node, pl_expr.Window):
         # TODO: raise in groupby?
-        return expr.Window(
-            dtype,
-            translate_expr(visitor, n=node.function),
-            tuple(translate_expr(visitor, n=n) for n in node.partition_by)
-            if node.partition_by is not None
-            else None,
-            node.options,
-        )
+        if node.partition_by is None:
+            return expr.RollingWindow(
+                dtype, node.options, translate_expr(visitor, n=node.function)
+            )
+        else:
+            return expr.GroupedRollingWindow(
+                dtype,
+                node.options,
+                translate_expr(visitor, n=node.function),
+                *(translate_expr(visitor, n=n) for n in node.partition_by),
+            )
     elif isinstance(node, pl_expr.Literal):
         return expr.Literal(dtype, node.value)
     elif isinstance(node, pl_expr.Sort):
         # TODO: raise in groupby
-        return expr.Sort(dtype, translate_expr(visitor, n=node.expr), node.options)
+        return expr.Sort(dtype, node.options, translate_expr(visitor, n=node.expr))
     elif isinstance(node, pl_expr.SortBy):
         # TODO: raise in groupby
-        stable, nulls_last, descending = node.sort_options
         return expr.SortBy(
             dtype,
+            node.sort_options,
             translate_expr(visitor, n=node.expr),
-            tuple(translate_expr(visitor, n=n) for n in node.by),
-            (stable, nulls_last, tuple(descending)),
+            *(translate_expr(visitor, n=n) for n in node.by),
         )
     elif isinstance(node, pl_expr.Gather):
         return expr.Gather(
@@ -267,16 +269,16 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
     elif isinstance(node, pl_expr.Agg):
         return expr.Agg(
             dtype,
-            translate_expr(visitor, n=node.arguments),
             node.name,
             node.options,
+            translate_expr(visitor, n=node.arguments),
         )
     elif isinstance(node, pl_expr.BinaryExpr):
         return expr.BinOp(
             dtype,
+            expr.BinOp._MAPPING[node.op],
             translate_expr(visitor, n=node.left),
             translate_expr(visitor, n=node.right),
-            expr.BinOp._MAPPING[node.op],
         )
     elif isinstance(node, pl_expr.Len):
         return expr.Len(dtype)

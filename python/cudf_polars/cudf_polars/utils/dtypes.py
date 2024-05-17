@@ -85,6 +85,8 @@ def from_polars(dtype: pl.DataType) -> plc.DataType:
     elif isinstance(dtype, pl.Null):
         # TODO: Hopefully
         return plc.DataType(plc.TypeId.EMPTY)
+    elif isinstance(dtype, pl.List):
+        return plc.DataType(plc.TypeId.LIST)
     else:
         breakpoint()
         raise NotImplementedError(f"{dtype=} conversion not supported")

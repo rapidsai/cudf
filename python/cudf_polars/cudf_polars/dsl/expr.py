@@ -16,7 +16,6 @@ In particular, the interpretation of the expression language in a
 from __future__ import annotations
 
 import enum
-from dataclasses import dataclass
 from enum import IntEnum
 from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
@@ -31,7 +30,7 @@ from cudf_polars.containers import Column, Scalar
 from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from collections.abc import Sequence
 
     from cudf_polars.containers import DataFrame
 
@@ -45,7 +44,8 @@ __all__ = [
     "SortBy",
     "Gather",
     "Filter",
-    "Window",
+    "RollingWindow",
+    "GroupedRollingWindow",
     "Cast",
     "Agg",
     "BinOp",
@@ -62,9 +62,86 @@ class AggInfo(NamedTuple):
     requests: list[tuple[Expr | None, plc.aggregation.Aggregation, Expr]]
 
 
-@dataclass(slots=True, unsafe_hash=True)
 class Expr:
+    __slots__ = ("dtype", "hash_value", "repr_value")
+    #: Data type of the expression
     dtype: plc.DataType
+    #: caching slot for the hash of the expression
+    hash_value: int
+    #: caching slot for repr of the expression
+    repr_value: str
+    #: Children of the expression
+    children: tuple[Expr, ...] = ()
+    #: Names of non-child data (not Exprs) for reconstruction
+    _non_child: ClassVar[tuple[str, ...]] = ("dtype",)
+
+    # Constructor must take arguments in order (*_non_child, *children)
+    def __init__(self, dtype: plc.DataType) -> None:
+        self.dtype = dtype
+
+    def _ctor_arguments(self, children: Sequence[Expr]) -> Sequence:
+        return (*(getattr(self, attr) for attr in self._non_child), *children)
+
+    def get_hash(self) -> int:
+        """
+        Return the hash of this expr.
+
+        Override this in subclasses, rather than __hash__.
+
+        Returns
+        -------
+        The integer hash value.
+        """
+        return hash((type(self), self._ctor_arguments(self.children)))
+
+    def __hash__(self):
+        """Hash of an expression with caching."""
+        try:
+            return self.hash_value
+        except AttributeError:
+            self.hash_value = self.get_hash()
+            return self.hash_value
+
+    def is_equal(self, other: Any) -> bool:
+        """
+        Equality of two expressions.
+
+        Override this in subclasses, rather than __eq__.
+
+        Parameter
+        ---------
+        other
+            object to compare to
+
+        Returns
+        -------
+        True if the two expressions are equal, false otherwise.
+        """
+        if type(self) is not type(other):
+            return False
+        return self._ctor_arguments(self.children) == other._ctor_arguments(
+            other.children
+        )
+
+    def __eq__(self, other):
+        """Equality of expressions."""
+        if type(self) != type(other) or hash(self) != hash(other):
+            return False
+        else:
+            return self.is_equal(other)
+
+    def __ne__(self, other):
+        """Inequality of expressions."""
+        return not self.__eq__(other)
+
+    def __repr__(self):
+        """String representation of an expression with caching."""
+        try:
+            return self.repr_value
+        except AttributeError:
+            args = ", ".join(f"{arg}" for arg in self._ctor_arguments(self.children))
+            self.repr_value = f"{type(self)}({args})"
+            return self.repr_value
 
     # TODO: return type is a lie for Literal
     def evaluate(
@@ -104,10 +181,14 @@ def with_mapping(fn):
     return look
 
 
-@dataclass(slots=True, unsafe_hash=True)
 class NamedExpr(Expr):
-    name: str
-    value: Expr
+    __slots__ = ("name", "children")
+    _non_child = ("dtype", "name")
+
+    def __init__(self, dtype: plc.DataType, name: str, value: Expr) -> None:
+        super().__init__(dtype)
+        self.name = name
+        self.children = (value,)
 
     @with_mapping
     def evaluate(
@@ -118,18 +199,25 @@ class NamedExpr(Expr):
         mapping: dict[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
+        (child,) = self.children
         return Column(
-            self.value.evaluate(df, context=context, mapping=mapping).obj, self.name
+            child.evaluate(df, context=context, mapping=mapping).obj, self.name
         )
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
-        return self.value.collect_agg(depth=depth)
+        (value,) = self.children
+        return value.collect_agg(depth=depth)
 
 
-@dataclass(slots=True, unsafe_hash=True)  # TODO: won't work for list literals
 class Literal(Expr):
-    value: Any
+    __slots__ = ("value",)
+    _non_child = ("dtype", "value")
+    value: pa.Scalar
+
+    def __init__(self, dtype: plc.DataType, value: Any) -> None:
+        super().__init__(dtype)
+        self.value = pa.scalar(value)
 
     @with_mapping
     def evaluate(
@@ -141,7 +229,7 @@ class Literal(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         # TODO: obey dtype
-        obj = plc.interop.from_arrow(pa.scalar(self.value))
+        obj = plc.interop.from_arrow(self.value)
         return Scalar(obj)  # type: ignore
 
     def collect_agg(self, *, depth: int) -> AggInfo:
@@ -149,9 +237,14 @@ class Literal(Expr):
         raise NotImplementedError("Literal in groupby")
 
 
-@dataclass(slots=True, unsafe_hash=True)
 class Col(Expr):
+    __slots__ = ("name",)
+    _non_child = ("dtype", "name")
     name: str
+
+    def __init__(self, dtype: plc.DataType, name: str) -> None:
+        self.dtype = dtype
+        self.name = name
 
     @with_mapping
     def evaluate(
@@ -169,7 +262,6 @@ class Col(Expr):
         return AggInfo([(self, plc.aggregation.collect_list(), self)])
 
 
-@dataclass(slots=True, unsafe_hash=True)
 class Len(Expr):
     @with_mapping
     def evaluate(
@@ -191,17 +283,27 @@ class Len(Expr):
         )
 
 
-@dataclass(slots=True, unsafe_hash=True)
 class BooleanFunction(Expr):
-    name: str
-    options: Any
-    arguments: tuple[Expr, ...]
+    __slots__ = ("name", "options", "children")
+    _non_child = ("dtype", "name", "options")
+
+    def __init__(self, dtype: plc.DataType, name: str, options: Any, *children: Expr):
+        super().__init__(dtype)
+        self.options = options
+        self.name = name
+        self.children = tuple(children)
 
 
-@dataclass(slots=True, unsafe_hash=True)
 class Sort(Expr):
-    column: Expr
-    options: tuple[bool, bool, bool]
+    __slots__ = ("options", "children")
+    _non_child = ("dtype", "options")
+
+    def __init__(
+        self, dtype: plc.DataType, options: tuple[bool, bool, bool], column: Expr
+    ):
+        super().__init__(dtype)
+        self.options = options
+        self.children = (column,)
 
     @with_mapping
     def evaluate(
@@ -212,7 +314,8 @@ class Sort(Expr):
         mapping: dict[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        column = self.column.evaluate(df, context=context, mapping=mapping)
+        (child,) = self.children
+        column = child.evaluate(df, context=context, mapping=mapping)
         (stable, nulls_last, descending) = self.options
         order, null_order = sorting.sort_order(
             [descending], nulls_last=nulls_last, num_keys=1
@@ -229,11 +332,20 @@ class Sort(Expr):
         raise NotImplementedError("Sort in groupby")
 
 
-@dataclass(slots=True, unsafe_hash=True)
 class SortBy(Expr):
-    column: Expr
-    by: tuple[Expr, ...]
-    options: tuple[bool, bool, tuple[bool]]
+    __slots__ = ("options", "children")
+    _non_child = ("dtype", "options")
+
+    def __init__(
+        self,
+        dtype: plc.DataType,
+        options: tuple[bool, bool, tuple[bool]],
+        column: Expr,
+        *by: Expr,
+    ):
+        super().__init__(dtype)
+        self.options = options
+        self.children = (column, *by)
 
     @with_mapping
     def evaluate(
@@ -244,11 +356,13 @@ class SortBy(Expr):
         mapping: dict[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        column = self.column.evaluate(df, context=context, mapping=mapping)
-        by = [b.evaluate(df, context=context, mapping=mapping) for b in self.by]
+        column, *by = (
+            child.evaluate(df, context=context, mapping=mapping)
+            for child in self.children
+        )
         (stable, nulls_last, descending) = self.options
         order, null_order = sorting.sort_order(
-            descending, nulls_last=nulls_last, num_keys=len(self.by)
+            descending, nulls_last=nulls_last, num_keys=len(by)
         )
         do_sort = plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
         table = do_sort(
@@ -262,10 +376,13 @@ class SortBy(Expr):
         raise NotImplementedError("SortBy in groupby")
 
 
-@dataclass(slots=True)
 class Gather(Expr):
-    values: Expr
-    indices: Expr
+    __slots__ = ("children",)
+    _non_child = ("dtype",)
+
+    def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr):
+        super().__init__(dtype)
+        self.children = (values, indices)
 
     @with_mapping
     def evaluate(
@@ -276,8 +393,10 @@ class Gather(Expr):
         mapping: dict[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        values = self.values.evaluate(df, context=context, mapping=mapping)
-        indices = self.indices.evaluate(df, context=context, mapping=mapping)
+        values, indices = (
+            child.evaluate(df, context=context, mapping=mapping)
+            for child in self.children
+        )
         lo, hi = plc.reduce.minmax(indices.obj)
         lo = plc.interop.to_arrow(lo).as_py()
         hi = plc.interop.to_arrow(hi).as_py()
@@ -302,10 +421,13 @@ class Gather(Expr):
         raise NotImplementedError("Gather in groupby")
 
 
-@dataclass(slots=True)
 class Filter(Expr):
-    values: Expr
-    mask: Expr
+    __slots__ = ("children",)
+    _non_child = ("dtype",)
+
+    def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr):
+        super().__init__(dtype)
+        self.children = (values, indices)
 
     @with_mapping
     def evaluate(
@@ -316,8 +438,10 @@ class Filter(Expr):
         mapping: dict[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        values = self.values.evaluate(df, context=context, mapping=mapping)
-        mask = self.mask.evaluate(df, context=context, mapping=mapping)
+        values, mask = (
+            child.evaluate(df, context=context, mapping=mapping)
+            for child in self.children
+        )
         table = plc.stream_compaction.apply_boolean_mask(
             plc.Table([values.obj]), mask.obj
         )
@@ -329,17 +453,33 @@ class Filter(Expr):
         raise NotImplementedError("Filter in groupby")
 
 
-@dataclass(slots=True)
-class Window(Expr):
-    agg: Expr
-    by: None | tuple[Expr, ...]
-    options: Any
+class RollingWindow(Expr):
+    __slots__ = ("options", "children")
+    _non_child = ("dtype", "options")
+
+    def __init__(self, dtype: plc.DataType, options: Any, agg: Expr):
+        super().__init__(dtype)
+        self.options = options
+        self.children = (agg,)
 
 
-@dataclass(slots=True)
+class GroupedRollingWindow(Expr):
+    __slots__ = ("options", "children")
+    _non_child = ("dtype", "options")
+
+    def __init__(self, dtype: plc.DataType, options: Any, agg: Expr, *by: Expr):
+        super().__init__(dtype)
+        self.options = options
+        self.children = (agg, *by)
+
+
 class Cast(Expr):
-    dtype: plc.DataType
-    column: Expr
+    __slots__ = ("children",)
+    _non_child = ("dtype",)
+
+    def __init__(self, dtype: plc.DataType, value: Expr):
+        super().__init__(dtype)
+        self.children = (value,)
 
     @with_mapping
     def evaluate(
@@ -350,7 +490,8 @@ class Cast(Expr):
         mapping: dict[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        column = self.column.evaluate(df, context=context, mapping=mapping)
+        (child,) = self.children
+        column = child.evaluate(df, context=context, mapping=mapping)
         return Column(plc.unary.cast(column.obj, self.dtype), column.name).with_sorted(
             like=column
         )
@@ -358,60 +499,23 @@ class Cast(Expr):
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
         # TODO: Could do with sort-based groupby and segmented filter
-        return self.column.collect_agg(depth=depth)
+        (child,) = self.children
+        return child.collect_agg(depth=depth)
 
 
-@dataclass(slots=True)
 class Agg(Expr):
-    column: Expr
-    op: Callable[..., plc.Column]
-    name: str
-    request: plc.aggregation.Aggregation
-
-    _SUPPORTED: ClassVar[frozenset[str]] = frozenset(
-        [
-            "min",
-            "max",
-            "median",
-            "nunique",
-            "first",
-            "last",
-            "mean",
-            "sum",
-            "count",
-            "std",
-            "var",
-        ]
-    )
-
-    def __eq__(self, other):
-        """Return whether this Agg is equal to another."""
-        return type(self) == type(other) and (self.column, self.name) == (
-            other.column,
-            other.name,
-        )
-
-    def __hash__(self):
-        """Return a hash."""
-        return hash((self.column, self.name))
-
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        if depth >= 1:
-            raise NotImplementedError("Nested aggregations in groupby")
-        ((expr, _, _),) = self.column.collect_agg(depth=depth + 1).requests
-        if self.request is None:
-            raise NotImplementedError(f"Aggregation {self.name} in groupby")
-        return AggInfo([(expr, self.request, self)])
+    __slots__ = ("name", "options", "op", "request", "children")
+    _non_child = ("dtype", "name", "options")
 
     def __init__(
-        self, dtype: plc.DataType, column: Expr, name: str, options: Any
+        self, dtype: plc.DataType, name: str, options: Any, value: Expr
     ) -> None:
-        if name not in Agg._SUPPORTED:
-            raise NotImplementedError(f"Unsupported aggregation {name}")
-        self.dtype = dtype
-        self.column = column
+        super().__init__(dtype)
         self.name = name
+        self.options = options
+        self.children = (value,)
+        if name not in Agg._SUPPORTED:
+            raise NotImplementedError(f"Unsupported aggregation {name=}")
         # TODO: nan handling in groupby case
         if name == "min":
             req = plc.aggregation.min()
@@ -446,6 +550,32 @@ class Agg(Expr):
         else:
             raise AssertionError
         self.op = op
+
+    _SUPPORTED: ClassVar[frozenset[str]] = frozenset(
+        [
+            "min",
+            "max",
+            "median",
+            "nunique",
+            "first",
+            "last",
+            "mean",
+            "sum",
+            "count",
+            "std",
+            "var",
+        ]
+    )
+
+    def collect_agg(self, *, depth: int) -> AggInfo:
+        """Collect information about aggregations in groupbys."""
+        if depth >= 1:
+            raise NotImplementedError("Nested aggregations in groupby")
+        (child,) = self.children
+        ((expr, _, _),) = child.collect_agg(depth=depth + 1).requests
+        if self.request is None:
+            raise NotImplementedError(f"Aggregation {self.name} in groupby")
+        return AggInfo([(expr, self.request, self)])
 
     def _reduce(
         self, column: Column, *, request: plc.aggregation.Aggregation
@@ -506,14 +636,24 @@ class Agg(Expr):
         """Evaluate this expression given a dataframe for context."""
         if context is not ExecutionContext.FRAME:
             raise NotImplementedError(f"Agg in context {context}")
-        return self.op(self.column.evaluate(df, context=context, mapping=mapping))
+        (child,) = self.children
+        return self.op(child.evaluate(df, context=context, mapping=mapping))
 
 
-@dataclass(slots=True, unsafe_hash=True)
 class BinOp(Expr):
-    left: Expr
-    right: Expr
-    op: plc.binaryop.BinaryOperator
+    __slots__ = ("op", "children")
+    _non_child = ("dtype", "op")
+
+    def __init__(
+        self,
+        dtype: plc.DataType,
+        op: plc.binaryop.BinaryOperator,
+        left: Expr,
+        right: Expr,
+    ) -> None:
+        super().__init__(dtype)
+        self.op = op
+        self.children = (left, right)
 
     _MAPPING: ClassVar[dict[pl_expr.PyOperator, plc.binaryop.BinaryOperator]] = {
         pl_expr.PyOperator.Eq: plc.binaryop.BinaryOperator.EQUAL,
@@ -547,8 +687,10 @@ class BinOp(Expr):
         mapping: dict[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        left = self.left.evaluate(df, context=context, mapping=mapping)
-        right = self.right.evaluate(df, context=context, mapping=mapping)
+        left, right = (
+            child.evaluate(df, context=context, mapping=mapping)
+            for child in self.children
+        )
         return Column(
             plc.binaryop.binary_operation(left.obj, right.obj, self.op, self.dtype),
             "what",
@@ -564,8 +706,9 @@ class BinOp(Expr):
             # for pre-eval
             return AggInfo([(self, plc.aggregation.collect_list(), self)])
         else:
-            left_info = self.left.collect_agg(depth=depth)
-            right_info = self.right.collect_agg(depth=depth)
+            left_info, right_info = (
+                child.collect_agg(depth=depth) for child in self.children
+            )
             return AggInfo(
                 [*left_info.requests, *right_info.requests],
             )
