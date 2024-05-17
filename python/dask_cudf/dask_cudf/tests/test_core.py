@@ -977,7 +977,7 @@ def test_implicit_array_conversion_cupy_sparse():
 @pytest.mark.parametrize("values", [[1, 5], [1.1, 2.4, 2.3]])
 def test_series_isin(data, values):
     ser = cudf.Series(data)
-    pddf = dd.from_pandas(ser.to_pandas())
+    pddf = dd.from_pandas(ser.to_pandas(), 1)
     ddf = dask_cudf.from_cudf(ser, 1)
 
     actual = ddf.isin(values)
