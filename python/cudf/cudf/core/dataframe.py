@@ -3275,23 +3275,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if not ignore_index:
                     self.index = as_index(value.index)
             elif (length := len(value)) > 0:
-                breakpoint()
                 if num_cols != 0:
-                    ca_data = ColumnAccessor(
-                        {
-                            col_name: column.column_empty_like(
+                    ca = self._data._from_columns_like_self(
+                        (
+                            column.column_empty_like(
                                 col_data, masked=True, newsize=length
                             )
-                            for col_name, col_data in self._data.items()
-                        },
+                            for col_data in self._data.values()
+                        ),
                         verify=False,
                     )
                 else:
-                    ca_data = {}
-                # TODO: Clear self._data cache here
-                self._mimic_inplace(
-                    self._from_data(ca_data, index=RangeIndex(length))
-                )
+                    ca = ColumnAccessor({})
+                self._data = ca
+                self._index = RangeIndex(length)
 
         elif isinstance(value, (pd.Series, Series)):
             value = Series(value, nan_as_null=nan_as_null)

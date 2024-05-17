@@ -4216,7 +4216,6 @@ def test_empty_dataframe_any(axis):
 )
 @pytest.mark.parametrize("non_list_data", [123, "abc", "zyx", "rapids", 0.8])
 def test_create_dataframe_cols_empty_data(a, b, misc_data, non_list_data):
-    breakpoint()
     expected = pd.DataFrame({"a": a})
     actual = cudf.DataFrame.from_pandas(expected)
     expected["b"] = b
