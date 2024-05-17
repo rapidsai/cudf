@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pickle
 import warnings
+from collections.abc import Generator
 from functools import cached_property
 from typing import Any, Literal, Set, Tuple
 
@@ -2190,14 +2191,20 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def _split_columns_by_levels(self, levels):
-        if isinstance(levels, int) and levels > 0:
-            raise ValueError(f"Out of bound level: {levels}")
-        return (
-            [self._data[self.name]],
-            [],
-            ["index" if self.name is None else self.name],
-            [],
+    def _new_index_for_reset_index(
+        self, levels: tuple | None, name
+    ) -> None | BaseIndex:
+        """Return the new index after .reset_index"""
+        # None is caught later to return RangeIndex
+        return None
+
+    def _columns_for_reset_index(
+        self, levels: tuple | None
+    ) -> Generator[tuple[Any, ColumnBase], None, None]:
+        """Return the columns and column names for .reset_index"""
+        yield (
+            "index" if self.name is None else self.name,
+            next(iter(self._columns)),
         )
 
     def _split(self, splits):

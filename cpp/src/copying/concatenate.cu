@@ -121,8 +121,8 @@ CUDF_KERNEL void concatenate_masks_kernel(column_device_view const* views,
                                           size_type number_of_mask_bits,
                                           size_type* out_valid_count)
 {
-  auto tidx         = cudf::detail::grid_1d::global_thread_id();
-  auto const stride = cudf::detail::grid_1d::grid_stride();
+  auto tidx         = cudf::detail::grid_1d::global_thread_id<block_size>();
+  auto const stride = cudf::detail::grid_1d::grid_stride<block_size>();
   auto active_mask  = __ballot_sync(0xFFFF'FFFFu, tidx < number_of_mask_bits);
 
   size_type warp_valid_count = 0;

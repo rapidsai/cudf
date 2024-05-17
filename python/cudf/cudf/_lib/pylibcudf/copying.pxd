@@ -2,8 +2,11 @@
 
 from libcpp cimport bool as cbool
 
-from cudf._lib.cpp.copying cimport mask_allocation_policy, out_of_bounds_policy
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.copying cimport (
+    mask_allocation_policy,
+    out_of_bounds_policy,
+)
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 from .column cimport Column
 from .scalar cimport Scalar

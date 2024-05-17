@@ -301,7 +301,6 @@ ConfigureBench(
   string/copy.cu
   string/factory.cu
   string/filter.cpp
-  string/find.cpp
   string/repeat_strings.cpp
   string/replace.cpp
   string/slice.cpp
@@ -318,6 +317,7 @@ ConfigureNVBench(
   string/copy_range.cpp
   string/count.cpp
   string/extract.cpp
+  string/find.cpp
   string/gather.cpp
   string/join_strings.cpp
   string/lengths.cpp
@@ -330,7 +330,7 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
-ConfigureBench(JSON_BENCH json/json.cu)
+ConfigureNVBench(JSON_NVBENCH json/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
 ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
 ConfigureNVBench(JSON_READER_OPTION_NVBENCH io/json/json_reader_option.cpp)
