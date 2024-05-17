@@ -49,6 +49,7 @@ cdef extern from "cudf/io/csv.hpp" \
         bool is_enabled_skip_blank_lines() except +
         cudf_io_types.quote_style get_quoting() except +
         char get_quotechar() except +
+        bool is_enabled_doublequote() except +
         bool is_enabled_updated_quotes_detection() except +
         vector[string] get_parse_dates_names() except +
         vector[int] get_parse_dates_indexes() except +
