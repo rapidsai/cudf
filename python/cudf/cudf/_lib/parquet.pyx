@@ -280,14 +280,14 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
                     for rg in row_groups[i]:
                         filtered_idx.append(
-                            tuple(
+                            [
                                 n for n in
                                 range(
                                     row_groups_i[rg][0],
                                     row_groups_i[rg][1],
                                     range_index_meta['step']
                                 )
-                            )
+                            ]
                         )
 
                 if len(filtered_idx) > 0:
