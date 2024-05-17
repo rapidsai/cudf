@@ -423,7 +423,10 @@ reader::impl::impl(std::size_t chunk_read_limit,
              options.get_skip_rows(),
              options.get_num_rows(),
              options.get_row_groups(),
-             options.get_filter()},
+             (options.get_filter().has_value())
+               ? std::make_optional(std::reference_wrapper<ast::expression const>{
+                   options.get_filter().value().get()})
+               : std::nullopt},
     _sources{std::move(sources)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
