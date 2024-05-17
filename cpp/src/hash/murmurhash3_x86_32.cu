@@ -19,6 +19,7 @@
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -53,7 +54,8 @@ std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
   thrust::tabulate(rmm::exec_policy(stream),
                    output_view.begin<hash_value_type>(),
                    output_view.end<hash_value_type>(),
-                   row_hasher.device_hasher<MurmurHash3_x86_32>(nullable, seed));
+                   row_hasher.device_hasher<cudf::experimental::type_identity, MurmurHash3_x86_32>(
+                     nullable, seed));
 
   return output;
 }

@@ -507,8 +507,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     num_rows, stream, rmm::mr::get_current_device_resource());
 
   auto const row_hasher = experimental::row::hash::row_hasher(table_to_hash, stream);
-  auto const hasher =
-    row_hasher.device_hasher<hash_function>(nullate::DYNAMIC{hash_has_nulls}, seed);
+  auto const hasher = row_hasher.device_hasher<cudf::experimental::type_identity, hash_function>(
+    nullate::DYNAMIC{hash_has_nulls}, seed);
 
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations
