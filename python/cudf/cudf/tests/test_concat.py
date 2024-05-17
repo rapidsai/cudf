@@ -2034,6 +2034,10 @@ def test_concat_dict_incorrect_type_index(d):
             )
         ],
         [(cudf.CategoricalIndex, {"data": [1, 2, 3]})],
+        [
+            (cudf.RangeIndex, {"start": 2, "stop": 4, "step": 1}),
+            (cudf.RangeIndex, {"start": 2, "stop": 9, "step": 3}),
+        ],
     ],
 )
 def test_concat_index(idx, axis, exception):

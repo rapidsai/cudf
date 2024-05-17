@@ -509,13 +509,9 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
     df.to_parquet(fname_2, row_group_size=2)
 
     # Check filter
-    with pytest.warns(
-        FutureWarning,
-        match="index concatenation will be deprecated in a future release",
-    ):
-        filtered_df = cudf.read_parquet(
-            [fname_0, fname_1, fname_2], filters=[("x", "==", 2)]
-        )
+    filtered_df = cudf.read_parquet(
+        [fname_0, fname_1, fname_2], filters=[("x", "==", 2)]
+    )
     assert_eq(
         filtered_df,
         cudf.DataFrame({"x": [2, 2], "y": list("bc")}, index=[2, 2]),

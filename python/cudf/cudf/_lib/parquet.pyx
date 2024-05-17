@@ -280,15 +280,25 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
                     for rg in row_groups[i]:
                         filtered_idx.append(
-                            cudf.RangeIndex(
-                                start=row_groups_i[rg][0],
-                                stop=row_groups_i[rg][1],
-                                step=range_index_meta['step']
-                            )
+                            {
+                                "start": row_groups_i[rg][0],
+                                "stop": row_groups_i[rg][1],
+                                "step": range_index_meta['step']
+                            }
                         )
 
                 if len(filtered_idx) > 0:
-                    idx = cudf.concat(filtered_idx)
+                    idx = cudf.Index(
+                        "data": [
+                            n
+                            for f_idx in filtered_idx
+                            for n in range(
+                                f_idx["start"],
+                                f_idx["stop"],
+                                f_idx["step"]
+                            )
+                         ]
+                    )
                 else:
                     idx = cudf.Index(cudf.core.column.column_empty(0))
             else:
