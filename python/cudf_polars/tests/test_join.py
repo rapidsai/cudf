@@ -14,10 +14,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
     [
         "inner",
         "left",
-        pytest.param(
-            "outer",
-            marks=pytest.mark.xfail(reason="non-coalescing join not implemented"),
-        ),
+        "outer",
         "semi",
         "anti",
         pytest.param(
@@ -34,18 +31,20 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
     "join_expr",
     [
         pl.col("a"),
-        pytest.param(
-            pl.col("a") * 2,
-            marks=pytest.mark.xfail(reason="Taking key columns from wrong table"),
-        ),
-        pytest.param(
-            [pl.col("a"), pl.col("a") + 1],
-            marks=pytest.mark.xfail(reason="Taking key columns from wrong table"),
-        ),
+        pl.col("a") * 2,
+        [pl.col("a"), pl.col("a") + 1],
         ["c", "a"],
     ],
 )
-def test_join(how, join_nulls, join_expr):
+def test_join(request, how, join_nulls, join_expr):
+    request.applymarker(
+        pytest.mark.xfail(
+            how == "outer_coalesce"
+            and isinstance(join_expr, list)
+            and not isinstance(join_expr[0], str),
+            reason="https://github.com/pola-rs/polars/issues/16289",
+        )
+    )
     left = pl.DataFrame(
         {
             "a": [1, 2, 3, 1, None],

@@ -73,6 +73,7 @@ def test_scan_parquet(tmp_path):
     assert_gpu_result_equal(ldf)
 
 
+@pytest.mark.xfail(reason="Rolling window not yet implemented")
 def test_rolling(ldf_datetime):
     out = ldf_datetime.rolling(index_column="dt", period="2d").agg(
         [
@@ -84,6 +85,7 @@ def test_rolling(ldf_datetime):
     assert_gpu_result_equal(out)
 
 
+@pytest.mark.xfail(reason="Grouped rolling window not yet implemented")
 def test_groupby_rolling(ldf_datetime):
     out = ldf_datetime.rolling(index_column="dt", period="2d", group_by="b").agg(
         [
@@ -95,6 +97,7 @@ def test_groupby_rolling(ldf_datetime):
     assert_gpu_result_equal(out)
 
 
+@pytest.mark.xfail(reason="Rolling expression not yet implemented")
 def test_rolling_expression(ldf_datetime):
     out = ldf_datetime.with_columns(
         sum_a=pl.sum("a").rolling(index_column="dt", period="2d"),
@@ -120,6 +123,7 @@ def null_data():
     ).lazy()
 
 
+@pytest.mark.xfail(reason="Boolean function not yet implemented")
 def test_drop_nulls(null_data):
     result = null_data.drop_nulls()
     assert_gpu_result_equal(result)
@@ -221,12 +225,12 @@ def test_groupby(ldf):
     assert_gpu_result_equal(out, check_row_order=False, check_exact=False)
 
 
+@pytest.mark.xfail(reason="arg_where not yet implemented")
 def test_expr_function(ldf):
     out = ldf.select(pl.arg_where(pl.col("int_key1") == 5)).set_sorted(
         pl.col("int_key1")
     )
-    # TODO: Fix the underlying dtype
-    assert_gpu_result_equal(out, check_dtype=False)
+    assert_gpu_result_equal(out)
 
 
 def test_filter_expr(ldf):

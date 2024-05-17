@@ -538,7 +538,7 @@ class Agg(Expr):
             # TODO: handle nans
             req = plc.aggregation.variance(ddof=options)
         elif name == "count":
-            req = plc.aggregation.count(null_policy=plc.types.NullPolicy.EXCLUDE)
+            req = plc.aggregation.count(null_handling=plc.types.NullPolicy.EXCLUDE)
         else:
             raise NotImplementedError
         self.request = req
@@ -547,6 +547,8 @@ class Agg(Expr):
             op = partial(self._reduce, request=req)
         elif name in {"min", "max"}:
             op = partial(op, propagate_nans=options)
+        elif name == "count":
+            pass
         else:
             raise AssertionError
         self.op = op
@@ -583,6 +585,18 @@ class Agg(Expr):
         return Column(
             plc.Column.from_scalar(
                 plc.reduce.reduce(column.obj, request, self.dtype),
+                1,
+            ),
+            column.name,
+        )
+
+    def _count(self, column: Column) -> Column:
+        # TODO: dtype handling
+        return Column(
+            plc.Column.from_scalar(
+                plc.interop.from_arrow(
+                    pa.scalar(column.obj.size() - column.obj.null_count()),
+                ),
                 1,
             ),
             column.name,

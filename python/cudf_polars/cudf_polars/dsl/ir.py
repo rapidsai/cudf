@@ -15,6 +15,7 @@ can be considered as functions:
 
 from __future__ import annotations
 
+import itertools
 import types
 from dataclasses import dataclass
 from functools import cache
@@ -263,8 +264,10 @@ class GroupBy(IR):
 
     def __post_init__(self):
         """Check whether all the aggregations are implemented."""
-        if self.maintain_order:
+        if self.options.rolling is None and self.maintain_order:
             raise NotImplementedError("Maintaining order in groupby")
+        if self.options.rolling:
+            raise NotImplementedError("rolling window/groupby")
         if any(GroupBy.check_agg(a) > 1 for a in self.agg_requests):
             raise NotImplementedError("Nested aggregations in groupby")
         self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
@@ -395,7 +398,7 @@ class Join(IR):
                 plc.copying.gather(right.table, rg, right_policy), right.column_names
             )
             if coalesce and how == "outer":
-                left.replace_columns(
+                left = left.replace_columns(
                     *(
                         Column(
                             plc.replace.replace_nulls(left_col.obj, right_col.obj),
@@ -407,7 +410,7 @@ class Join(IR):
                         )
                     )
                 )
-                right.discard_columns(right_on.column_names_set)
+                right = right.discard_columns(right_on.column_names_set)
             right = right.rename_columns(
                 {
                     name: f"{name}{suffix}"
@@ -673,7 +676,7 @@ class Union(IR):
     def __post_init__(self):
         """Validated preconditions."""
         schema = self.dfs[0].schema
-        if not all(s == schema for s in self.dfs[1:]):
+        if not all(s.schema == schema for s in self.dfs[1:]):
             raise ValueError("Schema mismatch")
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
@@ -692,7 +695,10 @@ class HConcat(IR):
         """Evaluate and return a dataframe."""
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
         columns, scalars = zip(*((df.columns, df.scalars) for df in dfs))
-        return DataFrame(columns, scalars)
+        return DataFrame(
+            list(itertools.chain.from_iterable(columns)),
+            list(itertools.chain.from_iterable(scalars)),
+        )
 
 
 @dataclass(slots=True)

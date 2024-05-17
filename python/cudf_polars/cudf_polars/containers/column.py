@@ -87,9 +87,11 @@ class Column:
         if self.obj.type().id() not in (plc.TypeId.FLOAT32, plc.TypeId.FLOAT64):
             return 0
         else:
-            return plc.reduce.reduce(
-                plc.unary.is_nan(self.obj),
-                plc.aggregation.sum(),
-                # TODO: pylibcudf needs to have a SizeType DataType singleton
-                plc.DataType(plc.TypeId.INT32),
-            )
+            return plc.interop.to_arrow(
+                plc.reduce.reduce(
+                    plc.unary.is_nan(self.obj),
+                    plc.aggregation.sum(),
+                    # TODO: pylibcudf needs to have a SizeType DataType singleton
+                    plc.DataType(plc.TypeId.INT32),
+                )
+            ).as_py()
