@@ -617,10 +617,9 @@ struct PdaSymbolToSymbolGroupId {
     // The relative symbol group id of the current input symbol
     constexpr auto pda_sgid_lookup_size =
       static_cast<int32_t>(sizeof(tos_sg_to_pda_sgid) / sizeof(tos_sg_to_pda_sgid[0]));
-    /*
-    // Note that delimiter cannot be any of opening(closing) brace, bracket, quote, escape,
-    // comma, colon or whitespace characters.
-    */
+    // We map the delimiter character to LINE_BREAK symbol group id, and the newline character
+    // to OTHER. Note that delimiter cannot be any of opening(closing) brace, bracket, quote,
+    // escape, comma, colon or whitespace characters.
     auto const symbol_position =
       symbol == delimiter
         ? static_cast<int32_t>('\n')

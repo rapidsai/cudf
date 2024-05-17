@@ -354,7 +354,24 @@ class json_reader_options {
    *
    * @param delimiter Delimiter separating records in JSON lines
    */
-  void set_delimiter(char delimiter) { _delimiter = delimiter; }
+  void set_delimiter(char delimiter)
+  {
+    switch (delimiter) {
+      case '{': [[fallthrough]];
+      case '[': [[fallthrough]];
+      case '}': [[fallthrough]];
+      case ']': [[fallthrough]];
+      case ',': [[fallthrough]];
+      case ':': [[fallthrough]];
+      case '"': [[fallthrough]];
+      case '\'': [[fallthrough]];
+      case '\\': [[fallthrough]];
+      case ' ': [[fallthrough]];
+      case '\t': [[fallthrough]];
+      case '\r': CUDF_FAIL("Unsupported delimiter character.", std::runtime_error); break;
+    }
+    _delimiter = delimiter;
+  }
 
   /**
    * @brief Set whether to read the file as a json object per line.
@@ -531,7 +548,7 @@ class json_reader_options_builder {
    */
   json_reader_options_builder& delimiter(char delimiter)
   {
-    options._delimiter = delimiter;
+    options.set_delimiter(delimiter);
     return *this;
   }
 

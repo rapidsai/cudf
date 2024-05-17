@@ -2497,6 +2497,21 @@ TEST_P(JsonDelimiterParamTest, JsonLinesDelimiter)
     cudf::test::strings_column_wrapper(col3_iterator, col3_iterator + repetitions));
 }
 
+TEST_F(JsonReaderTest, ViableDelimiter)
+{
+  // Test input
+  std::string input = R"({"col1":100, "col2":1.1, "col3":"aaa"})";
+
+  cudf::io::json_reader_options json_parser_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{input.c_str(), input.size()})
+      .lines(true);
+
+  json_parser_options.set_delimiter('\f');
+  CUDF_EXPECT_NO_THROW(cudf::io::read_json(json_parser_options));
+
+  EXPECT_THROW(json_parser_options.set_delimiter('\t'), std::runtime_error);
+}
+
 // Test case for dtype prune:
 // all paths, only one.
 // one present, another not present, nothing present
