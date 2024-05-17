@@ -552,10 +552,7 @@ def test_parquet_read_filtered_complex_predicate(
     df.to_parquet(fname, row_group_size=2)
 
     # Check filters
-    if expected_len != 0:
-        df_filtered = cudf.read_parquet(fname, filters=predicate)
-    else:
-        df_filtered = cudf.read_parquet(fname, filters=predicate)
+    df_filtered = cudf.read_parquet(fname, filters=predicate)
     assert_eq(cudf.io.read_parquet_metadata(fname)[1], 10 / 2)
     assert_eq(len(df_filtered), expected_len)
 
