@@ -355,8 +355,7 @@ class reader::impl {
     // User specified reading rows/stripes selection.
     int64_t const skip_rows;
     std::optional<int64_t> num_rows;
-    host_span<std::vector<size_type> const> row_group_indices;
-    std::optional<std::reference_wrapper<ast::expression const>> filter;
+    std::vector<std::vector<size_type>> row_group_indices;
   } const _options;
 
   // name to reference converter to extract AST output filter

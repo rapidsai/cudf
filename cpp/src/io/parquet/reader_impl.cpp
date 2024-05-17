@@ -422,8 +422,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
     _options{options.get_timestamp_type(),
              options.get_skip_rows(),
              options.get_num_rows(),
-             options.get_row_groups(),
-             options.get_filter()},
+             options.get_row_groups()},
     _sources{std::move(sources)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
@@ -440,11 +439,11 @@ reader::impl::impl(std::size_t chunk_read_limit,
 
   // Select only columns required by the options and filter
   std::optional<std::vector<std::string>> filter_columns_names;
-  if (_options.filter.has_value() and options.get_columns().has_value()) {
+  if (options.get_filter().has_value() and options.get_columns().has_value()) {
     // list, struct, dictionary are not supported by AST filter yet.
     // extract columns not present in get_columns() & keep count to remove at end.
     filter_columns_names =
-      get_column_names_in_expression(_options.filter, *(options.get_columns()));
+      get_column_names_in_expression(options.get_filter(), *(options.get_columns()));
     _num_filter_only_columns = filter_columns_names->size();
   }
   std::tie(_input_columns, _output_buffers, _output_column_schemas) =
@@ -463,7 +462,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
   // `preprocess_file()` and `finalize_output()`
   table_metadata metadata;
   populate_metadata(metadata);
-  _expr_conv = named_to_reference_converter(_options.filter, metadata);
+  _expr_conv = named_to_reference_converter(options.get_filter(), metadata);
 }
 
 void reader::impl::prepare_data(read_mode mode)
