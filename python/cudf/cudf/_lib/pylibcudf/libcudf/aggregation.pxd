@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from libc.stddef cimport size_t
 from libc.stdint cimport int32_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -51,6 +52,8 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
     cdef cppclass aggregation:
         Kind kind
         unique_ptr[aggregation] clone()
+        size_t do_hash() noexcept
+        bool is_equal(const aggregation const) noexcept
 
     cdef cppclass rolling_aggregation(aggregation):
         pass
