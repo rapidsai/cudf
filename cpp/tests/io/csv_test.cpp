@@ -1047,7 +1047,7 @@ TEST_F(CsvReaderTest, StringsQuotesWhitespace)
   auto result = cudf::io::read_csv(in_opts);
 
   auto const view = result.tbl->view();
-  EXPECT_EQ(2, view.num_columns());
+  ASSERT_EQ(2, view.num_columns());
   ASSERT_EQ(type_id::STRING, view.column(0).type().id());
   ASSERT_EQ(type_id::STRING, view.column(1).type().id());
 
