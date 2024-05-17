@@ -2047,11 +2047,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             equal_columns = True
         elif isinstance(other, Series):
             if (
-                not can_reindex
+                not (self_pd_columns := self._data.to_pandas_index()).equals(
+                    other_pd_index := other.index.to_pandas()
+                )
+                and not can_reindex
                 and fn in cudf.utils.utils._EQUALITY_OPS
-                and not (
-                    self_pd_columns := self._data.to_pandas_index()
-                ).equals(other_pd_index := other.index.to_pandas())
             ):
                 raise ValueError(
                     "Can only compare DataFrame & Series objects "
