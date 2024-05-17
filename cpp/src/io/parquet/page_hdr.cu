@@ -163,8 +163,7 @@ __device__ inline bool is_boolean(ColumnChunkDesc const& chunk)
  * @return `kernel_mask_bits` value for the given page
  */
 __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
-                                                   ColumnChunkDesc const& chunk,
-                                                   int use_fixed_op)
+                                                   ColumnChunkDesc const& chunk)
 {
   if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return decode_kernel_mask::NONE; }
   if (page.encoding == Encoding::DELTA_BINARY_PACKED) {
@@ -383,8 +382,7 @@ CUDF_KERNEL
 void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
                                                  chunk_page_info* chunk_pages,
                                                  int32_t num_chunks,
-                                                 kernel_error::pointer error_code,
-                                                 int use_fixed_op)
+                                                 kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
   gpuParsePageHeader parse_page_header;
@@ -486,7 +484,7 @@ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
             error[warp_id] |=
               static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
           }
-          bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck, use_fixed_op);
+          bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck);
         } else {
           bs->cur = bs->end;
         }
@@ -575,7 +573,7 @@ void __host__ DecodePageHeaders(ColumnChunkDesc* chunks,
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
   gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(
-    chunks, chunk_pages, num_chunks, error_code, use_fixed_op);
+    chunks, chunk_pages, num_chunks, error_code);
 }
 
 void __host__ BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
