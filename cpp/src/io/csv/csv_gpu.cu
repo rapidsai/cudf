@@ -351,7 +351,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         if (dtypes[actual_col].id() == cudf::type_id::STRING) {
           auto end = next_delimiter;
           if (not options.keepquotes) {
-            if (not options.updatedquotesdetection) {
+            if (not options.detect_whitespace_around_quotes) {
               if ((*field_start == options.quotechar) && (*(end - 1) == options.quotechar)) {
                 ++field_start;
                 --end;

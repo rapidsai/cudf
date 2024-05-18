@@ -1044,7 +1044,7 @@ TEST_F(CsvReaderTest, StringsQuotesWhitespace)
       .dtypes(std::vector<data_type>{dtype<cudf::string_view>(), dtype<cudf::string_view>()})
       .quoting(cudf::io::quote_style::ALL)
       .doublequote(false)
-      .updated_quotes_detection(true);
+      .detect_whitespace_around_quotes(true);
   auto result = cudf::io::read_csv(in_opts);
 
   auto const view = result.tbl->view();
