@@ -17,7 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_lists.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
@@ -218,7 +218,7 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
   auto const d_separators = column_device_view::create(separators.parent(), stream);
   auto const d_na_rep     = na_rep.value(stream);
 
-  auto [offsets_column, chars] = experimental::make_strings_children(
+  auto [offsets_column, chars] = make_strings_children(
     format_lists_fn{*d_input, *d_separators, d_na_rep, stack_buffer.data(), depth},
     input.size(),
     stream,

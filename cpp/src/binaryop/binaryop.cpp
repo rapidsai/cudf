@@ -77,9 +77,9 @@ std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
  */
 inline bool is_null_dependent(binary_operator op)
 {
-  return op == binary_operator::NULL_EQUALS || op == binary_operator::NULL_MIN ||
-         op == binary_operator::NULL_MAX || op == binary_operator::NULL_LOGICAL_AND ||
-         op == binary_operator::NULL_LOGICAL_OR;
+  return op == binary_operator::NULL_EQUALS || op == binary_operator::NULL_NOT_EQUALS ||
+         op == binary_operator::NULL_MIN || op == binary_operator::NULL_MAX ||
+         op == binary_operator::NULL_LOGICAL_AND || op == binary_operator::NULL_LOGICAL_OR;
 }
 
 /**
@@ -109,7 +109,8 @@ bool is_comparison_binop(binary_operator op)
          op == binary_operator::GREATER or        // operator >
          op == binary_operator::LESS_EQUAL or     // operator <=
          op == binary_operator::GREATER_EQUAL or  // operator >=
-         op == binary_operator::NULL_EQUALS;      // 2 null = true; 1 null = false; else ==
+         op == binary_operator::NULL_EQUALS or    // 2 null = true; 1 null = false; else ==
+         op == binary_operator::NULL_NOT_EQUALS;  // 2 null = false; 1 null = true; else !=
 }
 
 /**

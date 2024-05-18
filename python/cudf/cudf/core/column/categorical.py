@@ -729,7 +729,12 @@ class CategoricalColumn(column.ColumnBase):
         if not isinstance(other, CategoricalColumn):
             raise ValueError
         # Note: at this stage we are guaranteed that the dtypes are equal.
-        if not self.ordered and op not in {"__eq__", "__ne__", "NULL_EQUALS"}:
+        if not self.ordered and op not in {
+            "__eq__",
+            "__ne__",
+            "NULL_EQUALS",
+            "NULL_NOT_EQUALS",
+        }:
             raise TypeError(
                 "The only binary operations supported by unordered "
                 "categorical columns are equality and inequality."

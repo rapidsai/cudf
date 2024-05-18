@@ -8,7 +8,6 @@ import operator
 import textwrap
 import warnings
 from collections import Counter, abc
-from functools import cached_property
 from typing import (
     Any,
     Callable,
@@ -195,7 +194,6 @@ def _get_label_range_or_mask(index, start, stop, step):
     if (
         not (start is None and stop is None)
         and type(index) is cudf.core.index.DatetimeIndex
-        and index.is_monotonic_increasing is False
     ):
         start = pd.to_datetime(start)
         stop = pd.to_datetime(stop)
@@ -206,8 +204,8 @@ def _get_label_range_or_mask(index, start, stop, step):
                 # when we have a non-monotonic datetime index, return
                 # values in the slice defined by index_of(start) and
                 # index_of(end)
-                start_loc = index.get_loc(start.to_datetime64())
-                stop_loc = index.get_loc(stop.to_datetime64()) + 1
+                start_loc = index.get_loc(start)
+                stop_loc = index.get_loc(stop) + 1
                 return slice(start_loc, stop_loc)
             else:
                 raise KeyError(
@@ -215,10 +213,19 @@ def _get_label_range_or_mask(index, start, stop, step):
                     "DatetimeIndexes with non-existing keys is not allowed.",
                 )
         elif start is not None:
-            boolean_mask = index >= start
+            if index.is_monotonic_increasing:
+                return index >= start
+            elif index.is_monotonic_decreasing:
+                return index <= start
+            else:
+                return index.find_label_range(slice(start, stop, step))
         else:
-            boolean_mask = index <= stop
-        return boolean_mask
+            if index.is_monotonic_increasing:
+                return index <= stop
+            elif index.is_monotonic_decreasing:
+                return index >= stop
+            else:
+                return index.find_label_range(slice(start, stop, step))
     else:
         return index.find_label_range(slice(start, stop, step))
 
@@ -2266,7 +2273,7 @@ class IndexedFrame(Frame):
         slicer[axis] = slice(before, after)
         return self.loc[tuple(slicer)].copy()
 
-    @cached_property
+    @property
     def loc(self):
         """Select rows and columns by label or boolean mask.
 
@@ -2332,7 +2339,7 @@ class IndexedFrame(Frame):
         """
         return self._loc_indexer_type(self)
 
-    @cached_property
+    @property
     def iloc(self):
         """Select values by position.
 
@@ -4871,13 +4878,16 @@ class IndexedFrame(Frame):
         1    2
         dtype: int64
         """
-        return self._from_columns_like_self(
+        res = self._from_columns_like_self(
             Frame._repeat(
                 [*self._index._data.columns, *self._columns], repeats, axis
             ),
             self._column_names,
             self._index_names,
         )
+        if isinstance(res.index, cudf.DatetimeIndex):
+            res.index._freq = None
+        return res
 
     def astype(
         self,
