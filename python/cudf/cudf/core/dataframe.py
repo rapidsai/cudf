@@ -1396,23 +1396,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else:
                 if arg in self._data:
                     if not is_scalar(value) and len(self) == 0:
-                        if isinstance(value, (pd.Series, Series)):
-                            self.index = as_index(value.index)
-                        elif len(value) > 0:
-                            self.index = RangeIndex(start=0, stop=len(value))
                         value = column.as_column(value)
-                        new_data = self._data.__class__()
-                        for key in self._data:
-                            if key == arg:
-                                new_data[key] = value
-                            else:
-                                new_data[key] = column.column_empty_like(
-                                    self._data[key],
-                                    masked=True,
-                                    newsize=len(value),
-                                )
-
-                        self._data = new_data
+                        length = len(value)
+                        new_columns = (
+                            value
+                            if key == arg
+                            else column.column_empty_like(
+                                col, masked=True, newsize=length
+                            )
+                            for key, col in self._data.items()
+                        )
+                        self._data = self._data._from_columns_like_self(
+                            new_columns, verify=False
+                        )
+                        if isinstance(value, (pd.Series, Series)):
+                            self._index = as_index(value.index)
+                        elif len(value) > 0:
+                            self._index = RangeIndex(length)
                         return
                     elif isinstance(value, (pd.Series, Series)):
                         value = Series(value)._align_to_index(
@@ -5679,7 +5679,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             }
         elif data.ndim == 1:
             ca_data = {
-                names[0]: column.as_column(data, nan_as_null=nan_as_null)
+                name: column.as_column(data[name], nan_as_null=nan_as_null)
+                for name in names
             }
 
         if not is_scalar(index):
