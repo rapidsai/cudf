@@ -166,9 +166,7 @@ def test_dask_timeseries_from_pandas(tmpdir):
     pdf = ddf2.compute()
     pdf.to_parquet(fn, engine="pyarrow")
     read_df = dask_cudf.read_parquet(fn)
-    # Workaround until following issue is fixed:
-    # https://github.com/apache/arrow/issues/33321
-    dd.assert_eq(ddf2, read_df.compute(), check_index_type=False)
+    dd.assert_eq(ddf2, read_df.compute())
 
 
 @pytest.mark.parametrize("index", [False, None])
@@ -443,7 +441,7 @@ def test_create_metadata_file(tmpdir, partition_on):
     dd.assert_eq(ddf1, ddf2)
 
 
-@xfail_dask_expr("dtypes are inconsistent")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 @need_create_meta
 def test_create_metadata_file_inconsistent_schema(tmpdir):
     # NOTE: This test demonstrates that the CudfEngine

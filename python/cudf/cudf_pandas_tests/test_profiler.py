@@ -33,10 +33,11 @@ def test_profiler():
         "Timestamp",
         "DataFrame",
         "DataFrame.groupby",
-        "DataFrameGroupBy.sum",
+        "GroupBy.sum",
         "DataFrame.sum",
         "Series.__getitem__",
         "Timedelta",
+        "_Timestamp.__add__",
     }
     for name, func in per_function_stats.items():
         assert (

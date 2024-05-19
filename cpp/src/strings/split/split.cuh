@@ -365,8 +365,8 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
     });
 
   // create offsets from the counts for return to the caller
-  auto [offsets, total_tokens] = cudf::strings::detail::make_offsets_child_column(
-    token_counts.begin(), token_counts.end(), stream, mr);
+  auto [offsets, total_tokens] =
+    cudf::detail::make_offsets_child_column(token_counts.begin(), token_counts.end(), stream, mr);
   auto const d_tokens_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
