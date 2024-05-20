@@ -2434,6 +2434,84 @@ TEST_F(JsonReaderTest, MapTypes)
           {type_id::LIST, type_id::STRING, type_id::STRING});
 }
 
+/**
+ * @brief Test fixture for parametrized JSON reader tests
+ */
+struct JsonDelimiterParamTest : public cudf::test::BaseFixture,
+                                public testing::WithParamInterface<char> {};
+
+// Parametrize qualifying JSON tests for executing both nested reader and legacy JSON lines reader
+INSTANTIATE_TEST_SUITE_P(JsonDelimiterParamTest,
+                         JsonDelimiterParamTest,
+                         ::testing::Values('\n', '\b', '\v', '\f', 'h'));
+
+TEST_P(JsonDelimiterParamTest, JsonLinesDelimiter)
+{
+  using SymbolT = char;
+
+  SymbolT const random_delimiter = GetParam();
+
+  // Test input
+  std::string input             = R"({"col1":100, "col2":1.1, "col3":"aaa"})";
+  std::size_t const string_size = 400;
+  /*
+   * We are constructing a JSON lines string where each row is {"col1":100, "col2":1.1,
+   * "col3":"aaa"} and rows are separated by random_delimiter. Instead of concatenating lines
+   * linearly in O(n), we can do it in O(log n) by doubling the input in each iteration. The total
+   * number of such iterations is log_repetitions.
+   */
+  std::size_t const log_repetitions =
+    static_cast<std::size_t>(std::ceil(std::log2(string_size / input.size())));
+  std::size_t const repetitions = 1UL << log_repetitions;
+  for (std::size_t i = 0; i < log_repetitions; i++) {
+    input = input + random_delimiter + input;
+  }
+
+  cudf::io::json_reader_options json_parser_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{input.c_str(), input.size()})
+      .lines(true)
+      .delimiter(random_delimiter);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(json_parser_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 3);
+  EXPECT_EQ(result.tbl->num_rows(), repetitions);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::STRING);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "col1");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "col2");
+  EXPECT_EQ(result.metadata.schema_info[2].name, "col3");
+
+  auto col1_iterator = thrust::constant_iterator<int64_t>(100);
+  auto col2_iterator = thrust::constant_iterator<double>(1.1);
+  auto col3_iterator = thrust::constant_iterator<std::string>("aaa");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper(col1_iterator, col1_iterator + repetitions));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                 float64_wrapper(col2_iterator, col2_iterator + repetitions));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(2),
+    cudf::test::strings_column_wrapper(col3_iterator, col3_iterator + repetitions));
+}
+
+TEST_F(JsonReaderTest, ViableDelimiter)
+{
+  // Test input
+  std::string input = R"({"col1":100, "col2":1.1, "col3":"aaa"})";
+
+  cudf::io::json_reader_options json_parser_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{input.c_str(), input.size()})
+      .lines(true);
+
+  json_parser_options.set_delimiter('\f');
+  CUDF_EXPECT_NO_THROW(cudf::io::read_json(json_parser_options));
+
+  EXPECT_THROW(json_parser_options.set_delimiter('\t'), std::invalid_argument);
+}
+
 // Test case for dtype prune:
 // all paths, only one.
 // one present, another not present, nothing present

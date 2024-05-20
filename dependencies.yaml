@@ -341,10 +341,10 @@ dependencies:
       - output_types: conda
         packages:
           # Allow runtime version to float up to minor version
-          - libarrow-acero>=16.0.0,<17.0.0a0
-          - libarrow-dataset>=16.0.0,<17.0.0a0
-          - libarrow>=16.0.0,<17.0.0a0
-          - libparquet>=16.0.0,<17.0.0a0
+          - libarrow-acero>=16.0.0,<16.1.0a0
+          - libarrow-dataset>=16.0.0,<16.1.0a0
+          - libarrow>=16.0.0,<16.1.0a0
+          - libparquet>=16.0.0,<16.1.0a0
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
