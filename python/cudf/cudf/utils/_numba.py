@@ -8,10 +8,9 @@ from numba import config as numba_config
 
 
 def _get_cc_60_ptx_file():
-    here = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(
-        here,
-        "../",
+        os.path.dirname(os.path.abspath(__file__)),
+        "..",
         "core",
         "udf",
         "shim_60.ptx",
