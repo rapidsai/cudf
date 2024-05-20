@@ -47,7 +47,7 @@ def test_sort_values(nelem, nparts, by, ascending):
     dd.assert_eq(got, expect, check_index=False)
 
 
-@pytest.mark.parametrize("by", ["b", ["a", "b"]])
+@pytest.mark.parametrize("by", ["b", ["b", "a"]])
 def test_sort_values_categorical_raises(by):
     df = cudf.DataFrame()
     df["a"] = np.ascontiguousarray(np.arange(10)[::-1])
