@@ -83,7 +83,8 @@ struct floating_converter {
   static constexpr IntegralType exponent_bias =
     cuda::std::numeric_limits<FloatingType>::max_exponent - 2;
 
-  /** @brief Reinterpret the bits of a floating-point value as an integer
+  /**
+   * @brief Reinterpret the bits of a floating-point value as an integer
    *
    * @param floating The floating-point value to cast
    * @return An integer with bits identical to the input
@@ -96,7 +97,8 @@ struct floating_converter {
     return integer_rep;
   }
 
-  /** @brief Reinterpret the bits of an integer as floating-point value
+  /**
+   * @brief Reinterpret the bits of an integer as floating-point value
    *
    * @param integer The integer to cast
    * @return A floating-point value with bits identical to the input
@@ -109,7 +111,8 @@ struct floating_converter {
     return floating;
   }
 
-  /** @brief Extracts the integral significand of a floating-point number
+  /**
+   * @brief Extracts the integral significand of a floating-point number
    *
    * @param floating The floating value to extract the significand from
    * @return The integral significand, bit-shifted to a (large) whole number
@@ -123,7 +126,8 @@ struct floating_converter {
     return (integer_rep & mantissa_mask) | understood_bit_mask;
   }
 
-  /** @brief Extracts the sign bit of a floating-point number
+  /**
+   * @brief Extracts the sign bit of a floating-point number
    *
    * @param floating The floating value to extract the sign from
    * @return The sign bit
@@ -137,7 +141,8 @@ struct floating_converter {
     return static_cast<bool>(sign_mask & integer_rep);
   }
 
-  /** @brief Extracts the exponent of a floating-point number
+  /**
+   * @brief Extracts the exponent of a floating-point number
    *
    * @note This returns INT_MIN for +/-0, +/-inf, NaN's, and denormals
    * For all of these cases, the decimal fixed_point number should be set to zero
@@ -172,9 +177,10 @@ struct floating_converter {
     return shifted_exponent_bits - static_cast<SignedIntegralType>(exponent_bias);
   }
 
-  /** @brief Sets the sign bit of a floating-point number
+  /**
+   * @brief Sets the sign bit of a floating-point number
    *
-   * @param floating The floating value to set the sign of
+   * @param floating The floating-point value to set the sign of. Must be positive.
    * @param is_negative The sign bit to set for the floating-point number
    * @return The input floating-point value with the chosen sign
    */
@@ -184,14 +190,15 @@ struct floating_converter {
     // Convert floating to integer
     IntegralType integer_rep = bit_cast_to_integer(floating);
 
-    // Set the sign bit
+    // Set the sign bit. Note that the input floating-point number must be positive.
     integer_rep |= (IntegralType(is_negative) << sign_bit_index);
 
     // Convert back to float
     return bit_cast_to_floating(integer_rep);
   }
 
-  /** @brief Adds to the base-2 exponent of a floating-point number
+  /**
+   * @brief Adds to the base-2 exponent of a floating-point number
    *
    * @param floating The floating value to add to the exponent of
    * @param exp2 The power-of-2 to add to the floating-point number
@@ -219,9 +226,10 @@ struct floating_converter {
   }
 };
 
-/** @brief Determine the number of significant bits in an integer
+/**
+ * @brief Determine the number of significant bits in an integer
  *
- * @tparam T Type of input integer value
+ * @tparam T Type of input integer value. Must be either uint32_t, uint64_t, or __uint128_t
  * @param value The integer whose bits are being counted
  * @return The number of significant bits: the # of bits - # of leading zeroes
  */
@@ -241,7 +249,7 @@ CUDF_HOST_DEVICE inline int count_significant_bits(T value)
     // 128 bit type, must break up into high and low components
     auto const high_bits = static_cast<int64_t>(value >> 64);
     auto const low_bits  = static_cast<int64_t>(value);
-    return 128 - (__clzll(high_bits) + int(high_bits == 0) * __clzll(low_bits));
+    return 128 - (__clzll(high_bits) + static_cast<int>(high_bits == 0) * __clzll(low_bits));
   }
 #else
   // Undefined behavior to call __builtin_clzll() with zero in gcc and clang
