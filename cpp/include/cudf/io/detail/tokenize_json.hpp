@@ -120,6 +120,30 @@ enum token_t : PdaTokenT {
 namespace detail {
 
 /**
+ * @brief Decision to keep or discard LineEnd tokens in the output token stream
+ */
+enum class LineEndTokenOption { Keep, Discard };
+
+/**
+ * @brief Parses the given JSON string and emits a sequence of tokens that demarcate relevant
+ * sections from the input.
+ *
+ * @param json_in The JSON input
+ * @param options Parsing options specifying the parsing behaviour
+ * @param line_end_option option whether to keep or discard line_end_token
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr Optional, resource with which to allocate
+ * @return Pair of device vectors, where the first vector represents the token types and the second
+ * vector represents the index within the input corresponding to each token
+ */
+std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> get_token_stream(
+  device_span<SymbolT const> json_in,
+  cudf::io::json_reader_options const& options,
+  cudf::io::json::detail::LineEndTokenOption line_end_option,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+/**
  * @brief Parses the given JSON string and emits a sequence of tokens that demarcate relevant
  * sections from the input.
  *

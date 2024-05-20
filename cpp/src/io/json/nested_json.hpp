@@ -211,12 +211,14 @@ void get_stack_context(device_span<SymbolT const> json_in,
  *
  * @param tokens The tokens to be post-processed
  * @param token_indices The tokens' corresponding indices that are post-processed
+ * @param line_end_option option whether to keep or discard line_end_token
  * @param stream The cuda stream to dispatch GPU kernels to
  * @return Returns the post-processed token stream
  */
 std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> process_token_stream(
   device_span<PdaTokenT const> tokens,
   device_span<SymbolOffsetT const> token_indices,
+  LineEndTokenOption line_end_option,
   rmm::cuda_stream_view stream);
 
 /**

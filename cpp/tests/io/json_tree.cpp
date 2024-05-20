@@ -591,8 +591,12 @@ TEST_F(JsonTest, TreeRepresentation)
   cudf::io::json_reader_options const options{};
 
   // Parse the JSON and get the token stream
-  auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
-    d_input, options, stream, rmm::mr::get_current_device_resource());
+  auto const [tokens_gpu, token_indices_gpu] =
+    cudf::io::json::detail::get_token_stream(d_input,
+                                             options,
+                                             cudf::io::json::detail::LineEndTokenOption::Discard,
+                                             stream,
+                                             rmm::mr::get_current_device_resource());
 
   // Get the JSON's tree representation
   auto gpu_tree = cuio_json::detail::get_tree_representation(
@@ -679,8 +683,12 @@ TEST_F(JsonTest, TreeRepresentation2)
   cudf::io::json_reader_options const options{};
 
   // Parse the JSON and get the token stream
-  auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
-    d_input, options, stream, rmm::mr::get_current_device_resource());
+  auto const [tokens_gpu, token_indices_gpu] =
+    cudf::io::json::detail::get_token_stream(d_input,
+                                             options,
+                                             cudf::io::json::detail::LineEndTokenOption::Discard,
+                                             stream,
+                                             rmm::mr::get_current_device_resource());
 
   // Get the JSON's tree representation
   auto gpu_tree = cuio_json::detail::get_tree_representation(
@@ -754,8 +762,12 @@ TEST_F(JsonTest, TreeRepresentation3)
   options.enable_lines(true);
 
   // Parse the JSON and get the token stream
-  auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
-    d_input, options, stream, rmm::mr::get_current_device_resource());
+  auto const [tokens_gpu, token_indices_gpu] =
+    cudf::io::json::detail::get_token_stream(d_input,
+                                             options,
+                                             cudf::io::json::detail::LineEndTokenOption::Discard,
+                                             stream,
+                                             rmm::mr::get_current_device_resource());
 
   // Get the JSON's tree representation
   auto gpu_tree = cuio_json::detail::get_tree_representation(
@@ -780,8 +792,12 @@ TEST_F(JsonTest, TreeRepresentationError)
   cudf::io::json_reader_options const options{};
 
   // Parse the JSON and get the token stream
-  auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
-    d_input, options, stream, rmm::mr::get_current_device_resource());
+  auto const [tokens_gpu, token_indices_gpu] =
+    cudf::io::json::detail::get_token_stream(d_input,
+                                             options,
+                                             cudf::io::json::detail::LineEndTokenOption::Discard,
+                                             stream,
+                                             rmm::mr::get_current_device_resource());
 
   // Get the JSON's tree representation
   // This JSON is invalid and will raise an exception.
@@ -863,8 +879,12 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
                                                              static_cast<size_t>(d_scalar.size())};
 
   // Parse the JSON and get the token stream
-  auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
-    d_input, options, stream, rmm::mr::get_current_device_resource());
+  auto const [tokens_gpu, token_indices_gpu] =
+    cudf::io::json::detail::get_token_stream(d_input,
+                                             options,
+                                             cudf::io::json::detail::LineEndTokenOption::Discard,
+                                             stream,
+                                             rmm::mr::get_current_device_resource());
   // host tree generation
   auto cpu_tree = get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   bool const is_array_of_arrays =

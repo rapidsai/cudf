@@ -238,6 +238,7 @@ struct UnwrapTokenFromSymbolOp {
  * invalid lines.
  */
 struct TransduceToken {
+  detail::LineEndTokenOption line_end_option;
   template <typename RelativeOffsetT, typename SymbolT>
   constexpr CUDF_HOST_DEVICE SymbolT operator()(StateT const state_id,
                                                 SymbolGroupT const match_id,
@@ -249,8 +250,9 @@ struct TransduceToken {
        match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER));
 
     if (is_end_of_invalid_line) {
-      return relative_offset == 0 ? SymbolT{token_t::StructEnd, 0}
-                                  : SymbolT{token_t::StructBegin, 0};
+      return relative_offset == 0   ? SymbolT{token_t::StructEnd, 0}
+             : relative_offset == 1 ? SymbolT{token_t::StructBegin, 0}
+                                    : SymbolT{token_t::LineEnd, 0};
     } else {
       return read_symbol;
     }
@@ -262,12 +264,12 @@ struct TransduceToken {
                                                 SymbolT const read_symbol) const
   {
     // Number of tokens emitted on invalid lines
-    constexpr int32_t num_inv_tokens = 2;
+    int32_t num_inv_tokens = line_end_option == detail::LineEndTokenOption::Discard ? 2 : 3;
 
     const bool is_delimiter = match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER);
 
     // If state is either invalid or we're entering an invalid state, we discard tokens
-    const bool is_part_of_invalid_line =
+    const bool is_part_of_valid_line =
       (match_id != static_cast<SymbolGroupT>(dfa_symbol_group_id::ERROR) &&
        state_id == static_cast<StateT>(TT_VLD));
 
@@ -275,7 +277,12 @@ struct TransduceToken {
     const bool is_end_of_invalid_line = (state_id == static_cast<StateT>(TT_INV) && is_delimiter);
 
     int32_t const emit_count =
-      is_end_of_invalid_line ? num_inv_tokens : (is_part_of_invalid_line && !is_delimiter ? 1 : 0);
+      is_end_of_invalid_line
+        ? num_inv_tokens
+        : (is_part_of_valid_line &&
+               (is_delimiter ? (line_end_option == detail::LineEndTokenOption::Keep) : true)
+             ? 1
+             : 0);
     return emit_count;
   }
 };
@@ -1479,16 +1486,12 @@ void get_stack_context(device_span<SymbolT const> json_in,
 std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> process_token_stream(
   device_span<PdaTokenT const> tokens,
   device_span<SymbolOffsetT const> token_indices,
+  LineEndTokenOption line_end_option,
   rmm::cuda_stream_view stream)
 {
   // Instantiate FST for post-processing the token stream to remove all tokens that belong to an
   // invalid JSON line
   token_filter::UnwrapTokenFromSymbolOp sgid_op{};
-  auto filter_fst =
-    fst::detail::make_fst(fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
-                          fst::detail::make_transition_table(token_filter::transition_table),
-                          fst::detail::make_translation_functor(token_filter::TransduceToken{}),
-                          stream);
 
   auto const mr = rmm::mr::get_current_device_resource();
   rmm::device_scalar<SymbolOffsetT> d_num_selected_tokens(stream, mr);
@@ -1497,10 +1500,19 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
 
   // The FST is run on the reverse token stream, discarding all tokens between ErrorBegin and the
   // next LineEnd (LineEnd, inv_token_0, inv_token_1, ..., inv_token_n, ErrorBegin, LineEnd, ...),
-  // emitting a [StructBegin, StructEnd] pair on the end of such an invalid line. In that example,
-  // inv_token_i for i in [0, n] together with the ErrorBegin are removed and replaced with
-  // StructBegin, StructEnd. Also, all LineEnd are removed as well, as these are not relevant after
-  // this stage anymore
+  // emitting a [StructBegin, StructEnd] pair on the end of such an invalid line when
+  // remove_line_end_token is true. In that example, inv_token_i for i in [0, n] together with the
+  // ErrorBegin are removed and replaced with StructBegin, StructEnd. Also, LineEnd tokens are
+  // removed. However, if remove_line_end_token is false the FST replaces inv_token_i for i in [0,
+  // n] and ErrorBegin with [LineEnd, StructBegin, StructEnd] in case of invalid lines.
+  // Additionally, all LineEnd tokens in valid lines are retained.
+
+  auto filter_fst = fst::detail::make_fst(
+    fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
+    fst::detail::make_transition_table(token_filter::transition_table),
+    fst::detail::make_translation_functor(token_filter::TransduceToken{line_end_option}),
+    stream);
+
   filter_fst.Transduce(
     thrust::make_reverse_iterator(thrust::make_zip_iterator(tokens.data(), token_indices.data()) +
                                   tokens.size()),
@@ -1531,6 +1543,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
 std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> get_token_stream(
   device_span<SymbolT const> json_in,
   cudf::io::json_reader_options const& options,
+  LineEndTokenOption line_end_option,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -1632,7 +1645,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   if (delimiter_offset == 1) {
     tokens.set_element(0, token_t::LineEnd, stream);
     auto [filtered_tokens, filtered_tokens_indices] =
-      process_token_stream(tokens, tokens_indices, stream);
+      process_token_stream(tokens, tokens_indices, line_end_option, stream);
     tokens         = std::move(filtered_tokens);
     tokens_indices = std::move(filtered_tokens_indices);
   }
@@ -1641,6 +1654,15 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
                "Generated token count exceeds the expected token count");
 
   return std::make_pair(std::move(tokens), std::move(tokens_indices));
+}
+
+std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> get_token_stream(
+  device_span<SymbolT const> json_in,
+  cudf::io::json_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  return get_token_stream(json_in, options, LineEndTokenOption::Discard, stream, mr);
 }
 
 /**
@@ -1671,7 +1693,8 @@ void make_json_column(json_column& root_column,
   CUDF_FUNC_RANGE();
 
   // Parse the JSON and get the token stream
-  auto const [d_tokens_gpu, d_token_indices_gpu] = get_token_stream(d_input, options, stream, mr);
+  auto const [d_tokens_gpu, d_token_indices_gpu] =
+    get_token_stream(d_input, options, LineEndTokenOption::Discard, stream, mr);
 
   // Copy the JSON tokens to the host
   thrust::host_vector<PdaTokenT> tokens =
