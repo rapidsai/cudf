@@ -10,7 +10,7 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import xfail_dask_expr
+from dask_cudf.tests.utils import QUERY_PLANNING_ON, xfail_dask_expr
 
 
 @pytest.mark.parametrize("ascending", [True, False])
@@ -54,8 +54,11 @@ def test_sort_values_categorical_raises(by):
     df["b"] = df["a"].astype("category")
     ddf = dd.from_pandas(df, npartitions=10)
 
-    with pytest.raises(NotImplementedError, match="sorting on categorical"):
-        ddf.sort_values(by=by)
+    if QUERY_PLANNING_ON:
+        with pytest.raises(
+            NotImplementedError, match="sorting on categorical"
+        ):
+            ddf.sort_values(by=by)
 
 
 @pytest.mark.parametrize("ascending", [True, False])
