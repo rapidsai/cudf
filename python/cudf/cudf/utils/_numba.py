@@ -3,15 +3,10 @@
 import glob
 import os
 import sys
-from functools import lru_cache
 
 from numba import config as numba_config
 
 
-# Use an lru_cache with a single value to allow a delayed import of
-# strings_udf. This is the easiest way to break an otherwise circular import
-# loop of _lib.*->cudautils->_numba->_lib.strings_udf
-@lru_cache
 def _get_cc_60_ptx_file():
     here = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(
