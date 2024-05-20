@@ -87,7 +87,9 @@ class DataFrame(DXDataFrame, CudfFrameBase):
         by,
         **kwargs,
     ):
-        # Check if first column is categorical and raise if it is
+        # Raise if the first column is categorical, otherwise the
+        # upstream divisions logic may produce errors
+        # (See: https://github.com/rapidsai/cudf/issues/11795)
         check_by = by[0] if isinstance(by, list) else by
         if is_categorical_dtype(self.dtypes.get(check_by, None)):
             raise NotImplementedError(
