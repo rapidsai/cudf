@@ -6,10 +6,12 @@ from libcpp.utility cimport move
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
-from cudf._lib.cpp.column.column cimport column, column_contents
-from cudf._lib.cpp.column.column_factories cimport make_column_from_scalar
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.column.column cimport column, column_contents
+from cudf._lib.pylibcudf.libcudf.column.column_factories cimport (
+    make_column_from_scalar,
+)
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar

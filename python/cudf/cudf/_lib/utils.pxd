@@ -4,8 +4,8 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-from cudf._lib.cpp.column.column cimport column_view
-from cudf._lib.cpp.table.table cimport table, table_view
+from cudf._lib.pylibcudf.libcudf.column.column cimport column_view
+from cudf._lib.pylibcudf.libcudf.table.table cimport table, table_view
 
 
 cdef data_from_unique_ptr(

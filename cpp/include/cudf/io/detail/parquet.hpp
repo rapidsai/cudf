@@ -102,6 +102,13 @@ class chunked_reader : private reader {
    *    // Process chunk
    *  } while (reader.has_next());
    *
+   * // Alternatively
+   *
+   *  while (reader.has_next()) {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  }
+   *
    * ```
    *
    * If `chunk_read_limit == 0` (i.e., no output limit), and `pass_read_limit == 0` (no input

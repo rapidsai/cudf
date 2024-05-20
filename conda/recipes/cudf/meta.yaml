@@ -62,7 +62,6 @@ requirements:
     - python
     - cython >=3.0.3
     - scikit-build-core >=0.7.0
-    - setuptools
     - dlpack >=0.8,<1.0
     - numpy 1.23
     - pyarrow ==16.0.0.*
