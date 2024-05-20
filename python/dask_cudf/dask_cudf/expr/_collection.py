@@ -87,15 +87,15 @@ class DataFrame(DXDataFrame, CudfFrameBase):
         by,
         **kwargs,
     ):
-        for col in by if isinstance(by, list) else [by]:
-            if is_categorical_dtype(self.dtypes.get(col, None)):
-                warnings.warn(
-                    "Dask-cudf has limited support for sorting on categorical "
-                    "columns when query-planning is enabled. Please consider "
-                    "using the legacy API if you run into any issues."
-                    f"\n{_LEGACY_WORKAROUND}",
-                    FutureWarning,
-                )
+        # Check if first column is categorical and raise if it is
+        check_by = by[0] if isinstance(by, list) else by
+        if is_categorical_dtype(self.dtypes.get(check_by, None)):
+            raise NotImplementedError(
+                "Dask-cudf does not support sorting on categorical "
+                "columns when query-planning is enabled. Please use "
+                "the legacy API for now."
+                f"\n{_LEGACY_WORKAROUND}",
+            )
         return super().sort_values(by, **kwargs)
 
     def groupby(
