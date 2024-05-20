@@ -151,7 +151,7 @@ struct stats_caster {
         }
 
         void set_index(size_type index,
-                       thrust::optional<std::vector<uint8_t>> const& binary_value,
+                       cuda::std::optional<std::vector<uint8_t>> const& binary_value,
                        Type const type)
         {
           if (binary_value.has_value()) {

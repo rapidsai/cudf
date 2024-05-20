@@ -26,7 +26,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/optional.h>
+#include <cuda/std/optional>
 
 using cudf::device_span;
 
@@ -93,7 +93,7 @@ void collect_keys_info(parse_options_view const& options,
                        device_span<char const> data,
                        device_span<uint64_t const> row_offsets,
                        unsigned long long int* keys_cnt,
-                       thrust::optional<mutable_table_device_view> keys_info,
+                       cuda::std::optional<mutable_table_device_view> keys_info,
                        rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::json::detail::legacy

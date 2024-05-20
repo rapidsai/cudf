@@ -33,8 +33,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/optional>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/optional.h>
 #include <thrust/tabulate.h>
 
 namespace cudf {
@@ -157,9 +157,9 @@ void flatten_hierarchy(ColIter begin,
                        std::vector<column_info>& info,
                        hierarchy_info& h_info,
                        rmm::cuda_stream_view stream,
-                       size_type cur_depth                = 0,
-                       size_type cur_branch_depth         = 0,
-                       thrust::optional<int> parent_index = {});
+                       size_type cur_depth                   = 0,
+                       size_type cur_branch_depth            = 0,
+                       cuda::std::optional<int> parent_index = {});
 
 /**
  * @brief Type-dispatched functor called by flatten_hierarchy.
@@ -175,7 +175,7 @@ struct flatten_functor {
                   rmm::cuda_stream_view,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  thrust::optional<int>)
+                  cuda::std::optional<int>)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -192,7 +192,7 @@ struct flatten_functor {
                   rmm::cuda_stream_view,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  thrust::optional<int>)
+                  cuda::std::optional<int>)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -208,7 +208,7 @@ struct flatten_functor {
                   rmm::cuda_stream_view stream,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  thrust::optional<int> parent_index)
+                  cuda::std::optional<int> parent_index)
   {
     // track branch depth as we reach this list and after we pass it
     auto const branch_depth_start = cur_branch_depth;
@@ -241,7 +241,7 @@ struct flatten_functor {
                   rmm::cuda_stream_view stream,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  thrust::optional<int>)
+                  cuda::std::optional<int>)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -282,7 +282,7 @@ void flatten_hierarchy(ColIter begin,
                        rmm::cuda_stream_view stream,
                        size_type cur_depth,
                        size_type cur_branch_depth,
-                       thrust::optional<int> parent_index)
+                       cuda::std::optional<int> parent_index)
 {
   std::for_each(begin, end, [&](column_view const& col) {
     cudf::type_dispatcher(col.type(),

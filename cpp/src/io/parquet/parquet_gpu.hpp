@@ -381,7 +381,7 @@ struct ColumnChunkDesc {
                            uint8_t rep_level_bits_,
                            int8_t codec_,
                            int8_t converted_type_,
-                           thrust::optional<LogicalType> logical_type_,
+                           cuda::std::optional<LogicalType> logical_type_,
                            int8_t decimal_precision_,
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
@@ -429,14 +429,14 @@ struct ColumnChunkDesc {
   int32_t num_data_pages{};                     // number of data pages
   int32_t num_dict_pages{};                     // number of dictionary pages
   PageInfo const* dict_page{};
-  string_index_pair* str_dict_index{};           // index for string dictionary
-  bitmask_type** valid_map_base{};               // base pointers of valid bit map for this column
-  void** column_data_base{};                     // base pointers of column data
-  void** column_string_base{};                   // base pointers of column string data
-  int8_t codec{};                                // compressed codec enum
-  int8_t converted_type{};                       // converted type enum
-  thrust::optional<LogicalType> logical_type{};  // logical type
-  int8_t decimal_precision{};                    // Decimal precision
+  string_index_pair* str_dict_index{};  // index for string dictionary
+  bitmask_type** valid_map_base{};      // base pointers of valid bit map for this column
+  void** column_data_base{};            // base pointers of column data
+  void** column_string_base{};          // base pointers of column string data
+  int8_t codec{};                       // compressed codec enum
+  int8_t converted_type{};              // converted type enum
+  cuda::std::optional<LogicalType> logical_type{};  // logical type
+  int8_t decimal_precision{};                       // Decimal precision
   int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
   int32_t src_col_index{};   // my input column index

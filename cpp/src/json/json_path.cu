@@ -38,7 +38,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/optional.h>
+#include <cuda/std/optional>
 #include <thrust/pair.h>
 #include <thrust/scan.h>
 #include <thrust/tuple.h>
@@ -206,7 +206,7 @@ class parser {
 struct json_output {
   size_t output_max_len;
   char* output;
-  thrust::optional<size_t> output_len;
+  cuda::std::optional<size_t> output_len;
 
   __device__ void add_output(char const* str, size_t len)
   {
@@ -655,7 +655,7 @@ class path_state : private parser {
  * @param stream Cuda stream to perform any gpu actions on
  * @returns A pair containing the command buffer, and maximum stack depth required.
  */
-std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_command_buffer(
+std::pair<cuda::std::optional<rmm::device_uvector<path_operator>>, int> build_command_buffer(
   cudf::string_scalar const& json_path, rmm::cuda_stream_view stream)
 {
   std::string h_json_path = json_path.to_string(stream);
@@ -689,8 +689,8 @@ std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_comma
   } while (op.type != path_operator_type::END);
 
   auto const is_empty = h_operators.size() == 1 && h_operators[0].type == path_operator_type::END;
-  return is_empty ? std::pair(thrust::nullopt, 0)
-                  : std::pair(thrust::make_optional(cudf::detail::make_device_uvector_sync(
+  return is_empty ? std::pair(cuda::std::nullopt, 0)
+                  : std::pair(cuda::std::make_optional(cudf::detail::make_device_uvector_sync(
                                 h_operators, stream, rmm::mr::get_current_device_resource())),
                               max_stack_depth);
 }
@@ -919,9 +919,9 @@ __launch_bounds__(block_size) CUDF_KERNEL
                               path_operator const* const commands,
                               size_type* d_sizes,
                               cudf::detail::input_offsetalator output_offsets,
-                              thrust::optional<char*> out_buf,
-                              thrust::optional<bitmask_type*> out_validity,
-                              thrust::optional<size_type*> out_valid_count,
+                              cuda::std::optional<char*> out_buf,
+                              cuda::std::optional<bitmask_type*> out_validity,
+                              cuda::std::optional<size_type*> out_valid_count,
                               get_json_object_options options)
 {
   auto tid          = cudf::detail::grid_1d::global_thread_id();
@@ -1011,9 +1011,9 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       std::get<0>(preprocess).value().data(),
       sizes.data(),
       d_offsets,
-      thrust::nullopt,
-      thrust::nullopt,
-      thrust::nullopt,
+      cuda::std::nullopt,
+      cuda::std::nullopt,
+      cuda::std::nullopt,
       options);
 
   // convert sizes to offsets

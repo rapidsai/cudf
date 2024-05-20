@@ -35,6 +35,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/optional>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -42,7 +43,6 @@
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/optional.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
@@ -100,7 +100,7 @@ struct replace_multi_parallel_fn {
    * @param idx Index of the byte position in the chars column
    * @param chars_bytes Number of bytes in the chars column
    */
-  __device__ thrust::optional<size_type> has_target(size_type idx, size_type chars_bytes) const
+  __device__ cuda::std::optional<size_type> has_target(size_type idx, size_type chars_bytes) const
   {
     auto const d_offsets = get_offsets_ptr();
     auto const d_chars   = get_base_ptr() + d_offsets[0] + idx;
@@ -118,7 +118,7 @@ struct replace_multi_parallel_fn {
         if ((d_chars + d_tgt.size_bytes()) <= (d_str.data() + d_str.size_bytes())) { return t; }
       }
     }
-    return thrust::nullopt;
+    return cuda::std::nullopt;
   }
 
   /**

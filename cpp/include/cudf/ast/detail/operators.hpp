@@ -20,8 +20,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/optional>
 #include <cuda/std/type_traits>
-#include <thrust/optional.h>
 
 #include <cmath>
 #include <type_traits>
@@ -41,7 +41,7 @@ struct possibly_null_value;
 
 template <typename T>
 struct possibly_null_value<T, true> {
-  using type = thrust::optional<T>;
+  using type = cuda::std::optional<T>;
 };
 
 template <typename T>

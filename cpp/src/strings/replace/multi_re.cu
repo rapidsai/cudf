@@ -90,7 +90,7 @@ struct replace_multi_regex_fn {
         }
         reprog_device prog = progs[ptn_idx];
 
-        auto const result = !prog.is_empty() ? prog.find(idx, d_str, itr) : thrust::nullopt;
+        auto const result = !prog.is_empty() ? prog.find(idx, d_str, itr) : cuda::std::nullopt;
         d_ranges[ptn_idx] =
           result ? found_range{result->first, result->second} : found_range{nchars, nchars};
       }

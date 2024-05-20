@@ -24,8 +24,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/optional>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/optional.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -40,9 +40,9 @@ namespace detail {
  * ```
  *
  * @tparam StringIterLeft A random access iterator whose value_type is
- * `thrust::optional<string_view>` where the `optional` has a value iff the element is valid.
+ * `cuda::std::optional<string_view>` where the `optional` has a value iff the element is valid.
  * @tparam StringIterRight A random access iterator whose value_type is
- * `thrust::optional<string_view>` where the `optional` has a value iff the element is valid.
+ * `cuda::std::optional<string_view>` where the `optional` has a value iff the element is valid.
  * @tparam Filter Functor that takes an index and returns a boolean.
  *
  * @param lhs_begin Start of first set of data. Used when `filter_fn` returns true.
