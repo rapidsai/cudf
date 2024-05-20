@@ -13,11 +13,10 @@ from numba import config as numba_config
 # loop of _lib.*->cudautils->_numba->_lib.strings_udf
 @lru_cache
 def _get_cc_60_ptx_file():
-    from cudf._lib import strings_udf
-
+    here = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(
-        os.path.dirname(strings_udf.__file__),
-        "..",
+        here,
+        "../",
         "core",
         "udf",
         "shim_60.ptx",
