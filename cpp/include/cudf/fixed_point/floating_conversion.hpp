@@ -83,7 +83,8 @@ struct floating_converter {
   static constexpr IntegralType exponent_bias =
     cuda::std::numeric_limits<FloatingType>::max_exponent - 2;
 
-  /** @brief Reinterpret the bits of a floating-point value as an integer
+  /**
+   * @brief Reinterpret the bits of a floating-point value as an integer
    *
    * @param floating The floating-point value to cast
    * @return An integer with bits identical to the input
