@@ -296,10 +296,10 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
   // so that we can actually compile a list of all the unsupported encodings found
   // in the pages. That cannot be done here since we do not have the pages vector here.
   // see https://github.com/rapidsai/cudf/pull/14453#pullrequestreview-1778346688
-  if (error_code.value() != 0 and
-      error_code.value() != static_cast<uint32_t>(decode_error::UNSUPPORTED_ENCODING)) {
+  if (auto const error = error_code.value_sync(stream);
+      error != 0 and error != static_cast<uint32_t>(decode_error::UNSUPPORTED_ENCODING)) {
     CUDF_FAIL("Parquet header parsing failed with code(s) while counting page headers " +
-              error_code.str());
+              kernel_error::to_string(error));
   }
 
   for (size_t c = 0; c < chunks.size(); c++) {
@@ -307,6 +307,95 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
   }
 
   return total_pages;
+}
+
+/**
+ * @brief Count the total number of pages using page index information.
+ */
+[[nodiscard]] size_t count_page_headers_with_pgidx(
+  cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks, rmm::cuda_stream_view stream)
+{
+  size_t total_pages = 0;
+  for (auto& chunk : chunks) {
+    CUDF_EXPECTS(chunk.h_chunk_info != nullptr, "Expected non-null column info struct");
+    auto const& chunk_info = *chunk.h_chunk_info;
+    chunk.num_dict_pages   = chunk_info.has_dictionary() ? 1 : 0;
+    chunk.num_data_pages   = chunk_info.pages.size();
+    total_pages += chunk.num_data_pages + chunk.num_dict_pages;
+  }
+
+  // count_page_headers() also pushes chunks to device, so not using thrust here
+  chunks.host_to_device_async(stream);
+
+  return total_pages;
+}
+
+// struct used to carry info from the page indexes to the device
+struct page_index_info {
+  int32_t num_rows;
+  int32_t chunk_row;
+  int32_t num_nulls;
+  int32_t num_valids;
+  int32_t str_bytes;
+};
+
+// functor to copy page_index_info into the PageInfo struct
+struct copy_page_info {
+  device_span<page_index_info const> page_indexes;
+  device_span<PageInfo> pages;
+
+  __device__ void operator()(size_type idx)
+  {
+    auto& pg                = pages[idx];
+    auto const& pi          = page_indexes[idx];
+    pg.num_rows             = pi.num_rows;
+    pg.chunk_row            = pi.chunk_row;
+    pg.has_page_index       = true;
+    pg.num_nulls            = pi.num_nulls;
+    pg.num_valids           = pi.num_valids;
+    pg.str_bytes_from_index = pi.str_bytes;
+    pg.str_bytes            = pi.str_bytes;
+    pg.start_val            = 0;
+    pg.end_val              = pg.num_valids;
+  }
+};
+
+/**
+ * @brief Set fields on the pages that can be derived from page indexes.
+ *
+ * This replaces some preprocessing steps, such as page string size calculation.
+ */
+void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
+                       device_span<PageInfo> pages,
+                       rmm::cuda_stream_view stream)
+{
+  auto const num_pages = pages.size();
+  std::vector<page_index_info> page_indexes(num_pages);
+
+  for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
+    auto const& chunk = chunks[c];
+    CUDF_EXPECTS(chunk.h_chunk_info != nullptr, "Expected non-null column info struct");
+    auto const& chunk_info = *chunk.h_chunk_info;
+    size_t start_row       = 0;
+    page_count += chunk.num_dict_pages;
+    for (size_t p = 0; p < chunk_info.pages.size(); p++, page_count++) {
+      auto& page      = page_indexes[page_count];
+      page.num_rows   = chunk_info.pages[p].num_rows;
+      page.chunk_row  = start_row;
+      page.num_nulls  = chunk_info.pages[p].num_nulls.value_or(0);
+      page.num_valids = chunk_info.pages[p].num_valid.value_or(0);
+      page.str_bytes  = chunk_info.pages[p].var_bytes_size.value_or(0);
+
+      start_row += page.num_rows;
+    }
+  }
+
+  auto d_page_indexes = cudf::detail::make_device_uvector_async(
+    page_indexes, stream, rmm::mr::get_current_device_resource());
+
+  auto iter = thrust::make_counting_iterator<size_type>(0);
+  thrust::for_each(
+    rmm::exec_policy_nosync(stream), iter, iter + num_pages, copy_page_info{d_page_indexes, pages});
 }
 
 /**
@@ -445,6 +534,7 @@ cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const>
  */
 void decode_page_headers(pass_intermediate_data& pass,
                          device_span<PageInfo> unsorted_pages,
+                         bool has_page_index,
                          rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -480,15 +570,18 @@ void decode_page_headers(pass_intermediate_data& pass,
                     error_code.data(),
                     stream);
 
-  if (error_code.value() != 0) {
-    if (BitAnd(error_code.value(), decode_error::UNSUPPORTED_ENCODING) != 0) {
+  if (auto const error = error_code.value_sync(stream); error != 0) {
+    if (BitAnd(error, decode_error::UNSUPPORTED_ENCODING) != 0) {
       auto const unsupported_str =
         ". With unsupported encodings found: " + list_unsupported_encodings(pass.pages, stream);
-      CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str() + unsupported_str);
+      CUDF_FAIL("Parquet header parsing failed with code(s) " + kernel_error::to_string(error) +
+                unsupported_str);
     } else {
-      CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str());
+      CUDF_FAIL("Parquet header parsing failed with code(s) " + kernel_error::to_string(error));
     }
   }
+
+  if (has_page_index) { fill_in_page_info(pass.chunks, unsorted_pages, stream); }
 
   // compute max bytes needed for level data
   auto level_bit_size = cudf::detail::make_counting_transform_iterator(
@@ -607,16 +700,16 @@ struct set_list_row_count_estimate {
 struct set_final_row_count {
   device_span<PageInfo> pages;
   device_span<const ColumnChunkDesc> chunks;
-  device_span<const size_type> page_offsets;
-  size_t const max_row;
 
   __device__ void operator()(size_t i)
   {
-    auto const last_page_index      = page_offsets[i + 1] - 1;
-    auto const& page                = pages[last_page_index];
-    auto const& chunk               = chunks[page.chunk_idx];
-    size_t const page_start_row     = chunk.start_row + page.chunk_row;
-    pages[last_page_index].num_rows = max_row - page_start_row;
+    auto& page        = pages[i];
+    auto const& chunk = chunks[page.chunk_idx];
+    // only do this for the last page in each chunk
+    if (i < pages.size() - 1 && (pages[i + 1].chunk_idx == page.chunk_idx)) { return; }
+    size_t const page_start_row = chunk.start_row + page.chunk_row;
+    size_t const chunk_last_row = chunk.start_row + chunk.num_rows;
+    page.num_rows               = chunk_last_row - page_start_row;
   }
 };
 
@@ -633,8 +726,8 @@ void reader::impl::build_string_dict_indices()
   thrust::fill(
     rmm::exec_policy_nosync(_stream), str_dict_index_count.begin(), str_dict_index_count.end(), 0);
   thrust::for_each(rmm::exec_policy_nosync(_stream),
-                   pass.pages.begin(),
-                   pass.pages.end(),
+                   pass.pages.d_begin(),
+                   pass.pages.d_end(),
                    set_str_dict_index_count{str_dict_index_count, pass.chunks});
 
   size_t const total_str_dict_indexes = thrust::reduce(
@@ -901,12 +994,13 @@ void reader::impl::read_compressed_data()
   }
 
   // Process dataset chunk pages into output columns
-  auto const total_pages = count_page_headers(chunks, _stream);
+  auto const total_pages = _has_page_index ? count_page_headers_with_pgidx(chunks, _stream)
+                                           : count_page_headers(chunks, _stream);
   if (total_pages <= 0) { return; }
   rmm::device_uvector<PageInfo> unsorted_pages(total_pages, _stream);
 
   // decoding of column/page information
-  decode_page_headers(pass, unsorted_pages, _stream);
+  decode_page_headers(pass, unsorted_pages, _has_page_index, _stream);
   CUDF_EXPECTS(pass.page_offsets.size() - 1 == static_cast<size_t>(_input_columns.size()),
                "Encountered page_offsets / num_columns mismatch");
 }
@@ -1139,6 +1233,11 @@ void reader::impl::preprocess_file(
     _metadata->select_row_groups(
       row_group_indices, skip_rows, num_rows, output_types, filter, _stream);
 
+  // check for page indexes
+  _has_page_index = std::all_of(_file_itm_data.row_groups.begin(),
+                                _file_itm_data.row_groups.end(),
+                                [](auto const& row_group) { return row_group.has_page_index(); });
+
   if (_file_itm_data.global_num_rows > 0 && not _file_itm_data.row_groups.empty() &&
       not _input_columns.empty()) {
     // fills in chunk information without physically loading or decompressing
@@ -1190,25 +1289,26 @@ void reader::impl::generate_list_column_row_count_estimates()
   // field in ColumnChunkDesc is the absolute row index for the whole file. chunk_row in PageInfo is
   // relative to the beginning of the chunk. so in the kernels, chunk.start_row + page.chunk_row
   // gives us the absolute row index
-  auto key_input  = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_chunk_idx{});
-  auto page_input = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_num_rows{});
-  thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
-                                key_input,
-                                key_input + pass.pages.size(),
-                                page_input,
-                                chunk_row_output_iter{pass.pages.device_ptr()});
+  // Note: chunk_row is already computed if we have column indexes
+  if (not _has_page_index) {
+    auto key_input  = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_chunk_idx{});
+    auto page_input = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_num_rows{});
+    thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
+                                  key_input,
+                                  key_input + pass.pages.size(),
+                                  page_input,
+                                  chunk_row_output_iter{pass.pages.device_ptr()});
+  }
 
-  // finally, fudge the last page for each column such that it ends on the real known row count
-  // for the pass. this is so that as we march through the subpasses, we will find that every column
-  // cleanly ends up the expected row count at the row group boundary.
-  auto const& last_chunk = pass.chunks[pass.chunks.size() - 1];
-  auto const num_columns = _input_columns.size();
-  size_t const max_row   = last_chunk.start_row + last_chunk.num_rows;
-  auto iter              = thrust::make_counting_iterator(0);
+  // to compensate for the list row size estimates, force the row count on the last page for each
+  // column chunk (each rowgroup) such that it ends on the real known row count. this is so that as
+  // we march through the subpasses, we will find that every column cleanly ends up the expected row
+  // count at the row group boundary and our split computations work correctly.
+  auto iter = thrust::make_counting_iterator(0);
   thrust::for_each(rmm::exec_policy_nosync(_stream),
                    iter,
-                   iter + num_columns,
-                   set_final_row_count{pass.pages, pass.chunks, pass.page_offsets, max_row});
+                   iter + pass.pages.size(),
+                   set_final_row_count{pass.pages, pass.chunks});
 
   pass.chunks.device_to_host_async(_stream);
   pass.pages.device_to_host_async(_stream);

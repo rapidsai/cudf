@@ -55,7 +55,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
   )
 
   target_link_libraries(
-    ${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main
+    ${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main nvtx3-cpp
                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
@@ -132,6 +132,7 @@ ConfigureTest(
   groupby/min_scan_tests.cpp
   groupby/nth_element_tests.cpp
   groupby/nunique_tests.cpp
+  groupby/product_scan_tests.cpp
   groupby/product_tests.cpp
   groupby/quantile_tests.cpp
   groupby/rank_scan_tests.cpp
@@ -263,8 +264,6 @@ ConfigureTest(
   transform/one_hot_encode_tests.cpp
 )
 
-ConfigureTest(ROW_CONVERSION_TEST transform/row_conversion.cpp)
-
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
@@ -378,6 +377,7 @@ ConfigureTest(
   utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
+  utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
   utilities_tests/logger_tests.cpp
   utilities_tests/default_stream_tests.cpp

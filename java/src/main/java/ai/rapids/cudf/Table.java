@@ -620,6 +620,9 @@ public final class Table implements AutoCloseable {
   private static native long[] leftJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] leftDistinctJoinGatherMap(long leftKeys, long rightKeys,
+                                                         boolean compareNullsEqual) throws CudfException;
+
   private static native long leftJoinRowCount(long leftTable, long rightHashJoin) throws CudfException;
 
   private static native long[] leftHashJoinGatherMaps(long leftTable, long rightHashJoin) throws CudfException;
@@ -1200,7 +1203,7 @@ public final class Table implements AutoCloseable {
     }
   }
 
-  private static Table gatherJSONColumns(Schema schema, TableWithMeta twm) {
+  private static Table gatherJSONColumns(Schema schema, TableWithMeta twm, int emptyRowCount) {
     String[] neededColumns = schema.getColumnNames();
     if (neededColumns == null || neededColumns.length == 0) {
       return twm.releaseTable();
@@ -1214,6 +1217,11 @@ public final class Table implements AutoCloseable {
       DType[] types = schema.getChildTypes();
       ColumnVector[] columns = new ColumnVector[neededColumns.length];
       try (Table tbl = twm.releaseTable()) {
+        int rowCount = tbl == null ? emptyRowCount : (int)tbl.getRowCount();
+        if (rowCount < 0) {
+          throw new IllegalStateException(
+              "No empty row count provided and the table read has no row count or columns");
+        }
         for (int i = 0; i < columns.length; i++) {
           String neededColumnName = neededColumns[i];
           Integer index = indices.get(neededColumnName);
@@ -1231,7 +1239,7 @@ public final class Table implements AutoCloseable {
             }
           } else {
             try (Scalar s = Scalar.fromNull(types[i])) {
-              columns[i] = ColumnVector.fromScalar(s, (int)tbl.getRowCount());
+              columns[i] = ColumnVector.fromScalar(s, rowCount);
             }
           }
         }
@@ -1265,7 +1273,7 @@ public final class Table implements AutoCloseable {
                     opts.isMixedTypesAsStrings(),
                 opts.keepStringQuotes()))) {
 
-      return gatherJSONColumns(schema, twm);
+      return gatherJSONColumns(schema, twm, -1);
     }
   }
 
@@ -1281,6 +1289,23 @@ public final class Table implements AutoCloseable {
    */
   public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
                                long len, HostMemoryAllocator hostMemoryAllocator) {
+    return readJSON(schema, opts, buffer, offset, len, hostMemoryAllocator, -1);
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
+   * @param emptyRowCount the number of rows to return if no columns were read.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
+                               long len, HostMemoryAllocator hostMemoryAllocator,
+                               int emptyRowCount) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
@@ -1289,8 +1314,14 @@ public final class Table implements AutoCloseable {
     assert offset >= 0 && offset < buffer.length;
     try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
-      return readJSON(schema, opts, newBuf, 0, len);
+      return readJSON(schema, opts, newBuf, 0, len, emptyRowCount);
     }
+  }
+
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
+                               long len, int emptyRowCount) {
+    return readJSON(schema, opts, buffer, offset, len, DefaultHostMemoryAllocator.get(),
+        emptyRowCount);
   }
 
   public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
@@ -1354,6 +1385,21 @@ public final class Table implements AutoCloseable {
    */
   public static Table readJSON(Schema schema, JSONOptions opts, HostMemoryBuffer buffer,
                               long offset, long len) {
+    return readJSON(schema, opts, buffer, offset, len, -1);
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @param emptyRowCount the number of rows to use if no columns were found.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, HostMemoryBuffer buffer,
+                               long offset, long len, int emptyRowCount) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
@@ -1367,7 +1413,7 @@ public final class Table implements AutoCloseable {
             opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
             opts.isNormalizeWhitespace(),
             opts.isMixedTypesAsStrings(), opts.keepStringQuotes()))) {
-      return gatherJSONColumns(schema, twm);
+      return gatherJSONColumns(schema, twm, emptyRowCount);
     }
   }
 
@@ -1379,13 +1425,25 @@ public final class Table implements AutoCloseable {
    * @return the data parsed as a table on the GPU.
    */
   public static Table readJSON(Schema schema, JSONOptions opts, DataSource ds) {
+    return readJSON(schema, opts, ds, -1);
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param ds the DataSource to read from.
+   * @param emtpyRowCount the number of rows to return if no columns were read.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, DataSource ds, int emtpyRowCount) {
     long dsHandle = DataSourceHelper.createWrapperDataSource(ds);
     try (TableWithMeta twm = new TableWithMeta(readJSONFromDataSource(schema.getFlattenedNumChildren(),
         schema.getFlattenedColumnNames(), schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(), opts.isDayFirst(),
         opts.isLines(), opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
         opts.isNormalizeWhitespace(),
         opts.isMixedTypesAsStrings(), opts.keepStringQuotes(), dsHandle))) {
-      return gatherJSONColumns(schema, twm);
+      return gatherJSONColumns(schema, twm, emtpyRowCount);
     } finally {
       DataSourceHelper.destroyWrapperDataSource(dsHandle);
     }
@@ -2950,6 +3008,33 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes a gather map that can be used to manifest the result of a left equi-join between
+   * two tables where the right table is guaranteed to not contain any duplicated join keys.
+   * The left table can be used as-is to produce the left table columns resulting from the join,
+   * i.e.: left table ordering is preserved in the join result, so no gather map is required for
+   * the left table. The resulting gather map can be applied to the right table to produce the
+   * right table columns resulting from the join. It is assumed this table instance holds the
+   * key columns from the left table, and the table argument represents the key columns from the
+   * right table. A {@link GatherMap} instance will be returned that can be used to gather the
+   * right table and that result combined with the left table to produce a left outer join result.
+   *
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   *
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return right table gather map
+   */
+  public GatherMap leftDistinctJoinGatherMap(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftDistinctJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildSingleJoinGatherMap(gatherMapData);
+  }
+
+  /**
    * Computes the number of rows resulting from a left equi-join between two tables.
    * It is assumed this table instance holds the key columns from the left table, and the
    * {@link HashJoin} argument has been constructed from the key columns from the right table.
@@ -3576,7 +3661,7 @@ public final class Table implements AutoCloseable {
     return buildJoinGatherMaps(gatherMapData);
   }
 
-  private static GatherMap buildSemiJoinGatherMap(long[] gatherMapData) {
+  private static GatherMap buildSingleJoinGatherMap(long[] gatherMapData) {
     long bufferSize = gatherMapData[0];
     long leftAddr = gatherMapData[1];
     long leftHandle = gatherMapData[2];
@@ -3601,7 +3686,7 @@ public final class Table implements AutoCloseable {
     }
     long[] gatherMapData =
         leftSemiJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3634,7 +3719,7 @@ public final class Table implements AutoCloseable {
     long[] gatherMapData =
         conditionalLeftSemiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle());
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3659,7 +3744,7 @@ public final class Table implements AutoCloseable {
     long[] gatherMapData =
         conditionalLeftSemiJoinGatherMapWithCount(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), outputRowCount);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3716,7 +3801,7 @@ public final class Table implements AutoCloseable {
         leftConditional.getNativeView(), rightConditional.getNativeView(),
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3752,7 +3837,7 @@ public final class Table implements AutoCloseable {
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL,
         joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3773,7 +3858,7 @@ public final class Table implements AutoCloseable {
     }
     long[] gatherMapData =
         leftAntiJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3806,7 +3891,7 @@ public final class Table implements AutoCloseable {
     long[] gatherMapData =
         conditionalLeftAntiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle());
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3831,7 +3916,7 @@ public final class Table implements AutoCloseable {
     long[] gatherMapData =
         conditionalLeftAntiJoinGatherMapWithCount(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), outputRowCount);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3888,7 +3973,7 @@ public final class Table implements AutoCloseable {
         leftConditional.getNativeView(), rightConditional.getNativeView(),
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3924,7 +4009,7 @@ public final class Table implements AutoCloseable {
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL,
         joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**

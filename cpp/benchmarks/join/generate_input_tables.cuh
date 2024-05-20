@@ -16,10 +16,11 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/device_atomics.cuh>
+#include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/distance.h>

@@ -64,7 +64,7 @@ requirements:
     - cython >=3.0.3
     - scikit-build-core >=0.7.0
     - setuptools
-    - dlpack >=0.5,<0.6.0a0
+    - dlpack >=0.8,<1.0
     - numpy 1.23
     - pyarrow ==14.0.2.*
     - libcudf ={{ version }}
@@ -78,7 +78,7 @@ requirements:
     {% endif %}
     - cuda-version ={{ cuda_version }}
   run:
-    - {{ pin_compatible('protobuf', min_pin='x.x', max_pin='x') }}
+    - protobuf >=3.20,<5.0a0
     - python
     - typing_extensions >=4.0.0
     - pandas >=2.0,<2.2.2dev0

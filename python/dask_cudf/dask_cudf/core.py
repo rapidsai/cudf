@@ -685,18 +685,27 @@ def reduction(
 
 @_dask_cudf_nvtx_annotate
 def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
+    from dask_cudf import QUERY_PLANNING_ON
+
     if isinstance(getattr(data, "index", None), cudf.MultiIndex):
         raise NotImplementedError(
             "dask_cudf does not support MultiIndex Dataframes."
         )
 
-    name = name or ("from_cudf-" + tokenize(data, npartitions or chunksize))
+    # Dask-expr doesn't support the `name` argument
+    name = {}
+    if not QUERY_PLANNING_ON:
+        name = {
+            "name": name
+            or ("from_cudf-" + tokenize(data, npartitions or chunksize))
+        }
+
     return dd.from_pandas(
         data,
         npartitions=npartitions,
         chunksize=chunksize,
         sort=sort,
-        name=name,
+        **name,
     )
 
 
@@ -711,7 +720,10 @@ from_cudf.__doc__ = (
         rather than pandas objects.\n
         """
     )
-    + textwrap.dedent(dd.from_pandas.__doc__)
+    # TODO: `dd.from_pandas.__doc__` is empty when
+    # `DASK_DATAFRAME__QUERY_PLANNING=True`
+    # since dask-expr does not provide a docstring for from_pandas.
+    + textwrap.dedent(dd.from_pandas.__doc__ or "")
 )
 
 

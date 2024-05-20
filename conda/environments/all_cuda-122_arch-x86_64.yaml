@@ -29,7 +29,7 @@ dependencies:
 - cxx-compiler
 - cython>=3.0.3
 - dask-cuda==24.4.*
-- dlpack>=0.5,<0.6.0a0
+- dlpack>=0.8,<1.0
 - doxygen=1.9.1
 - fastavro>=0.22.9
 - fmt>=10.1.1,<11
@@ -57,7 +57,7 @@ dependencies:
 - ninja
 - notebook
 - numba>=0.57
-- numpy>=1.23
+- numpy>=1.23,<2.0a0
 - numpydoc
 - nvcomp==3.0.6
 - nvtx>=0.2.1
@@ -66,7 +66,7 @@ dependencies:
 - pandoc
 - pip
 - pre-commit
-- protobuf>=4.21,<5
+- protobuf>=3.20,<5
 - pyarrow==14.0.2.*
 - pydata-sphinx-theme!=0.14.2
 - pynvjitlink
