@@ -26,6 +26,8 @@
 
 #include <rmm/resource_ref.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 #include <bitset>
 #include <numeric>
 
@@ -436,9 +438,18 @@ reader::impl::impl(std::size_t chunk_read_limit,
   // Binary columns can be read as binary or strings
   _reader_column_schema = options.get_column_schema();
 
-  // Select only columns required by the options
+  // Select only columns required by the options and filter
+  std::optional<std::vector<std::string>> filter_columns_names;
+  if (options.get_filter().has_value() and options.get_columns().has_value()) {
+    // list, struct, dictionary are not supported by AST filter yet.
+    // extract columns not present in get_columns() & keep count to remove at end.
+    filter_columns_names =
+      get_column_names_in_expression(options.get_filter(), *(options.get_columns()));
+    _num_filter_only_columns = filter_columns_names->size();
+  }
   std::tie(_input_columns, _output_buffers, _output_column_schemas) =
     _metadata->select_columns(options.get_columns(),
+                              filter_columns_names,
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
                               _timestamp_type.id());
@@ -465,8 +476,10 @@ void reader::impl::prepare_data(int64_t skip_rows,
   }
 
   // handle any chunking work (ratcheting through the subpasses and chunks within
-  // our current pass)
-  if (_file_itm_data.num_passes() > 0) { handle_chunking(uses_custom_row_bounds); }
+  // our current pass) if in bounds
+  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
+    handle_chunking(uses_custom_row_bounds);
+  }
 }
 
 void reader::impl::populate_metadata(table_metadata& out_metadata)
@@ -558,13 +571,15 @@ table_with_metadata reader::impl::finalize_output(
     _output_metadata = std::make_unique<table_metadata>(out_metadata);
   }
 
-  // advance output chunk/subpass/pass info
-  if (_file_itm_data.num_passes() > 0) {
+  // advance output chunk/subpass/pass info for non-empty tables if and only if we are in bounds
+  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
     auto& pass    = *_pass_itm_data;
     auto& subpass = *pass.subpass;
     subpass.current_output_chunk++;
-    _file_itm_data._output_chunk_count++;
   }
+
+  // increment the output chunk count
+  _file_itm_data._output_chunk_count++;
 
   if (filter.has_value()) {
     auto read_table = std::make_unique<table>(std::move(out_columns));
@@ -572,7 +587,12 @@ table_with_metadata reader::impl::finalize_output(
       *read_table, filter.value().get(), _stream, rmm::mr::get_current_device_resource());
     CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
                  "Predicate filter should return a boolean");
-    auto output_table = cudf::detail::apply_boolean_mask(*read_table, *predicate, _stream, _mr);
+    // Exclude columns present in filter only in output
+    auto counting_it        = thrust::make_counting_iterator<std::size_t>(0);
+    auto const output_count = read_table->num_columns() - _num_filter_only_columns;
+    auto only_output        = read_table->select(counting_it, counting_it + output_count);
+    auto output_table = cudf::detail::apply_boolean_mask(only_output, *predicate, _stream, _mr);
+    if (_num_filter_only_columns > 0) { out_metadata.schema_info.resize(output_count); }
     return {std::move(output_table), std::move(out_metadata)};
   }
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
@@ -600,7 +620,8 @@ table_with_metadata reader::impl::read_chunk()
 {
   // Reset the output buffers to their original states (right after reader construction).
   // Don't need to do it if we read the file all at once.
-  if (_file_itm_data._output_chunk_count > 0) {
+  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes() and
+      not is_first_output_chunk()) {
     _output_buffers.resize(0);
     for (auto const& buff : _output_buffers_template) {
       _output_buffers.emplace_back(cudf::io::detail::inline_column_buffer::empty_like(buff));
@@ -612,6 +633,7 @@ table_with_metadata reader::impl::read_chunk()
                true /*uses_custom_row_bounds*/,
                {} /*row_group_indices, empty means read all row groups*/,
                std::nullopt /*filter*/);
+
   return read_chunk_internal(true, std::nullopt);
 }
 
@@ -625,7 +647,9 @@ bool reader::impl::has_next()
 
   // current_input_pass will only be incremented to be == num_passes after
   // the last chunk in the last subpass in the last pass has been returned
-  return has_more_work();
+  // if not has_more_work then check if this is the first pass in an empty
+  // table and return true so it could be read once.
+  return has_more_work() or is_first_output_chunk();
 }
 
 namespace {
