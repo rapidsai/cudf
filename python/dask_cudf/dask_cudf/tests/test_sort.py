@@ -10,7 +10,7 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import xfail_dask_expr
+from dask_cudf.tests.utils import skip_dask_expr, xfail_dask_expr
 
 
 @pytest.mark.parametrize("ascending", [True, False])
@@ -22,8 +22,8 @@ from dask_cudf.tests.utils import xfail_dask_expr
         "c",
         pytest.param(
             "d",
-            marks=xfail_dask_expr(
-                "Dask-expr fails to sort by categorical column."
+            marks=skip_dask_expr(
+                "Possible segfault when sorting by categorical column.",
             ),
         ),
         ["a", "b"],
