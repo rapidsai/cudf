@@ -140,7 +140,6 @@ class reader::impl {
    * information and computes the schedule of top level passes (see `pass_intermediate_data`).
    *
    * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
-   * @param filter Optional AST expression to filter output rows
    */
   void preprocess_file(read_mode mode);
 
@@ -164,11 +163,12 @@ class reader::impl {
   /**
    * @brief Setup step for the next decompression subpass.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
-   *
    * A 'subpass' is defined as a subset of pages within a pass that are
    * decompressed and decoded as a batch. Subpasses may be further subdivided
    * into output chunks.
+   *
+   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   *
    */
   void setup_next_subpass(read_mode mode);
 
@@ -329,12 +329,8 @@ class reader::impl {
    */
   [[nodiscard]] bool uses_custom_row_bounds(read_mode mode) const
   {
-    // TODO: The following should the same for both `read_modes` and not hardcoded to true for
-    // `read_mode::CHUNKED_READ`. We have done this for now due to following: We are calling
-    // `read_chunk_internal()` in a few places where we're only passing `uses_custom_row_bounds`.
-    // But if chunked_read_size is > 0 we need to force that to be true. If we don't, various
-    // important things don't happen for all the remaining chunks. Basically if this code doesn't
-    // execute, it will be bad.
+    // TODO: `read_mode` is hardcoded to `true` when `read_mode::CHUNKED_READ` to enforce
+    // `ComputePageSizes()` computation for all remaining chunks.
     return (mode == read_mode::READ_ALL)
              ? (_options.num_rows.has_value() or _options.skip_rows != 0)
              : true;
