@@ -1833,6 +1833,9 @@ def test_orc_writer_negative_timestamp(negative_timestamp_df):
     )
 
 
+@pytest.mark.skip(
+    reason="Bug specific to rockylinux8: https://github.com/rapidsai/cudf/issues/15802",
+)
 def test_orc_reader_apache_negative_timestamp(datadir):
     path = datadir / "TestOrcFile.apache_timestamp.orc"
 

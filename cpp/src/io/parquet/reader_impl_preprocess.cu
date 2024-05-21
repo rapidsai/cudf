@@ -873,7 +873,7 @@ void reader::impl::allocate_nesting_info()
           nesting_info[cur_depth].max_def_level = cur_schema.max_definition_level;
           pni[cur_depth].size                   = 0;
           pni[cur_depth].type =
-            to_type_id(cur_schema, _strings_to_categorical, _timestamp_type.id());
+            to_type_id(cur_schema, _strings_to_categorical, _options.timestamp_type.id());
           pni[cur_depth].nullable = cur_schema.repetition_type == OPTIONAL;
         }
 
@@ -1221,17 +1221,14 @@ struct update_pass_num_rows {
 
 }  // anonymous namespace
 
-void reader::impl::preprocess_file(
-  int64_t skip_rows,
-  std::optional<size_type> const& num_rows,
-  host_span<std::vector<size_type> const> row_group_indices,
-  std::optional<std::reference_wrapper<ast::expression const>> filter)
+void reader::impl::preprocess_file(read_mode mode)
 {
   CUDF_EXPECTS(!_file_preprocessed, "Attempted to preprocess file more than once");
 
   // if filter is not empty, then create output types as vector and pass for filtering.
+
   std::vector<data_type> output_dtypes;
-  if (filter.has_value()) {
+  if (_expr_conv.get_converted_expr().has_value()) {
     std::transform(_output_buffers_template.cbegin(),
                    _output_buffers_template.cend(),
                    std::back_inserter(output_dtypes),
@@ -1240,12 +1237,12 @@ void reader::impl::preprocess_file(
 
   std::tie(
     _file_itm_data.global_skip_rows, _file_itm_data.global_num_rows, _file_itm_data.row_groups) =
-    _metadata->select_row_groups(row_group_indices,
-                                 skip_rows,
-                                 num_rows,
+    _metadata->select_row_groups(_options.row_group_indices,
+                                 _options.skip_rows,
+                                 _options.num_rows,
                                  output_dtypes,
                                  _output_column_schemas,
-                                 filter,
+                                 _expr_conv.get_converted_expr(),
                                  _stream);
 
   // check for page indexes
@@ -1276,7 +1273,7 @@ void reader::impl::preprocess_file(
   printf("# Input columns: %'lu\n", _input_columns.size());
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
     auto const& schema = _metadata->get_schema(_input_columns[idx].schema_idx);
-    auto const type_id = to_type_id(schema, _strings_to_categorical, _timestamp_type.id());
+    auto const type_id = to_type_id(schema, _strings_to_categorical, _options.timestamp_type.id());
     printf("\tC(%'lu, %s): %s\n",
            idx,
            _input_columns[idx].name.c_str(),
@@ -1330,7 +1327,7 @@ void reader::impl::generate_list_column_row_count_estimates()
   _stream.synchronize();
 }
 
-void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t chunk_read_limit)
+void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_limit)
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -1457,7 +1454,7 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
   compute_output_chunks_for_subpass();
 }
 
-void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses_custom_row_bounds)
+void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows)
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -1470,7 +1467,7 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
   // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
   // respect the user bounds. It is only necessary to do this second pass if uses_custom_row_bounds
   // is set (if the user has specified artificial bounds).
-  if (uses_custom_row_bounds) {
+  if (uses_custom_row_bounds(mode)) {
     ComputePageSizes(subpass.pages,
                      pass.chunks,
                      skip_rows,
@@ -1479,8 +1476,6 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
                      false,  // no need to compute string sizes
                      pass.level_type_size,
                      _stream);
-
-    // print_pages(pages, _stream);
   }
 
   // iterate over all input columns and allocate any associated output
