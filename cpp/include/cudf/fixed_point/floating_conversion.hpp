@@ -260,7 +260,7 @@ CUDF_HOST_DEVICE inline int count_significant_bits(T value)
   }
 #endif
 }
-  
+
 /**
  * @brief Recursively calculate a signed large power of 10 (>= 10^19) that can only be stored in an
  * 128bit integer
