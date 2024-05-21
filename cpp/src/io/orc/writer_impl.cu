@@ -783,13 +783,13 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
           // pushdown mask present; null mask bits w/ set pushdown mask bits will be encoded
           // Use the number of set bits in pushdown mask as size
           auto bits_to_borrow = [&]() {
-            if (d_pd_set_counts[rg_idx][parent_col_idx] < previously_borrowed) {
-              // Borrow to make make an empty rowgroup
-              return previously_borrowed - d_pd_set_counts[rg_idx][parent_col_idx];
+            auto const parent_valid_count = d_pd_set_counts[rg_idx][parent_col_idx];
+            if (parent_valid_count < previously_borrowed) {
+              // Borrow to make an empty rowgroup
+              return previously_borrowed - parent_valid_count;
             }
-            auto const misalignment =
-              (d_pd_set_counts[rg_idx][parent_col_idx] - previously_borrowed) % 8;
-            return (misalignment == 0) ? 0 : (8 - misalignment);
+            auto const misalignment = (parent_valid_count - previously_borrowed) % 8;
+            return (8 - misalignment) % 8;
           }();
 
           if (bits_to_borrow == 0) {
