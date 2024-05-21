@@ -1439,7 +1439,7 @@ class CategoricalColumn(column.ColumnBase):
             categories=self.categories,
             codes=self.codes,
             mask=self.base_mask,
-            size=self.base_size,
+            size=self.size,
             offset=self.offset,
             ordered=ordered,
         )
