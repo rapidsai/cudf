@@ -563,7 +563,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def ndim(self):
+    def ndim(self) -> int:
         """Dimension of the data. For MultiIndex ndim is always 2."""
         return 2
 

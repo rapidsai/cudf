@@ -86,6 +86,9 @@ outputs:
         {% else %}
         - {{ compiler('cuda') }}
         {% endif %}
+        # TODO: start taking libarrow's run exports again wwhen they're correct for 16.0
+        # ref: https://github.com/conda-forge/arrow-cpp-feedstock/issues/1418
+        - libarrow
     requirements:
       build:
         - cmake {{ cmake_version }}
@@ -105,6 +108,12 @@ outputs:
         - librmm ={{ minor_version }}
         - libkvikio ={{ minor_version }}
         - dlpack {{ dlpack_version }}
+        # TODO: start taking libarrow's run exports again wwhen they're correct for 16.0
+        # ref: https://github.com/conda-forge/arrow-cpp-feedstock/issues/1418
+        - libarrow>=16.0.0,<16.1.0a0
+        - libarrow-acero>=16.0.0,<16.1.0a0
+        - libarrow-dataset>=16.0.0,<16.1.0a0
+        - libparquet>=16.0.0,<16.1.0a0
     test:
       commands:
         - test -f $PREFIX/lib/libcudf.so

@@ -147,7 +147,7 @@ std::pair<rmm::device_uvector<string_index_pair>, std::unique_ptr<column>> gener
   auto const begin = cudf::detail::make_counting_transform_iterator(0, map_fn);
   auto const end   = begin + strings_count;
 
-  auto [offsets, total_tokens] = cudf::strings::detail::make_offsets_child_column(
+  auto [offsets, total_tokens] = cudf::detail::make_offsets_child_column(
     begin, end, stream, rmm::mr::get_current_device_resource());
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
