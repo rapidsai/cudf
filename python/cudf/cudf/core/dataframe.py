@@ -2047,29 +2047,24 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             equal_columns = True
         elif isinstance(other, Series):
             if (
-                not can_reindex
-                and fn in cudf.utils.utils._EQUALITY_OPS
-                and (
-                    not self._data.to_pandas_index().equals(
-                        other.index.to_pandas()
-                    )
+                not (self_pd_columns := self._data.to_pandas_index()).equals(
+                    other_pd_index := other.index.to_pandas()
                 )
+                and not can_reindex
+                and fn in cudf.utils.utils._EQUALITY_OPS
             ):
                 raise ValueError(
                     "Can only compare DataFrame & Series objects "
                     "whose columns & index are same respectively, "
                     "please reindex."
                 )
-            rhs = dict(zip(other.index.to_pandas(), other.values_host))
+            rhs = dict(zip(other_pd_index, other.values_host))
             # For keys in right but not left, perform binops between NaN (not
             # NULL!) and the right value (result is NaN).
             left_default = as_column(np.nan, length=len(self))
-            equal_columns = other.index.to_pandas().equals(
-                self._data.to_pandas_index()
-            )
+            equal_columns = other_pd_index.equals(self_pd_columns)
             can_use_self_column_name = (
-                equal_columns
-                or list(other._index._data.names) == self._data._level_names
+                equal_columns or other_pd_index.names == self_pd_columns.names
             )
         elif isinstance(other, DataFrame):
             if (
@@ -2952,81 +2947,59 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if not isinstance(keys, list):
             keys = [keys]
+        if len(keys) == 0:
+            raise ValueError("No valid columns to be added to index.")
+        if append:
+            keys = [self.index] + keys
 
         # Preliminary type check
-        col_not_found = []
-        columns_to_add = []
+        labels_not_found = []
+        data_to_add = []
         names = []
         to_drop = []
         for col in keys:
-            # Is column label
+            # label-like
             if is_scalar(col) or isinstance(col, tuple):
                 if col in self._column_names:
-                    columns_to_add.append(self[col])
+                    data_to_add.append(self[col])
                     names.append(col)
                     if drop:
                         to_drop.append(col)
                 else:
-                    col_not_found.append(col)
+                    labels_not_found.append(col)
+            # index-like
+            elif isinstance(col, (MultiIndex, pd.MultiIndex)):
+                if isinstance(col, pd.MultiIndex):
+                    col = MultiIndex.from_pandas(col)
+                data_to_add.extend(col._data.columns)
+                names.extend(col.names)
+            elif isinstance(
+                col, (cudf.Series, cudf.Index, pd.Series, pd.Index)
+            ):
+                data_to_add.append(col)
+                names.append(col.name)
             else:
-                # Try coerce into column
-                if not is_column_like(col):
-                    try:
-                        col = as_column(col)
-                    except TypeError:
-                        msg = f"{col} cannot be converted to column-like."
-                        raise TypeError(msg)
-                if isinstance(col, (MultiIndex, pd.MultiIndex)):
-                    col = (
-                        cudf.from_pandas(col)
-                        if isinstance(col, pd.MultiIndex)
-                        else col
-                    )
-                    cols = [col._data[x] for x in col._data]
-                    columns_to_add.extend(cols)
-                    names.extend(col.names)
-                else:
-                    if isinstance(col, (pd.RangeIndex, cudf.RangeIndex)):
-                        # Corner case: RangeIndex does not need to instantiate
-                        columns_to_add.append(col)
-                    else:
-                        # For pandas obj, convert to gpu obj
-                        columns_to_add.append(as_column(col))
-                    if isinstance(
-                        col, (cudf.Series, cudf.Index, pd.Series, pd.Index)
-                    ):
-                        names.append(col.name)
-                    else:
-                        names.append(None)
+                try:
+                    col = as_column(col)
+                except TypeError as err:
+                    msg = f"{col} cannot be converted to column-like."
+                    raise TypeError(msg) from err
+                data_to_add.append(col)
+                names.append(None)
 
-        if col_not_found:
-            raise KeyError(f"None of {col_not_found} are in the columns")
+        if labels_not_found:
+            raise KeyError(f"None of {labels_not_found} are in the columns")
 
-        if append:
-            idx_cols = [self.index._data[x] for x in self.index._data]
-            if isinstance(self.index, MultiIndex):
-                idx_names = self.index.names
-            else:
-                idx_names = [self.index.name]
-            columns_to_add = idx_cols + columns_to_add
-            names = idx_names + names
-
-        if len(columns_to_add) == 0:
-            raise ValueError("No valid columns to be added to index.")
-        elif (
-            len(columns_to_add) == 1
+        if (
+            len(data_to_add) == 1
             and len(keys) == 1
             and not isinstance(keys[0], (cudf.MultiIndex, pd.MultiIndex))
         ):
-            idx = cudf.Index(columns_to_add[0], name=names[0])
+            # Don't turn single level MultiIndex into an Index
+            idx = cudf.Index(data_to_add[0], name=names[0])
         else:
-            idx = MultiIndex._from_data(
-                {i: col for i, col in enumerate(columns_to_add)}
-            )
+            idx = MultiIndex._from_data(dict(enumerate(data_to_add)))
             idx.names = names
-
-        if not isinstance(idx, BaseIndex):
-            raise ValueError("Parameter index should be type `Index`.")
 
         df = self if inplace else self.copy(deep=True)
 
