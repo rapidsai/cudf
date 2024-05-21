@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/utilities/traits.hpp>
+
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
@@ -37,8 +39,7 @@ namespace detail {
  *
  * @tparam FloatingType Type of floating-point value
  */
-template <typename FloatingType,
-          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+template <typename FloatingType, CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
 struct floating_converter {
   // This struct assumes we're working with IEEE 754 floating-point values.
   // Details on the IEEE-754 floating-point format:
@@ -59,7 +60,7 @@ struct floating_converter {
   static constexpr IntegralType sign_mask = (IntegralType(1) << sign_bit_index);
 
   // The low 23 / 52 bits (for float / double) are the mantissa.
-  // The mantissa is normalized. There is an implicit 1 bit to the left of the binary point.
+  // The mantissa is normalized. There is an understood 1 bit to the left of the binary point.
   // The value of the mantissa is in the range [1, 2).
   /// # mantissa bits (-1 for understood bit)
   static constexpr int num_mantissa_bits = cuda::std::numeric_limits<FloatingType>::digits - 1;
@@ -112,49 +113,40 @@ struct floating_converter {
   }
 
   /**
-   * @brief Extracts the integral significand of a floating-point number
+   * @brief Extracts the integral significand of a bit-casted floating-point number
    *
-   * @param floating The floating value to extract the significand from
+   * @param integer_rep The bit-casted floating value to extract the exponent from
    * @return The integral significand, bit-shifted to a (large) whole number
    */
-  CUDF_HOST_DEVICE inline static IntegralType get_base2_value(FloatingType floating)
+  CUDF_HOST_DEVICE inline static IntegralType get_base2_value(IntegralType integer_rep)
   {
-    // Convert floating to integer
-    auto const integer_rep = bit_cast_to_integer(floating);
-
     // Extract the significand, setting the high bit for the understood 1/2
     return (integer_rep & mantissa_mask) | understood_bit_mask;
   }
 
   /**
-   * @brief Extracts the sign bit of a floating-point number
+   * @brief Extracts the sign bit of a bit-casted floating-point number
    *
-   * @param floating The floating value to extract the sign from
+   * @param integer_rep The bit-casted floating value to extract the exponent from
    * @return The sign bit
    */
-  CUDF_HOST_DEVICE inline static bool get_is_negative(FloatingType floating)
+  CUDF_HOST_DEVICE inline static bool get_is_negative(IntegralType integer_rep)
   {
-    // Convert floating to integer
-    auto const integer_rep = bit_cast_to_integer(floating);
-
     // Extract the sign bit:
     return static_cast<bool>(sign_mask & integer_rep);
   }
 
   /**
-   * @brief Extracts the exponent of a floating-point number
+   * @brief Extracts the exponent of a bit-casted floating-point number
    *
    * @note This returns INT_MIN for +/-0, +/-inf, NaN's, and denormals
    * For all of these cases, the decimal fixed_point number should be set to zero
    *
-   * @param floating The floating value to extract the exponent from
+   * @param integer_rep The bit-casted floating value to extract the exponent from
    * @return The stored base-2 exponent, or INT_MIN for special values
    */
-  CUDF_HOST_DEVICE inline static int get_exp2(FloatingType floating)
+  CUDF_HOST_DEVICE inline static int get_exp2(IntegralType integer_rep)
   {
-    // Convert floating to integer
-    auto const integer_rep = bit_cast_to_integer(floating);
-
     // First extract the exponent bits and handle its special values.
     // To minimize branching, all of these special cases will return INT_MIN.
     // For all of these cases, the decimal fixed_point number should be set to zero.
@@ -178,7 +170,7 @@ struct floating_converter {
   }
 
   /**
-   * @brief Sets the sign bit of a floating-point number
+   * @brief Sets the sign bit of a positive floating-point number
    *
    * @param floating The floating-point value to set the sign of. Must be positive.
    * @param is_negative The sign bit to set for the floating-point number
@@ -190,7 +182,7 @@ struct floating_converter {
     // Convert floating to integer
     IntegralType integer_rep = bit_cast_to_integer(floating);
 
-    // Set the sign bit. Note that the input floating-point number must be positive.
+    // Set the sign bit. Note that the input floating-point number must be positive (bit = 0).
     integer_rep |= (IntegralType(is_negative) << sign_bit_index);
 
     // Convert back to float
@@ -233,7 +225,7 @@ struct floating_converter {
  * @param value The integer whose bits are being counted
  * @return The number of significant bits: the # of bits - # of leading zeroes
  */
-template <typename T, typename cuda::std::enable_if_t<(cuda::std::is_unsigned_v<T>)>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline int count_significant_bits(T value)
 {
   static_assert(
