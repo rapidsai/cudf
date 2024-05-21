@@ -762,10 +762,17 @@ class Frame(BinaryOperand, Scannable):
             else:
                 replace_val = None
             should_fill = (
-                col_name in value
-                and col.has_nulls(include_nan=True)
-                and not libcudf.scalar._is_null_host_scalar(replace_val)
-            ) or method is not None
+                (
+                    col_name in value
+                    and col.has_nulls(include_nan=True)
+                    and not libcudf.scalar._is_null_host_scalar(replace_val)
+                )
+                or method is not None
+                or (
+                    isinstance(col, cudf.core.column.CategoricalColumn)
+                    and not libcudf.scalar._is_null_host_scalar(replace_val)
+                )
+            )
             if should_fill:
                 filled_data[col_name] = col.fillna(replace_val, method)
             else:
@@ -1120,7 +1127,9 @@ class Frame(BinaryOperand, Scannable):
         array([False, False,  True,  True, False, False])
         """
         data_columns = (col.isnull() for col in self._columns)
-        return self._from_data_like_self(zip(self._column_names, data_columns))
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(data_columns)
+        )
 
     # Alias for isna
     isnull = isna
@@ -1199,7 +1208,9 @@ class Frame(BinaryOperand, Scannable):
         array([ True,  True, False, False,  True,  True])
         """
         data_columns = (col.notnull() for col in self._columns)
-        return self._from_data_like_self(zip(self._column_names, data_columns))
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(data_columns)
+        )
 
     # Alias for notna
     notnull = notna
@@ -1506,7 +1517,9 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def _unaryop(self, op):
         data_columns = (col.unary_operator(op) for col in self._columns)
-        return self._from_data_like_self(zip(self._column_names, data_columns))
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(data_columns)
+        )
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -1638,12 +1651,14 @@ class Frame(BinaryOperand, Scannable):
     def __neg__(self):
         """Negate for integral dtypes, logical NOT for bools."""
         return self._from_data_like_self(
-            {
-                name: col.unary_operator("not")
-                if is_bool_dtype(col.dtype)
-                else -1 * col
-                for name, col in self._data.items()
-            }
+            self._data._from_columns_like_self(
+                (
+                    col.unary_operator("not")
+                    if col.dtype.kind == "b"
+                    else -1 * col
+                    for col in self._data.columns
+                )
+            )
         )
 
     @_cudf_nvtx_annotate
@@ -1897,10 +1912,9 @@ class Frame(BinaryOperand, Scannable):
     def __invert__(self):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
         return self._from_data_like_self(
-            {
-                name: _apply_inverse_column(col)
-                for name, col in self._data.items()
-            }
+            self._data._from_columns_like_self(
+                (_apply_inverse_column(col) for col in self._data.columns)
+            )
         )
 
     @_cudf_nvtx_annotate

@@ -23,7 +23,7 @@
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/replace.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/replace.hpp>
@@ -462,7 +462,7 @@ std::unique_ptr<column> replace_string_parallel(strings_column_view const& input
   auto d_targets      = column_device_view::create(targets.parent(), stream);
   auto d_replacements = column_device_view::create(repls.parent(), stream);
 
-  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
+  auto [offsets_column, chars] = make_strings_children(
     replace_multi_fn{*d_strings, *d_targets, *d_replacements}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),

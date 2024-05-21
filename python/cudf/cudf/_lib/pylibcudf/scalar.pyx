@@ -5,7 +5,7 @@ from libcpp.memory cimport unique_ptr
 
 from rmm._lib.memory_resource cimport get_current_device_resource
 
-from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 
 from .types cimport DataType
 

@@ -3,9 +3,9 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp.lists cimport explode as cpp_explode
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.lists cimport explode as cpp_explode
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 from .table cimport Table
 

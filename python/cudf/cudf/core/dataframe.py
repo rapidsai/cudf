@@ -357,6 +357,11 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     # as join is not assigning any names to index,
                     # update it over here
                     df.index.name = columns_df.index.name
+                    if not isinstance(
+                        df.index, MultiIndex
+                    ) and is_numeric_dtype(df.index.dtype):
+                        # Preserve the original index type.
+                        df.index = df.index.astype(self._frame.index.dtype)
                     df = df.sort_values(by=[tmp_col_name, cantor_name])
                     df.drop(columns=[tmp_col_name, cantor_name], inplace=True)
                     # There were no indices found
@@ -400,12 +405,12 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 value = as_column(value, length=length)
 
             new_col = cudf.Series(value, index=idx)
-            if not self._frame.empty:
+            if len(self._frame.index) != 0:
                 new_col = new_col._align_to_index(
                     self._frame.index, how="right"
                 )
 
-            if self._frame.empty:
+            if len(self._frame.index) == 0:
                 self._frame.index = (
                     idx if idx is not None else cudf.RangeIndex(len(new_col))
                 )
@@ -684,9 +689,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def __init__(
-        self, data=None, index=None, columns=None, dtype=None, nan_as_null=True
+        self,
+        data=None,
+        index=None,
+        columns=None,
+        dtype=None,
+        nan_as_null=no_default,
     ):
         super().__init__()
+        if nan_as_null is no_default:
+            nan_as_null = not cudf.get_option("mode.pandas_compatible")
 
         if isinstance(columns, (Series, cudf.BaseIndex)):
             columns = columns.to_pandas()
@@ -1215,7 +1227,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df.dtypes
         float              float64
         int                  int64
-        datetime    datetime64[us]
+        datetime    datetime64[ns]
         string              object
         dtype: object
         """
@@ -1768,7 +1780,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 indices[:first_data_column_position],
             )
             if not isinstance(out._index, MultiIndex) and isinstance(
-                out._index._values.dtype, cudf.CategoricalDtype
+                out._index.dtype, cudf.CategoricalDtype
             ):
                 out = out.set_index(
                     cudf.core.index.as_index(out.index._values)
@@ -3036,8 +3048,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # First process the condition.
         if isinstance(cond, Series):
-            cond = self._from_data_like_self(
-                {name: cond._column for name in self._column_names},
+            cond = self._from_data(
+                self._data._from_columns_like_self(
+                    itertools.repeat(cond._column, len(self._column_names)),
+                    verify=False,
+                )
             )
         elif hasattr(cond, "__cuda_array_interface__"):
             cond = DataFrame(
@@ -3078,7 +3093,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 should be equal to number of columns of self"""
             )
 
-        out = {}
+        out = []
         for (name, col), other_col in zip(self._data.items(), other_cols):
             col, other_col = _check_and_cast_columns_with_other(
                 source_col=col,
@@ -3091,16 +3106,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     col, other_col, cond_col
                 )
 
-                out[name] = _make_categorical_like(result, self._data[name])
+                out.append(_make_categorical_like(result, self._data[name]))
             else:
                 out_mask = cudf._lib.null_mask.create_null_mask(
                     len(col),
                     state=cudf._lib.null_mask.MaskState.ALL_NULL,
                 )
-                out[name] = col.set_mask(out_mask)
+                out.append(col.set_mask(out_mask))
 
         return self._mimic_inplace(
-            self._from_data_like_self(out), inplace=inplace
+            self._from_data_like_self(self._data._from_columns_like_self(out)),
+            inplace=inplace,
         )
 
     @docutils.doc_apply(
@@ -3181,7 +3197,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_cudf_nvtx_annotate
-    def insert(self, loc, name, value, nan_as_null=None):
+    def insert(self, loc, name, value, nan_as_null=no_default):
         """Add a column to DataFrame at the index specified by loc.
 
         Parameters
@@ -3196,6 +3212,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             ``null`` values.
             If ``False``, leaves ``np.nan`` values as is.
         """
+        if nan_as_null is no_default:
+            nan_as_null = not cudf.get_option("mode.pandas_compatible")
         return self._insert(
             loc=loc,
             name=name,
@@ -3578,7 +3596,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if index:
             if (
                 any(isinstance(item, str) for item in index.values())
-                and type(self.index._values) != cudf.core.column.StringColumn
+                and self.index.dtype != "object"
             ):
                 raise NotImplementedError(
                     "Implicit conversion of index to "
@@ -7556,6 +7574,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Returns
         -------
         The interleaved columns as a single column
+
+        .. pandas-compat::
+            **DataFrame.interleave_columns**
+
+            This method does not exist in pandas but it can be run
+            as ``pd.Series(np.vstack(df.to_numpy()).reshape((-1,)))``.
         """
         if ("category" == self.dtypes).any():
             raise ValueError(
