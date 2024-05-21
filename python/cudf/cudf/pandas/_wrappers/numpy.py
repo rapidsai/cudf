@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -10,6 +10,7 @@ import numpy
 import numpy.core.multiarray
 
 from ..fast_slow_proxy import (
+    _FastSlowAttribute,
     make_final_proxy_type,
     make_intermediate_proxy_type,
 )
@@ -122,6 +123,7 @@ ndarray = make_final_proxy_type(
         "__iter__": custom_iter,
         # Special wrapping to handle scalar values
         "_fsproxy_wrap": classmethod(wrap_ndarray),
+        "base": _FastSlowAttribute("base", private=True),
     },
 )
 
