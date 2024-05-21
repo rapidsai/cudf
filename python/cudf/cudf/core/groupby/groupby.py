@@ -22,7 +22,12 @@ from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.extensions import no_default
-from cudf.api.types import is_bool_dtype, is_float_dtype, is_list_like
+from cudf.api.types import (
+    is_bool_dtype,
+    is_float_dtype,
+    is_list_like,
+    is_numeric_dtype,
+)
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, StructDtype, as_column
@@ -701,6 +706,11 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return result
 
+    def _reduce_numeric_only(self, op: str):
+        raise NotImplementedError(
+            f"numeric_only is not implemented for {type(self)}"
+        )
+
     def _reduce(
         self,
         op: str,
@@ -731,14 +741,12 @@ class GroupBy(Serializable, Reducible, Scannable):
 
             The numeric_only, min_count
         """
-        if numeric_only:
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
         if min_count != 0:
             raise NotImplementedError(
                 "min_count parameter is not implemented yet"
             )
+        if numeric_only:
+            return self._reduce_numeric_only(op)
         return self.agg(op)
 
     def _scan(self, op: str, *args, **kwargs):
@@ -1193,7 +1201,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         offsets, grouped_key_cols, grouped_value_cols = self._groupby.groups(
             [*self.obj._index._columns, *self.obj._columns]
         )
-        grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)
+        grouped_keys = cudf.core.index._index_from_data(
+            dict(enumerate(grouped_key_cols))
+        )
         if isinstance(self.grouping.keys, cudf.MultiIndex):
             grouped_keys.names = self.grouping.keys.names
             to_drop = self.grouping.keys.names
@@ -1759,13 +1769,23 @@ class GroupBy(Serializable, Reducible, Scannable):
         --------
         agg
         """
+        if not (isinstance(function, str) or callable(function)):
+            raise TypeError(
+                "Aggregation must be a named aggregation or a callable"
+            )
         try:
             result = self.agg(function)
         except TypeError as e:
             raise NotImplementedError(
                 "Currently, `transform()` supports only aggregations."
             ) from e
-
+        # If the aggregation is a scan, don't broadcast
+        if libgroupby._is_all_scan_aggregate([[function]]):
+            if len(result) != len(self.obj):
+                raise AssertionError(
+                    "Unexpected result length for scan transform"
+                )
+            return result
         return self._broadcast(result)
 
     def rolling(self, *args, **kwargs):
@@ -2647,6 +2667,17 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
     obj: "cudf.core.dataframe.DataFrame"
 
     _PROTECTED_KEYS = frozenset(("obj",))
+
+    def _reduce_numeric_only(self, op: str):
+        columns = list(
+            name
+            for name in self.obj._data.names
+            if (
+                is_numeric_dtype(self.obj._data[name].dtype)
+                and name not in self.grouping.names
+            )
+        )
+        return self[columns].agg(op)
 
     def __getitem__(self, key):
         return self.obj[key].groupby(

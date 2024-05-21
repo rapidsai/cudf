@@ -77,7 +77,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def ndim(self):  # noqa: D401
+    def ndim(self) -> int:  # noqa: D401
         """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
@@ -102,11 +102,6 @@ class SingleColumnFrame(Frame, NotIterable):
     @_cudf_nvtx_annotate
     def _column(self):
         return self._data[self.name]
-
-    @_column.setter  # type: ignore
-    @_cudf_nvtx_annotate
-    def _column(self, value):
-        self._data[self.name] = value
 
     @property  # type: ignore
     @_cudf_nvtx_annotate

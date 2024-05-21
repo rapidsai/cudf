@@ -35,16 +35,6 @@ column_view strings_column_view::offsets() const
   return child(offsets_column_index);
 }
 
-strings_column_view::offset_iterator strings_column_view::offsets_begin() const
-{
-  return offsets().begin<int32_t>() + offset();
-}
-
-strings_column_view::offset_iterator strings_column_view::offsets_end() const
-{
-  return offsets().begin<int32_t>() + offset() + size() + 1;
-}
-
 int64_t strings_column_view::chars_size(rmm::cuda_stream_view stream) const noexcept
 {
   if (size() == 0) { return 0L; }

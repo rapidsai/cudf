@@ -32,6 +32,7 @@
 #include <nvtext/replace.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
@@ -47,8 +48,9 @@ using replace_result = thrust::pair<bool, cudf::string_view>;
 struct base_token_replacer_fn {
   cudf::column_device_view const d_strings;  ///< strings to tokenize
   cudf::string_view const d_delimiter;       ///< delimiter characters for tokenizing
-  cudf::size_type* d_offsets{};              ///< for locating output string in d_chars
+  cudf::size_type* d_sizes{};                ///< for output string size
   char* d_chars{};                           ///< output buffer
+  cudf::detail::input_offsetalator d_offsets;
 
   /**
    * @brief Tokenizes each string and calls the provided `replacer` function
@@ -62,7 +64,7 @@ struct base_token_replacer_fn {
   __device__ void process_string(cudf::size_type idx, ReplaceFn replacer)
   {
     if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -94,10 +96,11 @@ struct base_token_replacer_fn {
     }
 
     // copy the remainder of the string's bytes to the output buffer
-    if (out_ptr)
+    if (out_ptr) {
       memcpy(out_ptr, in_ptr + last_pos, d_str.size_bytes() - last_pos);
-    else
-      d_offsets[idx] = nbytes;
+    } else {
+      d_sizes[idx] = nbytes;
+    }
   }
 };
 
@@ -202,7 +205,7 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
                                              cudf::strings_column_view const& replacements,
                                              cudf::string_scalar const& delimiter,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!targets.has_nulls(), "Parameter targets must not have nulls");
   CUDF_EXPECTS(!replacements.has_nulls(), "Parameter replacements must not have nulls");
@@ -244,7 +247,7 @@ std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& str
                                             cudf::string_scalar const& replacement,
                                             cudf::string_scalar const& delimiter,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(replacement.is_valid(stream), "Parameter replacement must be valid");
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
@@ -281,7 +284,7 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& in
                                              cudf::strings_column_view const& replacements,
                                              cudf::string_scalar const& delimiter,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::replace_tokens(input, targets, replacements, delimiter, stream, mr);
@@ -292,7 +295,7 @@ std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& inp
                                             cudf::string_scalar const& replacement,
                                             cudf::string_scalar const& delimiter,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::filter_tokens(input, min_token_length, replacement, delimiter, stream, mr);

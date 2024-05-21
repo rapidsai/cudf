@@ -26,6 +26,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <iomanip>
 #include <sstream>
@@ -68,16 +69,6 @@ void cudf::io::detail::inline_column_buffer::create_string_data(size_t num_bytes
   _string_data = rmm::device_buffer(num_bytes, stream, _mr);
 }
 
-std::unique_ptr<column> cudf::io::detail::inline_column_buffer::make_string_column_impl(
-  rmm::cuda_stream_view stream)
-{
-  // no need for copies, just transfer ownership of the data_buffers to the columns
-  auto offsets_col = std::make_unique<column>(
-    data_type{type_to_id<size_type>()}, size + 1, std::move(_data), rmm::device_buffer{}, 0);
-  return make_strings_column(
-    size, std::move(offsets_col), std::move(_string_data), null_count(), std::move(_null_mask));
-}
-
 namespace {
 
 /**
@@ -100,9 +91,10 @@ void copy_buffer_data(string_policy const& buff, string_policy& new_buff)
 }  // namespace
 
 template <class string_policy>
-void column_buffer_base<string_policy>::create(size_type _size,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+void column_buffer_base<string_policy>::create_with_mask(size_type _size,
+                                                         cudf::mask_state null_mask_state,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::device_async_resource_ref mr)
 {
   size = _size;
   _mr  = mr;
@@ -120,9 +112,17 @@ void column_buffer_base<string_policy>::create(size_type _size,
     default: _data = create_data(type, size, stream, _mr); break;
   }
   if (is_nullable) {
-    _null_mask = cudf::detail::create_null_mask(
-      size, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), _mr);
+    _null_mask =
+      cudf::detail::create_null_mask(size, null_mask_state, rmm::cuda_stream_view(stream), _mr);
   }
+}
+
+template <class string_policy>
+void column_buffer_base<string_policy>::create(size_type _size,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
+{
+  create_with_mask(_size, mask_state::ALL_NULL, stream, mr);
 }
 
 template <class string_policy>
@@ -197,6 +197,11 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
         if (schema_info != nullptr) {
           schema_info->children.push_back(column_name_info{"offsets"});
           schema_info->children.push_back(column_name_info{"binary"});
+          // cuDF type will be list<UINT8>, but remember it was originally binary data
+          schema_info->is_binary = true;
+          if (schema.has_value() and schema->get_type_length() > 0) {
+            schema_info->type_length = schema->get_type_length();
+          }
         }
 
         return make_lists_column(
@@ -286,7 +291,7 @@ template <class string_policy>
 std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
                                    column_name_info* schema_info,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   if (schema_info != nullptr) { schema_info->name = buffer.name; }
 
@@ -357,12 +362,12 @@ template std::unique_ptr<column> make_column<pointer_type>(
 template std::unique_ptr<column> empty_like<string_type>(string_column_buffer& buffer,
                                                          column_name_info* schema_info,
                                                          rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr);
+                                                         rmm::device_async_resource_ref mr);
 
 template std::unique_ptr<column> empty_like<pointer_type>(pointer_column_buffer& buffer,
                                                           column_name_info* schema_info,
                                                           rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
+                                                          rmm::device_async_resource_ref mr);
 
 template std::string type_to_name<string_type>(string_column_buffer const& buffer);
 template std::string type_to_name<pointer_type>(pointer_column_buffer const& buffer);

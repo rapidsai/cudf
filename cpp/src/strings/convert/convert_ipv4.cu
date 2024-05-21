@@ -26,6 +26,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
@@ -74,7 +75,7 @@ struct ipv4_to_integers_fn {
 // Convert strings column of IPv4 addresses to integers column
 std::unique_ptr<column> ipv4_to_integers(strings_column_view const& input,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
@@ -106,7 +107,7 @@ std::unique_ptr<column> ipv4_to_integers(strings_column_view const& input,
 // external API
 std::unique_ptr<column> ipv4_to_integers(strings_column_view const& input,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::ipv4_to_integers(input, stream, mr);
@@ -123,13 +124,14 @@ namespace {
  */
 struct integers_to_ipv4_fn {
   column_device_view const d_column;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type idx)
   {
     if (d_column.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -150,7 +152,7 @@ struct integers_to_ipv4_fn {
       shift_bits -= 8;
     }
 
-    if (!d_chars) { d_offsets[idx] = bytes; }
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 
@@ -159,15 +161,15 @@ struct integers_to_ipv4_fn {
 // Convert integers into IPv4 addresses
 std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   if (integers.is_empty()) return make_empty_column(type_id::STRING);
 
   CUDF_EXPECTS(integers.type().id() == type_id::INT64, "Input column must be type_id::INT64 type");
 
-  auto d_column                = column_device_view::create(integers, stream);
-  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
-    integers_to_ipv4_fn{*d_column}, integers.size(), stream, mr);
+  auto d_column = column_device_view::create(integers, stream);
+  auto [offsets_column, chars] =
+    make_strings_children(integers_to_ipv4_fn{*d_column}, integers.size(), stream, mr);
 
   return make_strings_column(integers.size(),
                              std::move(offsets_column),
@@ -178,7 +180,7 @@ std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
 
 std::unique_ptr<column> is_ipv4(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_column       = *strings_column;
@@ -227,7 +229,7 @@ std::unique_ptr<column> is_ipv4(strings_column_view const& input,
 
 std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::integers_to_ipv4(integers, stream, mr);
@@ -235,7 +237,7 @@ std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
 
 std::unique_ptr<column> is_ipv4(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::is_ipv4(input, stream, mr);

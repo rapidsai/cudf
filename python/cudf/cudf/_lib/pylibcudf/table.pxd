@@ -2,8 +2,8 @@
 
 from libcpp.memory cimport unique_ptr
 
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
 
 
 cdef class Table:
@@ -11,6 +11,9 @@ cdef class Table:
     cdef public list _columns
 
     cdef table_view view(self) nogil
+
+    cpdef int num_columns(self)
+    cpdef int num_rows(self)
 
     @staticmethod
     cdef Table from_libcudf(unique_ptr[table] libcudf_tbl)

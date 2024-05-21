@@ -26,6 +26,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/copy.h>
@@ -44,7 +45,7 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
                                                 null_equality nulls_equal,
                                                 nan_equality nans_equal,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::device_async_resource_ref mr)
 {
   if (input.num_rows() == 0 or input.num_columns() == 0) {
     return rmm::device_uvector<size_type>(0, stream, mr);
@@ -145,7 +146,7 @@ std::unique_ptr<table> distinct(table_view const& input,
                                 null_equality nulls_equal,
                                 nan_equality nans_equal,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   if (input.num_rows() == 0 or input.num_columns() == 0 or keys.empty()) {
     return empty_like(input);
@@ -172,7 +173,7 @@ std::unique_ptr<table> distinct(table_view const& input,
                                 duplicate_keep_option keep,
                                 null_equality nulls_equal,
                                 nan_equality nans_equal,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::distinct(
@@ -184,7 +185,7 @@ std::unique_ptr<column> distinct_indices(table_view const& input,
                                          null_equality nulls_equal,
                                          nan_equality nans_equal,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto indices = detail::distinct_indices(input, keep, nulls_equal, nans_equal, stream, mr);

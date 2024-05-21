@@ -4,11 +4,11 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib.cpp cimport concatenate as cpp_concatenate
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf cimport concatenate as cpp_concatenate
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
 
 from .column cimport Column
 from .table cimport Table

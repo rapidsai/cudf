@@ -45,6 +45,8 @@ static std::string cuio_host_mem_param{
  * Initializes the default memory resource to use the RMM pool device resource.
  */
 struct nvbench_base_fixture {
+  using host_pooled_mr_t = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
+
   inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
 
   inline auto make_pool()
@@ -90,12 +92,14 @@ struct nvbench_base_fixture {
 
   inline rmm::host_async_resource_ref make_cuio_host_pinned_pool()
   {
-    using host_pooled_mr = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
-    static std::shared_ptr<host_pooled_mr> mr = std::make_shared<host_pooled_mr>(
-      std::make_shared<rmm::mr::pinned_host_memory_resource>().get(),
-      size_t{1} * 1024 * 1024 * 1024);
+    if (!this->host_pooled_mr) {
+      // Don't store in static, as the CUDA context may be destroyed before static destruction
+      this->host_pooled_mr = std::make_shared<host_pooled_mr_t>(
+        std::make_shared<rmm::mr::pinned_host_memory_resource>().get(),
+        size_t{1} * 1024 * 1024 * 1024);
+    }
 
-    return *mr;
+    return *this->host_pooled_mr;
   }
 
   inline rmm::host_async_resource_ref create_cuio_host_memory_resource(std::string const& mode)
@@ -126,9 +130,16 @@ struct nvbench_base_fixture {
     std::cout << "CUIO host memory resource = " << cuio_host_mode << "\n";
   }
 
+  ~nvbench_base_fixture()
+  {
+    // Ensure the the pool is freed before the CUDA context is destroyed:
+    cudf::io::set_host_memory_resource(this->make_cuio_host_pinned());
+  }
+
   std::shared_ptr<rmm::mr::device_memory_resource> mr;
   std::string rmm_mode{"pool"};
 
+  std::shared_ptr<host_pooled_mr_t> host_pooled_mr;
   std::string cuio_host_mode{"pinned"};
 };
 

@@ -39,6 +39,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -574,7 +575,7 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
                                        int32_t num_actual_columns,
                                        int32_t num_active_columns,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<column_buffer> out_buffers;
@@ -667,7 +668,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
                              csv_reader_options const& reader_opts,
                              parse_options const& parse_opts,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   std::vector<char> header;
 
@@ -995,7 +996,7 @@ parse_options make_parse_options(csv_reader_options const& reader_opts,
 table_with_metadata read_csv(std::unique_ptr<cudf::io::datasource>&& source,
                              csv_reader_options const& options,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   auto parse_options = make_parse_options(options, stream);
 

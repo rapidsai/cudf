@@ -11,18 +11,24 @@ from libcpp.vector cimport vector
 # directly from that. It will make namespacing much cleaner in pylibcudf. What
 # we really want here would be
 # cimport libcudf... libcudf.copying.algo(...)
-from cudf._lib.cpp cimport copying as cpp_copying
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
-from cudf._lib.cpp.copying cimport mask_allocation_policy, out_of_bounds_policy
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf cimport copying as cpp_copying
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport (
+    column_view,
+    mutable_column_view,
+)
+from cudf._lib.pylibcudf.libcudf.copying cimport (
+    mask_allocation_policy,
+    out_of_bounds_policy,
+)
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
-from cudf._lib.cpp.copying import \
+from cudf._lib.pylibcudf.libcudf.copying import \
     mask_allocation_policy as MaskAllocationPolicy  # no-cython-lint
-from cudf._lib.cpp.copying import \
+from cudf._lib.pylibcudf.libcudf.copying import \
     out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
 
 from .column cimport Column
@@ -54,6 +60,11 @@ cpdef Table gather(
     -------
     pylibcudf.Table
         The result of the gather
+
+    Raises
+    ------
+    ValueError
+        If the gather_map contains nulls.
     """
     cdef unique_ptr[table] c_result
     with nogil:
@@ -92,6 +103,20 @@ cpdef Table scatter(
     -------
     Table
         The result of the scatter
+
+    Raises
+    ------
+    ValueError
+        If any of the following occur:
+            - scatter_map contains null values.
+            - source is a Table and the number of columns in source does not match the
+              number of columns in target.
+            - source is a Table and the number of rows in source does not match the
+              number of elements in scatter_map.
+            - source is a List[Scalar] and the number of scalars does not match the
+              number of columns in target.
+    TypeError
+        If data types of the source and target columns do not match.
     """
     cdef unique_ptr[table] c_result
     cdef vector[reference_wrapper[const scalar]] source_scalars
@@ -207,6 +232,17 @@ cpdef Column copy_range_in_place(
         The index of the last element in input_column to copy.
     target_begin : int
         The index of the first element in target_column to overwrite.
+
+    Raises
+    ------
+    TypeError
+        If the operation is attempted on non-fixed width types since those would require
+        memory reallocations, or if the input and target columns have different types.
+    IndexError
+        If the indices accessed by the ranges implied by input_begin, input_end, and
+        target_begin are out of bounds.
+    ValueError
+        If source has null values and target is not nullable.
     """
 
     # Need to initialize this outside the function call so that Cython doesn't
@@ -251,6 +287,14 @@ cpdef Column copy_range(
     -------
     pylibcudf.Column
         A copy of target_column with the specified range overwritten.
+
+    Raises
+    ------
+    IndexError
+        If the indices accessed by the ranges implied by input_begin, input_end, and
+        target_begin are out of bounds.
+    TypeError
+        If target and source have different types.
     """
     cdef unique_ptr[column] c_result
 
@@ -266,7 +310,7 @@ cpdef Column copy_range(
     return Column.from_libcudf(move(c_result))
 
 
-cpdef Column shift(Column input, size_type offset, Scalar fill_values):
+cpdef Column shift(Column input, size_type offset, Scalar fill_value):
     """Shift the elements of input by offset.
 
     For details on the implementation, see :cpp:func:`shift`.
@@ -285,6 +329,12 @@ cpdef Column shift(Column input, size_type offset, Scalar fill_values):
     -------
     pylibcudf.Column
         A copy of input shifted by offset.
+
+    Raises
+    ------
+    TypeError
+        If the fill_value is not of the same type as input, or if the input type is not
+        of fixed width or string type.
     """
     cdef unique_ptr[column] c_result
     with nogil:
@@ -292,10 +342,57 @@ cpdef Column shift(Column input, size_type offset, Scalar fill_values):
             cpp_copying.shift(
                 input.view(),
                 offset,
-                dereference(fill_values.c_obj)
+                dereference(fill_value.c_obj)
             )
         )
     return Column.from_libcudf(move(c_result))
+
+
+cpdef list slice(ColumnOrTable input, list indices):
+    """Slice input according to indices.
+
+    For details on the implementation, see :cpp:func:`slice`.
+
+    Parameters
+    ----------
+    input_column : Union[Column, Table]
+        The column or table to slice.
+    indices : List[int]
+        The indices to select from input.
+
+    Returns
+    -------
+    List[Union[Column, Table]]
+        The result of slicing ``input``.
+
+    Raises
+    ------
+    ValueError
+        If indices size is not even or the values in any pair of lower/upper bounds are
+        strictly decreasing.
+    IndexError
+        When any of the indices don't belong to the range ``[0, input_column.size())``.
+    """
+    cdef vector[size_type] c_indices = indices
+    cdef vector[column_view] c_col_result
+    cdef vector[table_view] c_tbl_result
+    cdef int i
+    if ColumnOrTable is Column:
+        with nogil:
+            c_col_result = move(cpp_copying.slice(input.view(), c_indices))
+
+        return [
+            Column.from_column_view(c_col_result[i], input)
+            for i in range(c_col_result.size())
+        ]
+    else:
+        with nogil:
+            c_tbl_result = move(cpp_copying.slice(input.view(), c_indices))
+
+        return [
+            Table.from_table_view(c_tbl_result[i], input)
+            for i in range(c_tbl_result.size())
+        ]
 
 
 cpdef list split(ColumnOrTable input, list splits):
@@ -338,45 +435,6 @@ cpdef list split(ColumnOrTable input, list splits):
         ]
 
 
-cpdef list slice(ColumnOrTable input, list indices):
-    """Slice input according to indices.
-
-    For details on the implementation, see :cpp:func:`slice`.
-
-    Parameters
-    ----------
-    input_column : Union[Column, Table]
-        The column or table to slice.
-    indices : List[int]
-        The indices to select from input.
-
-    Returns
-    -------
-    List[Union[Column, Table]]
-        The result of slicing ``input``.
-    """
-    cdef vector[size_type] c_indices = indices
-    cdef vector[column_view] c_col_result
-    cdef vector[table_view] c_tbl_result
-    cdef int i
-    if ColumnOrTable is Column:
-        with nogil:
-            c_col_result = move(cpp_copying.slice(input.view(), c_indices))
-
-        return [
-            Column.from_column_view(c_col_result[i], input)
-            for i in range(c_col_result.size())
-        ]
-    else:
-        with nogil:
-            c_tbl_result = move(cpp_copying.slice(input.view(), c_indices))
-
-        return [
-            Table.from_table_view(c_tbl_result[i], input)
-            for i in range(c_tbl_result.size())
-        ]
-
-
 cpdef Column copy_if_else(
     LeftCopyIfElseOperand lhs,
     RightCopyIfElseOperand rhs,
@@ -401,6 +459,15 @@ cpdef Column copy_if_else(
     -------
     pylibcudf.Column
         The result of copying elements from lhs and rhs according to boolean_mask.
+
+    Raises
+    ------
+    TypeError
+        If lhs and rhs are not of the same type or if the boolean mask is not of type
+        bool.
+    ValueError
+        If boolean mask is not of the same length as lhs and rhs (whichever are
+        columns), or if lhs and rhs are not of the same length (if both are columns).
     """
     cdef unique_ptr[column] result
 
@@ -459,6 +526,16 @@ cpdef Table boolean_mask_scatter(
     -------
     Table
         The result of the scatter
+
+    Raises
+    ------
+    ValueError
+        If input.num_columns() != target.num_columns(), boolean_mask.size() !=
+        target.num_rows(), or if input is a Table and the number of `true` in
+        `boolean_mask` > input.num_rows().
+    TypeError
+        If any input type does not match the corresponding target column's type, or
+        if boolean_mask.type() is not bool.
     """
     cdef unique_ptr[table] result
     cdef vector[reference_wrapper[const scalar]] source_scalars
@@ -502,6 +579,11 @@ cpdef Scalar get_element(Column input_column, size_type index):
     -------
     pylibcudf.Scalar
         The element at index from input_column.
+
+    Raises
+    ------
+    IndexError
+        If index is out of bounds.
     """
     cdef unique_ptr[scalar] c_output
     with nogil:

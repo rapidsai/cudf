@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -41,7 +42,7 @@ namespace detail {
 std::unique_ptr<column> encode(column_view const& input_column,
                                data_type indices_type,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(is_unsigned(indices_type), "indices must be type unsigned integer");
   CUDF_EXPECTS(input_column.type().id() != type_id::DICTIONARY32,
@@ -90,7 +91,7 @@ data_type get_indices_type_for_size(size_type keys_size)
 std::unique_ptr<column> encode(column_view const& input_column,
                                data_type indices_type,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::encode(input_column, indices_type, stream, mr);

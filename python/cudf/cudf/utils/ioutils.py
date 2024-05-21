@@ -101,11 +101,13 @@ Returns
 Total number of rows
 Number of row groups
 List of column names
+Number of columns
+List of metadata of row groups
 
 Examples
 --------
 >>> import cudf
->>> num_rows, num_row_groups, names = cudf.io.read_parquet_metadata(filename)
+>>> num_rows, num_row_groups, names, num_columns, row_group_metadata = cudf.io.read_parquet_metadata(filename)
 >>> df = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
 >>> df = cudf.concat(df)
 >>> df
@@ -245,7 +247,8 @@ partition_file_name : str, optional, default None
     File name to use for partitioned datasets. Different partitions
     will be written to different directories, but all files will
     have this name.  If nothing is specified, a random uuid4 hex string
-    will be used for each file.
+    will be used for each file. This parameter is only supported by 'cudf'
+    engine, and will be ignored by other engines.
 partition_offsets : list, optional, default None
     Offsets to partition the dataframe by. Should be used when path is list
     of str. Should be a list of integers of size ``len(path) + 1``
@@ -275,6 +278,10 @@ max_page_size_bytes: integer or None, default None
 max_page_size_rows: integer or None, default None
     Maximum number of rows of each page of the output.
     If None, 20000 will be used.
+max_dictionary_size: integer or None, default None
+    Maximum size of the dictionary page for each output column chunk. Dictionary
+    encoding for column chunks that exceeds this limit will be disabled.
+    If None, 1048576 (1MB) will be used.
 storage_options : dict, optional, default None
     Extra options that make sense for a particular storage connection,
     e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
@@ -289,8 +296,8 @@ return_metadata : bool, default False
     ``return_metadata=True`` instead of specifying ``metadata_file_path``
 use_dictionary : bool, default True
     When ``False``, prevents the use of dictionary encoding for Parquet page
-    data. When ``True``, dictionary encoding is preferred when not disabled due
-    to dictionary size constraints.
+    data. When ``True``, dictionary encoding is preferred subject to
+    ``max_dictionary_size`` constraints.
 header_version : {{'1.0', '2.0'}}, default "1.0"
     Controls whether to use version 1.0 or version 2.0 page headers when
     encoding. Version 1.0 is more portable, but version 2.0 enables the
@@ -543,7 +550,7 @@ path_or_buf : list, str, path object, or file-like object
     function or `StringIO`). Multiple inputs may be provided as a list. If a
     list is specified each list entry may be of a different input type as long
     as each input is of a valid type and all input JSON schema(s) match.
-engine : {{ 'auto', 'cudf', 'cudf_legacy', 'pandas' }}, default 'auto'
+engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the engine will be
     automatically selected based on the other parameters. See notes below.
 orient : string
@@ -690,7 +697,6 @@ keep_quotes : bool, default False
 
        This parameter is only supported with ``engine='cudf'``.
 
-    This parameter is only supported in ``cudf`` engine.
     If `True`, any string values are read literally (and wrapped in an
     additional set of quotes).
     If `False` string values are parsed into Python strings.
@@ -701,7 +707,22 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+mixed_types_as_string : bool, default False
 
+    .. admonition:: GPU-accelerated feature
+
+       This parameter is only supported with ``engine='cudf'``.
+
+    If True, mixed type columns are returned as string columns.
+    If `False` parsing mixed type columns will thrown an error.
+prune_columns : bool, default False
+
+    .. admonition:: GPU-accelerated feature
+
+       This parameter is only supported with ``engine='cudf'``.
+
+    If True, only return those columns mentioned in the dtype argument.
+    If `False` dtype argument is used a type inference suggestion.
 Returns
 -------
 result : Series or DataFrame, depending on the value of `typ`.
@@ -1844,6 +1865,7 @@ def stringify_pathlike(pathlike):
     """
     Convert any object that implements the fspath protocol
     to a string. Leaves other objects unchanged
+
     Parameters
     ----------
     pathlike
