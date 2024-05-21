@@ -1840,7 +1840,9 @@ def test_orc_writer_negative_timestamp(negative_timestamp_df):
 )
 def test_orc_reader_apache_negative_timestamp(datadir):
     path = datadir / "TestOrcFile.apache_timestamp.orc"
-    print(platform.system(), platform.release())
+    print(platform.system())
+    print(platform.release())
+    print(platform.uname())
     pdf = pd.read_orc(path)
     gdf = cudf.read_orc(path)
 
