@@ -327,7 +327,6 @@ CUDF_KERNEL void count_delimiters_kernel(Tokenizer tokenizer,
   for (auto i = byte_idx; (i < (byte_idx + bytes_per_thread)) && (i < chars_bytes); ++i) {
     count += tokenizer.is_delimiter(i, d_offsets, chars_bytes);
   }
-  __syncthreads();
   auto const total = block_reduce(temp_storage).Reduce(count, cub::Sum());
 
   if ((lane_idx == 0) && (total > 0)) {
@@ -368,7 +367,8 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   rmm::device_scalar<int64_t> d_count(0, stream);
   constexpr int64_t block_size         = 512;
   constexpr size_type bytes_per_thread = 4;
-  auto const num_blocks = util::div_rounding_up_safe(chars_bytes / bytes_per_thread, block_size);
+  auto const num_blocks                = util::div_rounding_up_safe(
+    util::div_rounding_up_safe(chars_bytes, static_cast<int64_t>(bytes_per_thread)), block_size);
   count_delimiters_kernel<Tokenizer, block_size, bytes_per_thread>
     <<<num_blocks, block_size, 0, stream.value()>>>(
       tokenizer, d_offsets, chars_bytes, d_count.data());

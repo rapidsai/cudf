@@ -270,8 +270,8 @@ dependencies:
       - output_types: conda
         packages:
           - fmt>=10.1.1,<11
-          - librmm==24.6.*
-          - libkvikio==24.6.*
+          - librmm==24.8.*
+          - libkvikio==24.8.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==3.0.6
@@ -305,7 +305,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &rmm_conda rmm==24.6.*
+          - &rmm_conda rmm==24.8.*
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
@@ -321,10 +321,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages: &build_python_packages_cu12
-              - &rmm_cu12 rmm-cu12==24.6.*
+              - &rmm_cu12 rmm-cu12==24.8.*
           - matrix: {cuda: "11.*"}
             packages: &build_python_packages_cu11
-              - &rmm_cu11 rmm-cu11==24.6.*
+              - &rmm_cu11 rmm-cu11==24.8.*
           - {matrix: null, packages: [*rmm_conda] }
   libarrow_build:
     common:
@@ -477,7 +477,7 @@ dependencies:
       - output_types: [conda]
         packages:
           - breathe>=4.35.0
-          - dask-cuda==24.6.*
+          - dask-cuda==24.8.*
           - *doxygen
           - make
           - myst-nb
@@ -568,11 +568,11 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - rmm-cu12==24.6.*
+              - rmm-cu12==24.8.*
               - pynvjitlink-cu12
           - matrix: {cuda: "11.*"}
             packages:
-              - rmm-cu11==24.6.*
+              - rmm-cu11==24.8.*
               - cubinlinker-cu11
               - ptxcompiler-cu11
           - {matrix: null, packages: [cubinlinker, ptxcompiler, *rmm_conda]}
@@ -585,7 +585,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - rapids-dask-dependency==24.6.*
+          - rapids-dask-dependency==24.8.*
   run_custreamz:
     common:
       - output_types: conda
@@ -671,13 +671,13 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask-cuda==24.6.*
+          - dask-cuda==24.8.*
           - *numba
   depends_on_cudf:
     common:
       - output_types: conda
         packages:
-          - &cudf_conda cudf==24.6.*
+          - &cudf_conda cudf==24.8.*
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -689,16 +689,16 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cudf-cu12==24.6.*
+              - cudf-cu12==24.8.*
           - matrix: {cuda: "11.*"}
             packages:
-              - cudf-cu11==24.6.*
+              - cudf-cu11==24.8.*
           - {matrix: null, packages: [*cudf_conda]}
   depends_on_cudf_kafka:
     common:
       - output_types: conda
         packages:
-          - &cudf_kafka_conda cudf_kafka==24.6.*
+          - &cudf_kafka_conda cudf_kafka==24.8.*
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -710,10 +710,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cudf_kafka-cu12==24.6.*
+              - cudf_kafka-cu12==24.8.*
           - matrix: {cuda: "11.*"}
             packages:
-              - cudf_kafka-cu11==24.6.*
+              - cudf_kafka-cu11==24.8.*
           - {matrix: null, packages: [*cudf_kafka_conda]}
   depends_on_cupy:
     common:
