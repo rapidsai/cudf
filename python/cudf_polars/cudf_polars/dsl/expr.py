@@ -387,6 +387,30 @@ class BooleanFunction(Expr):
             column.name,
         )
 
+    _BETWEEN_OPS: ClassVar[
+        dict[
+            pl_expr.ClosedInterval,
+            tuple[plc.binaryop.BinaryOperator, plc.binaryop.BinaryOperator],
+        ]
+    ] = {
+        pl_expr.ClosedInterval.None_: (
+            plc.binaryop.BinaryOperator.GREATER,
+            plc.binaryop.BinaryOperator.LESS,
+        ),
+        pl_expr.ClosedInterval.Left: (
+            plc.binaryop.BinaryOperator.GREATER_EQUAL,
+            plc.binaryop.BinaryOperator.LESS,
+        ),
+        pl_expr.ClosedInterval.Right: (
+            plc.binaryop.BinaryOperator.GREATER,
+            plc.binaryop.BinaryOperator.LESS_EQUAL,
+        ),
+        pl_expr.ClosedInterval.Both: (
+            plc.binaryop.BinaryOperator.GREATER_EQUAL,
+            plc.binaryop.BinaryOperator.LESS_EQUAL,
+        ),
+    }
+
     @with_mapping
     def evaluate(
         self,
@@ -488,26 +512,14 @@ class BooleanFunction(Expr):
             )
         elif self.name == pl_expr.BooleanFunction.IsBetween:
             column, lo, hi = columns
-            closed = self.options
-            if closed == pl_expr.ClosedInterval.None_:
-                left = plc.binaryop.BinaryOperator.GREATER
-                right = plc.binaryop.BinaryOperator.LESS
-            elif closed == pl_expr.ClosedInterval.Left:
-                left = plc.binaryop.BinaryOperator.GREATER_EQUAL
-                right = plc.binaryop.BinaryOperator.LESS
-            elif closed == pl_expr.ClosedInterval.Right:
-                left = plc.binaryop.BinaryOperator.GREATER
-                right = plc.binaryop.BinaryOperator.LESS_EQUAL
-            else:
-                left = plc.binaryop.BinaryOperator.GREATER_EQUAL
-                right = plc.binaryop.BinaryOperator.LESS_EQUAL
+            lop, rop = self._BETWEEN_OPS[self.options]
             return Column(
                 plc.binaryop.binary_operation(
                     plc.binaryop.binary_operation(
-                        column.obj, lo.obj, left, output_type=self.dtype
+                        column.obj, lo.obj, lop, output_type=self.dtype
                     ),
                     plc.binaryop.binary_operation(
-                        column.obj, hi.obj, right, output_type=self.dtype
+                        column.obj, hi.obj, rop, output_type=self.dtype
                     ),
                     plc.binaryop.BinaryOperator.LOGICAL_AND,
                     self.dtype,
