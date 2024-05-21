@@ -94,7 +94,7 @@ class Frame(BinaryOperand, Scannable):
 
     @property
     def ndim(self) -> int:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @_cudf_nvtx_annotate
     def serialize(self):
