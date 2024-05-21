@@ -1241,8 +1241,12 @@ def test_pickle_groupby(dataframe):
 
 def test_numpy_extension_array():
     np_array = np.array([0, 1, 2, 3])
-    xarray = xpd.arrays.NumpyExtensionArray(np_array)
-    array = pd.arrays.NumpyExtensionArray(np_array)
+    try:
+        xarray = xpd.arrays.NumpyExtensionArray(np_array)
+        array = pd.arrays.NumpyExtensionArray(np_array)
+    except AttributeError:
+        xarray = xpd.arrays.PandasArray(np_array)
+        array = pd.arrays.PandasArray(np_array)
 
     tm.assert_equal(xarray, array)
 
