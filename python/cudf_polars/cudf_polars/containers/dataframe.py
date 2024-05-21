@@ -121,7 +121,9 @@ class DataFrame:
     def select(self, names: Sequence[str]) -> Self:
         """Select columns by name returning DataFrame."""
         want = set(names)
-        return type(self)([c for c in self.columns if c.name in want], self.scalars)
+        if not want.issubset(self.column_names_set):
+            raise ValueError("Can't select missing names")
+        return type(self)([self._column_map[name] for name in names], self.scalars)
 
     def replace_columns(self, *columns: Column) -> Self:
         """Return a new dataframe with columns replaced by name."""

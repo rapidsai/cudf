@@ -512,7 +512,8 @@ class BooleanFunction(Expr):
             )
         elif self.name == pl_expr.BooleanFunction.IsBetween:
             column, lo, hi = columns
-            lop, rop = self._BETWEEN_OPS[self.options]
+            (closed,) = self.options
+            lop, rop = self._BETWEEN_OPS[closed]
             return Column(
                 plc.binaryop.binary_operation(
                     plc.binaryop.binary_operation(
@@ -545,6 +546,13 @@ class StringFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
+        if self.name not in (
+            pl_expr.StringFunction.Lowercase,
+            pl_expr.StringFunction.Uppercase,
+            pl_expr.StringFunction.EndsWith,
+            pl_expr.StringFunction.StartsWith,
+        ):
+            raise NotImplementedError(f"String function {self.name}")
 
     @with_mapping
     def evaluate(
@@ -569,6 +577,11 @@ class StringFunction(Expr):
             column, suffix = columns
             return Column(
                 plc.strings.find.ends_with(column.obj, suffix.obj), column.name
+            )
+        elif self.name == pl_expr.StringFunction.StartsWith:
+            column, suffix = columns
+            return Column(
+                plc.strings.find.starts_with(column.obj, suffix.obj), column.name
             )
         else:
             raise NotImplementedError(f"StringFunction {self.name}")
