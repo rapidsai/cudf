@@ -100,6 +100,24 @@ class DataFrame(DXDataFrame, CudfFrameBase):
             )
         return super().sort_values(by, **kwargs)
 
+    def set_index(
+        self,
+        *args,
+        divisions=None,
+        **kwargs,
+    ):
+        if divisions == "quantile":
+            divisions = None
+            warnings.warn(
+                "Ignoring divisions='quantile'. This option is now "
+                "deprecated. Please use the legacy API and raise an "
+                "issue on github if this feature is necessary."
+                f"\n{_LEGACY_WORKAROUND}",
+                FutureWarning,
+            )
+
+        return super().set_index(*args, divisions=divisions, **kwargs)
+
     def groupby(
         self,
         by,
