@@ -1739,6 +1739,8 @@ def get_reader_filepath_or_buffer(
 
                 # raise FileNotFound if path looks like json
                 # following pandas
+                # see
+                # https://github.com/pandas-dev/pandas/pull/46718/files#diff-472ce5fe087e67387942e1e1c409a5bc58dde9eb8a2db6877f1a45ae4974f694R724-R729
                 elif not allow_raw_text_input or paths[0].lower().endswith(
                     tuple(f".json{c}" for c in compression_extensions)
                 ):
