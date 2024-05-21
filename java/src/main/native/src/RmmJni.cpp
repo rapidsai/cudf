@@ -1106,4 +1106,15 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromFallbackPinnedPool(JNIEnv
   }
   CATCH_STD(env, )
 }
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_configureDefaultCudfPinnedPoolSize(JNIEnv* env,
+                                                                                  jclass clazz,
+                                                                                  jlong size)
+{
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::io::config_default_host_memory_resource(cudf::io::host_mr_options{size});
+  }
+  CATCH_STD(env, )
+}
 }
