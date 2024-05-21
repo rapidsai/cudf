@@ -697,7 +697,7 @@ dependencies:
           - *numba
       - output_types: [requirements, pyproject]
         packages:
-          - dask-cuda==24.6.*,>=0.0.0a0
+          - dask-cuda==24.8.*,>=0.0.0a0
           - *numba
   depends_on_cudf:
     common:
