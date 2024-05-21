@@ -10,7 +10,7 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import xfail_dask_expr
+from dask_cudf.tests.utils import QUERY_PLANNING_ON, xfail_dask_expr
 
 
 @pytest.mark.parametrize("ascending", [True, False])
@@ -23,7 +23,7 @@ from dask_cudf.tests.utils import xfail_dask_expr
         pytest.param(
             "d",
             marks=xfail_dask_expr(
-                "Dask-expr fails to sort by categorical column."
+                "Possible segfault when sorting by categorical column.",
             ),
         ),
         ["a", "b"],
@@ -45,6 +45,20 @@ def test_sort_values(nelem, nparts, by, ascending):
         got = ddf.sort_values(by=by, ascending=ascending)
     expect = df.sort_values(by=by, ascending=ascending)
     dd.assert_eq(got, expect, check_index=False)
+
+
+@pytest.mark.parametrize("by", ["b", ["b", "a"]])
+def test_sort_values_categorical_raises(by):
+    df = cudf.DataFrame()
+    df["a"] = np.ascontiguousarray(np.arange(10)[::-1])
+    df["b"] = df["a"].astype("category")
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    if QUERY_PLANNING_ON:
+        with pytest.raises(
+            NotImplementedError, match="sorting on categorical"
+        ):
+            ddf.sort_values(by=by)
 
 
 @pytest.mark.parametrize("ascending", [True, False])
