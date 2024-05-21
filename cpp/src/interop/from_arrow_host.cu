@@ -141,7 +141,7 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<bool>(ArrowSch
 {
   auto data_buffer         = input->buffers[fixed_width_data_buffer_idx];
   const auto buffer_length = bitmask_allocation_size_bytes(input->length + input->offset);
-  // mask-to-bools expects the mask to be bitmask_type aligned/padded
+
   auto data = rmm::device_buffer(buffer_length, stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(data.data(),
                                 reinterpret_cast<uint8_t const*>(data_buffer),
@@ -467,9 +467,9 @@ std::unique_ptr<table> from_arrow(ArrowSchema const* schema,
   CUDF_FUNC_RANGE();
 
   ArrowDeviceArray const device_input = {
-    .array = *input,
-    .device_id = -1,
-    .device_type = ARROW_DEVICE_CPU,    
+    .array       = *input,
+    .device_id   = -1,
+    .device_type = ARROW_DEVICE_CPU,
   };
   return detail::from_arrow_host(schema, &device_input, stream, mr);
 }
