@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -17,9 +17,9 @@ def array_method(self: _FastSlowProxy, *args, **kwargs):
 
 def array_function_method(self, func, types, args, kwargs):
     try:
-        return _FastSlowAttribute("__array_function__").__get__(self)(
-            func, types, args, kwargs
-        )
+        return _FastSlowAttribute("__array_function__").__get__(
+            self, type(self)
+        )(func, types, args, kwargs)
     except Exception:
         # if something went wrong with __array_function__ we
         # attempt to call the function directly on the slow

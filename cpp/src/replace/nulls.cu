@@ -38,6 +38,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -216,7 +217,8 @@ struct replace_nulls_scalar_kernel_forwarder {
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
   {
-    CUDF_EXPECTS(input.type() == replacement.type(), "Data type mismatch");
+    CUDF_EXPECTS(
+      cudf::have_same_types(input, replacement), "Data type mismatch", cudf::data_type_error);
     std::unique_ptr<cudf::column> output = cudf::detail::allocate_like(
       input, input.size(), cudf::mask_allocation_policy::NEVER, stream, mr);
     auto output_view = output->mutable_view();
@@ -252,9 +254,10 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(input.type() == replacement.type(), "Data type mismatch");
+  CUDF_EXPECTS(
+    cudf::have_same_types(input, replacement), "Data type mismatch", cudf::data_type_error);
   cudf::strings_column_view input_s(input);
-  cudf::string_scalar const& repl = static_cast<cudf::string_scalar const&>(replacement);
+  auto const& repl = static_cast<cudf::string_scalar const&>(replacement);
   return cudf::strings::detail::replace_nulls(input_s, repl, stream, mr);
 }
 
@@ -318,7 +321,8 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(input.type() == replacement.type(), "Data type mismatch");
+  CUDF_EXPECTS(
+    cudf::have_same_types(input, replacement), "Data type mismatch", cudf::data_type_error);
   CUDF_EXPECTS(replacement.size() == input.size(), "Column size mismatch");
 
   if (input.is_empty()) { return cudf::empty_like(input); }

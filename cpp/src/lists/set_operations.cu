@@ -52,7 +52,7 @@ namespace {
 void check_compatibility(lists_column_view const& lhs, lists_column_view const& rhs)
 {
   CUDF_EXPECTS(lhs.size() == rhs.size(), "The input lists column must have the same size.");
-  CUDF_EXPECTS(column_types_equal(lhs.child(), rhs.child()),
+  CUDF_EXPECTS(have_same_types(lhs.child(), rhs.child()),
                "The input lists columns must have children having the same type structure");
 }
 

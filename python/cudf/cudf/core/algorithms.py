@@ -142,10 +142,10 @@ def _index_or_values_interpolation(column, index=None):
         BooleanMask(~mask, len(to_interp))
     )
 
-    known_x = known_x_and_y._index._column.values
+    known_x = known_x_and_y.index.to_cupy()
     known_y = known_x_and_y._data.columns[0].values
 
-    result = cp.interp(to_interp._index.values, known_x, known_y)
+    result = cp.interp(index.to_cupy(), known_x, known_y)
 
     # find the first nan
     first_nan_idx = (mask == 0).argmax().item()

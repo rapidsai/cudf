@@ -60,11 +60,12 @@ struct compute_size_and_concatenate_fn {
   separator_on_nulls const separate_nulls;
   output_if_empty_list const empty_list_policy;
 
-  size_type* d_offsets{nullptr};
+  size_type* d_sizes{nullptr};
 
   // If d_chars == nullptr: only compute sizes and validities of the output strings.
   // If d_chars != nullptr: only concatenate strings.
   char* d_chars{nullptr};
+  cudf::detail::input_offsetalator d_offsets;
 
   [[nodiscard]] __device__ bool output_is_null(size_type const idx,
                                                size_type const start_idx,
@@ -84,7 +85,7 @@ struct compute_size_and_concatenate_fn {
     auto const end_idx   = list_offsets[idx + 1];
 
     if (!d_chars && output_is_null(idx, start_idx, end_idx)) {
-      d_offsets[idx] = 0;
+      d_sizes[idx] = 0;
       return;
     }
 
@@ -120,7 +121,7 @@ struct compute_size_and_concatenate_fn {
 
     // If there are all null elements, the output should be the same as having an empty list input:
     // a null or an empty string
-    if (!d_chars) { d_offsets[idx] = has_valid_element ? size_bytes : 0; }
+    if (!d_chars) { d_sizes[idx] = has_valid_element ? size_bytes : 0; }
   }
 };
 

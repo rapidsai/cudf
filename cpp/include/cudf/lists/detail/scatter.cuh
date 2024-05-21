@@ -101,7 +101,7 @@ std::unique_ptr<column> scatter_impl(rmm::device_uvector<unbound_list_view> cons
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(column_types_equal(source, target), "Mismatched column types.");
+  CUDF_EXPECTS(have_same_types(source, target), "Mismatched column types.");
 
   auto const child_column_type = lists_column_view(target).child().type();
 

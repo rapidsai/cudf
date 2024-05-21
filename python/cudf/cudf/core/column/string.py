@@ -5600,6 +5600,13 @@ class StringColumn(column.ColumnBase):
     ) -> cuda.devicearray.DeviceNDArray:
         raise ValueError("Cannot get an array view of a StringColumn")
 
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            f"dtype {self.dtype} is not yet supported via "
+            "`__cuda_array_interface__`"
+        )
+
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
 
@@ -5950,6 +5957,7 @@ class StringColumn(column.ColumnBase):
                 "__ge__",
                 "__le__",
                 "NULL_EQUALS",
+                "NULL_NOT_EQUALS",
             }:
                 lhs, rhs = (other, self) if reflect else (self, other)
                 return libcudf.binaryop.binaryop(

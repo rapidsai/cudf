@@ -32,6 +32,30 @@ def test_from_dict_backend_dispatch():
     dd.assert_eq(expect, ddf)
 
 
+def test_to_dask_dataframe_deprecated():
+    gdf = cudf.DataFrame({"a": range(100)})
+    ddf = dd.from_pandas(gdf, npartitions=2)
+    assert isinstance(ddf._meta, cudf.DataFrame)
+
+    with pytest.warns(FutureWarning, match="API is now deprecated"):
+        assert isinstance(
+            ddf.to_dask_dataframe()._meta,
+            pd.DataFrame,
+        )
+
+
+def test_from_dask_dataframe_deprecated():
+    gdf = pd.DataFrame({"a": range(100)})
+    ddf = dd.from_pandas(gdf, npartitions=2)
+    assert isinstance(ddf._meta, pd.DataFrame)
+
+    with pytest.warns(FutureWarning, match="API is now deprecated"):
+        assert isinstance(
+            dask_cudf.from_dask_dataframe(ddf)._meta,
+            cudf.DataFrame,
+        )
+
+
 def test_to_backend():
     np.random.seed(0)
     data = {
@@ -776,7 +800,7 @@ def test_dataframe_set_index():
         assert_eq(ddf.compute(), pddf.compute())
 
 
-@xfail_dask_expr("Insufficient describe support in dask-expr")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 def test_series_describe():
     random.seed(0)
     sr = cudf.datasets.randomdata(20)["x"]
@@ -792,7 +816,7 @@ def test_series_describe():
     )
 
 
-@xfail_dask_expr("Insufficient describe support in dask-expr")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 def test_dataframe_describe():
     random.seed(0)
     df = cudf.datasets.randomdata(20)
@@ -806,7 +830,7 @@ def test_dataframe_describe():
     )
 
 
-@xfail_dask_expr("Insufficient describe support in dask-expr")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 def test_zero_std_describe():
     num = 84886781
     df = cudf.DataFrame(
@@ -947,3 +971,25 @@ def test_implicit_array_conversion_cupy_sparse():
     # NOTE: The calculation here doesn't need to make sense.
     # We just need to make sure we get the right type back.
     assert type(result) == type(expect)
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3], [1.1, 2.3, 4.5]])
+@pytest.mark.parametrize("values", [[1, 5], [1.1, 2.4, 2.3]])
+def test_series_isin(data, values):
+    ser = cudf.Series(data)
+    pddf = dd.from_pandas(ser.to_pandas(), 1)
+    ddf = dask_cudf.from_cudf(ser, 1)
+
+    actual = ddf.isin(values)
+    expected = pddf.isin(values)
+
+    dd.assert_eq(actual, expected)
+
+
+def test_series_isin_error():
+    ser = cudf.Series([1, 2, 3])
+    ddf = dask_cudf.from_cudf(ser, 1)
+    with pytest.raises(TypeError):
+        ser.isin([1, 5, "a"])
+    with pytest.raises(TypeError):
+        ddf.isin([1, 5, "a"]).compute()

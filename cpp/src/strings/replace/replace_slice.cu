@@ -45,13 +45,14 @@ struct replace_slice_fn {
   string_view const d_repl;
   size_type const start;
   size_type const stop;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) {
-      if (!d_chars) { d_offsets[idx] = 0; }
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     auto const d_str   = d_strings.element<string_view>(idx);
@@ -69,7 +70,7 @@ struct replace_slice_fn {
                                    in_ptr + end,
                                    d_str.size_bytes() - end);
     } else {
-      d_offsets[idx] = d_str.size_bytes() + d_repl.size_bytes() - (end - begin);
+      d_sizes[idx] = d_str.size_bytes() + d_repl.size_bytes() - (end - begin);
     }
   }
 };
@@ -94,7 +95,7 @@ std::unique_ptr<column> replace_slice(strings_column_view const& input,
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // this utility calls the given functor to build the offsets and chars columns
-  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = make_strings_children(
     replace_slice_fn{*d_strings, d_repl, start, stop}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),

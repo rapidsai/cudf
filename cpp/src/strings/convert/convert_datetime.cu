@@ -37,7 +37,6 @@
 #include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
-#include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
@@ -756,8 +755,9 @@ struct datetime_formatter_fn {
   column_device_view const d_timestamps;
   column_device_view const d_format_names;
   device_span<format_item const> const d_format_items;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   /**
    * @brief Specialized modulo expression that handles negative values.
@@ -1087,14 +1087,14 @@ struct datetime_formatter_fn {
   __device__ void operator()(size_type idx) const
   {
     if (d_timestamps.is_null(idx)) {
-      if (!d_chars) { d_offsets[idx] = 0; }
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     auto const tstamp = d_timestamps.element<T>(idx);
     if (d_chars) {
       timestamp_to_string(tstamp, d_chars + d_offsets[idx]);
     } else {
-      d_offsets[idx] = compute_output_size(tstamp);
+      d_sizes[idx] = compute_output_size(tstamp);
     }
   }
 };

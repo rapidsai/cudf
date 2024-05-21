@@ -1,5 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+import warnings
 from functools import cached_property
 
 from dask_expr import (
@@ -14,17 +15,43 @@ from dask_expr._util import _raise_if_object_series
 
 from dask import config
 from dask.dataframe.core import is_dataframe_like
+from dask.dataframe.dispatch import is_categorical_dtype
 
 import cudf
+
+_LEGACY_WORKAROUND = (
+    "To enable the 'legacy' dask-cudf API, set the "
+    "global 'dataframe.query-planning' config to "
+    "`False` before dask is imported. This can also "
+    "be done by setting an environment variable: "
+    "`DASK_DATAFRAME__QUERY_PLANNING=False` "
+)
+
 
 ##
 ## Custom collection classes
 ##
 
 
-# VarMixin can be removed if cudf#15179 is addressed.
-# See: https://github.com/rapidsai/cudf/issues/15179
-class VarMixin:
+class CudfFrameBase(FrameBase):
+    def to_dask_dataframe(self, **kwargs):
+        """Create a dask.dataframe object from a dask_cudf object
+
+        WARNING: This API is deprecated, and may not work properly.
+        Please use `*.to_backend("pandas")` to convert the
+        underlying data to pandas.
+        """
+
+        warnings.warn(
+            "The `to_dask_dataframe` API is now deprecated. "
+            "Please use `*.to_backend('pandas')` instead.",
+            FutureWarning,
+        )
+
+        return self.to_backend("pandas", **kwargs)
+
+    # var can be removed if cudf#15179 is addressed.
+    # See: https://github.com/rapidsai/cudf/issues/15179
     def var(
         self,
         axis=0,
@@ -49,11 +76,29 @@ class VarMixin:
         )
 
 
-class DataFrame(VarMixin, DXDataFrame):
+class DataFrame(DXDataFrame, CudfFrameBase):
     @classmethod
     def from_dict(cls, *args, **kwargs):
         with config.set({"dataframe.backend": "cudf"}):
             return DXDataFrame.from_dict(*args, **kwargs)
+
+    def sort_values(
+        self,
+        by,
+        **kwargs,
+    ):
+        # Raise if the first column is categorical, otherwise the
+        # upstream divisions logic may produce errors
+        # (See: https://github.com/rapidsai/cudf/issues/11795)
+        check_by = by[0] if isinstance(by, list) else by
+        if is_categorical_dtype(self.dtypes.get(check_by, None)):
+            raise NotImplementedError(
+                "Dask-cudf does not support sorting on categorical "
+                "columns when query-planning is enabled. Please use "
+                "the legacy API for now."
+                f"\n{_LEGACY_WORKAROUND}",
+            )
+        return super().sort_values(by, **kwargs)
 
     def groupby(
         self,
@@ -70,6 +115,21 @@ class DataFrame(VarMixin, DXDataFrame):
             raise ValueError(
                 f"`by` must be a column name or list of columns, got {by}."
             )
+
+        if "as_index" in kwargs:
+            msg = (
+                "The `as_index` argument is now deprecated. All groupby "
+                "results will be consistent with `as_index=True`."
+            )
+
+            if kwargs.pop("as_index") is not True:
+                raise NotImplementedError(
+                    f"{msg} Please reset the index after aggregating, or "
+                    "use the legacy API if `as_index=False` is required.\n"
+                    f"{_LEGACY_WORKAROUND}"
+                )
+            else:
+                warnings.warn(msg, FutureWarning)
 
         return GroupBy(
             self,
@@ -94,7 +154,7 @@ class DataFrame(VarMixin, DXDataFrame):
         return from_legacy_dataframe(ddf)
 
 
-class Series(VarMixin, DXSeries):
+class Series(DXSeries, CudfFrameBase):
     def groupby(self, by, **kwargs):
         from dask_cudf.expr._groupby import SeriesGroupBy
 
@@ -113,7 +173,7 @@ class Series(VarMixin, DXSeries):
         return StructMethods(self)
 
 
-class Index(DXIndex):
+class Index(DXIndex, CudfFrameBase):
     pass  # Same as pandas (for now)
 
 
