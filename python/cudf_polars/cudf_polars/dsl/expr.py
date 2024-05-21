@@ -348,10 +348,7 @@ class BooleanFunction(Expr):
         super().__init__(dtype)
         self.options = options
         self.name = name
-        self.children = tuple(children)
-
-    def __post_init__(self):
-        """Validate preconditions."""
+        self.children = children
         if (
             self.name in (pl_expr.BooleanFunction.Any, pl_expr.BooleanFunction.All)
             and not self.options[0]
@@ -361,7 +358,6 @@ class BooleanFunction(Expr):
         if self.name in (
             pl_expr.BooleanFunction.IsFinite,
             pl_expr.BooleanFunction.IsInfinite,
-            pl_expr.BooleanFunction.IsBetween,
             pl_expr.BooleanFunction.IsIn,
         ):
             raise NotImplementedError(f"{self.name}")
@@ -460,7 +456,7 @@ class BooleanFunction(Expr):
                 source_value=plc.interop.from_arrow(pa.scalar(False)),  # noqa: FBT003
                 target_value=plc.interop.from_arrow(pa.scalar(True)),  # noqa: FBT003
             )
-        elif self.name == pl_expr.AllHorizontal:
+        elif self.name == pl_expr.BooleanFunction.AllHorizontal:
             name = columns[0].name
             if any(c.obj.null_count() > 0 for c in columns):
                 raise NotImplementedError("Kleene logic for all_horizontal")
@@ -475,7 +471,7 @@ class BooleanFunction(Expr):
                 ),
                 name,
             )
-        elif self.name == pl_expr.AnyHorizontal:
+        elif self.name == pl_expr.BooleanFunction.AnyHorizontal:
             name = columns[0].name
             if any(c.obj.null_count() > 0 for c in columns):
                 raise NotImplementedError("Kleene logic for any_horizontal")
@@ -489,6 +485,34 @@ class BooleanFunction(Expr):
                     (c.obj for c in columns),
                 ),
                 name,
+            )
+        elif self.name == pl_expr.BooleanFunction.IsBetween:
+            column, lo, hi = columns
+            closed = self.options
+            if closed == pl_expr.ClosedInterval.None_:
+                left = plc.binaryop.BinaryOperator.GREATER
+                right = plc.binaryop.BinaryOperator.LESS
+            elif closed == pl_expr.ClosedInterval.Left:
+                left = plc.binaryop.BinaryOperator.GREATER_EQUAL
+                right = plc.binaryop.BinaryOperator.LESS
+            elif closed == pl_expr.ClosedInterval.Right:
+                left = plc.binaryop.BinaryOperator.GREATER
+                right = plc.binaryop.BinaryOperator.LESS_EQUAL
+            else:
+                left = plc.binaryop.BinaryOperator.GREATER_EQUAL
+                right = plc.binaryop.BinaryOperator.LESS_EQUAL
+            return Column(
+                plc.binaryop.binary_operation(
+                    plc.binaryop.binary_operation(
+                        column.obj, lo.obj, left, output_type=self.dtype
+                    ),
+                    plc.binaryop.binary_operation(
+                        column.obj, hi.obj, right, output_type=self.dtype
+                    ),
+                    plc.binaryop.BinaryOperator.LOGICAL_AND,
+                    self.dtype,
+                ),
+                column.name,
             )
         else:
             raise NotImplementedError(f"BooleanFunction {self.name}")
@@ -519,14 +543,21 @@ class StringFunction(Expr):
         mapping: dict[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        (child,) = self.children
-        column = child.evaluate(df, context=context, mapping=mapping)
+        columns = [
+            child.evaluate(df, context=context, mapping=mapping)
+            for child in self.children
+        ]
         if self.name == pl_expr.StringFunction.Lowercase:
+            (column,) = columns
             return Column(plc.strings.case.to_lower(column.obj), column.name)
         elif self.name == pl_expr.StringFunction.Uppercase:
-            (child,) = self.children
-            column = child.evaluate(df, context=context, mapping=mapping)
+            (column,) = columns
             return Column(plc.strings.case.to_upper(column.obj), column.name)
+        elif self.name == pl_expr.StringFunction.EndsWith:
+            column, suffix = columns
+            return Column(
+                plc.strings.find.ends_with(column.obj, suffix.obj), column.name
+            )
         else:
             raise NotImplementedError(f"StringFunction {self.name}")
 
