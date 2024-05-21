@@ -15,8 +15,18 @@ from dask_expr._util import _raise_if_object_series
 
 from dask import config
 from dask.dataframe.core import is_dataframe_like
+from dask.dataframe.dispatch import is_categorical_dtype
 
 import cudf
+
+_LEGACY_WORKAROUND = (
+    "To enable the 'legacy' dask-cudf API, set the "
+    "global 'dataframe.query-planning' config to "
+    "`False` before dask is imported. This can also "
+    "be done by setting an environment variable: "
+    "`DASK_DATAFRAME__QUERY_PLANNING=False` "
+)
+
 
 ##
 ## Custom collection classes
@@ -72,6 +82,24 @@ class DataFrame(DXDataFrame, CudfFrameBase):
         with config.set({"dataframe.backend": "cudf"}):
             return DXDataFrame.from_dict(*args, **kwargs)
 
+    def sort_values(
+        self,
+        by,
+        **kwargs,
+    ):
+        # Raise if the first column is categorical, otherwise the
+        # upstream divisions logic may produce errors
+        # (See: https://github.com/rapidsai/cudf/issues/11795)
+        check_by = by[0] if isinstance(by, list) else by
+        if is_categorical_dtype(self.dtypes.get(check_by, None)):
+            raise NotImplementedError(
+                "Dask-cudf does not support sorting on categorical "
+                "columns when query-planning is enabled. Please use "
+                "the legacy API for now."
+                f"\n{_LEGACY_WORKAROUND}",
+            )
+        return super().sort_values(by, **kwargs)
+
     def groupby(
         self,
         by,
@@ -87,6 +115,21 @@ class DataFrame(DXDataFrame, CudfFrameBase):
             raise ValueError(
                 f"`by` must be a column name or list of columns, got {by}."
             )
+
+        if "as_index" in kwargs:
+            msg = (
+                "The `as_index` argument is now deprecated. All groupby "
+                "results will be consistent with `as_index=True`."
+            )
+
+            if kwargs.pop("as_index") is not True:
+                raise NotImplementedError(
+                    f"{msg} Please reset the index after aggregating, or "
+                    "use the legacy API if `as_index=False` is required.\n"
+                    f"{_LEGACY_WORKAROUND}"
+                )
+            else:
+                warnings.warn(msg, FutureWarning)
 
         return GroupBy(
             self,

@@ -2824,13 +2824,7 @@ def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
     ]
     pa_chunk_array = pa.chunked_array(np_list_data)
 
-    expect = pd.Series(pa_chunk_array.to_pandas())
-    if cudf.api.types.is_datetime64_dtype(
-        data_type
-    ) or cudf.api.types.is_timedelta64_dtype(data_type):
-        # Workaround for an Arrow Bug:
-        # https://github.com/apache/arrow/issues/34462
-        expect = expect.astype(data_type)
+    expect = pa_chunk_array.to_pandas()
     got = cudf.Series(pa_chunk_array)
 
     assert_eq(expect, got)
@@ -2845,12 +2839,6 @@ def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
     )
 
     expect = pa_table.to_pandas()
-    if cudf.api.types.is_datetime64_dtype(
-        data_type
-    ) or cudf.api.types.is_timedelta64_dtype(data_type):
-        # Workaround for an Arrow Bug:
-        # https://github.com/apache/arrow/issues/34462
-        expect = expect.astype(data_type)
     got = cudf.DataFrame.from_arrow(pa_table)
 
     assert_eq(expect, got)
@@ -3206,6 +3194,14 @@ def test_reset_index_unnamed(
         expect = pdf
         got = gdf
     assert_eq(expect, got)
+
+
+def test_reset_index_invalid_level():
+    with pytest.raises(IndexError):
+        cudf.DataFrame([1]).reset_index(level=2)
+
+    with pytest.raises(IndexError):
+        pd.DataFrame([1]).reset_index(level=2)
 
 
 @pytest.mark.parametrize(
@@ -4012,44 +4008,28 @@ def test_diff(dtype, period, data_empty):
 
 @pytest.mark.parametrize("df", _dataframe_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
-def test_dataframe_isnull_isna(df, nan_as_null):
+@pytest.mark.parametrize("api_call", ["isnull", "isna", "notna", "notnull"])
+def test_dataframe_isnull_isna_and_reverse(df, nan_as_null, api_call):
+    def detect_nan(x):
+        # Check if the input is a float and if it is nan
+        return x.apply(lambda v: isinstance(v, float) and np.isnan(v))
+
+    nan_contains = df.select_dtypes(object).apply(detect_nan)
     if nan_as_null is False and (
-        df.select_dtypes(object).isna().any().any()
-        and not df.select_dtypes(object).isna().all().all()
+        nan_contains.any().any() and not nan_contains.all().all()
     ):
         with pytest.raises(MixedTypeError):
             cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
     else:
         gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
 
-        assert_eq(df.isnull(), gdf.isnull())
-        assert_eq(df.isna(), gdf.isna())
+        assert_eq(getattr(df, api_call)(), getattr(gdf, api_call)())
 
         # Test individual columns
         for col in df:
-            assert_eq(df[col].isnull(), gdf[col].isnull())
-            assert_eq(df[col].isna(), gdf[col].isna())
-
-
-@pytest.mark.parametrize("df", _dataframe_na_data())
-@pytest.mark.parametrize("nan_as_null", [True, False, None])
-def test_dataframe_notna_notnull(df, nan_as_null):
-    if nan_as_null is False and (
-        df.select_dtypes(object).isna().any().any()
-        and not df.select_dtypes(object).isna().all().all()
-    ):
-        with pytest.raises(MixedTypeError):
-            cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
-    else:
-        gdf = cudf.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
-
-        assert_eq(df.notnull(), gdf.notnull())
-        assert_eq(df.notna(), gdf.notna())
-
-        # Test individual columns
-        for col in df:
-            assert_eq(df[col].notnull(), gdf[col].notnull())
-            assert_eq(df[col].notna(), gdf[col].notna())
+            assert_eq(
+                getattr(df[col], api_call)(), getattr(gdf[col], api_call)()
+            )
 
 
 def test_ndim():
@@ -10986,3 +10966,49 @@ def test_squeeze(axis, data):
     result = df.squeeze(axis=axis)
     expected = df.to_pandas().squeeze(axis=axis)
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("column", [range(1), np.array([1], dtype=np.int8)])
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda df: df.where(df < 2, 2),
+        lambda df: df.nans_to_nulls(),
+        lambda df: df.isna(),
+        lambda df: df.notna(),
+        lambda df: abs(df),
+        lambda df: -df,
+        lambda df: ~df,
+    ],
+)
+def test_op_preserves_column_metadata(column, operation):
+    df = cudf.DataFrame([1], columns=cudf.Index(column))
+    result = operation(df).columns
+    expected = pd.Index(column)
+    pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+def test_dataframe_init_with_nans():
+    with cudf.option_context("mode.pandas_compatible", True):
+        gdf = cudf.DataFrame({"a": [1, 2, 3, np.nan]})
+    assert gdf["a"].dtype == np.dtype("float64")
+    pdf = pd.DataFrame({"a": [1, 2, 3, np.nan]})
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("dtype1", ["int16", "float32"])
+@pytest.mark.parametrize("dtype2", ["int16", "float32"])
+def test_dataframe_loc_int_float(dtype1, dtype2):
+    df = cudf.DataFrame(
+        {"a": [10, 11, 12, 13, 14]},
+        index=cudf.Index([1, 2, 3, 4, 5], dtype=dtype1),
+    )
+    pdf = df.to_pandas()
+
+    gidx = cudf.Index([2, 3, 4], dtype=dtype2)
+    pidx = gidx.to_pandas()
+
+    actual = df.loc[gidx]
+    expected = pdf.loc[pidx]
+
+    assert_eq(actual, expected, check_index_type=True, check_dtype=True)

@@ -3,16 +3,7 @@
 from __future__ import annotations
 
 import functools
-from typing import (
-    Any,
-    Callable,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-    cast,
-)
+from typing import Any, Callable, Optional, Sequence, Tuple, Union, cast
 
 import cupy as cp
 import numpy as np
@@ -37,7 +28,7 @@ from cudf.api.types import (
     is_integer_dtype,
     is_scalar,
 )
-from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
+from cudf.core.buffer import Buffer
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -47,6 +38,7 @@ from cudf.core.column import (
 )
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
+from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     min_column_type,
     min_signed_type,
@@ -116,15 +108,14 @@ class NumericalColumn(NumericalBaseColumn):
         # Handles improper item types
         # Fails if item is of type None, so the handler.
         try:
-            if np.can_cast(item, self.dtype):
-                item = self.dtype.type(item)
-            else:
+            search_item = self.dtype.type(item)
+            if search_item != item and self.dtype.kind != "f":
                 return False
         except (TypeError, ValueError):
             return False
         # TODO: Use `scalar`-based `contains` wrapper
         return libcudf.search.contains(
-            self, column.as_column([item], dtype=self.dtype)
+            self, column.as_column([search_item], dtype=self.dtype)
         ).any()
 
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
@@ -194,30 +185,6 @@ class NumericalColumn(NumericalBaseColumn):
         if out:
             self._mimic_inplace(out, inplace=True)
 
-    @property
-    def __cuda_array_interface__(self) -> Mapping[str, Any]:
-        output = {
-            "shape": (len(self),),
-            "strides": (self.dtype.itemsize,),
-            "typestr": self.dtype.str,
-            "data": (self.data_ptr, False),
-            "version": 1,
-        }
-
-        if self.nullable and self.has_nulls():
-            # Create a simple Python object that exposes the
-            # `__cuda_array_interface__` attribute here since we need to modify
-            # some of the attributes from the numba device array
-            output["mask"] = cuda_array_interface_wrapper(
-                ptr=self.mask_ptr,
-                size=len(self),
-                owner=self.mask,
-                readonly=True,
-                typestr="<t1",
-            )
-
-        return output
-
     def unary_operator(self, unaryop: Union[str, Callable]) -> ColumnBase:
         if callable(unaryop):
             return libcudf.transform.transform(self, unaryop)
@@ -282,6 +249,7 @@ class NumericalColumn(NumericalBaseColumn):
             "__eq__",
             "__ne__",
             "NULL_EQUALS",
+            "NULL_NOT_EQUALS",
         }:
             out_dtype = "bool"
 
@@ -437,10 +405,30 @@ class NumericalColumn(NumericalBaseColumn):
         self, values: Sequence
     ) -> Tuple[ColumnBase, ColumnBase]:
         lhs = cast("cudf.core.column.ColumnBase", self)
-        rhs = as_column(values, nan_as_null=False)
-
-        if isinstance(rhs, NumericalColumn):
-            rhs = rhs.astype(dtype=self.dtype)
+        try:
+            rhs = as_column(values, nan_as_null=False)
+        except (MixedTypeError, TypeError) as e:
+            # There is a corner where `values` can be of `object` dtype
+            # but have values of homogeneous type.
+            inferred_dtype = cudf.api.types.infer_dtype(values)
+            if (
+                self.dtype.kind in {"i", "u"} and inferred_dtype == "integer"
+            ) or (
+                self.dtype.kind == "f"
+                and inferred_dtype in {"floating", "integer"}
+            ):
+                rhs = as_column(values, nan_as_null=False, dtype=self.dtype)
+            elif self.dtype.kind == "f" and inferred_dtype == "integer":
+                rhs = as_column(values, nan_as_null=False, dtype="int")
+            elif (
+                self.dtype.kind in {"i", "u"} and inferred_dtype == "floating"
+            ):
+                rhs = as_column(values, nan_as_null=False, dtype="float")
+            else:
+                raise e
+        else:
+            if isinstance(rhs, NumericalColumn):
+                rhs = rhs.astype(dtype=self.dtype)
 
         if lhs.null_count == len(lhs):
             lhs = lhs.astype(rhs.dtype)

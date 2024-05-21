@@ -218,3 +218,8 @@ def test_contains_tz_aware(item, expected):
     dti = cudf.date_range("2020", periods=2, freq="D").tz_localize("UTC")
     result = item in dti
     assert result == expected
+
+
+def test_tz_convert_naive_typeerror():
+    with pytest.raises(TypeError):
+        cudf.date_range("2020", periods=2, freq="D").tz_convert(None)

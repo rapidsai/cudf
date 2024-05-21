@@ -31,12 +31,8 @@ constexpr int rolling_buf_size  = decode_block_size * 2;
 constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<decode_block_size>();
 
 template <bool nullable, typename level_t, typename state_buf>
-static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(int32_t target_value_count,
-                                                                page_state_s* s,
-                                                                state_buf* sb,
-                                                                level_t const* const def,
-                                                                int t,
-                                                                bool nullable_with_nulls)
+static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(
+  int32_t target_value_count, page_state_s* s, state_buf* sb, level_t const* const def, int t)
 {
   constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
   constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
@@ -63,13 +59,9 @@ static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(int32_t target_v
     // definition level. only need to process for nullable columns
     int d = 0;
     if constexpr (nullable) {
-      if (nullable_with_nulls) {
-        d = t < batch_size
-              ? static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)])
-              : -1;
-      } else {
-        d = t < batch_size ? 1 : -1;
-      }
+      d = t < batch_size
+            ? static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)])
+            : -1;
     }
 
     int const thread_value_count = t + 1;
@@ -426,17 +418,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   while (s->error == 0 && processed_count < s->page.num_input_values) {
     int next_valid_count;
 
-    // only need to process definition levels if this is a nullable column
-    if (nullable) {
-      if (nullable_with_nulls) {
-        processed_count += def_decoder.decode_next(t);
-        __syncthreads();
-      } else {
-        processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
-      }
+    // only need to process definition levels if the column has nulls
+    if (nullable_with_nulls) {
+      processed_count += def_decoder.decode_next(t);
+      __syncthreads();
 
-      next_valid_count = gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(
-        processed_count, s, sb, def, t, nullable_with_nulls);
+      next_valid_count =
+        gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(processed_count, s, sb, def, t);
     }
     // if we wanted to split off the skip_rows/num_rows case into a separate kernel, we could skip
     // this function call entirely since all it will ever generate is a mapping of (i -> i) for
@@ -444,7 +432,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     else {
       processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
       next_valid_count = gpuUpdateValidityOffsetsAndRowIndicesFlat<false, level_t>(
-        processed_count, s, sb, nullptr, t, false);
+        processed_count, s, sb, nullptr, t);
     }
     __syncthreads();
 
@@ -547,18 +535,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   while (s->error == 0 && processed_count < s->page.num_input_values) {
     int next_valid_count;
 
-    // only need to process definition levels if this is a nullable column
-    if (nullable) {
-      if (nullable_with_nulls) {
-        processed_count += def_decoder.decode_next(t);
-        __syncthreads();
-      } else {
-        processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
-      }
+    // only need to process definition levels if the column has nulls
+    if (nullable_with_nulls) {
+      processed_count += def_decoder.decode_next(t);
+      __syncthreads();
 
       // count of valid items in this batch
-      next_valid_count = gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(
-        processed_count, s, sb, def, t, nullable_with_nulls);
+      next_valid_count =
+        gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(processed_count, s, sb, def, t);
     }
     // if we wanted to split off the skip_rows/num_rows case into a separate kernel, we could skip
     // this function call entirely since all it will ever generate is a mapping of (i -> i) for
@@ -566,7 +550,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     else {
       processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
       next_valid_count = gpuUpdateValidityOffsetsAndRowIndicesFlat<false, level_t>(
-        processed_count, s, sb, nullptr, t, false);
+        processed_count, s, sb, nullptr, t);
     }
     __syncthreads();
 
@@ -671,17 +655,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   while (s->error == 0 && processed_count < s->page.num_input_values) {
     int next_valid_count;
 
-    // only need to process definition levels if this is a nullable column
-    if (nullable) {
-      if (nullable_with_nulls) {
-        processed_count += def_decoder.decode_next(t);
-        __syncthreads();
-      } else {
-        processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
-      }
+    // only need to process definition levels if the column has nulls
+    if (nullable_with_nulls) {
+      processed_count += def_decoder.decode_next(t);
+      __syncthreads();
 
-      next_valid_count = gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(
-        processed_count, s, sb, def, t, nullable_with_nulls);
+      next_valid_count =
+        gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(processed_count, s, sb, def, t);
     }
     // if we wanted to split off the skip_rows/num_rows case into a separate kernel, we could skip
     // this function call entirely since all it will ever generate is a mapping of (i -> i) for
@@ -689,7 +669,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     else {
       processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
       next_valid_count = gpuUpdateValidityOffsetsAndRowIndicesFlat<false, level_t>(
-        processed_count, s, sb, nullptr, t, false);
+        processed_count, s, sb, nullptr, t);
     }
     __syncthreads();
 

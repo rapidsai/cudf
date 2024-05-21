@@ -504,7 +504,6 @@ def test_groupby_apply_jit_unary_reductions(
     func, dtype, dataset, groupby_jit_datasets
 ):
     dataset = groupby_jit_datasets[dataset]
-
     groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
 
 
@@ -1891,9 +1890,6 @@ def test_groupby_nth(n, by):
     assert_groupby_results_equal(expect, got, check_dtype=False)
 
 
-@pytest.mark.xfail(
-    reason="https://github.com/pandas-dev/pandas/issues/43209",
-)
 def test_raise_data_error():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
     gdf = cudf.from_pandas(pdf)
@@ -1904,12 +1900,13 @@ def test_raise_data_error():
     )
 
 
-def test_drop_unsupported_multi_agg():
+def test_multi_agg():
     gdf = cudf.DataFrame(
         {"a": [1, 1, 2, 2], "b": [1, 2, 3, 4], "c": ["a", "b", "c", "d"]}
     )
+    pdf = gdf.to_pandas()
     assert_groupby_results_equal(
-        gdf.groupby("a").agg(["count", "mean"]),
+        pdf.groupby("a").agg({"b": ["count", "mean"], "c": ["count"]}),
         gdf.groupby("a").agg({"b": ["count", "mean"], "c": ["count"]}),
     )
 
@@ -3852,3 +3849,39 @@ def test_group_by_reduce_numeric_only(by, data, func):
     )
     result = getattr(df.groupby(by, sort=True), func)(numeric_only=True)
     assert_eq(expected, result)
+
+
+@pytest.mark.parametrize(
+    "op", ["cummax", "cummin", "cumprod", "cumsum", "mean", "median"]
+)
+def test_group_by_raises_string_error(op):
+    df = cudf.DataFrame({"a": [1, 2, 3, 4, 5], "b": ["a", "b", "c", "d", "e"]})
+
+    with pytest.raises(TypeError):
+        df.groupby(df.a).agg(op)
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        "cummax",
+        "cummin",
+        "cumprod",
+        "cumsum",
+        "mean",
+        "median",
+        "prod",
+        "sum",
+        list,
+    ],
+)
+def test_group_by_raises_category_error(op):
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5],
+            "b": cudf.Series(["a", "b", "c", "d", "e"], dtype="category"),
+        }
+    )
+
+    with pytest.raises(TypeError):
+        df.groupby(df.a).agg(op)

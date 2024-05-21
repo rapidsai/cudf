@@ -57,8 +57,9 @@ struct filter_fn {
   rmm::device_uvector<char_range>::iterator table_begin;
   rmm::device_uvector<char_range>::iterator table_end;
   string_view const d_replacement;
-  int32_t* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   /**
    * @brief Return true if this character should be removed.
@@ -87,7 +88,7 @@ struct filter_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     auto const d_str = d_strings.element<string_view>(idx);
@@ -104,7 +105,7 @@ struct filter_fn {
       else
         nbytes += d_newchar.size_bytes() - char_size;
     }
-    if (!out_ptr) d_offsets[idx] = nbytes;
+    if (!out_ptr) { d_sizes[idx] = nbytes; }
   }
 };
 
@@ -140,8 +141,7 @@ std::unique_ptr<column> filter_characters(
 
   // this utility calls the strip_fn to build the offsets and chars columns
   filter_fn ffn{*d_strings, keep_characters, table.begin(), table.end(), d_replacement};
-  auto [offsets_column, chars] =
-    cudf::strings::detail::make_strings_children(ffn, strings.size(), stream, mr);
+  auto [offsets_column, chars] = make_strings_children(ffn, strings.size(), stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),

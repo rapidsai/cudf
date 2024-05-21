@@ -52,13 +52,14 @@ struct translate_fn {
   column_device_view const d_strings;
   rmm::device_uvector<translate_table>::iterator table_begin;
   rmm::device_uvector<translate_table>::iterator table_end;
-  int32_t* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     string_view const d_str = d_strings.element<string_view>(idx);
@@ -80,7 +81,7 @@ struct translate_fn {
       }
       if (chr && out_ptr) out_ptr += from_char_utf8(chr, out_ptr);
     }
-    if (!d_chars) d_offsets[idx] = bytes;
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 

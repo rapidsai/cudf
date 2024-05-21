@@ -14,17 +14,23 @@ from libcpp.vector cimport vector
 import datetime
 from collections import OrderedDict
 
-cimport cudf._lib.cpp.lists.lists_column_view as cpp_lists_column_view
+cimport cudf._lib.pylibcudf.libcudf.lists.lists_column_view as cpp_lists_column_view
 
 try:
     import ujson as json
 except ImportError:
     import json
 
-cimport cudf._lib.cpp.io.types as cudf_io_types
+cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.io.data_sink cimport data_sink
-from cudf._lib.cpp.io.orc cimport (
+from cudf._lib.io.datasource cimport NativeFileDatasource
+from cudf._lib.io.utils cimport (
+    make_sink_info,
+    make_source_info,
+    update_column_struct_field_names,
+)
+from cudf._lib.pylibcudf.libcudf.io.data_sink cimport data_sink
+from cudf._lib.pylibcudf.libcudf.io.orc cimport (
     chunked_orc_writer_options,
     orc_chunked_writer,
     orc_reader_options,
@@ -32,7 +38,7 @@ from cudf._lib.cpp.io.orc cimport (
     read_orc as libcudf_read_orc,
     write_orc as libcudf_write_orc,
 )
-from cudf._lib.cpp.io.orc_metadata cimport (
+from cudf._lib.pylibcudf.libcudf.io.orc_metadata cimport (
     binary_statistics,
     bucket_statistics,
     column_statistics,
@@ -47,7 +53,7 @@ from cudf._lib.cpp.io.orc_metadata cimport (
     string_statistics,
     timestamp_statistics,
 )
-from cudf._lib.cpp.io.types cimport (
+from cudf._lib.pylibcudf.libcudf.io.types cimport (
     column_in_metadata,
     compression_type,
     sink_info,
@@ -55,14 +61,8 @@ from cudf._lib.cpp.io.types cimport (
     table_input_metadata,
     table_with_metadata,
 )
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport data_type, size_type, type_id
-from cudf._lib.io.datasource cimport NativeFileDatasource
-from cudf._lib.io.utils cimport (
-    make_sink_info,
-    make_source_info,
-    update_column_struct_field_names,
-)
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.types cimport data_type, size_type, type_id
 from cudf._lib.variant cimport get_if as std_get_if, holds_alternative
 
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
@@ -472,11 +472,11 @@ cdef int64_t get_skiprows_arg(object arg) except*:
         raise TypeError("skiprows must be an int >= 0")
     return <int64_t> arg
 
-cdef size_type get_num_rows_arg(object arg) except*:
+cdef int64_t get_num_rows_arg(object arg) except*:
     arg = -1 if arg is None else arg
     if not isinstance(arg, int) or arg < -1:
         raise TypeError("num_rows must be an int >= -1")
-    return <size_type> arg
+    return <int64_t> arg
 
 
 cdef orc_reader_options make_orc_reader_options(
@@ -484,7 +484,7 @@ cdef orc_reader_options make_orc_reader_options(
     object column_names,
     object stripes,
     int64_t skip_rows,
-    size_type num_rows,
+    int64_t num_rows,
     type_id timestamp_type,
     bool use_index
 ) except*:

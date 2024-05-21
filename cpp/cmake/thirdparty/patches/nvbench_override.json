@@ -1,9 +1,0 @@
-
-{
-  "packages" : {
-    "nvbench" : {
-      "git_url": "https://github.com/NVIDIA/nvbench.git",
-      "git_tag": "555d628e9b250868c9da003e4407087ff1982e8e"
-    }
-  }
-}
