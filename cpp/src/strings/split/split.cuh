@@ -327,7 +327,6 @@ CUDF_KERNEL void count_delimiters_kernel(Tokenizer tokenizer,
   for (auto i = byte_idx; (i < (byte_idx + bytes_per_thread)) && (i < chars_bytes); ++i) {
     count += tokenizer.is_delimiter(i, d_offsets, chars_bytes);
   }
-  __syncthreads();
   auto const total = block_reduce(temp_storage).Reduce(count, cub::Sum());
 
   if ((lane_idx == 0) && (total > 0)) {
