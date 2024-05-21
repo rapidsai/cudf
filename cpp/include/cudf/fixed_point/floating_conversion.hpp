@@ -225,13 +225,11 @@ struct floating_converter {
  * @param value The integer whose bits are being counted
  * @return The number of significant bits: the # of bits - # of leading zeroes
  */
-template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
+template <typename T,
+          CUDF_ENABLE_IF(std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> ||
+                         std::is_same_v<T, __uint128_t>)>
 CUDF_HOST_DEVICE inline int count_significant_bits(T value)
 {
-  static_assert(
-    std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> || std::is_same_v<T, __uint128_t>,
-    "Unimplemented type");
-
 #ifdef __CUDA_ARCH__
   if constexpr (std::is_same_v<T, uint64_t>) {
     return 64 - __clzll(static_cast<int64_t>(value));
