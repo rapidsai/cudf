@@ -351,9 +351,9 @@ std::unique_ptr<cudf::scalar> from_arrow(
 /**
  * @brief Create `cudf::table` from given ArrowDeviceArray input
  *
- * @throws cudf::logic_error if either schema or input are NULL
+ * @throws std::invalid_argument if either schema or input are NULL
  *
- * @throws cudf::logic_error if the device_type is not `ARROW_DEVICE_CPU`
+ * @throws std::invalid_argument if the device_type is not `ARROW_DEVICE_CPU`
  *
  * @throws cudf::data_type_error if the input array is not a struct array,
  * non-struct arrays should be passed to `from_arrow_host_column` instead.
@@ -373,9 +373,9 @@ std::unique_ptr<table> from_arrow_host(
 /**
  * @brief Create `cudf::column` from given ArrowDeviceArray input
  *
- * @throws cudf::logic_error if either schema or input are NULL
+ * @throws std::invalid_argument if either schema or input are NULL
  *
- * @throws cudf::logic_error if the device_type is not `ARROW_DEVICE_CPU`
+ * @throws std::invalid_argument if the device_type is not `ARROW_DEVICE_CPU`
  *
  * @throws cudf::data_type_error if input arrow data type is not supported in cudf.
  *
@@ -383,7 +383,7 @@ std::unique_ptr<table> from_arrow_host(
  * @param input `ArrowDeviceArray` pointer to object owning the Arrow data
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to perform cuda allocation
- * @return cudf table generated from the given Arrow data
+ * @return cudf column generated from the given Arrow data
  */
 std::unique_ptr<column> from_arrow_host_column(
   ArrowSchema const* schema,
@@ -441,7 +441,7 @@ using unique_table_view_t =
  * `ArrowDeviceArray` after it is no longer needed, and that the `cudf::table_view` is not
  * accessed after this happens.
  *
- * @throws cudf::logic_error if device_type is not `ARROW_DEVICE_CUDA`, `ARROW_DEVICE_CUDA_HOST`
+ * @throws std::invalid_argument if device_type is not `ARROW_DEVICE_CUDA`, `ARROW_DEVICE_CUDA_HOST`
  * or `ARROW_DEVICE_CUDA_MANAGED`
  *
  * @throws cudf::data_type_error if the input array is not a struct array, non-struct
@@ -489,7 +489,7 @@ using unique_column_view_t =
  * `ArrowDeviceArray` after it is no longer needed, and that the `cudf::column_view` is not
  * accessed after this happens.
  *
- * @throws cudf::logic_error if device_type is not `ARROW_DEVICE_CUDA`, `ARROW_DEVICE_CUDA_HOST`
+ * @throws std::invalid_argument if device_type is not `ARROW_DEVICE_CUDA`, `ARROW_DEVICE_CUDA_HOST`
  * or `ARROW_DEVICE_CUDA_MANAGED`
  *
  * @throws cudf::data_type_error input arrow data type is not supported.

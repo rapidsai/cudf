@@ -120,6 +120,12 @@ struct dispatch_copy_from_arrow_host {
 // forward declaration is needed because `type_dispatch` instantiates the
 // dispatch_copy_from_arrow_host struct causing a recursive situation for struct,
 // dictionary and list_view types.
+//
+// This function is simply a convenience wrapper around the dispatch functor with
+// some extra handling to avoid having to reproduce it for all of the nested types.
+// It also allows us to centralize the location where the recursive calls happen
+// so that we only need to forward declare this one function, rather than multiple
+// functions which handle the overloads for nested types (list, struct, etc.)
 std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
                                         ArrowArray const* input,
                                         data_type type,
@@ -168,7 +174,9 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::string_v
 {
   if (input->length == 0) { return make_empty_column(type_id::STRING); }
 
-  const void* offset_buffers[2] = {nullptr, input->buffers[fixed_width_data_buffer_idx]};
+  // offsets column should contain no nulls so we can put nullptr for the bitmask
+  // nulls are tracked in the parent string column itself, not in the offsets
+  void const* offset_buffers[2] = {nullptr, input->buffers[fixed_width_data_buffer_idx]};
   ArrowArray offsets_array      = {
          .length     = input->offset + input->length + 1,
          .null_count = 0,
@@ -178,9 +186,11 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::string_v
          .buffers    = offset_buffers,
   };
 
+  // chars_column does not contain any nulls, they are tracked by the parent string column
+  // itself instead. So we pass nullptr for the validity bitmask.
   size_type const char_data_length =
     reinterpret_cast<int32_t const*>(offset_buffers[1])[input->length + input->offset];
-  const void* char_buffers[2] = {nullptr, input->buffers[2]};
+  void const* char_buffers[2] = {nullptr, input->buffers[2]};
   ArrowArray char_array       = {
           .length     = char_data_length,
           .null_count = 0,
@@ -196,6 +206,8 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::string_v
   nanoarrow::UniqueSchema char_data_schema;
   NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(char_data_schema.get(), NANOARROW_TYPE_INT8));
 
+  // leverage the dispatch overloads for int32 and char(int8) to generate the child
+  // offset and char data columns for us.
   ArrowSchemaView view;
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, offset_schema.get(), nullptr));
   auto offsets_column =
@@ -270,27 +282,28 @@ template <>
 std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::struct_view>(
   ArrowSchemaView* schema, ArrowArray const* input, data_type type, bool skip_mask)
 {
-  char buffer[1024];
-
   std::vector<std::unique_ptr<column>> child_columns;
-  std::transform(input->children,
-                 input->children + input->n_children,
-                 schema->schema->children,
-                 std::back_inserter(child_columns),
-                 [this, input, &buffer](ArrowArray const* child, ArrowSchema const* child_schema) {
-                   ArrowSchemaView view;
-                   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, child_schema, nullptr));
-                   auto type = arrow_to_cudf_type(&view);
+  std::transform(
+    input->children,
+    input->children + input->n_children,
+    schema->schema->children,
+    std::back_inserter(child_columns),
+    [this, input](ArrowArray const* child, ArrowSchema const* child_schema) {
+      ArrowSchemaView view;
+      NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, child_schema, nullptr));
+      auto type = arrow_to_cudf_type(&view);
 
-                   auto out = get_column_copy(&view, child, type, false, stream, mr);
-                   return std::make_unique<column>(
-                     cudf::detail::slice(out->view(),
-                                         static_cast<size_type>(input->offset),
-                                         static_cast<size_type>(input->offset + input->length),
-                                         stream),
-                     stream,
-                     mr);
-                 });
+      auto out = get_column_copy(&view, child, type, false, stream, mr);
+      return input->offset == 0
+               ? std::move(out)
+               : std::make_unique<column>(
+                   cudf::detail::slice(out->view(),
+                                       static_cast<size_type>(input->offset),
+                                       static_cast<size_type>(input->offset + input->length),
+                                       stream),
+                   stream,
+                   mr);
+    });
 
   auto out_mask = std::move(*(get_mask_buffer(input)));
   if (input->buffers[validity_buffer_idx] != nullptr) {
@@ -375,9 +388,11 @@ std::unique_ptr<table> from_arrow_host(ArrowSchema const* schema,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(schema != nullptr && input != nullptr,
-               "input ArrowSchema and ArrowDeviceArray must not be NULL");
+               "input ArrowSchema and ArrowDeviceArray must not be NULL",
+               std::invalid_argument);
   CUDF_EXPECTS(input->device_type == ARROW_DEVICE_CPU,
-               "ArrowDeviceArray must have CPU device type for `from_arrow_host`");
+               "ArrowDeviceArray must have CPU device type for `from_arrow_host`",
+               std::invalid_argument);
 
   ArrowSchemaView view;
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema, nullptr));
@@ -409,9 +424,11 @@ std::unique_ptr<column> from_arrow_host_column(ArrowSchema const* schema,
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(schema != nullptr && input != nullptr,
-               "input ArrowSchema and ArrowDeviceArray must not be NULL");
+               "input ArrowSchema and ArrowDeviceArray must not be NULL",
+               std::invalid_argument);
   CUDF_EXPECTS(input->device_type == ARROW_DEVICE_CPU,
-               "ArrowDeviceArray must have CPU device type for `from_arrow_host_column`");
+               "ArrowDeviceArray must have CPU device type for `from_arrow_host_column`",
+               std::invalid_argument);
 
   ArrowSchemaView view;
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema, nullptr));
