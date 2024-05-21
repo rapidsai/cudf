@@ -18,9 +18,9 @@
 
 #include <cudf_test/file_utilities.hpp>
 
+#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/types.hpp>
 
 #include <rmm/device_uvector.hpp>
 
@@ -28,6 +28,7 @@
 enum class io_type {
   FILEPATH,       // Input/output are both files
   HOST_BUFFER,    // Input/output are both host buffers (pageable)
+  PINNED_BUFFER,  // Input is a pinned host buffer, output is a host buffer (pageable)
   DEVICE_BUFFER,  // Input is a device buffer, output is a host buffer (pageable)
   VOID
 };
@@ -74,6 +75,7 @@ class cuio_source_sink_pair {
 
   io_type const type;
   std::vector<char> h_buffer;
+  cudf::detail::pinned_host_vector<char> pinned_buffer;
   rmm::device_uvector<std::byte> d_buffer;
   std::string const file_name;
   std::unique_ptr<cudf::io::data_sink> void_sink;

@@ -61,6 +61,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     switch (value) {
       case io_type::FILEPATH: return "FILEPATH";
       case io_type::HOST_BUFFER: return "HOST_BUFFER";
+      case io_type::PINNED_BUFFER: return "PINNED_BUFFER";
       case io_type::DEVICE_BUFFER: return "DEVICE_BUFFER";
       case io_type::VOID: return "VOID";
       default: return "Unknown";
