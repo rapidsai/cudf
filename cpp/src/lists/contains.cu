@@ -105,10 +105,9 @@ __device__ auto element_index_pair_iter(size_type const size)
   auto const end   = thrust::make_counting_iterator(size);
 
   if constexpr (forward) {
-    return thrust::make_pair(begin, end);
+    return thrust::pair{begin, end};
   } else {
-    return thrust::make_pair(thrust::make_reverse_iterator(end),
-                             thrust::make_reverse_iterator(begin));
+    return thrust::pair{thrust::make_reverse_iterator(end), thrust::make_reverse_iterator(begin)};
   }
 }
 
