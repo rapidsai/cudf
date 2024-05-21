@@ -6,8 +6,10 @@ import collections
 import copy
 import datetime
 import operator
+import os
 import pathlib
 import pickle
+import subprocess
 import tempfile
 import types
 from io import BytesIO, StringIO
@@ -1421,3 +1423,32 @@ def test_holidays_within_dates(holiday, start, expected):
             utc.localize(xpd.Timestamp(start)),
         )
     ) == [utc.localize(dt) for dt in expected]
+
+
+@pytest.mark.parametrize(
+    "env_value",
+    ["", "cuda", "pool", "async", "managed", "managed_pool", "abc"],
+)
+def test_rmm_option_on_import(env_value):
+    data_directory = os.path.dirname(os.path.abspath(__file__))
+    # Create a copy of the current environment variables
+    env = os.environ.copy()
+    env["CUDF_PANDAS_RMM_MODE"] = env_value
+
+    sp_completed = subprocess.run(
+        [
+            "python",
+            "-m",
+            "cudf.pandas",
+            data_directory + "/data/profile_basic.py",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    if env_value in {"cuda", "pool", "async", "managed", "managed_pool"}:
+        assert sp_completed.returncode == 0
+    else:
+        assert sp_completed.returncode == 1
+
+    del env["CUDF_PANDAS_RMM_MODE"]

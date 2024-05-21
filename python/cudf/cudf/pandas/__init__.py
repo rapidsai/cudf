@@ -2,6 +2,8 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
+
 from .magics import load_ipython_extension
 from .profiler import Profiler
 
@@ -20,20 +22,44 @@ def install():
     LOADED = loader is not None
     import os
 
-    if cudf_pandas_mr := os.getenv("CUDF_PANDAS_MEMORY_RESOURCE", None) is not None:
+    if (rmm_mode := os.getenv("CUDF_PANDAS_RMM_MODE", None)) is not None:
         import rmm.mr
+        from rmm._lib.memory_resource import get_free_device_memory
 
-        if cudf_pandas_mr := getattr(rmm.mr, cudf_pandas_mr, None) is not None:
-            from rmm.mr import PoolMemoryResource
+        # Check if a non-default memory resource is set
+        current_mr = rmm.mr.get_current_device_resource()
+        if not isinstance(current_mr, rmm.mr.CudaMemoryResource):
+            warnings.warn(
+                f"cudf.pandas detected an already configured memory resource, ignoring 'CUDF_PANDAS_RMM_MODE'={str(rmm_mode)}",
+                UserWarning,
+            )
 
-            mr = PoolMemoryResource(
-                cudf_pandas_mr(),
-                initial_pool_size=os.getenv(
-                    "CUDF_PANDAS_INITIAL_POOL_SIZE", None
-                ),
-                maximum_pool_size=os.getenv("CUDF_PANDAS_MAX_POOL_SIZE", None),
+        if rmm_mode == "cuda":
+            mr = rmm.mr.CudaMemoryResource()
+            rmm.mr.set_current_device_resource(mr)
+        elif rmm_mode == "pool":
+            rmm.mr.set_current_device_resource(
+                rmm.mr.PoolMemoryResource(
+                    rmm.mr.get_current_device_resource(),
+                    initial_pool_size=get_free_device_memory(80),
+                )
+            )
+        elif rmm_mode == "async":
+            mr = rmm.mr.CudaAsyncMemoryResource(
+                initial_pool_size=get_free_device_memory(80)
             )
             rmm.mr.set_current_device_resource(mr)
+        elif rmm_mode == "managed":
+            mr = rmm.mr.ManagedMemoryResource()
+            rmm.mr.set_current_device_resource(mr)
+        elif rmm_mode == "managed_pool":
+            rmm.reinitialize(
+                managed_memory=True,
+                pool_allocator=True,
+                initial_pool_size=get_free_device_memory(80),
+            )
+        else:
+            raise TypeError(f"Unsupported rmm mode: {rmm_mode}")
 
 
 def pytest_load_initial_conftests(early_config, parser, args):
