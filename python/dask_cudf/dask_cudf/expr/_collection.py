@@ -15,6 +15,7 @@ from dask_expr._util import _raise_if_object_series
 
 from dask import config
 from dask.dataframe.core import is_dataframe_like
+from dask.dataframe.dispatch import is_categorical_dtype
 
 import cudf
 
@@ -80,6 +81,24 @@ class DataFrame(DXDataFrame, CudfFrameBase):
     def from_dict(cls, *args, **kwargs):
         with config.set({"dataframe.backend": "cudf"}):
             return DXDataFrame.from_dict(*args, **kwargs)
+
+    def sort_values(
+        self,
+        by,
+        **kwargs,
+    ):
+        # Raise if the first column is categorical, otherwise the
+        # upstream divisions logic may produce errors
+        # (See: https://github.com/rapidsai/cudf/issues/11795)
+        check_by = by[0] if isinstance(by, list) else by
+        if is_categorical_dtype(self.dtypes.get(check_by, None)):
+            raise NotImplementedError(
+                "Dask-cudf does not support sorting on categorical "
+                "columns when query-planning is enabled. Please use "
+                "the legacy API for now."
+                f"\n{_LEGACY_WORKAROUND}",
+            )
+        return super().sort_values(by, **kwargs)
 
     def groupby(
         self,

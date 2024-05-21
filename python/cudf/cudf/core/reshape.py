@@ -2,10 +2,8 @@
 
 import itertools
 import warnings
-from collections import abc
 from typing import Dict, Optional
 
-import cupy
 import numpy as np
 import pandas as pd
 
@@ -590,7 +588,7 @@ def melt(
 
     # id_vars
     if id_vars is not None:
-        if not isinstance(id_vars, abc.Sequence):
+        if cudf.api.types.is_scalar(id_vars):
             id_vars = [id_vars]
         id_vars = list(id_vars)
         missing = set(id_vars) - set(frame._column_names)
@@ -604,7 +602,7 @@ def melt(
 
     # value_vars
     if value_vars is not None:
-        if not isinstance(value_vars, abc.Sequence):
+        if cudf.api.types.is_scalar(value_vars):
             value_vars = [value_vars]
         value_vars = list(value_vars)
         missing = set(value_vars) - set(frame._column_names)
@@ -658,21 +656,22 @@ def melt(
     # Step 2: add variable
     nval = len(value_vars)
     dtype = min_unsigned_type(nval)
-    temp = cudf.Series(cupy.repeat(cupy.arange(nval, dtype=dtype), N))
 
     if not var_name:
         var_name = "variable"
 
-    mdata[var_name] = cudf.Series(
-        cudf.core.column.build_categorical_column(
-            categories=value_vars,
-            codes=temp._column,
-            mask=temp._column.base_mask,
-            size=temp._column.size,
-            offset=temp._column.offset,
-            ordered=False,
+    if not value_vars:
+        # TODO: Use frame._data.label_dtype when it's more consistently set
+        var_data = cudf.Series(
+            value_vars, dtype=frame._data.to_pandas_index().dtype
         )
-    )
+    else:
+        var_data = (
+            cudf.Series(value_vars)
+            .take(np.repeat(np.arange(nval, dtype=dtype), N))
+            .reset_index(drop=True)
+        )
+    mdata[var_name] = var_data
 
     # Step 3: add values
     mdata[value_name] = cudf.Series._concat(

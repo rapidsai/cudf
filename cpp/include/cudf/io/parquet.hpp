@@ -205,6 +205,31 @@ class parquet_reader_options {
   /**
    * @brief Sets AST based filter for predicate pushdown.
    *
+   * The filter can utilize cudf::ast::column_name_reference to reference a column by its name,
+   * even if it's not necessarily present in the requested projected columns.
+   * To refer to output column indices, you can use cudf::ast::column_reference.
+   *
+   * For a parquet with columns ["A", "B", "C", ... "X", "Y", "Z"],
+   * Example 1: with/without column projection
+   * @code
+   * use_columns({"A", "X", "Z"})
+   * .filter(operation(ast_operator::LESS, column_name_reference{"C"}, literal{100}));
+   * @endcode
+   * Column "C" need not be present in output table.
+   * Example 2: without column projection
+   * @code
+   * filter(operation(ast_operator::LESS, column_reference{1}, literal{100}));
+   * @endcode
+   * Here, `1` will refer to column "B" because output will contain all columns in
+   * order ["A", ..., "Z"].
+   * Example 3: with column projection
+   * @code
+   * use_columns({"A", "Z", "X"})
+   * .filter(operation(ast_operator::LESS, column_reference{1}, literal{100}));
+   * @endcode
+   * Here, `1` will refer to column "Z" because output will contain 3 columns in
+   * order ["A", "Z", "X"].
+   *
    * @param filter AST expression to use as filter
    */
   void set_filter(ast::expression const& filter) { _filter = filter; }
@@ -309,9 +334,7 @@ class parquet_reader_options_builder {
   }
 
   /**
-   * @brief Sets vector of individual row groups to read.
-   *
-   * @param filter Vector of row groups to read
+   * @copydoc parquet_reader_options::set_filter
    * @return this for chaining
    */
   parquet_reader_options_builder& filter(ast::expression const& filter)

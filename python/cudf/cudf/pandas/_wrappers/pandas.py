@@ -107,14 +107,16 @@ class _AccessorAttr:
     """
 
     def __init__(self, typ):
-        self.__typ = typ
+        self._typ = typ
+
+    def __set_name__(self, owner, name):
+        self._name = name
 
     def __get__(self, obj, cls=None):
         if obj is None:
-            return self.__typ
+            return self._typ
         else:
-            # allow __getattr__ to handle this
-            raise AttributeError()
+            return _FastSlowAttribute(self._name).__get__(obj, type(obj))
 
 
 def Timestamp_Timedelta__new__(cls, *args, **kwargs):
@@ -214,6 +216,7 @@ DataFrame = make_final_proxy_type(
         "__dir__": _DataFrame__dir__,
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
+        "_accessors": set(),
     },
 )
 
@@ -236,6 +239,7 @@ Series = make_final_proxy_type(
         "cat": _AccessorAttr(_CategoricalAccessor),
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
+        "_accessors": set(),
     },
 )
 
@@ -273,6 +277,9 @@ Index = make_final_proxy_type(
         "__new__": Index__new__,
         "_constructor": _FastSlowAttribute("_constructor"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "_accessors": set(),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -337,7 +344,11 @@ DatetimeIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+    },
 )
 
 DatetimeArray = make_final_proxy_type(
@@ -346,6 +357,10 @@ DatetimeArray = make_final_proxy_type(
     pd.arrays.DatetimeArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+    },
 )
 
 DatetimeTZDtype = make_final_proxy_type(
@@ -364,20 +379,42 @@ TimedeltaIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
-)
-
-NumpyExtensionArray = make_final_proxy_type(
-    "NumpyExtensionArray",
-    _Unusable,
-    pd.arrays.NumpyExtensionArray,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
     additional_attributes={
-        "_ndarray": _FastSlowAttribute("_ndarray"),
-        "_dtype": _FastSlowAttribute("_dtype"),
+        "__init__": _DELETE,
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
+
+try:
+    from pandas.arrays import NumpyExtensionArray as pd_NumpyExtensionArray
+
+    NumpyExtensionArray = make_final_proxy_type(
+        "NumpyExtensionArray",
+        _Unusable,
+        pd_NumpyExtensionArray,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+        additional_attributes={
+            "_ndarray": _FastSlowAttribute("_ndarray"),
+            "_dtype": _FastSlowAttribute("_dtype"),
+        },
+    )
+
+except ImportError:
+    from pandas.arrays import PandasArray as pd_PandasArray
+
+    PandasArray = make_final_proxy_type(
+        "PandasArray",
+        _Unusable,
+        pd_PandasArray,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+        additional_attributes={
+            "_ndarray": _FastSlowAttribute("_ndarray"),
+            "_dtype": _FastSlowAttribute("_dtype"),
+        },
+    )
 
 TimedeltaArray = make_final_proxy_type(
     "TimedeltaArray",
@@ -385,6 +422,10 @@ TimedeltaArray = make_final_proxy_type(
     pd.arrays.TimedeltaArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+    },
 )
 
 PeriodIndex = make_final_proxy_type(
@@ -394,7 +435,11 @@ PeriodIndex = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+    },
 )
 
 PeriodArray = make_final_proxy_type(
@@ -403,6 +448,11 @@ PeriodArray = make_final_proxy_type(
     pd.arrays.PeriodArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+    },
 )
 
 PeriodDtype = make_final_proxy_type(
@@ -464,6 +514,10 @@ StringArray = make_final_proxy_type(
     pd.arrays.StringArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+    },
 )
 
 StringDtype = make_final_proxy_type(
@@ -472,7 +526,10 @@ StringDtype = make_final_proxy_type(
     pd.StringDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "storage": _FastSlowAttribute("storage"),
+    },
 )
 
 BooleanArray = make_final_proxy_type(
@@ -482,7 +539,9 @@ BooleanArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
 
@@ -502,7 +561,9 @@ IntegerArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -586,7 +647,11 @@ IntervalIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+    },
 )
 
 IntervalArray = make_final_proxy_type(
@@ -595,6 +660,10 @@ IntervalArray = make_final_proxy_type(
     pd.arrays.IntervalArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+    },
 )
 
 IntervalDtype = make_final_proxy_type(
@@ -622,7 +691,9 @@ FloatingArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -798,6 +869,14 @@ try:
         pd_Styler,
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
+        additional_attributes={
+            "css": _FastSlowAttribute("css"),
+            "ctx": _FastSlowAttribute("ctx"),
+            "index": _FastSlowAttribute("ctx"),
+            "data": _FastSlowAttribute("data"),
+            "_display_funcs": _FastSlowAttribute("_display_funcs"),
+            "table_styles": _FastSlowAttribute("table_styles"),
+        },
     )
 except ImportError:
     # Styler requires Jinja to be installed
@@ -813,7 +892,7 @@ def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
     return local_dict, global_dict
 
 
-@register_proxy_func(pd.eval)
+@register_proxy_func(pd.core.computation.eval.eval)
 @nvtx.annotate(
     "CUDF_PANDAS_EVAL",
     color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
@@ -843,6 +922,24 @@ def _eval(
     )
 
 
+_orig_df_eval_method = DataFrame.eval
+
+
+@register_proxy_func(pd.core.accessor.register_dataframe_accessor)
+def _register_dataframe_accessor(name):
+    return pd.core.accessor._register_accessor(name, DataFrame)
+
+
+@register_proxy_func(pd.core.accessor.register_series_accessor)
+def _register_series_accessor(name):
+    return pd.core.accessor._register_accessor(name, Series)
+
+
+@register_proxy_func(pd.core.accessor.register_index_accessor)
+def _register_index_accessor(name):
+    return pd.core.accessor._register_accessor(name, Index)
+
+
 @nvtx.annotate(
     "CUDF_PANDAS_DATAFRAME_EVAL",
     color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
@@ -853,9 +950,12 @@ def _df_eval_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     local_dict, global_dict = _get_eval_locals_and_globals(
         level, local_dict, global_dict
     )
-    return super(type(self), self).__getattr__("eval")(
-        *args, local_dict=local_dict, global_dict=global_dict, **kwargs
+    return _orig_df_eval_method(
+        self, *args, local_dict=local_dict, global_dict=global_dict, **kwargs
     )
+
+
+_orig_query_eval_method = DataFrame.query
 
 
 @nvtx.annotate(
@@ -870,8 +970,8 @@ def _df_query_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     local_dict, global_dict = _get_eval_locals_and_globals(
         level, local_dict, global_dict
     )
-    return super(type(self), self).__getattr__("query")(
-        *args, local_dict=local_dict, global_dict=global_dict, **kwargs
+    return _orig_query_eval_method(
+        self, *args, local_dict=local_dict, global_dict=global_dict, **kwargs
     )
 
 
@@ -1276,6 +1376,7 @@ Minute = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
+
 
 MonthBegin = make_final_proxy_type(
     "MonthBegin",
