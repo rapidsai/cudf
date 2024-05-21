@@ -379,6 +379,8 @@ def test_pickle_round_trip(dataframe):
 
 
 def test_excel_round_trip(dataframe):
+    pytest.importorskip("openpyxl")
+
     pdf, df = dataframe
     excel_pdf = BytesIO()
     excel_cudf_pandas = BytesIO()
@@ -1211,6 +1213,24 @@ def test_func_namespace():
     assert xpd.concat is xpd.core.reshape.concat.concat
 
 
+def test_register_accessor():
+    @xpd.api.extensions.register_dataframe_accessor("xyz")
+    class XYZ:
+        def __init__(self, obj):
+            self._obj = obj
+
+        @property
+        def foo(self):
+            return "spam"
+
+    # the accessor must be registered with the proxy type,
+    # not the underlying fast or slow type
+    assert "xyz" in xpd.DataFrame.__dict__
+
+    df = xpd.DataFrame()
+    assert df.xyz.foo == "spam"
+
+
 def test_pickle_groupby(dataframe):
     pdf, df = dataframe
     pgb = pdf.groupby("a")
@@ -1221,8 +1241,12 @@ def test_pickle_groupby(dataframe):
 
 def test_numpy_extension_array():
     np_array = np.array([0, 1, 2, 3])
-    xarray = xpd.arrays.NumpyExtensionArray(np_array)
-    array = pd.arrays.NumpyExtensionArray(np_array)
+    try:
+        xarray = xpd.arrays.NumpyExtensionArray(np_array)
+        array = pd.arrays.NumpyExtensionArray(np_array)
+    except AttributeError:
+        xarray = xpd.arrays.PandasArray(np_array)
+        array = pd.arrays.PandasArray(np_array)
 
     tm.assert_equal(xarray, array)
 
@@ -1230,6 +1254,18 @@ def test_numpy_extension_array():
 def test_isinstance_base_offset():
     offset = xpd.tseries.frequencies.to_offset("1s")
     assert isinstance(offset, xpd.tseries.offsets.BaseOffset)
+
+
+def test_super_attribute_lookup():
+    # test that we can use super() to access attributes
+    # of the base class when subclassing proxy types
+
+    class Foo(xpd.Series):
+        def max_times_two(self):
+            return super().max() * 2
+
+    s = Foo([1, 2, 3])
+    assert s.max_times_two() == 6
 
 
 def test_floordiv_array_vs_df():

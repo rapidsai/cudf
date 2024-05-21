@@ -145,7 +145,7 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     @property  # type: ignore
-    def ndim(self):  # noqa: D401
+    def ndim(self) -> int:  # noqa: D401
         """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
