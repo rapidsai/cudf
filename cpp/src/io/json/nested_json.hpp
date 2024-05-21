@@ -59,8 +59,8 @@ enum class stack_behavior_t : char {
   PushPopWithoutReset,
 
   /// Opening brackets and braces, [, {, push onto the stack, closing brackets and braces, ], }, pop
-  /// from the stack. Newline characters are considered delimiters and therefore reset to an empty
-  /// stack.
+  /// from the stack. Delimiter characters are passed when the stack context is constructed to
+  /// reset to an empty stack.
   ResetOnDelimiter
 };
 
@@ -198,11 +198,13 @@ namespace detail {
  * within the context of a struct, a '[' represents that it is within the context of an array, and a
  * '_' symbol that it is at the root of the JSON.
  * @param[in] stack_behavior Specifies the stack's behavior
+ * @param[in] delimiter Specifies the delimiter to use as separator for JSON lines input
  * @param[in] stream The cuda stream to dispatch GPU kernels to
  */
 void get_stack_context(device_span<SymbolT const> json_in,
                        SymbolT* d_top_of_stack,
                        stack_behavior_t stack_behavior,
+                       SymbolT delimiter,
                        rmm::cuda_stream_view stream);
 
 /**
