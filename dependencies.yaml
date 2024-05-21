@@ -297,17 +297,17 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - rapids-build-backend ~=0.2.0
+          - rapids-build-backend ~=0.2.1
           - scikit-build-core >=0.7.0
       - output_types: [requirements, pyproject]
         packages:
-          - rapids-build-backend>=0.2.0,<0.3.0.dev0
+          - rapids-build-backend>=0.2.1,<0.3.0.dev0
           - scikit-build-core[pyproject]>=0.7.0
   rapids_build_setuptools:
     common:
       - output_types: [requirements, pyproject]
         packages:
-          - rapids-build-backend>=0.2.0,<0.3.0.dev0
+          - rapids-build-backend>=0.2.1,<0.3.0.dev0
           - setuptools
           - wheel
   build_python_common:
