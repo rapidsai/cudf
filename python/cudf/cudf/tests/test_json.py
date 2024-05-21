@@ -360,7 +360,7 @@ def test_json_lines_basic(json_input, engine):
 def test_nonexistent_json_correct_error(engine):
     json_input = "doesnotexist.json"
     with pytest.raises(FileNotFoundError):
-        cudf.read_json(json_input, engine=engine, lines=True)
+        cudf.read_json(json_input, engine=engine)
 
 
 @pytest.mark.skipif(
