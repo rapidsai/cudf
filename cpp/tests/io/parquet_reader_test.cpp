@@ -1406,6 +1406,56 @@ TEST_F(ParquetReaderTest, FilterIdentity)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *result2.tbl);
 }
 
+TEST_F(ParquetReaderTest, FilterWithColumnProjection)
+{
+  // col_uint32, col_int64, col_double
+  auto [src, filepath] = create_parquet_with_stats("FilterWithColumnProjection.parquet");
+  auto val             = cudf::numeric_scalar<uint32_t>{10};
+  auto lit             = cudf::ast::literal{val};
+  auto col_ref         = cudf::ast::column_name_reference{"col_uint32"};
+  auto col_index       = cudf::ast::column_reference{0};
+  auto filter_expr     = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_index, lit);
+
+  auto predicate = cudf::compute_column(src, filter_expr);
+
+  {  // column_name_reference in parquet filter (not present in column projection)
+    auto read_expr       = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, lit);
+    auto projected_table = cudf::table_view{{src.get_column(2)}};
+    auto expected        = cudf::apply_boolean_mask(projected_table, *predicate);
+
+    auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                       .columns({"col_double"})
+                       .filter(read_expr);
+    auto result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  }
+
+  {  // column_reference in parquet filter (indices as per order of column projection)
+    auto col_index2    = cudf::ast::column_reference{1};
+    auto read_ref_expr = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_index2, lit);
+
+    auto projected_table = cudf::table_view{{src.get_column(2), src.get_column(0)}};
+    auto expected        = cudf::apply_boolean_mask(projected_table, *predicate);
+    auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                       .columns({"col_double", "col_uint32"})
+                       .filter(read_ref_expr);
+    auto result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+  }
+
+  // Error cases
+  {  // column_reference is not same type as literal, column_reference index is out of bounds
+    for (auto const index : {0, 2}) {
+      auto col_index2    = cudf::ast::column_reference{index};
+      auto read_ref_expr = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_index2, lit);
+      auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                         .columns({"col_double", "col_uint32"})
+                         .filter(read_ref_expr);
+      EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
+    }
+  }
+}
+
 TEST_F(ParquetReaderTest, FilterReferenceExpression)
 {
   auto [src, filepath] = create_parquet_with_stats("FilterReferenceExpression.parquet");
