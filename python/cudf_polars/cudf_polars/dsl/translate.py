@@ -174,9 +174,6 @@ def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
             )
 
 
-BOOLEAN_FUNCTIONS: frozenset[str] = frozenset()
-
-
 def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
     """
     Translate a polars-internal expression IR into our representation.
@@ -206,7 +203,14 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
     dtype = dtypes.from_polars(visitor.get_dtype(n))
     if isinstance(node, pl_expr.Function):
         name, *options = node.function_data
-        if name in BOOLEAN_FUNCTIONS:
+        if isinstance(name, pl_expr.StringFunction):
+            return expr.StringFunction(
+                dtype,
+                name,
+                options,
+                *(translate_expr(visitor, n=n) for n in node.input),
+            )
+        elif isinstance(name, pl_expr.BooleanFunction):
             return expr.BooleanFunction(
                 dtype,
                 name,

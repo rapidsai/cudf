@@ -309,7 +309,7 @@ class GroupBy(IR):
         results = [
             req.evaluate(result_subs, mapping=mapping) for req in self.agg_requests
         ]
-        return DataFrame([*result_keys, *results], [])
+        return DataFrame([*result_keys, *results], []).slice(self.options.slice)
 
 
 @dataclass(slots=True)

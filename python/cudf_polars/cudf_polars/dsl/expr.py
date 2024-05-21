@@ -40,6 +40,7 @@ __all__ = [
     "Literal",
     "Col",
     "BooleanFunction",
+    "StringFunction",
     "Sort",
     "SortBy",
     "Gather",
@@ -63,17 +64,30 @@ class AggInfo(NamedTuple):
 
 
 class Expr:
+    """
+    An abstract expression object.
+
+    This contains a (potentially empty) tuple of child expressions,
+    along with non-child data. For uniform reconstruction and
+    implementation of hashing and equality schemes, child classes need
+    to provide a certain amount of metadata when they are defined.
+    Specifically, the ``_non_child`` attribute must list, in-order,
+    the names of the slots that are passed to the constructor. The
+    constructor must take arguments in the order ``(*_non_child,
+    *children).``
+    """
+
     __slots__ = ("dtype", "hash_value", "repr_value")
-    #: Data type of the expression
     dtype: plc.DataType
-    #: caching slot for the hash of the expression
+    """Data type of the expression."""
     hash_value: int
-    #: caching slot for repr of the expression
+    """Caching slot for the hash of the expression."""
     repr_value: str
-    #: Children of the expression
+    """Caching slot for repr of the expression."""
     children: tuple[Expr, ...] = ()
-    #: Names of non-child data (not Exprs) for reconstruction
+    """Children of the expression."""
     _non_child: ClassVar[tuple[str, ...]] = ("dtype",)
+    """Names of non-child data (not Exprs) for reconstruction."""
 
     # Constructor must take arguments in order (*_non_child, *children)
     def __init__(self, dtype: plc.DataType) -> None:
@@ -151,18 +165,61 @@ class Expr:
         context: ExecutionContext = ExecutionContext.FRAME,
         mapping: dict[Expr, Column] | None = None,
     ) -> Column:
-        """Evaluate this expression given a dataframe for context."""
+        """
+        Evaluate this expression given a dataframe for context.
+
+        Parameters
+        ----------
+        df
+            DataFrame that will provide columns.
+        context
+            What context are we performing this evaluation in?
+        mapping
+            Substitution mapping from expressions to Columns, used to
+            override the evaluation of a given expression if we're
+            performing a simple rewritten evaluation.
+
+        Returns
+        -------
+        Column representing the evaluation of the expression (or maybe
+        a scalar, annoying!).
+
+        Raises
+        ------
+        NotImplementedError if we couldn't evaluate the expression.
+        Ideally all these are returned during translation to the IR,
+        but for now we are not perfect.
+        """
         raise NotImplementedError
 
     def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
+        """
+        Collect information about aggregations in groupbys.
+
+        Parameters
+        ----------
+        depth
+            The depth of aggregating (reduction or sampling)
+            expressions we are currently at.
+
+        Returns
+        -------
+        Aggregation info describing the expression to aggregate in the
+        groupby.
+
+        Raises
+        ------
+        NotImplementedError if we can't currently perform the
+        aggregation request (for example nested aggregations like
+        ``a.max().min()``).
+        """
         raise NotImplementedError
 
 
 def with_mapping(fn):
     """Decorate a callback that takes an expression mapping to use it."""
 
-    def look(
+    def _(
         self,
         df: DataFrame,
         *,
@@ -178,7 +235,7 @@ def with_mapping(fn):
             except KeyError:
                 return fn(self, df, context=context, mapping=mapping)
 
-    return look
+    return _
 
 
 class NamedExpr(Expr):
@@ -292,6 +349,61 @@ class BooleanFunction(Expr):
         self.options = options
         self.name = name
         self.children = tuple(children)
+
+    @with_mapping
+    def evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: dict[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        (child,) = self.children
+        column = child.evaluate(df, context=context, mapping=mapping)
+        if self.name == pl_expr.BooleanFunction.IsNull:
+            return Column(plc.unary.is_null(column.obj), column.name)
+        elif self.name == pl_expr.BooleanFunction.IsNotNull:
+            return Column(plc.unary.is_valid(column.obj), column.name)
+        else:
+            raise NotImplementedError(f"BooleanFunction {self.name}")
+
+
+class StringFunction(Expr):
+    __slots__ = ("name", "options", "children")
+    _non_child = ("dtype", "name", "options")
+
+    def __init__(
+        self,
+        dtype: plc.DataType,
+        name: pl_expr.StringFunction,
+        options: Any,
+        *children: Expr,
+    ):
+        super().__init__(dtype)
+        self.options = options
+        self.name = name
+        self.children = children
+
+    @with_mapping
+    def evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: dict[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        (child,) = self.children
+        column = child.evaluate(df, context=context, mapping=mapping)
+        if self.name == pl_expr.StringFunction.Lowercase:
+            return Column(plc.strings.case.to_lower(column.obj), column.name)
+        elif self.name == pl_expr.StringFunction.Uppercase:
+            (child,) = self.children
+            column = child.evaluate(df, context=context, mapping=mapping)
+            return Column(plc.strings.case.to_upper(column.obj), column.name)
+        else:
+            raise NotImplementedError(f"StringFunction {self.name}")
 
 
 class Sort(Expr):
@@ -669,27 +781,27 @@ class BinOp(Expr):
         self.op = op
         self.children = (left, right)
 
-    _MAPPING: ClassVar[dict[pl_expr.PyOperator, plc.binaryop.BinaryOperator]] = {
-        pl_expr.PyOperator.Eq: plc.binaryop.BinaryOperator.EQUAL,
-        pl_expr.PyOperator.EqValidity: plc.binaryop.BinaryOperator.NULL_EQUALS,
-        pl_expr.PyOperator.NotEq: plc.binaryop.BinaryOperator.NOT_EQUAL,
-        pl_expr.PyOperator.NotEqValidity: plc.binaryop.BinaryOperator.NULL_NOT_EQUALS,
-        pl_expr.PyOperator.Lt: plc.binaryop.BinaryOperator.LESS,
-        pl_expr.PyOperator.LtEq: plc.binaryop.BinaryOperator.LESS_EQUAL,
-        pl_expr.PyOperator.Gt: plc.binaryop.BinaryOperator.GREATER,
-        pl_expr.PyOperator.GtEq: plc.binaryop.BinaryOperator.GREATER_EQUAL,
-        pl_expr.PyOperator.Plus: plc.binaryop.BinaryOperator.ADD,
-        pl_expr.PyOperator.Minus: plc.binaryop.BinaryOperator.SUB,
-        pl_expr.PyOperator.Multiply: plc.binaryop.BinaryOperator.MUL,
-        pl_expr.PyOperator.Divide: plc.binaryop.BinaryOperator.DIV,
-        pl_expr.PyOperator.TrueDivide: plc.binaryop.BinaryOperator.TRUE_DIV,
-        pl_expr.PyOperator.FloorDivide: plc.binaryop.BinaryOperator.FLOOR_DIV,
-        pl_expr.PyOperator.Modulus: plc.binaryop.BinaryOperator.PYMOD,
-        pl_expr.PyOperator.And: plc.binaryop.BinaryOperator.BITWISE_AND,
-        pl_expr.PyOperator.Or: plc.binaryop.BinaryOperator.BITWISE_OR,
-        pl_expr.PyOperator.Xor: plc.binaryop.BinaryOperator.BITWISE_XOR,
-        pl_expr.PyOperator.LogicalAnd: plc.binaryop.BinaryOperator.LOGICAL_AND,
-        pl_expr.PyOperator.LogicalOr: plc.binaryop.BinaryOperator.LOGICAL_OR,
+    _MAPPING: ClassVar[dict[pl_expr.Operator, plc.binaryop.BinaryOperator]] = {
+        pl_expr.Operator.Eq: plc.binaryop.BinaryOperator.EQUAL,
+        pl_expr.Operator.EqValidity: plc.binaryop.BinaryOperator.NULL_EQUALS,
+        pl_expr.Operator.NotEq: plc.binaryop.BinaryOperator.NOT_EQUAL,
+        pl_expr.Operator.NotEqValidity: plc.binaryop.BinaryOperator.NULL_NOT_EQUALS,
+        pl_expr.Operator.Lt: plc.binaryop.BinaryOperator.LESS,
+        pl_expr.Operator.LtEq: plc.binaryop.BinaryOperator.LESS_EQUAL,
+        pl_expr.Operator.Gt: plc.binaryop.BinaryOperator.GREATER,
+        pl_expr.Operator.GtEq: plc.binaryop.BinaryOperator.GREATER_EQUAL,
+        pl_expr.Operator.Plus: plc.binaryop.BinaryOperator.ADD,
+        pl_expr.Operator.Minus: plc.binaryop.BinaryOperator.SUB,
+        pl_expr.Operator.Multiply: plc.binaryop.BinaryOperator.MUL,
+        pl_expr.Operator.Divide: plc.binaryop.BinaryOperator.DIV,
+        pl_expr.Operator.TrueDivide: plc.binaryop.BinaryOperator.TRUE_DIV,
+        pl_expr.Operator.FloorDivide: plc.binaryop.BinaryOperator.FLOOR_DIV,
+        pl_expr.Operator.Modulus: plc.binaryop.BinaryOperator.PYMOD,
+        pl_expr.Operator.And: plc.binaryop.BinaryOperator.BITWISE_AND,
+        pl_expr.Operator.Or: plc.binaryop.BinaryOperator.BITWISE_OR,
+        pl_expr.Operator.Xor: plc.binaryop.BinaryOperator.BITWISE_XOR,
+        pl_expr.Operator.LogicalAnd: plc.binaryop.BinaryOperator.LOGICAL_AND,
+        pl_expr.Operator.LogicalOr: plc.binaryop.BinaryOperator.LOGICAL_OR,
     }
 
     @with_mapping
