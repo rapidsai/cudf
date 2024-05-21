@@ -119,6 +119,29 @@ files:
       key: cudf-pandas-tests
     includes:
       - test_python_cudf_pandas
+  py_build_cudf_polars:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: build-system
+    includes:
+      - build_wheels
+  py_run_cudf_polars:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project
+    includes:
+      - run_cudf_polars
+      - depends_on_cudf
+  py_test_cudf_polars:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project.optional-dependencies
+      key: test
+    includes:
+      - test_python_common
   py_build_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -266,7 +289,7 @@ dependencies:
           - cython>=3.0.3
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==14.0.2.*
+          - pyarrow==16.0.0.*
       - output_types: conda
         packages:
           - scikit-build-core>=0.7.0
@@ -302,9 +325,6 @@ dependencies:
           - matrix: {cuda: "11.*"}
             packages: &build_python_packages_cu11
               - &rmm_cu11 rmm-cu11==24.6.*
-          - {matrix: null, packages: null }
-      - output_types: pyproject
-        matrices:
           - {matrix: null, packages: [*rmm_conda] }
   libarrow_build:
     common:
@@ -312,27 +332,25 @@ dependencies:
         packages:
           # Hard pin the Arrow patch version used during the build. This must
           # be kept in sync with the version pinned in get_arrow.cmake.
-          - libarrow-acero==14.0.2.*
-          - libarrow-dataset==14.0.2.*
-          - libarrow==14.0.2.*
-          - libparquet==14.0.2.*
+          - libarrow-acero==16.0.0.*
+          - libarrow-dataset==16.0.0.*
+          - libarrow==16.0.0.*
+          - libparquet==16.0.0.*
   libarrow_run:
     common:
       - output_types: conda
         packages:
           # Allow runtime version to float up to minor version
-          # Disallow libarrow 14.0.0 due to a CVE
-          - libarrow-acero>=14.0.1,<15.0.0a0
-          - libarrow-dataset>=14.0.1,<15.0.0a0
-          - libarrow>=14.0.1,<15.0.0a0
-          - libparquet>=14.0.1,<15.0.0a0
+          - libarrow-acero>=16.0.0,<16.1.0a0
+          - libarrow-dataset>=16.0.0,<16.1.0a0
+          - libarrow>=16.0.0,<16.1.0a0
+          - libparquet>=16.0.0,<16.1.0a0
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          # Allow runtime version to float up to minor version
-          # Disallow pyarrow 14.0.0 due to a CVE
-          - pyarrow>=14.0.1,<15.0.0a0
+          # Allow runtime version to float up to patch version
+          - pyarrow>=16.0.0,<16.1.0a0
   cuda_version:
     specific:
       - output_types: conda
@@ -557,10 +575,12 @@ dependencies:
               - rmm-cu11==24.6.*
               - cubinlinker-cu11
               - ptxcompiler-cu11
-          - {matrix: null, packages: null}
-      - output_types: pyproject
-        matrices:
-          - {matrix: null, packages: [cubinlinker, ptxcompiler, *rmm_conda] }
+          - {matrix: null, packages: [cubinlinker, ptxcompiler, *rmm_conda]}
+  run_cudf_polars:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - polars>=0.20.24
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -631,7 +651,7 @@ dependencies:
         packages:
           - msgpack
           - &tokenizers tokenizers==0.15.2
-          - &transformers transformers==4.38.1
+          - &transformers transformers==4.39.3
           - tzdata
     specific:
       - output_types: conda

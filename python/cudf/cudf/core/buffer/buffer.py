@@ -6,7 +6,7 @@ import math
 import pickle
 import weakref
 from types import SimpleNamespace
-from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Literal, Mapping, Optional, Tuple
 
 import numpy
 from typing_extensions import Self
@@ -480,36 +480,6 @@ class Buffer(Serializable):
         )
 
 
-def is_c_contiguous(
-    shape: Sequence[int], strides: Sequence[int], itemsize: int
-) -> bool:
-    """Determine if shape and strides are C-contiguous
-
-    Parameters
-    ----------
-    shape : Sequence[int]
-        Number of elements in each dimension.
-    strides : Sequence[int]
-        The stride of each dimension in bytes.
-    itemsize : int
-        Size of an element in bytes.
-
-    Return
-    ------
-    bool
-        The boolean answer.
-    """
-
-    if any(dim == 0 for dim in shape):
-        return True
-    cumulative_stride = itemsize
-    for dim, stride in zip(reversed(shape), reversed(strides)):
-        if dim > 1 and stride != cumulative_stride:
-            return False
-        cumulative_stride *= dim
-    return True
-
-
 def get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
     """Retrieve the pointer and size from an array interface.
 
@@ -531,7 +501,9 @@ def get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
     shape = array_interface["shape"] or (1,)
     strides = array_interface["strides"]
     itemsize = cudf.dtype(array_interface["typestr"]).itemsize
-    if strides is None or is_c_contiguous(shape, strides, itemsize):
+    if strides is None or cudf._lib.pylibcudf.column.is_c_contiguous(
+        shape, strides, itemsize
+    ):
         nelem = math.prod(shape)
         ptr = array_interface["data"][0] or 0
         return ptr, nelem * itemsize

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pickle
 import warnings
+from collections.abc import Generator
 from functools import cached_property
 from typing import Any, Literal, Set, Tuple
 
@@ -144,7 +145,7 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     @property  # type: ignore
-    def ndim(self):  # noqa: D401
+    def ndim(self) -> int:  # noqa: D401
         """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
@@ -275,6 +276,7 @@ class BaseIndex(Serializable):
         raise NotImplementedError()
 
     def __contains__(self, item):
+        hash(item)
         return item in self._values
 
     def _copy_type_metadata(
@@ -2189,14 +2191,20 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def _split_columns_by_levels(self, levels):
-        if isinstance(levels, int) and levels > 0:
-            raise ValueError(f"Out of bound level: {levels}")
-        return (
-            [self._data[self.name]],
-            [],
-            ["index" if self.name is None else self.name],
-            [],
+    def _new_index_for_reset_index(
+        self, levels: tuple | None, name
+    ) -> None | BaseIndex:
+        """Return the new index after .reset_index"""
+        # None is caught later to return RangeIndex
+        return None
+
+    def _columns_for_reset_index(
+        self, levels: tuple | None
+    ) -> Generator[tuple[Any, ColumnBase], None, None]:
+        """Return the columns and column names for .reset_index"""
+        yield (
+            "index" if self.name is None else self.name,
+            next(iter(self._columns)),
         )
 
     def _split(self, splits):
@@ -2205,3 +2213,9 @@ class BaseIndex(Serializable):
 
 def _get_result_name(left_name, right_name):
     return left_name if _is_same_name(left_name, right_name) else None
+
+
+def _return_get_indexer_result(result):
+    if cudf.get_option("mode.pandas_compatible"):
+        return result.astype("int64")
+    return result
