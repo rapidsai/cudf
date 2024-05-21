@@ -63,25 +63,64 @@ __all__ = [
 
 @dataclass(slots=True)
 class IR:
+    """Abstract plan node, representing an unevaluated dataframe."""
+
     schema: dict[str, plc.DataType]
+    """Mapping from column names to their data types."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
-        """Evaluate and return a dataframe."""
+        """
+        Evaluate the node and return a dataframe.
+
+        Parameters
+        ----------
+        cache
+            Mapping from cached node ids to constructed DataFrames.
+            Used to implement evaluation of the `Cache` node.
+
+        Returns
+        -------
+        DataFrame (on device) representing the evaluation of this plan
+        node.
+
+        Raises
+        ------
+        NotImplementedError if we couldn't evaluate things. Ideally
+        this should not occur, since the translation phase should pick
+        up things that we cannot handle.
+        """
         raise NotImplementedError
 
 
 @dataclass(slots=True)
 class PythonScan(IR):
+    """Representation of input from a python function."""
+
     options: Any
+    """Arbitrary options."""
     predicate: Expr | None
+    """Filter to apply to the constructed dataframe before returning it."""
 
 
 @dataclass(slots=True)
 class Scan(IR):
+    """Input from files."""
+
     typ: Any
+    """What type of file are we reading? Parquet, CSV, etc..."""
     paths: list[str]
+    """List of paths to read from."""
     file_options: Any
+    """Options for reading the file.
+
+    Attributes are:
+    - ``with_columns: list[str]`` of projected columns to return.
+    - ``n_rows: int``: Number of rows to read.
+    - ``row_index: tuple[name, offset] | None``: Add an integer index
+        column with given name.
+    """
     predicate: Expr | None
+    """Mask to apply to the read dataframe."""
 
     def __post_init__(self):
         """Validate preconditions."""
@@ -138,8 +177,16 @@ class Scan(IR):
 
 @dataclass(slots=True)
 class Cache(IR):
+    """
+    Return a cached plan node.
+
+    Used for CSE at the plan level.
+    """
+
     key: int
+    """The cache key."""
     value: IR
+    """The unevaluated node to cache."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -151,9 +198,18 @@ class Cache(IR):
 
 @dataclass(slots=True)
 class DataFrameScan(IR):
+    """
+    Input from an existing polars DataFrame.
+
+    This typically arises from ``q.collect().lazy()``
+    """
+
     df: Any
+    """Polars LazyFrame object."""
     projection: list[str]
+    """List of columns to project out."""
     predicate: Expr | None
+    """Mask to apply."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -183,9 +239,18 @@ class DataFrameScan(IR):
 
 @dataclass(slots=True)
 class Select(IR):
+    """Produce a new dataframe selecting given expressions from an input."""
+
     df: IR
+    """Input dataframe."""
     cse: list[Expr]
+    """
+    List of common subexpressions that will appear in the selected expressions.
+
+    These must be evaluated before the returned expressions.
+    """
     expr: list[Expr]
+    """List of expressions to evaluate to form the new dataframe."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]):
         """Evaluate and return a dataframe."""
@@ -227,11 +292,18 @@ def placeholder_column(n: int):
 
 @dataclass(slots=False)
 class GroupBy(IR):
+    """Perform a groupby."""
+
     df: IR
+    """Input dataframe."""
     agg_requests: list[Expr]
+    """List of expressions to evaluate groupwise."""
     keys: list[Expr]
+    """List of expressions forming the keys."""
     maintain_order: bool
+    """Should the order of the input dataframe be maintained?"""
     options: Any
+    """Options controlling style of groupby."""
 
     @staticmethod
     def check_agg(agg: Expr) -> int:
@@ -314,11 +386,25 @@ class GroupBy(IR):
 
 @dataclass(slots=True)
 class Join(IR):
+    """A join of two dataframes."""
+
     left: IR
+    """Left frame."""
     right: IR
+    """Right frame."""
     left_on: list[Expr]
+    """List of expressions used as keys in the left frame."""
     right_on: list[Expr]
+    """List of expressions used as keys in the right frame."""
     options: Any
+    """
+    tuple of options:
+    - how: join type
+    - join_nulls: do nulls compare equal?
+    - slice: optional slice to perform after joining.
+    - suffix: string suffix for right columns if names match
+    - coalesce: should key columns be coalesced (only makes sense for outer joins)
+    """
 
     def __post_init__(self):
         """Validate preconditions."""
@@ -424,8 +510,12 @@ class Join(IR):
 
 @dataclass(slots=True)
 class HStack(IR):
+    """Add new columns to a dataframe."""
+
     df: IR
+    """Input dataframe."""
     columns: list[Expr]
+    """List of expressions to produce new columns."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -435,11 +525,18 @@ class HStack(IR):
 
 @dataclass(slots=True)
 class Distinct(IR):
+    """Produce a new dataframe with distinct rows."""
+
     df: IR
+    """Input dataframe."""
     keep: plc.stream_compaction.DuplicateKeepOption
+    """Which rows to keep."""
     subset: set[str] | None
+    """Which columns to inspect when computing distinct rows."""
     zlice: tuple[int, int] | None
+    """Optional slice to perform after compaction."""
     stable: bool
+    """Should order be preserved?"""
 
     _KEEP_MAP: ClassVar[dict[str, plc.stream_compaction.DuplicateKeepOption]] = {
         "first": plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
@@ -495,12 +592,20 @@ class Distinct(IR):
 
 @dataclass(slots=True)
 class Sort(IR):
+    """Sort a dataframe."""
+
     df: IR
+    """Input."""
     by: list[Expr]
+    """List of expressions to produce sort keys."""
     do_sort: Callable[..., plc.Table]
+    """pylibcudf sorting function."""
     zlice: tuple[int, int] | None
+    """Optional slice to apply after sorting."""
     order: list[plc.types.Order]
+    """Order keys should be sorted in."""
     null_order: list[plc.types.NullOrder]
+    """Where nulls sort to."""
 
     def __init__(
         self,
@@ -551,9 +656,14 @@ class Sort(IR):
 
 @dataclass(slots=True)
 class Slice(IR):
+    """Slice a dataframe."""
+
     df: IR
+    """Input."""
     offset: int
+    """Start of the slice."""
     length: int
+    """Length of the slice."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -563,8 +673,12 @@ class Slice(IR):
 
 @dataclass(slots=True)
 class Filter(IR):
+    """Filter a dataframe with a boolean mask."""
+
     df: IR
+    """Input."""
     mask: Expr
+    """Expression evaluating to a mask."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -574,7 +688,10 @@ class Filter(IR):
 
 @dataclass(slots=True)
 class Projection(IR):
+    """Select a subset of columns from a dataframe."""
+
     df: IR
+    """Input."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -585,9 +702,14 @@ class Projection(IR):
 
 @dataclass(slots=True)
 class MapFunction(IR):
+    """Apply some function to a dataframe."""
+
     df: IR
+    """Input."""
     name: str
+    """Function name."""
     options: Any
+    """Arbitrary options, interpreted per function."""
 
     _NAMES: ClassVar[frozenset[str]] = frozenset(
         [
@@ -670,8 +792,12 @@ class MapFunction(IR):
 
 @dataclass(slots=True)
 class Union(IR):
+    """Concatenate dataframes vertically."""
+
     dfs: list[IR]
+    """List of inputs."""
     zlice: tuple[int, int] | None
+    """Optional slice to apply after concatenation."""
 
     def __post_init__(self):
         """Validated preconditions."""
@@ -681,6 +807,7 @@ class Union(IR):
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
+        # TODO: only evaluate what we need if we have a slice
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
         return DataFrame.from_table(
             plc.concatenate.concatenate([df.table for df in dfs]), dfs[0].column_names
@@ -689,7 +816,10 @@ class Union(IR):
 
 @dataclass(slots=True)
 class HConcat(IR):
+    """Concatenate dataframes horizontally."""
+
     dfs: list[IR]
+    """List of inputs."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -703,8 +833,17 @@ class HConcat(IR):
 
 @dataclass(slots=True)
 class ExtContext(IR):
+    """
+    Concatenate dataframes horizontally.
+
+    This is similar to HConcat, but is used only to temporarily
+    introduce new dataframes into an expression context.
+    """
+
     df: IR
+    """Input."""
     extra: list[IR]
+    """List of extra inputs."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
