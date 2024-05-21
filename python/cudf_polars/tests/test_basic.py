@@ -123,7 +123,6 @@ def null_data():
     ).lazy()
 
 
-@pytest.mark.xfail(reason="Boolean function not yet implemented")
 def test_drop_nulls(null_data):
     result = null_data.drop_nulls()
     assert_gpu_result_equal(result)

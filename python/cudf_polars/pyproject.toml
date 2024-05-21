@@ -51,6 +51,9 @@ version = {file = "cudf_polars/VERSION"}
 [tool.setuptools.packages.find]
 exclude = ["*tests*"]
 
+[tool.pytest.ini_options]
+xfail_strict = true
+
 [tool.ruff]
 line-length = 88
 indent-width = 4
