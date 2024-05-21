@@ -204,13 +204,12 @@ void try_drop_l3_cache()
                "Failed to execute the drop cache command");
 }
 
-cudf::io::io_type retrieve_io_type_enum(std::string_view io_string)
+io_type retrieve_io_type_enum(std::string_view io_string)
 {
-  if (io_string == "FILEPATH") { return cudf::io::io_type::FILEPATH; }
-  if (io_string == "HOST_BUFFER") { return cudf::io::io_type::HOST_BUFFER; }
-  if (io_string == "DEVICE_BUFFER") { return cudf::io::io_type::DEVICE_BUFFER; }
-  if (io_string == "VOID") { return cudf::io::io_type::VOID; }
-  if (io_string == "USER_IMPLEMENTED") { return cudf::io::io_type::USER_IMPLEMENTED; }
+  if (io_string == "FILEPATH") { return io_type::FILEPATH; }
+  if (io_string == "HOST_BUFFER") { return io_type::HOST_BUFFER; }
+  if (io_string == "DEVICE_BUFFER") { return io_type::DEVICE_BUFFER; }
+  if (io_string == "VOID") { return io_type::VOID; }
   CUDF_FAIL("Unsupported io_type.");
 }
 

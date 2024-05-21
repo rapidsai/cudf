@@ -24,7 +24,13 @@
 
 #include <rmm/device_uvector.hpp>
 
-using cudf::io::io_type;
+// IO types supported in the benchmarks
+enum class io_type {
+  FILEPATH,       // Input/output are both files
+  HOST_BUFFER,    // Input/output are both host buffers (pageable)
+  DEVICE_BUFFER,  // Input is a device buffer, output is a host buffer (pageable)
+  VOID
+};
 
 std::string random_file_in_dir(std::string const& dir_path);
 
@@ -140,7 +146,7 @@ void try_drop_l3_cache();
  *
  * @return The io_type enum value
  */
-cudf::io::io_type retrieve_io_type_enum(std::string_view io_string);
+io_type retrieve_io_type_enum(std::string_view io_string);
 
 /**
  * @brief Convert a string to the corresponding compression_type enum value.
