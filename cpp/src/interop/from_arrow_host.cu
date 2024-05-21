@@ -459,4 +459,19 @@ std::unique_ptr<column> from_arrow_host_column(ArrowSchema const* schema,
   return detail::from_arrow_host_column(schema, input, stream, mr);
 }
 
+std::unique_ptr<table> from_arrow(ArrowSchema const* schema,
+                                  ArrowArray const* input,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+
+  ArrowDeviceArray const device_input = {
+    .array = *input,
+    .device_id = -1,
+    .device_type = ARROW_DEVICE_CPU,    
+  };
+  return detail::from_arrow_host(schema, &device_input, stream, mr);
+}
+
 }  // namespace cudf

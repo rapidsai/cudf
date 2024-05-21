@@ -349,6 +349,24 @@ std::unique_ptr<cudf::scalar> from_arrow(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Create `cudf::table` from given ArrowArray and ArrowSchema input
+ *
+ * @throws std::invalid_argument if either schema or input are NULL 
+ *
+ * @throws cudf::data_type_error if the input array is not a struct array.
+ *
+ * @param schema `ArrowSchema` pointer to describe the type of the data
+ * @param input `ArrowArray` pointer that needs to be converted to cudf::table
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate `cudf::table`
+ * @return cudf table generated from given arrow data
+ */
+std::unique_ptr<cudf::table> from_arrow(ArrowSchema const* schema,
+                                        ArrowArray const* input,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr);
+
+/**
  * @brief Create `cudf::table` from given ArrowDeviceArray input
  *
  * @throws std::invalid_argument if either schema or input are NULL
