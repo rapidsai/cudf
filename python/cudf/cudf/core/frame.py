@@ -6,6 +6,7 @@ import copy
 import itertools
 import operator
 import pickle
+import types
 import warnings
 from collections import abc
 from typing import (
@@ -90,6 +91,10 @@ class Frame(BinaryOperand, Scannable):
         return dict(
             zip(self._data.names, (col.dtype for col in self._data.columns))
         )
+
+    @property
+    def ndim(self) -> int:
+        raise NotImplementedError()
 
     @_cudf_nvtx_annotate
     def serialize(self):
@@ -417,51 +422,60 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def _to_array(
         self,
-        get_column_values: Callable,
-        make_empty_matrix: Callable,
+        get_array: Callable,
+        module: types.ModuleType,
+        copy: bool,
         dtype: Union[Dtype, None] = None,
         na_value=None,
-    ) -> Union[cupy.ndarray, np.ndarray]:
+    ) -> Union[cupy.ndarray, numpy.ndarray]:
         # Internal function to implement to_cupy and to_numpy, which are nearly
         # identical except for the attribute they access to generate values.
 
-        def get_column_values_na(col):
+        def to_array(
+            col: ColumnBase, dtype: np.dtype
+        ) -> Union[cupy.ndarray, numpy.ndarray]:
             if na_value is not None:
                 col = col.fillna(na_value)
-            return get_column_values(col)
+            array = get_array(col)
+            casted_array = module.asarray(array, dtype=dtype)
+            if copy and casted_array is array:
+                # Don't double copy after asarray
+                casted_array = casted_array.copy()
+            return casted_array
 
-        # Early exit for an empty Frame.
         ncol = self._num_columns
         if ncol == 0:
-            return make_empty_matrix(
-                shape=(len(self), ncol), dtype=np.dtype("float64"), order="F"
+            return module.empty(
+                shape=(len(self), ncol),
+                dtype=numpy.dtype("float64"),
+                order="F",
             )
 
         if dtype is None:
-            dtypes = [col.dtype for col in self._data.values()]
-            for dtype in dtypes:
-                if isinstance(
-                    dtype,
-                    (
-                        cudf.ListDtype,
-                        cudf.core.dtypes.DecimalDtype,
-                        cudf.StructDtype,
-                    ),
-                ):
-                    raise NotImplementedError(
-                        f"{dtype} cannot be exposed as a cupy array"
-                    )
-            dtype = find_common_type(dtypes)
+            if ncol == 1:
+                dtype = next(iter(self._data.values())).dtype
+            else:
+                dtype = find_common_type(
+                    [col.dtype for col in self._data.values()]
+                )
 
-        matrix = make_empty_matrix(
-            shape=(len(self), ncol), dtype=dtype, order="F"
-        )
-        for i, col in enumerate(self._data.values()):
-            # TODO: col.values may fail if there is nullable data or an
-            # unsupported dtype. We may want to catch and provide a more
-            # suitable error.
-            matrix[:, i] = get_column_values_na(col)
-        return matrix
+            if not isinstance(dtype, numpy.dtype):
+                raise NotImplementedError(
+                    f"{dtype} cannot be exposed as an array"
+                )
+
+        if self.ndim == 1:
+            return to_array(self._data.columns[0], dtype)
+        else:
+            matrix = module.empty(
+                shape=(len(self), ncol), dtype=dtype, order="F"
+            )
+            for i, col in enumerate(self._data.values()):
+                # TODO: col.values may fail if there is nullable data or an
+                # unsupported dtype. We may want to catch and provide a more
+                # suitable error.
+                matrix[:, i] = to_array(col, dtype)
+            return matrix
 
     # TODO: As of now, calling cupy.asarray is _much_ faster than calling
     # to_cupy. We should investigate the reasons why and whether we can provide
@@ -496,10 +510,9 @@ class Frame(BinaryOperand, Scannable):
         cupy.ndarray
         """
         return self._to_array(
-            (lambda col: col.values.copy())
-            if copy
-            else (lambda col: col.values),
-            cupy.empty,
+            lambda col: col.values,
+            cupy,
+            copy,
             dtype,
             na_value,
         )
@@ -536,7 +549,7 @@ class Frame(BinaryOperand, Scannable):
             )
 
         return self._to_array(
-            (lambda col: col.values_host), np.empty, dtype, na_value
+            lambda col: col.values_host, numpy, copy, dtype, na_value
         )
 
     @_cudf_nvtx_annotate

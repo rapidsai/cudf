@@ -1234,7 +1234,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return pd.Series(self._dtypes, dtype="object")
 
     @property
-    def ndim(self):
+    def ndim(self) -> int:
         """Dimension of the data. DataFrame ndim is always 2."""
         return 2
 

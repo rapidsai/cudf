@@ -76,11 +76,9 @@ class reader {
   /**
    * @brief Reads the dataset as per given options.
    *
-   * @param options Settings for controlling reading behavior
-   *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(parquet_reader_options const& options);
+  table_with_metadata read();
 };
 
 /**
