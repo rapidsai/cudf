@@ -29,12 +29,8 @@ def _callback(
     assert with_columns is None
     assert pyarrow_predicate is None
     assert n_rows is None
-    try:
-        with nvtx.annotate(message="ExecuteIR", domain="cudf_polars"):
-            return ir.evaluate(cache={}).to_polars()
-    except Exception as e:
-        print("Unable to evaluate", e)
-        raise
+    with nvtx.annotate(message="ExecuteIR", domain="cudf_polars"):
+        return ir.evaluate(cache={}).to_polars()
 
 
 def execute_with_cudf(nt, *, raise_on_fail: bool = False) -> None:
@@ -54,11 +50,7 @@ def execute_with_cudf(nt, *, raise_on_fail: bool = False) -> None:
     """
     try:
         with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
-            callback = partial(_callback, translate_ir(nt))
+            nt.set_udf(partial(_callback, translate_ir(nt)))
     except NotImplementedError:
         if raise_on_fail:
             raise
-        return
-
-    nt.set_udf(callback)
-    return

@@ -21,7 +21,7 @@ class set_node(AbstractContextManager):
 
     __slots__ = ("n", "visitor")
 
-    def __init__(self, visitor, n):
+    def __init__(self, visitor, n: int):
         self.visitor = visitor
         self.n = n
 
@@ -94,6 +94,9 @@ def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
                 else None,
             )
         elif isinstance(node, pl_ir.Select):
+            # We translate the expressions (which are executed with
+            # reference to the input node) with the input node active
+            # so that dtype resolution works correctly.
             with set_node(visitor, node.input):
                 inp = translate_ir(visitor, n=None)
                 cse_exprs = [translate_expr(visitor, n=e) for e in node.cse_expr]
