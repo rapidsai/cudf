@@ -2180,7 +2180,13 @@ class GroupBy(Serializable, Reducible, Scannable):
     @_cudf_nvtx_annotate
     def collect(self):
         """Get a list of all the values for each column in each group."""
-        return self.agg("collect")
+        warnings.warn(
+            "Groupby.collect is deprecated and "
+            "will be removed in a future version. "
+            "Use `.agg(list)` instead.",
+            FutureWarning,
+        )
+        return self.agg(list)
 
     @_cudf_nvtx_annotate
     def unique(self):

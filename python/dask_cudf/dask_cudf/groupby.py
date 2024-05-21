@@ -166,7 +166,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def collect(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self._make_groupby_method_aggs("collect"),
+            self._make_groupby_method_aggs(list),
             split_every,
             split_out,
         )
@@ -310,7 +310,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     def collect(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            {self._slice: "collect"},
+            {self._slice: list},
             split_every,
             split_out,
         )[self._slice]
