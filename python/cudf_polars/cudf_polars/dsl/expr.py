@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import enum
 from enum import IntEnum
-from functools import partial
+from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 import pyarrow as pa
@@ -350,6 +350,47 @@ class BooleanFunction(Expr):
         self.name = name
         self.children = tuple(children)
 
+    def __post_init__(self):
+        """Validate preconditions."""
+        if (
+            self.name in (pl_expr.BooleanFunction.Any, pl_expr.BooleanFunction.All)
+            and not self.options[0]
+        ):
+            # With ignore_nulls == False, polars uses Kleene logic
+            raise NotImplementedError(f"Kleene logic for {self.name}")
+        if self.name in (
+            pl_expr.BooleanFunction.IsFinite,
+            pl_expr.BooleanFunction.IsInfinite,
+            pl_expr.BooleanFunction.IsBetween,
+            pl_expr.BooleanFunction.IsIn,
+        ):
+            raise NotImplementedError(f"{self.name}")
+
+    @staticmethod
+    def _distinct(
+        column: Column,
+        *,
+        keep: plc.stream_compaction.DuplicateKeepOption,
+        source_value: plc.Scalar,
+        target_value: plc.Scalar,
+    ) -> Column:
+        table = plc.Table([column.obj])
+        indices = plc.stream_compaction.distinct_indices(
+            table,
+            keep,
+            # TODO: polars doesn't expose options for these
+            plc.types.NullEquality.EQUAL,
+            plc.types.NanEquality.ALL_EQUAL,
+        )
+        return Column(
+            plc.copying.scatter(
+                [source_value],
+                indices,
+                plc.Table([plc.Column.from_scalar(target_value, table.num_rows())]),
+            ).columns()[0],
+            column.name,
+        )
+
     @with_mapping
     def evaluate(
         self,
@@ -359,12 +400,96 @@ class BooleanFunction(Expr):
         mapping: dict[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        (child,) = self.children
-        column = child.evaluate(df, context=context, mapping=mapping)
+        columns = [
+            child.evaluate(df, context=context, mapping=mapping)
+            for child in self.children
+        ]
+        if self.name == pl_expr.BooleanFunction.Any:
+            (column,) = columns
+            return plc.Column.from_scalar(
+                plc.reduce.reduce(column.obj, plc.aggregation.any(), self.dtype), 1
+            )
+        elif self.name == pl_expr.BooleanFunction.All:
+            (column,) = columns
+            return plc.Column.from_scalar(
+                plc.reduce.reduce(column.obj, plc.aggregation.all(), self.dtype), 1
+            )
         if self.name == pl_expr.BooleanFunction.IsNull:
+            (column,) = columns
             return Column(plc.unary.is_null(column.obj), column.name)
         elif self.name == pl_expr.BooleanFunction.IsNotNull:
+            (column,) = columns
             return Column(plc.unary.is_valid(column.obj), column.name)
+        elif self.name == pl_expr.BooleanFunction.IsNan:
+            # TODO: copy over null mask since is_nan(null) => null in polars
+            (column,) = columns
+            return Column(plc.unary.is_nan(column.obj), column.name)
+        elif self.name == pl_expr.BooleanFunction.IsNotNan:
+            # TODO: copy over null mask since is_not_nan(null) => null in polars
+            (column,) = columns
+            return Column(plc.unary.is_not_nan(column.obj), column.name)
+        elif self.name == pl_expr.BooleanFunction.IsFirstDistinct:
+            (column,) = columns
+            return self._distinct(
+                column,
+                keep=plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+                source_value=plc.interop.from_arrow(pa.scalar(True)),  # noqa: FBT003
+                target_value=plc.interop.from_arrow(pa.scalar(False)),  # noqa: FBT003
+            )
+        elif self.name == pl_expr.BooleanFunction.IsLastDistinct:
+            (column,) = columns
+            return self._distinct(
+                column,
+                keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+                source_value=plc.interop.from_arrow(pa.scalar(True)),  # noqa: FBT003
+                target_value=plc.interop.from_arrow(pa.scalar(False)),  # noqa: FBT003
+            )
+        elif self.name == pl_expr.BooleanFunction.IsUnique:
+            (column,) = columns
+            return self._distinct(
+                column,
+                keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
+                source_value=plc.interop.from_arrow(pa.scalar(True)),  # noqa: FBT003
+                target_value=plc.interop.from_arrow(pa.scalar(False)),  # noqa: FBT003
+            )
+        elif self.name == pl_expr.BooleanFunction.IsDuplicated:
+            (column,) = columns
+            return self._distinct(
+                column,
+                keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
+                source_value=plc.interop.from_arrow(pa.scalar(False)),  # noqa: FBT003
+                target_value=plc.interop.from_arrow(pa.scalar(True)),  # noqa: FBT003
+            )
+        elif self.name == pl_expr.AllHorizontal:
+            name = columns[0].name
+            if any(c.obj.null_count() > 0 for c in columns):
+                raise NotImplementedError("Kleene logic for all_horizontal")
+            return Column(
+                reduce(
+                    partial(
+                        plc.binaryop.binary_operation,
+                        op=plc.binaryop.BinaryOperator.BITWISE_AND,
+                        output_type=self.dtype,
+                    ),
+                    (c.obj for c in columns),
+                ),
+                name,
+            )
+        elif self.name == pl_expr.AnyHorizontal:
+            name = columns[0].name
+            if any(c.obj.null_count() > 0 for c in columns):
+                raise NotImplementedError("Kleene logic for any_horizontal")
+            return Column(
+                reduce(
+                    partial(
+                        plc.binaryop.binary_operation,
+                        op=plc.binaryop.BinaryOperator.BITWISE_OR,
+                        output_type=self.dtype,
+                    ),
+                    (c.obj for c in columns),
+                ),
+                name,
+            )
         else:
             raise NotImplementedError(f"BooleanFunction {self.name}")
 
