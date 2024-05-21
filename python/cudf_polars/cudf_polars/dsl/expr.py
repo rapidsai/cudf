@@ -32,6 +32,8 @@ from cudf_polars.utils import sorting
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    import polars.type_aliases as pl_types
+
     from cudf_polars.containers import DataFrame
 
 __all__ = [
@@ -389,23 +391,23 @@ class BooleanFunction(Expr):
 
     _BETWEEN_OPS: ClassVar[
         dict[
-            pl_expr.ClosedInterval,
+            pl_types.ClosedInterval,
             tuple[plc.binaryop.BinaryOperator, plc.binaryop.BinaryOperator],
         ]
     ] = {
-        pl_expr.ClosedInterval.None_: (
+        "none": (
             plc.binaryop.BinaryOperator.GREATER,
             plc.binaryop.BinaryOperator.LESS,
         ),
-        pl_expr.ClosedInterval.Left: (
+        "left": (
             plc.binaryop.BinaryOperator.GREATER_EQUAL,
             plc.binaryop.BinaryOperator.LESS,
         ),
-        pl_expr.ClosedInterval.Right: (
+        "right": (
             plc.binaryop.BinaryOperator.GREATER,
             plc.binaryop.BinaryOperator.LESS_EQUAL,
         ),
-        pl_expr.ClosedInterval.Both: (
+        "both": (
             plc.binaryop.BinaryOperator.GREATER_EQUAL,
             plc.binaryop.BinaryOperator.LESS_EQUAL,
         ),
