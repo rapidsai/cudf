@@ -461,7 +461,7 @@ def test_options_mode():
     assert xpd.options.mode.copy_on_write == pd.options.mode.copy_on_write
 
 
-def test_profiler():
+def test_profiler():  # pragma: no cover
     pytest.importorskip("cudf")
 
     # test that the profiler correctly reports
