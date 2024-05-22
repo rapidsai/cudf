@@ -18,7 +18,7 @@ import cudf._lib.pylibcudf as plc
 from cudf_polars.dsl import expr, ir
 from cudf_polars.utils import dtypes
 
-__all__ = ["translate_ir", "translate_expr"]
+__all__ = ["translate_ir", "translate_named_expr"]
 
 
 class set_node(AbstractContextManager):
@@ -52,7 +52,7 @@ def _(node: pl_ir.PythonScan, visitor: Any, schema: dict[str, plc.DataType]) -> 
     return ir.PythonScan(
         schema,
         node.options,
-        translate_expr(visitor, n=node.predicate)
+        translate_named_expr(visitor, n=node.predicate)
         if node.predicate is not None
         else None,
     )
@@ -65,7 +65,7 @@ def _(node: pl_ir.Scan, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
         node.scan_type,
         node.paths,
         node.file_options,
-        translate_expr(visitor, n=node.predicate)
+        translate_named_expr(visitor, n=node.predicate)
         if node.predicate is not None
         else None,
     )
@@ -84,7 +84,7 @@ def _(
         schema,
         node.df,
         node.projection,
-        translate_expr(visitor, n=node.selection)
+        translate_named_expr(visitor, n=node.selection)
         if node.selection is not None
         else None,
     )
@@ -94,8 +94,8 @@ def _(
 def _(node: pl_ir.Select, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
-    cse_exprs = [translate_expr(visitor, n=e) for e in node.cse_expr]
-    exprs = [translate_expr(visitor, n=e) for e in node.expr]
+    cse_exprs = [translate_named_expr(visitor, n=e) for e in node.cse_expr]
+    exprs = [translate_named_expr(visitor, n=e) for e in node.expr]
     return ir.Select(schema, inp, cse_exprs, exprs)
 
 
@@ -103,8 +103,8 @@ def _(node: pl_ir.Select, visitor: Any, schema: dict[str, plc.DataType]) -> ir.I
 def _(node: pl_ir.GroupBy, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
-    aggs = [translate_expr(visitor, n=e) for e in node.aggs]
-    keys = [translate_expr(visitor, n=e) for e in node.keys]
+    aggs = [translate_named_expr(visitor, n=e) for e in node.aggs]
+    keys = [translate_named_expr(visitor, n=e) for e in node.keys]
     return ir.GroupBy(
         schema,
         inp,
@@ -122,10 +122,10 @@ def _(node: pl_ir.Join, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
     # input active.
     with set_node(visitor, node.input_left):
         inp_left = translate_ir(visitor, n=None)
-        left_on = [translate_expr(visitor, n=e) for e in node.left_on]
+        left_on = [translate_named_expr(visitor, n=e) for e in node.left_on]
     with set_node(visitor, node.input_right):
         inp_right = translate_ir(visitor, n=None)
-        right_on = [translate_expr(visitor, n=e) for e in node.right_on]
+        right_on = [translate_named_expr(visitor, n=e) for e in node.right_on]
     return ir.Join(schema, inp_left, inp_right, left_on, right_on, node.options)
 
 
@@ -133,8 +133,8 @@ def _(node: pl_ir.Join, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
 def _(node: pl_ir.HStack, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
-    cse_exprs = [translate_expr(visitor, n=e) for e in node.cse_exprs]
-    exprs = [translate_expr(visitor, n=e) for e in node.exprs]
+    cse_exprs = [translate_named_expr(visitor, n=e) for e in node.cse_exprs]
+    exprs = [translate_named_expr(visitor, n=e) for e in node.exprs]
     return ir.HStack(schema, inp, cse_exprs, exprs)
 
 
@@ -142,7 +142,7 @@ def _(node: pl_ir.HStack, visitor: Any, schema: dict[str, plc.DataType]) -> ir.I
 def _(node: pl_ir.Reduce, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
-    exprs = [translate_expr(visitor, n=e) for e in node.expr]
+    exprs = [translate_named_expr(visitor, n=e) for e in node.expr]
     return ir.Reduce(schema, inp, exprs)
 
 
@@ -159,7 +159,7 @@ def _(node: pl_ir.Distinct, visitor: Any, schema: dict[str, plc.DataType]) -> ir
 def _(node: pl_ir.Sort, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
-    by = [translate_expr(visitor, n=e) for e in node.by_column]
+    by = [translate_named_expr(visitor, n=e) for e in node.by_column]
     return ir.Sort(schema, inp, by, node.sort_options, node.slice)
 
 
@@ -172,7 +172,7 @@ def _(node: pl_ir.Slice, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR
 def _(node: pl_ir.Filter, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
-    mask = translate_expr(visitor, n=node.predicate)
+    mask = translate_named_expr(visitor, n=node.predicate)
     return ir.Filter(schema, inp, mask)
 
 
@@ -246,15 +246,31 @@ def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
         return _translate_ir(node, visitor, schema)
 
 
+def translate_named_expr(visitor: Any, *, n: pl_expr.PyExprIR) -> expr.NamedExpr:
+    """
+    Translate a polars-internal named expression IR object into our representation.
+
+    Parameters
+    ----------
+    visitor
+        Polars NodeTraverser object
+    n
+        Node to translate, a named expression node.
+
+    Returns
+    -------
+    Translated IR object.
+
+    Raises
+    ------
+    NotImplementedError if any translation fails due to unsupported functionality.
+    """
+    return expr.NamedExpr(n.output_name, translate_expr(visitor, n=n.node))
+
+
 @singledispatch
 def _translate_expr(node: Any, visitor: Any, dtype: plc.DataType) -> expr.Expr:
     raise NotImplementedError(f"Translation for {type(node).__name__}")
-
-
-@_translate_expr.register
-def _(node: pl_expr.PyExprIR, visitor: Any, dtype: plc.DataType) -> expr.Expr:
-    e = translate_expr(visitor, n=node.node)
-    return expr.NamedExpr(dtype, node.output_name, e)
 
 
 @_translate_expr.register
@@ -375,7 +391,7 @@ def _(node: pl_expr.Len, visitor: Any, dtype: plc.DataType) -> expr.Expr:
     return expr.Len(dtype)
 
 
-def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
+def translate_expr(visitor: Any, *, n: int) -> expr.Expr:
     """
     Translate a polars-internal expression IR into our representation.
 
@@ -384,8 +400,7 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
     visitor
         Polars NodeTraverser object
     n
-        Node to translate, either an integer referencing a polars
-        internal node, or a named expression node.
+        Node to translate, an integer referencing a polars internal node.
 
     Returns
     -------
@@ -395,12 +410,6 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
     ------
     NotImplementedError if any translation fails due to unsupported functionality.
     """
-    if isinstance(n, pl_expr.PyExprIR):
-        # TODO: type narrowing doesn't rule out int since PyExprIR is Unknown
-        assert not isinstance(n, int)
-        node = n
-        dtype = dtypes.from_polars(visitor.get_dtype(node.node))
-    else:
-        node = visitor.view_expression(n)
-        dtype = dtypes.from_polars(visitor.get_dtype(n))
+    node = visitor.view_expression(n)
+    dtype = dtypes.from_polars(visitor.get_dtype(n))
     return _translate_expr(node, visitor, dtype)

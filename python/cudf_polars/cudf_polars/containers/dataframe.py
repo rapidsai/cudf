@@ -12,7 +12,7 @@ import polars as pl
 
 import cudf._lib.pylibcudf as plc
 
-from cudf_polars.containers.column import Column
+from cudf_polars.containers.column import NamedColumn
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence, Set
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     import cudf
 
-    from cudf_polars.containers.scalar import Scalar
+    from cudf_polars.containers import Column, Scalar
 
 
 __all__: list[str] = ["DataFrame"]
@@ -30,11 +30,13 @@ __all__: list[str] = ["DataFrame"]
 class DataFrame:
     """A representation of a dataframe."""
 
-    columns: list[Column]
+    columns: list[NamedColumn]
     scalars: list[Scalar]
     table: plc.Table | None
 
-    def __init__(self, columns: Sequence[Column], scalars: Sequence[Scalar]) -> None:
+    def __init__(
+        self, columns: Sequence[NamedColumn], scalars: Sequence[Scalar]
+    ) -> None:
         self.columns = list(columns)
         self._column_map = {c.name: c for c in self.columns}
         self.scalars = list(scalars)
@@ -83,7 +85,10 @@ class DataFrame:
     def from_cudf(cls, df: cudf.DataFrame) -> Self:
         """Create from a cudf dataframe."""
         return cls(
-            [Column(c.to_pylibcudf(mode="read"), name) for name, c in df._data.items()],
+            [
+                NamedColumn(c.to_pylibcudf(mode="read"), name)
+                for name, c in df._data.items()
+            ],
             [],
         )
 
@@ -111,7 +116,9 @@ class DataFrame:
         # TODO: strict=True when we drop py39
         if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
-        return cls([Column(c, name) for c, name in zip(table.columns(), names)], [])
+        return cls(
+            [NamedColumn(c, name) for c, name in zip(table.columns(), names)], []
+        )
 
     def sorted_like(
         self, like: DataFrame, /, *, subset: Set[str] | None = None
@@ -143,7 +150,7 @@ class DataFrame:
         ]
         return self
 
-    def with_columns(self, columns: Sequence[Column]) -> Self:
+    def with_columns(self, columns: Sequence[NamedColumn]) -> Self:
         """
         Return a new dataframe with extra columns.
 
@@ -175,7 +182,7 @@ class DataFrame:
             raise ValueError("Can't select missing names")
         return type(self)([self._column_map[name] for name in names], self.scalars)
 
-    def replace_columns(self, *columns: Column) -> Self:
+    def replace_columns(self, *columns: NamedColumn) -> Self:
         """Return a new dataframe with columns replaced by name."""
         new = {c.name: c for c in columns}
         if not set(new).issubset(self.column_names_set):
@@ -188,7 +195,7 @@ class DataFrame:
             [c.copy(new_name=mapping.get(c.name)) for c in self.columns], self.scalars
         )
 
-    def select_columns(self, names: Set[str]) -> list[Column]:
+    def select_columns(self, names: Set[str]) -> list[NamedColumn]:
         """Select columns by name."""
         return [c for c in self.columns if c.name in names]
 

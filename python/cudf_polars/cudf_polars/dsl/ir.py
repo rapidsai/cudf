@@ -30,7 +30,7 @@ import cudf
 import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
-from cudf_polars.containers import Column, DataFrame
+from cudf_polars.containers import DataFrame, NamedColumn
 from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
@@ -96,7 +96,7 @@ class PythonScan(IR):
 
     options: Any
     """Arbitrary options."""
-    predicate: expr.Expr | None
+    predicate: expr.NamedExpr | None
     """Filter to apply to the constructed dataframe before returning it."""
 
 
@@ -117,7 +117,7 @@ class Scan(IR):
     - ``row_index: tuple[name, offset] | None``: Add an integer index
         column with given name.
     """
-    predicate: expr.Expr | None
+    predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
 
     def __post_init__(self):
@@ -153,9 +153,9 @@ class Scan(IR):
             init = plc.interop.from_arrow(
                 pa.scalar(offset, type=plc.interop.to_arrow(dtype))
             )
-            index = Column(
-                plc.filling.sequence(df.num_rows, init, step), name
-            ).set_sorted(
+            index = NamedColumn(
+                plc.filling.sequence(df.num_rows, init, step),
+                name,
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.AFTER,
@@ -208,7 +208,7 @@ class DataFrameScan(IR):
     """Polars LazyFrame object."""
     projection: list[str]
     """List of columns to project out."""
-    predicate: expr.Expr | None
+    predicate: expr.NamedExpr | None
     """Mask to apply."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
@@ -243,13 +243,13 @@ class Select(IR):
 
     df: IR
     """Input dataframe."""
-    cse: list[expr.Expr]
+    cse: list[expr.NamedExpr]
     """
     List of common subexpressions that will appear in the selected expressions.
 
     These must be evaluated before the returned expressions.
     """
-    expr: list[expr.Expr]
+    expr: list[expr.NamedExpr]
     """List of expressions to evaluate to form the new dataframe."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]):
@@ -269,7 +269,7 @@ class Reduce(IR):
 
     df: IR
     """Input dataframe."""
-    expr: list[expr.Expr]
+    expr: list[expr.NamedExpr]
     """List of expressions to evaluate to form the new dataframe."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]):
@@ -314,9 +314,9 @@ class GroupBy(IR):
 
     df: IR
     """Input dataframe."""
-    agg_requests: list[expr.Expr]
+    agg_requests: list[expr.NamedExpr]
     """List of expressions to evaluate groupwise."""
-    keys: list[expr.Expr]
+    keys: list[expr.NamedExpr]
     """List of expressions forming the keys."""
     maintain_order: bool
     """Should the order of the input dataframe be maintained?"""
@@ -341,7 +341,7 @@ class GroupBy(IR):
         ------
         NotImplementedError for unsupported expression nodes.
         """
-        if isinstance(agg, (expr.NamedExpr, expr.BinOp, expr.Cast)):
+        if isinstance(agg, (expr.BinOp, expr.Cast)):
             return max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, expr.Agg):
             if agg.name == "implode":
@@ -358,7 +358,7 @@ class GroupBy(IR):
             raise NotImplementedError("Maintaining order in groupby")
         if self.options.rolling:
             raise NotImplementedError("rolling window/groupby")
-        if any(GroupBy.check_agg(a) > 1 for a in self.agg_requests):
+        if any(GroupBy.check_agg(a.value) > 1 for a in self.agg_requests):
             raise NotImplementedError("Nested aggregations in groupby")
         self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
 
@@ -379,7 +379,7 @@ class GroupBy(IR):
         )
         # TODO: uniquify
         requests = []
-        replacements = []
+        replacements: list[expr.Expr] = []
         for info in self.agg_infos:
             for pre_eval, req, rep in info.requests:
                 if pre_eval is None:
@@ -389,12 +389,15 @@ class GroupBy(IR):
                 requests.append(plc.groupby.GroupByRequest(col, [req]))
                 replacements.append(rep)
         group_keys, raw_tables = grouper.aggregate(requests)
-        raw_columns = []
+        # TODO: names
+        raw_columns: list[NamedColumn] = []
         for i, table in enumerate(raw_tables):
             (column,) = table.columns()
-            raw_columns.append(Column(column, f"column{i}"))
+            raw_columns.append(NamedColumn(column, f"tmp{i}"))
         mapping = dict(zip(replacements, raw_columns))
-        result_keys = [Column(gk, k.name) for gk, k in zip(group_keys.columns(), keys)]
+        result_keys = [
+            NamedColumn(gk, k.name) for gk, k in zip(group_keys.columns(), keys)
+        ]
         result_subs = DataFrame(raw_columns, [])
         results = [
             req.evaluate(result_subs, mapping=mapping) for req in self.agg_requests
@@ -410,9 +413,9 @@ class Join(IR):
     """Left frame."""
     right: IR
     """Right frame."""
-    left_on: list[expr.Expr]
+    left_on: list[expr.NamedExpr]
     """List of expressions used as keys in the left frame."""
-    right_on: list[expr.Expr]
+    right_on: list[expr.NamedExpr]
     """List of expressions used as keys in the right frame."""
     options: tuple[
         Literal["inner", "left", "full", "leftsemi", "leftanti"],
@@ -510,7 +513,7 @@ class Join(IR):
             if coalesce and how != "inner":
                 left = left.replace_columns(
                     *(
-                        Column(
+                        NamedColumn(
                             plc.replace.replace_nulls(left_col.obj, right_col.obj),
                             left_col.name,
                         )
@@ -538,13 +541,13 @@ class HStack(IR):
 
     df: IR
     """Input dataframe."""
-    cse: list[expr.Expr]
+    cse: list[expr.NamedExpr]
     """
     List of common subexpressions that will appear in the selected expressions.
 
     These must be evaluated before the returned expressions.
     """
-    columns: list[expr.Expr]
+    columns: list[expr.NamedExpr]
     """List of expressions to produce new columns."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
@@ -614,7 +617,11 @@ class Distinct(IR):
                 plc.types.NanEquality.ALL_EQUAL,
             )
         result = DataFrame(
-            [Column(c, old.name) for c, old in zip(table.columns(), df.columns)], []
+            [
+                NamedColumn(c, old.name).sorted_like(old)
+                for c, old in zip(table.columns(), df.columns)
+            ],
+            [],
         )
         if keys_sorted or self.stable:
             result = result.sorted_like(df)
@@ -627,7 +634,7 @@ class Sort(IR):
 
     df: IR
     """Input."""
-    by: list[expr.Expr]
+    by: list[expr.NamedExpr]
     """List of expressions to produce sort keys."""
     do_sort: Callable[..., plc.Table]
     """pylibcudf sorting function."""
@@ -642,7 +649,7 @@ class Sort(IR):
         self,
         schema: dict,
         df: IR,
-        by: list[expr.Expr],
+        by: list[expr.NamedExpr],
         options: Any,
         zlice: tuple[int, int] | None,
     ):
@@ -675,7 +682,9 @@ class Sort(IR):
             self.order,
             self.null_order,
         )
-        columns = [Column(c, old.name) for c, old in zip(table.columns(), df.columns)]
+        columns = [
+            NamedColumn(c, old.name) for c, old in zip(table.columns(), df.columns)
+        ]
         # If a sort key is in the result table, set the sortedness property
         for k, i in enumerate(keys_in_result):
             columns[i] = columns[i].set_sorted(
@@ -709,7 +718,7 @@ class Filter(IR):
 
     df: IR
     """Input."""
-    mask: expr.Expr
+    mask: expr.NamedExpr
     """Expression evaluating to a mask."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
