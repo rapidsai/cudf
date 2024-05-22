@@ -40,6 +40,15 @@ from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import GetAttrGetItemMixin
 
 
+def _deprecate_collect():
+    warnings.warn(
+        "Groupby.collect is deprecated and "
+        "will be removed in a future version. "
+        "Use `.agg(list)` instead.",
+        FutureWarning,
+    )
+
+
 # The three functions below return the quantiles [25%, 50%, 75%]
 # respectively, which are called in the describe() method to output
 # the summary stats of a GroupBy object
@@ -2180,7 +2189,8 @@ class GroupBy(Serializable, Reducible, Scannable):
     @_cudf_nvtx_annotate
     def collect(self):
         """Get a list of all the values for each column in each group."""
-        return self.agg("collect")
+        _deprecate_collect()
+        return self.agg(list)
 
     @_cudf_nvtx_annotate
     def unique(self):
