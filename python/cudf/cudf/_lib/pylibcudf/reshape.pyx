@@ -31,8 +31,8 @@ cpdef Column interleave_columns(Table source_table):
 
     Returns
     -------
-    Table
-        A new table with
+    Column
+        A new column which is the result of interleaving the input columns
 
     """
     cdef unique_ptr[column] c_result
@@ -52,6 +52,11 @@ cpdef Table tile(Table source_table, size_type count):
         The input table containing rows to be repeated
     count: size_type
         The number of times to tile "rows". Must be non-negative
+
+    Returns
+    -------
+    Table
+        The table containing the tiled "rows"
     """
     cdef unique_ptr[table] c_result
 
