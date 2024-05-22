@@ -773,6 +773,7 @@ cdef class ParquetReader:
     cdef bool initialized
     cdef unique_ptr[cpp_chunked_parquet_reader] reader
     cdef size_t chunk_read_limit
+    cdef size_t pass_read_limit
     cdef size_t row_group_size_bytes
     cdef table_metadata result_meta
     cdef vector[unordered_map[string, string]] per_file_user_data
@@ -790,7 +791,9 @@ cdef class ParquetReader:
 
     def __cinit__(self, filepaths_or_buffers, columns=None, row_groups=None,
                   use_pandas_metadata=True,
-                  Expression filters=None, int chunk_read_limit=1024000000):
+                  Expression filters=None,
+                  size_t chunk_read_limit=0,
+                  size_t pass_read_limit=1024000000):
 
         # Convert NativeFile buffers to NativeFileDatasource,
         # but save original buffers in case we need to use
@@ -840,9 +843,16 @@ cdef class ParquetReader:
         self.allow_range_index &= filters is None
 
         self.chunk_read_limit = chunk_read_limit
+        self.pass_read_limit = pass_read_limit
 
         with nogil:
-            self.reader.reset(new cpp_chunked_parquet_reader(chunk_read_limit, args))
+            self.reader.reset(
+                new cpp_chunked_parquet_reader(
+                    chunk_read_limit,
+                    pass_read_limit,
+                    args
+                )
+            )
         self.initialized = False
         self.row_groups = row_groups
         self.filepaths_or_buffers = filepaths_or_buffers
