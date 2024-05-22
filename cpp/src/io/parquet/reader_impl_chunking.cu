@@ -1148,12 +1148,12 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
 
 }  // anonymous namespace
 
-void reader::impl::handle_chunking(bool uses_custom_row_bounds)
+void reader::impl::handle_chunking(read_mode mode)
 {
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
     // setup the next pass
-    setup_next_pass(uses_custom_row_bounds);
+    setup_next_pass(mode);
   }
 
   auto& pass = *_pass_itm_data;
@@ -1181,15 +1181,15 @@ void reader::impl::handle_chunking(bool uses_custom_row_bounds)
       if (_file_itm_data._current_input_pass == _file_itm_data.num_passes()) { return; }
 
       // setup the next pass
-      setup_next_pass(uses_custom_row_bounds);
+      setup_next_pass(mode);
     }
   }
 
   // setup the next sub pass
-  setup_next_subpass(uses_custom_row_bounds);
+  setup_next_subpass(mode);
 }
 
-void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
+void reader::impl::setup_next_pass(read_mode mode)
 {
   auto const num_passes = _file_itm_data.num_passes();
 
@@ -1260,7 +1260,7 @@ void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
     detect_malformed_pages(
       pass.pages,
       pass.chunks,
-      uses_custom_row_bounds ? std::nullopt : std::make_optional(pass.num_rows),
+      uses_custom_row_bounds(mode) ? std::nullopt : std::make_optional(pass.num_rows),
       _stream);
 
     // decompress dictionary data if applicable.
@@ -1309,7 +1309,7 @@ void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
   }
 }
 
-void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
+void reader::impl::setup_next_subpass(read_mode mode)
 {
   auto& pass    = *_pass_itm_data;
   pass.subpass  = std::make_unique<subpass_intermediate_data>();
@@ -1444,7 +1444,7 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
 
   // preprocess pages (computes row counts for lists, computes output chunks and computes
   // the actual row counts we will be able load out of this subpass)
-  preprocess_subpass_pages(uses_custom_row_bounds, _output_chunk_read_limit);
+  preprocess_subpass_pages(mode, _output_chunk_read_limit);
 
 #if defined(PARQUET_CHUNK_LOGGING)
   printf("\tSubpass: skip_rows(%'lu), num_rows(%'lu), remaining read limit(%'lu)\n",
@@ -1519,8 +1519,8 @@ void reader::impl::create_global_chunk_info()
       auto& schema   = _metadata->get_schema(col.schema_idx);
 
       auto [clock_rate, logical_type] =
-        conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
-                        _timestamp_type.id(),
+        conversion_info(to_type_id(schema, _strings_to_categorical, _options.timestamp_type.id()),
+                        _options.timestamp_type.id(),
                         schema.type,
                         schema.logical_type);
 
