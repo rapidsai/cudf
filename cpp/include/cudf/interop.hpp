@@ -46,6 +46,8 @@ struct ArrowDeviceArray;
 
 struct ArrowSchema;
 
+struct ArrowArray;
+
 namespace cudf {
 /**
  * @addtogroup interop_dlpack
