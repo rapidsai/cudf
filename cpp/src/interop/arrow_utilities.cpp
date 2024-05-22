@@ -66,5 +66,25 @@ data_type arrow_to_cudf_type(const ArrowSchemaView* arrow_view)
     default: CUDF_FAIL("Unsupported type_id conversion to cudf", cudf::data_type_error);
   }
 }
+
+ArrowType id_to_arrow_type(cudf::type_id id)
+{
+  switch (id) {
+    case cudf::type_id::BOOL8: return NANOARROW_TYPE_BOOL;
+    case cudf::type_id::INT8: return NANOARROW_TYPE_INT8;
+    case cudf::type_id::INT16: return NANOARROW_TYPE_INT16;
+    case cudf::type_id::INT32: return NANOARROW_TYPE_INT32;
+    case cudf::type_id::INT64: return NANOARROW_TYPE_INT64;
+    case cudf::type_id::UINT8: return NANOARROW_TYPE_UINT8;
+    case cudf::type_id::UINT16: return NANOARROW_TYPE_UINT16;
+    case cudf::type_id::UINT32: return NANOARROW_TYPE_UINT32;
+    case cudf::type_id::UINT64: return NANOARROW_TYPE_UINT64;
+    case cudf::type_id::FLOAT32: return NANOARROW_TYPE_FLOAT;
+    case cudf::type_id::FLOAT64: return NANOARROW_TYPE_DOUBLE;
+    case cudf::type_id::TIMESTAMP_DAYS: return NANOARROW_TYPE_DATE32;
+    default: CUDF_FAIL("Unsupported type_id conversion to arrow type", cudf::data_type_error);
+  }
+}
+
 }  // namespace detail
 }  // namespace cudf
