@@ -1036,7 +1036,9 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCuioPinnedPoolMemoryResource(J
     // if the regular pinned pool is exhausted
     pinned_fallback_mr.reset(new pinned_fallback_host_memory_resource(pool));
     // set the cuio host mr and store the prior resource in our static variable
-    prior_cuio_host_mr() = cudf::io::set_host_memory_resource(*pinned_fallback_mr);
+    // we pass host_mr_options{0} so we disable any default pinned pool creation from cuDF
+    prior_cuio_host_mr() =
+      cudf::io::set_host_memory_resource(*pinned_fallback_mr, cudf::io::host_mr_options{0});
   }
   CATCH_STD(env, )
 }

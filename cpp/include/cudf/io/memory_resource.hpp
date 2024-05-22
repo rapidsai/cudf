@@ -47,7 +47,8 @@ struct host_mr_options {
  * @return The previous resource that was in use
  */
 rmm::host_async_resource_ref set_host_memory_resource(
-  rmm::host_async_resource_ref mr, std::optional<host_mr_options> const& default_opts = std::nullopt);
+  rmm::host_async_resource_ref mr,
+  std::optional<host_mr_options> const& default_opts = std::nullopt);
 
 /**
  * @brief Get the rmm resource being used for host memory allocations by

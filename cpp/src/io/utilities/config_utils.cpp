@@ -256,8 +256,8 @@ rmm::host_async_resource_ref set_host_memory_resource(
   rmm::host_async_resource_ref mr, std::optional<host_mr_options> const& default_opts)
 {
   std::scoped_lock lock{host_mr_mutex()};
-  auto last_mr = host_mr(default_opts);
-  host_mr(std::nullopt)    = mr;
+  auto last_mr          = host_mr(default_opts);
+  host_mr(std::nullopt) = mr;
   return last_mr;
 }
 
