@@ -55,7 +55,7 @@ ALL_TYPES = (
 
 def pa_type_to_plc_type(pa_type):
     # TODO: should be a cleaner way
-    return plc.interop.from_arrow(pa.array([], type=pa_type)).type()
+    return plc.interop.from_arrow(pa_type)
 
 
 @pytest.fixture(scope="module", params=NUMERIC_TYPES, ids=repr)

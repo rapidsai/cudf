@@ -86,10 +86,17 @@ def from_arrow(pyarrow_object, *, DataType data_type=None):
 
 @from_arrow.register(pa.DataType)
 def _from_arrow_datatype(pyarrow_object):
-    return DataType(
-        SUPPORTED_NUMPY_TO_LIBCUDF_TYPES.get(
-            np.dtype(pyarrow_object.to_pandas_dtype()))
-        )
+    if isinstance(pyarrow_object, pa.Decimal128Type):
+        return DataType(type_id.DECIMAL128, scale=-pyarrow_object.scale)
+    elif isinstance(pyarrow_object, pa.StructType):
+        return DataType(type_id.STRUCT)
+    elif isinstance(pyarrow_object, pa.ListType):
+        return DataType(type_id.LIST)
+    else:
+        return DataType(
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES.get(
+                np.dtype(pyarrow_object.to_pandas_dtype()))
+            )
 
 
 @from_arrow.register(pa.Table)
