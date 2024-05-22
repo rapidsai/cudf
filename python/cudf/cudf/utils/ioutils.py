@@ -1718,10 +1718,32 @@ def get_reader_filepath_or_buffer(
         if _is_local_filesystem(fs):
             # Doing this as `read_json` accepts a json string
             # path_or_data need not be a filepath like string
+
+            # helper for checking if raw text looks like a json filename
+            compression_extensions = [
+                ".tar",
+                ".tar.gz",
+                ".tar.bz2",
+                ".tar.xz",
+                ".gz",
+                ".bz2",
+                ".zip",
+                ".xz",
+                ".zst",
+                "",
+            ]
+
             if len(paths):
                 if fs.exists(paths[0]):
                     path_or_data = paths if len(paths) > 1 else paths[0]
-                elif not allow_raw_text_input:
+
+                # raise FileNotFound if path looks like json
+                # following pandas
+                # see
+                # https://github.com/pandas-dev/pandas/pull/46718/files#diff-472ce5fe087e67387942e1e1c409a5bc58dde9eb8a2db6877f1a45ae4974f694R724-R729
+                elif not allow_raw_text_input or paths[0].lower().endswith(
+                    tuple(f".json{c}" for c in compression_extensions)
+                ):
                     raise FileNotFoundError(
                         f"{path_or_data} could not be resolved to any files"
                     )
