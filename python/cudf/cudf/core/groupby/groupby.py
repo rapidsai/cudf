@@ -949,7 +949,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         result = result[sizes > n]
 
-        result._index = self.obj.index.take(
+        result.index = self.obj.index.take(
             result._data["__groupbynth_order__"]
         )
         del result._data["__groupbynth_order__"]
@@ -1038,7 +1038,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         if has_null_group:
             group_ids.iloc[-1] = cudf.NA
 
-        group_ids._index = index
+        group_ids.index = index
         return self._broadcast(group_ids)
 
     def sample(
@@ -1208,7 +1208,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def _grouped(self, *, include_groups: bool = True):
         offsets, grouped_key_cols, grouped_value_cols = self._groupby.groups(
-            [*self.obj._index._columns, *self.obj._columns]
+            [*self.obj.index._columns, *self.obj._columns]
         )
         grouped_keys = cudf.core.index._index_from_data(
             dict(enumerate(grouped_key_cols))
@@ -2849,8 +2849,8 @@ class _Grouping(Serializable):
             self._key_columns.append(self._obj._data[by])
         except KeyError as e:
             # `by` can be index name(label) too.
-            if by in self._obj._index.names:
-                self._key_columns.append(self._obj._index._data[by])
+            if by in self._obj.index.names:
+                self._key_columns.append(self._obj.index._data[by])
             else:
                 raise e
         self.names.append(by)
