@@ -57,6 +57,8 @@ struct host_mr_options {
  * @throws cudf::logic_error if called after the default host memory resource has been created
  *
  * @param opts Options to configure the default host memory resource
+ * @return True if this call successfully configured the host memory resource, false if a
+ * a resource was already configured.
  */
 bool config_default_host_memory_resource(host_mr_options const& opts);
 
