@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -761,6 +762,7 @@ TEST_F(ColumnFactoryTest, FromStructScalarNull) { struct_from_scalar(false); }
 
 TEST_F(ColumnFactoryTest, FromScalarErrors)
 {
+  if (cudf::strings::detail::is_large_strings_enabled()) { return; }
   cudf::string_scalar ss("hello world");
   EXPECT_THROW(cudf::make_column_from_scalar(ss, 214748365), std::overflow_error);
 
