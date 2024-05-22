@@ -22,7 +22,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/strings/detail/replace.hpp>
-#include <cudf/strings/detail/strings_children_ex.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/replace.hpp>
@@ -399,7 +399,7 @@ std::unique_ptr<column> replace_string_parallel(strings_column_view const& input
 {
   auto d_strings = column_device_view::create(input.parent(), stream);
 
-  auto [offsets_column, chars] = cudf::strings::detail::experimental::make_strings_children(
+  auto [offsets_column, chars] = make_strings_children(
     replace_fn{*d_strings, d_target, d_replacement, maxrepl}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),

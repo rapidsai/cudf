@@ -41,6 +41,11 @@
 
 #include <vector>
 
+using JOIN_KEY_TYPE_RANGE = nvbench::type_list<nvbench::int32_t, nvbench::int64_t>;
+using JOIN_NULLABLE_RANGE = nvbench::enum_type_list<false, true>;
+
+auto const JOIN_SIZE_RANGE = std::vector<nvbench::int64_t>{1000, 100'000, 10'000'000};
+
 struct null75_generator {
   thrust::minstd_rand engine;
   thrust::uniform_int_distribution<unsigned> rand_gen;
@@ -55,52 +60,42 @@ struct null75_generator {
 
 enum class join_t { CONDITIONAL, MIXED, HASH };
 
-inline void skip_helper(nvbench::state& state)
-{
-  auto const build_table_size = state.get_int64("Build Table Size");
-  auto const probe_table_size = state.get_int64("Probe Table Size");
-
-  if (build_table_size > probe_table_size) {
-    state.skip("Large build tables are skipped.");
-    return;
-  }
-
-  if (build_table_size * 100 <= probe_table_size) {
-    state.skip("Large probe tables are skipped.");
-    return;
-  }
-}
-
-template <typename key_type,
-          typename payload_type,
+template <typename Key,
           bool Nullable,
           join_t join_type = join_t::HASH,
           typename state_type,
           typename Join>
 void BM_join(state_type& state, Join JoinFunc)
 {
-  auto const build_table_size = [&]() {
+  auto const right_size = [&]() {
     if constexpr (std::is_same_v<state_type, benchmark::State>) {
       return static_cast<cudf::size_type>(state.range(0));
     }
     if constexpr (std::is_same_v<state_type, nvbench::state>) {
-      return static_cast<cudf::size_type>(state.get_int64("Build Table Size"));
+      return static_cast<cudf::size_type>(state.get_int64("right_size"));
     }
   }();
-  auto const probe_table_size = [&]() {
+  auto const left_size = [&]() {
     if constexpr (std::is_same_v<state_type, benchmark::State>) {
       return static_cast<cudf::size_type>(state.range(1));
     }
     if constexpr (std::is_same_v<state_type, nvbench::state>) {
-      return static_cast<cudf::size_type>(state.get_int64("Probe Table Size"));
+      return static_cast<cudf::size_type>(state.get_int64("left_size"));
     }
   }();
+
+  if constexpr (std::is_same_v<state_type, nvbench::state>) {
+    if (right_size > left_size) {
+      state.skip("Skip large right table");
+      return;
+    }
+  }
 
   double const selectivity = 0.3;
   int const multiplicity   = 1;
 
   // Generate build and probe tables
-  auto build_random_null_mask = [](int size) {
+  auto right_random_null_mask = [](int size) {
     // roughly 75% nulls
     auto validity =
       thrust::make_transform_iterator(thrust::make_counting_iterator(0), null75_generator{});
@@ -111,62 +106,62 @@ void BM_join(state_type& state, Join JoinFunc)
                                   rmm::mr::get_current_device_resource());
   };
 
-  std::unique_ptr<cudf::column> build_key_column0 = [&]() {
-    auto [null_mask, null_count] = build_random_null_mask(build_table_size);
-    return Nullable ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()),
-                                                build_table_size,
-                                                std::move(null_mask),
-                                                null_count)
-                    : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()),
-                                                build_table_size);
+  std::unique_ptr<cudf::column> right_key_column0 = [&]() {
+    auto [null_mask, null_count] = right_random_null_mask(right_size);
+    return Nullable
+             ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()),
+                                         right_size,
+                                         std::move(null_mask),
+                                         null_count)
+             : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()), right_size);
   }();
-  std::unique_ptr<cudf::column> probe_key_column0 = [&]() {
-    auto [null_mask, null_count] = build_random_null_mask(probe_table_size);
-    return Nullable ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()),
-                                                probe_table_size,
-                                                std::move(null_mask),
-                                                null_count)
-                    : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<key_type>()),
-                                                probe_table_size);
+  std::unique_ptr<cudf::column> left_key_column0 = [&]() {
+    auto [null_mask, null_count] = right_random_null_mask(left_size);
+    return Nullable
+             ? cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()),
+                                         left_size,
+                                         std::move(null_mask),
+                                         null_count)
+             : cudf::make_numeric_column(cudf::data_type(cudf::type_to_id<Key>()), left_size);
   }();
 
-  generate_input_tables<key_type, cudf::size_type>(
-    build_key_column0->mutable_view().data<key_type>(),
-    build_table_size,
-    probe_key_column0->mutable_view().data<key_type>(),
-    probe_table_size,
-    selectivity,
-    multiplicity);
+  // build table is right table, probe table is left table
+  generate_input_tables<Key, cudf::size_type>(right_key_column0->mutable_view().data<Key>(),
+                                              right_size,
+                                              left_key_column0->mutable_view().data<Key>(),
+                                              left_size,
+                                              selectivity,
+                                              multiplicity);
 
-  // Copy build_key_column0 and probe_key_column0 into new columns.
+  // Copy right_key_column0 and left_key_column0 into new columns.
   // If Nullable, the new columns will be assigned new nullmasks.
-  auto const build_key_column1 = [&]() {
-    auto col = std::make_unique<cudf::column>(build_key_column0->view());
+  auto const right_key_column1 = [&]() {
+    auto col = std::make_unique<cudf::column>(right_key_column0->view());
     if (Nullable) {
-      auto [null_mask, null_count] = build_random_null_mask(build_table_size);
+      auto [null_mask, null_count] = right_random_null_mask(right_size);
       col->set_null_mask(std::move(null_mask), null_count);
     }
     return col;
   }();
-  auto const probe_key_column1 = [&]() {
-    auto col = std::make_unique<cudf::column>(probe_key_column0->view());
+  auto const left_key_column1 = [&]() {
+    auto col = std::make_unique<cudf::column>(left_key_column0->view());
     if (Nullable) {
-      auto [null_mask, null_count] = build_random_null_mask(probe_table_size);
+      auto [null_mask, null_count] = right_random_null_mask(left_size);
       col->set_null_mask(std::move(null_mask), null_count);
     }
     return col;
   }();
 
-  auto init = cudf::make_fixed_width_scalar<payload_type>(static_cast<payload_type>(0));
-  auto build_payload_column = cudf::sequence(build_table_size, *init);
-  auto probe_payload_column = cudf::sequence(probe_table_size, *init);
+  auto init                 = cudf::make_fixed_width_scalar<Key>(static_cast<Key>(0));
+  auto right_payload_column = cudf::sequence(right_size, *init);
+  auto left_payload_column  = cudf::sequence(left_size, *init);
 
   CUDF_CHECK_CUDA(0);
 
-  cudf::table_view build_table(
-    {build_key_column0->view(), build_key_column1->view(), *build_payload_column});
-  cudf::table_view probe_table(
-    {probe_key_column0->view(), probe_key_column1->view(), *probe_payload_column});
+  cudf::table_view right_table(
+    {right_key_column0->view(), right_key_column1->view(), *right_payload_column});
+  cudf::table_view left_table(
+    {left_key_column0->view(), left_key_column1->view(), *left_payload_column});
 
   // Setup join parameters and result table
   [[maybe_unused]] std::vector<cudf::size_type> columns_to_join = {0};
@@ -177,8 +172,8 @@ void BM_join(state_type& state, Join JoinFunc)
     for (auto _ : state) {
       cuda_event_timer raii(state, true, cudf::get_default_stream());
 
-      auto result = JoinFunc(probe_table.select(columns_to_join),
-                             build_table.select(columns_to_join),
+      auto result = JoinFunc(left_table.select(columns_to_join),
+                             right_table.select(columns_to_join),
                              cudf::null_equality::UNEQUAL);
     }
   }
@@ -191,10 +186,10 @@ void BM_join(state_type& state, Join JoinFunc)
         cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
       state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
         rmm::cuda_stream_view stream_view{launch.get_stream()};
-        auto result = JoinFunc(probe_table.select(columns_to_join),
-                               build_table.select(columns_to_join),
-                               probe_table.select({1}),
-                               build_table.select({1}),
+        auto result = JoinFunc(left_table.select(columns_to_join),
+                               right_table.select(columns_to_join),
+                               left_table.select({1}),
+                               right_table.select({1}),
                                left_zero_eq_right_zero,
                                cudf::null_equality::UNEQUAL,
                                stream_view);
@@ -203,8 +198,8 @@ void BM_join(state_type& state, Join JoinFunc)
     if constexpr (join_type == join_t::HASH) {
       state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
         rmm::cuda_stream_view stream_view{launch.get_stream()};
-        auto result = JoinFunc(probe_table.select(columns_to_join),
-                               build_table.select(columns_to_join),
+        auto result = JoinFunc(left_table.select(columns_to_join),
+                               right_table.select(columns_to_join),
                                cudf::null_equality::UNEQUAL,
                                stream_view);
       });
@@ -223,7 +218,7 @@ void BM_join(state_type& state, Join JoinFunc)
       cuda_event_timer raii(state, true, cudf::get_default_stream());
 
       auto result =
-        JoinFunc(probe_table, build_table, left_zero_eq_right_zero, cudf::null_equality::UNEQUAL);
+        JoinFunc(left_table, right_table, left_zero_eq_right_zero, cudf::null_equality::UNEQUAL);
     }
   }
 }

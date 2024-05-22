@@ -357,6 +357,11 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     # as join is not assigning any names to index,
                     # update it over here
                     df.index.name = columns_df.index.name
+                    if not isinstance(
+                        df.index, MultiIndex
+                    ) and is_numeric_dtype(df.index.dtype):
+                        # Preserve the original index type.
+                        df.index = df.index.astype(self._frame.index.dtype)
                     df = df.sort_values(by=[tmp_col_name, cantor_name])
                     df.drop(columns=[tmp_col_name, cantor_name], inplace=True)
                     # There were no indices found
@@ -400,12 +405,12 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 value = as_column(value, length=length)
 
             new_col = cudf.Series(value, index=idx)
-            if not self._frame.empty:
+            if len(self._frame.index) != 0:
                 new_col = new_col._align_to_index(
                     self._frame.index, how="right"
                 )
 
-            if self._frame.empty:
+            if len(self._frame.index) == 0:
                 self._frame.index = (
                     idx if idx is not None else cudf.RangeIndex(len(new_col))
                 )
@@ -1229,7 +1234,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return pd.Series(self._dtypes, dtype="object")
 
     @property
-    def ndim(self):
+    def ndim(self) -> int:
         """Dimension of the data. DataFrame ndim is always 2."""
         return 2
 
