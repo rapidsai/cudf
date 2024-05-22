@@ -351,7 +351,7 @@ std::unique_ptr<cudf::scalar> from_arrow(
 /**
  * @brief Create `cudf::table` from given ArrowArray and ArrowSchema input
  *
- * @throws std::invalid_argument if either schema or input are NULL 
+ * @throws std::invalid_argument if either schema or input are NULL
  *
  * @throws cudf::data_type_error if the input array is not a struct array.
  *
