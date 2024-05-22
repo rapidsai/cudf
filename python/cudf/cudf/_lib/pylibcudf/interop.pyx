@@ -28,18 +28,37 @@ from cudf._lib.pylibcudf.libcudf.wrappers.decimals cimport (
     scale_type,
 )
 
-import numpy as np
-
-from .types import (
-    LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
-    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES,
-)
-
 from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
 from .types cimport DataType, type_id
 
+ARROW_TO_PYLIBCUDF_TYPES = {
+    pa.int8(): type_id.INT8,
+    pa.int16(): type_id.INT16,
+    pa.int32(): type_id.INT32,
+    pa.int64(): type_id.INT64,
+    pa.uint8(): type_id.UINT8,
+    pa.uint16(): type_id.UINT16,
+    pa.uint32(): type_id.UINT32,
+    pa.uint64(): type_id.UINT64,
+    pa.float32(): type_id.FLOAT32,
+    pa.float64(): type_id.FLOAT64,
+    pa.bool_(): type_id.BOOL8,
+    pa.string(): type_id.STRING,
+    pa.duration('s'): type_id.DURATION_SECONDS,
+    pa.duration('ms'): type_id.DURATION_MILLISECONDS,
+    pa.duration('us'): type_id.DURATION_MICROSECONDS,
+    pa.duration('ns'): type_id.DURATION_NANOSECONDS,
+    pa.timestamp('s'): type_id.TIMESTAMP_SECONDS,
+    pa.timestamp('ms'): type_id.TIMESTAMP_MILLISECONDS,
+    pa.timestamp('us'): type_id.TIMESTAMP_MICROSECONDS,
+    pa.timestamp('ns'): type_id.TIMESTAMP_NANOSECONDS,
+}
+
+LIBCUDF_TO_ARROW_TYPES = {
+    v: k for k, v in ARROW_TO_PYLIBCUDF_TYPES.items()
+}
 
 cdef column_metadata _metadata_to_libcudf(metadata):
     """Convert a ColumnMetadata object to C++ column_metadata.
@@ -93,10 +112,7 @@ def _from_arrow_datatype(pyarrow_object):
     elif isinstance(pyarrow_object, pa.ListType):
         return DataType(type_id.LIST)
     else:
-        return DataType(
-            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES.get(
-                np.dtype(pyarrow_object.to_pandas_dtype()))
-            )
+        return DataType(ARROW_TO_PYLIBCUDF_TYPES.get(pyarrow_object))
 
 
 @from_arrow.register(pa.Table)
@@ -201,9 +217,7 @@ def _to_arrow_datatype(cudf_object):
         raise ValueError(
             f"Cannot convert {cudf_object} to PyArrow type"
         )
-    return pa.from_numpy_dtype(
-        LIBCUDF_TO_SUPPORTED_NUMPY_TYPES.get(cudf_object)
-    )
+    return ARROW_TO_PYLIBCUDF_TYPES.get(cudf_object.id())
 
 
 @to_arrow.register(Table)
