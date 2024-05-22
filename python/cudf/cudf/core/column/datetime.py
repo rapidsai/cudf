@@ -340,31 +340,33 @@ class DatetimeColumn(column.ColumnBase):
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
 
-    def get_day_names(self, locale: str | None = None) -> ColumnBase:
+    def _get_field_names(
+        self,
+        field: Literal["month", "weekday"],
+        labels: list[str],
+        locale: str | None = None,
+    ) -> ColumnBase:
         if locale is not None:
             raise NotImplementedError(
                 "Setting a locale is currently not supported. "
                 "Results will be returned in your current locale."
             )
-        days = as_column(list(calendar.day_name))
-        indices = self.get_dt_field("weekday")
+        col_labels = as_column(labels)
+        indices = self.get_dt_field(field)
         has_nulls = indices.has_nulls()
         if has_nulls:
-            indices = indices.fillna(len(days))
-        return days.take(indices, nullify=True, check_bounds=has_nulls)
+            indices = indices.fillna(len(col_labels))
+        return col_labels.take(indices, nullify=True, check_bounds=has_nulls)
+
+    def get_day_names(self, locale: str | None = None) -> ColumnBase:
+        return self._get_field_names(
+            "weekday", list(calendar.day_name), locale=locale
+        )
 
     def get_month_names(self, locale: str | None = None) -> ColumnBase:
-        if locale is not None:
-            raise NotImplementedError(
-                "Setting a locale is currently not supported. "
-                "Results will be returned in your current locale."
-            )
-        months = as_column(list(calendar.month_name))
-        indices = self.get_dt_field("month")
-        has_nulls = indices.has_nulls()
-        if has_nulls:
-            indices = indices.fillna(len(months))
-        return months.take(indices, nullify=True, check_bounds=has_nulls)
+        return self._get_field_names(
+            "month", list(calendar.month_name), locale=locale
+        )
 
     def ceil(self, freq: str) -> ColumnBase:
         return libcudf.datetime.ceil_datetime(self, freq)
