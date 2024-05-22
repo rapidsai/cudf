@@ -28,7 +28,7 @@ def assert_gpu_result_equal(
     rtol: float = 1e-05,
     atol: float = 1e-08,
     categorical_as_str: bool = False,
-):
+) -> None:
     """
     Assert that collection of a lazyframe on GPU produces correct results.
 
