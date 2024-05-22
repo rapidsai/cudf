@@ -30,12 +30,9 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cuda/atomic>
-#include <thrust/binary_search.h>
 #include <thrust/copy.h>
-#include <thrust/count.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
 #include <thrust/transform.h>
 
 namespace cudf::strings::detail {
