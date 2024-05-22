@@ -1954,3 +1954,16 @@ def test_writer_lz4():
 
     got = pd.read_orc(buffer)
     assert_eq(gdf, got)
+
+
+def test_row_group_alignment(datadir):
+    path = datadir / "TestOrcFile.MapManyNulls.parquet"
+
+    expected = cudf.read_parquet(path)
+
+    buffer = BytesIO()
+    expected.to_orc(buffer)
+
+    got = cudf.read_orc(buffer)
+
+    assert_eq(expected, got)
