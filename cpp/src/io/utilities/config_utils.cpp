@@ -209,7 +209,7 @@ static_assert(cuda::mr::resource_with<fixed_pinned_pool_memory_resource,
 
 }  // namespace
 
-CUDF_EXPORT rmm::host_async_resource_ref& make_default_pinned_mr(std::optional<size_t> config_size)
+CUDF_EXPORT rmm::host_async_resource_ref make_default_pinned_mr(std::optional<size_t> config_size)
 {
   static fixed_pinned_pool_memory_resource mr = [config_size]() {
     auto const size = [&config_size]() -> size_t {
@@ -244,44 +244,28 @@ CUDF_EXPORT std::mutex& host_mr_mutex()
 }
 
 // Must be called with the host_mr_mutex mutex held
-CUDF_EXPORT rmm::host_async_resource_ref& make_host_mr(std::optional<host_mr_options> const& opts)
+CUDF_EXPORT rmm::host_async_resource_ref& host_mr(
+  std::optional<host_mr_options> const& default_opts)
 {
-  static rmm::host_async_resource_ref* mr_ref = nullptr;
-  if (mr_ref == nullptr) {
-    mr_ref = &make_default_pinned_mr(opts ? opts->pool_size : std::nullopt);
-  } else {
-    // Throw an error if the user tries to reconfigure the default host resource
-    CUDF_EXPECTS(opts == std::nullopt, "The default host memory resource has already been created");
-  }
-
-  return *mr_ref;
-}
-
-// Must be called with the host_mr_mutex mutex held
-CUDF_EXPORT rmm::host_async_resource_ref& host_mr()
-{
-  static rmm::host_async_resource_ref mr_ref = make_host_mr(std::nullopt);
+  static rmm::host_async_resource_ref mr_ref =
+    make_default_pinned_mr(default_opts ? default_opts->pool_size : std::nullopt);
   return mr_ref;
 }
 
-rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_ref mr)
+rmm::host_async_resource_ref set_host_memory_resource(
+  rmm::host_async_resource_ref mr, std::optional<host_mr_options> const& default_opts)
 {
   std::scoped_lock lock{host_mr_mutex()};
-  auto last_mr = host_mr();
+  auto last_mr = host_mr(default_opts);
   host_mr()    = mr;
   return last_mr;
 }
 
-rmm::host_async_resource_ref get_host_memory_resource()
+rmm::host_async_resource_ref get_host_memory_resource(
+  std::optional<host_mr_options> const& default_opts)
 {
   std::scoped_lock lock{host_mr_mutex()};
-  return host_mr();
-}
-
-void config_default_host_memory_resource(host_mr_options const& opts)
-{
-  std::scoped_lock lock{host_mr_mutex()};
-  make_host_mr(opts);
+  return host_mr(default_opts);
 }
 
 }  // namespace cudf::io
