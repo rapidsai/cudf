@@ -152,7 +152,7 @@ def test_make_numeric_column(numeric_pa_type, mask_state):
 
 
 @pytest.mark.parametrize(
-    "non_numeric_pa_type", list(set(ALL_TYPES) - set(NUMERIC_TYPES))
+    "non_numeric_pa_type", [t for t in ALL_TYPES if t not in NUMERIC_TYPES]
 )
 def test_make_numeric_column_dtype_err(non_numeric_pa_type):
     plc_type = plc.interop.from_arrow(non_numeric_pa_type)
@@ -181,7 +181,7 @@ def test_make_fixed_point_column(fixed_point_pa_type, mask_state):
 
 
 @pytest.mark.parametrize(
-    "non_fixed_point_pa_type", list(set(ALL_TYPES) - set(DECIMAL_TYPES))
+    "non_fixed_point_pa_type", [t for t in ALL_TYPES if t not in DECIMAL_TYPES]
 )
 def test_make_fixed_point_column_dtype_err(non_fixed_point_pa_type):
     plc_type = plc.interop.from_arrow(non_fixed_point_pa_type)
@@ -209,7 +209,7 @@ def test_make_timestamp_column(timestamp_pa_type, mask_state):
 
 
 @pytest.mark.parametrize(
-    "non_timestamp_pa_type", list(set(ALL_TYPES) - set(TIMESTAMP_TYPES))
+    "non_timestamp_pa_type", [t for t in ALL_TYPES if t not in TIMESTAMP_TYPES]
 )
 def test_make_timestamp_column_dtype_err(non_timestamp_pa_type):
     plc_type = plc.interop.from_arrow(non_timestamp_pa_type)
@@ -237,7 +237,7 @@ def test_make_duration_column(duration_pa_type, mask_state):
 
 
 @pytest.mark.parametrize(
-    "non_duration_pa_type", list(set(ALL_TYPES) - set(DURATION_TYPES))
+    "non_duration_pa_type", [t for t in ALL_TYPES if t not in DURATION_TYPES]
 )
 def test_make_duration_column_dtype_err(non_duration_pa_type):
     plc_type = plc.interop.from_arrow(non_duration_pa_type)
