@@ -2349,3 +2349,16 @@ def test_loc_datetime_random_with_ts(data, scalar):
         expected = pdf.loc[:i]
 
         assert_eq(actual, expected)
+
+
+def test_sliced_categorical_as_ordered():
+    df = cudf.DataFrame({"a": list("caba"), "b": list(range(4))})
+    df["a"] = df["a"].astype("category")
+    df = df.iloc[:2]
+    result = df["a"].cat.as_ordered()
+    expected = cudf.Series(
+        ["c", "a"],
+        dtype=cudf.CategoricalDtype(list("abc"), ordered=True),
+        name="a",
+    )
+    assert_eq(result, expected)
