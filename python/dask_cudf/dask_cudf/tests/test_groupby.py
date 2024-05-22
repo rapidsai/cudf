@@ -53,7 +53,7 @@ def pdf(request):
 # deprecation check for "collect".
 @pytest.mark.parametrize(
     "aggregation",
-    tuple(set(OPTIMIZED_AGGS) - {list}) + ("collect",),
+    sorted(tuple(set(OPTIMIZED_AGGS) - {list}) + ("collect",)),
 )
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation, pdf):
