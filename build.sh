@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 # cuDF build script
 
@@ -109,8 +109,8 @@ function buildAll {
 }
 
 function buildLibCudfJniInDocker {
-    local cudaVersion="11.5.0"
-    local imageName="cudf-build:${cudaVersion}-devel-centos7"
+    local cudaVersion="11.8.0"
+    local imageName="cudf-build:${cudaVersion}-devel-rocky8"
     local CMAKE_GENERATOR="${CMAKE_GENERATOR:-Ninja}"
     local workspaceDir="/rapids"
     local localMavenRepo=${LOCAL_MAVEN_REPO:-"$HOME/.m2/repository"}
@@ -120,7 +120,7 @@ function buildLibCudfJniInDocker {
     mkdir -p "$CUDF_JAR_JAVA_BUILD_DIR/libcudf-cmake-build"
     mkdir -p "$HOME/.ccache" "$HOME/.m2"
     nvidia-docker build \
-        -f java/ci/Dockerfile.centos7 \
+        -f java/ci/Dockerfile.rocky \
         --build-arg CUDA_VERSION=${cudaVersion} \
         -t $imageName .
     nvidia-docker run -it -u $(id -u):$(id -g) --rm \

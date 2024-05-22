@@ -27,6 +27,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/atomic>
 #include <thrust/binary_search.h>
@@ -294,7 +295,7 @@ struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
 std::unique_ptr<column> create_offsets_from_positions(strings_column_view const& input,
                                                       device_span<int64_t const> const& positions,
                                                       rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr);
+                                                      rmm::device_async_resource_ref mr);
 
 /**
  * @brief Helper function used by split/rsplit and split_record/rsplit_record
@@ -315,7 +316,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   strings_column_view const& input,
   Tokenizer tokenizer,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto const strings_count = input.size();
   auto const chars_bytes =
@@ -364,8 +365,8 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
     });
 
   // create offsets from the counts for return to the caller
-  auto [offsets, total_tokens] = cudf::strings::detail::make_offsets_child_column(
-    token_counts.begin(), token_counts.end(), stream, mr);
+  auto [offsets, total_tokens] =
+    cudf::detail::make_offsets_child_column(token_counts.begin(), token_counts.end(), stream, mr);
   auto const d_tokens_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 

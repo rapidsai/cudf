@@ -22,6 +22,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <map>
 #include <string>
@@ -100,6 +101,10 @@ class json_reader_options {
   bool _lines = false;
   // Parse mixed types as a string column
   bool _mixed_types_as_string = false;
+  // Delimiter separating records in JSON lines
+  char _delimiter = '\n';
+  // Prune columns on read, selected based on the _dtypes option
+  bool _prune_columns = false;
 
   // Bytes to skip from the start
   size_t _byte_range_offset = 0;
@@ -227,6 +232,13 @@ class json_reader_options {
   }
 
   /**
+   * @brief Returns delimiter separating records in JSON lines
+   *
+   * @return Delimiter separating records in JSON lines
+   */
+  char get_delimiter() const { return _delimiter; }
+
+  /**
    * @brief Whether to read the file as a json object per line.
    *
    * @return `true` if reading the file as a json object per line
@@ -241,6 +253,17 @@ class json_reader_options {
   bool is_enabled_mixed_types_as_string() const { return _mixed_types_as_string; }
 
   /**
+   * @brief Whether to prune columns on read, selected based on the @ref set_dtypes option.
+   *
+   * When set as true, if the reader options include @ref set_dtypes, then
+   * the reader will only return those columns which are mentioned in @ref set_dtypes.
+   * If false, then all columns are returned, independent of the @ref set_dtypes setting.
+   *
+   * @return True if column pruning is enabled
+   */
+  bool is_enabled_prune_columns() const { return _prune_columns; }
+
+  /**
    * @brief Whether to parse dates as DD/MM versus MM/DD.
    *
    * @returns true if dates are parsed as DD/MM, false if MM/DD
@@ -250,9 +273,11 @@ class json_reader_options {
   /**
    * @brief Whether the legacy reader should be used.
    *
+   * @deprecated Since 24.06
+   *
    * @returns true if the legacy reader will be used, false otherwise
    */
-  bool is_enabled_legacy() const { return _legacy; }
+  [[deprecated]] bool is_enabled_legacy() const { return _legacy; }
 
   /**
    * @brief Whether the reader should keep quotes of string values.
@@ -325,6 +350,30 @@ class json_reader_options {
   void set_byte_range_size(size_type size) { _byte_range_size = size; }
 
   /**
+   * @brief Set delimiter separating records in JSON lines
+   *
+   * @param delimiter Delimiter separating records in JSON lines
+   */
+  void set_delimiter(char delimiter)
+  {
+    switch (delimiter) {
+      case '{':
+      case '[':
+      case '}':
+      case ']':
+      case ',':
+      case ':':
+      case '"':
+      case '\'':
+      case '\\':
+      case ' ':
+      case '\t':
+      case '\r': CUDF_FAIL("Unsupported delimiter character.", std::invalid_argument); break;
+    }
+    _delimiter = delimiter;
+  }
+
+  /**
    * @brief Set whether to read the file as a json object per line.
    *
    * @param val Boolean value to enable/disable the option to read each line as a json object
@@ -340,6 +389,17 @@ class json_reader_options {
   void enable_mixed_types_as_string(bool val) { _mixed_types_as_string = val; }
 
   /**
+   * @brief Set whether to prune columns on read, selected based on the @ref set_dtypes option.
+   *
+   * When set as true, if the reader options include @ref set_dtypes, then
+   * the reader will only return those columns which are mentioned in @ref set_dtypes.
+   * If false, then all columns are returned, independent of the @ref set_dtypes setting.
+   *
+   * @param val Boolean value to enable/disable column pruning
+   */
+  void enable_prune_columns(bool val) { _prune_columns = val; }
+
+  /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
    *
    * @param val Boolean value to enable/disable day first parsing format
@@ -349,9 +409,11 @@ class json_reader_options {
   /**
    * @brief Set whether to use the legacy reader.
    *
+   * @deprecated Since 24.06
+   *
    * @param val Boolean value to enable/disable the legacy reader
    */
-  void enable_legacy(bool val) { _legacy = val; }
+  [[deprecated]] void enable_legacy(bool val) { _legacy = val; }
 
   /**
    * @brief Set whether the reader should keep quotes of string values.
@@ -479,6 +541,18 @@ class json_reader_options_builder {
   }
 
   /**
+   * @brief Set delimiter separating records in JSON lines
+   *
+   * @param delimiter Delimiter separating records in JSON lines
+   * @return this for chaining
+   */
+  json_reader_options_builder& delimiter(char delimiter)
+  {
+    options.set_delimiter(delimiter);
+    return *this;
+  }
+
+  /**
    * @brief Set whether to read the file as a json object per line.
    *
    * @param val Boolean value to enable/disable the option to read each line as a json object
@@ -504,6 +578,22 @@ class json_reader_options_builder {
   }
 
   /**
+   * @brief Set whether to prune columns on read, selected based on the @ref dtypes option.
+   *
+   * When set as true, if the reader options include @ref dtypes, then
+   * the reader will only return those columns which are mentioned in @ref dtypes.
+   * If false, then all columns are returned, independent of the @ref dtypes setting.
+   *
+   * @param val Boolean value to enable/disable column pruning
+   * @return this for chaining
+   */
+  json_reader_options_builder& prune_columns(bool val)
+  {
+    options._prune_columns = val;
+    return *this;
+  }
+
+  /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
    *
    * @param val Boolean value to enable/disable day first parsing format
@@ -518,10 +608,12 @@ class json_reader_options_builder {
   /**
    * @brief Set whether to use the legacy reader.
    *
+   * @deprecated Since 24.06
+   *
    * @param val Boolean value to enable/disable legacy parsing
    * @return this for chaining
    */
-  json_reader_options_builder& legacy(bool val)
+  [[deprecated]] json_reader_options_builder& legacy(bool val)
   {
     options._legacy = val;
     return *this;
@@ -612,8 +704,8 @@ class json_reader_options_builder {
  */
 table_with_metadata read_json(
   json_reader_options options,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 
@@ -959,8 +1051,8 @@ class json_writer_options_builder {
  * @param mr Device memory resource to use for device memory allocation
  */
 void write_json(json_writer_options const& options,
-                rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace io

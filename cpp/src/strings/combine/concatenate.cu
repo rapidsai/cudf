@@ -17,6 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
@@ -32,6 +33,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -48,8 +50,9 @@ struct concat_strings_base {
   table_device_view const d_table;
   string_scalar_device_view const d_narep;
   separator_on_nulls separate_nulls;
-  size_type* d_offsets{};
-  char* d_chars{};
+  size_type* d_sizes;
+  char* d_chars;
+  cudf::detail::input_offsetalator d_offsets;
 
   /**
    * @brief Concatenate each table row to a single output string.
@@ -67,7 +70,7 @@ struct concat_strings_base {
         thrust::any_of(thrust::seq, d_table.begin(), d_table.end(), [idx](auto const& col) {
           return col.is_null(idx);
         })) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -94,7 +97,7 @@ struct concat_strings_base {
         write_separator || (separate_nulls == separator_on_nulls::YES) || !null_element;
     }
 
-    if (!d_chars) d_offsets[idx] = bytes;
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 
@@ -112,7 +115,7 @@ struct concat_strings_fn : concat_strings_base {
   {
   }
 
-  __device__ void operator()(size_type idx) { process_row(idx, d_separator); }
+  __device__ void operator()(std::size_t idx) { process_row(idx, d_separator); }
 };
 
 }  // namespace
@@ -122,7 +125,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& narep,
                                     separator_on_nulls separate_nulls,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   auto const num_columns = strings_columns.num_columns();
   CUDF_EXPECTS(num_columns > 1, "At least two columns must be specified");
@@ -187,7 +190,7 @@ struct multi_separator_concat_fn : concat_strings_base {
   __device__ void operator()(size_type idx)
   {
     if (d_separators.is_null(idx) && !d_separator_narep.is_valid()) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -206,7 +209,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& col_narep,
                                     separator_on_nulls separate_nulls,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   auto const num_columns = strings_columns.num_columns();
   CUDF_EXPECTS(num_columns > 0, "At least one column must be specified");
@@ -262,7 +265,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& narep,
                                     separator_on_nulls separate_nulls,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::concatenate(strings_columns, separator, narep, separate_nulls, stream, mr);
@@ -274,7 +277,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& col_narep,
                                     separator_on_nulls separate_nulls,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::concatenate(

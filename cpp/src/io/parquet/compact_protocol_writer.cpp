@@ -16,6 +16,8 @@
 
 #include "compact_protocol_writer.hpp"
 
+#include "parquet.hpp"
+
 #include <cudf/utilities/error.hpp>
 
 namespace cudf::io::parquet::detail {
@@ -140,6 +142,10 @@ size_t CompactProtocolWriter::write(RowGroup const& r)
   c.field_struct_list(1, r.columns);
   c.field_int(2, r.total_byte_size);
   c.field_int(3, r.num_rows);
+  if (r.sorting_columns.has_value()) { c.field_struct_list(4, r.sorting_columns.value()); }
+  if (r.file_offset.has_value()) { c.field_int(5, r.file_offset.value()); }
+  if (r.total_compressed_size.has_value()) { c.field_int(6, r.total_compressed_size.value()); }
+  if (r.ordinal.has_value()) { c.field_int16(7, r.ordinal.value()); }
   return c.value();
 }
 
@@ -182,6 +188,7 @@ size_t CompactProtocolWriter::write(ColumnChunkMetaData const& s)
   if (s.index_page_offset != 0) { c.field_int(10, s.index_page_offset); }
   if (s.dictionary_page_offset != 0) { c.field_int(11, s.dictionary_page_offset); }
   c.field_struct(12, s.statistics);
+  if (s.encoding_stats.has_value()) { c.field_struct_list(13, s.encoding_stats.value()); }
   if (s.size_statistics.has_value()) { c.field_struct(16, s.size_statistics.value()); }
   return c.value();
 }
@@ -195,6 +202,8 @@ size_t CompactProtocolWriter::write(Statistics const& s)
   if (s.distinct_count.has_value()) { c.field_int(4, s.distinct_count.value()); }
   if (s.max_value.has_value()) { c.field_binary(5, s.max_value.value()); }
   if (s.min_value.has_value()) { c.field_binary(6, s.min_value.value()); }
+  if (s.is_max_value_exact.has_value()) { c.field_bool(7, s.is_max_value_exact.value()); }
+  if (s.is_min_value_exact.has_value()) { c.field_bool(8, s.is_min_value_exact.value()); }
   return c.value();
 }
 
@@ -239,6 +248,24 @@ size_t CompactProtocolWriter::write(ColumnOrder const& co)
     case ColumnOrder::TYPE_ORDER: c.field_empty_struct(co.type); break;
     default: CUDF_FAIL("Trying to write an invalid ColumnOrder " + std::to_string(co.type));
   }
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(PageEncodingStats const& enc)
+{
+  CompactProtocolFieldWriter c(*this);
+  c.field_int(1, static_cast<int32_t>(enc.page_type));
+  c.field_int(2, static_cast<int32_t>(enc.encoding));
+  c.field_int(3, enc.count);
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(SortingColumn const& sc)
+{
+  CompactProtocolFieldWriter c(*this);
+  c.field_int(1, sc.column_idx);
+  c.field_bool(2, sc.descending);
+  c.field_bool(3, sc.nulls_first);
   return c.value();
 }
 
@@ -289,6 +316,13 @@ inline void CompactProtocolFieldWriter::field_int8(int field, int8_t val)
 {
   put_field_header(field, current_field_value, FieldType::I8);
   put_byte(val);
+  current_field_value = field;
+}
+
+inline void CompactProtocolFieldWriter::field_int16(int field, int16_t val)
+{
+  put_field_header(field, current_field_value, FieldType::I16);
+  put_int(val);
   current_field_value = field;
 }
 

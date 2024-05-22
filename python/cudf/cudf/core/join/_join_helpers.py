@@ -43,10 +43,10 @@ class _ColumnIndexer(_Indexer):
 
 class _IndexIndexer(_Indexer):
     def get(self, obj: cudf.DataFrame) -> ColumnBase:
-        return obj._index._data[self.name]
+        return obj.index._data[self.name]
 
     def set(self, obj: cudf.DataFrame, value: ColumnBase, validate=False):
-        obj._index._data.set_by_label(self.name, value, validate=validate)
+        obj.index._data.set_by_label(self.name, value, validate=validate)
 
 
 def _match_join_keys(

@@ -40,7 +40,7 @@ target_include_directories(
 
 # Use an OBJECT library so we only compile these helper source files only once
 add_library(
-  cudf_benchmark_common OBJECT "${CUDF_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
+  cudf_benchmark_common OBJECT "${CUDF_SOURCE_DIR}/tests/utilities/random_seed.cpp"
                                synchronization/synchronization.cpp io/cuio_common.cpp
 )
 target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env>)
@@ -236,7 +236,9 @@ ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
 # ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
 ConfigureBench(MERGE_BENCH merge/merge.cpp)
-ConfigureNVBench(MERGE_NVBENCH merge/merge_structs.cpp merge/merge_lists.cpp)
+ConfigureNVBench(
+  MERGE_NVBENCH merge/merge_lists.cpp merge/merge_structs.cpp merge/merge_strings.cpp
+)
 
 # ##################################################################################################
 # * null_mask benchmark ---------------------------------------------------------------------------
@@ -253,6 +255,11 @@ ConfigureNVBench(
 ConfigureNVBench(
   PARQUET_READER_NVBENCH io/parquet/parquet_reader_input.cpp io/parquet/parquet_reader_options.cpp
 )
+
+# ##################################################################################################
+# * parquet multithread reader benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(PARQUET_MULTITHREAD_READER_NVBENCH io/parquet/parquet_reader_multithread.cpp)
 
 # ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------
@@ -299,7 +306,6 @@ ConfigureBench(
   string/copy.cu
   string/factory.cu
   string/filter.cpp
-  string/find.cpp
   string/repeat_strings.cpp
   string/replace.cpp
   string/slice.cpp
@@ -316,6 +322,7 @@ ConfigureNVBench(
   string/copy_range.cpp
   string/count.cpp
   string/extract.cpp
+  string/find.cpp
   string/gather.cpp
   string/join_strings.cpp
   string/lengths.cpp
@@ -328,16 +335,26 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
-ConfigureBench(JSON_BENCH json/json.cu)
+ConfigureNVBench(JSON_NVBENCH json/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
 ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
-ConfigureNVBench(JSON_READER_OPTION io/json/json_reader_option.cpp)
+ConfigureNVBench(JSON_READER_OPTION_NVBENCH io/json/json_reader_option.cpp)
 ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
 ConfigureNVBench(MULTIBYTE_SPLIT_NVBENCH io/text/multibyte_split.cpp)
 target_link_libraries(MULTIBYTE_SPLIT_NVBENCH PRIVATE ZLIB::ZLIB)
+
+# ##################################################################################################
+# * decimal benchmark
+# ---------------------------------------------------------------------------------
+ConfigureNVBench(DECIMAL_NVBENCH decimal/convert_floating.cpp)
+
+# ##################################################################################################
+# * reshape benchmark
+# ---------------------------------------------------------------------------------
+ConfigureNVBench(RESHAPE_NVBENCH reshape/interleave.cpp)
 
 add_custom_target(
   run_benchmarks

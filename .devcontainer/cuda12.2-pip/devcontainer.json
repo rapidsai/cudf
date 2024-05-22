@@ -8,6 +8,11 @@
       "BASE": "rapidsai/devcontainers:24.06-cpp-cuda12.2-ubuntu22.04"
     }
   },
+  "runArgs": [
+    "--rm",
+    "--name",
+    "${localEnv:USER}-rapids-${localWorkspaceFolderBasename}-24.06-cuda12.2-pip"
+  ],
   "hostRequirements": {"gpu": "optional"},
   "features": {
     "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:24.6": {}

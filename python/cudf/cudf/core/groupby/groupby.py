@@ -40,6 +40,15 @@ from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import GetAttrGetItemMixin
 
 
+def _deprecate_collect():
+    warnings.warn(
+        "Groupby.collect is deprecated and "
+        "will be removed in a future version. "
+        "Use `.agg(list)` instead.",
+        FutureWarning,
+    )
+
+
 # The three functions below return the quantiles [25%, 50%, 75%]
 # respectively, which are called in the describe() method to output
 # the summary stats of a GroupBy object
@@ -940,7 +949,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         result = result[sizes > n]
 
-        result._index = self.obj.index.take(
+        result.index = self.obj.index.take(
             result._data["__groupbynth_order__"]
         )
         del result._data["__groupbynth_order__"]
@@ -1029,7 +1038,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         if has_null_group:
             group_ids.iloc[-1] = cudf.NA
 
-        group_ids._index = index
+        group_ids.index = index
         return self._broadcast(group_ids)
 
     def sample(
@@ -1199,9 +1208,11 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def _grouped(self, *, include_groups: bool = True):
         offsets, grouped_key_cols, grouped_value_cols = self._groupby.groups(
-            [*self.obj._index._columns, *self.obj._columns]
+            [*self.obj.index._columns, *self.obj._columns]
         )
-        grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)
+        grouped_keys = cudf.core.index._index_from_data(
+            dict(enumerate(grouped_key_cols))
+        )
         if isinstance(self.grouping.keys, cudf.MultiIndex):
             grouped_keys.names = self.grouping.keys.names
             to_drop = self.grouping.keys.names
@@ -1767,13 +1778,23 @@ class GroupBy(Serializable, Reducible, Scannable):
         --------
         agg
         """
+        if not (isinstance(function, str) or callable(function)):
+            raise TypeError(
+                "Aggregation must be a named aggregation or a callable"
+            )
         try:
             result = self.agg(function)
         except TypeError as e:
             raise NotImplementedError(
                 "Currently, `transform()` supports only aggregations."
             ) from e
-
+        # If the aggregation is a scan, don't broadcast
+        if libgroupby._is_all_scan_aggregate([[function]]):
+            if len(result) != len(self.obj):
+                raise AssertionError(
+                    "Unexpected result length for scan transform"
+                )
+            return result
         return self._broadcast(result)
 
     def rolling(self, *args, **kwargs):
@@ -2168,7 +2189,8 @@ class GroupBy(Serializable, Reducible, Scannable):
     @_cudf_nvtx_annotate
     def collect(self):
         """Get a list of all the values for each column in each group."""
-        return self.agg("collect")
+        _deprecate_collect()
+        return self.agg(list)
 
     @_cudf_nvtx_annotate
     def unique(self):
@@ -2827,8 +2849,8 @@ class _Grouping(Serializable):
             self._key_columns.append(self._obj._data[by])
         except KeyError as e:
             # `by` can be index name(label) too.
-            if by in self._obj._index.names:
-                self._key_columns.append(self._obj._index._data[by])
+            if by in self._obj.index.names:
+                self._key_columns.append(self._obj.index._data[by])
             else:
                 raise e
         self.names.append(by)

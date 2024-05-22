@@ -18,6 +18,12 @@ rapids-logger "Run libcudf gtests"
 SUITEERROR=$?
 
 if (( ${SUITEERROR} == 0 )); then
+    rapids-logger "Run libcudf examples"
+    ./ci/run_cudf_examples.sh
+    SUITEERROR=$?
+fi
+
+if (( ${SUITEERROR} == 0 )); then
     rapids-logger "Run libcudf_kafka gtests"
     ./ci/run_cudf_kafka_ctests.sh -j20
     SUITEERROR=$?
