@@ -1202,7 +1202,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
                    pages.device_begin(),
                    pages.device_end(),
                    cuda::proclaim_return_type<bool>(
-                     [] __device__(auto const& page) { return page.temp_string_size != 0; }));
+                     [] __device__(auto& page) { return page.temp_string_size != 0; }));
 
   if (need_sizes) {
     // sum up all of the temp_string_sizes
