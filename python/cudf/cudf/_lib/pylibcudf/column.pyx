@@ -22,6 +22,8 @@ import functools
 
 import numpy as np
 
+from .types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
+
 
 cdef class Column:
     """A container of nullable device data as a column of elements.
@@ -351,27 +353,8 @@ cdef class ListColumnView:
 
 @functools.cache
 def _datatype_from_dtype_desc(desc):
-    mapping = {
-        'u1': type_id.UINT8,
-        'u2': type_id.UINT16,
-        'u4': type_id.UINT32,
-        'u8': type_id.UINT64,
-        'i1': type_id.INT8,
-        'i2': type_id.INT16,
-        'i4': type_id.INT32,
-        'i8': type_id.INT64,
-        'f4': type_id.FLOAT32,
-        'f8': type_id.FLOAT64,
-        'b1': type_id.BOOL8,
-        'M8[s]': type_id.TIMESTAMP_SECONDS,
-        'M8[ms]': type_id.TIMESTAMP_MILLISECONDS,
-        'M8[us]': type_id.TIMESTAMP_MICROSECONDS,
-        'M8[ns]': type_id.TIMESTAMP_NANOSECONDS,
-        'm8[s]': type_id.DURATION_SECONDS,
-        'm8[ms]': type_id.DURATION_MILLISECONDS,
-        'm8[us]': type_id.DURATION_MICROSECONDS,
-        'm8[ns]': type_id.DURATION_NANOSECONDS,
-    }
+    desc = np.dtype(desc)
+    mapping = SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
     if desc not in mapping:
         raise ValueError(f"Unsupported dtype: {desc}")
     return DataType(mapping[desc])

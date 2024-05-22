@@ -28,6 +28,13 @@ from cudf._lib.pylibcudf.libcudf.wrappers.decimals cimport (
     scale_type,
 )
 
+import numpy as np
+
+from .types import (
+    LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
+    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES,
+)
+
 from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
@@ -75,6 +82,14 @@ def from_arrow(pyarrow_object, *, DataType data_type=None):
         The converted object of type corresponding to the input type in cudf.
     """
     raise TypeError("from_arrow only accepts Table and Scalar objects")
+
+
+@from_arrow.register(pa.DataType)
+def _from_arrow_datatype(pyarrow_object):
+    return DataType(
+        SUPPORTED_NUMPY_TO_LIBCUDF_TYPES.get(
+            np.dtype(pyarrow_object.to_pandas_dtype()))
+        )
 
 
 @from_arrow.register(pa.Table)
@@ -168,6 +183,11 @@ def to_arrow(cudf_object, metadata=None):
         The converted object of type corresponding to the input type in PyArrow.
     """
     raise TypeError("to_arrow only accepts Table and Scalar objects")
+
+
+@to_arrow.register(DataType)
+def _to_arrow_datatype(cudf_object):
+    return LIBCUDF_TO_SUPPORTED_NUMPY_TYPES.get(cudf_object)
 
 
 @to_arrow.register(Table)
