@@ -257,6 +257,11 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
+# * parquet multithread reader benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(PARQUET_MULTITHREAD_READER_NVBENCH io/parquet/parquet_reader_multithread.cpp)
+
+# ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------
 ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp io/orc/orc_reader_options.cpp)
 

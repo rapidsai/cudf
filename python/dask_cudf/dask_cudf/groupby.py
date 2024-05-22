@@ -29,9 +29,9 @@ OPTIMIZED_AGGS = (
     "sum",
     "min",
     "max",
+    list,
     "first",
     "last",
-    list,
 )
 
 
