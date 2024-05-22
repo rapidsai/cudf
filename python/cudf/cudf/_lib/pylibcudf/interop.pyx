@@ -194,7 +194,16 @@ def to_arrow(cudf_object, metadata=None):
 
 @to_arrow.register(DataType)
 def _to_arrow_datatype(cudf_object):
-    return LIBCUDF_TO_SUPPORTED_NUMPY_TYPES.get(cudf_object)
+    if cudf_object.id() == type_id.DECIMAL128:
+        return pa.decimal128(-cudf_object.scale)
+    elif cudf_object.id() in {type_id.LIST, type_id.STRUCT}:
+        # TODO: need column metadata
+        raise ValueError(
+            f"Cannot convert {cudf_object} to PyArrow type"
+        )
+    return pa.from_numpy_dtype(
+        LIBCUDF_TO_SUPPORTED_NUMPY_TYPES.get(cudf_object)
+    )
 
 
 @to_arrow.register(Table)
