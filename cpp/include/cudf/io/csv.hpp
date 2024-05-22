@@ -106,6 +106,9 @@ class csv_reader_options {
   char _quotechar = '"';
   // Whether a quote inside a value is double-quoted
   bool _doublequote = true;
+  // Whether to detect quotes surrounded by spaces e.g. `   "data"   `. This flag has no effect when
+  // _doublequote is true
+  bool _detect_whitespace_around_quotes = false;
   // Names of columns to read as datetime
   std::vector<std::string> _parse_dates_names;
   // Indexes of columns to read as datetime
@@ -374,6 +377,17 @@ class csv_reader_options {
    * @return `true` if a quote inside a value is double-quoted
    */
   [[nodiscard]] bool is_enabled_doublequote() const { return _doublequote; }
+
+  /**
+   * @brief Whether to detect quotes surrounded by spaces e.g. `   "data"   `. This flag has no
+   * effect when _doublequote is true
+   *
+   * @return `true` if detect_whitespace_around_quotes is enabled
+   */
+  [[nodiscard]] bool is_enabled_detect_whitespace_around_quotes() const
+  {
+    return _detect_whitespace_around_quotes;
+  }
 
   /**
    * @brief Returns names of columns to read as datetime.
@@ -697,6 +711,14 @@ class csv_reader_options {
    * @param val Boolean value to enable/disable
    */
   void enable_doublequote(bool val) { _doublequote = val; }
+
+  /**
+   * @brief Sets whether to detect quotes surrounded by spaces e.g. `   "data"   `. This flag has no
+   * effect when _doublequote is true
+   *
+   * @param val Boolean value to enable/disable
+   */
+  void enable_detect_whitespace_around_quotes(bool val) { _detect_whitespace_around_quotes = val; }
 
   /**
    * @brief Sets names of columns to read as datetime.
@@ -1123,6 +1145,19 @@ class csv_reader_options_builder {
   csv_reader_options_builder& doublequote(bool val)
   {
     options._doublequote = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets whether to detect quotes surrounded by spaces e.g. `   "data"   `. This flag has no
+   * effect when _doublequote is true
+   *
+   * @param val Boolean value to enable/disable
+   * @return this for chaining
+   */
+  csv_reader_options_builder& detect_whitespace_around_quotes(bool val)
+  {
+    options._detect_whitespace_around_quotes = val;
     return *this;
   }
 
