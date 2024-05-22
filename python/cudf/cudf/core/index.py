@@ -2137,9 +2137,7 @@ class DatetimeIndex(Index):
         Index(['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
                'Friday', 'Saturday'], dtype='object')
         """
-        if locale and locale != "en_US.utf8":
-            raise NotImplementedError("non-English locale is not implemented.")
-        day_names = self._column.get_day_names()
+        day_names = self._column.get_day_names(locale)
         return Index._from_data({self.name: day_names})
 
     @_cudf_nvtx_annotate
@@ -2158,9 +2156,7 @@ class DatetimeIndex(Index):
         >>> datetime_index.month_name()
         Index(['December', 'January', 'January', 'January', 'January', 'February'], dtype='object')
         """
-        if locale and locale != "en_US.utf8":
-            raise NotImplementedError("non-English locale is not implemented.")
-        month_names = self._column.get_month_names()
+        month_names = self._column.get_month_names(locale)
         return Index._from_data({self.name: month_names})
 
     @_cudf_nvtx_annotate

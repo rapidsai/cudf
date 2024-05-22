@@ -340,7 +340,12 @@ class DatetimeColumn(column.ColumnBase):
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
 
-    def get_day_names(self) -> ColumnBase:
+    def get_day_names(self, locale: str | None = None) -> ColumnBase:
+        if locale is not None:
+            raise NotImplementedError(
+                "Setting a locale is currently not supported. "
+                "Results will be returned in your current locale."
+            )
         days = as_column(list(calendar.day_name))
         indices = self.get_dt_field("weekday")
         has_nulls = indices.has_nulls()
@@ -348,7 +353,12 @@ class DatetimeColumn(column.ColumnBase):
             indices = indices.fillna(len(days))
         return days.take(indices, nullify=True, check_bounds=has_nulls)
 
-    def get_month_names(self) -> ColumnBase:
+    def get_month_names(self, locale: str | None = None) -> ColumnBase:
+        if locale is not None:
+            raise NotImplementedError(
+                "Setting a locale is currently not supported. "
+                "Results will be returned in your current locale."
+            )
         months = as_column(list(calendar.month_name))
         indices = self.get_dt_field("month")
         has_nulls = indices.has_nulls()

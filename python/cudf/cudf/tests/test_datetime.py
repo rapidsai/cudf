@@ -2452,7 +2452,7 @@ def test_day_month_name(meth, klass):
 
 @pytest.mark.parametrize("meth", ["day_name", "month_name"])
 @pytest.mark.parametrize("klass", [cudf.Series, cudf.DatetimeIndex])
-def test_day_month_name_not_implemented(meth, klass):
+def test_day_month_name_locale_not_implemented(meth, klass):
     obj = klass(cudf.date_range("2020-01-01", periods=7))
     if klass is cudf.Series:
         obj = obj.dt

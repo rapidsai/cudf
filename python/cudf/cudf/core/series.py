@@ -4231,9 +4231,7 @@ class DatetimeProperties:
         7     Saturday
         dtype: object
         """
-        if locale and locale != "en_US.utf8":
-            raise NotImplementedError("non-English locale is not implemented.")
-        day_names = self.series._column.get_day_names()
+        day_names = self.series._column.get_day_names(locale)
         return Series._from_data(
             ColumnAccessor({None: day_names}),
             index=self.series.index,
@@ -4266,9 +4264,7 @@ class DatetimeProperties:
         5    February
         dtype: object
         """
-        if locale and locale != "en_US.utf8":
-            raise NotImplementedError("non-English locale is not implemented.")
-        month_names = self.series._column.get_month_names()
+        month_names = self.series._column.get_month_names(locale)
         return Series._from_data(
             ColumnAccessor({None: month_names}),
             index=self.series.index,
