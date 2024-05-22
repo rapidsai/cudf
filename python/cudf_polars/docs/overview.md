@@ -69,7 +69,7 @@ pytest -v tests
 
 The polars `LazyFrame.collect` functionality offers a
 "post-optimization" callback that may be used by a third party library
-to replace a (or more, though we only replace a single node) in the
+to replace a node (or more, though we only replace a single node) in the
 optimized logical plan with a Python callback that is to deliver the
 result of evaluating the plan. This splits the execution of the plan
 into two phases. First, a symbolic phase which translates to our
@@ -108,7 +108,7 @@ lives in `cudf_polars/dsl/translate.py`.
 As well as child nodes that are plans, most plan nodes contain child
 expressions, which should be transformed using the input to the plan as a
 context. The translation of expressions is handled via
-`translate_expr` in `cudf_poalrs/dsl/translate.py`. So that data-type
+`translate_expr` in `cudf_polars/dsl/translate.py`. So that data-type
 resolution is performed correctly any expression should be translated
 with the correct plan node "active" in the visitor. For example, when
 translating a `Join` node, the left keys (expressions) should be
@@ -137,13 +137,13 @@ Read the docstrings in the `Expr` class for more details. In
 particular, one needs to be careful to ensure that an `Expr` hashes
 correctly.
 
-Expressions are evaluated by implementing an `evaluate` method, this
-takes a `DataFrame` as context (this provides columns), along with an
+Expressions are evaluated by implementing an `evaluate` method that
+takes a `DataFrame` as context (this provides columns) along with an
 `ExecutionContext` parameter (indicating what context we're evaluating
-this expression in, currently unused), and a `mapping` from
-expressions to evaluated `Column`s: this enables a simple form of
+this expression in, currently unused) and a `mapping` from
+expressions to evaluated `Column`s. This approach enables a simple form of
 expression rewriting during evaluation of expressions that is used in
-evaluation of groupby-aggregations. To reduce boilerplate for lookup
+evaluation of, for example, groupby-aggregations. To reduce boilerplate for lookup
 in the mappings dictionary use the `@with_mapping` decorator.
 
 To simplify state tracking, all columns should be considered immutable
