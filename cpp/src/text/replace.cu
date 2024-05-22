@@ -194,26 +194,25 @@ struct sub_offset_fn {
 
   __device__ int64_t operator()(int64_t idx) const
   {
-    auto end      = d_input_chars + last_offset;
-    auto position = (idx + 1) * LS_SUB_BLOCK_SIZE;
-    auto itr      = d_input_chars + first_offset + position;
+    // keep delimiter search within this sub-block
+    auto const end =
+      d_input_chars + std::min(last_offset, ((idx + 2) * LS_SUB_BLOCK_SIZE) + first_offset);
+    // starting point of this sub-block
+    auto itr = d_input_chars + first_offset + ((idx + 1) * LS_SUB_BLOCK_SIZE);
     while ((itr < end) &&
            cudf::strings::detail::is_utf8_continuation_char(static_cast<u_char>(*itr))) {
       ++itr;
-      ++position;
     }
     if (itr >= end) { return 0; }  // 0s will be filtered out
-    // keep delimiter search within this sub-block
-    end = d_input_chars + std::min(last_offset, (idx + 2) * LS_SUB_BLOCK_SIZE + first_offset);
+    // now check for a delimiter in this block
     auto tokenizer = characters_tokenizer(cudf::string_view{}, d_delimiter);
     while (itr < end) {
       auto chr      = cudf::char_utf8{};
       auto chr_size = cudf::strings::detail::to_char_utf8(itr, chr);
       if (tokenizer.is_delimiter(chr)) { break; }
       itr += chr_size;
-      position += chr_size;
     }
-    return (itr < end) ? position + first_offset : 0;
+    return (itr < end) ? thrust::distance(d_input_chars, itr) : 0L;
   }
 };
 
@@ -252,6 +251,19 @@ struct remove_small_tokens_fn : base_token_replacer_fn {
   }
 };
 
+/**
+ * @brief Common code for replace and filter
+ *
+ * Builds the output strings column using the given replace functor.
+ *
+ * @tparam ReplaceFn Functor called for replacing tokens
+ *
+ * @param replacer Functor for determining matching token and its replacement
+ * @param input Strings column to tokenize and replace
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings columns of with replaced strings
+ */
 template <typename ReplacerFn>
 std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
                                              cudf::strings_column_view const& input,
@@ -277,6 +289,10 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
                                      cudf::detail::copy_bitmask(input.parent(), stream, mr));
   }
 
+  // Long strings logic builds a new fake strings column with the same data but additional offsets
+  // thus converting the input to a larger column of smaller strings.
+  // This can be processed in parallel more efficiently than long strings in general.
+
   auto const input_chars = input.chars_begin(stream);
   auto const input_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
@@ -292,24 +308,23 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
                       count_itr + sub_count,
                       sub_offsets.data(),
                       sub_offset_fn{input_chars, first_offset, last_offset});
-
-    auto rend =
+    // remove 0s -- where sub-offset could not be computed
+    auto const remove_end =
       thrust::remove(rmm::exec_policy_nosync(stream), sub_offsets.begin(), sub_offsets.end(), 0L);
-    sub_count = thrust::distance(sub_offsets.begin(), rend);
-    sub_offsets.resize(sub_count, stream);
+    sub_count = thrust::distance(sub_offsets.begin(), remove_end);
 
     // merge them with input offsets
     thrust::merge(rmm::exec_policy_nosync(stream),
                   input_offsets,
                   input_offsets + input.size() + 1,
                   sub_offsets.begin(),
-                  sub_offsets.end(),
+                  sub_offsets.begin() + sub_count,
                   tmp_offsets.begin());
     tmp_offsets.resize(sub_count + input.size() + 1, stream);
     stream.synchronize();  // protect against destruction of sub_offsets
   }
 
-  // cobble together a column_view of type STRING
+  // cobble together a column_view of type STRING using the original data and the tmp offsets
   auto const tmp_size    = static_cast<cudf::size_type>(tmp_offsets.size()) - 1;
   auto const children    = std::vector<cudf::column_view>({cudf::column_view(
     cudf::data_type{cudf::type_id::INT64}, tmp_size + 1, tmp_offsets.data(), nullptr, 0)});
@@ -317,7 +332,7 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
     cudf::data_type{cudf::type_id::STRING}, tmp_size, input_chars, nullptr, 0, 0, children);
   auto const d_tmp_strings = cudf::column_device_view::create(tmp_strings, stream);
 
-  // compute indices of actual output rows
+  // compute indices to the actual output rows
   auto indices = rmm::device_uvector<cudf::size_type>(tmp_offsets.size(), stream);
   thrust::upper_bound(rmm::exec_policy_nosync(stream),
                       input_offsets,
@@ -326,6 +341,7 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
                       tmp_offsets.end(),
                       indices.begin());
 
+  // initialize the output row sizes
   auto d_sizes = rmm::device_uvector<cudf::size_type>(input.size(), stream);
   thrust::fill(rmm::exec_policy_nosync(stream), d_sizes.begin(), d_sizes.end(), 0);
 
