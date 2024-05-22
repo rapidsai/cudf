@@ -17,9 +17,9 @@
 #pragma once
 
 #ifdef CUFILE_FOUND
-#include "thread_pool.hpp"
-
 #include <cudf_test/file_utilities.hpp>
+
+#include <cudf/utilities/thread_pool.hpp>
 
 #include <cufile.h>
 #endif
