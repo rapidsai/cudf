@@ -2121,15 +2121,14 @@ class DatetimeIndex(Index):
         return Index(res, dtype="int8")
 
     @_cudf_nvtx_annotate
-    def day_name(self, locale=None):
+    def day_name(self, locale: str | None = None) -> Index:
         """
         Return the day names. Currently supports English locale only.
 
         Examples
         --------
         >>> import cudf
-        >>> datetime_index = cudf.Index(cudf.date_range("2016-12-31",
-        ...     "2017-01-08", freq="D"))
+        >>> datetime_index = cudf.date_range("2016-12-31", "2017-01-08", freq="D")
         >>> datetime_index
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                        '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07'],
@@ -2140,35 +2139,29 @@ class DatetimeIndex(Index):
         """
         if locale and locale != "en_US.utf8":
             raise NotImplementedError("non-English locale is not implemented.")
-        days = self._get_dt_field("weekday")
-        day_names = cudf.core.tools.datetimes._get_date_name_field(
-            days.to_series().astype(str), "day_name"
-        )
-        return Index(day_names)
+        day_names = self._column.get_day_names()
+        return Index._from_data({self.name: day_names})
 
     @_cudf_nvtx_annotate
-    def month_name(self, locale=None):
+    def month_name(self, locale: str | None = None) -> Index:
         """
         Return the month names. Currently supports English locale only.
 
         Examples
         --------
         >>> import cudf
-        >>> datetime_index = cudf.Index(cudf.date_range("2017-12-30", periods=6, freq='W'))
+        >>> datetime_index = cudf.date_range("2017-12-30", periods=6, freq='W')
         >>> datetime_index
         DatetimeIndex(['2017-12-30', '2018-01-06', '2018-01-13', '2018-01-20',
-                       '2018-01-27', '2018-02-03'],
+                    '2018-01-27', '2018-02-03'],
                       dtype='datetime64[ns]', freq='7D')
         >>> datetime_index.month_name()
         Index(['December', 'January', 'January', 'January', 'January', 'February'], dtype='object')
         """
         if locale and locale != "en_US.utf8":
             raise NotImplementedError("non-English locale is not implemented.")
-        months = self._get_dt_field("month")
-        month_names = cudf.core.tools.datetimes._get_date_name_field(
-            months.to_series().astype(str), "month_name"
-        )
-        return Index(month_names)
+        month_names = self._column.get_month_names()
+        return Index._from_data({self.name: month_names})
 
     @_cudf_nvtx_annotate
     def isocalendar(self):

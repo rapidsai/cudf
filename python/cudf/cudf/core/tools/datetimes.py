@@ -56,33 +56,6 @@ _unit_dtype_map = {
 }
 
 
-_MONTHS_FULL = {
-    "0": "",
-    "1": "January",
-    "2": "February",
-    "3": "March",
-    "4": "April",
-    "5": "May",
-    "6": "June",
-    "7": "July",
-    "8": "August",
-    "9": "September",
-    "10": "October",
-    "11": "November",
-    "12": "December",
-}
-
-_DAYS_FULL = {
-    "0": "Monday",
-    "1": "Tuesday",
-    "2": "Wednesday",
-    "3": "Thursday",
-    "4": "Friday",
-    "5": "Saturday",
-    "6": "Sunday",
-}
-
-
 def to_datetime(
     arg,
     errors: Literal["raise", "coerce", "warn", "ignore"] = "raise",
@@ -1094,17 +1067,3 @@ def _to_iso_calendar(arg):
 
     data = dict(zip(["year", "week", "day"], iso_params))
     return cudf.DataFrame(data, index=index, dtype=np.int32)
-
-
-def _get_date_name_field(date_values, field):
-    """
-    Given a Series of day of week or month strings, returns a Series with
-    the corresponding date name based on requested field
-    """
-    if field == "day_name":
-        out = date_values.replace(_DAYS_FULL)
-    elif field == "month_name":
-        out = date_values.replace(_MONTHS_FULL)
-    else:
-        raise ValueError(f"Field {field} not supported")
-    return out

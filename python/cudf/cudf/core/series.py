@@ -4233,18 +4233,15 @@ class DatetimeProperties:
         """
         if locale and locale != "en_US.utf8":
             raise NotImplementedError("non-English locale is not implemented.")
-        days = self._get_dt_field("weekday").astype(str)
-        day_names = cudf.core.tools.datetimes._get_date_name_field(
-            days, "day_name"
-        )
+        day_names = self.series._column.get_day_names()
         return Series._from_data(
             ColumnAccessor({None: day_names}),
-            index=self.series._index,
+            index=self.series.index,
             name=self.series.name,
         )
 
     @_cudf_nvtx_annotate
-    def month_name(self, locale=None):
+    def month_name(self, locale: str | None = None) -> Series:
         """
         Return the month names. Currently supports English locale only.
 
@@ -4271,13 +4268,10 @@ class DatetimeProperties:
         """
         if locale and locale != "en_US.utf8":
             raise NotImplementedError("non-English locale is not implemented.")
-        months = self._get_dt_field("month").astype(str)
-        month_names = cudf.core.tools.datetimes._get_date_name_field(
-            months, "month_name"
-        )
+        month_names = self.series._column.get_month_names()
         return Series._from_data(
             ColumnAccessor({None: month_names}),
-            index=self.series._index,
+            index=self.series.index,
             name=self.series.name,
         )
 

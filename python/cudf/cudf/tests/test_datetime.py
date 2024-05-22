@@ -2421,7 +2421,9 @@ def test_date_range_tz():
     assert_eq(result, expected)
 
 
-def test_day_name_series():
+@pytest.mark.parametrize("meth", ["day_name", "month_name"])
+@pytest.mark.parametrize("klass", [pd.Series, pd.DatetimeIndex])
+def test_day_month_name(meth, klass):
     data = [
         "2020-05-31 08:00:00",
         None,
@@ -2435,85 +2437,24 @@ def test_day_name_series():
         "1969-12-31 12:59:00",
     ]
 
-    ps = pd.Series(data, dtype="datetime64[s]")
-    gs = cudf.from_pandas(ps)
+    p_obj = klass(data, dtype="datetime64[s]")
+    g_obj = cudf.from_pandas(p_obj)
 
-    expect = ps.dt.day_name()
-    got = gs.dt.day_name()
+    if klass is pd.Series:
+        p_obj = p_obj.dt
+        g_obj = g_obj.dt
 
-    assert_eq(expect, got)
-
-
-def test_day_name_index():
-    data = [
-        "2020-05-31 08:00:00",
-        None,
-        "1999-12-31 18:40:00",
-        "2000-12-31 04:00:00",
-        None,
-        "1900-02-28 07:00:00",
-        "1800-03-14 07:30:00",
-        "2100-03-14 07:30:00",
-        "1970-01-01 00:00:00",
-        "1969-12-31 12:59:00",
-    ]
-
-    pIndex = pd.DatetimeIndex(data)
-    gIndex = cudf.from_pandas(pIndex)
-
-    expect = pIndex.day_name()
-    got = gIndex.day_name()
+    expect = getattr(p_obj, meth)()
+    got = getattr(g_obj, meth)()
 
     assert_eq(expect, got)
 
 
-def test_month_name_series():
-    data = [
-        "2020-05-31 08:00:00",
-        None,
-        "1999-12-31 18:40:00",
-        "2000-12-31 04:00:00",
-        None,
-        "1900-02-28 07:00:00",
-        "1800-03-14 07:30:00",
-        "2100-03-14 07:30:00",
-        "1970-01-01 00:00:00",
-        "1969-12-31 12:59:00",
-    ]
-
-    ps = pd.Series(data, dtype="datetime64[s]")
-    gs = cudf.from_pandas(ps)
-
-    expect = ps.dt.month_name()
-    got = gs.dt.month_name()
-
-    assert_eq(expect, got)
-
-
-def test_month_name_index():
-    data = [
-        "2020-05-31 08:00:00",
-        None,
-        "1999-12-31 18:40:00",
-        "2000-12-31 04:00:00",
-        None,
-        "1900-02-28 07:00:00",
-        "1800-03-14 07:30:00",
-        "2100-03-14 07:30:00",
-        "1970-01-01 00:00:00",
-        "1969-12-31 12:59:00",
-    ]
-
-    pIndex = pd.DatetimeIndex(data)
-    gIndex = cudf.from_pandas(pIndex)
-
-    expect = pIndex.month_name()
-    got = gIndex.month_name()
-
-    assert_eq(expect, got)
-
-
-def test_day_name_not_implemented():
-    gs = cudf.Series(cudf.date_range("2020-01-01", periods=7))
+@pytest.mark.parametrize("meth", ["day_name", "month_name"])
+@pytest.mark.parametrize("klass", [cudf.Series, cudf.DatetimeIndex])
+def test_day_month_name_not_implemented(meth, klass):
+    obj = klass(cudf.date_range("2020-01-01", periods=7))
+    if klass is cudf.Series:
+        obj = obj.dt
     with pytest.raises(NotImplementedError):
-        gs.dt.day_name(locale="pt_BR.utf8")
+        getattr(obj, meth)(locale="pt_BR.utf8")
