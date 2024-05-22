@@ -160,7 +160,7 @@ class Scan(IR):
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.AFTER,
             )
-            df = DataFrame([index, *df.columns], [])
+            df = DataFrame([index, *df.columns])
         # TODO: should be true, but not the case until we get
         # cudf-classic out of the loop for IO since it converts date32
         # to datetime.
@@ -256,7 +256,7 @@ class Select(IR):
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         df = df.with_columns([e.evaluate(df) for e in self.cse])
-        return DataFrame([e.evaluate(df) for e in self.expr], [])
+        return DataFrame([e.evaluate(df) for e in self.expr])
 
 
 @dataclass(slots=True)
@@ -275,7 +275,7 @@ class Reduce(IR):
     def evaluate(self, *, cache: dict[int, DataFrame]):
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        return DataFrame([e.evaluate(df) for e in self.expr], [])
+        return DataFrame([e.evaluate(df) for e in self.expr])
 
 
 def placeholder_column(n: int):
@@ -398,11 +398,11 @@ class GroupBy(IR):
         result_keys = [
             NamedColumn(gk, k.name) for gk, k in zip(group_keys.columns(), keys)
         ]
-        result_subs = DataFrame(raw_columns, [])
+        result_subs = DataFrame(raw_columns)
         results = [
             req.evaluate(result_subs, mapping=mapping) for req in self.agg_requests
         ]
-        return DataFrame([*result_keys, *results], []).slice(self.options.slice)
+        return DataFrame([*result_keys, *results]).slice(self.options.slice)
 
 
 @dataclass(slots=True)
@@ -482,8 +482,8 @@ class Join(IR):
         """Evaluate and return a dataframe."""
         left = self.left.evaluate(cache=cache)
         right = self.right.evaluate(cache=cache)
-        left_on = DataFrame([e.evaluate(left) for e in self.left_on], [])
-        right_on = DataFrame([e.evaluate(right) for e in self.right_on], [])
+        left_on = DataFrame([e.evaluate(left) for e in self.left_on])
+        right_on = DataFrame([e.evaluate(right) for e in self.right_on])
         how, join_nulls, zlice, suffix, coalesce = self.options
         null_equality = (
             plc.types.NullEquality.EQUAL
@@ -620,8 +620,7 @@ class Distinct(IR):
             [
                 NamedColumn(c, old.name).sorted_like(old)
                 for c, old in zip(table.columns(), df.columns)
-            ],
-            [],
+            ]
         )
         if keys_sorted or self.stable:
             result = result.sorted_like(df)
@@ -692,7 +691,7 @@ class Sort(IR):
                 order=self.order[k],
                 null_order=self.null_order[k],
             )
-        return DataFrame(columns, []).slice(self.zlice)
+        return DataFrame(columns).slice(self.zlice)
 
 
 @dataclass(slots=True)
@@ -865,10 +864,8 @@ class HConcat(IR):
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
-        columns, scalars = zip(*((df.columns, df.scalars) for df in dfs))
         return DataFrame(
-            list(itertools.chain.from_iterable(columns)),
-            list(itertools.chain.from_iterable(scalars)),
+            list(itertools.chain.from_iterable(df.columns for df in dfs)),
         )
 
 
