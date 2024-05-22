@@ -433,7 +433,7 @@ std::unique_ptr<column> from_arrow_host_column(ArrowSchema const* schema,
   ArrowSchemaView view;
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema, nullptr));
 
-  auto type = arrow_to_cudf_type(schema);
+  auto type = arrow_to_cudf_type(&view);
   return get_column_copy(&view, &input->array, type, false, stream, mr);
 }
 
