@@ -23,6 +23,27 @@
 namespace cudf::io {
 
 /**
+ * @brief Set the rmm resource to be used for host memory allocations by
+ * cudf::detail::hostdevice_vector
+ *
+ * hostdevice_vector is a utility class that uses a pair of host and device-side buffers for
+ * bouncing state between the cpu and the gpu. The resource set with this function (typically a
+ * pinned memory allocator) is what it uses to allocate space for it's host-side buffer.
+ *
+ * @param mr The rmm resource to be used for host-side allocations
+ * @return The previous resource that was in use
+ */
+rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_ref mr);
+
+/**
+ * @brief Get the rmm resource being used for host memory allocations by
+ * cudf::detail::hostdevice_vector
+ *
+ * @return The rmm resource used for host-side allocations
+ */
+rmm::host_async_resource_ref get_host_memory_resource();
+
+/**
  * @brief Options to configure the default host memory resource
  */
 struct host_mr_options {
@@ -31,37 +52,12 @@ struct host_mr_options {
 };
 
 /**
- * @brief Set the rmm resource to be used for host memory allocations by
- * cudf::detail::hostdevice_vector
+ * @brief Configure the size of the default host memory resource.
  *
- * hostdevice_vector is a utility class that uses a pair of host and device-side buffers for
- * bouncing state between the cpu and the gpu. The resource set with this function (typically a
- * pinned memory allocator) is what it uses to allocate space for it's host-side buffer.
+ * @throws cudf::logic_error if called after the default host memory resource has been created
  *
- * The default_opts parameter allows the caller to customize the default host memory resource
- * if it hasn't been configured already, otherwise the argument is ignored.
- * Omitting this argument (nullopt) means cuDF will use defaults to initialize a host pinned pool.
- *
- * @param mr The rmm resource to be used for host-side allocations
- * @param default_opts Options to configure the default host memory resource
- * @return The previous resource that was in use
+ * @param opts Options to configure the default host memory resource
  */
-rmm::host_async_resource_ref set_host_memory_resource(
-  rmm::host_async_resource_ref mr,
-  std::optional<host_mr_options> const& default_opts = std::nullopt);
-
-/**
- * @brief Get the rmm resource being used for host memory allocations by
- * cudf::detail::hostdevice_vector
- *
- * The default_opts parameter allows the caller to customize the default host memory resource
- * if it hasn't been configured already, otherwise the argument is ignored.
- * Omitting this argument (nullopt) means cuDF will use defaults to initialize a host pinned pool.
- *
- * @param default_opts Options to configure the default host memory resource
- * @return The rmm resource used for host-side allocations
- */
-rmm::host_async_resource_ref get_host_memory_resource(
-  std::optional<host_mr_options> const& default_opts = std::nullopt);
+bool config_default_host_memory_resource(host_mr_options const& opts);
 
 }  // namespace cudf::io
