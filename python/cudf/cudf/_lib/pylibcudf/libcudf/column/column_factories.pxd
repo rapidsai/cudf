@@ -70,7 +70,7 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
         size_type null_count) except +
 
     cdef unique_ptr[column] make_column_from_scalar(const scalar& s,
-                                                     size_type size) except +
+                                                    size_type size) except +
 
     cdef unique_ptr[column] make_dictionary_from_scalar(const scalar& s,
                                                         size_type size) except +
