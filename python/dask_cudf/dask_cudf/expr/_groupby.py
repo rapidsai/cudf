@@ -17,11 +17,11 @@ from dask.dataframe.groupby import Aggregation
 class Collect(SingleAggregation):
     @staticmethod
     def groupby_chunk(arg):
-        return arg.agg("collect")
+        return arg.agg(list)
 
     @staticmethod
     def groupby_aggregate(arg):
-        gb = arg.agg("collect")
+        gb = arg.agg(list)
         if gb.ndim > 1:
             for col in gb.columns:
                 gb[col] = gb[col].list.concat()
@@ -31,7 +31,7 @@ class Collect(SingleAggregation):
 
 
 collect_aggregation = Aggregation(
-    name="collect",
+    name="list",
     chunk=Collect.groupby_chunk,
     agg=Collect.groupby_aggregate,
 )
@@ -41,7 +41,7 @@ def _translate_arg(arg):
     # Helper function to translate args so that
     # they can be processed correctly by upstream
     # dask & dask-expr. Right now, the only necessary
-    # translation is "collect" aggregations.
+    # translation is "list" aggregations.
     if isinstance(arg, dict):
         return {k: _translate_arg(v) for k, v in arg.items()}
     elif isinstance(arg, list):

@@ -9,7 +9,6 @@ from dask import dataframe as dd
 from dask.utils_test import hlg_layer
 
 import cudf
-from cudf.testing._utils import expect_warning_if
 
 import dask_cudf
 from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
@@ -63,9 +62,8 @@ def test_groupby_basic(series, aggregation, pdf):
 
     check_dtype = aggregation != "count"
 
-    with expect_warning_if(aggregation == "collect"):
-        expect = getattr(gdf_grouped, aggregation)()
-    actual = getattr(ddf_grouped, aggregation)()
+    expect = gdf_grouped.agg(aggregation)
+    actual = ddf_grouped.agg(aggregation)
 
     if not QUERY_PLANNING_ON:
         assert_cudf_groupby_layers(actual)
