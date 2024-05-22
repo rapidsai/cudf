@@ -129,23 +129,26 @@ def test_make_empty_column_typeid(pa_type):
     assert_column_eq(cudf_col, pa_col)
 
 
-def test_make_numeric_column(numeric_pa_type, mask_state):
-    if mask_state == plc.types.MaskState.ALL_NULL:
-        expected = pa.array([None] * EMPTY_COL_SIZE, type=numeric_pa_type)
-    else:
-        # TODO: uninitialized not necessarily 0
-        expected = pa.array(
-            [0 if numeric_pa_type is not pa.bool_() else False]
-            * EMPTY_COL_SIZE,
-            type=numeric_pa_type,
-        )
+def validate_empty_column(col, mask_state, dtype):
+    assert col.size() == EMPTY_COL_SIZE
 
+    if mask_state == plc.types.MaskState.UNALLOCATED:
+        assert col.null_count() == 0
+    elif mask_state == plc.types.MaskState.ALL_VALID:
+        assert col.null_count() == 0
+    elif mask_state == plc.types.MaskState.ALL_NULL:
+        assert col.null_count() == EMPTY_COL_SIZE
+
+    assert plc.interop.to_arrow(col).type == dtype
+
+
+def test_make_numeric_column(numeric_pa_type, mask_state):
     plc_type = plc.interop.from_arrow(numeric_pa_type)
 
     got = plc.column_factories.make_numeric_column(
         plc_type, EMPTY_COL_SIZE, mask_state
     )
-    assert_column_eq(got, expected)
+    validate_empty_column(got, mask_state, numeric_pa_type)
 
 
 @pytest.mark.parametrize(
@@ -168,17 +171,13 @@ def test_make_numeric_column_negative_size_err(numeric_pa_type):
 
 
 def test_make_fixed_point_column(fixed_point_pa_type, mask_state):
-    if mask_state == plc.types.MaskState.ALL_NULL:
-        expected = pa.array([None] * EMPTY_COL_SIZE, type=fixed_point_pa_type)
-    else:
-        expected = pa.array([0] * EMPTY_COL_SIZE, type=fixed_point_pa_type)
-
     plc_type = plc.interop.from_arrow(fixed_point_pa_type)
 
     got = plc.column_factories.make_fixed_point_column(
         plc_type, EMPTY_COL_SIZE, mask_state
     )
-    assert_column_eq(got, expected)
+
+    validate_empty_column(got, mask_state, fixed_point_pa_type)
 
 
 @pytest.mark.parametrize(
@@ -201,17 +200,12 @@ def test_make_fixed_point_column_negative_size_err(fixed_point_pa_type):
 
 
 def test_make_timestamp_column(timestamp_pa_type, mask_state):
-    if mask_state == plc.types.MaskState.ALL_NULL:
-        expected = pa.array([None] * EMPTY_COL_SIZE, type=timestamp_pa_type)
-    else:
-        expected = pa.array([0] * EMPTY_COL_SIZE, type=timestamp_pa_type)
-
     plc_type = plc.interop.from_arrow(timestamp_pa_type)
 
     got = plc.column_factories.make_timestamp_column(
         plc_type, EMPTY_COL_SIZE, mask_state
     )
-    assert_column_eq(got, expected)
+    validate_empty_column(got, mask_state, timestamp_pa_type)
 
 
 @pytest.mark.parametrize(
@@ -234,17 +228,12 @@ def test_make_timestamp_column_negative_size_err(timestamp_pa_type):
 
 
 def test_make_duration_column(duration_pa_type, mask_state):
-    if mask_state == plc.types.MaskState.ALL_NULL:
-        expected = pa.array([None] * EMPTY_COL_SIZE, type=duration_pa_type)
-    else:
-        expected = pa.array([0] * EMPTY_COL_SIZE, type=duration_pa_type)
-
     plc_type = plc.interop.from_arrow(duration_pa_type)
 
     got = plc.column_factories.make_duration_column(
         plc_type, EMPTY_COL_SIZE, mask_state
     )
-    assert_column_eq(got, expected)
+    validate_empty_column(got, mask_state, duration_pa_type)
 
 
 @pytest.mark.parametrize(
