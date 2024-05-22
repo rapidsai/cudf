@@ -135,7 +135,7 @@ def test_make_empty_column_typeid(pa_type):
 
 
 def test_make_numeric_column(numeric_pa_type, mask_state):
-    if mask_state == plc.column_factories.MaskState.ALL_NULL:
+    if mask_state == plc.types.MaskState.ALL_NULL:
         expected = pa.array([None] * size, type=numeric_pa_type)
     else:
         # TODO: uninitialized not necessarily 0
@@ -157,7 +157,7 @@ def test_make_numeric_column_dtype_err(non_numeric_pa_type):
     plc_type = pa_type_to_plc_type(non_numeric_pa_type)
     with pytest.raises(ValueError):
         plc.column_factories.make_numeric_column(
-            plc_type, 3, plc.column_factories.MaskState.UNALLOCATED
+            plc_type, 3, plc.types.MaskState.UNALLOCATED
         )
 
 
@@ -165,12 +165,12 @@ def test_make_numeric_column_negative_size_err(numeric_pa_type):
     plc_type = pa_type_to_plc_type(numeric_pa_type)
     with pytest.raises(RuntimeError):
         plc.column_factories.make_numeric_column(
-            plc_type, -1, plc.column_factories.MaskState.UNALLOCATED
+            plc_type, -1, plc.types.MaskState.UNALLOCATED
         )
 
 
 def test_make_fixed_point_column(fixed_point_pa_type, mask_state):
-    if mask_state == plc.column_factories.MaskState.ALL_NULL:
+    if mask_state == plc.types.MaskState.ALL_NULL:
         expected = pa.array([None] * size, type=fixed_point_pa_type)
     else:
         expected = pa.array([0] * size, type=fixed_point_pa_type)
@@ -190,7 +190,7 @@ def test_make_fixed_point_column_dtype_err(non_fixed_point_pa_type):
     plc_type = pa_type_to_plc_type(non_fixed_point_pa_type)
     with pytest.raises(ValueError):
         plc.column_factories.make_fixed_point_column(
-            plc_type, 3, plc.column_factories.MaskState.UNALLOCATED
+            plc_type, 3, plc.types.MaskState.UNALLOCATED
         )
 
 
@@ -198,12 +198,12 @@ def test_make_fixed_point_column_negative_size_err(fixed_point_pa_type):
     plc_type = pa_type_to_plc_type(fixed_point_pa_type)
     with pytest.raises(RuntimeError):
         plc.column_factories.make_fixed_point_column(
-            plc_type, -1, plc.column_factories.MaskState.UNALLOCATED
+            plc_type, -1, plc.types.MaskState.UNALLOCATED
         )
 
 
 def test_make_timestamp_column(timestamp_pa_type, mask_state):
-    if mask_state == plc.column_factories.MaskState.ALL_NULL:
+    if mask_state == plc.types.MaskState.ALL_NULL:
         expected = pa.array([None] * size, type=timestamp_pa_type)
     else:
         expected = pa.array([0] * size, type=timestamp_pa_type)
@@ -223,7 +223,7 @@ def test_make_timestamp_column_dtype_err(non_timestamp_pa_type):
     plc_type = pa_type_to_plc_type(non_timestamp_pa_type)
     with pytest.raises(ValueError):
         plc.column_factories.make_timestamp_column(
-            plc_type, 3, plc.column_factories.MaskState.UNALLOCATED
+            plc_type, 3, plc.types.MaskState.UNALLOCATED
         )
 
 
@@ -231,12 +231,12 @@ def test_make_timestamp_column_negative_size_err(timestamp_pa_type):
     plc_type = pa_type_to_plc_type(timestamp_pa_type)
     with pytest.raises(RuntimeError):
         plc.column_factories.make_timestamp_column(
-            plc_type, -1, plc.column_factories.MaskState.UNALLOCATED
+            plc_type, -1, plc.types.MaskState.UNALLOCATED
         )
 
 
 def test_make_duration_column(duration_pa_type, mask_state):
-    if mask_state == plc.column_factories.MaskState.ALL_NULL:
+    if mask_state == plc.types.MaskState.ALL_NULL:
         expected = pa.array([None] * size, type=duration_pa_type)
     else:
         expected = pa.array([0] * size, type=duration_pa_type)
@@ -254,7 +254,7 @@ def test_make_duration_column_dtype_err(non_duration_pa_type):
     plc_type = pa_type_to_plc_type(non_duration_pa_type)
     with pytest.raises(ValueError):
         plc.column_factories.make_duration_column(
-            plc_type, 3, plc.column_factories.MaskState.UNALLOCATED
+            plc_type, 3, plc.types.MaskState.UNALLOCATED
         )
 
 
@@ -262,5 +262,5 @@ def test_make_duration_column_negative_size_err(duration_pa_type):
     plc_type = pa_type_to_plc_type(duration_pa_type)
     with pytest.raises(RuntimeError):
         plc.column_factories.make_duration_column(
-            plc_type, -1, plc.column_factories.MaskState.UNALLOCATED
+            plc_type, -1, plc.types.MaskState.UNALLOCATED
         )

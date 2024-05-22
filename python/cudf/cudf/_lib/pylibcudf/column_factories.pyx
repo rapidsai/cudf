@@ -68,20 +68,20 @@ cpdef Column make_numeric_column(
     if MaskArg is object:
         if isinstance(mstate, MaskState):
             state = mstate
-            with nogil:
-                result = move(
-                    cpp_make_numeric_column(
-                        type_.c_obj,
-                        size,
-                        state
-                    )
-                )
         else:
             raise TypeError("Invalid mask argument")
-    elif MaskArg is tuple:
-        raise TypeError("Passing preallocated mask not yet supported.")
+    elif MaskArg is mask_state:
+        state = mstate
     else:
         raise TypeError("Invalid mask argument")
+    with nogil:
+        result = move(
+            cpp_make_numeric_column(
+                type_.c_obj,
+                size,
+                state
+            )
+        )
 
     return Column.from_libcudf(move(result))
 
@@ -97,22 +97,23 @@ cpdef Column make_fixed_point_column(
     if MaskArg is object:
         if isinstance(mstate, MaskState):
             state = mstate
-            with nogil:
-                result = move(
-                    cpp_make_fixed_point_column(
-                        type_.c_obj,
-                        size,
-                        state
-                    )
-                )
         else:
             raise TypeError("Invalid mask argument")
-    elif MaskArg is tuple:
-        raise TypeError("Passing preallocated mask not yet supported.")
+    elif MaskArg is mask_state:
+        state = mstate
     else:
         raise TypeError("Invalid mask argument")
+    with nogil:
+        result = move(
+            cpp_make_fixed_point_column(
+                type_.c_obj,
+                size,
+                state
+            )
+        )
 
     return Column.from_libcudf(move(result))
+
 
 cpdef Column make_timestamp_column(
     DataType type_,
@@ -126,22 +127,23 @@ cpdef Column make_timestamp_column(
     if MaskArg is object:
         if isinstance(mstate, MaskState):
             state = mstate
-            with nogil:
-                result = move(
-                    cpp_make_timestamp_column(
-                        type_.c_obj,
-                        size,
-                        state
-                    )
-                )
         else:
             raise TypeError("Invalid mask argument")
-    elif MaskArg is tuple:
-        raise TypeError("Passing preallocated mask not yet supported.")
+    elif MaskArg is mask_state:
+        state = mstate
     else:
         raise TypeError("Invalid mask argument")
+    with nogil:
+        result = move(
+            cpp_make_timestamp_column(
+                type_.c_obj,
+                size,
+                state
+            )
+        )
 
     return Column.from_libcudf(move(result))
+
 
 cpdef Column make_duration_column(
     DataType type_,
@@ -155,22 +157,23 @@ cpdef Column make_duration_column(
     if MaskArg is object:
         if isinstance(mstate, MaskState):
             state = mstate
-            with nogil:
-                result = move(
-                    cpp_make_duration_column(
-                        type_.c_obj,
-                        size,
-                        state
-                    )
-                )
         else:
             raise TypeError("Invalid mask argument")
-    elif MaskArg is tuple:
-        raise TypeError("Passing preallocated mask not yet supported.")
+    elif MaskArg is mask_state:
+        state = mstate
     else:
         raise TypeError("Invalid mask argument")
+    with nogil:
+        result = move(
+            cpp_make_duration_column(
+                type_.c_obj,
+                size,
+                state
+            )
+        )
 
     return Column.from_libcudf(move(result))
+
 
 cpdef Column make_fixed_width_column(
     DataType type_,
@@ -184,19 +187,19 @@ cpdef Column make_fixed_width_column(
     if MaskArg is object:
         if isinstance(mstate, MaskState):
             state = mstate
-            with nogil:
-                result = move(
-                    cpp_make_fixed_width_column(
-                        type_.c_obj,
-                        size,
-                        state
-                    )
-                )
         else:
             raise TypeError("Invalid mask argument")
-    elif MaskArg is tuple:
-        raise TypeError("Passing preallocated mask not yet supported.")
+    elif MaskArg is mask_state:
+        state = mstate
     else:
         raise TypeError("Invalid mask argument")
+    with nogil:
+        result = move(
+            cpp_make_fixed_width_column(
+                type_.c_obj,
+                size,
+                state
+            )
+        )
 
     return Column.from_libcudf(move(result))

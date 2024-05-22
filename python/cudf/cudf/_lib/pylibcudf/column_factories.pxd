@@ -14,7 +14,6 @@ ctypedef fused MakeEmptyColumnOperand:
 
 ctypedef fused MaskArg:
     mask_state
-    tuple
     object
 
 
