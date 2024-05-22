@@ -25,8 +25,11 @@
 #include "io/parquet/parquet.hpp"
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
+#include "io/utilities/base64_utilities.hpp"
 #include "io/utilities/column_utils.cuh"
 #include "io/utilities/config_utils.hpp"
+#include "ipc/Message_generated.h"
+#include "ipc/Schema_generated.h"
 #include "parquet_common.hpp"
 #include "parquet_gpu.cuh"
 #include "writer_impl.hpp"
@@ -66,12 +69,29 @@ namespace cudf::io::parquet::detail {
 
 using namespace cudf::io::detail;
 
+/**
+ * @brief Construct and return arrow schema ipc message from input parquet schema
+ *
+ * Recursively traverses through parquet schema to construct arrow schema tree.
+ * The resulting schema tree is serialized and stored as the header (or metadata) of
+ * an otherwise empty ipc message using flatbuffers. The ipc message is then prepended
+ * with header (metadata) size (padded for 16 byte alignment) and a continuation
+ * string. The final string is base64 encoded and returned to be stored at the keyvalue
+ * metadata section of the Parquet file footer.
+ */
+std::string construct_arrow_schema_ipc_message(host_span<SchemaElement const> parquet_schema)
+{
+  // TODO: dummy return empty string for now
+  return cudf::io::detail::base64_encode("");
+}
+
 struct aggregate_writer_metadata {
   aggregate_writer_metadata(host_span<partition_info const> partitions,
                             host_span<std::map<std::string, std::string> const> kv_md,
                             host_span<SchemaElement const> tbl_schema,
                             size_type num_columns,
-                            statistics_freq stats_granularity)
+                            statistics_freq stats_granularity,
+                            bool const write_arrow_schema)
     : version(1),
       schema(std::vector<SchemaElement>(tbl_schema.begin(), tbl_schema.end())),
       files(partitions.size())
@@ -85,6 +105,9 @@ struct aggregate_writer_metadata {
       this->column_orders       = std::vector<ColumnOrder>(num_columns, default_order);
     }
 
+    // Construct the arrow schema ipc message string.
+    auto const arrow_schema_ipc_message = construct_arrow_schema_ipc_message(schema);
+
     for (size_t p = 0; p < kv_md.size(); ++p) {
       std::transform(kv_md[p].begin(),
                      kv_md[p].end(),
@@ -92,6 +115,11 @@ struct aggregate_writer_metadata {
                      [](auto const& kv) {
                        return KeyValue{kv.first, kv.second};
                      });
+      // Append arrow schema to the key_value_metadata
+      if (write_arrow_schema and not arrow_schema_ipc_message.empty()) {
+        this->files[p].key_value_metadata.emplace_back(
+          KeyValue{"ARROW:schema", std::move(arrow_schema_ipc_message)});
+      }
     }
   }
 
@@ -507,52 +535,90 @@ struct leaf_schema_fn {
     }
   }
 
-  //  unsupported outside cudf for parquet 1.0.
+  /* TODO: This code block should be ``time`` type and not ``duration`` type
+    //  unsupported outside cudf for parquet 1.0.
+    template <typename T>
+    std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
+    {
+      col_schema.type           = Type::INT32;
+      col_schema.converted_type = ConvertedType::TIME_MILLIS;
+      col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+      col_schema.ts_scale       = 24 * 60 * 60 * 1000;
+      col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
+    }
+
+    template <typename T>
+    std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
+    {
+      col_schema.type           = Type::INT32;
+      col_schema.converted_type = ConvertedType::TIME_MILLIS;
+      col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+      col_schema.ts_scale       = 1000;
+      col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
+    }
+
+    template <typename T>
+    std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
+    {
+      col_schema.type           = Type::INT32;
+      col_schema.converted_type = ConvertedType::TIME_MILLIS;
+      col_schema.stats_dtype    = statistics_dtype::dtype_int32;
+      col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
+    }
+
+    template <typename T>
+    std::enable_if_t<std::is_same_v<T, cudf::duration_us>, void> operator()()
+    {
+      col_schema.type           = Type::INT64;
+      col_schema.converted_type = ConvertedType::TIME_MICROS;
+      col_schema.stats_dtype    = statistics_dtype::dtype_int64;
+      col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MICROS}};
+    }
+
+    //  unsupported outside cudf for parquet 1.0.
+    template <typename T>
+    std::enable_if_t<std::is_same_v<T, cudf::duration_ns>, void> operator()()
+    {
+      col_schema.type         = Type::INT64;
+      col_schema.stats_dtype  = statistics_dtype::dtype_int64;
+      col_schema.logical_type = LogicalType{TimeType{timestamp_is_utc, TimeUnit::NANOS}};
+    }
+  */
+
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
   {
-    col_schema.type           = Type::INT32;
-    col_schema.converted_type = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
-    col_schema.ts_scale       = 24 * 60 * 60 * 1000;
-    col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
+    col_schema.type       = Type::INT64;
+    col_schema.arrow_type = cudf::type_id::DURATION_SECONDS;
+    col_schema.ts_scale   = 24 * 60 * 60;
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
   {
-    col_schema.type           = Type::INT32;
-    col_schema.converted_type = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
-    col_schema.ts_scale       = 1000;
-    col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
+    col_schema.type       = Type::INT64;
+    col_schema.arrow_type = cudf::type_id::DURATION_SECONDS;
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
   {
-    col_schema.type           = Type::INT32;
-    col_schema.converted_type = ConvertedType::TIME_MILLIS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
-    col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
+    col_schema.type       = Type::INT64;
+    col_schema.arrow_type = cudf::type_id::DURATION_MILLISECONDS;
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_us>, void> operator()()
   {
-    col_schema.type           = Type::INT64;
-    col_schema.converted_type = ConvertedType::TIME_MICROS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
-    col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MICROS}};
+    col_schema.type       = Type::INT64;
+    col_schema.arrow_type = cudf::type_id::DURATION_MICROSECONDS;
   }
 
-  //  unsupported outside cudf for parquet 1.0.
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ns>, void> operator()()
   {
-    col_schema.type         = Type::INT64;
-    col_schema.stats_dtype  = statistics_dtype::dtype_int64;
-    col_schema.logical_type = LogicalType{TimeType{timestamp_is_utc, TimeUnit::NANOS}};
+    col_schema.type       = Type::INT64;
+    col_schema.arrow_type = cudf::type_id::DURATION_NANOSECONDS;
   }
 
   template <typename T>
@@ -625,7 +691,7 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
  * Recursively traverses through linked_columns and corresponding metadata to construct schema tree.
  * The resulting schema tree is stored in a vector in pre-order traversal order.
  */
-std::vector<schema_tree_node> construct_schema_tree(
+std::vector<schema_tree_node> construct_parquet_schema_tree(
   cudf::detail::LinkedColVector const& linked_columns,
   table_input_metadata& metadata,
   single_write_mode write_mode,
@@ -1703,12 +1769,13 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    bool int96_timestamps,
                                    bool utc_timestamps,
                                    bool write_v2_headers,
+                                   bool write_arrow_schema,
                                    host_span<std::unique_ptr<data_sink> const> out_sink,
                                    rmm::cuda_stream_view stream)
 {
   auto vec = table_to_linked_columns(input);
   auto schema_tree =
-    construct_schema_tree(vec, table_meta, write_mode, int96_timestamps, utc_timestamps);
+    construct_parquet_schema_tree(vec, table_meta, write_mode, int96_timestamps, utc_timestamps);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<parquet_column_view> parquet_columns;
 
@@ -1831,7 +1898,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   std::unique_ptr<aggregate_writer_metadata> agg_meta;
   if (!curr_agg_meta) {
     agg_meta = std::make_unique<aggregate_writer_metadata>(
-      partitions, kv_meta, this_table_schema, num_columns, stats_granularity);
+      partitions, kv_meta, this_table_schema, num_columns, stats_granularity, write_arrow_schema);
   } else {
     agg_meta = std::make_unique<aggregate_writer_metadata>(*curr_agg_meta);
 
@@ -2312,6 +2379,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _write_arrow_schema(options.is_enabled_write_arrow_schema()),
     _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
@@ -2342,6 +2410,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _write_arrow_schema(options.is_enabled_write_arrow_schema()),
     _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
@@ -2420,6 +2489,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                                            _int96_timestamps,
                                            _utc_timestamps,
                                            _write_v2_headers,
+                                           _write_arrow_schema,
                                            _out_sink,
                                            _stream);
     } catch (...) {  // catch any exception type

@@ -602,6 +602,8 @@ class parquet_writer_options {
   // Parquet writer can write timestamps as UTC
   // Defaults to true because libcudf timestamps are implicitly UTC
   bool _write_timestamps_as_UTC = true;
+  // Whether to write ARROW schema
+  bool _write_arrow_schema = true;
   // Column chunks file paths to be set in the raw output metadata. One per output file
   std::vector<std::string> _column_chunks_file_paths;
   // Maximum size of each row group (unless smaller than a single page)
@@ -730,6 +732,13 @@ class parquet_writer_options {
    * @return `true` if timestamps will be written as UTC
    */
   [[nodiscard]] auto is_enabled_utc_timestamps() const { return _write_timestamps_as_UTC; }
+
+  /**
+   * @brief Returns `true` if arrow schema will be written
+   *
+   * @return `true` if arrow schema will be written
+   */
+  [[nodiscard]] auto is_enabled_write_arrow_schema() const { return _write_arrow_schema; }
 
   /**
    * @brief Returns Column chunks file paths to be set in the raw output metadata.
@@ -881,6 +890,13 @@ class parquet_writer_options {
    * @param val Boolean value to enable/disable writing of timestamps as UTC.
    */
   void enable_utc_timestamps(bool val) { _write_timestamps_as_UTC = val; }
+
+  /**
+   * @brief Sets preference for writing arrow schema. Write arrow schema if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of arrow schema.
+   */
+  void enable_write_arrow_schema(bool val) { _write_arrow_schema = val; }
 
   /**
    * @brief Sets column chunks file path to be set in the raw output metadata.
@@ -1216,6 +1232,18 @@ class parquet_writer_options_builder {
   }
 
   /**
+   * @brief Set to true if arrow schema is to be written
+   *
+   * @param enabled Boolean value to enable/disable writing of arrow schema
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& write_arrow_schema(bool enabled)
+  {
+    options._write_arrow_schema = enabled;
+    return *this;
+  }
+
+  /**
    * @brief Set to true if V2 page headers are to be written.
    *
    * @param enabled Boolean value to enable/disable writing of V2 page headers.
@@ -1298,6 +1326,8 @@ class chunked_parquet_writer_options {
   bool _write_timestamps_as_int96 = false;
   // Parquet writer can write timestamps as UTC. Defaults to true.
   bool _write_timestamps_as_UTC = true;
+  // Whether to write ARROW schema
+  bool _write_arrow_schema = true;
   // Maximum size of each row group (unless smaller than a single page)
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)
@@ -1389,6 +1419,13 @@ class chunked_parquet_writer_options {
    * @return `true` if timestamps will be written as UTC
    */
   [[nodiscard]] auto is_enabled_utc_timestamps() const { return _write_timestamps_as_UTC; }
+
+  /**
+   * @brief Returns `true` if arrow schema will be written
+   *
+   * @return `true` if arrow schema will be written
+   */
+  [[nodiscard]] auto is_enabled_write_arrow_schema() const { return _write_arrow_schema; }
 
   /**
    * @brief Returns maximum row group size, in bytes.
@@ -1524,6 +1561,13 @@ class chunked_parquet_writer_options {
    * @param val Boolean value to enable/disable writing of timestamps as UTC.
    */
   void enable_utc_timestamps(bool val) { _write_timestamps_as_UTC = val; }
+
+  /**
+   * @brief Sets preference for writing arrow schema. Write arrow schema if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of arrow schema.
+   */
+  void enable_write_arrow_schema(bool val) { _write_arrow_schema = val; }
 
   /**
    * @brief Sets the maximum row group size, in bytes.
@@ -1708,6 +1752,18 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& utc_timestamps(bool enabled)
   {
     options._write_timestamps_as_UTC = enabled;
+    return *this;
+  }
+
+  /**
+   * @brief Set to true if arrow schema is to be written
+   *
+   * @param enabled Boolean value to enable/disable writing of arrow schema
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& write_arrow_schema(bool enabled)
+  {
+    options._write_arrow_schema = enabled;
     return *this;
   }
 

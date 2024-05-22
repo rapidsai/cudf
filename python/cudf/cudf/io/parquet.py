@@ -69,6 +69,7 @@ def _write_parquet(
     force_nullable_schema=False,
     header_version="1.0",
     use_dictionary=True,
+    write_arrow_schema=True,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -102,6 +103,7 @@ def _write_parquet(
         "force_nullable_schema": force_nullable_schema,
         "header_version": header_version,
         "use_dictionary": use_dictionary,
+        "write_arrow_schema": write_arrow_schema,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -906,6 +908,7 @@ def to_parquet(
     force_nullable_schema=False,
     header_version="1.0",
     use_dictionary=True,
+    store_schema=True,
     *args,
     **kwargs,
 ):
@@ -983,6 +986,7 @@ def to_parquet(
             force_nullable_schema=force_nullable_schema,
             header_version=header_version,
             use_dictionary=use_dictionary,
+            write_arrow_schema=store_schema,
         )
 
     else:

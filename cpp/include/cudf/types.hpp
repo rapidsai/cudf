@@ -216,7 +216,11 @@ enum class type_id : int32_t {
   TIMESTAMP_MILLISECONDS,  ///< point in time in milliseconds since Unix Epoch in int64
   TIMESTAMP_MICROSECONDS,  ///< point in time in microseconds since Unix Epoch in int64
   TIMESTAMP_NANOSECONDS,   ///< point in time in nanoseconds since Unix Epoch in int64
-  DURATION_DAYS,           ///< time interval of days in int32
+  TIME_SECONDS,            ///< time of day since midnight in seconds in int64
+  TIME_MILLISECONDS,       ///< time of day since midnight in milliseconds in int64
+  TIME_MICROSECONDS,       ///< time of day since midnight in microseconds in int64
+  TIME_NANOSECONDS,        ///< time of day since midnight in nanoseconds in int64
+  DURATION_DAYS,           ///< time interval of days in int64
   DURATION_SECONDS,        ///< time interval of seconds in int64
   DURATION_MILLISECONDS,   ///< time interval of milliseconds in int64
   DURATION_MICROSECONDS,   ///< time interval of microseconds in int64

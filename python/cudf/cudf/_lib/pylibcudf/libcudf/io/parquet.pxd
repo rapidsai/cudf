@@ -80,6 +80,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         size_t get_max_page_size_bytes() except +
         size_type get_max_page_size_rows() except +
         size_t get_max_dictionary_size() except +
+        bool is_enabled_write_arrow_schema() except +
 
         void set_partitions(
             vector[cudf_io_types.partition_info] partitions
@@ -99,12 +100,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_column_chunks_file_paths(
             vector[string] column_chunks_file_paths
         ) except +
-        void set_int96_timestamps(
-            bool enabled
-        ) except +
-        void set_utc_timestamps(
-            bool enabled
-        ) except +
+        void enable_int96_timestamps(bool val) except +
+        void enable_utc_timestamps(bool val) except +
+        void enable_write_arrow_schema(bool val) except +
         void set_row_group_size_bytes(size_t val) except +
         void set_row_group_size_rows(size_type val) except +
         void set_max_page_size_bytes(size_t val) except +
@@ -145,6 +143,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             vector[string] column_chunks_file_paths
         ) except +
         parquet_writer_options_builder& int96_timestamps(
+            bool enabled
+        ) except +
+        parquet_writer_options_builder& write_arrow_schema(
             bool enabled
         ) except +
         parquet_writer_options_builder& utc_timestamps(
@@ -190,6 +191,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         size_t get_max_page_size_bytes() except +
         size_type get_max_page_size_rows() except +
         size_t get_max_dictionary_size() except +
+        bool is_enabled_write_arrow_schema() except +
 
         void set_metadata(
             cudf_io_types.table_input_metadata m
@@ -215,6 +217,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_max_page_size_rows(size_type val) except +
         void set_max_dictionary_size(size_t val) except +
         void enable_write_v2_headers(bool val) except +
+        void enable_write_arrow_schema(bool val) except +
         void set_dictionary_policy(cudf_io_types.dictionary_policy policy) except +
 
         @staticmethod
@@ -243,6 +246,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             bool enabled
         ) except +
         chunked_parquet_writer_options_builder& utc_timestamps(
+            bool enabled
+        ) except +
+        chunked_parquet_writer_options_builder& write_arrow_schema(
             bool enabled
         ) except +
         chunked_parquet_writer_options_builder& row_group_size_bytes(
