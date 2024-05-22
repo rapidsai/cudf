@@ -244,8 +244,8 @@ CUDF_EXPORT std::mutex& host_mr_mutex()
 }
 
 // Must be called with the host_mr_mutex mutex held
-CUDF_EXPORT std::pair<rmm::host_async_resource_ref*, bool> make_host_mr(
-  std::optional<host_mr_options> const& opts)
+CUDF_EXPORT rmm::host_async_resource_ref& make_host_mr(std::optional<host_mr_options> const& opts,
+                                                       bool* did_configure = nullptr)
 {
   static rmm::host_async_resource_ref* mr_ref = nullptr;
   bool configured                             = false;
@@ -253,13 +253,18 @@ CUDF_EXPORT std::pair<rmm::host_async_resource_ref*, bool> make_host_mr(
     configured = true;
     mr_ref     = &make_default_pinned_mr(opts ? opts->pool_size : std::nullopt);
   }
-  return std::make_pair(mr_ref, configured);
+
+  // If the user passed an out param to detect whether this call configured a resource
+  // set the result
+  if (did_configure != nullptr) { *did_configure = configured; }
+
+  return *mr_ref;
 }
 
 // Must be called with the host_mr_mutex mutex held
 CUDF_EXPORT rmm::host_async_resource_ref& host_mr()
 {
-  static rmm::host_async_resource_ref mr_ref = *std::get<0>(make_host_mr(std::nullopt));
+  static rmm::host_async_resource_ref mr_ref = make_host_mr(std::nullopt);
   return mr_ref;
 }
 
@@ -280,8 +285,9 @@ rmm::host_async_resource_ref get_host_memory_resource()
 bool config_default_host_memory_resource(host_mr_options const& opts)
 {
   std::scoped_lock lock{host_mr_mutex()};
-  auto configured = std::get<1>(make_host_mr(opts));
-  return configured;
+  auto did_configure = false;
+  make_host_mr(opts, &did_configure);
+  return did_configure;
 }
 
 }  // namespace cudf::io
