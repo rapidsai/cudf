@@ -1,11 +1,14 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import functools
 
+import dask_expr._shuffle as _shuffle_module
+from dask_expr import new_collection
 from dask_expr._cumulative import CumulativeBlockwise
 from dask_expr._expr import Expr, VarColumns
 from dask_expr._reductions import Reduction, Var
 
 from dask.dataframe.core import is_dataframe_like, make_meta, meta_nonempty
+from dask.dataframe.dispatch import is_categorical_dtype
 
 ##
 ## Custom expression patching
@@ -121,3 +124,25 @@ def _patched_var(
 
 
 Expr.var = _patched_var
+
+
+# Temporary work-around for missing cudf + categorical support
+# See: https://github.com/rapidsai/cudf/issues/11795
+# TODO: Fix RepartitionQuantiles and remove this in cudf>24.06
+
+_original_get_divisions = _shuffle_module._get_divisions
+
+
+def _patched_get_divisions(frame, other, *args, **kwargs):
+    # NOTE: The following two lines contains the "patch"
+    # (we simply convert the partitioning column to pandas)
+    if is_categorical_dtype(other._meta.dtype) and hasattr(
+        other.frame._meta, "to_pandas"
+    ):
+        other = new_collection(other).to_backend("pandas")._expr
+
+    # Call "original" function
+    return _original_get_divisions(frame, other, *args, **kwargs)
+
+
+_shuffle_module._get_divisions = _patched_get_divisions
