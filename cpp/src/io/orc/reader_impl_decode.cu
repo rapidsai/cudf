@@ -36,6 +36,7 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <cuda/std/functional>
 #include <thrust/copy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
