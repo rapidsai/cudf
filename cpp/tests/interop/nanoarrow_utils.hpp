@@ -30,6 +30,52 @@
 
 #include <nanoarrow/nanoarrow.hpp>
 
+struct generated_test_data {
+  generated_test_data(cudf::size_type length)
+    : int64_data(length),
+      bool_data(length),
+      string_data(length),
+      validity(length),
+      bool_validity(length),
+      list_int64_data(3 * length),
+      list_int64_data_validity(3 * length),
+      list_offsets(length + 1)
+  {
+    cudf::size_type length_of_individual_list = 3;
+    cudf::size_type length_of_list            = length_of_individual_list * length;
+
+    std::generate(int64_data.begin(), int64_data.end(), []() { return rand() % 500000; });
+    std::generate(list_int64_data.begin(), list_int64_data.end(), []() { return rand() % 500000; });
+    auto validity_generator = []() { return rand() % 7 != 0; };
+    std::generate(
+      list_int64_data_validity.begin(), list_int64_data_validity.end(), validity_generator);
+    std::generate(
+      list_offsets.begin(), list_offsets.end(), [length_of_individual_list, n = 0]() mutable {
+        return (n++) * length_of_individual_list;
+      });
+    std::generate(bool_data.begin(), bool_data.end(), validity_generator);
+    std::generate(
+      string_data.begin(), string_data.end(), []() { return rand() % 7 != 0 ? "CUDF" : "Rocks"; });
+    std::generate(validity.begin(), validity.end(), validity_generator);
+    std::generate(bool_validity.begin(), bool_validity.end(), validity_generator);
+
+    std::transform(bool_validity.cbegin(),
+                   bool_validity.cend(),
+                   std::back_inserter(bool_data_validity),
+                   [](auto val) { return static_cast<uint8_t>(val); });
+  }
+
+  std::vector<int64_t> int64_data;
+  std::vector<bool> bool_data;
+  std::vector<std::string> string_data;
+  std::vector<uint8_t> validity;
+  std::vector<bool> bool_validity;
+  std::vector<uint8_t> bool_data_validity;
+  std::vector<int64_t> list_int64_data;
+  std::vector<uint8_t> list_int64_data_validity;
+  std::vector<int32_t> list_offsets;
+};
+
 // no-op allocator/deallocator to set into ArrowArray buffers that we don't
 // want to own their buffers.
 static ArrowBufferAllocator noop_alloc = (struct ArrowBufferAllocator){
@@ -327,3 +373,6 @@ nanoarrow::UniqueArray get_nanoarrow_list_array(std::initializer_list<T> data,
   std::vector<uint8_t> list_mask(list_validity);
   return get_nanoarrow_list_array<T>(data_vector, offset, data_mask, list_mask);
 }
+
+std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, generated_test_data>
+get_nanoarrow_cudf_table(cudf::size_type length);
