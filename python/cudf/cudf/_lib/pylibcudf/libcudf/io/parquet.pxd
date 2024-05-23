@@ -125,9 +125,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef cppclass parquet_writer_options_builder_base[BuilderT]:
         parquet_writer_options_builder() except +
 
-        BuilderT& partitions(
-            vector[cudf_io_types.partition_info] partitions
-        ) except +
         BuilderT& metadata(
             cudf_io_types.table_input_metadata m
         ) except +
@@ -139,9 +136,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
         BuilderT& compression(
             cudf_io_types.compression_type compression
-        ) except +
-        BuilderT& column_chunks_file_paths(
-            vector[string] column_chunks_file_paths
         ) except +
         BuilderT& int96_timestamps(
             bool enabled
@@ -177,6 +171,13 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_writer_options_builder(
             cudf_io_types.sink_info sink_,
             cudf_table_view.table_view table_
+        ) except +
+
+        parquet_writer_options_builder& partitions(
+            vector[cudf_io_types.partition_info] partitions
+        ) except +
+        parquet_writer_options_builder& column_chunks_file_paths(
+            vector[string] column_chunks_file_paths
         ) except +
 
         parquet_writer_options build() except +
