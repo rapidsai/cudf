@@ -29,6 +29,7 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cstdint>
 #include <memory>
@@ -76,18 +77,41 @@ class FieldPosition {
   int _depth;
 };
 
-std::vector<FieldOffset> make_field_offsets(host_span<SchemaElement const> parquet_schema)
+struct dispatch_to_flatbuf_type {};
+
+std::vector<FieldOffset> make_field_offsets(FlatBufferBuilder& fbb,
+                                            host_span<SchemaElement const> parquet_schema)
 {
   // MH: Get here
   std::vector<FieldOffset> field_offsets;
-  FieldPosition pos;
+  [[maybe_unused]] FieldPosition pos;
 
-  for (size_type i = 0; i < static_cast<size_type>(parquet_schema.size()); ++i) {
-    FieldOffset offset;
-    // FieldToFlatbufferVisitor field_visitor(fbb, mapper, pos.child(i));
-    // field_visitor.GetResult(schema.field(i), &offset);
-    field_offsets.push_back(offset);
-  }
+  // Create flatbuffer Fields and insert in field offsets vector
+  std::transform(parquet_schema.begin(),
+                 parquet_schema.end(),
+                 std::back_inserter(field_offsets),
+                 [&](auto schema_elem) {
+                   auto fb_name = fbb.CreateString(schema_elem.name);
+                   auto is_nullable =
+                     schema_elem.repetition_type == FieldRepetitionType::OPTIONAL or
+                     schema_elem.repetition_type == FieldRepetitionType::REPEATED;
+
+                   auto type_type = flatbuf::Type_NONE;
+                   Offset type_offset;
+
+                   DictionaryOffset dictionary = 0;
+
+                   std::vector<FieldOffset> children{};
+                   auto fb_children = fbb.CreateVector(children.data(), children.size());
+                   // cudf::type_dispatcher(
+                   // schema_elem.type, dispatch_to_flatbuf_type{}, schema_elem, type_offset,
+                   // children);
+
+                   // push to field offsets vector
+                   return flatbuf::CreateField(
+                     fbb, fb_name, is_nullable, type_type, type_offset, dictionary, fb_children);
+                 });
+
   return field_offsets;
 }
 
@@ -110,7 +134,8 @@ std::string construct_arrow_schema_ipc_message(host_span<SchemaElement const> pa
   };
 
   FlatBufferBuilder fbb;
-  auto fb_offsets = fbb.CreateVector(make_field_offsets(parquet_schema));
+  auto field_offsets = make_field_offsets(fbb, parquet_schema);
+  auto fb_offsets    = fbb.CreateVector(field_offsets);
 
   flatbuffers::Offset<flatbuf::Schema> const fb_schema =
     flatbuf::CreateSchema(fbb, flatbuf::Endianness::Endianness_Little, fb_offsets);
@@ -119,7 +144,7 @@ std::string construct_arrow_schema_ipc_message(host_span<SchemaElement const> pa
                                                              flatbuf::MetadataVersion_V5,
                                                              flatbuf::MessageHeader_Schema,
                                                              fb_schema.Union(),
-                                                             0 /* body_length */);
+                                                             0 /* body_length = 0 */);
   fbb.Finish(ipc_message_flatbuffer);
 
   int32_t metadata_len = fbb.GetSize();
