@@ -19,6 +19,10 @@ cdef extern from "cudf/io/json.hpp" \
         data_type type
         map[string, schema_element] child_types
 
+    cdef enum json_recovery_mode_t:
+        FAIL "cudf::io::json_recovery_mode_t::FAIL"
+        RECOVER_WITH_NULL "cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL"
+
     cdef cppclass json_reader_options:
         json_reader_options() except +
         cudf_io_types.source_info get_source() except +
@@ -46,6 +50,7 @@ cdef extern from "cudf/io/json.hpp" \
         void enable_dayfirst(bool val) except +
         void enable_experimental(bool val) except +
         void enable_keep_quotes(bool val) except +
+        void set_recovery_mode(json_recovery_mode_t val) except +
 
         @staticmethod
         json_reader_options_builder builder(
