@@ -87,9 +87,6 @@ cdef extern from "cudf/io/json.hpp" \
         json_reader_options_builder& dayfirst(
             bool val
         ) except +
-        json_reader_options_builder& legacy(
-            bool val
-        ) except +
         json_reader_options_builder& keep_quotes(
             bool val
         ) except +
