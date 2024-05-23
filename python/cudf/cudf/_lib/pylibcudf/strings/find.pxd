@@ -3,10 +3,8 @@
 from cudf._lib.pylibcudf.column cimport Column
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
 from cudf._lib.pylibcudf.scalar cimport Scalar
+from cudf._lib.pylibcudf.strings.types cimport ColumnOrScalar
 
-ctypedef fused ColumnOrScalar:
-    Column
-    Scalar
 
 cpdef Column find(
     Column input,
