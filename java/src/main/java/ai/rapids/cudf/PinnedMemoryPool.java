@@ -260,9 +260,12 @@ public final class PinnedMemoryPool implements AutoCloseable {
    *
    * @param size initial and maximum size for the cuDF default pinned pool.
    *        Pass size=0 to disable the default pool.
+   *
+   * @return true if we were able to setup the default resource, false if there was
+   *         a resource already set.
    */
-  public static synchronized void configureDefaultCudfPinnedPoolSize(long size) {
-    Rmm.configureDefaultCudfPinnedPoolSize(size);
+  public static synchronized boolean configureDefaultCudfPinnedPoolSize(long size) {
+    return Rmm.configureDefaultCudfPinnedPoolSize(size);
   }
 
 }
