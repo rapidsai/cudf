@@ -509,7 +509,7 @@ class IndexedFrame(Frame):
         True
 
         .. pandas-compat::
-            **DataFrame.empty, Series.empty**
+            :meth:`pandas.DataFrame.empty`, :meth:`pandas.Series.empty`
 
             If DataFrame/Series contains only `null` values, it is still not
             considered empty. See the example above.
@@ -843,7 +843,7 @@ class IndexedFrame(Frame):
         4    4    9  e
 
         .. pandas-compat::
-            **DataFrame.replace, Series.replace**
+            :meth:`pandas.DataFrame.replace`, :meth:`pandas.Series.replace`
 
             Parameters that are currently not supported are: `limit`, `regex`,
             `method`
@@ -1382,7 +1382,7 @@ class IndexedFrame(Frame):
         dtype: int64
 
         .. pandas-compat::
-            **DataFrame.sum, Series.sum**
+           :meth:`pandas.DataFrame.sum`, :meth:`pandas.Series.sum`
 
             Parameters currently not supported are `level`, `numeric_only`.
         """
@@ -1443,7 +1443,7 @@ class IndexedFrame(Frame):
         dtype: int64
 
         .. pandas-compat::
-            **DataFrame.product, Series.product**
+            :meth:`pandas.DataFrame.product`, :meth:`pandas.Series.product`
 
             Parameters currently not supported are level`, `numeric_only`.
         """
@@ -1540,7 +1540,7 @@ class IndexedFrame(Frame):
         17.0
 
         .. pandas-compat::
-            **DataFrame.median, Series.median**
+            :meth:`pandas.DataFrame.median`, :meth:`pandas.Series.median`
 
             Parameters currently not supported are `level` and `numeric_only`.
         """
@@ -1596,7 +1596,7 @@ class IndexedFrame(Frame):
         dtype: float64
 
         .. pandas-compat::
-            **DataFrame.std, Series.std**
+            :meth:`pandas.DataFrame.std`, :meth:`pandas.Series.std`
 
             Parameters currently not supported are `level` and
             `numeric_only`
@@ -1655,7 +1655,7 @@ class IndexedFrame(Frame):
         dtype: float64
 
         .. pandas-compat::
-            **DataFrame.var, Series.var**
+            :meth:`pandas.DataFrame.var`, :meth:`pandas.Series.var`
 
             Parameters currently not supported are `level` and
             `numeric_only`
@@ -1711,7 +1711,7 @@ class IndexedFrame(Frame):
         dtype: float64
 
         .. pandas-compat::
-            **DataFrame.kurtosis**
+            :meth:`pandas.DataFrame.kurtosis`
 
             Parameters currently not supported are `level` and `numeric_only`
         """
@@ -1773,7 +1773,7 @@ class IndexedFrame(Frame):
         dtype: float64
 
         .. pandas-compat::
-            **DataFrame.skew, Series.skew, Frame.skew**
+            :meth:`pandas.DataFrame.skew`, :meth:`pandas.Series.skew`
 
             The `axis` parameter is not currently supported.
         """
@@ -2243,7 +2243,7 @@ class IndexedFrame(Frame):
         2021-01-01 23:45:27  1  2
 
         .. pandas-compat::
-            **DataFrame.truncate, Series.truncate**
+            :meth:`pandas.DataFrame.truncate`, :meth:`pandas.Series.truncate`
 
             The ``copy`` parameter is only present for API compatibility, but
             ``copy=False`` is not supported. This method always generates a
@@ -2679,7 +2679,7 @@ class IndexedFrame(Frame):
         2  3  1
 
         .. pandas-compat::
-            **DataFrame.sort_index, Series.sort_index**
+            :meth:`pandas.DataFrame.sort_index`, :meth:`pandas.Series.sort_index`
 
             * Not supporting: kind, sort_remaining=False
         """
@@ -3523,7 +3523,7 @@ class IndexedFrame(Frame):
         1  1  2
 
         .. pandas-compat::
-            **DataFrame.sort_values, Series.sort_values**
+            :meth:`pandas.DataFrame.sort_values`, :meth:`pandas.Series.sort_values`
 
             * Support axis='index' only.
             * Not supporting: inplace, kind
@@ -4051,7 +4051,7 @@ class IndexedFrame(Frame):
 
 
         .. pandas-compat::
-            **DataFrame.resample, Series.resample**
+            :meth:`pandas.DataFrame.resample`, :meth:`pandas.Series.resample`
 
             Note that the dtype of the index (or the 'on' column if using
             'on=') in the result will be of a frequency closest to the
@@ -4615,7 +4615,7 @@ class IndexedFrame(Frame):
         1  2  4
 
         .. pandas-compat::
-            **DataFrame.sample, Series.sample**
+            :meth:`pandas.DataFrame.sample`, :meth:`pandas.Series.sample`
 
             When sampling from ``axis=0/'index'``, ``random_state`` can be
             either a numpy random state (``numpy.random.RandomState``)

@@ -655,9 +655,10 @@ class ListMethods(ColumnMethods):
         dtype: list
 
         .. pandas-compat::
-            **ListMethods.sort_values**
+            :meth:`pandas.Series.list.sort_values`
 
-            The ``inplace`` and ``kind`` arguments are currently not supported.
+            This method does not exist in pandas but it can be run
+            as ``...``.
         """
         if inplace:
             raise NotImplementedError("`inplace` not currently implemented.")

@@ -2770,7 +2770,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Chrome                200          0.02
 
         .. pandas-compat::
-            **DataFrame.reindex**
+            :meth:`pandas.DataFrame.reindex`
 
             Note: One difference from Pandas is that ``NA`` is used for rows
             that do not match, rather than ``NaN``. One side effect of this is
@@ -3343,7 +3343,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         5     2     5    20
 
         .. pandas-compat::
-            **DataFrame.diff**
+            :meth:`pandas.DataFrame.diff`
 
             Diff currently only supports numeric dtype columns.
         """
@@ -3548,7 +3548,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         30  3  6
 
         .. pandas-compat::
-            **DataFrame.rename**
+            :meth:`pandas.DataFrame.rename`
 
             * Not Supporting: level
 
@@ -3659,7 +3659,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             ``DataFrame`` is returned.
 
         .. pandas-compat::
-            **DataFrame.agg**
+            :meth:`pandas.DataFrame.agg`
 
             * Not supporting: ``axis``, ``*args``, ``**kwargs``
 
@@ -3832,7 +3832,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Brunei      434000    12128      BN
 
         .. pandas-compat::
-            **DataFrame.nlargest**
+            :meth:`pandas.DataFrame.nlargest`
 
             - Only a single column is supported in *columns*
         """
@@ -3904,7 +3904,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Nauru         337000  182      NR
 
         .. pandas-compat::
-            **DataFrame.nsmallest**
+            :meth:`pandas.DataFrame.nsmallest`
 
             - Only a single column is supported in *columns*
         """
@@ -3985,7 +3985,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         a new (ncol x nrow) dataframe. self is (nrow x ncol)
 
         .. pandas-compat::
-            **DataFrame.transpose, DataFrame.T**
+            :meth:`pandas.DataFrame.transpose`, :meth:`pandas.DataFrame.T`
 
             Not supporting *copy* because default and only behavior is
             copy=True
@@ -4176,7 +4176,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         from both sides.
 
         .. pandas-compat::
-            **DataFrame.merge**
+            :meth:`pandas.DataFrame.merge`
 
             DataFrames merges in cuDF result in non-deterministic row
             ordering.
@@ -4251,7 +4251,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         joined : DataFrame
 
         .. pandas-compat::
-            **DataFrame.join**
+            :meth:`pandas.DataFrame.join`
 
             - *other* must be a single DataFrame for now.
             - *on* is not supported yet due to lack of multi-index support.
@@ -4373,7 +4373,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1 2018-10-08
 
         .. pandas-compat::
-            **DataFrame.query**
+            :meth:`pandas.DataFrame.query`
 
             One difference from pandas is that ``query`` currently only
             supports numeric, datetime, timedelta, or bool dtypes.
@@ -5437,7 +5437,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2  3  6
 
         .. pandas-compat::
-            **DataFrame.from_arrow**
+            :meth:`pandas.DataFrame.from_arrow`
 
             -   Does not support automatically setting index column(s) similar
                 to how ``to_pandas`` works for PyArrow Tables.
@@ -5869,7 +5869,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         0.5  2.5  55.0
 
         .. pandas-compat::
-            **DataFrame.quantile**
+            :meth:`pandas.DataFrame.quantile`
 
             One notable difference from Pandas is when DataFrame is of
             non-numeric types and result is expected to be a Series in case of
@@ -6159,7 +6159,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dtype: int64
 
         .. pandas-compat::
-            **DataFrame.count**
+            :meth:`pandas.DataFrame.count`
 
             Parameters currently not supported are `axis` and `numeric_only`.
         """
@@ -6397,7 +6397,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1  <NA>    2.0
 
         .. pandas-compat::
-            **DataFrame.mode**
+            :meth:`pandas.DataFrame.transpose`
 
             ``axis`` parameter is currently not supported.
         """
@@ -7587,7 +7587,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         The interleaved columns as a single column
 
         .. pandas-compat::
-            **DataFrame.interleave_columns**
+            :meth:`pandas.DataFrame.interleave_columns`
 
             This method does not exist in pandas but it can be run
             as ``pd.Series(np.vstack(df.to_numpy()).reshape((-1,)))``.
@@ -7689,7 +7689,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         4  5   2   7  3
 
         .. pandas-compat::
-            **DataFrame.eval**
+            :meth:`pandas.DataFrame.eval`
 
             * Additional kwargs are not supported.
             * Bitwise and logical operators are not dtype-dependent.
