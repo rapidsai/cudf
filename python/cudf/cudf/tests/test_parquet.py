@@ -2870,6 +2870,82 @@ def test_parquet_reader_fixed_len_with_dict(tmpdir):
     assert_eq(expect, got)
 
 
+def test_parquet_flba_round_trip(tmpdir):
+    def flba(i):
+        hasher = hashlib.sha256()
+        hasher.update(i.to_bytes(4, "little"))
+        return hasher.digest()
+
+    # use pyarrow to write table of fixed_len_byte_array
+    num_rows = 200
+    data = pa.array([flba(i) for i in range(num_rows)], type=pa.binary(32))
+    padf = pa.Table.from_arrays([data], names=["flba"])
+    padf_fname = tmpdir.join("padf.parquet")
+    pq.write_table(padf, padf_fname)
+
+    # round trip data with cudf
+    cdf = cudf.read_parquet(padf_fname)
+    cdf_fname = tmpdir.join("cdf.parquet")
+    cdf.to_parquet(cdf_fname, column_type_length={"flba": 32})
+
+    # now read back in with pyarrow to test it was written properly by cudf
+    padf2 = pq.read_table(padf_fname)
+    padf3 = pq.read_table(cdf_fname)
+    assert_eq(padf2, padf3)
+    assert_eq(padf2.schema[0].type, padf3.schema[0].type)
+
+
+@pytest.mark.parametrize(
+    "encoding",
+    [
+        "PLAIN",
+        "DICTIONARY",
+        "DELTA_BINARY_PACKED",
+        "BYTE_STREAM_SPLIT",
+        "USE_DEFAULT",
+    ],
+)
+def test_per_column_options(tmpdir, encoding):
+    pdf = pd.DataFrame({"ilist": [[1, 2, 3, 1, 2, 3]], "i1": [1]})
+    cdf = cudf.from_pandas(pdf)
+    fname = tmpdir.join("ilist.parquet")
+    cdf.to_parquet(
+        fname,
+        column_encoding={"ilist.list.element": encoding},
+        compression="SNAPPY",
+        skip_compression={"ilist.list.element"},
+    )
+    # DICTIONARY and USE_DEFAULT should both result in a PLAIN_DICTIONARY encoding in parquet
+    encoding_name = (
+        "PLAIN_DICTIONARY"
+        if encoding == "DICTIONARY" or encoding == "USE_DEFAULT"
+        else encoding
+    )
+    pf = pq.ParquetFile(fname)
+    fmd = pf.metadata
+    assert encoding_name in fmd.row_group(0).column(0).encodings
+    assert fmd.row_group(0).column(0).compression == "UNCOMPRESSED"
+    assert fmd.row_group(0).column(1).compression == "SNAPPY"
+
+
+@pytest.mark.parametrize(
+    "encoding",
+    ["DELTA_LENGTH_BYTE_ARRAY", "DELTA_BYTE_ARRAY"],
+)
+def test_per_column_options_string_col(tmpdir, encoding):
+    pdf = pd.DataFrame({"s": ["a string"], "i1": [1]})
+    cdf = cudf.from_pandas(pdf)
+    fname = tmpdir.join("strcol.parquet")
+    cdf.to_parquet(
+        fname,
+        column_encoding={"s": encoding},
+        compression="SNAPPY",
+    )
+    pf = pq.ParquetFile(fname)
+    fmd = pf.metadata
+    assert encoding in fmd.row_group(0).column(0).encodings
+
+
 def test_parquet_reader_rle_boolean(datadir):
     fname = datadir / "rle_boolean_encoding.parquet"
 
@@ -3243,3 +3319,91 @@ def test_parquet_reader_zstd_huff_tables(datadir):
     expected = pa.parquet.read_table(fname).to_pandas()
     actual = cudf.read_parquet(fname)
     assert_eq(actual, expected)
+
+
+def test_parquet_reader_roundtrip_with_arrow_schema():
+    # Ensure that the nested types are faithfully being roundtripped
+    # across Parquet with arrow schema which is used to faithfully
+    # round trip duration types (timedelta64) across Parquet read and write.
+    pdf = pd.DataFrame(
+        {
+            "s": pd.Series([None, None, None], dtype="timedelta64[s]"),
+            "ms": pd.Series([1234, None, 32442], dtype="timedelta64[ms]"),
+            "us": pd.Series([None, 3456, None], dtype="timedelta64[us]"),
+            "ns": pd.Series([1234, 3456, 32442], dtype="timedelta64[ns]"),
+            "duration_list": list(
+                [
+                    [
+                        datetime.timedelta(minutes=7, seconds=4),
+                        datetime.timedelta(minutes=7),
+                    ],
+                    [
+                        None,
+                        None,
+                    ],
+                    [
+                        datetime.timedelta(minutes=7, seconds=4),
+                        None,
+                    ],
+                ]
+            ),
+            "int64": pd.Series([1234, 123, 4123], dtype="int64"),
+            "list": list([[1, 2], [1, 2], [1, 2]]),
+            "datetime": pd.Series([1234, 123, 4123], dtype="datetime64[ms]"),
+            "map": pd.Series(["cat", "dog", "lion"]).map(
+                {"cat": "kitten", "dog": "puppy", "lion": "cub"}
+            ),
+        }
+    )
+
+    # Write parquet with arrow for now (to write arrow:schema)
+    buffer = BytesIO()
+    pdf.to_parquet(buffer, engine="pyarrow")
+
+    # Read parquet with arrow schema
+    got = cudf.read_parquet(buffer)
+    # Convert to cudf table for an apple to apple comparison
+    expected = cudf.from_pandas(pdf)
+
+    # Check results for reader with schema
+    assert_eq(expected, got)
+
+
+def test_parquet_reader_roundtrip_structs_with_arrow_schema():
+    # Ensure that the structs with duration types are faithfully being
+    # roundtripped across Parquet with arrow schema
+    pdf = pd.DataFrame(
+        {
+            "struct": {
+                "payload": {
+                    "Domain": {
+                        "Name": "abc",
+                        "Id": {"Name": "host", "Value": "127.0.0.8"},
+                        "Duration": datetime.timedelta(minutes=12),
+                    },
+                    "StreamId": "12345678",
+                    "Duration": datetime.timedelta(minutes=4),
+                    "Offset": None,
+                    "Resource": [
+                        {
+                            "Name": "ZoneName",
+                            "Value": "RAPIDS",
+                            "Duration": datetime.timedelta(seconds=1),
+                        }
+                    ],
+                }
+            }
+        }
+    )
+
+    # Reset the buffer and write parquet with arrow
+    buffer = BytesIO()
+    pdf.to_parquet(buffer, engine="pyarrow")
+
+    # Read parquet with arrow schema
+    got = cudf.read_parquet(buffer)
+    # Convert to cudf table for an apple to apple comparison
+    expected = cudf.from_pandas(pdf)
+
+    # Check results
+    assert_eq(expected, got)

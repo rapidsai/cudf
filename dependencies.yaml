@@ -289,7 +289,7 @@ dependencies:
           - cython>=3.0.3
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==16.0.0.*
+          - pyarrow==16.1.0.*
       - output_types: conda
         packages:
           - scikit-build-core>=0.7.0
@@ -325,9 +325,6 @@ dependencies:
           - matrix: {cuda: "11.*"}
             packages: &build_python_packages_cu11
               - &rmm_cu11 rmm-cu11==24.6.*
-          - {matrix: null, packages: null }
-      - output_types: pyproject
-        matrices:
           - {matrix: null, packages: [*rmm_conda] }
   libarrow_build:
     common:
@@ -335,25 +332,25 @@ dependencies:
         packages:
           # Hard pin the Arrow patch version used during the build. This must
           # be kept in sync with the version pinned in get_arrow.cmake.
-          - libarrow-acero==16.0.0.*
-          - libarrow-dataset==16.0.0.*
-          - libarrow==16.0.0.*
-          - libparquet==16.0.0.*
+          - libarrow-acero==16.1.0.*
+          - libarrow-dataset==16.1.0.*
+          - libarrow==16.1.0.*
+          - libparquet==16.1.0.*
   libarrow_run:
     common:
       - output_types: conda
         packages:
-          # Allow runtime version to float up to minor version
-          - libarrow-acero>=16.0.0,<17.0.0a0
-          - libarrow-dataset>=16.0.0,<17.0.0a0
-          - libarrow>=16.0.0,<17.0.0a0
-          - libparquet>=16.0.0,<17.0.0a0
+          # Allow runtime version to float up to patch version
+          - libarrow-acero>=16.1.0,<16.2.0a0
+          - libarrow-dataset>=16.1.0,<16.2.0a0
+          - libarrow>=16.1.0,<16.2.0a0
+          - libparquet>=16.1.0,<16.2.0a0
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          # Allow runtime version to float up to minor version
-          - pyarrow>=16.0.0,<17.0.0a0
+          # Allow runtime version to float up to patch version
+          - pyarrow>=16.1.0,<16.2.0a0
   cuda_version:
     specific:
       - output_types: conda
@@ -578,10 +575,7 @@ dependencies:
               - rmm-cu11==24.6.*
               - cubinlinker-cu11
               - ptxcompiler-cu11
-          - {matrix: null, packages: null}
-      - output_types: pyproject
-        matrices:
-          - {matrix: null, packages: [cubinlinker, ptxcompiler, *rmm_conda] }
+          - {matrix: null, packages: [cubinlinker, ptxcompiler, *rmm_conda]}
   run_cudf_polars:
     common:
       - output_types: [conda, requirements, pyproject]

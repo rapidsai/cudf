@@ -71,6 +71,8 @@ class parquet_reader_options {
   bool _convert_strings_to_categories = false;
   // Whether to use PANDAS metadata to load columns
   bool _use_pandas_metadata = true;
+  // Whether to read and use ARROW schema
+  bool _use_arrow_schema = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
@@ -125,6 +127,13 @@ class parquet_reader_options {
    * @return `true` if pandas metadata is used while reading
    */
   [[nodiscard]] bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
+
+  /**
+   * @brief Returns true/false depending whether to use arrow schema while reading.
+   *
+   * @return `true` if arrow schema is used while reading
+   */
+  [[nodiscard]] bool is_enabled_use_arrow_schema() const { return _use_arrow_schema; }
 
   /**
    * @brief Returns optional tree of metadata.
@@ -196,6 +205,31 @@ class parquet_reader_options {
   /**
    * @brief Sets AST based filter for predicate pushdown.
    *
+   * The filter can utilize cudf::ast::column_name_reference to reference a column by its name,
+   * even if it's not necessarily present in the requested projected columns.
+   * To refer to output column indices, you can use cudf::ast::column_reference.
+   *
+   * For a parquet with columns ["A", "B", "C", ... "X", "Y", "Z"],
+   * Example 1: with/without column projection
+   * @code
+   * use_columns({"A", "X", "Z"})
+   * .filter(operation(ast_operator::LESS, column_name_reference{"C"}, literal{100}));
+   * @endcode
+   * Column "C" need not be present in output table.
+   * Example 2: without column projection
+   * @code
+   * filter(operation(ast_operator::LESS, column_reference{1}, literal{100}));
+   * @endcode
+   * Here, `1` will refer to column "B" because output will contain all columns in
+   * order ["A", ..., "Z"].
+   * Example 3: with column projection
+   * @code
+   * use_columns({"A", "Z", "X"})
+   * .filter(operation(ast_operator::LESS, column_reference{1}, literal{100}));
+   * @endcode
+   * Here, `1` will refer to column "Z" because output will contain 3 columns in
+   * order ["A", "Z", "X"].
+   *
    * @param filter AST expression to use as filter
    */
   void set_filter(ast::expression const& filter) { _filter = filter; }
@@ -213,6 +247,13 @@ class parquet_reader_options {
    * @param val Boolean value whether to use pandas metadata
    */
   void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
+
+  /**
+   * @brief Sets to enable/disable use of arrow schema to read.
+   *
+   * @param val Boolean value whether to use arrow schema
+   */
+  void enable_use_arrow_schema(bool val) { _use_arrow_schema = val; }
 
   /**
    * @brief Sets reader column schema.
@@ -293,9 +334,7 @@ class parquet_reader_options_builder {
   }
 
   /**
-   * @brief Sets vector of individual row groups to read.
-   *
-   * @param filter Vector of row groups to read
+   * @copydoc parquet_reader_options::set_filter
    * @return this for chaining
    */
   parquet_reader_options_builder& filter(ast::expression const& filter)
@@ -325,6 +364,18 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& use_pandas_metadata(bool val)
   {
     options._use_pandas_metadata = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets to enable/disable use of arrow schema to read.
+   *
+   * @param val Boolean value whether to use arrow schema
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& use_arrow_schema(bool val)
+  {
+    options._use_arrow_schema = val;
     return *this;
   }
 

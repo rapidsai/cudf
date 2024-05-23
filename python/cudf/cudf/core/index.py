@@ -38,6 +38,7 @@ from cudf.api.types import (
     is_integer,
     is_list_like,
     is_scalar,
+    is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
@@ -1623,7 +1624,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     @property
     @_cudf_nvtx_annotate
     def str(self):
-        if isinstance(self._values, cudf.core.column.StringColumn):
+        if is_string_dtype(self.dtype):
             return StringMethods(parent=self)
         else:
             raise AttributeError(
@@ -2372,6 +2373,11 @@ class DatetimeIndex(Index):
         """  # noqa: E501
         result_col = self._column.tz_convert(tz)
         return DatetimeIndex._from_data({self.name: result_col})
+
+    def repeat(self, repeats, axis=None):
+        res = super().repeat(repeats, axis=axis)
+        res._freq = None
+        return res
 
 
 class TimedeltaIndex(Index):
