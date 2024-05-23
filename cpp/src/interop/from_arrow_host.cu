@@ -294,7 +294,7 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::struct_v
       auto type = arrow_to_cudf_type(&view);
 
       auto out = get_column_copy(&view, child, type, false, stream, mr);
-      return input->offset == 0
+      return input->offset == 0 && input->length == out->size()
                ? std::move(out)
                : std::make_unique<column>(
                    cudf::detail::slice(out->view(),
@@ -482,8 +482,8 @@ std::unique_ptr<column> from_arrow_column(ArrowSchema const* schema,
   CUDF_FUNC_RANGE();
 
   ArrowDeviceArray const device_input = {
-    .array = *input,
-    .device_id = -1,
+    .array       = *input,
+    .device_id   = -1,
     .device_type = ARROW_DEVICE_CPU,
   };
   return detail::from_arrow_host_column(schema, &device_input, stream, mr);
