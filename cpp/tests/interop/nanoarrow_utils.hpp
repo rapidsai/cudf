@@ -42,7 +42,6 @@ struct generated_test_data {
       list_offsets(length + 1)
   {
     cudf::size_type length_of_individual_list = 3;
-    cudf::size_type length_of_list            = length_of_individual_list * length;
 
     std::generate(int64_data.begin(), int64_data.end(), []() { return rand() % 500000; });
     std::generate(list_int64_data.begin(), list_int64_data.end(), []() { return rand() % 500000; });

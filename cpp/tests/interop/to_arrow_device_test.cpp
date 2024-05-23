@@ -186,17 +186,17 @@ get_nanoarrow_tables(cudf::size_type length)
   NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(arrow.get(), schema.get(), nullptr));
   arrow->length = length;
 
-  populate_from_col<int64_t>(arrow->children[0], columns[0]->view());
-  populate_from_col<cudf::string_view>(arrow->children[1], columns[1]->view());
+  populate_from_col<int64_t>(arrow->children[0], table->get_column(0).view());
+  populate_from_col<cudf::string_view>(arrow->children[1], table->get_column(1).view());
   populate_dict_from_col<int64_t, uint32_t>(arrow->children[2],
-                                            cudf::dictionary_column_view(columns[2]->view()));
+                                            cudf::dictionary_column_view(table->get_column(2).view()));
 
-  populate_from_col<bool>(arrow->children[3], columns[3]->view());
-  cudf::lists_column_view list_view{columns[4]->view()};
+  populate_from_col<bool>(arrow->children[3], table->get_column(3).view());
+  cudf::lists_column_view list_view{table->get_column(4).view()};
   populate_list_from_col(arrow->children[4], list_view);
   populate_from_col<int64_t>(arrow->children[4]->children[0], list_view.child());
 
-  cudf::structs_column_view struct_view{columns[5]->view()};
+  cudf::structs_column_view struct_view{table->get_column(5).view()};
   populate_from_col<int64_t>(arrow->children[5]->children[0], struct_view.child(0));
   populate_from_col<cudf::string_view>(arrow->children[5]->children[1], struct_view.child(1));
   arrow->children[5]->length     = struct_view.size();

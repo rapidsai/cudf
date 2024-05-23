@@ -45,7 +45,7 @@ get_nanoarrow_host_tables(cudf::size_type length)
   auto int64_array = get_nanoarrow_array<int64_t>(test_data.int64_data, test_data.validity);
   auto string_array =
     get_nanoarrow_array<cudf::string_view>(test_data.string_data, test_data.validity);
-  cudf::dictionary_column_view view(dict_col->view());
+  cudf::dictionary_column_view view(table->get_column(2).view());
   auto keys       = cudf::test::to_host<int64_t>(view.keys()).first;
   auto indices    = cudf::test::to_host<uint32_t>(view.indices()).first;
   auto dict_array = get_nanoarrow_dict_array(std::vector<int64_t>(keys.begin(), keys.end()),
