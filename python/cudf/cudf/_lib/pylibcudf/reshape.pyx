@@ -33,7 +33,6 @@ cpdef Column interleave_columns(Table source_table):
     -------
     Column
         A new column which is the result of interleaving the input columns
-
     """
     cdef unique_ptr[column] c_result
 
