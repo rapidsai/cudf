@@ -386,17 +386,35 @@ TimedeltaIndex = make_final_proxy_type(
     },
 )
 
-NumpyExtensionArray = make_final_proxy_type(
-    "NumpyExtensionArray",
-    _Unusable,
-    pd.arrays.NumpyExtensionArray,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
-    additional_attributes={
-        "_ndarray": _FastSlowAttribute("_ndarray"),
-        "_dtype": _FastSlowAttribute("_dtype"),
-    },
-)
+try:
+    from pandas.arrays import NumpyExtensionArray as pd_NumpyExtensionArray
+
+    NumpyExtensionArray = make_final_proxy_type(
+        "NumpyExtensionArray",
+        _Unusable,
+        pd_NumpyExtensionArray,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+        additional_attributes={
+            "_ndarray": _FastSlowAttribute("_ndarray"),
+            "_dtype": _FastSlowAttribute("_dtype"),
+        },
+    )
+
+except ImportError:
+    from pandas.arrays import PandasArray as pd_PandasArray
+
+    PandasArray = make_final_proxy_type(
+        "PandasArray",
+        _Unusable,
+        pd_PandasArray,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+        additional_attributes={
+            "_ndarray": _FastSlowAttribute("_ndarray"),
+            "_dtype": _FastSlowAttribute("_dtype"),
+        },
+    )
 
 TimedeltaArray = make_final_proxy_type(
     "TimedeltaArray",
