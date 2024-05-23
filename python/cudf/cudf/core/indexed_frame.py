@@ -644,7 +644,7 @@ class IndexedFrame(Frame):
                 f"new values have {len(value)} elements"
             )
         # avoid unnecessary cast to Index
-        if not isinstance(value, Index):
+        if not isinstance(value, BaseIndex):
             value = Index(value)
 
         self._index = value
