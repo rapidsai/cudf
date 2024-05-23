@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import pytest
+
 import polars as pl
 
 from cudf_polars.testing.asserts import assert_gpu_result_equal
@@ -16,4 +18,6 @@ def test_extcontext():
     ).lazy()
     ldf2 = ldf.select((pl.col("b") + pl.col("a")).alias("c"))
     query = ldf.with_context(ldf2).select(pl.col("b"), pl.col("c"))
-    assert_gpu_result_equal(query)
+    with pytest.raises(pl.exceptions.ComputeError):
+        # ExtContext to be deprecated so we're not implementing it.
+        assert_gpu_result_equal(query)

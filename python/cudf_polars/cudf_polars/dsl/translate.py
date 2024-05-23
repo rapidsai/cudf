@@ -6,9 +6,12 @@
 from __future__ import annotations
 
 from contextlib import AbstractContextManager, nullcontext
+from functools import singledispatch
 from typing import Any
 
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
+
+import cudf._lib.pylibcudf as plc  # noqa: TCH002, singledispatch register needs this name defined.
 
 from cudf_polars.dsl import expr, ir
 from cudf_polars.utils import dtypes
@@ -35,6 +38,171 @@ class set_node(AbstractContextManager):
 
 
 noop_context: nullcontext = nullcontext()
+
+
+@singledispatch
+def _translate_ir(node: Any, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    raise NotImplementedError(f"Translation for {type(node).__name__}")
+
+
+@_translate_ir.register
+def _(node: pl_ir.PythonScan, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    return ir.PythonScan(
+        schema,
+        node.options,
+        translate_expr(visitor, n=node.predicate)
+        if node.predicate is not None
+        else None,
+    )
+
+
+@_translate_ir.register
+def _(node: pl_ir.Scan, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    return ir.Scan(
+        schema,
+        node.scan_type,
+        node.paths,
+        node.file_options,
+        translate_expr(visitor, n=node.predicate)
+        if node.predicate is not None
+        else None,
+    )
+
+
+@_translate_ir.register
+def _(node: pl_ir.Cache, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    return ir.Cache(schema, node.id_, translate_ir(visitor, n=node.input))
+
+
+@_translate_ir.register
+def _(
+    node: pl_ir.DataFrameScan, visitor: Any, schema: dict[str, plc.DataType]
+) -> ir.IR:
+    return ir.DataFrameScan(
+        schema,
+        node.df,
+        node.projection,
+        translate_expr(visitor, n=node.selection)
+        if node.selection is not None
+        else None,
+    )
+
+
+@_translate_ir.register
+def _(node: pl_ir.Select, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    # We translate the expressions (which are executed with
+    # reference to the input node) with the input node active
+    # so that dtype resolution works correctly.
+    with set_node(visitor, node.input):
+        inp = translate_ir(visitor, n=None)
+        cse_exprs = [translate_expr(visitor, n=e) for e in node.cse_expr]
+        exprs = [translate_expr(visitor, n=e) for e in node.expr]
+    return ir.Select(schema, inp, cse_exprs, exprs)
+
+
+@_translate_ir.register
+def _(node: pl_ir.GroupBy, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    with set_node(visitor, node.input):
+        inp = translate_ir(visitor, n=None)
+        aggs = [translate_expr(visitor, n=e) for e in node.aggs]
+        keys = [translate_expr(visitor, n=e) for e in node.keys]
+    return ir.GroupBy(
+        schema,
+        inp,
+        aggs,
+        keys,
+        node.maintain_order,
+        node.options,
+    )
+
+
+@_translate_ir.register
+def _(node: pl_ir.Join, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    with set_node(visitor, node.input_left):
+        inp_left = translate_ir(visitor, n=None)
+        left_on = [translate_expr(visitor, n=e) for e in node.left_on]
+    with set_node(visitor, node.input_right):
+        inp_right = translate_ir(visitor, n=None)
+        right_on = [translate_expr(visitor, n=e) for e in node.right_on]
+    return ir.Join(schema, inp_left, inp_right, left_on, right_on, node.options)
+
+
+@_translate_ir.register
+def _(node: pl_ir.HStack, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    with set_node(visitor, node.input):
+        inp = translate_ir(visitor, n=None)
+        exprs = [translate_expr(visitor, n=e) for e in node.exprs]
+    return ir.HStack(schema, inp, exprs)
+
+
+@_translate_ir.register
+def _(node: pl_ir.Distinct, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    return ir.Distinct(
+        schema,
+        translate_ir(visitor, n=node.input),
+        node.options,
+    )
+
+
+@_translate_ir.register
+def _(node: pl_ir.Sort, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    with set_node(visitor, node.input):
+        inp = translate_ir(visitor, n=None)
+        by = [translate_expr(visitor, n=e) for e in node.by_column]
+    return ir.Sort(schema, inp, by, node.sort_options, node.slice)
+
+
+@_translate_ir.register
+def _(node: pl_ir.Slice, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    return ir.Slice(schema, translate_ir(visitor, n=node.input), node.offset, node.len)
+
+
+@_translate_ir.register
+def _(node: pl_ir.Filter, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    with set_node(visitor, node.input):
+        inp = translate_ir(visitor, n=None)
+        mask = translate_expr(visitor, n=node.predicate)
+    return ir.Filter(schema, inp, mask)
+
+
+@_translate_ir.register
+def _(
+    node: pl_ir.SimpleProjection, visitor: Any, schema: dict[str, plc.DataType]
+) -> ir.IR:
+    return ir.Projection(schema, translate_ir(visitor, n=node.input))
+
+
+@_translate_ir.register
+def _(node: pl_ir.MapFunction, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    name, *options = node.function
+    return ir.MapFunction(
+        schema,
+        # TODO: merge_sorted breaks this pattern
+        translate_ir(visitor, n=node.input),
+        name,
+        options,
+    )
+
+
+@_translate_ir.register
+def _(node: pl_ir.Union, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    return ir.Union(
+        schema, [translate_ir(visitor, n=n) for n in node.inputs], node.options
+    )
+
+
+@_translate_ir.register
+def _(node: pl_ir.HConcat, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    return ir.HConcat(schema, [translate_ir(visitor, n=n) for n in node.inputs])
+
+
+@_translate_ir.register
+def _(node: pl_ir.ExtContext, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    return ir.ExtContext(
+        schema,
+        translate_ir(visitor, n=node.input),
+        [translate_ir(visitor, n=n) for n in node.contexts],
+    )
 
 
 def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
@@ -64,117 +232,134 @@ def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
     with ctx:
         node = visitor.view_current_node()
         schema = {k: dtypes.from_polars(v) for k, v in visitor.get_schema().items()}
-        if isinstance(node, pl_ir.PythonScan):
-            return ir.PythonScan(
-                schema,
-                node.options,
-                translate_expr(visitor, n=node.predicate)
-                if node.predicate is not None
-                else None,
-            )
-        elif isinstance(node, pl_ir.Scan):
-            return ir.Scan(
-                schema,
-                node.scan_type,
-                node.paths,
-                node.file_options,
-                translate_expr(visitor, n=node.predicate)
-                if node.predicate is not None
-                else None,
-            )
-        elif isinstance(node, pl_ir.Cache):
-            return ir.Cache(schema, node.id_, translate_ir(visitor, n=node.input))
-        elif isinstance(node, pl_ir.DataFrameScan):
-            return ir.DataFrameScan(
-                schema,
-                node.df,
-                node.projection,
-                translate_expr(visitor, n=node.selection)
-                if node.selection is not None
-                else None,
-            )
-        elif isinstance(node, pl_ir.Select):
-            # We translate the expressions (which are executed with
-            # reference to the input node) with the input node active
-            # so that dtype resolution works correctly.
-            with set_node(visitor, node.input):
-                inp = translate_ir(visitor, n=None)
-                cse_exprs = [translate_expr(visitor, n=e) for e in node.cse_expr]
-                exprs = [translate_expr(visitor, n=e) for e in node.expr]
-            return ir.Select(schema, inp, cse_exprs, exprs)
-        elif isinstance(node, pl_ir.GroupBy):
-            with set_node(visitor, node.input):
-                inp = translate_ir(visitor, n=None)
-                aggs = [translate_expr(visitor, n=e) for e in node.aggs]
-                keys = [translate_expr(visitor, n=e) for e in node.keys]
-            return ir.GroupBy(
-                schema,
-                inp,
-                aggs,
-                keys,
-                node.maintain_order,
-                node.options,
-            )
-        elif isinstance(node, pl_ir.Join):
-            with set_node(visitor, node.input_left):
-                inp_left = translate_ir(visitor, n=None)
-                left_on = [translate_expr(visitor, n=e) for e in node.left_on]
-            with set_node(visitor, node.input_right):
-                inp_right = translate_ir(visitor, n=None)
-                right_on = [translate_expr(visitor, n=e) for e in node.right_on]
-            return ir.Join(schema, inp_left, inp_right, left_on, right_on, node.options)
-        elif isinstance(node, pl_ir.HStack):
-            with set_node(visitor, node.input):
-                inp = translate_ir(visitor, n=None)
-                exprs = [translate_expr(visitor, n=e) for e in node.exprs]
-            return ir.HStack(schema, inp, exprs)
-        elif isinstance(node, pl_ir.Distinct):
-            return ir.Distinct(
-                schema,
-                translate_ir(visitor, n=node.input),
-                node.options,
-            )
-        elif isinstance(node, pl_ir.Sort):
-            with set_node(visitor, node.input):
-                inp = translate_ir(visitor, n=None)
-                by = [translate_expr(visitor, n=e) for e in node.by_column]
-            return ir.Sort(schema, inp, by, node.sort_options, node.slice)
-        elif isinstance(node, pl_ir.Slice):
-            return ir.Slice(
-                schema, translate_ir(visitor, n=node.input), node.offset, node.len
-            )
-        elif isinstance(node, pl_ir.Filter):
-            with set_node(visitor, node.input):
-                inp = translate_ir(visitor, n=None)
-                mask = translate_expr(visitor, n=node.predicate)
-            return ir.Filter(schema, inp, mask)
-        elif isinstance(node, pl_ir.SimpleProjection):
-            return ir.Projection(schema, translate_ir(visitor, n=node.input))
-        elif isinstance(node, pl_ir.MapFunction):
-            name, *options = node.function
-            return ir.MapFunction(
-                schema,
-                # TODO: merge_sorted breaks this pattern
-                translate_ir(visitor, n=node.input),
-                name,
-                options,
-            )
-        elif isinstance(node, pl_ir.Union):
-            return ir.Union(
-                schema, [translate_ir(visitor, n=n) for n in node.inputs], node.options
-            )
-        elif isinstance(node, pl_ir.HConcat):
-            return ir.HConcat(schema, [translate_ir(visitor, n=n) for n in node.inputs])
-        elif isinstance(node, pl_ir.ExtContext):
-            return ir.ExtContext(
-                schema,
-                translate_ir(visitor, n=node.input),
-                [translate_ir(visitor, n=n) for n in node.contexts],
-            )
-        else:
-            raise NotImplementedError(
-                f"No handler for LogicalPlan node with {type(node)=}"
-            )
+        return _translate_ir(node, visitor, schema)
+
+
+@singledispatch
+def _translate_expr(node: Any, visitor: Any, dtype: plc.DataType) -> expr.Expr:
+    raise NotImplementedError(f"Translation for {type(node).__name__}")
+
+
+@_translate_expr.register
+def _(node: pl_expr.PyExprIR, visitor: Any, dtype: plc.DataType) -> expr.Expr:
+    e = translate_expr(visitor, n=node.node)
+    return expr.NamedExpr(dtype, node.output_name, e)
+
+
+@_translate_expr.register
+def _(node: pl_expr.Function, visitor: Any, dtype: plc.DataType) -> expr.Expr:
+    name, *options = node.function_data
+    if isinstance(name, pl_expr.StringFunction):
+        return expr.StringFunction(
+            dtype,
+            name,
+            options,
+            *(translate_expr(visitor, n=n) for n in node.input),
+        )
+    elif isinstance(name, pl_expr.BooleanFunction):
+        return expr.BooleanFunction(
+            dtype,
+            name,
+            options,
+            *(translate_expr(visitor, n=n) for n in node.input),
+        )
+    else:
+        raise NotImplementedError(f"No handler for Expr function node with {name=}")
+
+
+@_translate_expr.register
+def _(node: pl_expr.Window, visitor: Any, dtype: plc.DataType) -> expr.Expr:
+    # TODO: raise in groupby?
+    if node.partition_by is None:
+        return expr.RollingWindow(
+            dtype, node.options, translate_expr(visitor, n=node.function)
+        )
+    else:
+        return expr.GroupedRollingWindow(
+            dtype,
+            node.options,
+            translate_expr(visitor, n=node.function),
+            *(translate_expr(visitor, n=n) for n in node.partition_by),
+        )
+
+
+@_translate_expr.register
+def _(node: pl_expr.Literal, visitor: Any, dtype: plc.DataType) -> expr.Expr:
+    return expr.Literal(dtype, node.value)
+
+
+@_translate_expr.register
+def _(node: pl_expr.Sort, visitor: Any, dtype: plc.DataType) -> expr.Expr:
+    # TODO: raise in groupby
+    return expr.Sort(dtype, node.options, translate_expr(visitor, n=node.expr))
+
+
+@_translate_expr.register
+def _(node: pl_expr.SortBy, visitor: Any, dtype: plc.DataType) -> expr.Expr:
+    return expr.SortBy(
+        dtype,
+        node.sort_options,
+        translate_expr(visitor, n=node.expr),
+        *(translate_expr(visitor, n=n) for n in node.by),
+    )
+
+
+@_translate_expr.register
+def _(node: pl_expr.Gather, visitor: Any, dtype: plc.DataType) -> expr.Expr:
+    return expr.Gather(
+        dtype,
+        translate_expr(visitor, n=node.expr),
+        translate_expr(visitor, n=node.idx),
+    )
+
+
+@_translate_expr.register
+def _(node: pl_expr.Filter, visitor: Any, dtype: plc.DataType) -> expr.Expr:
+    return expr.Filter(
+        dtype,
+        translate_expr(visitor, n=node.input),
+        translate_expr(visitor, n=node.by),
+    )
+
+
+@_translate_expr.register
+def _(node: pl_expr.Cast, visitor: Any, dtype: plc.DataType) -> expr.Expr:
+    inner = translate_expr(visitor, n=node.expr)
+    # Push casts into literals so we can handle Cast(Literal(Null))
+    if isinstance(inner, expr.Literal):
+        return expr.Literal(dtype, inner.value)
+    else:
+        return expr.Cast(dtype, inner)
+
+
+@_translate_expr.register
+def _(node: pl_expr.Column, visitor: Any, dtype: plc.DataType) -> expr.Expr:
+    return expr.Col(dtype, node.name)
+
+
+@_translate_expr.register
+def _(node: pl_expr.Agg, visitor: Any, dtype: plc.DataType) -> expr.Expr:
+    return expr.Agg(
+        dtype,
+        node.name,
+        node.options,
+        translate_expr(visitor, n=node.arguments),
+    )
+
+
+@_translate_expr.register
+def _(node: pl_expr.BinaryExpr, visitor: Any, dtype: plc.DataType) -> expr.Expr:
+    return expr.BinOp(
+        dtype,
+        expr.BinOp._MAPPING[node.op],
+        translate_expr(visitor, n=node.left),
+        translate_expr(visitor, n=node.right),
+    )
+
+
+@_translate_expr.register
+def _(node: pl_expr.Len, visitor: Any, dtype: plc.DataType) -> expr.Expr:
+    return expr.Len(dtype)
 
 
 def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
@@ -198,92 +383,11 @@ def translate_expr(visitor: Any, *, n: int | pl_expr.PyExprIR) -> expr.Expr:
     NotImplementedError if any translation fails due to unsupported functionality.
     """
     if isinstance(n, pl_expr.PyExprIR):
-        # TODO: type narrowing didn't work because PyExprIR is Unknown
+        # TODO: type narrowing doesn't rule out int since PyExprIR is Unknown
         assert not isinstance(n, int)
-        e = translate_expr(visitor, n=n.node)
-        return expr.NamedExpr(e.dtype, n.output_name, e)
-    node = visitor.view_expression(n)
-    dtype = dtypes.from_polars(visitor.get_dtype(n))
-    if isinstance(node, pl_expr.Function):
-        name, *options = node.function_data
-        if isinstance(name, pl_expr.StringFunction):
-            return expr.StringFunction(
-                dtype,
-                name,
-                options,
-                *(translate_expr(visitor, n=n) for n in node.input),
-            )
-        elif isinstance(name, pl_expr.BooleanFunction):
-            return expr.BooleanFunction(
-                dtype,
-                name,
-                options,
-                *(translate_expr(visitor, n=n) for n in node.input),
-            )
-        else:
-            raise NotImplementedError(f"No handler for Expr function node with {name=}")
-    elif isinstance(node, pl_expr.Window):
-        # TODO: raise in groupby?
-        if node.partition_by is None:
-            return expr.RollingWindow(
-                dtype, node.options, translate_expr(visitor, n=node.function)
-            )
-        else:
-            return expr.GroupedRollingWindow(
-                dtype,
-                node.options,
-                translate_expr(visitor, n=node.function),
-                *(translate_expr(visitor, n=n) for n in node.partition_by),
-            )
-    elif isinstance(node, pl_expr.Literal):
-        return expr.Literal(dtype, node.value)
-    elif isinstance(node, pl_expr.Sort):
-        # TODO: raise in groupby
-        return expr.Sort(dtype, node.options, translate_expr(visitor, n=node.expr))
-    elif isinstance(node, pl_expr.SortBy):
-        # TODO: raise in groupby
-        return expr.SortBy(
-            dtype,
-            node.sort_options,
-            translate_expr(visitor, n=node.expr),
-            *(translate_expr(visitor, n=n) for n in node.by),
-        )
-    elif isinstance(node, pl_expr.Gather):
-        return expr.Gather(
-            dtype,
-            translate_expr(visitor, n=node.expr),
-            translate_expr(visitor, n=node.idx),
-        )
-    elif isinstance(node, pl_expr.Filter):
-        return expr.Filter(
-            dtype,
-            translate_expr(visitor, n=node.input),
-            translate_expr(visitor, n=node.by),
-        )
-    elif isinstance(node, pl_expr.Cast):
-        inner = translate_expr(visitor, n=node.expr)
-        # Push casts into literals so we can handle Cast(Literal(Null))
-        if isinstance(inner, expr.Literal):
-            return expr.Literal(dtype, inner.value)
-        else:
-            return expr.Cast(dtype, inner)
-    elif isinstance(node, pl_expr.Column):
-        return expr.Col(dtype, node.name)
-    elif isinstance(node, pl_expr.Agg):
-        return expr.Agg(
-            dtype,
-            node.name,
-            node.options,
-            translate_expr(visitor, n=node.arguments),
-        )
-    elif isinstance(node, pl_expr.BinaryExpr):
-        return expr.BinOp(
-            dtype,
-            expr.BinOp._MAPPING[node.op],
-            translate_expr(visitor, n=node.left),
-            translate_expr(visitor, n=node.right),
-        )
-    elif isinstance(node, pl_expr.Len):
-        return expr.Len(dtype)
+        node = n
+        dtype = dtypes.from_polars(visitor.get_dtype(node.node))
     else:
-        raise NotImplementedError(f"No handler for expression node with {type(node)=}")
+        node = visitor.view_expression(n)
+        dtype = dtypes.from_polars(visitor.get_dtype(n))
+    return _translate_expr(node, visitor, dtype)
