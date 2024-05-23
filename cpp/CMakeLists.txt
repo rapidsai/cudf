@@ -794,8 +794,8 @@ add_dependencies(cudf jitify_preprocess_run)
 target_link_libraries(
   cudf
   PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
-          $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
+          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
 )
 
 # Add Conda library, and include paths if specified
