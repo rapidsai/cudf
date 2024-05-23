@@ -36,8 +36,6 @@ from cudf_polars.utils import sorting
 if TYPE_CHECKING:
     from typing import Literal
 
-    from cudf_polars.dsl.expr import Expr
-
 
 __all__ = [
     "IR",
@@ -98,7 +96,7 @@ class PythonScan(IR):
 
     options: Any
     """Arbitrary options."""
-    predicate: Expr | None
+    predicate: expr.Expr | None
     """Filter to apply to the constructed dataframe before returning it."""
 
 
@@ -119,7 +117,7 @@ class Scan(IR):
     - ``row_index: tuple[name, offset] | None``: Add an integer index
         column with given name.
     """
-    predicate: Expr | None
+    predicate: expr.Expr | None
     """Mask to apply to the read dataframe."""
 
     def __post_init__(self):
@@ -208,7 +206,7 @@ class DataFrameScan(IR):
     """Polars LazyFrame object."""
     projection: list[str]
     """List of columns to project out."""
-    predicate: Expr | None
+    predicate: expr.Expr | None
     """Mask to apply."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
@@ -243,13 +241,13 @@ class Select(IR):
 
     df: IR
     """Input dataframe."""
-    cse: list[Expr]
+    cse: list[expr.Expr]
     """
     List of common subexpressions that will appear in the selected expressions.
 
     These must be evaluated before the returned expressions.
     """
-    expr: list[Expr]
+    expr: list[expr.Expr]
     """List of expressions to evaluate to form the new dataframe."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]):
@@ -296,9 +294,9 @@ class GroupBy(IR):
 
     df: IR
     """Input dataframe."""
-    agg_requests: list[Expr]
+    agg_requests: list[expr.Expr]
     """List of expressions to evaluate groupwise."""
-    keys: list[Expr]
+    keys: list[expr.Expr]
     """List of expressions forming the keys."""
     maintain_order: bool
     """Should the order of the input dataframe be maintained?"""
@@ -306,7 +304,7 @@ class GroupBy(IR):
     """Options controlling style of groupby."""
 
     @staticmethod
-    def check_agg(agg: Expr) -> int:
+    def check_agg(agg: expr.Expr) -> int:
         """
         Determine if we can handle an aggregation expression.
 
@@ -392,9 +390,9 @@ class Join(IR):
     """Left frame."""
     right: IR
     """Right frame."""
-    left_on: list[Expr]
+    left_on: list[expr.Expr]
     """List of expressions used as keys in the left frame."""
-    right_on: list[Expr]
+    right_on: list[expr.Expr]
     """List of expressions used as keys in the right frame."""
     options: Any
     """
@@ -514,7 +512,7 @@ class HStack(IR):
 
     df: IR
     """Input dataframe."""
-    columns: list[Expr]
+    columns: list[expr.Expr]
     """List of expressions to produce new columns."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
@@ -596,7 +594,7 @@ class Sort(IR):
 
     df: IR
     """Input."""
-    by: list[Expr]
+    by: list[expr.Expr]
     """List of expressions to produce sort keys."""
     do_sort: Callable[..., plc.Table]
     """pylibcudf sorting function."""
@@ -611,7 +609,7 @@ class Sort(IR):
         self,
         schema: dict,
         df: IR,
-        by: list[Expr],
+        by: list[expr.Expr],
         options: Any,
         zlice: tuple[int, int] | None,
     ):
@@ -677,7 +675,7 @@ class Filter(IR):
 
     df: IR
     """Input."""
-    mask: Expr
+    mask: expr.Expr
     """Expression evaluating to a mask."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
