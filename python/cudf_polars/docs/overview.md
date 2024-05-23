@@ -133,18 +133,18 @@ constructor should then take arguments:
 ```python
 def __init__(self, *non_child_data: Any, *children: Expr):
 ```
-Read the docstrings in the `Expr` class for more details. In
-particular, one needs to be careful to ensure that an `Expr` hashes
-correctly.
+Read the docstrings in the `Expr` class for more details.
 
-Expressions are evaluated by implementing an `evaluate` method that
+Expressions are evaluated by implementing a `do_evaluate` method that
 takes a `DataFrame` as context (this provides columns) along with an
 `ExecutionContext` parameter (indicating what context we're evaluating
 this expression in, currently unused) and a `mapping` from
 expressions to evaluated `Column`s. This approach enables a simple form of
 expression rewriting during evaluation of expressions that is used in
-evaluation of, for example, groupby-aggregations. To reduce boilerplate for lookup
-in the mappings dictionary use the `@with_mapping` decorator.
+evaluation of, for example, groupby-aggregations. To perform the
+evaluation, one should use the base class (generic) `evaluate` method
+which handles the boilerplate for looking up in the substitution
+`mapping`.
 
 To simplify state tracking, all columns should be considered immutable
 on construction. This matches the "functional" description coming from
