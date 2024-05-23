@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "compact_protocol_reader.hpp"
 #include "parquet_gpu.hpp"
 
 #include <cudf/ast/detail/expression_transformer.hpp>
@@ -24,9 +23,6 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/types.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/zip_iterator.h>
 
 #include <list>
 #include <tuple>
@@ -257,7 +253,8 @@ class aggregate_reader_metadata {
    * @brief Filters the row groups based on predicate filter
    *
    * @param row_group_indices Lists of row groups to read, one per source
-   * @param output_dtypes List of output column datatypes
+   * @param output_dtypes Datatypes of of output columns
+   * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Filtered row group indices, if any is filtered.
@@ -265,6 +262,7 @@ class aggregate_reader_metadata {
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> filter_row_groups(
     host_span<std::vector<size_type> const> row_group_indices,
     host_span<data_type const> output_dtypes,
+    host_span<int const> output_column_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 
@@ -277,7 +275,8 @@ class aggregate_reader_metadata {
    * @param row_group_indices Lists of row groups to read, one per source
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
-   * @param output_dtypes List of output column datatypes
+   * @param output_dtypes Datatypes of of output columns
+   * @param output_column_schemas schema indices of output columns
    * @param filter Optional AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return A tuple of corrected row_start, row_count and list of row group indexes and its
@@ -288,6 +287,7 @@ class aggregate_reader_metadata {
     int64_t row_start,
     std::optional<size_type> const& row_count,
     host_span<data_type const> output_dtypes,
+    host_span<int const> output_column_schemas,
     std::optional<std::reference_wrapper<ast::expression const>> filter,
     rmm::cuda_stream_view stream) const;
 
@@ -296,6 +296,7 @@ class aggregate_reader_metadata {
    *
    * @param use_names List of paths of column names to select; `nullopt` if user did not select
    * columns to read
+   * @param filter_columns_names List of paths of column names that are present only in filter
    * @param include_index Whether to always include the PANDAS index column(s)
    * @param strings_to_categorical Type conversion parameter
    * @param timestamp_type_id Type conversion parameter
@@ -307,6 +308,7 @@ class aggregate_reader_metadata {
                            std::vector<cudf::io::detail::inline_column_buffer>,
                            std::vector<size_type>>
   select_columns(std::optional<std::vector<std::string>> const& use_names,
+                 std::optional<std::vector<std::string>> const& filter_columns_names,
                  bool include_index,
                  bool strings_to_categorical,
                  type_id timestamp_type_id) const;
@@ -319,23 +321,7 @@ class aggregate_reader_metadata {
 class named_to_reference_converter : public ast::detail::expression_transformer {
  public:
   named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
-                               table_metadata const& metadata)
-    : metadata(metadata)
-  {
-    if (!expr.has_value()) return;
-    // create map for column name.
-    std::transform(
-      thrust::make_zip_iterator(metadata.schema_info.cbegin(),
-                                thrust::counting_iterator<size_t>(0)),
-      thrust::make_zip_iterator(metadata.schema_info.cend(),
-                                thrust::counting_iterator(metadata.schema_info.size())),
-      std::inserter(column_name_to_index, column_name_to_index.end()),
-      [](auto const& name_index) {
-        return std::make_pair(thrust::get<0>(name_index).name, thrust::get<1>(name_index));
-      });
-
-    expr.value().get().accept(*this);
-  }
+                               table_metadata const& metadata);
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
@@ -370,12 +356,22 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
     std::vector<std::reference_wrapper<ast::expression const>> operands);
 
-  table_metadata const& metadata;
   std::unordered_map<std::string, size_type> column_name_to_index;
   std::optional<std::reference_wrapper<ast::expression const>> _stats_expr;
   // Using std::list or std::deque to avoid reference invalidation
   std::list<ast::column_reference> _col_ref;
   std::list<ast::operation> _operators;
 };
+
+/**
+ * @brief Get the column names in expression object
+ *
+ * @param expr The optional expression object to get the column names from
+ * @param skip_names The names of column names to skip in returned column names
+ * @return The column names present in expression object except the skip_names
+ */
+[[nodiscard]] std::vector<std::string> get_column_names_in_expression(
+  std::optional<std::reference_wrapper<ast::expression const>> expr,
+  std::vector<std::string> const& skip_names);
 
 }  // namespace cudf::io::parquet::detail
