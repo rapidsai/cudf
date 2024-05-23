@@ -117,6 +117,9 @@ struct metadata : public FileMetaData {
   void sanitize_schema();
 };
 
+/**
+ * @brief Class to extract data types from arrow schema tree
+ */
 struct arrow_schema_data_types {
   std::vector<arrow_schema_data_types> children;
   data_type type{type_id::EMPTY};

@@ -26,6 +26,11 @@ auto constexpr MAX_DECIMAL32_PRECISION  = 9;
 auto constexpr MAX_DECIMAL64_PRECISION  = 18;
 auto constexpr MAX_DECIMAL128_PRECISION = 38;  // log10(2^(sizeof(int128_t) * 8 - 1) - 1)
 
+// Constants copied from arrow source and renamed to match the case
+constexpr int32_t MESSAGE_DECODER_NEXT_REQUIRED_SIZE_INITIAL         = sizeof(int32_t);
+constexpr int32_t MESSAGE_DECODER_NEXT_REQUIRED_SIZE_METADATA_LENGTH = sizeof(int32_t);
+constexpr int32_t IPC_CONTINUATION_TOKEN                             = -1;
+
 /**
  * @brief Basic data types in Parquet, determines how data is physically stored
  */

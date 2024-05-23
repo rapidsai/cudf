@@ -19,6 +19,7 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
+#include "arrow_schema_writer.hpp"
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
@@ -69,22 +70,6 @@ namespace cudf::io::parquet::detail {
 
 using namespace cudf::io::detail;
 
-/**
- * @brief Construct and return arrow schema ipc message from input parquet schema
- *
- * Recursively traverses through parquet schema to construct arrow schema tree.
- * The resulting schema tree is serialized and stored as the header (or metadata) of
- * an otherwise empty ipc message using flatbuffers. The ipc message is then prepended
- * with header (metadata) size (padded for 16 byte alignment) and a continuation
- * string. The final string is base64 encoded and returned to be stored at the keyvalue
- * metadata section of the Parquet file footer.
- */
-std::string construct_arrow_schema_ipc_message(host_span<SchemaElement const> parquet_schema)
-{
-  // TODO: dummy return empty string for now
-  return cudf::io::detail::base64_encode("");
-}
-
 struct aggregate_writer_metadata {
   aggregate_writer_metadata(host_span<partition_info const> partitions,
                             host_span<std::map<std::string, std::string> const> kv_md,
@@ -115,7 +100,7 @@ struct aggregate_writer_metadata {
                      [](auto const& kv) {
                        return KeyValue{kv.first, kv.second};
                      });
-      // Append arrow schema to the key_value_metadata
+      // Append arrow schema to the key-value metadata
       if (write_arrow_schema and not arrow_schema_ipc_message.empty()) {
         this->files[p].key_value_metadata.emplace_back(
           KeyValue{"ARROW:schema", std::move(arrow_schema_ipc_message)});

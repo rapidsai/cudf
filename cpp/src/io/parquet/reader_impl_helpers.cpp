@@ -786,11 +786,6 @@ void aggregate_reader_metadata::apply_arrow_schema()
 std::optional<std::string_view> aggregate_reader_metadata::decode_ipc_message(
   std::string_view const serialized_message) const
 {
-  // Constants copied from arrow source and renamed to match the case
-  constexpr int32_t MESSAGE_DECODER_NEXT_REQUIRED_SIZE_INITIAL         = sizeof(int32_t);
-  constexpr int32_t MESSAGE_DECODER_NEXT_REQUIRED_SIZE_METADATA_LENGTH = sizeof(int32_t);
-  constexpr int32_t IPC_CONTINUATION_TOKEN                             = -1;
-
   // message buffer
   auto message_buf = serialized_message.data();
   // current message (buffer) size
