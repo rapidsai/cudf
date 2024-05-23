@@ -122,57 +122,61 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             cudf_table_view.table_view table_
         ) except +
 
-    cdef cppclass parquet_writer_options_builder:
+    cdef cppclass parquet_writer_options_builder_base[BuilderT]:
+        parquet_writer_options_builder() except +
 
+        BuilderT& partitions(
+            vector[cudf_io_types.partition_info] partitions
+        ) except +
+        BuilderT& metadata(
+            cudf_io_types.table_input_metadata m
+        ) except +
+        BuilderT& key_value_metadata(
+            vector[map[string, string]] kvm
+        ) except +
+        BuilderT& stats_level(
+            cudf_io_types.statistics_freq sf
+        ) except +
+        BuilderT& compression(
+            cudf_io_types.compression_type compression
+        ) except +
+        BuilderT& column_chunks_file_paths(
+            vector[string] column_chunks_file_paths
+        ) except +
+        BuilderT& int96_timestamps(
+            bool enabled
+        ) except +
+        BuilderT& utc_timestamps(
+            bool enabled
+        ) except +
+        BuilderT& row_group_size_bytes(
+            size_t val
+        ) except +
+        BuilderT& row_group_size_rows(
+            size_type val
+        ) except +
+        BuilderT& max_page_size_bytes(
+            size_t val
+        ) except +
+        BuilderT& max_page_size_rows(
+            size_type val
+        ) except +
+        BuilderT& max_dictionary_size(
+            size_t val
+        ) except +
+        BuilderT& write_v2_headers(
+            bool val
+        ) except +
+        BuilderT& dictionary_policy(
+            cudf_io_types.dictionary_policy val
+        ) except +
+
+    cdef cppclass parquet_writer_options_builder(
+            parquet_writer_options_builder_base[parquet_writer_options_builder]):
         parquet_writer_options_builder() except +
         parquet_writer_options_builder(
             cudf_io_types.sink_info sink_,
             cudf_table_view.table_view table_
-        ) except +
-        parquet_writer_options_builder& partitions(
-            vector[cudf_io_types.partition_info] partitions
-        ) except +
-        parquet_writer_options_builder& metadata(
-            cudf_io_types.table_input_metadata m
-        ) except +
-        parquet_writer_options_builder& key_value_metadata(
-            vector[map[string, string]] kvm
-        ) except +
-        parquet_writer_options_builder& stats_level(
-            cudf_io_types.statistics_freq sf
-        ) except +
-        parquet_writer_options_builder& compression(
-            cudf_io_types.compression_type compression
-        ) except +
-        parquet_writer_options_builder& column_chunks_file_paths(
-            vector[string] column_chunks_file_paths
-        ) except +
-        parquet_writer_options_builder& int96_timestamps(
-            bool enabled
-        ) except +
-        parquet_writer_options_builder& utc_timestamps(
-            bool enabled
-        ) except +
-        parquet_writer_options_builder& row_group_size_bytes(
-            size_t val
-        ) except +
-        parquet_writer_options_builder& row_group_size_rows(
-            size_type val
-        ) except +
-        parquet_writer_options_builder& max_page_size_bytes(
-            size_t val
-        ) except +
-        parquet_writer_options_builder& max_page_size_rows(
-            size_type val
-        ) except +
-        parquet_writer_options_builder& max_dictionary_size(
-            size_t val
-        ) except +
-        parquet_writer_options_builder& write_v2_headers(
-            bool val
-        ) except +
-        parquet_writer_options_builder& dictionary_policy(
-            cudf_io_types.dictionary_policy val
         ) except +
 
         parquet_writer_options build() except +
@@ -189,49 +193,12 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             cudf_io_types.sink_info sink_,
         ) except +
 
-    cdef cppclass chunked_parquet_writer_options_builder:
+    cdef cppclass chunked_parquet_writer_options_builder(
+            parquet_writer_options_builder_base[chunked_parquet_writer_options_builder]
+            ):
         chunked_parquet_writer_options_builder() except +
         chunked_parquet_writer_options_builder(
             cudf_io_types.sink_info sink_,
-        ) except +
-        chunked_parquet_writer_options_builder& metadata(
-            cudf_io_types.table_input_metadata m
-        ) except +
-        chunked_parquet_writer_options_builder& key_value_metadata(
-            vector[map[string, string]] kvm
-        ) except +
-        chunked_parquet_writer_options_builder& stats_level(
-            cudf_io_types.statistics_freq sf
-        ) except +
-        chunked_parquet_writer_options_builder& compression(
-            cudf_io_types.compression_type compression
-        ) except +
-        chunked_parquet_writer_options_builder& int96_timestamps(
-            bool enabled
-        ) except +
-        chunked_parquet_writer_options_builder& utc_timestamps(
-            bool enabled
-        ) except +
-        chunked_parquet_writer_options_builder& row_group_size_bytes(
-            size_t val
-        ) except +
-        chunked_parquet_writer_options_builder& row_group_size_rows(
-            size_type val
-        ) except +
-        chunked_parquet_writer_options_builder& max_page_size_bytes(
-            size_t val
-        ) except +
-        chunked_parquet_writer_options_builder& max_page_size_rows(
-            size_type val
-        ) except +
-        chunked_parquet_writer_options_builder& max_dictionary_size(
-            size_t val
-        ) except +
-        parquet_writer_options_builder& write_v2_headers(
-            bool val
-        ) except +
-        parquet_writer_options_builder& dictionary_policy(
-            cudf_io_types.dictionary_policy val
         ) except +
 
         chunked_parquet_writer_options build() except +
