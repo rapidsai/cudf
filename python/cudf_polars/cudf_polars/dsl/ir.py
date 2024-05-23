@@ -154,7 +154,7 @@ class Scan(IR):
             step = plc.interop.from_arrow(pa.scalar(1), data_type=dtype)
             init = plc.interop.from_arrow(pa.scalar(offset), data_type=dtype)
             index = Column(
-                plc.filling.sequence(df.num_rows(), init, step), name
+                plc.filling.sequence(df.num_rows, init, step), name
             ).set_sorted(
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
@@ -836,8 +836,7 @@ class ExtContext(IR):
     """
     Concatenate dataframes horizontally.
 
-    This is similar to HConcat, but is used only to temporarily
-    introduce new dataframes into an expression context.
+    Prefer HConcat, since this is going to be deprecated on the polars side.
     """
 
     df: IR
@@ -845,17 +844,8 @@ class ExtContext(IR):
     extra: list[IR]
     """List of extra inputs."""
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
-        """Evaluate and return a dataframe."""
-        # TODO: polars optimizer doesn't do projection pushdown
-        # through extcontext AFAICT.
-        df = self.df.evaluate(cache=cache)
-        # extra contexts are added in order, if they have any
-        # overlapping column names, those are ignored.
-        names = df.column_names_set.copy()
-        # TODO: scalars
-        for ir in self.extra:
-            extra = ir.evaluate(cache=cache).discard_columns(names)
-            names |= extra.column_names_set
-            df = df.with_columns(extra.columns)
-        return df
+    def __post_init__(self):
+        """Validate preconditions."""
+        raise NotImplementedError(
+            "ExtContext will be deprecated, use horizontal concat instead."
+        )

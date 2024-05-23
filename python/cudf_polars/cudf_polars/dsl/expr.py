@@ -79,12 +79,12 @@ class Expr:
     *children).``
     """
 
-    __slots__ = ("dtype", "hash_value", "repr_value")
+    __slots__ = ("dtype", "_hash_value", "_repr_value")
     dtype: plc.DataType
     """Data type of the expression."""
-    hash_value: int
+    _hash_value: int
     """Caching slot for the hash of the expression."""
-    repr_value: str
+    _repr_value: str
     """Caching slot for repr of the expression."""
     children: tuple[Expr, ...] = ()
     """Children of the expression."""
@@ -113,10 +113,10 @@ class Expr:
     def __hash__(self):
         """Hash of an expression with caching."""
         try:
-            return self.hash_value
+            return self._hash_value
         except AttributeError:
-            self.hash_value = self.get_hash()
-            return self.hash_value
+            self._hash_value = self.get_hash()
+            return self._hash_value
 
     def is_equal(self, other: Any) -> bool:
         """
@@ -153,20 +153,19 @@ class Expr:
     def __repr__(self):
         """String representation of an expression with caching."""
         try:
-            return self.repr_value
+            return self._repr_value
         except AttributeError:
             args = ", ".join(f"{arg!r}" for arg in self._ctor_arguments(self.children))
-            self.repr_value = f"{type(self).__name__}({args})"
-            return self.repr_value
+            self._repr_value = f"{type(self).__name__}({args})"
+            return self._repr_value
 
-    # TODO: return type is a lie for Literal
-    def evaluate(
+    def do_evaluate(
         self,
         df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
         mapping: dict[Expr, Column] | None = None,
-    ) -> Column:
+    ) -> Column:  # TODO: return type is a lie for Literal
         """
         Evaluate this expression given a dataframe for context.
 
@@ -181,6 +180,11 @@ class Expr:
             override the evaluation of a given expression if we're
             performing a simple rewritten evaluation.
 
+        Notes
+        -----
+        Do not call this function directly, but rather
+        :func:`evaluate` which handles the mapping lookups.
+
         Returns
         -------
         Column representing the evaluation of the expression (or maybe
@@ -192,7 +196,52 @@ class Expr:
         Ideally all these are returned during translation to the IR,
         but for now we are not perfect.
         """
-        raise NotImplementedError
+        raise NotImplementedError(f"Evaluation of {type(self).__name__}")
+
+    def evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: dict[Expr, Column] | None = None,
+    ) -> Column:  # TODO: return type is a lie for Literal
+        """
+        Evaluate this expression given a dataframe for context.
+
+        Parameters
+        ----------
+        df
+            DataFrame that will provide columns.
+        context
+            What context are we performing this evaluation in?
+        mapping
+            Substitution mapping from expressions to Columns, used to
+            override the evaluation of a given expression if we're
+            performing a simple rewritten evaluation.
+
+        Notes
+        -----
+        Individual subclasses should implement :meth:`do_allocate`,
+        this method provides logic to handle lookups in the
+        substitution mapping.
+
+        Returns
+        -------
+        Column representing the evaluation of the expression (or maybe
+        a scalar, annoying!).
+
+        Raises
+        ------
+        NotImplementedError if we couldn't evaluate the expression.
+        Ideally all these are returned during translation to the IR,
+        but for now we are not perfect.
+        """
+        if mapping is None:
+            return self.do_evaluate(df, context=context, mapping=mapping)
+        try:
+            return mapping[self]
+        except KeyError:
+            return self.do_evaluate(df, context=context, mapping=mapping)
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """
@@ -215,29 +264,9 @@ class Expr:
         aggregation request (for example nested aggregations like
         ``a.max().min()``).
         """
-        raise NotImplementedError
-
-
-def with_mapping(fn):
-    """Decorate a callback that takes an expression mapping to use it."""
-
-    def _(
-        self,
-        df: DataFrame,
-        *,
-        context=ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
-    ) -> Column:
-        """Look up self in the mapping before evaluating it."""
-        if mapping is None:
-            return fn(self, df, context=context, mapping=mapping)
-        else:
-            try:
-                return mapping[self]
-            except KeyError:
-                return fn(self, df, context=context, mapping=mapping)
-
-    return _
+        raise NotImplementedError(
+            f"Collecting aggregation info for {type(self).__name__}"
+        )
 
 
 class NamedExpr(Expr):
@@ -249,8 +278,7 @@ class NamedExpr(Expr):
         self.name = name
         self.children = (value,)
 
-    @with_mapping
-    def evaluate(
+    def do_evaluate(
         self,
         df: DataFrame,
         *,
@@ -278,8 +306,7 @@ class Literal(Expr):
         super().__init__(dtype)
         self.value = pa.scalar(value)
 
-    @with_mapping
-    def evaluate(
+    def do_evaluate(
         self,
         df: DataFrame,
         *,
@@ -291,10 +318,6 @@ class Literal(Expr):
         obj = plc.interop.from_arrow(self.value)
         return Scalar(obj)  # type: ignore
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        raise NotImplementedError("Literal in groupby")
-
 
 class Col(Expr):
     __slots__ = ("name",)
@@ -305,8 +328,7 @@ class Col(Expr):
         self.dtype = dtype
         self.name = name
 
-    @with_mapping
-    def evaluate(
+    def do_evaluate(
         self,
         df: DataFrame,
         *,
@@ -322,8 +344,7 @@ class Col(Expr):
 
 
 class Len(Expr):
-    @with_mapping
-    def evaluate(
+    def do_evaluate(
         self,
         df: DataFrame,
         *,
@@ -332,7 +353,7 @@ class Len(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         # TODO: type is wrong, and dtype
-        return df.num_rows
+        return df.num_rows  # type: ignore
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
@@ -413,8 +434,7 @@ class BooleanFunction(Expr):
         ),
     }
 
-    @with_mapping
-    def evaluate(
+    def do_evaluate(
         self,
         df: DataFrame,
         *,
@@ -556,8 +576,7 @@ class StringFunction(Expr):
         ):
             raise NotImplementedError(f"String function {self.name}")
 
-    @with_mapping
-    def evaluate(
+    def do_evaluate(
         self,
         df: DataFrame,
         *,
@@ -600,8 +619,7 @@ class Sort(Expr):
         self.options = options
         self.children = (column,)
 
-    @with_mapping
-    def evaluate(
+    def do_evaluate(
         self,
         df: DataFrame,
         *,
@@ -621,11 +639,6 @@ class Sort(Expr):
             is_sorted=plc.types.Sorted.YES, order=order[0], null_order=null_order[0]
         )
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        # TODO: Could do with sort-based groupby and segmented sort post-hoc
-        raise NotImplementedError("Sort in groupby")
-
 
 class SortBy(Expr):
     __slots__ = ("options", "children")
@@ -642,8 +655,7 @@ class SortBy(Expr):
         self.options = options
         self.children = (column, *by)
 
-    @with_mapping
-    def evaluate(
+    def do_evaluate(
         self,
         df: DataFrame,
         *,
@@ -665,11 +677,6 @@ class SortBy(Expr):
         )
         return Column(table.columns()[0], column.name)
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        # TODO: Could do with sort-based groupby and segmented sort post-hoc
-        raise NotImplementedError("SortBy in groupby")
-
 
 class Gather(Expr):
     __slots__ = ("children",)
@@ -679,8 +686,7 @@ class Gather(Expr):
         super().__init__(dtype)
         self.children = (values, indices)
 
-    @with_mapping
-    def evaluate(
+    def do_evaluate(
         self,
         df: DataFrame,
         *,
@@ -710,11 +716,6 @@ class Gather(Expr):
         table = plc.copying.gather(plc.Table([values.obj]), obj, bounds_policy)
         return Column(table.columns()[0], values.name)
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        # TODO: Could do with sort-based groupby and segmented gather.
-        raise NotImplementedError("Gather in groupby")
-
 
 class Filter(Expr):
     __slots__ = ("children",)
@@ -724,8 +725,7 @@ class Filter(Expr):
         super().__init__(dtype)
         self.children = (values, indices)
 
-    @with_mapping
-    def evaluate(
+    def do_evaluate(
         self,
         df: DataFrame,
         *,
@@ -741,11 +741,6 @@ class Filter(Expr):
             plc.Table([values.obj]), mask.obj
         )
         return Column(table.columns()[0], values.name).with_sorted(like=values)
-
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        # TODO: Could do with sort-based groupby and segmented filter
-        raise NotImplementedError("Filter in groupby")
 
 
 class RollingWindow(Expr):
@@ -776,8 +771,7 @@ class Cast(Expr):
         super().__init__(dtype)
         self.children = (value,)
 
-    @with_mapping
-    def evaluate(
+    def do_evaluate(
         self,
         df: DataFrame,
         *,
@@ -934,8 +928,7 @@ class Agg(Expr):
         n = column.obj.size()
         return Column(plc.copying.slice(column.obj, [n - 1, n])[0], column.name)
 
-    @with_mapping
-    def evaluate(
+    def do_evaluate(
         self,
         df,
         *,
@@ -987,8 +980,7 @@ class BinOp(Expr):
         pl_expr.Operator.LogicalOr: plc.binaryop.BinaryOperator.LOGICAL_OR,
     }
 
-    @with_mapping
-    def evaluate(
+    def do_evaluate(
         self,
         df: DataFrame,
         *,

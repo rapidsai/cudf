@@ -43,8 +43,6 @@ class DataFrame:
         else:
             self.table = None
 
-    __iter__ = None
-
     def to_polars(self) -> pl.DataFrame:
         """Convert to a polars DataFrame."""
         assert len(self.scalars) == 0
@@ -66,12 +64,12 @@ class DataFrame:
         return [c.name for c in self.columns]
 
     @cached_property
-    def num_columns(self):
+    def num_columns(self) -> int:
         """Number of columns."""
         return len(self.columns)
 
     @cached_property
-    def num_rows(self):
+    def num_rows(self) -> int:
         """Number of rows."""
         if self.table is None:
             raise ValueError("Number of rows of frame with scalars makes no sense")

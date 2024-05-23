@@ -78,20 +78,18 @@ class Column:
         """Return a copy of self with nans masked out."""
         if self.nan_count > 0:
             raise NotImplementedError
-        else:
-            return self.copy()
+        return self.copy()
 
     @functools.cached_property
     def nan_count(self) -> int:
         """Return the number of NaN values in the column."""
         if self.obj.type().id() not in (plc.TypeId.FLOAT32, plc.TypeId.FLOAT64):
             return 0
-        else:
-            return plc.interop.to_arrow(
-                plc.reduce.reduce(
-                    plc.unary.is_nan(self.obj),
-                    plc.aggregation.sum(),
-                    # TODO: pylibcudf needs to have a SizeType DataType singleton
-                    plc.DataType(plc.TypeId.INT32),
-                )
-            ).as_py()
+        return plc.interop.to_arrow(
+            plc.reduce.reduce(
+                plc.unary.is_nan(self.obj),
+                plc.aggregation.sum(),
+                # TODO: pylibcudf needs to have a SizeType DataType singleton
+                plc.DataType(plc.TypeId.INT32),
+            )
+        ).as_py()
