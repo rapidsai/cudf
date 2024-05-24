@@ -350,7 +350,8 @@ class IndexedFrame(Frame):
         frame = self.__class__._from_data(data)
 
         if index is not None:
-            frame.index = index
+            # TODO: triage why using the setter here breaks dask_cuda.ProxifyHostFile
+            frame._index = index
         return frame._copy_type_metadata(
             self,
             include_index=bool(index_names),
