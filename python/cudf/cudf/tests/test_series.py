@@ -2835,3 +2835,9 @@ def test_timedelta_series_init(data):
     actual = cudf.Series(scalar)
 
     assert_eq(expected, actual)
+
+
+def test_series_from_series_index_no_shallow_copy():
+    ser1 = cudf.Series(range(3), index=list("abc"))
+    ser2 = cudf.Series(ser1)
+    assert ser1.index is ser2.index
