@@ -99,7 +99,6 @@ def read_json(
             lines,
             compression,
             byte_range,
-            False,
             keep_quotes,
             mixed_types_as_string,
             prune_columns,
