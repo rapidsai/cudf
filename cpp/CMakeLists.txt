@@ -407,6 +407,7 @@ add_library(
   src/io/orc/stripe_init.cu
   src/datetime/timezone.cpp
   src/io/orc/writer_impl.cu
+  src/io/parquet/arrow_schema_writer.cpp
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
