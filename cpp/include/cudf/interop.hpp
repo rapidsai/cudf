@@ -358,7 +358,7 @@ std::unique_ptr<cudf::scalar> from_arrow(
  * @throws cudf::data_type_error if the input array is not a struct array.
  *
  * The conversion will not call release on the input Array.
- * 
+ *
  * @param schema `ArrowSchema` pointer to describe the type of the data
  * @param input `ArrowArray` pointer that needs to be converted to cudf::table
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -376,7 +376,7 @@ std::unique_ptr<cudf::table> from_arrow(ArrowSchema const* schema,
  * @throws std::invalid_argument if either schema or input are NULL
  *
  * The conversion will not call release on the input Array.
- * 
+ *
  * @param schema `ArrowSchema` pointer to describe the type of the data
  * @param input `ArrowArray` pointer that needs to be converted to cudf::column
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -399,7 +399,7 @@ std::unique_ptr<cudf::column> from_arrow_column(ArrowSchema const* schema,
  * non-struct arrays should be passed to `from_arrow_host_column` instead.
  *
  * The conversion will not call release on the input Array.
- * 
+ *
  * @param schema `ArrowSchema` pointer to describe the type of the data
  * @param input `ArrowDeviceArray` pointer to object owning the Arrow data
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -422,7 +422,7 @@ std::unique_ptr<table> from_arrow_host(
  * @throws cudf::data_type_error if input arrow data type is not supported in cudf.
  *
  * The conversion will not call release on the input Array.
- * 
+ *
  * @param schema `ArrowSchema` pointer to describe the type of the data
  * @param input `ArrowDeviceArray` pointer to object owning the Arrow data
  * @param stream CUDA stream used for device memory operations and kernel launches

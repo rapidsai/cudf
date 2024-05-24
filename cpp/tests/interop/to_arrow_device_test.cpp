@@ -188,8 +188,8 @@ get_nanoarrow_tables(cudf::size_type length)
 
   populate_from_col<int64_t>(arrow->children[0], table->get_column(0).view());
   populate_from_col<cudf::string_view>(arrow->children[1], table->get_column(1).view());
-  populate_dict_from_col<int64_t, uint32_t>(arrow->children[2],
-                                            cudf::dictionary_column_view(table->get_column(2).view()));
+  populate_dict_from_col<int64_t, uint32_t>(
+    arrow->children[2], cudf::dictionary_column_view(table->get_column(2).view()));
 
   populate_from_col<bool>(arrow->children[3], table->get_column(3).view());
   cudf::lists_column_view list_view{table->get_column(4).view()};
