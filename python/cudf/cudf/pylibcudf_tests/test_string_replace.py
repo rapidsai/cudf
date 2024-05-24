@@ -86,6 +86,9 @@ def test_replace_slice(pa_data_col, plc_data_col, scalar_repl, startstop):
 
     if stop == -1:
         # pyarrow doesn't support -1 as stop, so just set to really big number
+
+        # TODO: once libcudf's count_characters() is migrated, we can call
+        # count_characters on the input, take the max and set stop to that
         stop = 1000
 
     expected = pa.compute.utf8_replace_slice(pa_data_col, start, stop, pa_repl)

@@ -15,7 +15,7 @@ from cudf._lib.pylibcudf.libcudf.strings.replace cimport (
 )
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
 from cudf._lib.pylibcudf.scalar cimport Scalar
-from cudf._lib.pylibcudf.strings.types cimport ColumnOrScalar
+from cudf._lib.pylibcudf.strings.replace cimport ColumnOrScalar
 
 
 cpdef Column replace(
