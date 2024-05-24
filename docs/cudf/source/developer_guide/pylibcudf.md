@@ -248,6 +248,6 @@ cpdef ColumnOrTable empty_like(ColumnOrTable input)
 See the pylibcudf source for examples of how to implement such functions.
 
 In the event that an libcudf overload takes in a different amount of arguments compared to another overload, you should specify the maximum amount of arguments in the Cython definition,
-with the arguments not shared between overloads set to None. If a user tries to pass in an unsupported argument for a specific overload type, you should raise NotImplementedError.
+with the arguments not shared between overloads set to None. If a user tries to pass in an unsupported argument for a specific overload type, you should raise NotImplementedError/ValueError.
 
 Finally, consider making an libcudf issue if you think this inconsistency can be addressed on the libcudf side.
