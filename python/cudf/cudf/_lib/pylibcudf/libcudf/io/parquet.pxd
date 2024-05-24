@@ -125,7 +125,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             cudf_table_view.table_view table_
         ) except +
 
-    cdef cppclass parquet_writer_options_builder_base[BuilderT]:
+    cdef cppclass parquet_writer_options_builder_base[BuilderT, OptionsT]:
         parquet_writer_options_builder() except +
 
         BuilderT& metadata(
@@ -167,31 +167,29 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         BuilderT& dictionary_policy(
             cudf_io_types.dictionary_policy val
         ) except +
+        # FIXME: the following two functions actually belong in
+        # parquet_writer_options_builder, but placing them there yields a
+        # "'parquet_writer_options_builder' is not a type identifier" error.
+        # This is probably a bug in cython since a simpler CRTP example that
+        # has methods returning references to a child class seem to work.
+        # Calling these from the chunked options builder will fail at compile
+        # time, so this should be safe.
+        BuilderT& partitions(
+            vector[cudf_io_types.partition_info] partitions
+        ) except +
+        BuilderT& column_chunks_file_paths(
+            vector[string] column_chunks_file_paths
+        ) except +
+        OptionsT build() except +
 
-    # forward declare derived builder type
     cdef cppclass parquet_writer_options_builder(
-            parquet_writer_options_builder_base[parquet_writer_options_builder])
-
-    # now typedef the child type for use in method declarations
-    ctypedef parquet_writer_options_builder_base[
-        parquet_writer_options_builder] writer_builder_type
-
-    cdef cppclass parquet_writer_options_builder(
-            parquet_writer_options_builder_base[parquet_writer_options_builder]):
+            parquet_writer_options_builder_base[parquet_writer_options_builder,
+                                                parquet_writer_options]):
         parquet_writer_options_builder() except +
         parquet_writer_options_builder(
             cudf_io_types.sink_info sink_,
             cudf_table_view.table_view table_
         ) except +
-
-        writer_builder_type& partitions(
-            vector[cudf_io_types.partition_info] partitions
-        ) except +
-        writer_builder_type& column_chunks_file_paths(
-            vector[string] column_chunks_file_paths
-        ) except +
-
-        parquet_writer_options build() except +
 
     cdef unique_ptr[vector[uint8_t]] write_parquet(
         parquet_writer_options args
@@ -206,14 +204,13 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
 
     cdef cppclass chunked_parquet_writer_options_builder(
-            parquet_writer_options_builder_base[chunked_parquet_writer_options_builder]
+            parquet_writer_options_builder_base[chunked_parquet_writer_options_builder,
+                                                chunked_parquet_writer_options]
             ):
         chunked_parquet_writer_options_builder() except +
         chunked_parquet_writer_options_builder(
             cudf_io_types.sink_info sink_,
         ) except +
-
-        chunked_parquet_writer_options build() except +
 
     cdef cppclass parquet_chunked_writer:
         parquet_chunked_writer() except +
