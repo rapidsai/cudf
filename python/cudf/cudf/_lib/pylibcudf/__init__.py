@@ -14,6 +14,7 @@ from . import (
     reduce,
     replace,
     rolling,
+    round,
     search,
     sorting,
     stream_compaction,

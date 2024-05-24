@@ -14,6 +14,7 @@ from . cimport (
     reduce,
     replace,
     rolling,
+    round,
     search,
     sorting,
     stream_compaction,
