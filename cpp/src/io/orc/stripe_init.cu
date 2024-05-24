@@ -561,20 +561,24 @@ void __host__ ParseCompressedStripeData(CompressedStreamInfo* strm_info,
                                         uint32_t log2maxcr,
                                         rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(128, 1);
-  dim3 dim_grid((num_streams + 3) >> 2, 1);  // 1 stream per warp, 4 warps per block
-  gpuParseCompressedStripeData<<<dim_grid, dim_block, 0, stream.value()>>>(
-    strm_info, num_streams, compression_block_size, log2maxcr);
+  if (num_streams > 0) {
+    dim3 dim_block(128, 1);
+    dim3 dim_grid((num_streams + 3) >> 2, 1);  // 1 stream per warp, 4 warps per block
+    gpuParseCompressedStripeData<<<dim_grid, dim_block, 0, stream.value()>>>(
+      strm_info, num_streams, compression_block_size, log2maxcr);
+  }
 }
 
 void __host__ PostDecompressionReassemble(CompressedStreamInfo* strm_info,
                                           int32_t num_streams,
                                           rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(128, 1);
-  dim3 dim_grid((num_streams + 3) >> 2, 1);  // 1 stream per warp, 4 warps per block
-  gpuPostDecompressionReassemble<<<dim_grid, dim_block, 0, stream.value()>>>(strm_info,
-                                                                             num_streams);
+  if (num_streams > 0) {
+    dim3 dim_block(128, 1);
+    dim3 dim_grid((num_streams + 3) >> 2, 1);  // 1 stream per warp, 4 warps per block
+    gpuPostDecompressionReassemble<<<dim_grid, dim_block, 0, stream.value()>>>(strm_info,
+                                                                               num_streams);
+  }
 }
 
 void __host__ ParseRowGroupIndex(RowGroup* row_groups,
