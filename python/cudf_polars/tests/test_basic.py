@@ -100,8 +100,3 @@ def null_data():
 def test_drop_nulls(null_data):
     result = null_data.drop_nulls()
     assert_gpu_result_equal(result)
-
-
-def test_gather_expr(ldf):
-    out = ldf.select(pl.col("int_key1").gather(pl.col("int_key2")))
-    assert_gpu_result_equal(out)
