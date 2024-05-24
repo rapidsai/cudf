@@ -613,7 +613,7 @@ def linkcode_resolve(domain, info) -> str | None:
 
     fn = os.path.relpath(fn, start=os.path.dirname(cudf.__file__))
 
-    if "+" in pandas.__version__:
+    if "+" in cudf.__version__:
         return f"https://github.com/rapidsai/cudf/blob/main/cudf/{fn}{linespec}"
     else:
         return (
