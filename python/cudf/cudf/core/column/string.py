@@ -552,16 +552,17 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(data)
 
     def _split_by_character(self):
-        result_col = libstrings.character_tokenize(self._column)
+        col = self._column.fillna("")  # sanitize nulls
+        result_col = libstrings.character_tokenize(col)
 
-        offset_col = self._column.children[0]
+        offset_col = col.children[0]
 
         return cudf.core.column.ListColumn(
-            size=len(self._column),
-            dtype=cudf.ListDtype(self._column.dtype),
-            mask=self._column.mask,
+            size=len(col),
+            dtype=cudf.ListDtype(col.dtype),
+            mask=col.mask,
             offset=0,
-            null_count=self._column.null_count,
+            null_count=0,
             children=(offset_col, result_col),
         )
 
