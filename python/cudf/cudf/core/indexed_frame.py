@@ -644,7 +644,11 @@ class IndexedFrame(Frame):
                 f"Length mismatch: Expected axis has {old_length} elements, "
                 f"new values have {len(value)} elements"
             )
-        self._index = Index(value)
+        # avoid unnecessary cast to Index
+        if not isinstance(value, BaseIndex):
+            value = Index(value)
+
+        self._index = value
 
     @_cudf_nvtx_annotate
     def replace(
