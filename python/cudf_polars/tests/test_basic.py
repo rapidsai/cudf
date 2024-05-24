@@ -197,26 +197,6 @@ def test_selection(ldf: pl.LazyFrame):
     assert_gpu_result_equal(out)
 
 
-def test_concat_vertical(ldf):
-    out = pl.concat([ldf, ldf])
-    assert_gpu_result_equal(out)
-
-
-def test_concat_horizontal(ldf):
-    # Have to split the columns in two to avoid the same column names
-    left_columns = ldf.columns[: len(ldf.columns) // 2]
-    right_columns = ldf.columns[len(ldf.columns) // 2 :]
-    out = pl.concat(
-        [ldf.select(left_columns), ldf.select(right_columns)], how="horizontal"
-    )
-    assert_gpu_result_equal(out)
-
-
-def test_groupby(ldf):
-    out = ldf.group_by("int_key1").agg(pl.col("float_val").sum())
-    assert_gpu_result_equal(out, check_row_order=False, check_exact=False)
-
-
 @pytest.mark.xfail(reason="arg_where not yet implemented")
 def test_expr_function(ldf):
     out = ldf.select(pl.arg_where(pl.col("int_key1") == 5)).set_sorted(

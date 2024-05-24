@@ -31,4 +31,4 @@ def test_slice(offset, len):
         .sort(by=pl.col("a"))
         .slice(offset, len)
     )
-    assert_gpu_result_equal(query, check_row_order=False)
+    assert_gpu_result_equal(query)

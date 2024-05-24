@@ -22,3 +22,16 @@ def test_union():
     # Plan for this produces a `None`.astype(Int64) which we don't
     # handle correctly right now
     assert_gpu_result_equal(query)
+
+
+def test_concat_vertical():
+    ldf = pl.LazyFrame(
+        {
+            "a": [1, 2, 3, 4, 5, 6, 7],
+            "b": [1, 1, 1, 1, 1, 1, 1],
+        }
+    )
+    ldf2 = ldf.select(pl.col("a"), pl.col("b") * 2 + pl.col("a"))
+    q = pl.concat([ldf, ldf2], how="vertical")
+
+    assert_gpu_result_equal(q)
