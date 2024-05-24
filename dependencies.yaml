@@ -297,7 +297,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - rapids-build-backend ~=0.3.0
+          - rapids-build-backend >=0.3.0,<0.4.0.dev0
           - scikit-build-core>=0.7.0
       - output_types: [requirements, pyproject]
         packages:

@@ -43,7 +43,7 @@ requirements:
     {% else %}
     - cuda-nvcc-impl
     {% endif %}
-    - rapids-build-backend ~=0.3.0
+    - rapids-build-backend >=0.3.0,<0.4.0.dev0
     - setuptools
     - cuda-version ={{ cuda_version }}
   run:
