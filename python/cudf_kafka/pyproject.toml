@@ -82,6 +82,12 @@ skip = [
     "__init__.py",
 ]
 
+[tool.pytest.ini_options]
+filterwarnings = [
+  "error::FutureWarning",
+  "error::DeprecationWarning",
+]
+
 [tool.scikit-build]
 build-dir = "build/{wheel_tag}"
 cmake.build-type = "Release"
