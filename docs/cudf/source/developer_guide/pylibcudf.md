@@ -15,7 +15,8 @@ To satisfy the goals of pylibcudf, we impose the following set of design princip
 - All typing in code should be written using Cython syntax, not PEP 484 Python typing syntax. Not only does this ensure compatibility with Cython < 3, but even with Cython 3 PEP 484 support remains incomplete as of this writing.
 - All cudf code should interact only with pylibcudf, never with libcudf directly.
 - All imports should be relative so that pylibcudf can be easily extracted from cudf later
-  - Exception: All imports of libcudf API bindings in `cudf._lib.cpp` should use absolute imports of `cudf._lib.cpp as libcudf`. We should convert the `cpp` directory into a proper package so that it can be imported as `libcudf` in that fashion. When moving pylibcudf into a separate package, it will be renamed to `libcudf` and only the imports will need to change.
+  - Exception: All imports of libcudf API bindings in `cudf._lib.pylibcudf.libcudf` should use absolute imports of `cudf._lib.pylibcudf.libcudf as libcudf`. This will make it easier to extract
+pylibcudf into a separate package.
 - Ideally, pylibcudf should depend on nothing other than rmm and pyarrow. This will allow it to be extracted into a a largely standalone library and used in environments where the larger dependency tree of cudf may be cumbersome.
 
 
@@ -112,6 +113,9 @@ Then, a corresponding pylibcudf fixture may be created using a simple `from_arro
 This approach ensures consistent global coverage across types for various tests.
 
 In general, pylibcudf tests should prefer validating against a corresponding pyarrow implementation rather than hardcoding data.
+If there is no pyarrow implementation, another alternative is to write a pure Python implementation that loops over the values
+of the Table/Column, if a scalar Python equivalent of the pylibcudf implementation exists (this is especially relevant for string methods).
+
 This approach is more resilient to changes to input data, particularly given the fixture strategy outlined above.
 Standard tools for comparing between pylibcudf and pyarrow types are provided in the utils module.
 
@@ -242,3 +246,8 @@ cpdef ColumnOrTable empty_like(ColumnOrTable input)
 
 [Cython supports specializing the contents of fused-type functions based on the argument types](https://cython.readthedocs.io/en/latest/src/userguide/fusedtypes.html#type-checking-specializations), so any type-specific logic may be encoded using the appropriate conditionals.
 See the pylibcudf source for examples of how to implement such functions.
+
+In the event that an libcudf overload takes in a different amount of arguments compared to another overload, you should specify the maximum amount of arguments in the Cython definition,
+with the arguments not shared between overloads set to None. If a user tries to pass in an unsupported argument for a specific overload type, you should raise NotImplementedError.
+
+Finally, consider making an libcudf issue if you think this inconsistency can be addressed on the libcudf side.
