@@ -273,20 +273,13 @@ class Frame(BinaryOperand, Scannable):
         return self._num_rows
 
     @_cudf_nvtx_annotate
-    def astype(self, dtype, copy: bool = False):
-        result_data = {
-            col_name: col.astype(dtype.get(col_name, col.dtype), copy=copy)
+    def astype(self, dtype: dict[Any, Dtype], copy: bool = False) -> Self:
+        casted = (
+            col.astype(dtype.get(col_name, col.dtype), copy=copy)
             for col_name, col in self._data.items()
-        }
-
-        return ColumnAccessor(
-            data=result_data,
-            multiindex=self._data.multiindex,
-            level_names=self._data.level_names,
-            rangeindex=self._data.rangeindex,
-            label_dtype=self._data.label_dtype,
-            verify=False,
         )
+        ca = self._data._from_columns_like_self(casted, verify=False)
+        return self._from_data_like_self(ca)
 
     @_cudf_nvtx_annotate
     def equals(self, other) -> bool:
@@ -349,11 +342,7 @@ class Frame(BinaryOperand, Scannable):
         """
         if self is other:
             return True
-        if (
-            other is None
-            or not isinstance(other, type(self))
-            or len(self) != len(other)
-        ):
+        if not isinstance(other, type(self)) or len(self) != len(other):
             return False
 
         return all(

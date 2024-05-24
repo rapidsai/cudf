@@ -445,7 +445,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._as_int_index()[index]
 
     @_cudf_nvtx_annotate
-    def equals(self, other):
+    def equals(self, other) -> bool:
         if isinstance(other, RangeIndex):
             return self._range == other._range
         return self._as_int_index().equals(other)
@@ -1060,6 +1060,16 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @classmethod
     @_cudf_nvtx_annotate
+    def _from_data_like_self(
+        cls, data: MutableMapping, name: Any = no_default
+    ) -> Self:
+        out = _index_from_data(data, name)
+        if name is not no_default:
+            out.name = name
+        return out
+
+    @classmethod
+    @_cudf_nvtx_annotate
     def from_arrow(cls, obj):
         try:
             return cls(ColumnBase.from_arrow(obj))
@@ -1180,12 +1190,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return self._column.is_unique
 
     @_cudf_nvtx_annotate
-    def equals(self, other):
-        if (
-            other is None
-            or not isinstance(other, BaseIndex)
-            or len(self) != len(other)
-        ):
+    def equals(self, other) -> bool:
+        if not isinstance(other, BaseIndex) or len(self) != len(other):
             return False
 
         check_dtypes = False
@@ -1231,7 +1237,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @_cudf_nvtx_annotate
     def astype(self, dtype, copy: bool = True):
-        return _index_from_data(super().astype({self.name: dtype}, copy))
+        return super().astype({self.name: dtype}, copy)
 
     @_cudf_nvtx_annotate
     def get_indexer(self, target, method=None, limit=None, tolerance=None):
