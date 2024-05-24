@@ -19,6 +19,7 @@ This page provides API documentation for pylibcudf.
     join
     lists
     merge
+    quantiles
     reduce
     rolling
     scalar

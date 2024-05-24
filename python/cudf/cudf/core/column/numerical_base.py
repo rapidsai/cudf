@@ -116,6 +116,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             indices = libcudf.sort.order_by(
                 [self], [True], "first", stable=True
             ).slice(self.null_count, len(self))
+
+            q = np.asarray(q, dtype="float64")
+
             result = libcudf.quantiles.quantile(
                 self, q, interpolation, indices, exact
             )

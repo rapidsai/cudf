@@ -833,6 +833,8 @@ class Frame(BinaryOperand, Scannable):
             libcudf.types.NullOrder[key] for key in null_precedence
         ]
 
+        q = np.asarray(q, dtype="float64")
+
         return self._from_columns_like_self(
             libcudf.quantiles.quantile_table(
                 [*self._columns],
