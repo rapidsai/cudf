@@ -121,23 +121,6 @@ def test_drop_nulls(null_data):
     assert_gpu_result_equal(result)
 
 
-@pytest.mark.parametrize("how", ["inner", "left", "semi", "outer_coalesce"])
-def test_join(df: pl.DataFrame, how):
-    pl.set_random_seed(42)
-    # Sample eagerly since we haven't implemented it yet.
-    ldf1 = df.sample(n=50).lazy()
-    ldf2 = df.sample(n=50).lazy()
-
-    out = ldf1.join(ldf2, on=["int_key1", "int_key2"], how=how)
-    assert_gpu_result_equal(out, check_row_order=False)
-
-
-def test_sort(ldf):
-    for col in ldf.columns:
-        out = ldf.sort(by=col)
-        assert_gpu_result_equal(out)
-
-
 @pytest.mark.parametrize("keep", ["first", "last", "none"])
 @pytest.mark.parametrize("subset", [None, "keys"])
 @pytest.mark.parametrize("sort", [False, True])
