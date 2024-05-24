@@ -1018,6 +1018,47 @@ TEST_F(CsvReaderTest, StringsQuotesIgnored)
     view.column(1));
 }
 
+TEST_F(CsvReaderTest, StringsQuotesWhitespace)
+{
+  std::vector<std::string> names{"line", "verse"};
+
+  auto filepath = temp_env->get_temp_dir() + "StringsQuotesIgnored.csv";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << names[0] << ',' << names[1] << '\n';
+    outfile << "A,a" << '\n';              // unquoted no whitespace
+    outfile << "    B,b" << '\n';          // unquoted leading whitespace
+    outfile << "C    ,c" << '\n';          // unquoted trailing whitespace
+    outfile << "    D    ,d" << '\n';      // unquoted leading and trailing whitespace
+    outfile << "\"E\",e" << '\n';          // quoted no whitespace
+    outfile << "\"F\"    ,f" << '\n';      // quoted trailing whitespace
+    outfile << "    \"G\",g" << '\n';      // quoted leading whitespace
+    outfile << "    \"H\"    ,h" << '\n';  // quoted leading and trailing whitespace
+    outfile << "    \"    I    \"    ,i"
+            << '\n';  // quoted leading and trailing whitespace with spaces inside quotes
+  }
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
+      .names(names)
+      .dtypes(std::vector<data_type>{dtype<cudf::string_view>(), dtype<cudf::string_view>()})
+      .quoting(cudf::io::quote_style::ALL)
+      .doublequote(false)
+      .detect_whitespace_around_quotes(true);
+  auto result = cudf::io::read_csv(in_opts);
+
+  auto const view = result.tbl->view();
+  ASSERT_EQ(2, view.num_columns());
+  ASSERT_EQ(type_id::STRING, view.column(0).type().id());
+  ASSERT_EQ(type_id::STRING, view.column(1).type().id());
+
+  expect_column_data_equal(
+    std::vector<std::string>{"A", "    B", "C    ", "    D    ", "E", "F", "G", "H", "    I    "},
+    view.column(0));
+  expect_column_data_equal(std::vector<std::string>{"a", "b", "c", "d", "e", "f", "g", "h", "i"},
+                           view.column(1));
+}
+
 TEST_F(CsvReaderTest, SkiprowsNrows)
 {
   auto filepath = temp_env->get_temp_dir() + "SkiprowsNrows.csv";

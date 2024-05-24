@@ -355,6 +355,14 @@ def test_json_lines_basic(json_input, engine):
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
 
+@pytest.mark.filterwarnings("ignore:Using CPU")
+@pytest.mark.parametrize("engine", ["auto", "cudf", "pandas"])
+def test_nonexistent_json_correct_error(engine):
+    json_input = "doesnotexist.json"
+    with pytest.raises(FileNotFoundError):
+        cudf.read_json(json_input, engine=engine)
+
+
 @pytest.mark.skipif(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="warning not present in older pandas versions",

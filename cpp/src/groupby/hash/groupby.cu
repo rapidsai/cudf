@@ -16,7 +16,6 @@
 
 #include "groupby/common/utils.hpp"
 #include "groupby/hash/groupby_kernels.cuh"
-#include "hash/concurrent_unordered_map.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>

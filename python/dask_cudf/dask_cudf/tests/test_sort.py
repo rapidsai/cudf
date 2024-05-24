@@ -20,12 +20,7 @@ from dask_cudf.tests.utils import xfail_dask_expr
         "a",
         "b",
         "c",
-        pytest.param(
-            "d",
-            marks=xfail_dask_expr(
-                "Dask-expr fails to sort by categorical column."
-            ),
-        ),
+        "d",
         ["a", "b"],
         ["c", "d"],
     ],

@@ -9,6 +9,7 @@ from dask import dataframe as dd
 from dask.utils_test import hlg_layer
 
 import cudf
+from cudf.testing._utils import expect_warning_if
 
 import dask_cudf
 from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
@@ -47,7 +48,13 @@ def pdf(request):
     return pdf
 
 
-@pytest.mark.parametrize("aggregation", OPTIMIZED_AGGS)
+# NOTE: We only want to test aggregation "methods" here,
+# so we need to leave out `list`. We also include a
+# deprecation check for "collect".
+@pytest.mark.parametrize(
+    "aggregation",
+    sorted(tuple(set(OPTIMIZED_AGGS) - {list}) + ("collect",)),
+)
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation, pdf):
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -62,8 +69,9 @@ def test_groupby_basic(series, aggregation, pdf):
 
     check_dtype = aggregation != "count"
 
-    expect = getattr(gdf_grouped, aggregation)()
-    actual = getattr(ddf_grouped, aggregation)()
+    with expect_warning_if(aggregation == "collect"):
+        expect = getattr(gdf_grouped, aggregation)()
+        actual = getattr(ddf_grouped, aggregation)()
 
     if not QUERY_PLANNING_ON:
         assert_cudf_groupby_layers(actual)
