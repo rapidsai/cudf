@@ -595,8 +595,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 data = data.copy(deep=True)
             name_from_data = data.name
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
-            if isinstance(data, (pd.Series, Series)):
+            if isinstance(data, pd.Series):
                 index_from_data = as_index(data.index)
+            elif isinstance(data, Series):
+                index_from_data = data.index
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.Series._from_data for constructing a Series from "
