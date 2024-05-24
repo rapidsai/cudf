@@ -84,8 +84,7 @@ skip = [
 
 [tool.pytest.ini_options]
 filterwarnings = [
-  "error::FutureWarning",
-  "error::DeprecationWarning",
+  "error"
 ]
 
 [tool.scikit-build]
