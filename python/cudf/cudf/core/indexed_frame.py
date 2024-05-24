@@ -350,7 +350,8 @@ class IndexedFrame(Frame):
         frame = self.__class__._from_data(data)
 
         if index is not None:
-            frame.index = index
+            # TODO: triage why using the setter here breaks dask_cuda.ProxifyHostFile
+            frame._index = index
         return frame._copy_type_metadata(
             self,
             include_index=bool(index_names),
@@ -643,7 +644,11 @@ class IndexedFrame(Frame):
                 f"Length mismatch: Expected axis has {old_length} elements, "
                 f"new values have {len(value)} elements"
             )
-        self._index = Index(value)
+        # avoid unnecessary cast to Index
+        if not isinstance(value, BaseIndex):
+            value = Index(value)
+
+        self._index = value
 
     @_cudf_nvtx_annotate
     def replace(
