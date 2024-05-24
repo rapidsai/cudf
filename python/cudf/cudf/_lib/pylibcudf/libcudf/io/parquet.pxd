@@ -12,6 +12,9 @@ from libcpp.vector cimport vector
 cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
 cimport cudf._lib.pylibcudf.libcudf.table.table_view as cudf_table_view
 from cudf._lib.pylibcudf.libcudf.expressions cimport expression
+from cudf._lib.pylibcudf.libcudf.io.parquet cimport (
+    parquet_writer_options_builder,
+)
 from cudf._lib.pylibcudf.libcudf.types cimport data_type, size_type
 
 
@@ -165,6 +168,14 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             cudf_io_types.dictionary_policy val
         ) except +
 
+    # forward declare derived builder type
+    cdef cppclass parquet_writer_options_builder(
+            parquet_writer_options_builder_base[parquet_writer_options_builder])
+
+    # now typedef the child type for use in method declarations
+    ctypedef parquet_writer_options_builder_base[
+        parquet_writer_options_builder] writer_builder_type
+
     cdef cppclass parquet_writer_options_builder(
             parquet_writer_options_builder_base[parquet_writer_options_builder]):
         parquet_writer_options_builder() except +
@@ -173,10 +184,10 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             cudf_table_view.table_view table_
         ) except +
 
-        parquet_writer_options_builder& partitions(
+        writer_builder_type& partitions(
             vector[cudf_io_types.partition_info] partitions
         ) except +
-        parquet_writer_options_builder& column_chunks_file_paths(
+        writer_builder_type& column_chunks_file_paths(
             vector[string] column_chunks_file_paths
         ) except +
 
