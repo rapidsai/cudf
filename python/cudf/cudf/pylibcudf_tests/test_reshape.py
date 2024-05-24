@@ -13,11 +13,15 @@ def reshape_data():
     return data
 
 
-def test_interleave_columns(reshape_data):
+@pytest.fixture(scope="module")
+def reshape_plc_tbl(reshape_data):
     arrow_tbl = pa.Table.from_arrays(reshape_data, names=["a", "b"])
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
+    return plc_tbl
 
-    res = plc.reshape.interleave_columns(plc_tbl)
+
+def test_interleave_columns(reshape_data, reshape_plc_tbl):
+    res = plc.reshape.interleave_columns(reshape_plc_tbl)
 
     interleaved_data = [pa.array(pair) for pair in zip(*reshape_data)]
 
@@ -27,14 +31,13 @@ def test_interleave_columns(reshape_data):
 
 
 @pytest.mark.parametrize("cnt", [0, 1, 3])
-def test_tile(reshape_data, cnt):
-    arrow_tbl = pa.Table.from_arrays(reshape_data, names=["a", "b"])
-    plc_tbl = plc.interop.from_arrow(arrow_tbl)
-
-    res = plc.reshape.tile(plc_tbl, cnt)
+def test_tile(reshape_data, reshape_plc_tbl, cnt):
+    res = plc.reshape.tile(reshape_plc_tbl, cnt)
 
     tiled_data = [pa.array(col * cnt) for col in reshape_data]
 
-    expect = pa.Table.from_arrays(tiled_data, schema=arrow_tbl.schema)
+    expect = pa.Table.from_arrays(
+        tiled_data, schema=plc.interop.to_arrow(reshape_plc_tbl).schema
+    )
 
     assert_table_eq(res, expect)
