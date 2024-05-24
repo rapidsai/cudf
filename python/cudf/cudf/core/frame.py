@@ -76,7 +76,7 @@ class Frame(BinaryOperand, Scannable):
 
     @property
     def _num_rows(self) -> int:
-        return 0 if self._num_columns == 0 else len(self._data.columns[0])
+        return self._data.nrows
 
     @property
     def _column_names(self) -> Tuple[Any, ...]:  # TODO: Tuple[str]?
