@@ -119,3 +119,15 @@ def test_replace_col(pa_data_col, plc_data_col, col_repl_target, col_repl):
     )
 
     assert_column_eq(got, expected)
+
+
+def test_replace_col_invalid_arg(plc_data_col, col_repl_target, col_repl):
+    _, plc_target = col_repl_target
+    _, plc_repl = col_repl
+    with pytest.raises(
+        ValueError,
+        match="maxrepl is not supported as a valid argument when target and repl are Columns",
+    ):
+        plc.strings.replace.replace(
+            plc_data_col, plc_target, plc_repl, maxrepl=10
+        )

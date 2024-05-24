@@ -42,7 +42,11 @@ cpdef Column replace(
             ))
     else:
         # Column case
-        # TODO: maxrepl should be supported in the corresponding CUDA/C++ code
+
+        if maxrepl != -1:
+            raise ValueError("maxrepl is not supported as a valid "
+                             "argument when target and repl are Columns")
+
         with nogil:
             c_result = move(cpp_replace(
                 input.view(),
@@ -64,14 +68,12 @@ cpdef Column replace_slice(
 
     cdef unique_ptr[column] c_result
 
-    cdef const string_scalar* scalar_str
-
     if repl is None:
         repl = Scalar.from_libcudf(
             cpp_make_string_scalar("".encode())
         )
 
-    scalar_str = <string_scalar*>(repl.c_obj.get())
+    cdef const string_scalar* scalar_str = <string_scalar*>(repl.c_obj.get())
 
     with nogil:
         c_result = move(cpp_replace_slice(
