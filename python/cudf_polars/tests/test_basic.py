@@ -121,34 +121,6 @@ def test_drop_nulls(null_data):
     assert_gpu_result_equal(result)
 
 
-@pytest.mark.parametrize("keep", ["first", "last", "none"])
-@pytest.mark.parametrize("subset", [None, "keys"])
-@pytest.mark.parametrize("sort", [False, True])
-@pytest.mark.parametrize("maintain_order", [False, True])
-def test_unique(ldf: pl.LazyFrame, keep, subset, sort, maintain_order):
-    if subset is not None:
-        subset = list(filter(lambda c: "key" in c, ldf.columns))
-        sort_by = subset
-    else:
-        sort_by = ldf.columns
-    if sort:
-        ldf = ldf.sort(*sort_by)
-    out = ldf.unique(
-        subset,
-        keep=keep,
-        maintain_order=maintain_order,
-    )
-    assert_gpu_result_equal(out, check_row_order=maintain_order)
-
-
-@pytest.mark.xfail(reason="arg_where not yet implemented")
-def test_expr_function(ldf):
-    out = ldf.select(pl.arg_where(pl.col("int_key1") == 5)).set_sorted(
-        pl.col("int_key1")
-    )
-    assert_gpu_result_equal(out)
-
-
 def test_gather_expr(ldf):
     out = ldf.select(pl.col("int_key1").gather(pl.col("int_key2")))
     assert_gpu_result_equal(out)

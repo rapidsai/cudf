@@ -557,7 +557,7 @@ class Distinct(IR):
             indices = list(range(df.num_columns))
         else:
             indices = [i for i, k in enumerate(df.column_names) if k in self.subset]
-        keys_sorted = all(c.is_sorted for c in df.columns)
+        keys_sorted = all(df.columns[i].is_sorted for i in indices)
         if keys_sorted:
             table = plc.stream_compaction.unique(
                 df.table,
@@ -628,10 +628,11 @@ class Sort(IR):
         df = self.df.evaluate(cache=cache)
         sort_keys = [k.evaluate(df) for k in self.by]
         names = {c.name: i for i, c in enumerate(df.columns)}
+        # TODO: More robust identification here.
         keys_in_result = [
             i
             for k in sort_keys
-            if (i := names.get(k.name)) is not None and k is df.columns[i]
+            if (i := names.get(k.name)) is not None and k.obj is df.columns[i].obj
         ]
         table = self.do_sort(
             df.table,
@@ -641,11 +642,11 @@ class Sort(IR):
         )
         columns = [Column(c, old.name) for c, old in zip(table.columns(), df.columns)]
         # If a sort key is in the result table, set the sortedness property
-        for i in keys_in_result:
+        for k, i in enumerate(keys_in_result):
             columns[i] = columns[i].set_sorted(
                 is_sorted=plc.types.Sorted.YES,
-                order=self.order[i],
-                null_order=self.null_order[i],
+                order=self.order[k],
+                null_order=self.null_order[k],
             )
         return DataFrame(columns, []).slice(self.zlice)
 
