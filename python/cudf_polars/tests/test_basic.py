@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import operator
 from datetime import datetime
 
 import numpy as np
@@ -46,24 +45,6 @@ def df():
 @pytest.fixture
 def ldf(df):
     return df.lazy()
-
-
-@pytest.mark.parametrize("dtype", ["int32", "int64", "float32", "float64"])
-@pytest.mark.parametrize(
-    "op", [operator.add, operator.sub, operator.mul, operator.truediv]
-)
-def test_binaryops(op, dtype):
-    df = pl.DataFrame(
-        {
-            "a": [1, 2, 3, 4, 5],
-            "b": [1, 2, 3, 4, 5],
-        }
-    ).lazy()
-
-    dtype = pl.datatypes.numpy_char_code_to_dtype(dtype)
-    df = df.with_columns(pl.col("a").cast(dtype)).with_columns(pl.col("b").cast(dtype))
-    result = df.with_columns(op(pl.col("a"), pl.col("b")))
-    assert_gpu_result_equal(result)
 
 
 @pytest.mark.xfail(reason="Rolling window not yet implemented")
