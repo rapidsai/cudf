@@ -174,6 +174,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         # has methods returning references to a child class seem to work.
         # Calling these from the chunked options builder will fail at compile
         # time, so this should be safe.
+        # NOTE: these two are never actually called from libcudf. Instead these
+        # properties are set in the options after calling build(), so perhaps
+        # they can be removed.
         BuilderT& partitions(
             vector[cudf_io_types.partition_info] partitions
         ) except +
