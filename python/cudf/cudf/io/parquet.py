@@ -107,6 +107,11 @@ def _write_parquet(
         "force_nullable_schema": force_nullable_schema,
         "header_version": header_version,
         "use_dictionary": use_dictionary,
+        "skip_compression": skip_compression,
+        "column_encoding": column_encoding,
+        "column_type_length": column_type_length,
+        "output_as_binary": output_as_binary,
+        "write_arrow_schema": write_arrow_schema,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -953,6 +958,11 @@ def to_parquet(
     force_nullable_schema=False,
     header_version="1.0",
     use_dictionary=True,
+    skip_compression=None,
+    column_encoding=None,
+    column_type_length=None,
+    output_as_binary=None,
+    store_schema=True,
     *args,
     **kwargs,
 ):
@@ -1036,6 +1046,11 @@ def to_parquet(
             force_nullable_schema=force_nullable_schema,
             header_version=header_version,
             use_dictionary=use_dictionary,
+            skip_compression=skip_compression,
+            column_encoding=column_encoding,
+            column_type_length=column_type_length,
+            output_as_binary=output_as_binary,
+            write_arrow_schema=store_schema,
         )
 
     else:
