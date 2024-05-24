@@ -57,7 +57,6 @@ cpdef read_json(object filepaths_or_buffers,
                 bool lines,
                 object compression,
                 object byte_range,
-                bool legacy,
                 bool keep_quotes,
                 bool mixed_types_as_string,
                 bool prune_columns,
@@ -130,7 +129,6 @@ cpdef read_json(object filepaths_or_buffers,
         .lines(c_lines)
         .byte_range_offset(c_range_offset)
         .byte_range_size(c_range_size)
-        .legacy(legacy)
         .build()
     )
     if is_list_like_dtypes:

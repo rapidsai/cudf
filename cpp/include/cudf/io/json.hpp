@@ -271,15 +271,6 @@ class json_reader_options {
   bool is_enabled_dayfirst() const { return _dayfirst; }
 
   /**
-   * @brief Whether the legacy reader should be used.
-   *
-   * @deprecated Since 24.06
-   *
-   * @returns true if the legacy reader will be used, false otherwise
-   */
-  [[deprecated]] bool is_enabled_legacy() const { return _legacy; }
-
-  /**
    * @brief Whether the reader should keep quotes of string values.
    *
    * @returns true if the reader should keep quotes, false otherwise
@@ -405,15 +396,6 @@ class json_reader_options {
    * @param val Boolean value to enable/disable day first parsing format
    */
   void enable_dayfirst(bool val) { _dayfirst = val; }
-
-  /**
-   * @brief Set whether to use the legacy reader.
-   *
-   * @deprecated Since 24.06
-   *
-   * @param val Boolean value to enable/disable the legacy reader
-   */
-  [[deprecated]] void enable_legacy(bool val) { _legacy = val; }
 
   /**
    * @brief Set whether the reader should keep quotes of string values.
@@ -602,20 +584,6 @@ class json_reader_options_builder {
   json_reader_options_builder& dayfirst(bool val)
   {
     options._dayfirst = val;
-    return *this;
-  }
-
-  /**
-   * @brief Set whether to use the legacy reader.
-   *
-   * @deprecated Since 24.06
-   *
-   * @param val Boolean value to enable/disable legacy parsing
-   * @return this for chaining
-   */
-  [[deprecated]] json_reader_options_builder& legacy(bool val)
-  {
-    options._legacy = val;
     return *this;
   }
 

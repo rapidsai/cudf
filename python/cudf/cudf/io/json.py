@@ -100,7 +100,6 @@ def read_json(
             lines=lines,
             compression=compression,
             byte_range=byte_range,
-            legacy=False,
             keep_quotes=keep_quotes,
             mixed_types_as_string=mixed_types_as_string,
             prune_columns=prune_columns,

@@ -15,7 +15,6 @@
  */
 
 #include "io/comp/io_uncomp.hpp"
-#include "io/json/legacy/read_json.hpp"
 #include "io/json/nested_json.hpp"
 #include "read_json.hpp"
 
@@ -266,14 +265,6 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-
-  // TODO remove this if-statement once legacy is removed
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-  if (reader_opts.is_enabled_legacy()) {
-    return legacy::read_json(sources, reader_opts, stream, mr);
-  }
-#pragma GCC diagnostic pop
 
   if (reader_opts.get_byte_range_offset() != 0 or reader_opts.get_byte_range_size() != 0) {
     CUDF_EXPECTS(reader_opts.is_enabled_lines(),
