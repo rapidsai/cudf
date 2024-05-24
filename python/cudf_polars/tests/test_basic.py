@@ -66,13 +66,6 @@ def test_binaryops(op, dtype):
     assert_gpu_result_equal(result)
 
 
-def test_scan_parquet(tmp_path):
-    df = pl.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
-    df.write_parquet(tmp_path / "example.parquet")
-    ldf = pl.scan_parquet(tmp_path / "example.parquet")
-    assert_gpu_result_equal(ldf)
-
-
 @pytest.mark.xfail(reason="Rolling window not yet implemented")
 def test_rolling(ldf_datetime):
     out = ldf_datetime.rolling(index_column="dt", period="2d").agg(

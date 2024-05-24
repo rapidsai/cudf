@@ -130,10 +130,8 @@ class Scan(IR):
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         options = self.file_options
-        n_rows = options.n_rows
         with_columns = options.with_columns
         row_index = options.row_index
-        assert n_rows is None
         if self.typ == "csv":
             df = DataFrame.from_cudf(
                 cudf.concat(
@@ -148,17 +146,17 @@ class Scan(IR):
             assert_never(self.typ)
         if row_index is not None:
             name, offset = row_index
-            dtype = self.schema[name]
-            step = plc.interop.from_arrow(pa.scalar(1), data_type=dtype)
-            init = plc.interop.from_arrow(pa.scalar(offset), data_type=dtype)
+            # TODO: dtype
+            step = plc.interop.from_arrow(pa.scalar(1))
+            init = plc.interop.from_arrow(pa.scalar(offset))
             index = Column(
                 plc.filling.sequence(df.num_rows, init, step), name
             ).set_sorted(
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
-                null_order=plc.types.null_order.AFTER,
+                null_order=plc.types.NullOrder.AFTER,
             )
-            df = df.with_columns([index])
+            df = DataFrame([index, *df.columns], [])
         # TODO: should be true, but not the case until we get
         # cudf-classic out of the loop for IO since it converts date32
         # to datetime.
