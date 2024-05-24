@@ -1001,7 +1001,6 @@ class BinOp(Expr):
         """Collect information about aggregations in groupbys."""
         if depth == 1:
             # inside aggregation, need to pre-evaluate,
-            # This recurses to check if we have nested aggs
             # groupby construction has checked that we don't have
             # nested aggs, so stop the recursion and return ourselves
             # for pre-eval
@@ -1010,6 +1009,17 @@ class BinOp(Expr):
             left_info, right_info = (
                 child.collect_agg(depth=depth) for child in self.children
             )
+            requests = [*left_info.requests, *right_info.requests]
+            # TODO: Hack, if there were no reductions inside this
+            # binary expression then we want to pre-evaluate and
+            # collect ourselves. Otherwise we want to collect the
+            # aggregations inside and post-evaluate. This is a bad way
+            # of checking that we are in case 1.
+            if all(
+                agg.kind() == plc.aggregation.Kind.COLLECT_LIST
+                for _, agg, _ in requests
+            ):
+                return AggInfo([(self, plc.aggregation.collect_list(), self)])
             return AggInfo(
                 [*left_info.requests, *right_info.requests],
             )
