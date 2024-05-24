@@ -308,8 +308,12 @@ class IndexedFrame(Frame):
 
     @_cudf_nvtx_annotate
     def _from_data_like_self(self, data: MutableMapping):
-        out = self._from_data(data, self.index)
-        out._data._level_names = self._data._level_names
+        out = super()._from_data_like_self(data)
+        if out._num_rows == 0:
+            index = self.index[:0]
+        else:
+            index = self.index
+        out.index = index
         return out
 
     @_cudf_nvtx_annotate
