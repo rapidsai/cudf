@@ -50,7 +50,6 @@ cdef extern from "cudf/io/json.hpp" \
         void enable_dayfirst(bool val) except +
         void enable_experimental(bool val) except +
         void enable_keep_quotes(bool val) except +
-        void set_recovery_mode(json_recovery_mode_t val) except +
 
         @staticmethod
         json_reader_options_builder builder(
@@ -94,6 +93,9 @@ cdef extern from "cudf/io/json.hpp" \
         ) except +
         json_reader_options_builder& keep_quotes(
             bool val
+        ) except +
+        json_reader_options_builder& recovery_mode(
+            json_recovery_mode_t val
         ) except +
 
         json_reader_options build() except +

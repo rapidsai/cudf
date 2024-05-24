@@ -43,7 +43,7 @@ from cudf._lib.types cimport dtype_to_data_type
 from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 
-def _get_json_recovery_mode(object on_bad_lines):
+cdef json_recovery_mode_t _get_json_recovery_mode(object on_bad_lines):
     if on_bad_lines.lower() == "error":
         return json_recovery_mode_t.FAIL
     elif on_bad_lines.lower() == "recover":
@@ -129,6 +129,7 @@ cpdef read_json(object filepaths_or_buffers,
         .lines(c_lines)
         .byte_range_offset(c_range_offset)
         .byte_range_size(c_range_size)
+        .recovery_mode(_get_json_recovery_mode(on_bad_lines))
         .build()
     )
     if is_list_like_dtypes:
@@ -139,7 +140,6 @@ cpdef read_json(object filepaths_or_buffers,
     opts.enable_keep_quotes(keep_quotes)
     opts.enable_mixed_types_as_string(mixed_types_as_string)
     opts.enable_prune_columns(prune_columns)
-    opts.set_recovery_mode(_get_json_recovery_mode(on_bad_lines))
 
     # Read JSON
     cdef cudf_io_types.table_with_metadata c_result
