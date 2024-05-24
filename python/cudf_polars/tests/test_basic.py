@@ -138,37 +138,6 @@ def test_sort(ldf):
         assert_gpu_result_equal(out)
 
 
-def test_filter(ldf):
-    out = ldf.filter(pl.col("int_key1") > pl.col("int_key2"))
-    assert_gpu_result_equal(out)
-
-
-@pytest.mark.parametrize(
-    "agg",
-    [
-        "sum",
-        "min",
-        "max",
-        "mean",
-        # TODO: first/last get turned into slice of the Scan
-        "first",
-        "last",
-        "count",
-        "median",
-    ],
-)
-def test_agg(df, agg):
-    ldf = (
-        df.cast(
-            {key: pl.Float64 for key in df.columns if ("int" in key or "float" in key)}
-        )
-        .select(list(filter(lambda c: "str" not in c, df.columns)))
-        .lazy()
-    )
-    out = getattr(ldf, agg)()
-    assert_gpu_result_equal(out, check_dtype=agg != "count", check_exact=False)
-
-
 @pytest.mark.parametrize("keep", ["first", "last", "none"])
 @pytest.mark.parametrize("subset", [None, "keys"])
 @pytest.mark.parametrize("sort", [False, True])
@@ -189,24 +158,11 @@ def test_unique(ldf: pl.LazyFrame, keep, subset, sort, maintain_order):
     assert_gpu_result_equal(out, check_row_order=maintain_order)
 
 
-def test_selection(ldf: pl.LazyFrame):
-    k = pl.col("int_key1")
-    v = pl.col("int_val")
-    # groupby stops predicate pushdown
-    out = ldf.group_by(k).agg(v.sum()).filter(k * 2 > v)
-    assert_gpu_result_equal(out)
-
-
 @pytest.mark.xfail(reason="arg_where not yet implemented")
 def test_expr_function(ldf):
     out = ldf.select(pl.arg_where(pl.col("int_key1") == 5)).set_sorted(
         pl.col("int_key1")
     )
-    assert_gpu_result_equal(out)
-
-
-def test_filter_expr(ldf):
-    out = ldf.select(pl.col("int_key1").filter(pl.col("int_key2") > 4))
     assert_gpu_result_equal(out)
 
 

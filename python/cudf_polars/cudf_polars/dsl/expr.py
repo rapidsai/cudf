@@ -800,6 +800,9 @@ class Agg(Expr):
         self, dtype: plc.DataType, name: str, options: Any, value: Expr
     ) -> None:
         super().__init__(dtype)
+        # TODO: fix polars name
+        if name == "nunique":
+            name = "n_unique"
         self.name = name
         self.options = options
         self.children = (value,)
@@ -812,7 +815,8 @@ class Agg(Expr):
             req = plc.aggregation.max()
         elif name == "median":
             req = plc.aggregation.median()
-        elif name == "nunique":
+        elif name == "n_unique":
+            # TODO: datatype of result
             req = plc.aggregation.nunique(null_handling=plc.types.NullPolicy.INCLUDE)
         elif name == "first" or name == "last":
             req = None
@@ -836,7 +840,7 @@ class Agg(Expr):
             op = partial(self._reduce, request=req)
         elif name in {"min", "max"}:
             op = partial(op, propagate_nans=options)
-        elif name == "count":
+        elif name in {"count", "first", "last"}:
             pass
         else:
             raise AssertionError
@@ -847,7 +851,7 @@ class Agg(Expr):
             "min",
             "max",
             "median",
-            "nunique",
+            "n_unique",
             "first",
             "last",
             "mean",
