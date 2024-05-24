@@ -3633,7 +3633,7 @@ class IndexedFrame(Frame):
         sort: bool = True,
         allow_non_unique: bool = False,
     ) -> Self:
-        index = cudf.core.index.as_index(index)
+        index = cudf.Index(index)
 
         if self.index.equals(index):
             return self
@@ -3708,7 +3708,7 @@ class IndexedFrame(Frame):
                 raise ValueError(
                     "cannot reindex on an axis with duplicate labels"
                 )
-            index = cudf.core.index.as_index(
+            index = cudf.Index(
                 index, name=getattr(index, "name", self.index.name)
             )
 

@@ -4391,7 +4391,7 @@ class StringMethods(ColumnMethods):
         if isinstance(self._parent, cudf.Series):
             return cudf.Series(new_col, name=self._parent.name)
         elif isinstance(self._parent, cudf.BaseIndex):
-            return cudf.core.index.as_index(new_col, name=self._parent.name)
+            return cudf.Index(new_col, name=self._parent.name)
         else:
             return new_col
 
@@ -4706,7 +4706,7 @@ class StringMethods(ColumnMethods):
             index = self._parent.index.repeat(lengths)
             return cudf.Series(result_col, name=self._parent.name, index=index)
         elif isinstance(self._parent, cudf.BaseIndex):
-            return cudf.core.index.as_index(result_col, name=self._parent.name)
+            return cudf.Index(result_col, name=self._parent.name)
         else:
             return result_col
 
