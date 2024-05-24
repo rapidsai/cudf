@@ -26,9 +26,6 @@ else()
   )
 endif()
 
-set(rapids-cmake-repo trxcllnt/rapids-cmake)
-set(rapids-cmake-branch fea/cccl-2.5)
-
 if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS-${RAPIDS_VERSION_MAJOR_MINOR}.cmake")
   file(
     DOWNLOAD
