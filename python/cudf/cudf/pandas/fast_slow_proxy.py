@@ -9,6 +9,7 @@ import inspect
 import operator
 import pickle
 import types
+import warnings
 from collections.abc import Iterator
 from enum import IntEnum
 from typing import (
@@ -23,6 +24,9 @@ from typing import (
     Type,
 )
 
+from cudf.testing._utils import assert_eq
+
+from ..options import get_option
 from .annotation import nvtx
 
 
@@ -898,6 +902,41 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
                 # try slow path
                 raise Exception()
             fast = True
+
+            if get_option("mode.pandas_debugging"):
+                try:
+                    with nvtx.annotate(
+                        "EXECUTE_SLOW",
+                        color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
+                        domain="cudf_pandas",
+                    ):
+                        slow_args, slow_kwargs = (
+                            _slow_arg(args),
+                            _slow_arg(kwargs),
+                        )
+                        with disable_module_accelerator():
+                            slow_result = func(*slow_args, **slow_kwargs)
+                except Exception as e:
+                    warnings.warn(
+                        "The result from pandas couyld not be computed correctly. "
+                        f"The exception was {e}."
+                    )
+                else:
+                    try:
+                        print("FAST ", result, type(result))
+                        print("SLOW ", slow_result, type(slow_result))
+                        if type(result).__name__ in _CUDF_OBJ_FINAL_TYPES:
+                            assert_eq(result, slow_result)
+                    except AssertionError as ae:
+                        warnings.warn(
+                            "The results from cudf and pandas were different. "
+                            f"The exception was {ae}."
+                        )
+                    except Exception as e:
+                        warnings.warn(
+                            "Pandas debugging mode failed. "
+                            f"The exception was {e}."
+                        )
     except Exception:
         with nvtx.annotate(
             "EXECUTE_SLOW",
@@ -1141,6 +1180,117 @@ def _replace_closurevars(
         f,
         assigned=functools.WRAPPER_ASSIGNMENTS + ("__kwdefaults__",),
     )
+
+
+_CUDF_OBJ_FINAL_TYPES: Set[str] = {
+    "Timedelta",
+    "Timestamp",
+    "DataFrame",
+    "Series",
+    "Index",
+    "RangeIndex",
+    "SparseDtype",
+    "SparseArray",
+    "CategoricalIndex",
+    "Categorical",
+    "CategoricalDtype",
+    "DatetimeIndex",
+    "DatetimeArray",
+    "DatetimeTZDtype",
+    "TimedeltaIndex",
+    "NumpyExtensionArray",
+    "PandasArray",
+    "TimedeltaArray",
+    "PeriodIndex",
+    "PeriodArray",
+    "PeriodDtype",
+    "Period",
+    "MultiIndex",
+    "Grouper",
+    "StringArray",
+    "StringDtype",
+    "BooleanArray",
+    "BooleanDtype",
+    "IntegerArray",
+    "Int8Dtype",
+    "Int16Dtype",
+    "Int32Dtype",
+    "Int64Dtype",
+    "UInt8Dtype",
+    "UInt16Dtype",
+    "UInt32Dtype",
+    "UInt64Dtype",
+    "IntervalIndex",
+    "IntervalArray",
+    "IntervalDtype",
+    "Interval",
+    "FloatingArray",
+    "Float32Dtype",
+    "Float64Dtype",
+    "FixedForwardWindowIndexer",
+    "VariableOffsetWindowIndexer",
+    "HDFStore",
+    "ExcelFile",
+    "ExcelWriter",
+    "Styler",
+    "USFederalHolidayCalendar",
+    "HolidayCalendarMetaClass",
+    "AbstractHolidayCalendar",
+    "Holiday",
+    "USThanksgivingDay",
+    "USColumbusDay",
+    "USLaborDay",
+    "USMemorialDay",
+    "USMartinLutherKingJr",
+    "USPresidentsDay",
+    "GoodFriday",
+    "EasterMonday",
+    "FY5253",
+    "BDay",
+    "BMonthBegin",
+    "BMonthEnd",
+    "BQuarterBegin",
+    "BQuarterEnd",
+    "BusinessDay",
+    "BusinessHour",
+    "BusinessMonthBegin",
+    "BusinessMonthEnd",
+    "BYearBegin",
+    "BYearEnd",
+    "CBMonthBegin",
+    "CBMonthEnd",
+    "CDay",
+    "CustomBusinessDay",
+    "CustomBusinessHour",
+    "CustomBusinessMonthBegin",
+    "CustomBusinessMonthEnd",
+    "DateOffset",
+    "BaseOffset",
+    "Day",
+    "Easter",
+    "FY5253Quarter",
+    "Hour",
+    "LastWeekOfMonth",
+    "Micro",
+    "Milli",
+    "Minute",
+    "MonthBegin",
+    "MonthEnd",
+    "Nano",
+    "QuarterBegin",
+    "QuarterEnd",
+    "Second",
+    "SemiMonthBegin",
+    "SemiMonthEnd",
+    "Tick",
+    "Week",
+    "WeekOfMonth",
+    "YearBegin",
+    "YearEnd",
+    "Flags",
+    "NamedAgg",
+    "ArrowExtensionArray",
+}
 
 
 _SPECIAL_METHODS: Set[str] = {

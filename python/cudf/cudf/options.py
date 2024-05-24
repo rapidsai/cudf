@@ -308,6 +308,21 @@ _register_option(
     _make_contains_validator([False, True]),
 )
 
+_register_option(
+    "mode.pandas_debugging",
+    False,
+    textwrap.dedent(
+        """
+        If set to `True`, enables cudf.pandas debugging mode.
+        When enabled, cudf code paths in cudf.pandas will
+        also run with pandas and raise a warning if the
+        results from cudf and pandas differ.
+        If set to `False`, cudf.pandas debugging is disabled.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)
+
 
 class option_context(ContextDecorator):
     """
