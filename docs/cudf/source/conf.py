@@ -612,13 +612,12 @@ def linkcode_resolve(domain, info) -> str | None:
         linespec = ""
 
     fn = os.path.relpath(fn, start=os.path.dirname(cudf.__file__))
-
     if "+" in cudf.__version__:
         return f"https://github.com/rapidsai/cudf/blob/main/cudf/{fn}{linespec}"
     else:
         return (
             f"https://github.com/rapidsai/cudf/blob/"
-            f"v{cudf.__version__}/cudf/{fn}{linespec}"
+            f"branch-{version}/python/cudf/cudf/{fn}{linespec}"
         )
 
 
