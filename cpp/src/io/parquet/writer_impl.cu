@@ -26,7 +26,6 @@
 #include "io/parquet/parquet.hpp"
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
-#include "io/utilities/base64_utilities.hpp"
 #include "io/utilities/column_utils.cuh"
 #include "io/utilities/config_utils.hpp"
 #include "ipc/Message_generated.h"
@@ -76,7 +75,7 @@ struct aggregate_writer_metadata {
                             host_span<SchemaElement const> tbl_schema,
                             size_type num_columns,
                             statistics_freq stats_granularity,
-                            bool const write_arrow_schema)
+                            std::string const arrow_schema_ipc_message)
     : version(1),
       schema(std::vector<SchemaElement>(tbl_schema.begin(), tbl_schema.end())),
       files(partitions.size())
@@ -90,9 +89,6 @@ struct aggregate_writer_metadata {
       this->column_orders       = std::vector<ColumnOrder>(num_columns, default_order);
     }
 
-    // Construct the arrow schema ipc message string.
-    auto const arrow_schema_ipc_message = construct_arrow_schema_ipc_message(schema);
-
     for (size_t p = 0; p < kv_md.size(); ++p) {
       std::transform(kv_md[p].begin(),
                      kv_md[p].end(),
@@ -101,7 +97,7 @@ struct aggregate_writer_metadata {
                        return KeyValue{kv.first, kv.second};
                      });
       // Append arrow schema to the key-value metadata
-      if (write_arrow_schema and not arrow_schema_ipc_message.empty()) {
+      if (not arrow_schema_ipc_message.empty()) {
         this->files[p].key_value_metadata.emplace_back(
           KeyValue{"ARROW:schema", std::move(arrow_schema_ipc_message)});
       }
@@ -1883,7 +1879,12 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   std::unique_ptr<aggregate_writer_metadata> agg_meta;
   if (!curr_agg_meta) {
     agg_meta = std::make_unique<aggregate_writer_metadata>(
-      partitions, kv_meta, this_table_schema, num_columns, stats_granularity, write_arrow_schema);
+      partitions,
+      kv_meta,
+      this_table_schema,
+      num_columns,
+      stats_granularity,
+      construct_arrow_schema_ipc_message(vec, table_meta, write_mode, utc_timestamps));
   } else {
     agg_meta = std::make_unique<aggregate_writer_metadata>(*curr_agg_meta);
 

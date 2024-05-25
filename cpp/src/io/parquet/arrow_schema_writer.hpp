@@ -21,14 +21,18 @@
 
 #pragma once
 
-#include "io/parquet/parquet.hpp"
 #include "io/parquet/parquet_common.hpp"
 #include "io/utilities/base64_utilities.hpp"
 #include "ipc/Message_generated.h"
 #include "ipc/Schema_generated.h"
 
+#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/linked_column.hpp>
+#include <cudf/io/data_sink.hpp>
+#include <cudf/io/detail/parquet.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -60,6 +64,9 @@ using FBString          = flatbuffers::Offset<flatbuffers::String>;
  * with header size (padded for 16 byte alignment) and a continuation string. The final
  * string is base64 encoded and returned.
  */
-std::string construct_arrow_schema_ipc_message(host_span<SchemaElement const> parquet_schema);
+std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector const& linked_columns,
+                                               table_input_metadata const& metadata,
+                                               single_write_mode write_mode,
+                                               bool utc_timestamps);
 
 }  // namespace cudf::io::parquet::detail
