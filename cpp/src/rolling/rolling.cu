@@ -32,17 +32,12 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type following_window,
                                        size_type min_periods,
                                        rolling_aggregation const& agg,
+                                       rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rolling_window(input,
-                                default_outputs,
-                                preceding_window,
-                                following_window,
-                                min_periods,
-                                agg,
-                                cudf::get_default_stream(),
-                                mr);
+  return detail::rolling_window(
+    input, default_outputs, preceding_window, following_window, min_periods, agg, stream, mr);
 }
 
 // Applies a fixed-size rolling window function to the values in a column, without default specified
@@ -51,6 +46,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type following_window,
                                        size_type min_periods,
                                        rolling_aggregation const& agg,
+                                       rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -62,7 +58,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                 following_window,
                                 min_periods,
                                 agg,
-                                cudf::get_default_stream(),
+                                stream,
                                 mr);
 }
 
@@ -72,11 +68,12 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        column_view const& following_window,
                                        size_type min_periods,
                                        rolling_aggregation const& agg,
+                                       rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::rolling_window(
-    input, preceding_window, following_window, min_periods, agg, cudf::get_default_stream(), mr);
+    input, preceding_window, following_window, min_periods, agg, stream, mr);
 }
 
 }  // namespace cudf
