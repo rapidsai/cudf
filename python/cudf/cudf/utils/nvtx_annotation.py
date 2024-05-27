@@ -1,9 +1,11 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 import hashlib
 from functools import partial
 
 from nvtx import annotate
+
+import rmm.statistics
 
 _NVTX_COLORS = ["green", "blue", "purple", "rapids"]
 
@@ -17,12 +19,13 @@ def _get_color_for_nvtx(name):
 
 
 def _cudf_nvtx_annotate(func, domain="cudf_python"):
-    """Decorator for applying nvtx annotations to methods in cudf."""
-    return annotate(
+    """Decorator for applying nvtx annotations and memory statistics."""
+    nvtx_wrapped = annotate(
         message=func.__qualname__,
         color=_get_color_for_nvtx(func.__qualname__),
         domain=domain,
     )(func)
+    return rmm.statistics.profiler()(nvtx_wrapped)
 
 
 _dask_cudf_nvtx_annotate = partial(
