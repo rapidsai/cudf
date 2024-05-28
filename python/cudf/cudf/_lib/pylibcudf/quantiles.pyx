@@ -12,7 +12,7 @@ from cudf._lib.pylibcudf.libcudf.quantiles cimport (
     quantiles as cpp_quantiles,
 )
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
-from cudf._lib.pylibcudf.libcudf.types cimport order, sorted
+from cudf._lib.pylibcudf.libcudf.types cimport null_order, order, sorted
 
 from .column cimport Column
 from .table cimport Table
