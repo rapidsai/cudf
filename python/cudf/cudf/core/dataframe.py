@@ -1429,7 +1429,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 else:
                     # disc. with pandas here
                     # pandas raises key error here
-                    self.insert(len(self._data), arg, value)
+                    self.insert(self._num_columns, arg, value)
 
         elif can_convert_to_column(arg):
             mask = arg
@@ -1846,7 +1846,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if lines[-1].startswith("["):
             lines = lines[:-1]
             lines.append(
-                "[%d rows x %d columns]" % (len(self), len(self._data.names))
+                "[%d rows x %d columns]" % (len(self), self._num_columns)
             )
         return "\n".join(lines)
 
@@ -1901,7 +1901,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else pd.options.display.width / 2
         )
 
-        if len(self) <= nrows and len(self._data.names) <= ncols:
+        if len(self) <= nrows and self._num_columns <= ncols:
             output = self.copy(deep=False)
         elif self.empty and len(self.index) > 0:
             max_seq_items = pd.options.display.max_seq_items
@@ -1922,15 +1922,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else:
                 output = self.copy(deep=False)
         else:
-            left_cols = len(self._data.names)
+            left_cols = self._num_columns
             right_cols = 0
             upper_rows = len(self)
             lower_rows = 0
             if len(self) > nrows and nrows > 0:
                 upper_rows = int(nrows / 2.0) + 1
                 lower_rows = upper_rows + (nrows % 2)
-            if len(self._data.names) > ncols:
-                right_cols = len(self._data.names) - int(ncols / 2.0)
+            if left_cols > ncols:
+                right_cols = left_cols - int(ncols / 2.0)
                 # adjust right columns for output if multiindex.
                 right_cols = (
                     right_cols - 1
@@ -1945,11 +1945,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else:
                 # If right_cols is 0 or negative, it means
                 # self has lesser number of columns than ncols.
-                # Hence assign len(self._data.names) which
+                # Hence assign self._num_columns which
                 # will result in empty `*_right` quadrants.
                 # This is because `*_left` quadrants will
                 # contain all columns.
-                right_cols = len(self._data.names)
+                right_cols = self._num_columns
 
             upper_left = self.head(upper_rows).iloc[:, :left_cols]
             upper_right = self.head(upper_rows).iloc[:, right_cols:]
@@ -1983,8 +1983,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if lines[-2].startswith("<p>"):
             lines = lines[:-2]
             lines.append(
-                "<p>%d rows × %d columns</p>"
-                % (len(self), len(self._data.names))
+                "<p>%d rows × %d columns</p>" % (len(self), self._num_columns)
             )
             lines.append("</div>")
         return "\n".join(lines)
@@ -2660,9 +2659,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             level_names = (pd_columns.name,)
             label_dtype = pd_columns.dtype
 
-        if len(pd_columns) != len(self._data.names):
+        if len(pd_columns) != self._num_columns:
             raise ValueError(
-                f"Length mismatch: expected {len(self._data.names)} elements, "
+                f"Length mismatch: expected {self._num_columns} elements, "
                 f"got {len(pd_columns)} elements"
             )
 
@@ -2683,7 +2682,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         * The possible .columns.dtype
         * The .columns.names/name (depending on if it's a MultiIndex)
         """
-        if len(self._data.names) != len(other.names):
+        if self._num_columns != len(other.names):
             raise ValueError(
                 f"Length mismatch: expected {len(other)} elements, "
                 f"got {len(self)} elements"
@@ -3207,7 +3206,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if name in self._data:
             raise NameError(f"duplicated column name {name}")
 
-        num_cols = len(self._data)
+        num_cols = self._num_columns
         if loc < 0:
             loc += num_cols + 1
 
@@ -5032,7 +5031,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
         lines.append(index_summary)
 
-        if len(self._data) == 0:
+        if self._num_columns == 0:
             lines.append(f"Empty {type(self).__name__}")
             cudf.utils.ioutils.buffer_write_lines(buf, lines)
             return

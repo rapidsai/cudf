@@ -24,6 +24,7 @@ from cudf._lib.io.utils cimport (
 from cudf._lib.pylibcudf.libcudf.io.data_sink cimport data_sink
 from cudf._lib.pylibcudf.libcudf.io.json cimport (
     json_reader_options,
+    json_recovery_mode_t,
     json_writer_options,
     read_json as libcudf_read_json,
     schema_element,
@@ -42,15 +43,24 @@ from cudf._lib.types cimport dtype_to_data_type
 from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 
+cdef json_recovery_mode_t _get_json_recovery_mode(object on_bad_lines):
+    if on_bad_lines.lower() == "error":
+        return json_recovery_mode_t.FAIL
+    elif on_bad_lines.lower() == "recover":
+        return json_recovery_mode_t.RECOVER_WITH_NULL
+    else:
+        raise TypeError(f"Invalid parameter for {on_bad_lines=}")
+
+
 cpdef read_json(object filepaths_or_buffers,
                 object dtype,
                 bool lines,
                 object compression,
                 object byte_range,
-                bool legacy,
                 bool keep_quotes,
                 bool mixed_types_as_string,
-                bool prune_columns):
+                bool prune_columns,
+                object on_bad_lines):
     """
     Cython function to call into libcudf API, see `read_json`.
 
@@ -119,7 +129,7 @@ cpdef read_json(object filepaths_or_buffers,
         .lines(c_lines)
         .byte_range_offset(c_range_offset)
         .byte_range_size(c_range_size)
-        .legacy(legacy)
+        .recovery_mode(_get_json_recovery_mode(on_bad_lines))
         .build()
     )
     if is_list_like_dtypes:
@@ -130,6 +140,7 @@ cpdef read_json(object filepaths_or_buffers,
     opts.enable_keep_quotes(keep_quotes)
     opts.enable_mixed_types_as_string(mixed_types_as_string)
     opts.enable_prune_columns(prune_columns)
+
     # Read JSON
     cdef cudf_io_types.table_with_metadata c_result
 
