@@ -189,7 +189,7 @@ def setup(app):
     )
     app.add_directive("pandas-compat", PandasCompatDirective)
     app.add_directive("pandas-compat-list", PandasCompatListDirective)
-    app.add_domain(PandasCompatDomain) 
+    app.add_domain(PandasCompatDomain)
     app.connect("doctree-resolved", PandasCompatListProcessor)
 
     return {
