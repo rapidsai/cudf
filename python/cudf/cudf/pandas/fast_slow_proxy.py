@@ -878,7 +878,13 @@ class _MethodProxy(_FunctionProxy):
         setattr(self._fsproxy_slow, "__name__", value)
 
 
-def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
+def _fast_slow_function_call(
+    func: Callable,
+    /,
+    *args,
+    debug_mode: str = "mode.pandas_debugging",
+    **kwargs,
+) -> Any:
     """
     Call `func` with all `args` and `kwargs` converted to their
     respective fast type. If that fails, call `func` with all
@@ -903,7 +909,7 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
                 raise Exception()
             fast = True
 
-            if get_option("mode.pandas_debugging"):
+            if get_option(debug_mode):
                 try:
                     with nvtx.annotate(
                         "EXECUTE_SLOW",
@@ -923,9 +929,6 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
                     )
                 else:
                     try:
-                        print("FAST ", result, type(result))
-                        print("SLOW ", slow_result, type(slow_result))
-                        print(type(result).__name__)
                         if type(result).__name__ in _TYPES:
                             assert_eq(result, slow_result)
                     except AssertionError as ae:
