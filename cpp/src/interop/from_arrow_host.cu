@@ -73,7 +73,7 @@ struct dispatch_copy_from_arrow_host {
                            !std::is_same_v<T, numeric::decimal128>)>
   std::unique_ptr<column> operator()(ArrowSchemaView*, ArrowArray const*, data_type, bool)
   {
-    CUDF_FAIL("Unsupported type in copy_from_arrow_device.");
+    CUDF_FAIL("Unsupported type in copy_from_arrow_host.");
   }
 
   template <typename T,
