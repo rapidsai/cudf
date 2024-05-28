@@ -295,19 +295,20 @@ dependencies:
           - spdlog>=1.12.0,<1.13
   rapids_build_skbuild:
     common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - &rapids_build_backend rapids-build-backend>=0.3.0,<0.4.0.dev0
       - output_types: conda
         packages:
-          - rapids-build-backend >=0.3.0,<0.4.0.dev0
           - scikit-build-core>=0.7.0
       - output_types: [requirements, pyproject]
         packages:
-          - rapids-build-backend>=0.3.0,<0.4.0.dev0
           - scikit-build-core[pyproject]>=0.7.0
   rapids_build_setuptools:
     common:
       - output_types: [requirements, pyproject]
         packages:
-          - rapids-build-backend>=0.3.0,<0.4.0.dev0
+          - *rapids_build_backend
           - setuptools
           - wheel
   build_python_common:
