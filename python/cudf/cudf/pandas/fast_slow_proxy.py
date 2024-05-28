@@ -24,6 +24,7 @@ from typing import (
     Type,
 )
 
+from cudf.options import _env_get_bool
 from cudf.testing._utils import assert_eq
 
 from ..options import get_option
@@ -909,7 +910,9 @@ def _fast_slow_function_call(
                 raise Exception()
             fast = True
 
-            if get_option(debug_mode):
+            if get_option(debug_mode) | _env_get_bool(
+                "CUDF_PANDAS_DEBUG", False
+            ):
                 try:
                     with nvtx.annotate(
                         "EXECUTE_SLOW",

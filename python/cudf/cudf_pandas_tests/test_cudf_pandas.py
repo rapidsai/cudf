@@ -1423,7 +1423,7 @@ def test_holidays_within_dates(holiday, start, expected):
     ) == [utc.localize(dt) for dt in expected]
 
 
-def test_fast_slow_function_call(monkeypatch):
+def test_pandas_debugging_mode_option(monkeypatch):
     from cudf import Series, set_option
 
     set_option("mode.pandas_debugging", True)
@@ -1434,5 +1434,20 @@ def test_fast_slow_function_call(monkeypatch):
     monkeypatch.setattr(Series, "mean", mock_mean)
     with pytest.warns(UserWarning):
         s = pd.Series([1, 2])
-        s.mean()
+        assert s.mean() == 1.0
     set_option("mode.pandas_debugging", False)
+
+
+def test_pandas_debugging_mode_env_var(monkeypatch):
+    from cudf import Series
+
+    monkeypatch.setenv("CUDF_PANDAS_DEBUG", "True")
+
+    def mock_mean(self, *args, **kwargs):
+        return 1.0
+
+    monkeypatch.setattr(Series, "mean", mock_mean)
+    with pytest.warns(UserWarning):
+        s = pd.Series([1, 2])
+        assert s.mean() == 1.0
+    monkeypatch.setenv("CUDF_PANDAS_DEBUG", "False")

@@ -310,7 +310,7 @@ _register_option(
 
 _register_option(
     "mode.pandas_debugging",
-    False,
+    _env_get_bool("CUDF_PANDAS_DEBUG", False),
     textwrap.dedent(
         """
         If set to `True`, enables cudf.pandas debugging mode.
