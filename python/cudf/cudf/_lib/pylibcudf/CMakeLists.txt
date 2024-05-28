@@ -27,6 +27,7 @@ set(cython_sources
     merge.pyx
     reduce.pyx
     replace.pyx
+    reshape.pyx
     rolling.pyx
     scalar.pyx
     search.pyx
