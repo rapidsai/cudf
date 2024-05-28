@@ -79,10 +79,10 @@ struct floating_converter {
   static constexpr IntegralType exponent_mask = unshifted_exponent_mask << num_mantissa_bits;
 
   // To store positive and negative exponents as unsigned values, the stored value for
-  // the power-of-2 is exponent + bias. The bias is 126 for floats and 1022 for doubles.
-  /// 126 / 1022 for float / double
+  // the power-of-2 is exponent + bias. The bias is 127 for floats and 1023 for doubles.
+  /// 127 / 1023 for float / double
   static constexpr IntegralType exponent_bias =
-    cuda::std::numeric_limits<FloatingType>::max_exponent - 2;
+    cuda::std::numeric_limits<FloatingType>::max_exponent - 1;
 
   /**
    * @brief Reinterpret the bits of a floating-point value as an integer
