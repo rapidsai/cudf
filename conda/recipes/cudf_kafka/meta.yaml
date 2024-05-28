@@ -60,16 +60,12 @@ requirements:
     - cuda-version ={{ cuda_version }}
     - cudf ={{ version }}
     - libcudf_kafka ={{ version }}
-    # Needed by rapids-build-backend to infer the CTK version
-    {% if cuda_major == "11" %}
-    - cudatoolkit
-    {% else %}
-    - cuda-nvcc-impl
-    {% endif %}
     - rapids-build-backend >=0.3.0,<0.4.0.dev0
     - scikit-build-core >=0.7.0
     {% if cuda_major != "11" %}
     - cuda-cudart-dev
+    # nvcc is needed by rapids-build-backend to infer the CTK version
+    - cuda-nvcc
     {% endif %}
   run:
     - python
