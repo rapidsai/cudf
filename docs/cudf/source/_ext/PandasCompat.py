@@ -53,7 +53,7 @@ class PandasCompatDirective(BaseAdmonition, SphinxDirective):
             get_translation_sphinx("Pandas Compatibility Note"),
         )
         PandasCompat_node["docname"] = self.env.docname
-        PandasCompat_node["target"] = targetnode        
+        PandasCompat_node["target"] = targetnode
         self.state.nested_parse(
             self.content, self.content_offset, PandasCompat_node
         )
@@ -159,7 +159,7 @@ class PandasCompatListProcessor:
             newnode["refuri"] += "#" + pandascompat["target"]["refid"]
         except NoUri:
             # ignore if no URI can be determined, e.g. for LaTeX output
-            pass        
+            pass
         newnode.append(innernode)
         para += newnode
         return para
