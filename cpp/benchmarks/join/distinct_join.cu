@@ -20,8 +20,8 @@ template <typename Key, bool Nullable>
 void distinct_inner_join(nvbench::state& state,
                          nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
 {
-  auto join = [](cudf::table_view const& build_input,
-                 cudf::table_view const& probe_input,
+  auto join = [](cudf::table_view const& probe_input,
+                 cudf::table_view const& build_input,
                  cudf::null_equality compare_nulls) {
     auto const has_nulls =
       cudf::has_nested_nulls(build_input) || cudf::has_nested_nulls(probe_input)
@@ -39,8 +39,8 @@ template <typename Key, bool Nullable>
 void distinct_left_join(nvbench::state& state,
                         nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
 {
-  auto join = [](cudf::table_view const& build_input,
-                 cudf::table_view const& probe_input,
+  auto join = [](cudf::table_view const& probe_input,
+                 cudf::table_view const& build_input,
                  cudf::null_equality compare_nulls) {
     auto const has_nulls =
       cudf::has_nested_nulls(build_input) || cudf::has_nested_nulls(probe_input)
