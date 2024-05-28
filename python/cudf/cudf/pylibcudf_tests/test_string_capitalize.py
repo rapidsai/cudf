@@ -41,7 +41,13 @@ def test_capitalize(plc_data, pa_data):
 
 
 def test_title(plc_data, pa_data):
-    got = plc.strings.capitalize.title(plc_data)
+    # A sequence shall be all characters that are not a space
+    # matches arrow for now
+    str_char_type = (
+        plc.strings.char_types.StringCharacterTypes.ALL_TYPES
+        & ~plc.strings.char_types.StringCharacterTypes.SPACE
+    )
+    got = plc.strings.capitalize.title(plc_data, str_char_type)
     expected = pa.compute.utf8_title(pa_data)
     assert_column_eq(got, expected)
 

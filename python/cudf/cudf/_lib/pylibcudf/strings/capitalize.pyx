@@ -11,6 +11,7 @@ from cudf._lib.pylibcudf.libcudf.scalar.scalar_factories cimport (
 )
 from cudf._lib.pylibcudf.libcudf.strings cimport capitalize as cpp_capitalize
 from cudf._lib.pylibcudf.scalar cimport Scalar
+from cudf._lib.pylibcudf.strings.char_types cimport string_character_types
 
 from cython.operator import dereference
 
@@ -42,7 +43,10 @@ cpdef Column capitalize(
     return Column.from_libcudf(move(c_result))
 
 
-cpdef Column title(Column input):
+cpdef Column title(
+    Column input,
+    string_character_types sequence_type=string_character_types.ALPHA
+):
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = cpp_capitalize.title(input.view())
