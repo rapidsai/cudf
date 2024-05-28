@@ -37,10 +37,6 @@ build:
 requirements:
   host:
     - python
-    {% if cuda_major != "11" %}
-    # nvcc is needed by rapids-build-backend to infer the CTK version
-    - cuda-nvcc
-    {% endif %}
     - rapids-build-backend >=0.3.0,<0.4.0.dev0
     - setuptools
     - cuda-version ={{ cuda_version }}
