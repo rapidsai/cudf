@@ -23,14 +23,13 @@ cpdef Column capitalize(
 ):
 
     cdef unique_ptr[column] c_result
-    cdef const string_scalar* cpp_delimiters
 
     if delimiters is None:
         delimiters = Scalar.from_libcudf(
             cpp_make_string_scalar("".encode())
         )
 
-    cpp_delimiters = <const string_scalar*>(
+    cdef const string_scalar* cpp_delimiters = <const string_scalar*>(
         delimiters.c_obj.get()
     )
 
