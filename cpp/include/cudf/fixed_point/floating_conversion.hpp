@@ -192,7 +192,7 @@ struct floating_converter {
   /**
    * @brief Adds to the base-2 exponent of a floating-point number
    *
-   * @param floating The floating value to add to the exponent of
+   * @param floating The floating value to add to the exponent of. Must be positive.
    * @param exp2 The power-of-2 to add to the floating-point number
    * @return The input floating-point value * 2^exp2
    */
@@ -207,14 +207,23 @@ struct floating_converter {
 
     // Add the additional power-of-2
     stored_exp2 += exp2;
-    exponent_bits = stored_exp2 << num_mantissa_bits;
 
-    // Clear existing exponent bits and set new ones
-    integer_rep &= (~exponent_mask);
-    integer_rep |= exponent_bits;
+    // Check for exponent over/under-flow.
+    // Note that the input floating-point number is always positive, so we don't have to
+    // worry about the sign here; the sign will be set later in set_is_negative()
+    if (stored_exp2 <= 0) {
+      return 0.0;
+    } else if (stored_exp2 >= unshifted_exponent_mask) {
+      return cuda::std::numeric_limits<FloatingType>::infinity();
+    } else {
+      // Clear existing exponent bits and set new ones
+      exponent_bits = stored_exp2 << num_mantissa_bits;
+      integer_rep &= (~exponent_mask);
+      integer_rep |= exponent_bits;
 
-    // Convert back to float
-    return bit_cast_to_floating(integer_rep);
+      // Convert back to float
+      return bit_cast_to_floating(integer_rep);
+    }
   }
 };
 
