@@ -21,6 +21,7 @@ This page provides API documentation for pylibcudf.
     merge
     quantiles
     reduce
+    reshape
     rolling
     scalar
     search

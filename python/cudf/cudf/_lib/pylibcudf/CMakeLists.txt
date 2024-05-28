@@ -28,6 +28,7 @@ set(cython_sources
     quantiles.pyx
     reduce.pyx
     replace.pyx
+    reshape.pyx
     rolling.pyx
     scalar.pyx
     search.pyx

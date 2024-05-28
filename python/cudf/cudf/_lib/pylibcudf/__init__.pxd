@@ -14,6 +14,7 @@ from . cimport (
     quantiles,
     reduce,
     replace,
+    reshape,
     rolling,
     search,
     sorting,
