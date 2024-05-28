@@ -327,7 +327,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &rmm_conda rmm==24.8.*
+          - &rmm_conda rmm==24.8.*,>=0.0.0a0
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
@@ -347,9 +347,7 @@ dependencies:
           - matrix: {cuda: "11.*"}
             packages: &build_python_packages_cu11
               - rmm-cu11==24.8.*,>=0.0.0a0
-          - matrix:
-            packages:
-              - rmm==24.8.*,>=0.0.0a0
+          - {matrix: null, packages: [*rmm_conda] }
   libarrow_build:
     common:
       - output_types: conda
@@ -599,11 +597,7 @@ dependencies:
               - rmm-cu11==24.8.*,>=0.0.0a0
               - cubinlinker-cu11
               - ptxcompiler-cu11
-          - matrix:
-            packages:
-              - cubinlinker
-              - ptxcompiler
-              - rmm==24.8.*,>=0.0.0a0
+          - {matrix: null, packages: [cubinlinker, ptxcompiler, *rmm_conda]}
   run_cudf_polars:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -611,10 +605,7 @@ dependencies:
           - polars>=0.20.24
   run_dask_cudf:
     common:
-      - output_types: conda
-        packages:
-          - rapids-dask-dependency==24.8.*
-      - output_types: [requirements, pyproject]
+      - output_types: [conda, requirements, pyproject]
         packages:
           - rapids-dask-dependency==24.8.*,>=0.0.0a0
   run_custreamz:
@@ -700,11 +691,7 @@ dependencies:
             packages:
   test_python_dask_cudf:
     common:
-      - output_types: [conda]
-        packages:
-          - dask-cuda==24.8.*
-          - *numba
-      - output_types: [requirements, pyproject]
+      - output_types: [conda, requirements, pyproject]
         packages:
           - dask-cuda==24.8.*,>=0.0.0a0
           - *numba
@@ -712,7 +699,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cudf==24.8.*
+          - &cudf_conda cudf==24.8.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -728,14 +715,12 @@ dependencies:
           - matrix: {cuda: "11.*"}
             packages:
               - cudf-cu11==24.8.*,>=0.0.0a0
-          - matrix:
-            packages:
-              - cudf==24.8.*,>=0.0.0a0
+          - {matrix: null, packages: [*cudf_conda]}
   depends_on_cudf_kafka:
     common:
       - output_types: conda
         packages:
-          - cudf_kafka==24.8.*
+          - &cudf_kafka_conda cudf_kafka==24.8.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -751,9 +736,7 @@ dependencies:
           - matrix: {cuda: "11.*"}
             packages:
               - cudf_kafka-cu11==24.8.*,>=0.0.0a0
-          - matrix:
-            packages:
-              - cudf_kafka==24.8.*,>=0.0.0a0
+          - {matrix: null, packages: [*cudf_kafka_conda]}
   depends_on_cupy:
     common:
       - output_types: conda
