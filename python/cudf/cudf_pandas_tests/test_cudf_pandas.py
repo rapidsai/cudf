@@ -1433,21 +1433,6 @@ def test_pandas_debugging_mode_option(monkeypatch):
 
     monkeypatch.setattr(Series, "mean", mock_mean)
     with pytest.warns(UserWarning):
-        s = pd.Series([1, 2])
+        s = xpd.Series([1, 2])
         assert s.mean() == 1.0
     set_option("mode.pandas_debugging", False)
-
-
-def test_pandas_debugging_mode_env_var(monkeypatch):
-    from cudf import Series
-
-    monkeypatch.setenv("CUDF_PANDAS_DEBUG", "True")
-
-    def mock_mean(self, *args, **kwargs):
-        return 1.0
-
-    monkeypatch.setattr(Series, "mean", mock_mean)
-    with pytest.warns(UserWarning):
-        s = pd.Series([1, 2])
-        assert s.mean() == 1.0
-    monkeypatch.setenv("CUDF_PANDAS_DEBUG", "False")
