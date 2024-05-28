@@ -527,7 +527,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_cudf_nvtx_annotate
     def nlevels(self):
         """Integer number of levels in this MultiIndex."""
-        return len(self._data)
+        return self._num_columns
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
