@@ -343,7 +343,7 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages: &build_python_packages_cu12
-              - &rmm_cu12 rmm-cu12==24.8.*,>=0.0.0a0
+              - rmm-cu12==24.8.*,>=0.0.0a0
           - matrix: {cuda: "11.*"}
             packages: &build_python_packages_cu11
               - rmm-cu11==24.8.*,>=0.0.0a0
