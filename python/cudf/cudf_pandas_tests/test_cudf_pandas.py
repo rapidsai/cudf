@@ -1421,3 +1421,18 @@ def test_holidays_within_dates(holiday, start, expected):
             utc.localize(xpd.Timestamp(start)),
         )
     ) == [utc.localize(dt) for dt in expected]
+
+
+def test_fast_slow_function_call(monkeypatch):
+    from cudf import Series, set_option
+
+    set_option("mode.pandas_debugging", True)
+
+    def mock_mean(self, *args, **kwargs):
+        return 1.0
+
+    monkeypatch.setattr(Series, "mean", mock_mean)
+    with pytest.warns(UserWarning):
+        s = pd.Series([1, 2])
+        s.mean()
+    set_option("mode.pandas_debugging", False)

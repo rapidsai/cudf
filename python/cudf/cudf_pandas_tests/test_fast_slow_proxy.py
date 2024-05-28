@@ -545,6 +545,3 @@ def test_tuple_with_attrs_transform():
     assert b == bprime and b is not bprime
     assert c == cprime and c is not cprime
     assert d == dprime and d is not dprime
-
-def test_fast_slow_function_call():
-    pass

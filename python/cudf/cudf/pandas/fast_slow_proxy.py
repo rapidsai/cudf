@@ -918,14 +918,15 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
                             slow_result = func(*slow_args, **slow_kwargs)
                 except Exception as e:
                     warnings.warn(
-                        "The result from pandas couyld not be computed correctly. "
+                        "The result from pandas could not be computed correctly. "
                         f"The exception was {e}."
                     )
                 else:
                     try:
                         print("FAST ", result, type(result))
                         print("SLOW ", slow_result, type(slow_result))
-                        if type(result).__name__ in _CUDF_OBJ_FINAL_TYPES:
+                        print(type(result).__name__)
+                        if type(result).__name__ in _TYPES:
                             assert_eq(result, slow_result)
                     except AssertionError as ae:
                         warnings.warn(
@@ -1182,7 +1183,7 @@ def _replace_closurevars(
     )
 
 
-_CUDF_OBJ_FINAL_TYPES: Set[str] = {
+_TYPES: Set[str] = {
     "Timedelta",
     "Timestamp",
     "DataFrame",
@@ -1290,6 +1291,9 @@ _CUDF_OBJ_FINAL_TYPES: Set[str] = {
     "Flags",
     "NamedAgg",
     "ArrowExtensionArray",
+    "int",
+    "str",
+    "float",
 }
 
 
