@@ -333,16 +333,27 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         if not isinstance(array, (pa.Array, pa.ChunkedArray)):
             raise TypeError("array should be PyArrow array or chunked array")
-
-        data = pa.table([array], [None])
-
-        if (
-            isinstance(array.type, pa.TimestampType)
-            and array.type.tz is not None
-        ):
+        elif pa.types.is_float16(array.type):
+            raise NotImplementedError(
+                "Type casting from `float16` to `float32` is not "
+                "yet supported in pyarrow, see: "
+                "https://github.com/apache/arrow/issues/20213"
+            )
+        elif pa.types.is_timestamp(array.type) and array.type.tz is not None:
             raise NotImplementedError(
                 "cuDF does not yet support timezone-aware datetimes"
             )
+        elif isinstance(array.type, ArrowIntervalType):
+            return cudf.core.column.IntervalColumn.from_arrow(array)
+        elif pa.types.is_large_string(array.type):
+            # Pandas-2.2+: Pandas defaults to `large_string` type
+            # instead of `string` without data-introspection.
+            # Temporary workaround until cudf has native
+            # support for `LARGE_STRING` i.e., 64 bit offsets
+            array = array.cast(pa.string())
+
+        data = pa.table([array], [None])
+
         if isinstance(array.type, pa.DictionaryType):
             indices_table = pa.table(
                 {
@@ -371,8 +382,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 size=codes.size,
                 ordered=array.type.ordered,
             )
-        elif isinstance(array.type, ArrowIntervalType):
-            return cudf.core.column.IntervalColumn.from_arrow(array)
 
         result = libcudf.interop.from_arrow(data)[0]
 
@@ -1809,27 +1818,7 @@ def as_column(
         return col
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
-        if pa.types.is_large_string(arbitrary.type):
-            # Pandas-2.2+: Pandas defaults to `large_string` type
-            # instead of `string` without data-introspection.
-            # Temporary workaround until cudf has native
-            # support for `LARGE_STRING` i.e., 64 bit offsets
-            arbitrary = arbitrary.cast(pa.string())
-
-        if pa.types.is_float16(arbitrary.type):
-            raise NotImplementedError(
-                "Type casting from `float16` to `float32` is not "
-                "yet supported in pyarrow, see: "
-                "https://github.com/apache/arrow/issues/20213"
-            )
-        elif (
-            pa.types.is_timestamp(arbitrary.type)
-            and arbitrary.type.tz is not None
-        ):
-            raise NotImplementedError(
-                "cuDF does not yet support timezone-aware datetimes"
-            )
-        elif (nan_as_null is None or nan_as_null) and pa.types.is_floating(
+        if (nan_as_null is None or nan_as_null) and pa.types.is_floating(
             arbitrary.type
         ):
             arbitrary = pc.if_else(
@@ -1837,31 +1826,12 @@ def as_column(
                 pa.nulls(len(arbitrary), type=arbitrary.type),
                 arbitrary,
             )
+        elif dtype is None and pa.types.is_null(arbitrary.type):
+            # default "empty" type
+            dtype = "str"
         col = ColumnBase.from_arrow(arbitrary)
 
-        if isinstance(arbitrary, pa.NullArray):
-            if dtype is not None:
-                # Cast the column to the `dtype` if specified.
-                new_dtype = dtype
-            elif len(arbitrary) == 0:
-                # If the column is empty, it has to be
-                # a `str` dtype.
-                new_dtype = cudf.dtype("str")
-            else:
-                # If the null column is not empty, it has to
-                # be of `object` dtype.
-                new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
-
-            if cudf.get_option(
-                "mode.pandas_compatible"
-            ) and new_dtype == cudf.dtype("O"):
-                # We internally raise if we do `astype("object")`, hence
-                # need to cast to `str` since this is safe to do so because
-                # it is a null-array.
-                new_dtype = "str"
-
-            col = col.astype(new_dtype)
-        elif dtype is not None:
+        if dtype is not None:
             col = col.astype(dtype)
 
         return col
