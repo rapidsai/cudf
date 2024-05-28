@@ -392,7 +392,13 @@ class Join(IR):
     """List of expressions used as keys in the left frame."""
     right_on: list[expr.Expr]
     """List of expressions used as keys in the right frame."""
-    options: Any
+    options: tuple[
+        Literal["inner", "left", "full", "leftsemi", "leftanti"],
+        bool,
+        tuple[int, int] | None,
+        str | None,
+        bool,
+    ]
     """
     tuple of options:
     - how: join type
@@ -410,7 +416,7 @@ class Join(IR):
     @cache
     @staticmethod
     def _joiners(
-        how: Literal["inner", "left", "outer", "leftsemi", "leftanti"],
+        how: Literal["inner", "left", "full", "leftsemi", "leftanti"],
     ) -> tuple[
         Callable, plc.copying.OutOfBoundsPolicy, plc.copying.OutOfBoundsPolicy | None
     ]:
@@ -426,7 +432,7 @@ class Join(IR):
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
             )
-        elif how == "outer":
+        elif how == "full":
             return (
                 plc.join.full_join,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
@@ -471,7 +477,7 @@ class Join(IR):
             lg, rg = join_fn(left_on.table, right_on.table, null_equality)
             left = left.replace_columns(*left_on.columns)
             right = right.replace_columns(*right_on.columns)
-            if coalesce and how != "outer":
+            if coalesce and how == "inner":
                 right = right.discard_columns(right_on.column_names_set)
             left = DataFrame.from_table(
                 plc.copying.gather(left.table, lg, left_policy), left.column_names
@@ -479,7 +485,7 @@ class Join(IR):
             right = DataFrame.from_table(
                 plc.copying.gather(right.table, rg, right_policy), right.column_names
             )
-            if coalesce and how == "outer":
+            if coalesce and how != "inner":
                 left = left.replace_columns(
                     *(
                         Column(

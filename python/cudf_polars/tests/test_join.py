@@ -14,16 +14,16 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
     [
         "inner",
         "left",
-        "outer",
         "semi",
         "anti",
         pytest.param(
             "cross",
             marks=pytest.mark.xfail(reason="cross join not implemented"),
         ),
-        "outer_coalesce",
+        "full",
     ],
 )
+@pytest.mark.parametrize("coalesce", [False, True])
 @pytest.mark.parametrize(
     "join_nulls", [False, True], ids=["nulls_not_equal", "nulls_equal"]
 )
@@ -32,19 +32,11 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
     [
         pl.col("a"),
         pl.col("a") * 2,
-        [pl.col("a"), pl.col("a") + 1],
+        [pl.col("a"), pl.col("c") + 1],
         ["c", "a"],
     ],
 )
-def test_join(request, how, join_nulls, join_expr):
-    request.applymarker(
-        pytest.mark.xfail(
-            how == "outer_coalesce"
-            and isinstance(join_expr, list)
-            and not isinstance(join_expr[0], str),
-            reason="https://github.com/pola-rs/polars/issues/16289",
-        )
-    )
+def test_join(how, coalesce, join_nulls, join_expr):
     left = pl.DataFrame(
         {
             "a": [1, 2, 3, 1, None],
@@ -59,5 +51,7 @@ def test_join(request, how, join_nulls, join_expr):
         }
     ).lazy()
 
-    query = left.join(right, on=join_expr, how=how, join_nulls=join_nulls)
+    query = left.join(
+        right, on=join_expr, how=how, join_nulls=join_nulls, coalesce=coalesce
+    )
     assert_gpu_result_equal(query, check_row_order=False)

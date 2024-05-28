@@ -249,6 +249,7 @@ def _(node: pl_expr.PyExprIR, visitor: Any, dtype: plc.DataType) -> expr.Expr:
 @_translate_expr.register
 def _(node: pl_expr.Function, visitor: Any, dtype: plc.DataType) -> expr.Expr:
     name, *options = node.function_data
+    options = tuple(options)
     if isinstance(name, pl_expr.StringFunction):
         return expr.StringFunction(
             dtype,

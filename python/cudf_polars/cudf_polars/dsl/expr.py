@@ -367,7 +367,7 @@ class BooleanFunction(Expr):
     __slots__ = ("name", "options", "children")
     _non_child = ("dtype", "name", "options")
 
-    def __init__(self, dtype: plc.DataType, name: str, options: Any, *children: Expr):
+    def __init__(self, dtype: plc.DataType, name: str, options: tuple, *children: Expr):
         super().__init__(dtype)
         self.options = options
         self.name = name
@@ -561,7 +561,7 @@ class StringFunction(Expr):
         self,
         dtype: plc.DataType,
         name: pl_expr.StringFunction,
-        options: Any,
+        options: tuple,
         *children: Expr,
     ):
         super().__init__(dtype)
