@@ -7,11 +7,13 @@ repos:
       - id: trailing-whitespace
         exclude: |
           (?x)^(
+            ^cpp/cmake/thirdparty/patches/.*|
             ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
           )
       - id: end-of-file-fixer
         exclude: |
           (?x)^(
+            ^cpp/cmake/thirdparty/patches/.*|
             ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
           )
   - repo: https://github.com/PyCQA/isort

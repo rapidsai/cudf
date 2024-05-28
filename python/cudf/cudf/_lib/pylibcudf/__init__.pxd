@@ -13,6 +13,7 @@ from . cimport (
     merge,
     reduce,
     replace,
+    reshape,
     rolling,
     round,
     search,
