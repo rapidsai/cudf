@@ -49,7 +49,7 @@ cpdef Column title(
 ):
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = cpp_capitalize.title(input.view())
+        c_result = cpp_capitalize.title(input.view(), sequence_type)
 
     return Column.from_libcudf(move(c_result))
 
