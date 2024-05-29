@@ -107,7 +107,8 @@ def test_series_argsort(nelem, dtype, asc):
     if asc:
         expected = np.argsort(sr.to_numpy(), kind="mergesort")
     else:
-        expected = np.argsort(sr.to_numpy() * -1, kind="mergesort")
+        # -1 multiply works around missing desc sort (may promote to float64)
+        expected = np.argsort(sr.to_numpy() * np.int8(-1), kind="mergesort")
     np.testing.assert_array_equal(expected, res.to_numpy())
 
 
