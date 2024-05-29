@@ -6,6 +6,12 @@ from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
 
 
 cdef extern from "cudf/strings/case.hpp" namespace "cudf::strings" nogil:
+    cdef unique_ptr[column] capitalize(
+        const column_view & input) except +
+
+    cdef unique_ptr[column] is_title(
+        const column_view & input) except +
+
     cdef unique_ptr[column] to_lower(
         const column_view & strings) except +
 
