@@ -224,17 +224,21 @@ std::unique_ptr<column> rescale(column_view input,
 /**
  * @brief Check if a floating point value is convertible to fixed point type.
  *
- * A floating point value is convertible only if:
- *  - It is not `NaN` and `inf`, and
- *  - Its rounded value is within the range that can represented by the target fixed point type.
+ * A floating point value is convertible if it is not null, not `NaN`, and not `inf`.
+ *
+ * Note that convertible input values may still be out of representible range of the target fixed
+ * point type and need to be checked separately.
  */
 template <typename FloatType>
 struct is_convertible_floating_point {
   column_device_view d_input;
-  // TODO: enable_if for only float types
+
   bool __device__ operator()(size_type idx) const
   {
+    static_assert(std::is_floating_point_v<FloatType>);
+
     if (d_input.is_null(idx)) { return false; }
+
     auto const value = d_input.element<FloatType>(idx);
     return !std::isnan(value) && !std::isinf(value);
   }
