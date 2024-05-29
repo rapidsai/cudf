@@ -25,24 +25,11 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/thread_pool.hpp>
 
-#include <rmm/mr/device/pool_memory_resource.hpp>
-#include <rmm/mr/pinned_host_memory_resource.hpp>
-#include <rmm/resource_ref.hpp>
-
 #include <nvtx3/nvtx3.hpp>
 
 #include <nvbench/nvbench.cuh>
 
 #include <vector>
-
-// TODO: remove this once pinned/pooled is enabled by default in cuIO
-void set_cuio_host_pinned_pool()
-{
-  using host_pooled_mr = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
-  static std::shared_ptr<host_pooled_mr> mr = std::make_shared<host_pooled_mr>(
-    std::make_shared<rmm::mr::pinned_host_memory_resource>().get(), 256ul * 1024 * 1024);
-  cudf::io::set_host_memory_resource(*mr);
-}
 
 size_t get_num_reads(nvbench::state const& state) { return state.get_int64("num_threads"); }
 
@@ -104,8 +91,6 @@ void BM_parquet_multithreaded_read_common(nvbench::state& state,
 {
   size_t const data_size = state.get_int64("total_data_size");
   auto const num_threads = state.get_int64("num_threads");
-
-  set_cuio_host_pinned_pool();
 
   auto streams = cudf::detail::fork_streams(cudf::get_default_stream(), num_threads);
   cudf::detail::thread_pool threads(num_threads);
@@ -185,8 +170,6 @@ void BM_parquet_multithreaded_read_chunked_common(nvbench::state& state,
   auto const num_threads    = state.get_int64("num_threads");
   size_t const input_limit  = state.get_int64("input_limit");
   size_t const output_limit = state.get_int64("output_limit");
-
-  set_cuio_host_pinned_pool();
 
   auto streams = cudf::detail::fork_streams(cudf::get_default_stream(), num_threads);
   cudf::detail::thread_pool threads(num_threads);
