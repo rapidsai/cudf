@@ -18,6 +18,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/transform_reduce.h>
 
 namespace cudf::io {
@@ -32,9 +33,9 @@ writer_compression_statistics collect_compression_statistics(
     rmm::exec_policy(stream),
     results.begin(),
     results.end(),
-    [] __device__(auto& res) {
+    cuda::proclaim_return_type<size_t>([] __device__(compression_result const& res) {
       return res.status == compression_status::SUCCESS ? res.bytes_written : 0;
-    },
+    }),
     0ul,
     thrust::plus<size_t>());
 
@@ -47,9 +48,9 @@ writer_compression_statistics collect_compression_statistics(
       rmm::exec_policy(stream),
       zipped_begin,
       zipped_end,
-      [status] __device__(auto tup) {
+      cuda::proclaim_return_type<size_t>([status] __device__(auto tup) {
         return thrust::get<1>(tup).status == status ? thrust::get<0>(tup).size() : 0;
-      },
+      }),
       0ul,
       thrust::plus<size_t>());
   };
