@@ -211,7 +211,7 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   auto chars_bytes = cudf::strings::detail::get_offset_value(
                        offsets, strings_column.offset() + strings_count, stream) -
                      offset;
-  // no byte -- this could happen in an all-empty column
+  // no bytes -- this could happen in an all-empty column
   if (chars_bytes == 0) { return cudf::make_empty_column(cudf::type_id::STRING); }
   auto d_chars =
     strings_column.parent().data<uint8_t>();  // unsigned is necessary for checking bits
@@ -228,18 +228,18 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
     d_chars, chars_bytes, d_count.data());
   auto const num_characters = d_count.value(stream);
 
+  // number of characters becomes the number of rows so need to check the row limit
   CUDF_EXPECTS(
     num_characters + 1 < static_cast<int64_t>(std::numeric_limits<cudf::size_type>::max()),
     "output exceeds the column size limit",
     std::overflow_error);
 
   // create output offsets column
-  // -- conditionally copy a counting iterator where
-  //    the first byte of each character is located
   auto offsets_column = cudf::make_numeric_column(
     offsets.type(), num_characters + 1, cudf::mask_state::UNALLOCATED, stream, mr);
   auto d_new_offsets =
     cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
+  // offsets are at the beginning byte of each character
   cudf::detail::copy_if_safe(
     thrust::counting_iterator<int64_t>(0),
     thrust::counting_iterator<int64_t>(chars_bytes + 1),
