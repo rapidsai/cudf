@@ -41,13 +41,15 @@ using Offset            = flatbuffers::Offset<void>;
 using FBString          = flatbuffers::Offset<flatbuffers::String>;
 
 /**
- * @brief Function to construct a tree of arrow schema fields
+ * @brief Recursively construct the arrow schema (fields) tree
  *
- * @param fbb
- * @param column
- * @param column_metadata
- * @param write_mode
- * @param utc_timestamps
+ * @param fbb The root flatbuffer builder object instance
+ * @param column A view of the column
+ * @param column_metadata Metadata of the column
+ * @param write_mode Flag to indicate that we are guaranteeing a single table write
+ * @param utc_timestamps Flag to indicate if timestamps are UTC
+ *
+ * @return Flatbuffer offset to the constructed field
  */
 FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
                                      cudf::detail::LinkedColPtr const& column,
@@ -56,7 +58,7 @@ FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
                                      bool const utc_timestamps);
 
 /**
- * @brief Functor to convert cudf column metadata to arrow schema
+ * @brief Functor to convert cudf column metadata to arrow schema field metadata
  */
 struct dispatch_to_flatbuf {
   FlatBufferBuilder& fbb;
