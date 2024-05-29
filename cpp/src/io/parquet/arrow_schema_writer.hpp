@@ -72,12 +72,14 @@ using namespace cudf::io::detail;
  * @param metadata Metadata of the columns of the table
  * @param write_mode Flag to indicate that we are guaranteeing a single table write
  * @param utc_timestamps Flag to indicate if timestamps are UTC
+ * @param int96_timestamps Flag to indicate if timestamps was written as INT96
  *
  * @return The constructed arrow ipc message string
  */
 std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector const& linked_columns,
                                                table_input_metadata const& metadata,
                                                single_write_mode const write_mode,
-                                               bool const utc_timestamps);
+                                               bool const utc_timestamps,
+                                               bool const int96_timestamps);
 
 }  // namespace cudf::io::parquet::detail

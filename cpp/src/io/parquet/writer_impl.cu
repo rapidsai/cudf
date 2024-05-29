@@ -1817,7 +1817,9 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       this_table_schema,
       num_columns,
       stats_granularity,
-      construct_arrow_schema_ipc_message(vec, table_meta, write_mode, utc_timestamps));
+      (write_arrow_schema) ? construct_arrow_schema_ipc_message(
+                               vec, table_meta, write_mode, utc_timestamps, int96_timestamps)
+                           : "");
   } else {
     agg_meta = std::make_unique<aggregate_writer_metadata>(*curr_agg_meta);
 

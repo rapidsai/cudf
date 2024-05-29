@@ -1620,7 +1620,13 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
     assert_eq(pdf, gdf)
 
     # Write out the gdf using the GPU accelerated writer with INT96 timestamps
-    gdf.to_parquet(gdf_fname.strpath, index=None, int96_timestamps=True)
+    # INT96 timestamps have been deprecated in Arrow so set `store_schema=False`
+    gdf.to_parquet(
+        gdf_fname.strpath,
+        index=None,
+        int96_timestamps=True,
+        store_schema=False,
+    )
 
     assert os.path.exists(gdf_fname)
 
