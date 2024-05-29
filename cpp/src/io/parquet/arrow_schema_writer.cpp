@@ -15,39 +15,45 @@
  */
 
 /**
- * @file arrow_schema.cpp
+ * @file arrow_schema_writer.cpp
  * @brief Arrow IPC schema writer implementation
  */
 
 #include "arrow_schema_writer.hpp"
 
+#include "io/parquet/parquet_common.hpp"
+#include "io/utilities/base64_utilities.hpp"
+#include "ipc/Message_generated.h"
+#include "ipc/Schema_generated.h"
+
+#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+
 namespace cudf::io::parquet::detail {
+
+// Copied over from arrow source for better code readability
+namespace flatbuf       = cudf::io::parquet::flatbuf;
+using FlatBufferBuilder = flatbuffers::FlatBufferBuilder;
+using DictionaryOffset  = flatbuffers::Offset<flatbuf::DictionaryEncoding>;
+using FieldOffset       = flatbuffers::Offset<flatbuf::Field>;
+using Offset            = flatbuffers::Offset<void>;
+using FBString          = flatbuffers::Offset<flatbuffers::String>;
 
 /**
  * @brief Function to construct a tree of arrow schema fields
+ *
+ * @param fbb
+ * @param column
+ * @param column_metadata
+ * @param write_mode
+ * @param utc_timestamps
  */
 FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
-                                     cudf::detail::LinkedColPtr const& col,
-                                     column_in_metadata const& col_meta,
+                                     cudf::detail::LinkedColPtr const& column,
+                                     column_in_metadata const& column_metadata,
                                      single_write_mode const write_mode,
                                      bool const utc_timestamps);
-
-// TODO: Copied over from ``writer_impl.cu``. Need to placed at a common location to avoid
-// duplication.
-inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
-                            column_in_metadata const& col_meta,
-                            single_write_mode write_mode)
-{
-  if (col_meta.is_nullability_defined()) {
-    CUDF_EXPECTS(col_meta.nullable() or col->null_count() == 0,
-                 "Mismatch in metadata prescribed nullability and input column. "
-                 "Metadata for input column with nulls cannot prescribe nullability = false");
-    return col_meta.nullable();
-  }
-  // For chunked write, when not provided nullability, we assume the worst case scenario
-  // that all columns are nullable.
-  return write_mode == single_write_mode::NO or col->nullable();
-}
 
 /**
  * @brief Functor to convert cudf column metadata to arrow schema
@@ -152,7 +158,7 @@ struct dispatch_to_flatbuf {
   operator()()
   {
     type_type = flatbuf::Type_Timestamp;
-    // TODO: Verify if this is the correct logic
+    // TODO: Verify if this is the correct logic for UTC
     field_offset = flatbuf::CreateTimestamp(
                      fbb, flatbuf::TimeUnit_SECOND, (utc_timestamps) ? fbb.CreateString("UTC") : 0)
                      .Union();
@@ -223,16 +229,17 @@ struct dispatch_to_flatbuf {
   template <typename T>
   std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
   {
-    // TODO: cuDF-PQ writer supports d32 and d64 types not supported by Arrow without conversion.
-    // See more: https://github.com/rapidsai/cudf/blob/branch-24.08/cpp/src/interop/to_arrow.cu#L155
-    //
     if constexpr (std::is_same_v<T, numeric::decimal128>) {
       type_type = flatbuf::Type_Decimal;
       field_offset =
         flatbuf::CreateDecimal(fbb, col_meta.get_decimal_precision(), col->type().scale(), 128)
           .Union();
-    } else {
-      // TODO: Should we fail or just not write arrow:schema anymore?
+    }
+    // cuDF-PQ writer supports ``decimal32`` and ``decimal64`` types, not directly supported by
+    // Arrow without explicit conversion. See more:
+    // https://github.com/rapidsai/cudf/blob/branch-24.08/cpp/src/interop/to_arrow.cu#L155.
+    else {
+      // TODO: Should we fail here or just not write arrow schema?.
       CUDF_FAIL("Fixed point types smaller than `decimal128` are not supported in arrow schema");
     }
   }
@@ -241,15 +248,16 @@ struct dispatch_to_flatbuf {
   std::enable_if_t<cudf::is_nested<T>(), void> operator()()
   {
     // Lists are represented differently in arrow and cuDF.
-    // cuDF representation: List<int>: "col_name" : { "list","element : int" } (2 children)
-    // arrow schema representation: List<int>: "col_name" : { "list<item : int>" } (1 child)
+    // cuDF representation: List<int>: "col_name" : { "list", "element:int" } (2 children)
+    // arrow schema representation: List<int>: "col_name" : { "list<item:int>" } (1 child)
+    // Hence, we only need to process the second child of the list.
     if constexpr (std::is_same_v<T, cudf::list_view>) {
-      // Only need to process the second child (at idx = 1)
       children.emplace_back(make_arrow_schema_fields(
         fbb, col->children[1], col_meta.child(1), write_mode, utc_timestamps));
       type_type    = flatbuf::Type_List;
       field_offset = flatbuf::CreateList(fbb).Union();
     }
+
     // Traverse the struct in DFS manner and process children fields.
     else if constexpr (std::is_same_v<T, cudf::struct_view>) {
       std::transform(thrust::make_counting_iterator(0UL),
@@ -274,8 +282,8 @@ struct dispatch_to_flatbuf {
 };
 
 FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
-                                     cudf::detail::LinkedColPtr const& col,
-                                     column_in_metadata const& col_meta,
+                                     cudf::detail::LinkedColPtr const& column,
+                                     column_in_metadata const& column_metadata,
                                      single_write_mode const write_mode,
                                      bool const utc_timestamps)
 {
@@ -284,13 +292,13 @@ FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
   std::vector<FieldOffset> children;
 
   cudf::type_dispatcher(
-    col->type(),
+    column->type(),
     dispatch_to_flatbuf{
-      fbb, col, col_meta, write_mode, utc_timestamps, field_offset, type_type, children});
+      fbb, column, column_metadata, write_mode, utc_timestamps, field_offset, type_type, children});
 
-  auto const fb_name          = fbb.CreateString(col_meta.get_name());
+  auto const fb_name          = fbb.CreateString(column_metadata.get_name());
   auto const fb_children      = fbb.CreateVector(children.data(), children.size());
-  auto const is_nullable      = is_col_nullable(col, col_meta, write_mode);
+  auto const is_nullable      = is_col_nullable(column, column_metadata, write_mode);
   DictionaryOffset dictionary = 0;
 
   // push to field offsets vector
@@ -298,15 +306,6 @@ FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
     fbb, fb_name, is_nullable, type_type, field_offset, dictionary, fb_children);
 }
 
-/**
- * @brief Construct and return arrow schema from input parquet schema
- *
- * Recursively traverses through parquet schema to construct the arrow schema tree.
- * Serializes the arrow schema tree and stores it as the header (or metadata) of
- * an otherwise empty ipc message using flatbuffers. The ipc message is then prepended
- * with header size (padded for 16 byte alignment) and a continuation string. The final
- * string is base64 encoded and returned.
- */
 std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector const& linked_columns,
                                                table_input_metadata const& metadata,
                                                single_write_mode const write_mode,
@@ -326,14 +325,15 @@ std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector con
   std::vector<FieldOffset> field_offsets;
 
   // populate field offsets (aka schema fields)
-  std::transform(
-    thrust::make_counting_iterator(0UL),
-    thrust::make_counting_iterator(linked_columns.size()),
-    std::back_inserter(field_offsets),
-    [&](auto const idx) {
-      return make_arrow_schema_fields(
-        fbb, linked_columns[idx], metadata.column_metadata[idx], write_mode, utc_timestamps);
-    });
+  std::transform(thrust::make_zip_iterator(
+                   thrust::make_tuple(linked_columns.begin(), metadata.column_metadata.begin())),
+                 thrust::make_zip_iterator(
+                   thrust::make_tuple(linked_columns.end(), metadata.column_metadata.end())),
+                 std::back_inserter(field_offsets),
+                 [&](auto const& elem) {
+                   return make_arrow_schema_fields(
+                     fbb, thrust::get<0>(elem), thrust::get<1>(elem), write_mode, utc_timestamps);
+                 });
 
   // Build an arrow:schema flatbuffer using the field offset vector and use it as the header to
   // create an ipc message flatbuffer

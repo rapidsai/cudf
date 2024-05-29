@@ -599,21 +599,6 @@ struct leaf_schema_fn {
   }
 };
 
-inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
-                            column_in_metadata const& col_meta,
-                            single_write_mode write_mode)
-{
-  if (col_meta.is_nullability_defined()) {
-    CUDF_EXPECTS(col_meta.nullable() or col->null_count() == 0,
-                 "Mismatch in metadata prescribed nullability and input column. "
-                 "Metadata for input column with nulls cannot prescribe nullability = false");
-    return col_meta.nullable();
-  }
-  // For chunked write, when not provided nullability, we assume the worst case scenario
-  // that all columns are nullable.
-  return write_mode == single_write_mode::NO or col->nullable();
-}
-
 /**
  * @brief Construct schema from input columns and per-column input options
  *

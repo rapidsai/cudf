@@ -15,45 +15,49 @@
  */
 
 /**
- * @file arrow_schema.hpp
+ * @file arrow_schema_writer.hpp
  * @brief Arrow IPC schema writer implementation
  */
 
 #pragma once
 
-#include "io/parquet/parquet_common.hpp"
-#include "io/utilities/base64_utilities.hpp"
-#include "ipc/Message_generated.h"
-#include "ipc/Schema_generated.h"
-
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-
-#include <cstdint>
-#include <memory>
 #include <string>
-#include <tuple>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
 
 using namespace cudf::io::detail;
 
-namespace flatbuf = cudf::io::parquet::flatbuf;
-
-using FlatBufferBuilder = flatbuffers::FlatBufferBuilder;
-using DictionaryOffset  = flatbuffers::Offset<flatbuf::DictionaryEncoding>;
-using FieldOffset       = flatbuffers::Offset<flatbuf::Field>;
-using Offset            = flatbuffers::Offset<void>;
-using FBString          = flatbuffers::Offset<flatbuffers::String>;
+/**
+ * @brief Returns ``true`` if the column is nullable or if the write mode is not
+ *        set to write the table all at once instead of chunked
+ *
+ * @param column A view of the column
+ * @param column_metadata Metadata of the column
+ * @param write_mode Flag to indicate that we are guaranteeing a single table write
+ *
+ * @return Whether the column is nullable.
+ */
+[[nodiscard]] inline bool is_col_nullable(cudf::detail::LinkedColPtr const& column,
+                                          column_in_metadata const& column_metadata,
+                                          single_write_mode write_mode)
+{
+  if (column_metadata.is_nullability_defined()) {
+    CUDF_EXPECTS(column_metadata.nullable() or column->null_count() == 0,
+                 "Mismatch in metadata prescribed nullability and input column. "
+                 "Metadata for input column with nulls cannot prescribe nullability = false");
+    return column_metadata.nullable();
+  }
+  // For chunked write, when not provided nullability, we assume the worst case scenario
+  // that all columns are nullable.
+  return write_mode == single_write_mode::NO or column->nullable();
+}
 
 /**
  * @brief Construct and return arrow schema from input parquet schema
@@ -63,6 +67,13 @@ using FBString          = flatbuffers::Offset<flatbuffers::String>;
  * an otherwise empty ipc message using flatbuffers. The ipc message is then prepended
  * with header size (padded for 16 byte alignment) and a continuation string. The final
  * string is base64 encoded and returned.
+ *
+ * @param linked_columns Vector of table column views
+ * @param metadata Metadata of the columns of the table
+ * @param write_mode Flag to indicate that we are guaranteeing a single table write
+ * @param utc_timestamps Flag to indicate if timestamps are UTC
+ *
+ * @return The constructed arrow ipc message string
  */
 std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector const& linked_columns,
                                                table_input_metadata const& metadata,
