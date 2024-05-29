@@ -1399,10 +1399,18 @@ struct nan_equal_physical_equality_comparator {
  */
 template <bool has_nested_columns,
           typename Nullate,
-          typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
+          typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator,
+          template <typename> typename dispatch_conditional_t = cudf::experimental::type_identity_t>
 class device_row_comparator {
   friend class self_comparator;       ///< Allow self_comparator to access private members
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
+
+  template <cudf::type_id T>
+  using dispatch_void_if_nested =
+    nested_conditional<id_to_type<T>, dispatch_conditional_t, dispatch_void_if_nested_t>;
+
+  template <cudf::type_id T>
+  using conditional_t = nested_conditional<id_to_type<T>, dispatch_conditional_t>;
 
  public:
   /**
@@ -1417,7 +1425,7 @@ class device_row_comparator {
                                        size_type const rhs_index) const noexcept
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
-      return cudf::type_dispatcher(
+      return cudf::type_dispatcher<conditional_t>(
         l.type(),
         element_comparator{check_nulls, l, r, nulls_are_equal, comparator},
         lhs_index,
@@ -1719,12 +1727,17 @@ class self_comparator {
    */
   template <bool has_nested_columns,
             typename Nullate,
-            typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
+            typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator,
+            template <typename>
+            typename dispatch_conditional_t = cudf::experimental::type_identity_t>
   auto equal_to(Nullate nullate                       = {},
                 null_equality nulls_are_equal         = null_equality::EQUAL,
                 PhysicalEqualityComparator comparator = {}) const noexcept
   {
-    return device_row_comparator<has_nested_columns, Nullate, PhysicalEqualityComparator>{
+    return device_row_comparator<has_nested_columns,
+                                 Nullate,
+                                 PhysicalEqualityComparator,
+                                 dispatch_conditional_t>{
       nullate, *d_t, *d_t, nulls_are_equal, comparator};
   }
 
@@ -1833,14 +1846,18 @@ class two_table_comparator {
    */
   template <bool has_nested_columns,
             typename Nullate,
-            typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
+            typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator,
+            template <typename>
+            typename dispatch_conditional_t = cudf::experimental::type_identity_t>
   auto equal_to(Nullate nullate                       = {},
                 null_equality nulls_are_equal         = null_equality::EQUAL,
                 PhysicalEqualityComparator comparator = {}) const noexcept
   {
-    return strong_index_comparator_adapter{
-      device_row_comparator<has_nested_columns, Nullate, PhysicalEqualityComparator>(
-        nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)};
+    return strong_index_comparator_adapter{device_row_comparator<has_nested_columns,
+                                                                 Nullate,
+                                                                 PhysicalEqualityComparator,
+                                                                 dispatch_conditional_t>(
+      nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)};
   }
 
  private:
@@ -1920,8 +1937,7 @@ class element_hasher {
  */
 template <template <typename> class hash_function,
           typename Nullate,
-          template <typename>
-          typename dispatch_conditional_t>
+          template <typename> typename dispatch_conditional_t = cudf::experimental::type_identity_t>
 class device_row_hasher {
   friend class row_hasher;  ///< Allow row_hasher to access private members.
   template <cudf::type_id T>
