@@ -19,12 +19,12 @@ from typing import (
     Literal,
     Mapping,
     Optional,
+    Sequence,
     Set,
     Tuple,
     Type,
 )
 
-from cudf.options import _env_get_bool
 from cudf.testing._utils import assert_eq
 
 from ..options import get_option
@@ -33,6 +33,12 @@ from .annotation import nvtx
 
 def call_operator(fn, args, kwargs):
     return fn(*args, **kwargs)
+
+
+DEBUG_MODE = (
+    "mode.pandas_debugging" if get_option("mode.pandas_debugging") else None
+)
+ASSERT_FUNC = None
 
 
 _CUDF_PANDAS_NVTX_COLORS = {
@@ -179,6 +185,8 @@ def make_final_proxy_type(
             lambda cls, args, kwargs: setattr(
                 self, "_fsproxy_wrapped", cls(*args, **kwargs)
             ),
+            DEBUG_MODE,
+            ASSERT_FUNC,
             type(self),
             args,
             kwargs,
@@ -708,6 +716,8 @@ class _CallableProxyMixin:
             # TODO: When Python 3.11 is the minimum supported Python version
             # this can use operator.call
             call_operator,
+            DEBUG_MODE,
+            ASSERT_FUNC,
             self,
             args,
             kwargs,
@@ -821,7 +831,7 @@ class _FastSlowAttribute:
             else:
                 # for anything else, use a fast-slow attribute:
                 self._attr, _ = _fast_slow_function_call(
-                    getattr, owner, self._name
+                    getattr, DEBUG_MODE, ASSERT_FUNC, owner, self._name
                 )
 
                 if isinstance(
@@ -842,9 +852,9 @@ class _FastSlowAttribute:
                         getattr(instance._fsproxy_slow, self._name),
                         None,  # type: ignore
                     )
-                return _fast_slow_function_call(getattr, instance, self._name)[
-                    0
-                ]
+                return _fast_slow_function_call(
+                    getattr, DEBUG_MODE, ASSERT_FUNC, instance, self._name
+                )[0]
         return self._attr
 
 
@@ -879,13 +889,22 @@ class _MethodProxy(_FunctionProxy):
         setattr(self._fsproxy_slow, "__name__", value)
 
 
+def _assert_fast_slow_eq(left, right, **kwargs):
+    assert_func = (
+        assert_eq
+        if not kwargs.get("assert_func")
+        else kwargs.get("assert_func")
+    )
+    if type(left).__name__ in _TYPES:
+        assert_func(left, right)
+
+
 def _fast_slow_function_call(
     func: Callable,
-    /,
-    *args,
-    debug_mode: str = "mode.pandas_debugging",
-    assert_func: Callable = assert_eq,
-    **kwargs,
+    debug_mode: str | None = None,
+    assert_func: Callable | None = None,
+    *args: Sequence[Any],
+    **kwargs: Mapping[Any, Any],
 ) -> Any:
     """
     Call `func` with all `args` and `kwargs` converted to their
@@ -911,12 +930,10 @@ def _fast_slow_function_call(
                 raise Exception()
             fast = True
 
-            if get_option(debug_mode) | _env_get_bool(
-                "CUDF_PANDAS_DEBUG", False
-            ):
+            if get_option(debug_mode):
                 try:
                     with nvtx.annotate(
-                        "EXECUTE_SLOW",
+                        "EXECUTE_SLOW_DEBUG",
                         color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
                         domain="cudf_pandas",
                     ):
@@ -928,17 +945,18 @@ def _fast_slow_function_call(
                             slow_result = func(*slow_args, **slow_kwargs)
                 except Exception as e:
                     warnings.warn(
-                        "The result from pandas could not be computed correctly. "
+                        "The result from pandas could not be computed. "
                         f"The exception was {e}."
                     )
                 else:
                     try:
-                        if type(result).__name__ in _TYPES:
-                            assert_func(result, slow_result)
-                    except AssertionError as ae:
+                        _assert_fast_slow_eq(
+                            result, slow_result, assert_func=assert_func
+                        )
+                    except AssertionError as e:
                         warnings.warn(
                             "The results from cudf and pandas were different. "
-                            f"The exception was {ae}."
+                            f"The exception was {e}."
                         )
                     except Exception as e:
                         warnings.warn(
