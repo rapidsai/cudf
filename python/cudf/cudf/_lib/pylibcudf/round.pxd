@@ -3,9 +3,6 @@ from libc.stdint cimport int32_t
 
 from cudf._lib.pylibcudf.libcudf.round cimport rounding_method
 
-from cudf._lib.pylibcudf.libcudf.round import \
-    rounding_method as RoundingMethod  # no-cython-lint
-
 from .column cimport Column
 
 
