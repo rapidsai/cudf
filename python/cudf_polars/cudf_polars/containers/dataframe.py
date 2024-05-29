@@ -43,6 +43,10 @@ class DataFrame:
         else:
             self.table = None
 
+    def copy(self) -> Self:
+        """Return a shallow copy of self."""
+        return type(self)(self.columns, self.scalars)
+
     def to_polars(self) -> pl.DataFrame:
         """Convert to a polars DataFrame."""
         assert len(self.scalars) == 0
