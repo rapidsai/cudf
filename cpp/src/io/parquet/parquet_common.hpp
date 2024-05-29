@@ -31,6 +31,9 @@ constexpr int32_t MESSAGE_DECODER_NEXT_REQUIRED_SIZE_INITIAL         = sizeof(in
 constexpr int32_t MESSAGE_DECODER_NEXT_REQUIRED_SIZE_METADATA_LENGTH = sizeof(int32_t);
 constexpr int32_t IPC_CONTINUATION_TOKEN                             = -1;
 
+// Schema type ipc message has zero length body
+constexpr int64_t SCHEMA_HEADER_TYPE_IPC_MESSAGE_BODYLENGTH = 0;
+
 /**
  * @brief Basic data types in Parquet, determines how data is physically stored
  */

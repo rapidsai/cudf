@@ -3372,31 +3372,28 @@ def test_parquet_reader_roundtrip_with_arrow_schema():
 def test_parquet_reader_roundtrip_structs_with_arrow_schema():
     # Ensure that the structs with duration types are faithfully being
     # roundtripped across Parquet with arrow schema
-    pdf = pd.DataFrame(
-        {
-            "struct": {
-                "payload": {
-                    "Domain": {
-                        "Name": "abc",
-                        "Id": {"Name": "host", "Value": "127.0.0.8"},
-                        "Duration": datetime.timedelta(minutes=12),
-                    },
-                    "StreamId": "12345678",
-                    "Duration": datetime.timedelta(minutes=4),
-                    "Offset": None,
-                    "Resource": [
-                        {
-                            "Name": "ZoneName",
-                            "Value": "RAPIDS",
-                            "Duration": datetime.timedelta(seconds=1),
-                        }
-                    ],
+    data = {
+        "payload": {
+            "Domain": {
+                "Name": "abc",
+                "Id": {"Name": "host", "Value": "127.0.0.8"},
+                "Duration": datetime.timedelta(minutes=12),
+            },
+            "StreamId": "12345678",
+            "Duration": datetime.timedelta(minutes=4),
+            "Offset": None,
+            "Resource": [
+                {
+                    "Name": "ZoneName",
+                    "Value": "RAPIDS",
+                    "Duration": datetime.timedelta(seconds=1),
                 }
-            }
+            ],
         }
-    )
+    }
 
-    # Reset the buffer and write parquet with arrow
+    pdf = pd.DataFrame({"struct": pd.Series(data)})
+
     buffer = BytesIO()
     pdf.to_parquet(buffer, engine="pyarrow")
 
@@ -3407,3 +3404,136 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema():
 
     # Check results
     assert_eq(expected, got)
+
+
+def test_parquet_writer_roundtrip_with_arrow_schema():
+    expected = cudf.DataFrame(
+        {
+            "s": cudf.Series([None, None, None], dtype="timedelta64[s]"),
+            "ms": cudf.Series([1234, None, 32442], dtype="timedelta64[ms]"),
+            "us": cudf.Series([None, 3456, None], dtype="timedelta64[us]"),
+            "ns": cudf.Series([1234, 3456, 32442], dtype="timedelta64[ns]"),
+            "duration_list": list(
+                [
+                    [
+                        datetime.timedelta(minutes=7, seconds=4),
+                        datetime.timedelta(minutes=7),
+                    ],
+                    [
+                        None,
+                        None,
+                    ],
+                    [
+                        datetime.timedelta(minutes=7, seconds=4),
+                        None,
+                    ],
+                ]
+            ),
+            "int64": cudf.Series([1234, 123, 4123], dtype="int64"),
+            "int64_list": list([[1, 2], [1, 2], [1, 2]]),
+            "datetime": cudf.Series([1234, 123, 4123], dtype="datetime64[ms]"),
+            "map": cudf.Series(["cat", "dog", "lion"]).map(
+                {"cat": "kitten", "dog": "puppy", "lion": "cub"}
+            ),
+        }
+    )
+
+    buffer = BytesIO()
+    expected.to_parquet(buffer)
+    read = cudf.DataFrame.from_arrow(pq.read_table(buffer))
+
+    assert_eq(expected, read)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        # struct
+        [
+            {"a": 1, "b": 2},
+            {"a": 10, "b": 20},
+            {"a": None, "b": 22},
+            {"a": None, "b": None},
+            {"a": 15, "b": None},
+        ],
+        # struct-of-list
+        [
+            {"a": 1, "b": 2, "c": [1, 2, 3]},
+            {"a": 10, "b": 20, "c": [4, 5]},
+            {"a": None, "b": 22, "c": [6]},
+            {"a": None, "b": None, "c": None},
+            {"a": 15, "b": None, "c": [-1, -2]},
+            None,
+            {"a": 100, "b": 200, "c": [-10, None, -20]},
+        ],
+        # list-of-struct
+        [
+            [{"a": 1, "b": 2}, {"a": 2, "b": 3}, {"a": 4, "b": 5}],
+            None,
+            [{"a": 10, "b": 20}],
+            [{"a": 100, "b": 200}, {"a": None, "b": 300}, None],
+        ],
+        # struct-of-struct
+        [
+            {"a": 1, "b": {"inner_a": 10, "inner_b": 20}, "c": 2},
+            {"a": 3, "b": {"inner_a": 30, "inner_b": 40}, "c": 4},
+            {"a": 5, "b": {"inner_a": 50, "inner_b": None}, "c": 6},
+            {"a": 7, "b": None, "c": 8},
+            {"a": None, "b": {"inner_a": None, "inner_b": None}, "c": None},
+            None,
+            {"a": None, "b": {"inner_a": None, "inner_b": 100}, "c": 10},
+        ],
+        # struct-with-mixed-types
+        [
+            {
+                "struct": {
+                    "payload": {
+                        "Domain": {
+                            "Name": "abc",
+                            "Id": {"Name": "host", "Value": "127.0.0.8"},
+                            "Duration": datetime.timedelta(minutes=12),
+                        },
+                        "StreamId": "12345678",
+                        "Duration": datetime.timedelta(minutes=4),
+                        "Offset": None,
+                        "Resource": [
+                            {
+                                "Name": "ZoneName",
+                                "Value": "RAPIDS",
+                                "Duration": datetime.timedelta(seconds=1),
+                            }
+                        ],
+                    }
+                }
+            }
+        ],
+    ],
+)
+def test_parquet_writer_roundtrip_structs_with_arrow_schema(tmpdir, data):
+    # Ensure that the structs are faithfully being roundtripped across
+    # Parquet with arrow schema
+    pa_expected = pa.Table.from_pydict({"struct": data})
+
+    expected = cudf.DataFrame.from_arrow(pa_expected)
+
+    # IO buffer
+    buffer = BytesIO()
+
+    # Write expected data frame to Parquet
+    expected.to_parquet(buffer)
+
+    # Read Parquet with pyarrow
+    pa_got = pq.read_table(buffer)
+
+    # Check results
+    assert_eq(pa_expected, pa_got)
+
+    # Convert to cuDF table and also read Parquet with cuDF reader
+    got = cudf.DataFrame.from_arrow(pa_got)
+    got2 = cudf.read_parquet(buffer)
+
+    # Check results
+    assert_eq(expected, got)
+    assert_eq(expected, got2)
+
+

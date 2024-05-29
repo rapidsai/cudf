@@ -66,7 +66,7 @@ using FBString          = flatbuffers::Offset<flatbuffers::String>;
  */
 std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector const& linked_columns,
                                                table_input_metadata const& metadata,
-                                               single_write_mode write_mode,
-                                               bool utc_timestamps);
+                                               single_write_mode const write_mode,
+                                               bool const utc_timestamps);
 
 }  // namespace cudf::io::parquet::detail

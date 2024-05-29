@@ -52,7 +52,7 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
   return write_mode == single_write_mode::NO or col->nullable();
 }
 
-// Helper class copied over from Arrow source. Do we need it even?
+// TODO: Helper class copied over from Arrow source. Do we need it even?
 class FieldPosition {
  public:
   FieldPosition() : _parent(nullptr), _index(-1), _depth(0) {}
@@ -184,7 +184,8 @@ struct dispatch_to_flatbuf {
                    void>
   operator()()
   {
-    type_type    = flatbuf::Type_Timestamp;
+    type_type = flatbuf::Type_Timestamp;
+    // TODO: Verify if this is the correct logic
     field_offset = flatbuf::CreateTimestamp(
                      fbb, flatbuf::TimeUnit_SECOND, (utc_timestamps) ? fbb.CreateString("UTC") : 0)
                      .Union();
@@ -194,6 +195,7 @@ struct dispatch_to_flatbuf {
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ms>, void> operator()()
   {
     type_type = flatbuf::Type_Timestamp;
+    // TODO: Verify if this is the correct logic for UTC
     field_offset =
       flatbuf::CreateTimestamp(
         fbb, flatbuf::TimeUnit_MILLISECOND, (utc_timestamps) ? fbb.CreateString("UTC") : 0)
@@ -204,6 +206,7 @@ struct dispatch_to_flatbuf {
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_us>, void> operator()()
   {
     type_type = flatbuf::Type_Timestamp;
+    // TODO: Verify if this is the correct logic for UTC
     field_offset =
       flatbuf::CreateTimestamp(
         fbb, flatbuf::TimeUnit_MICROSECOND, (utc_timestamps) ? fbb.CreateString("UTC") : 0)
@@ -214,6 +217,7 @@ struct dispatch_to_flatbuf {
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
   {
     type_type = flatbuf::Type_Timestamp;
+    // TODO: Verify if this is the correct logic for UTC
     field_offset =
       flatbuf::CreateTimestamp(
         fbb, flatbuf::TimeUnit_NANOSECOND, (utc_timestamps) ? fbb.CreateString("UTC") : 0)
@@ -252,43 +256,52 @@ struct dispatch_to_flatbuf {
   template <typename T>
   std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
   {
+    // TODO: cuDF-PQ writer supports d32 and d64 types not supported by Arrow without conversion.
+    // See more: https://github.com/rapidsai/cudf/blob/branch-24.08/cpp/src/interop/to_arrow.cu#L155
+    //
     if (std::is_same_v<T, numeric::decimal128>) {
       type_type = flatbuf::Type_Decimal;
       field_offset =
         flatbuf::CreateDecimal(fbb, col_meta.get_decimal_precision(), col->type().scale(), 128)
           .Union();
     } else {
-      CUDF_FAIL("fixed point type other than decimal128 not supported for arrow schema");
+      // TODO: Should we fail or just not write arrow:schema anymore?
+      CUDF_FAIL("Fixed point types other than decimal128 are not supported for arrow schema");
     }
   }
 
   template <typename T>
   std::enable_if_t<cudf::is_nested<T>(), void> operator()()
   {
-    // TODO: Handle list and struct types. Remember, Lists are different in arrow schema and PQ
-    // schema pq schema. List<int> in PQ schema:  "column_name" : { "list" : { "element" }} in
-    // List<int> in arrow schema: "column_name" : { "list<element>" }
-    // TODO: Arrow expects only 1 child for Lists and Structs. How and Why?
-    std::transform(thrust::make_counting_iterator(0ul),
-                   thrust::make_counting_iterator(col->children.size()),
-                   std::back_inserter(children),
-                   [&](auto const idx) {
-                     return make_arrow_schema_fields(fbb,
-                                                     field_position.child(idx),
-                                                     col->children[idx],
-                                                     col_meta.child(idx),
+    // Lists are represented differently in arrow and cuDF.
+    // cuDF representation: List<int>: "col_name" : { "list" : { "element" }} (2 children)
+    // arrow schema representation: List<int>: "col_name" : { "list<item>" } (1 child)
+    if constexpr (std::is_same_v<T, cudf::list_view>) {
+      // Only need to process the second child (at idx = 1)
+      children.emplace_back(make_arrow_schema_fields(fbb,
+                                                     field_position.child(0),
+                                                     col->children[1],
+                                                     col_meta.child(1),
                                                      write_mode,
-                                                     utc_timestamps);
-                   });
-
-    if (std::is_same_v<T, cudf::list_view>) {
+                                                     utc_timestamps));
       type_type    = flatbuf::Type_List;
       field_offset = flatbuf::CreateList(fbb).Union();
-    } else if (std::is_same_v<T, cudf::struct_view>) {
+    }
+    // Traverse the struct in DFS manner and process children fields.
+    else if constexpr (std::is_same_v<T, cudf::struct_view>) {
+      std::transform(thrust::make_counting_iterator(0UL),
+                     thrust::make_counting_iterator(col->children.size()),
+                     std::back_inserter(children),
+                     [&](auto const idx) {
+                       return make_arrow_schema_fields(fbb,
+                                                       field_position.child(idx),
+                                                       col->children[idx],
+                                                       col_meta.child(idx),
+                                                       write_mode,
+                                                       utc_timestamps);
+                     });
       type_type    = flatbuf::Type_Struct_;
       field_offset = flatbuf::CreateStruct_(fbb).Union();
-    } else {
-      CUDF_FAIL("Unexpected nested type");
     }
   }
 
@@ -352,10 +365,13 @@ std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector con
     return std::string(reinterpret_cast<char*>(buffer.data()), buffer.size());
   };
 
-  // intantiate a flatbuffer builder
+  // Intantiate a flatbuffer builder
   FlatBufferBuilder fbb;
 
+  // Instantiate a field position mapper struct (not sure if needed yet?)
   FieldPosition field_position;
+
+  // Create an empty field offset vector
   std::vector<FieldOffset> field_offsets;
 
   // populate field offsets (aka schema fields)
@@ -371,32 +387,25 @@ std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector con
                                                    utc_timestamps);
                  });
 
-  // Create a flatbuffer vector from the field offset vector
-  auto const fb_offsets = fbb.CreateVector(field_offsets);
+  // Build an arrow:schema flatbuffer using the field offset vector and use it as the header to
+  // create an ipc message flatbuffer
+  fbb.Finish(flatbuf::CreateMessage(
+    fbb,
+    flatbuf::MetadataVersion_V5,   /* Metadata version V5 (latest) */
+    flatbuf::MessageHeader_Schema, /* Schema type message header */
+    flatbuf::CreateSchema(
+      fbb, flatbuf::Endianness::Endianness_Little, fbb.CreateVector(field_offsets))
+      .Union(),                               /* Build an arrow:schema from the field vector */
+    SCHEMA_HEADER_TYPE_IPC_MESSAGE_BODYLENGTH /* Body length is zero for schema type ipc message */
+    ));
 
-  // Create an arrow:schema flatbuffer
-  flatbuffers::Offset<flatbuf::Schema> const fb_schema =
-    flatbuf::CreateSchema(fbb, flatbuf::Endianness::Endianness_Little, fb_offsets);
-
-  // Schema type message has zero length body
-  constexpr int64_t bodylength = 0;
-
-  // Create an ipc message flatbuffer
-  auto const ipc_message_flatbuffer = flatbuf::CreateMessage(
-    fbb, flatbuf::MetadataVersion_V5, flatbuf::MessageHeader_Schema, fb_schema.Union(), bodylength);
-
-  // All done, finish building flatbuffers
-  fbb.Finish(ipc_message_flatbuffer);
-
-  // Since the ipc message doesn't have a body or other custom key value metadata,
-  //  its size is equal to the size of its header (the schema flatbuffer)
-  int32_t const metadata_len = fbb.GetSize();
-
-  // Construct the final string and store in this variable here to use in base64_encode
+  // Construct the final string and store it here to use its view in base64_encode
   std::string const ipc_message =
     convert_int32_to_byte_string(IPC_CONTINUATION_TOKEN) +
-    convert_int32_to_byte_string(metadata_len) +
-    std::string(reinterpret_cast<char*>(fbb.GetBufferPointer()), metadata_len);
+    // Since the schema type ipc message doesn't have a body, the flatbuffer size is equal to the
+    // ipc message's metadata length
+    convert_int32_to_byte_string(fbb.GetSize()) +
+    std::string(reinterpret_cast<char*>(fbb.GetBufferPointer()), fbb.GetSize());
 
   // Encode the final ipc message string to base64 and return
   return cudf::io::detail::base64_encode(ipc_message);
