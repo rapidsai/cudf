@@ -22,7 +22,9 @@ cpdef Column round(
     rounding_method round_method = rounding_method.HALF_UP
 ):
     """Rounds all the values in a column to the specified number of decimal places.
-        For details, see :cpp:func:`round`.
+
+    For details, see :cpp:func:`round`.
+
     Parameters
     ----------
     source : Column
