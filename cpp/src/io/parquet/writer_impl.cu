@@ -517,37 +517,37 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
   {
-    col_schema.type       = Type::INT64;
-    col_schema.arrow_type = cudf::type_id::DURATION_SECONDS;
-    col_schema.ts_scale   = 24 * 60 * 60;
+    col_schema.type        = Type::INT64;
+    col_schema.stats_dtype = statistics_dtype::dtype_int64;
+    col_schema.ts_scale    = 24 * 60 * 60;
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
   {
-    col_schema.type       = Type::INT64;
-    col_schema.arrow_type = cudf::type_id::DURATION_SECONDS;
+    col_schema.type        = Type::INT64;
+    col_schema.stats_dtype = statistics_dtype::dtype_int64;
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
   {
-    col_schema.type       = Type::INT64;
-    col_schema.arrow_type = cudf::type_id::DURATION_MILLISECONDS;
+    col_schema.type        = Type::INT64;
+    col_schema.stats_dtype = statistics_dtype::dtype_int64;
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_us>, void> operator()()
   {
-    col_schema.type       = Type::INT64;
-    col_schema.arrow_type = cudf::type_id::DURATION_MICROSECONDS;
+    col_schema.type        = Type::INT64;
+    col_schema.stats_dtype = statistics_dtype::dtype_int64;
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ns>, void> operator()()
   {
-    col_schema.type       = Type::INT64;
-    col_schema.arrow_type = cudf::type_id::DURATION_NANOSECONDS;
+    col_schema.type        = Type::INT64;
+    col_schema.stats_dtype = statistics_dtype::dtype_int64;
   }
 
   template <typename T>
