@@ -38,80 +38,55 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
-
-std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, nanoarrow::UniqueArray>
-get_nanoarrow_tables(cudf::size_type length)
+std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, generated_test_data>
+get_nanoarrow_cudf_table(cudf::size_type length)
 {
-  std::vector<int64_t> int64_data(length);
-  std::vector<bool> bool_data(length);
-  std::vector<std::string> string_data(length);
-  std::vector<uint8_t> validity(length);
-  std::vector<bool> bool_validity(length);
-  std::vector<uint8_t> bool_data_validity;
-  cudf::size_type length_of_individual_list = 3;
-  cudf::size_type length_of_list            = length_of_individual_list * length;
-  std::vector<int64_t> list_int64_data(length_of_list);
-  std::vector<uint8_t> list_int64_data_validity(length_of_list);
-  std::vector<int32_t> list_offsets(length + 1);
+  generated_test_data test_data(length);
 
   std::vector<std::unique_ptr<cudf::column>> columns;
 
-  std::generate(int64_data.begin(), int64_data.end(), []() { return rand() % 500000; });
-  std::generate(list_int64_data.begin(), list_int64_data.end(), []() { return rand() % 500000; });
-  auto validity_generator = []() { return rand() % 7 != 0; };
-  std::generate(
-    list_int64_data_validity.begin(), list_int64_data_validity.end(), validity_generator);
-  std::generate(
-    list_offsets.begin(), list_offsets.end(), [length_of_individual_list, n = 0]() mutable {
-      return (n++) * length_of_individual_list;
-    });
-  std::generate(bool_data.begin(), bool_data.end(), validity_generator);
-  std::generate(
-    string_data.begin(), string_data.end(), []() { return rand() % 7 != 0 ? "CUDF" : "Rocks"; });
-  std::generate(validity.begin(), validity.end(), validity_generator);
-  std::generate(bool_validity.begin(), bool_validity.end(), validity_generator);
-
-  std::transform(bool_validity.cbegin(),
-                 bool_validity.cend(),
-                 std::back_inserter(bool_data_validity),
-                 [](auto val) { return static_cast<uint8_t>(val); });
-
-  columns.emplace_back(cudf::test::fixed_width_column_wrapper<int64_t>(
-                         int64_data.begin(), int64_data.end(), validity.begin())
+  columns.emplace_back(cudf::test::fixed_width_column_wrapper<int64_t>(test_data.int64_data.begin(),
+                                                                       test_data.int64_data.end(),
+                                                                       test_data.validity.begin())
                          .release());
-  columns.emplace_back(
-    cudf::test::strings_column_wrapper(string_data.begin(), string_data.end(), validity.begin())
-      .release());
+  columns.emplace_back(cudf::test::strings_column_wrapper(test_data.string_data.begin(),
+                                                          test_data.string_data.end(),
+                                                          test_data.validity.begin())
+                         .release());
   auto col4 = cudf::test::fixed_width_column_wrapper<int64_t>(
-    int64_data.begin(), int64_data.end(), validity.begin());
+    test_data.int64_data.begin(), test_data.int64_data.end(), test_data.validity.begin());
   auto dict_col = cudf::dictionary::encode(col4);
   columns.emplace_back(std::move(cudf::dictionary::encode(col4)));
-  columns.emplace_back(cudf::test::fixed_width_column_wrapper<bool>(
-                         bool_data.begin(), bool_data.end(), bool_validity.begin())
+  columns.emplace_back(cudf::test::fixed_width_column_wrapper<bool>(test_data.bool_data.begin(),
+                                                                    test_data.bool_data.end(),
+                                                                    test_data.bool_validity.begin())
                          .release());
-  auto list_child_column = cudf::test::fixed_width_column_wrapper<int64_t>(
-    list_int64_data.begin(), list_int64_data.end(), list_int64_data_validity.begin());
-  auto list_offsets_column =
-    cudf::test::fixed_width_column_wrapper<int32_t>(list_offsets.begin(), list_offsets.end());
+  auto list_child_column =
+    cudf::test::fixed_width_column_wrapper<int64_t>(test_data.list_int64_data.begin(),
+                                                    test_data.list_int64_data.end(),
+                                                    test_data.list_int64_data_validity.begin());
+  auto list_offsets_column = cudf::test::fixed_width_column_wrapper<int32_t>(
+    test_data.list_offsets.begin(), test_data.list_offsets.end());
   auto [list_mask, list_nulls] = cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>(
-    bool_data_validity.begin(), bool_data_validity.end()));
+    test_data.bool_data_validity.begin(), test_data.bool_data_validity.end()));
   columns.emplace_back(cudf::make_lists_column(length,
                                                list_offsets_column.release(),
                                                list_child_column.release(),
                                                list_nulls,
                                                std::move(*list_mask)));
-  auto int_column = cudf::test::fixed_width_column_wrapper<int64_t>(
-                      int64_data.begin(), int64_data.end(), validity.begin())
-                      .release();
+  auto int_column =
+    cudf::test::fixed_width_column_wrapper<int64_t>(
+      test_data.int64_data.begin(), test_data.int64_data.end(), test_data.validity.begin())
+      .release();
   auto str_column =
-    cudf::test::strings_column_wrapper(string_data.begin(), string_data.end(), validity.begin())
+    cudf::test::strings_column_wrapper(
+      test_data.string_data.begin(), test_data.string_data.end(), test_data.validity.begin())
       .release();
   vector_of_columns cols;
   cols.push_back(move(int_column));
   cols.push_back(move(str_column));
   auto [null_mask, null_count] = cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>(
-    bool_data_validity.begin(), bool_data_validity.end()));
+    test_data.bool_data_validity.begin(), test_data.bool_data_validity.end()));
   columns.emplace_back(
     cudf::make_structs_column(length, std::move(cols), null_count, std::move(*null_mask)));
 
@@ -198,21 +173,30 @@ get_nanoarrow_tables(cudf::size_type length)
     schema->children[5]->flags = 0;
   }
 
+  return std::make_tuple(
+    std::make_unique<cudf::table>(std::move(columns)), std::move(schema), std::move(test_data));
+}
+
+std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, nanoarrow::UniqueArray>
+get_nanoarrow_tables(cudf::size_type length)
+{
+  auto [table, schema, test_data] = get_nanoarrow_cudf_table(length);
+
   nanoarrow::UniqueArray arrow;
   NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(arrow.get(), schema.get(), nullptr));
   arrow->length = length;
 
-  populate_from_col<int64_t>(arrow->children[0], columns[0]->view());
-  populate_from_col<cudf::string_view>(arrow->children[1], columns[1]->view());
-  populate_dict_from_col<int64_t, uint32_t>(arrow->children[2],
-                                            cudf::dictionary_column_view(columns[2]->view()));
+  populate_from_col<int64_t>(arrow->children[0], table->get_column(0).view());
+  populate_from_col<cudf::string_view>(arrow->children[1], table->get_column(1).view());
+  populate_dict_from_col<int64_t, uint32_t>(
+    arrow->children[2], cudf::dictionary_column_view(table->get_column(2).view()));
 
-  populate_from_col<bool>(arrow->children[3], columns[3]->view());
-  cudf::lists_column_view list_view{columns[4]->view()};
+  populate_from_col<bool>(arrow->children[3], table->get_column(3).view());
+  cudf::lists_column_view list_view{table->get_column(4).view()};
   populate_list_from_col(arrow->children[4], list_view);
   populate_from_col<int64_t>(arrow->children[4]->children[0], list_view.child());
 
-  cudf::structs_column_view struct_view{columns[5]->view()};
+  cudf::structs_column_view struct_view{table->get_column(5).view()};
   populate_from_col<int64_t>(arrow->children[5]->children[0], struct_view.child(0));
   populate_from_col<cudf::string_view>(arrow->children[5]->children[1], struct_view.child(1));
   arrow->children[5]->length     = struct_view.size();
@@ -231,8 +215,7 @@ get_nanoarrow_tables(cudf::size_type length)
     CUDF_FAIL("failed to build example arrays");
   }
 
-  return std::make_tuple(
-    std::make_unique<cudf::table>(std::move(columns)), std::move(schema), std::move(arrow));
+  return std::make_tuple(std::move(table), std::move(schema), std::move(arrow));
 }
 
 // populate an ArrowArray list array from device buffers using a no-op
