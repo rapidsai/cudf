@@ -7,34 +7,32 @@ from utils import assert_column_eq
 import cudf._lib.pylibcudf as plc
 
 
-@pytest.fixture(scope="module")
-def pa_round_data():
-    pa_arr = pa.array([1.5, 2.5, 1.35, 1.45, 15, 25], type=pa.float64())
-    return pa_arr
+@pytest.fixture(params=[False, True])
+def nullable(request):
+    return request.param
 
 
-@pytest.fixture(scope="module")
-def plc_round_data(pa_round_data):
-    return plc.interop.from_arrow(pa_round_data)
+@pytest.fixture(params=["float32", "float64"])
+def column(request, nullable):
+    values = [2.5, 2.49, 1.6, 8, -1.5, -1.7, -0.5, 0.5]
+    typ = {"float32": pa.float32(), "float64": pa.float64()}[request.param]
+    if nullable:
+        values[2] = None
+    return plc.interop.from_arrow(pa.array(values, type=typ))
 
 
-@pytest.mark.parametrize("decimal_places", [0, 1, 10])
 @pytest.mark.parametrize(
-    "round_mode",
-    [
-        ("half_up", plc.round.RoundingMethod.HALF_UP),
-        ("half_to_even", plc.round.RoundingMethod.HALF_EVEN),
-    ],
+    "round_mode", ["half_towards_infinity", "half_to_even"]
 )
-def test_round(pa_round_data, plc_round_data, decimal_places, round_mode):
-    pa_round_mode, plc_round_mode = round_mode
-    res = plc.round.round(
-        plc_round_data,
-        decimal_places=decimal_places,
-        round_method=plc_round_mode,
-    )
-    expected = pa.compute.round(
-        pa_round_data, ndigits=decimal_places, round_mode=pa_round_mode
+@pytest.mark.parametrize("decimals", [0, 1, 2, 5])
+def test_round(column, round_mode, decimals):
+    method = {
+        "half_towards_infinity": plc.round.RoundingMethod.HALF_UP,
+        "half_to_even": plc.round.RoundingMethod.HALF_EVEN,
+    }[round_mode]
+    got = plc.round.round(column, decimals, method)
+    expect = pa.compute.round(
+        plc.interop.to_arrow(column), decimals, round_mode
     )
 
-    assert_column_eq(res, expected)
+    assert_column_eq(got, expect)
