@@ -15,12 +15,11 @@
 set(cython_sources aggregation.pyx binaryop.pyx copying.pyx replace.pyx reduce.pxd
                    stream_compaction.pyx types.pyx unary.pyx
 )
-add_subdirectory(strings)
 
 set(linked_libraries cudf::cudf)
-
 rapids_cython_create_modules(
   CXX
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" ASSOCIATED_TARGETS cudf MODULE_PREFIX cpp
 )
+add_subdirectory(strings)
