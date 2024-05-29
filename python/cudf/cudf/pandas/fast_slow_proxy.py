@@ -884,6 +884,7 @@ def _fast_slow_function_call(
     /,
     *args,
     debug_mode: str = "mode.pandas_debugging",
+    assert_func: Callable = assert_eq,
     **kwargs,
 ) -> Any:
     """
@@ -933,7 +934,7 @@ def _fast_slow_function_call(
                 else:
                     try:
                         if type(result).__name__ in _TYPES:
-                            assert_eq(result, slow_result)
+                            assert_func(result, slow_result)
                     except AssertionError as ae:
                         warnings.warn(
                             "The results from cudf and pandas were different. "
