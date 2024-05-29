@@ -1,5 +1,6 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint32_t
 from libcpp.memory cimport unique_ptr
 
 from cudf._lib.pylibcudf.libcudf.column.column cimport column
@@ -10,17 +11,17 @@ from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
 cdef extern from "cudf/strings/char_types/char_types.hpp" \
         namespace "cudf::strings" nogil:
 
-    ctypedef enum string_character_types:
-        DECIMAL 'cudf::strings::string_character_types::DECIMAL'
-        NUMERIC  'cudf::strings::string_character_types::NUMERIC'
-        DIGIT 'cudf::strings::string_character_types::DIGIT'
-        ALPHA 'cudf::strings::string_character_types::ALPHA'
-        SPACE 'cudf::strings::string_character_types::SPACE'
-        UPPER 'cudf::strings::string_character_types::UPPER'
-        LOWER 'cudf::strings::string_character_types::LOWER'
-        ALPHANUM 'cudf::strings::string_character_types::ALPHANUM'
-        CASE_TYPES 'cudf::strings::string_character_types::CASE_TYPES'
-        ALL_TYPES 'cudf::strings::string_character_types::ALL_TYPES'
+    cpdef enum class string_character_types(uint32_t):
+        DECIMAL
+        NUMERIC
+        DIGIT
+        ALPHA
+        SPACE
+        UPPER
+        LOWER
+        ALPHANUM
+        CASE_TYPES
+        ALL_TYPES
 
 cdef extern from "cudf/strings/char_types/char_types.hpp" \
         namespace "cudf::strings" nogil:
