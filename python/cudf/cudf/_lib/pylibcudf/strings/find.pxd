@@ -8,7 +8,6 @@ ctypedef fused ColumnOrScalar:
     Column
     Scalar
 
-
 cpdef Column find(
     Column input,
     ColumnOrScalar target,

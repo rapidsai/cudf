@@ -24,6 +24,38 @@ cpdef Column replace(
     ColumnOrScalar repl,
     size_type maxrepl = -1
 ):
+    """Replaces target string within each string with the specified replacement string.
+
+    Null string entries will return null output string entries.
+
+    For details, see :cpp:func:`replace`.
+
+    Parameters
+    ----------
+    input : Column
+        The input strings
+    target : Union[Column, Scalar]
+        String to search for in each string or Column containing strings
+        to search for in the input column.
+
+        If target is a Column, repl must also be a Column.
+    repl : Union[Column, Scalar]
+        String to replace target with, or Column (of equal length to target)
+        of replacement strings.
+
+        If repl is a Column, target must also be a Column.
+    maxrepl : size_type, default -1
+        Maximum times to replace if target appears multiple times in the input string.
+        Default of -1 specifies replace all occurrences of target in each string.
+
+        This option is not supported when target and repl are of type Column.
+        (all occurrences of target will always be replaced in that case)
+
+    Returns
+    -------
+    pylibcudf.Column
+        New string column with target replaced.
+    """
     cdef:
         unique_ptr[column] c_result
         const string_scalar* target_str
@@ -65,7 +97,32 @@ cpdef Column replace_slice(
     size_type start = 0,
     size_type stop = -1
 ):
+    """Replaces each string in the column with the provided repl string
+    within the [start,stop) character position range.
 
+    Null string entries will return null output string entries.
+    This function can be used to insert a string into specific position
+    by specifying the same position value for start and stop.
+    The repl string can be appended to each string by specifying -1
+    for both start and stop.
+
+    For details, see :cpp:func:`replace_slice`.
+
+    Parameters
+    ----------
+    input : Column
+        The input strings
+    repl : Scalar, default ""
+        String scalar to replace target with.
+    start : size_type, default 0
+        Start position where repl will be added.
+    stop : size_type, default -1
+        End position (exclusive) to use for replacement.
+    Returns
+    -------
+    pylibcudf.Column
+        New string column
+    """
     cdef unique_ptr[column] c_result
 
     if repl is None:
