@@ -2486,8 +2486,11 @@ void writer::impl::write_parquet_data_to_sink(
           _out_sink[p]->host_write(bounce_buffer.data(), ck.compressed_size);
         }
 
-        auto const chunk_offset = _current_chunk_offset[p];
-        auto& column_chunk_meta = row_group.columns[i].meta_data;
+        auto const chunk_offset  = _current_chunk_offset[p];
+        auto& column_chunk       = row_group.columns[i];
+        column_chunk.file_offset = chunk_offset;
+
+        auto& column_chunk_meta = column_chunk.meta_data;
         column_chunk_meta.data_page_offset =
           chunk_offset + ((ck.use_dictionary) ? ck.dictionary_size : 0);
         column_chunk_meta.dictionary_page_offset = (ck.use_dictionary) ? chunk_offset : 0;
