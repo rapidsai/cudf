@@ -23,13 +23,10 @@
 
 namespace cudf::io::parquet::detail {
 
-class FieldPosition;
-
 /**
  * @brief Function to construct a tree of arrow schema fields
  */
 FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
-                                     FieldPosition field_position,
                                      cudf::detail::LinkedColPtr const& col,
                                      column_in_metadata const& col_meta,
                                      single_write_mode const write_mode,
@@ -52,35 +49,6 @@ inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
   return write_mode == single_write_mode::NO or col->nullable();
 }
 
-// TODO: Helper class copied over from Arrow source. Do we need it even?
-class FieldPosition {
- public:
-  FieldPosition() : _parent(nullptr), _index(-1), _depth(0) {}
-
-  FieldPosition child(int index) const { return {this, index}; }
-
-  std::vector<int> path() const
-  {
-    std::vector<int> path(_depth);
-    const FieldPosition* cur = this;
-    for (int i = _depth - 1; i >= 0; --i) {
-      path[i] = cur->_index;
-      cur     = cur->_parent;
-    }
-    return path;
-  }
-
- protected:
-  FieldPosition(const FieldPosition* parent, int index)
-    : _parent(parent), _index(index), _depth(parent->_depth + 1)
-  {
-  }
-
-  const FieldPosition* _parent;
-  int _index;
-  int _depth;
-};
-
 /**
  * @brief Functor to convert cudf column metadata to arrow schema
  */
@@ -90,7 +58,6 @@ struct dispatch_to_flatbuf {
   column_in_metadata const& col_meta;
   single_write_mode const write_mode;
   bool const utc_timestamps;
-  FieldPosition& field_position;
   Offset& field_offset;
   flatbuf::Type& type_type;
   std::vector<FieldOffset>& children;
@@ -274,16 +241,12 @@ struct dispatch_to_flatbuf {
   std::enable_if_t<cudf::is_nested<T>(), void> operator()()
   {
     // Lists are represented differently in arrow and cuDF.
-    // cuDF representation: List<int>: "col_name" : { "list" : { "element" }} (2 children)
-    // arrow schema representation: List<int>: "col_name" : { "list<item>" } (1 child)
+    // cuDF representation: List<int>: "col_name" : { "list","element : int" } (2 children)
+    // arrow schema representation: List<int>: "col_name" : { "list<item : int>" } (1 child)
     if constexpr (std::is_same_v<T, cudf::list_view>) {
       // Only need to process the second child (at idx = 1)
-      children.emplace_back(make_arrow_schema_fields(fbb,
-                                                     field_position.child(0),
-                                                     col->children[1],
-                                                     col_meta.child(1),
-                                                     write_mode,
-                                                     utc_timestamps));
+      children.emplace_back(make_arrow_schema_fields(
+        fbb, col->children[1], col_meta.child(1), write_mode, utc_timestamps));
       type_type    = flatbuf::Type_List;
       field_offset = flatbuf::CreateList(fbb).Union();
     }
@@ -293,12 +256,8 @@ struct dispatch_to_flatbuf {
                      thrust::make_counting_iterator(col->children.size()),
                      std::back_inserter(children),
                      [&](auto const idx) {
-                       return make_arrow_schema_fields(fbb,
-                                                       field_position.child(idx),
-                                                       col->children[idx],
-                                                       col_meta.child(idx),
-                                                       write_mode,
-                                                       utc_timestamps);
+                       return make_arrow_schema_fields(
+                         fbb, col->children[idx], col_meta.child(idx), write_mode, utc_timestamps);
                      });
       type_type    = flatbuf::Type_Struct_;
       field_offset = flatbuf::CreateStruct_(fbb).Union();
@@ -308,12 +267,13 @@ struct dispatch_to_flatbuf {
   template <typename T>
   std::enable_if_t<cudf::is_dictionary<T>(), void> operator()()
   {
+    // TODO: Implementing ``dictionary32`` would need ``DictionaryFieldMapper`` and
+    // ``FieldPosition`` classes from arrow source to keep track of dictionary encoding paths.
     CUDF_FAIL("Dictionary columns are not supported for writing");
   }
 };
 
 FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
-                                     FieldPosition field_position,
                                      cudf::detail::LinkedColPtr const& col,
                                      column_in_metadata const& col_meta,
                                      single_write_mode const write_mode,
@@ -323,16 +283,10 @@ FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
   flatbuf::Type type_type = flatbuf::Type_NONE;
   std::vector<FieldOffset> children;
 
-  cudf::type_dispatcher(col->type(),
-                        dispatch_to_flatbuf{fbb,
-                                            col,
-                                            col_meta,
-                                            write_mode,
-                                            utc_timestamps,
-                                            field_position,
-                                            field_offset,
-                                            type_type,
-                                            children});
+  cudf::type_dispatcher(
+    col->type(),
+    dispatch_to_flatbuf{
+      fbb, col, col_meta, write_mode, utc_timestamps, field_offset, type_type, children});
 
   auto const fb_name          = fbb.CreateString(col_meta.get_name());
   auto const fb_children      = fbb.CreateVector(children.data(), children.size());
@@ -365,27 +319,21 @@ std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector con
     return std::string(reinterpret_cast<char*>(buffer.data()), buffer.size());
   };
 
-  // Intantiate a flatbuffer builder
+  // Instantiate a flatbuffer builder
   FlatBufferBuilder fbb;
-
-  // Instantiate a field position mapper struct (not sure if needed yet?)
-  FieldPosition field_position;
 
   // Create an empty field offset vector
   std::vector<FieldOffset> field_offsets;
 
   // populate field offsets (aka schema fields)
-  std::transform(thrust::make_counting_iterator(0ul),
-                 thrust::make_counting_iterator(linked_columns.size()),
-                 std::back_inserter(field_offsets),
-                 [&](auto const idx) {
-                   return make_arrow_schema_fields(fbb,
-                                                   field_position.child(idx),
-                                                   linked_columns[idx],
-                                                   metadata.column_metadata[idx],
-                                                   write_mode,
-                                                   utc_timestamps);
-                 });
+  std::transform(
+    thrust::make_counting_iterator(0ul),
+    thrust::make_counting_iterator(linked_columns.size()),
+    std::back_inserter(field_offsets),
+    [&](auto const idx) {
+      return make_arrow_schema_fields(
+        fbb, linked_columns[idx], metadata.column_metadata[idx], write_mode, utc_timestamps);
+    });
 
   // Build an arrow:schema flatbuffer using the field offset vector and use it as the header to
   // create an ipc message flatbuffer

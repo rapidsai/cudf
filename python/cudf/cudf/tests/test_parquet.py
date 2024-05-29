@@ -3535,5 +3535,3 @@ def test_parquet_writer_roundtrip_structs_with_arrow_schema(tmpdir, data):
     # Check results
     assert_eq(expected, got)
     assert_eq(expected, got2)
-
-

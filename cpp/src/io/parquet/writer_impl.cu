@@ -516,56 +516,6 @@ struct leaf_schema_fn {
     }
   }
 
-  /* TODO: This code block should be ``time`` type and not ``duration`` type
-    //  unsupported outside cudf for parquet 1.0.
-    template <typename T>
-    std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
-    {
-      col_schema.type           = Type::INT32;
-      col_schema.converted_type = ConvertedType::TIME_MILLIS;
-      col_schema.stats_dtype    = statistics_dtype::dtype_int32;
-      col_schema.ts_scale       = 24 * 60 * 60 * 1000;
-      col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
-    }
-
-    template <typename T>
-    std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
-    {
-      col_schema.type           = Type::INT32;
-      col_schema.converted_type = ConvertedType::TIME_MILLIS;
-      col_schema.stats_dtype    = statistics_dtype::dtype_int32;
-      col_schema.ts_scale       = 1000;
-      col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
-    }
-
-    template <typename T>
-    std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
-    {
-      col_schema.type           = Type::INT32;
-      col_schema.converted_type = ConvertedType::TIME_MILLIS;
-      col_schema.stats_dtype    = statistics_dtype::dtype_int32;
-      col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
-    }
-
-    template <typename T>
-    std::enable_if_t<std::is_same_v<T, cudf::duration_us>, void> operator()()
-    {
-      col_schema.type           = Type::INT64;
-      col_schema.converted_type = ConvertedType::TIME_MICROS;
-      col_schema.stats_dtype    = statistics_dtype::dtype_int64;
-      col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MICROS}};
-    }
-
-    //  unsupported outside cudf for parquet 1.0.
-    template <typename T>
-    std::enable_if_t<std::is_same_v<T, cudf::duration_ns>, void> operator()()
-    {
-      col_schema.type         = Type::INT64;
-      col_schema.stats_dtype  = statistics_dtype::dtype_int64;
-      col_schema.logical_type = LogicalType{TimeType{timestamp_is_utc, TimeUnit::NANOS}};
-    }
-  */
-
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
   {
