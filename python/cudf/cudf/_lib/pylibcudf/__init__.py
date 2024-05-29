@@ -49,6 +49,7 @@ __all__ = [
     "reduce",
     "replace",
     "rolling",
+    "round",
     "search",
     "stream_compaction",
     "strings",
