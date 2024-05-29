@@ -90,13 +90,13 @@ def _(
 
 @_translate_ir.register
 def _(node: pl_ir.Select, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
-    # We translate the expressions (which are executed with
-    # reference to the input node) with the input node active
-    # so that dtype resolution works correctly.
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
-        cse_exprs = [translate_expr(visitor, n=e) for e in node.cse_expr]
-        exprs = [translate_expr(visitor, n=e) for e in node.expr]
+    # Special-case carveout in get_dtype for Select means we should
+    # translate these expressions with the Select node active (even
+    # though they refer to the input node).
+    cse_exprs = [translate_expr(visitor, n=e) for e in node.cse_expr]
+    exprs = [translate_expr(visitor, n=e) for e in node.expr]
     return ir.Select(schema, inp, cse_exprs, exprs)
 
 
@@ -131,8 +131,21 @@ def _(node: pl_ir.Join, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
 def _(node: pl_ir.HStack, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
-        exprs = [translate_expr(visitor, n=e) for e in node.exprs]
-    return ir.HStack(schema, inp, exprs)
+    # Like Select, there is a special-case carveout in get_dtype for
+    # HStack, so we translate these expressions with HStack Select
+    # node active.
+    cse_exprs = [translate_expr(visitor, n=e) for e in node.cse_exprs]
+    exprs = [translate_expr(visitor, n=e) for e in node.exprs]
+    return ir.HStack(schema, inp, cse_exprs, exprs)
+
+
+@_translate_ir.register
+def _(node: pl_ir.Reduce, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    with set_node(visitor, node.input):
+        inp = translate_ir(visitor, n=None)
+        exprs = [translate_expr(visitor, n=e) for e in node.expr]
+    # Reduce is just a Select where all outputs are a single row.
+    return ir.Select(schema, inp, [], exprs)
 
 
 @_translate_ir.register
