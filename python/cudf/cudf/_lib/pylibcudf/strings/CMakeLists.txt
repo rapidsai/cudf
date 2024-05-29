@@ -12,7 +12,9 @@
 # the License.
 # =============================================================================
 
-set(cython_sources case.pyx capitalize.pyx contains.pyx find.pyx regex_flags.pyx regex_program.pyx)
+set(cython_sources case.pyx capitalize.pyx char_types.pyx contains.pyx find.pyx regex_flags.pyx
+                   regex_program.pyx
+)
 
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
