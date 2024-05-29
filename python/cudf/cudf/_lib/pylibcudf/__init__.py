@@ -13,6 +13,7 @@ from . import (
     merge,
     reduce,
     replace,
+    reshape,
     rolling,
     search,
     sorting,

@@ -1,3 +1,3 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from . cimport case, find, replace
+from . cimport capitalize, case, char_types, find, replace

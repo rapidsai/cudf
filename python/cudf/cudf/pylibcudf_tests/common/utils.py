@@ -35,7 +35,6 @@ def assert_column_eq(plc_column: plc.Column, pa_array: pa.Array) -> None:
         plc_pa = plc_pa.combine_chunks()
     if isinstance(pa_array, pa.ChunkedArray):
         pa_array = pa_array.combine_chunks()
-
     assert plc_pa.equals(pa_array)
 
 

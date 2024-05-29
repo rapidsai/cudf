@@ -20,6 +20,7 @@ This page provides API documentation for pylibcudf.
     lists
     merge
     reduce
+    reshape
     rolling
     scalar
     search
