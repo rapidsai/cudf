@@ -677,9 +677,9 @@ TYPED_TEST(FixedPointTests, CastFromDoubleWithNaNAndInf)
   auto const inf  = std::numeric_limits<double>::infinity();
   auto const null = 0;
 
-  auto const input    = fw_wrapper{1.729, NaN, 172.9, NaN, inf, 1.23, inf};
-  auto const expected = fp_wrapper{{1729, null, 172900, null, null, 1230, null},
-                                   {true, false, true, false, false, true, false},
+  auto const input    = fw_wrapper{1.729, -inf, NaN, 172.9, -inf, NaN, inf, 1.23, inf};
+  auto const expected = fp_wrapper{{1729, null, null, 172900, null, null, null, 1230, null},
+                                   {true, false, false, true, false, false, false, true, false},
                                    scale_type{-3}};
   auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(-3));
 
