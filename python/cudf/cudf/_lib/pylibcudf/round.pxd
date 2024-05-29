@@ -1,9 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 from libc.stdint cimport int32_t
 
-from cudf._lib.pylibcudf.libcudf.round cimport (
-    rounding_method as rounding_method,
-)
+from cudf._lib.pylibcudf.libcudf.round cimport rounding_method
 
 from .column cimport Column
 
