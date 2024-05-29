@@ -221,6 +221,25 @@ std::unique_ptr<column> rescale(column_view input,
   }
 };
 
+/**
+ * @brief Check if a floating point value is convertible to fixed point type.
+ *
+ * A floating point value is convertible only if:
+ *  - It is not `NaN` and `inf`, and
+ *  - Its rounded value is within the range that can represented by the target fixed point type.
+ */
+template <typename FloatType>
+struct is_convertible_floating_point {
+  column_device_view d_input;
+  // TODO: enable_if for only float types
+  bool __device__ operator()(size_type idx) const
+  {
+    if (d_input.is_null(idx)) { return false; }
+    auto const value = d_input.element<FloatType>(idx);
+    return !std::isnan(value) && !std::isinf(value);
+  }
+};
+
 template <typename _SourceT>
 struct dispatch_unary_cast_to {
   column_view input;
@@ -314,17 +333,13 @@ struct dispatch_unary_cast_to {
       // For floating-point values, beside input nulls, we also need to set nulls for the output
       // rows corresponding to NaN and inf in the input.
       auto const d_input_ptr = column_device_view::create(input, stream);
-      auto const is_valid    = [d_input = *d_input_ptr] __device__(auto const idx) {
-        if (d_input.is_null(idx)) { return false; }
-        auto const value = d_input.element<SourceT>(idx);
-        return !std::isnan(value) && !std::isinf(value);
-      };
-      auto [null_mask, null_count] = cudf::detail::valid_if(thrust::make_counting_iterator(0),
-                                                            thrust::make_counting_iterator(size),
-                                                            is_valid,
-                                                            stream,
-                                                            mr);
-      output->set_null_mask(std::move(null_mask), null_count);
+      auto [null_mask, null_count] =
+        cudf::detail::valid_if(thrust::make_counting_iterator(0),
+                               thrust::make_counting_iterator(size),
+                               is_convertible_floating_point<SourceT>{*d_input_ptr},
+                               stream,
+                               mr);
+      if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
     } else {
       output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
     }
