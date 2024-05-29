@@ -3170,10 +3170,10 @@ def test_parquet_writer_time_delta_physical_type():
     got = pd.read_parquet(buffer)
     expected = pd.DataFrame(
         {
-            "s": ["00:00:01"],
-            "ms": ["00:00:00.002000"],
-            "us": ["00:00:00.000003"],
-            "ns": ["00:00:00.000004"],
+            "s": ["0 days 00:00:01"],
+            "ms": ["0 days 00:00:00.002000"],
+            "us": ["0 days 00:00:00.000003"],
+            "ns": ["0 days 00:00:00.000004"],
         },
         dtype="str",
     )
