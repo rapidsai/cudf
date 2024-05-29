@@ -28,8 +28,6 @@
 #include "io/statistics/column_statistics.cuh"
 #include "io/utilities/column_utils.cuh"
 #include "io/utilities/config_utils.hpp"
-#include "ipc/Message_generated.h"
-#include "ipc/Schema_generated.h"
 #include "parquet_common.hpp"
 #include "parquet_gpu.cuh"
 #include "writer_impl.hpp"
@@ -99,7 +97,7 @@ struct aggregate_writer_metadata {
       // Append arrow schema to the key-value metadata
       if (not arrow_schema_ipc_message.empty()) {
         this->files[p].key_value_metadata.emplace_back(
-          KeyValue{"ARROW:schema", std::move(arrow_schema_ipc_message)});
+          KeyValue{"ARROW:schema", arrow_schema_ipc_message});
       }
     }
   }

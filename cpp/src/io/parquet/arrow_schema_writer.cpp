@@ -73,56 +73,56 @@ struct dispatch_to_flatbuf {
   std::enable_if_t<std::is_same_v<T, int8_t>, void> operator()()
   {
     type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 8, true).Union();
+    field_offset = flatbuf::CreateInt(fbb, 8, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, int16_t>, void> operator()()
   {
     type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 16, true).Union();
+    field_offset = flatbuf::CreateInt(fbb, 16, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, int32_t>, void> operator()()
   {
     type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 32, true).Union();
+    field_offset = flatbuf::CreateInt(fbb, 32, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, int64_t>, void> operator()()
   {
     type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 64, true).Union();
+    field_offset = flatbuf::CreateInt(fbb, 64, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, uint8_t>, void> operator()()
   {
     type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 8, false).Union();
+    field_offset = flatbuf::CreateInt(fbb, 8, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, uint16_t>, void> operator()()
   {
     type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 16, false).Union();
+    field_offset = flatbuf::CreateInt(fbb, 16, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, uint32_t>, void> operator()()
   {
     type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 32, false).Union();
+    field_offset = flatbuf::CreateInt(fbb, 32, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, uint64_t>, void> operator()()
   {
     type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 64, false).Union();
+    field_offset = flatbuf::CreateInt(fbb, 64, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
@@ -226,14 +226,14 @@ struct dispatch_to_flatbuf {
     // TODO: cuDF-PQ writer supports d32 and d64 types not supported by Arrow without conversion.
     // See more: https://github.com/rapidsai/cudf/blob/branch-24.08/cpp/src/interop/to_arrow.cu#L155
     //
-    if (std::is_same_v<T, numeric::decimal128>) {
+    if constexpr (std::is_same_v<T, numeric::decimal128>) {
       type_type = flatbuf::Type_Decimal;
       field_offset =
         flatbuf::CreateDecimal(fbb, col_meta.get_decimal_precision(), col->type().scale(), 128)
           .Union();
     } else {
       // TODO: Should we fail or just not write arrow:schema anymore?
-      CUDF_FAIL("Fixed point types other than decimal128 are not supported for arrow schema");
+      CUDF_FAIL("Fixed point types smaller than `decimal128` are not supported in arrow schema");
     }
   }
 
@@ -269,7 +269,7 @@ struct dispatch_to_flatbuf {
   {
     // TODO: Implementing ``dictionary32`` would need ``DictionaryFieldMapper`` and
     // ``FieldPosition`` classes from arrow source to keep track of dictionary encoding paths.
-    CUDF_FAIL("Dictionary columns are not supported for writing");
+    CUDF_FAIL("Dictionary columns are not supported for writing arrow schema");
   }
 };
 
@@ -327,7 +327,7 @@ std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector con
 
   // populate field offsets (aka schema fields)
   std::transform(
-    thrust::make_counting_iterator(0ul),
+    thrust::make_counting_iterator(0UL),
     thrust::make_counting_iterator(linked_columns.size()),
     std::back_inserter(field_offsets),
     [&](auto const idx) {

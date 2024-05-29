@@ -3407,12 +3407,12 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema():
 
 
 def test_parquet_writer_roundtrip_with_arrow_schema():
+    # Ensure that the concrete and nested types are faithfully being roundtripped
+    # across Parquet with arrow schema
     expected = cudf.DataFrame(
         {
             "s": cudf.Series([None, None, None], dtype="timedelta64[s]"),
-            "ms": cudf.Series([1234, None, 32442], dtype="timedelta64[ms]"),
             "us": cudf.Series([None, 3456, None], dtype="timedelta64[us]"),
-            "ns": cudf.Series([1234, 3456, 32442], dtype="timedelta64[ns]"),
             "duration_list": list(
                 [
                     [
@@ -3429,8 +3429,13 @@ def test_parquet_writer_roundtrip_with_arrow_schema():
                     ],
                 ]
             ),
-            "int64": cudf.Series([1234, 123, 4123], dtype="int64"),
-            "int64_list": list([[1, 2], [1, 2], [1, 2]]),
+            "int64": cudf.Series([-1234, 123, 4123], dtype="int64"),
+            "uint32": cudf.Series([1234, 123, 4123], dtype="uint32"),
+            "list": list([[1, 2], [1, 2], [1, 2]]),
+            "bool": cudf.Series([True, None, False], dtype=bool),
+            "fixed_pt": cudf.Series([0.00, 1.0, None]).astype(
+                cudf.Decimal128Dtype(7, 2)
+            ),
             "datetime": cudf.Series([1234, 123, 4123], dtype="datetime64[ms]"),
             "map": cudf.Series(["cat", "dog", "lion"]).map(
                 {"cat": "kitten", "dog": "puppy", "lion": "cub"}
@@ -3438,11 +3443,17 @@ def test_parquet_writer_roundtrip_with_arrow_schema():
         }
     )
 
+    # Write to Parquet
     buffer = BytesIO()
     expected.to_parquet(buffer)
-    read = cudf.DataFrame.from_arrow(pq.read_table(buffer))
 
-    assert_eq(expected, read)
+    # Read parquet with pyarrow and cudf readers
+    got = cudf.DataFrame.from_arrow(pq.read_table(buffer))
+    got2 = cudf.read_parquet(buffer)
+
+    # Check results
+    assert_eq(expected, got)
+    assert_eq(expected, got2)
 
 
 @pytest.mark.parametrize(
@@ -3516,10 +3527,8 @@ def test_parquet_writer_roundtrip_structs_with_arrow_schema(tmpdir, data):
 
     expected = cudf.DataFrame.from_arrow(pa_expected)
 
-    # IO buffer
-    buffer = BytesIO()
-
     # Write expected data frame to Parquet
+    buffer = BytesIO()
     expected.to_parquet(buffer)
 
     # Read Parquet with pyarrow
