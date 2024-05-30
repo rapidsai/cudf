@@ -2729,7 +2729,7 @@ TEST_F(JsonReaderTest, JSONMixedTypeChildren)
       .lines(true)
       .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
       .normalize_single_quotes(true)
-      .normalize_whitespace(true)
+      .normalize_whitespace(false)
       .mixed_types_as_string(true)
       .keep_quotes(true);
 
@@ -2738,10 +2738,10 @@ TEST_F(JsonReaderTest, JSONMixedTypeChildren)
   ASSERT_EQ(result.tbl->num_columns(), 1);
   ASSERT_EQ(result.metadata.schema_info.size(), 1);
   EXPECT_EQ(result.metadata.schema_info[0].name, "Root");
-  ASSERT_EQ(result.metadata.schema_info[1].children.size(), 1);
-  EXPECT_EQ(result.metadata.schema_info[1].children[0].name, "Key");
-  ASSERT_EQ(result.metadata.schema_info[1].children[0].children.size(), 1);
-  EXPECT_EQ(result.metadata.schema_info[1].children[0].children[0].name, "offsets");
+  ASSERT_EQ(result.metadata.schema_info[0].children.size(), 1);
+  EXPECT_EQ(result.metadata.schema_info[0].children[0].name, "Key");
+  ASSERT_EQ(result.metadata.schema_info[0].children[0].children.size(), 2);
+  EXPECT_EQ(result.metadata.schema_info[0].children[0].children[0].name, "offsets");
   // types
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRUCT);
   EXPECT_EQ(result.tbl->get_column(0).child(0).type().id(), cudf::type_id::STRING);
