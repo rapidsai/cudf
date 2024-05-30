@@ -27,7 +27,7 @@ def metadata_from_arrow_array(
 def assert_column_eq(
     lhs: Union[pa.Array, plc.Column], rhs: Union[pa.Array, plc.Column]
 ) -> None:
-    """Verify that the pylibcudf array and PyArrow array are equal."""
+    """Verify that a pylibcudf array and PyArrow array are equal."""
     # Nested types require children metadata to be passed to the conversion function.
     if isinstance(lhs, (pa.Array, pa.ChunkedArray)) and isinstance(
         rhs, plc.Column
@@ -55,7 +55,7 @@ def assert_column_eq(
 
 
 def assert_table_eq(plc_table: plc.Table, pa_table: pa.Table) -> None:
-    """Verify that the pylibcudf table and PyArrow table are equal."""
+    """Verify that a pylibcudf table and PyArrow table are equal."""
     plc_shape = (plc_table.num_rows(), plc_table.num_columns())
     assert plc_shape == pa_table.shape
 
