@@ -7,7 +7,7 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-def test_hstack():
+def test_select():
     ldf = pl.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -15,11 +15,14 @@ def test_hstack():
         }
     ).lazy()
 
-    query = ldf.with_columns(pl.col("a") + pl.col("b"))
+    query = ldf.select(
+        pl.col("a") + pl.col("b"), (pl.col("a") * 2 + pl.col("b")).alias("d")
+    )
+
     assert_gpu_result_equal(query)
 
 
-def test_hstack_with_cse():
+def test_select_reduce():
     ldf = pl.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -27,6 +30,9 @@ def test_hstack_with_cse():
         }
     ).lazy()
 
-    expr = pl.col("a") + pl.col("b")
-    query = ldf.with_columns(expr.alias("c"), expr.alias("d") * 2)
+    query = ldf.select(
+        (pl.col("a") + pl.col("b")).max(),
+        (pl.col("a") * 2 + pl.col("b")).alias("d").mean(),
+    )
+
     assert_gpu_result_equal(query)
