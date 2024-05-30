@@ -16,6 +16,13 @@ cdef extern from "dlpack/dlpack.h" nogil:
     ctypedef struct DLManagedTensor:
         void(*deleter)(DLManagedTensor*) except +
 
+
+# The Arrow structs are not namespaced.
+cdef extern from "cudf/interop.hpp" nogil:
+    cdef struct ArrowArrayStream:
+        void (*release)(ArrowArrayStream*) noexcept nogil
+
+
 cdef extern from "cudf/interop.hpp" namespace "cudf" \
         nogil:
     cdef unique_ptr[table] from_dlpack(const DLManagedTensor* tensor
@@ -42,3 +49,5 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
         const scalar& input,
         column_metadata metadata,
     ) except +
+
+    cdef unique_ptr[table] from_arrow_stream(ArrowArrayStream* input) except +
