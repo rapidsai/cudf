@@ -19,6 +19,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/aligned.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <thrust/host_vector.h>
@@ -32,8 +33,6 @@ namespace cudf::detail {
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
  *  that employs \c a `rmm::host_async_resource_ref` for allocation.
  *
- * This implementation is ported from pinned_host_vector in cudf.
- *
  *  \see https://en.cppreference.com/w/cpp/memory/allocator
  */
 template <typename T>
@@ -41,8 +40,6 @@ class rmm_host_allocator;
 
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
  *  that employs \c an `cudf::host_async_resource_ref` for allocation.
- *
- * This implementation is ported from pinned_host_vector in cudf.
  *
  *  \see https://en.cppreference.com/w/cpp/memory/allocator
  */
@@ -70,8 +67,7 @@ class rmm_host_allocator<void> {
  * The \p rmm_host_allocator provides an interface for host memory allocation through the user
  * provided \c `rmm::host_async_resource_ref`. The \p rmm_host_allocator does not take ownership of
  * this reference and therefore it is the user's responsibility to ensure its lifetime for the
- * duration of the lifetime of the \p rmm_host_allocator. This implementation is ported from
- * pinned_host_vector in cudf.
+ * duration of the lifetime of the \p rmm_host_allocator.
  *
  *  \see https://en.cppreference.com/w/cpp/memory/allocator
  */

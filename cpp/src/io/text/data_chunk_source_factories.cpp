@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
+#include "cudf/detail/utilities/vector_factories.hpp"
 #include "io/text/device_data_chunks.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/pinned_host_vector.hpp>
+#include <cudf/detail/utilities/rmm_host_vector.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -32,7 +33,7 @@ namespace {
 
 struct host_ticket {
   cudaEvent_t event;
-  cudf::detail::pinned_host_vector<char> buffer;
+  std::unique_ptr<cudf::detail::rmm_host_vector<char>> buffer;
 };
 
 /**
@@ -84,13 +85,16 @@ class datasource_chunk_reader : public data_chunk_reader {
       CUDF_CUDA_TRY(cudaEventSynchronize(h_ticket.event));
 
       // resize the host buffer as necessary to contain the requested number of bytes
-      if (h_ticket.buffer.size() < read_size) { h_ticket.buffer.resize(read_size); }
+      if (h_ticket.buffer == nullptr or h_ticket.buffer->size() < read_size) {
+        h_ticket.buffer = std::make_unique<cudf::detail::rmm_host_vector<char>>(
+          cudf::detail::make_pinned_vector_sync<char>(read_size, stream));
+      }
 
-      _source->host_read(_offset, read_size, reinterpret_cast<uint8_t*>(h_ticket.buffer.data()));
+      _source->host_read(_offset, read_size, reinterpret_cast<uint8_t*>(h_ticket.buffer->data()));
 
       // copy the host-pinned data on to device
       CUDF_CUDA_TRY(cudaMemcpyAsync(
-        chunk.data(), h_ticket.buffer.data(), read_size, cudaMemcpyDefault, stream.value()));
+        chunk.data(), h_ticket.buffer->data(), read_size, cudaMemcpyDefault, stream.value()));
 
       // record the host-to-device copy.
       CUDF_CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
@@ -148,10 +152,13 @@ class istream_data_chunk_reader : public data_chunk_reader {
     CUDF_CUDA_TRY(cudaEventSynchronize(h_ticket.event));
 
     // resize the host buffer as necessary to contain the requested number of bytes
-    if (h_ticket.buffer.size() < read_size) { h_ticket.buffer.resize(read_size); }
+    if (h_ticket.buffer == nullptr or h_ticket.buffer->size() < read_size) {
+      h_ticket.buffer = std::make_unique<cudf::detail::rmm_host_vector<char>>(
+        cudf::detail::make_pinned_vector_sync<char>(read_size, stream));
+    }
 
     // read data from the host istream in to the pinned host memory buffer
-    _datastream->read(h_ticket.buffer.data(), read_size);
+    _datastream->read(h_ticket.buffer->data(), read_size);
 
     // adjust the read size to reflect how many bytes were actually read from the data stream
     read_size = _datastream->gcount();
@@ -161,7 +168,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
 
     // copy the host-pinned data on to device
     CUDF_CUDA_TRY(cudaMemcpyAsync(
-      chunk.data(), h_ticket.buffer.data(), read_size, cudaMemcpyDefault, stream.value()));
+      chunk.data(), h_ticket.buffer->data(), read_size, cudaMemcpyDefault, stream.value()));
 
     // record the host-to-device copy.
     CUDF_CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
