@@ -1726,10 +1726,9 @@ class self_comparator {
    * @return A binary callable object
    */
   template <bool has_nested_columns,
+            template <typename> typename dispatch_conditional_t = type_identity_t,
             typename Nullate,
-            typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator,
-            template <typename>
-            typename dispatch_conditional_t = cudf::experimental::type_identity_t>
+            typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
   auto equal_to(Nullate nullate                       = {},
                 null_equality nulls_are_equal         = null_equality::EQUAL,
                 PhysicalEqualityComparator comparator = {}) const noexcept
@@ -1845,10 +1844,9 @@ class two_table_comparator {
    * @return A binary callable object
    */
   template <bool has_nested_columns,
+            template <typename> typename dispatch_conditional_t = type_identity_t,
             typename Nullate,
-            typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator,
-            template <typename>
-            typename dispatch_conditional_t = cudf::experimental::type_identity_t>
+            typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
   auto equal_to(Nullate nullate                       = {},
                 null_equality nulls_are_equal         = null_equality::EQUAL,
                 PhysicalEqualityComparator comparator = {}) const noexcept
