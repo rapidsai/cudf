@@ -100,6 +100,12 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_column_chunks_file_paths(
             vector[string] column_chunks_file_paths
         ) except +
+        void set_int96_timestamps(
+            bool enabled
+        ) except +
+        void set_utc_timestamps(
+            bool enabled
+        ) except +
         void enable_int96_timestamps(bool val) except +
         void enable_utc_timestamps(bool val) except +
         void enable_write_arrow_schema(bool val) except +

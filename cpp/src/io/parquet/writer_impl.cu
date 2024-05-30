@@ -1837,9 +1837,9 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       this_table_schema,
       num_columns,
       stats_granularity,
-      (write_arrow_schema) ? construct_arrow_schema_ipc_message(
-                               vec, table_meta, write_mode, int96_timestamps, utc_timestamps)
-                           : "");
+      (write_arrow_schema)
+        ? construct_arrow_schema_ipc_message(vec, table_meta, write_mode, utc_timestamps)
+        : "");
   } else {
     agg_meta = std::make_unique<aggregate_writer_metadata>(*curr_agg_meta);
 
@@ -2317,7 +2317,8 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _dict_policy(options.get_dictionary_policy()),
     _max_dictionary_size(options.get_max_dictionary_size()),
     _max_page_fragment_size(options.get_max_page_fragment_size()),
-    _int96_timestamps(options.is_enabled_int96_timestamps()),
+    _int96_timestamps(options.is_enabled_int96_timestamps() and
+                      not options.is_enabled_write_arrow_schema()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
     _write_arrow_schema(options.is_enabled_write_arrow_schema()),
@@ -2328,6 +2329,10 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _out_sink(std::move(sinks)),
     _compression_statistics{options.get_compression_statistics()}
 {
+  if (options.is_enabled_int96_timestamps() and options.is_enabled_write_arrow_schema()) {
+    CUDF_LOG_WARN("INT96 timestamps are deprecated in arrow schema. Disabling INT96 timestamps.");
+  }
+
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
@@ -2348,7 +2353,8 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _dict_policy(options.get_dictionary_policy()),
     _max_dictionary_size(options.get_max_dictionary_size()),
     _max_page_fragment_size(options.get_max_page_fragment_size()),
-    _int96_timestamps(options.is_enabled_int96_timestamps()),
+    _int96_timestamps(options.is_enabled_int96_timestamps() and
+                      not options.is_enabled_write_arrow_schema()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
     _write_arrow_schema(options.is_enabled_write_arrow_schema()),
@@ -2359,6 +2365,9 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _out_sink(std::move(sinks)),
     _compression_statistics{options.get_compression_statistics()}
 {
+  if (options.is_enabled_int96_timestamps() and options.is_enabled_write_arrow_schema()) {
+    CUDF_LOG_WARN("INT96 timestamps are deprecated in arrow schema. Disabling INT96 timestamps.");
+  }
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
