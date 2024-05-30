@@ -139,7 +139,7 @@ class DataFrame:
     def rename_columns(self, mapping: Mapping[str, str]) -> Self:
         """Rename some columns."""
         return type(self)(
-            [c.rename(mapping.get(c.name, c.name)) for c in self.columns], self.scalars
+            [c.copy(new_name=mapping.get(c.name)) for c in self.columns], self.scalars
         )
 
     def select_columns(self, names: Set[str]) -> list[Column]:

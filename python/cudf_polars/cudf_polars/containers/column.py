@@ -32,12 +32,23 @@ class Column:
         self.order = plc.types.Order.ASCENDING
         self.null_order = plc.types.NullOrder.BEFORE
 
-    def rename(self, name: str) -> Column:
-        """Return a new column sharing data with a new name."""
-        return type(self)(self.obj, name).sorted_like(self)
-
     def sorted_like(self, like: Column, /) -> Self:
-        """Copy sortedness properties from a column onto self."""
+        """
+        Copy sortedness properties from a column onto self.
+
+        Parameters
+        ----------
+        like
+            The column to copy sortedness metadata from.
+
+        Returns
+        -------
+        Self with metadata set.
+
+        See Also
+        --------
+        set_sorted
+        """
         return self.set_sorted(
             is_sorted=like.is_sorted, order=like.order, null_order=like.null_order
         )
@@ -70,9 +81,22 @@ class Column:
         self.null_order = null_order
         return self
 
-    def copy(self) -> Self:
-        """Return a shallow copy of the column."""
-        return type(self)(self.obj, self.name).sorted_like(self)
+    def copy(self, *, new_name: str | None = None) -> Self:
+        """
+        Return a shallow copy of the column.
+
+        Parameters
+        ----------
+        new_name
+            Optional new name for the copied column.
+
+        Returns
+        -------
+        New column sharing data with self.
+        """
+        return type(self)(
+            self.obj, self.name if new_name is None else new_name
+        ).sorted_like(self)
 
     def mask_nans(self) -> Self:
         """Return a copy of self with nans masked out."""
