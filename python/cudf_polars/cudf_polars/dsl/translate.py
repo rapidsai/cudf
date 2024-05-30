@@ -92,9 +92,6 @@ def _(
 def _(node: pl_ir.Select, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
-    # Special-case carveout in get_dtype for Select means we should
-    # translate these expressions with the Select node active (even
-    # though they refer to the input node).
     cse_exprs = [translate_expr(visitor, n=e) for e in node.cse_expr]
     exprs = [translate_expr(visitor, n=e) for e in node.expr]
     return ir.Select(schema, inp, cse_exprs, exprs)
@@ -104,8 +101,8 @@ def _(node: pl_ir.Select, visitor: Any, schema: dict[str, plc.DataType]) -> ir.I
 def _(node: pl_ir.GroupBy, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
-        aggs = [translate_expr(visitor, n=e) for e in node.aggs]
-        keys = [translate_expr(visitor, n=e) for e in node.keys]
+    aggs = [translate_expr(visitor, n=e) for e in node.aggs]
+    keys = [translate_expr(visitor, n=e) for e in node.keys]
     return ir.GroupBy(
         schema,
         inp,
@@ -118,6 +115,9 @@ def _(node: pl_ir.GroupBy, visitor: Any, schema: dict[str, plc.DataType]) -> ir.
 
 @_translate_ir.register
 def _(node: pl_ir.Join, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
+    # Join key dtypes are dependent on the schema of the left and
+    # right inputs, so these must be translated with the relevant
+    # input active.
     with set_node(visitor, node.input_left):
         inp_left = translate_ir(visitor, n=None)
         left_on = [translate_expr(visitor, n=e) for e in node.left_on]
@@ -131,9 +131,6 @@ def _(node: pl_ir.Join, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
 def _(node: pl_ir.HStack, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
-    # Like Select, there is a special-case carveout in get_dtype for
-    # HStack, so we translate these expressions with HStack Select
-    # node active.
     cse_exprs = [translate_expr(visitor, n=e) for e in node.cse_exprs]
     exprs = [translate_expr(visitor, n=e) for e in node.exprs]
     return ir.HStack(schema, inp, cse_exprs, exprs)
@@ -143,9 +140,8 @@ def _(node: pl_ir.HStack, visitor: Any, schema: dict[str, plc.DataType]) -> ir.I
 def _(node: pl_ir.Reduce, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
-        exprs = [translate_expr(visitor, n=e) for e in node.expr]
-    # Reduce is just a Select where all outputs are a single row.
-    return ir.Select(schema, inp, [], exprs)
+    exprs = [translate_expr(visitor, n=e) for e in node.expr]
+    return ir.Reduce(schema, inp, exprs)
 
 
 @_translate_ir.register
@@ -161,7 +157,7 @@ def _(node: pl_ir.Distinct, visitor: Any, schema: dict[str, plc.DataType]) -> ir
 def _(node: pl_ir.Sort, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
-        by = [translate_expr(visitor, n=e) for e in node.by_column]
+    by = [translate_expr(visitor, n=e) for e in node.by_column]
     return ir.Sort(schema, inp, by, node.sort_options, node.slice)
 
 
@@ -174,7 +170,7 @@ def _(node: pl_ir.Slice, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR
 def _(node: pl_ir.Filter, visitor: Any, schema: dict[str, plc.DataType]) -> ir.IR:
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
-        mask = translate_expr(visitor, n=node.predicate)
+    mask = translate_expr(visitor, n=node.predicate)
     return ir.Filter(schema, inp, mask)
 
 

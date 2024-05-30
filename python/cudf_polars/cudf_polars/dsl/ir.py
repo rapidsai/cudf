@@ -251,8 +251,26 @@ class Select(IR):
     def evaluate(self, *, cache: dict[int, DataFrame]):
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        for e in self.cse:
-            df = df.with_columns([e.evaluate(df)])
+        df = df.with_columns([e.evaluate(df) for e in self.cse])
+        return DataFrame([e.evaluate(df) for e in self.expr], [])
+
+
+@dataclass(slots=True)
+class Reduce(IR):
+    """
+    Produce a new dataframe selecting given expressions from an input.
+
+    This is a special case of :class:`Select` where all outputs are a single row.
+    """
+
+    df: IR
+    """Input dataframe."""
+    expr: list[expr.Expr]
+    """List of expressions to evaluate to form the new dataframe."""
+
+    def evaluate(self, *, cache: dict[int, DataFrame]):
+        """Evaluate and return a dataframe."""
+        df = self.df.evaluate(cache=cache)
         return DataFrame([e.evaluate(df) for e in self.expr], [])
 
 
