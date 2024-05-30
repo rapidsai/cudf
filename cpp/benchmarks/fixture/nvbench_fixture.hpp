@@ -81,14 +81,15 @@ struct nvbench_base_fixture {
               "\nExpecting: cuda, pool, async, arena, managed, or managed_pool");
   }
 
-  inline rmm::host_async_resource_ref make_cuio_host_pinned()
+  inline rmm::host_device_async_resource_ref make_cuio_host_pinned()
   {
     static std::shared_ptr<rmm::mr::pinned_host_memory_resource> mr =
       std::make_shared<rmm::mr::pinned_host_memory_resource>();
     return *mr;
   }
 
-  inline rmm::host_async_resource_ref create_cuio_host_memory_resource(std::string const& mode)
+  inline rmm::host_device_async_resource_ref create_cuio_host_memory_resource(
+    std::string const& mode)
   {
     if (mode == "pinned") return make_cuio_host_pinned();
     if (mode == "pinned_pool") return cudf::io::get_host_memory_resource();

@@ -209,7 +209,8 @@ static_assert(cuda::mr::resource_with<fixed_pinned_pool_memory_resource,
 
 }  // namespace
 
-CUDF_EXPORT rmm::host_async_resource_ref& make_default_pinned_mr(std::optional<size_t> config_size)
+CUDF_EXPORT rmm::host_device_async_resource_ref& make_default_pinned_mr(
+  std::optional<size_t> config_size)
 {
   static fixed_pinned_pool_memory_resource mr = [config_size]() {
     auto const size = [&config_size]() -> size_t {
@@ -233,7 +234,7 @@ CUDF_EXPORT rmm::host_async_resource_ref& make_default_pinned_mr(std::optional<s
     return fixed_pinned_pool_memory_resource{aligned_size};
   }();
 
-  static rmm::host_async_resource_ref mr_ref{mr};
+  static rmm::host_device_async_resource_ref mr_ref{mr};
   return mr_ref;
 }
 
@@ -244,11 +245,11 @@ CUDF_EXPORT std::mutex& host_mr_mutex()
 }
 
 // Must be called with the host_mr_mutex mutex held
-CUDF_EXPORT rmm::host_async_resource_ref& make_host_mr(std::optional<host_mr_options> const& opts,
-                                                       bool* did_configure = nullptr)
+CUDF_EXPORT rmm::host_device_async_resource_ref& make_host_mr(
+  std::optional<host_mr_options> const& opts, bool* did_configure = nullptr)
 {
-  static rmm::host_async_resource_ref* mr_ref = nullptr;
-  bool configured                             = false;
+  static rmm::host_device_async_resource_ref* mr_ref = nullptr;
+  bool configured                                    = false;
   if (mr_ref == nullptr) {
     configured = true;
     mr_ref     = &make_default_pinned_mr(opts ? opts->pool_size : std::nullopt);
@@ -262,13 +263,13 @@ CUDF_EXPORT rmm::host_async_resource_ref& make_host_mr(std::optional<host_mr_opt
 }
 
 // Must be called with the host_mr_mutex mutex held
-CUDF_EXPORT rmm::host_async_resource_ref& host_mr()
+CUDF_EXPORT rmm::host_device_async_resource_ref& host_mr()
 {
-  static rmm::host_async_resource_ref mr_ref = make_host_mr(std::nullopt);
+  static rmm::host_device_async_resource_ref mr_ref = make_host_mr(std::nullopt);
   return mr_ref;
 }
 
-rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_ref mr)
+rmm::host_device_async_resource_ref set_host_memory_resource(rmm::host_device_async_resource_ref mr)
 {
   std::scoped_lock lock{host_mr_mutex()};
   auto last_mr = host_mr();
@@ -276,7 +277,7 @@ rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_r
   return last_mr;
 }
 
-rmm::host_async_resource_ref get_host_memory_resource()
+rmm::host_device_async_resource_ref get_host_memory_resource()
 {
   std::scoped_lock lock{host_mr_mutex()};
   return host_mr();

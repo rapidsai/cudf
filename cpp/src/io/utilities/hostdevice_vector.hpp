@@ -20,7 +20,6 @@
 
 #include <cudf/detail/utilities/rmm_host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/io/memory_resource.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>

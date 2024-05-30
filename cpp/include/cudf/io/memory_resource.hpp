@@ -33,7 +33,8 @@ namespace cudf::io {
  * @param mr The rmm resource to be used for host-side allocations
  * @return The previous resource that was in use
  */
-rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_ref mr);
+rmm::host_device_async_resource_ref set_host_memory_resource(
+  rmm::host_device_async_resource_ref mr);
 
 /**
  * @brief Get the rmm resource being used for host memory allocations by
@@ -41,7 +42,7 @@ rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_r
  *
  * @return The rmm resource used for host-side allocations
  */
-rmm::host_async_resource_ref get_host_memory_resource();
+rmm::host_device_async_resource_ref get_host_memory_resource();
 
 /**
  * @brief Options to configure the default host memory resource
@@ -53,8 +54,6 @@ struct host_mr_options {
 
 /**
  * @brief Configure the size of the default host memory resource.
- *
- * @throws cudf::logic_error if called after the default host memory resource has been created
  *
  * @param opts Options to configure the default host memory resource
  * @return True if this call successfully configured the host memory resource, false if a
