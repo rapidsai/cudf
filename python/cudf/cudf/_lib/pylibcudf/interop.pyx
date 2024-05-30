@@ -12,10 +12,14 @@ from functools import singledispatch
 
 from pyarrow import lib as pa
 
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.interop cimport (
+    ArrowArray,
     ArrowArrayStream,
+    ArrowSchema,
     column_metadata,
     from_arrow as cpp_from_arrow,
+    from_arrow_column as cpp_from_arrow_column,
     from_arrow_stream as cpp_from_arrow_stream,
     to_arrow as cpp_to_arrow,
 )
@@ -127,9 +131,9 @@ def _from_arrow_datatype(pyarrow_object):
 def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
     if data_type is not None:
         raise ValueError("data_type may not be passed for tables")
-    capsule = pyarrow_object.__arrow_c_stream__()
+    stream = pyarrow_object.__arrow_c_stream__()
     cdef ArrowArrayStream* c_stream = (
-        <ArrowArrayStream*>pycapsule.PyCapsule_GetPointer(capsule, "arrow_array_stream")
+        <ArrowArrayStream*>pycapsule.PyCapsule_GetPointer(stream, "arrow_array_stream")
     )
 
     cdef unique_ptr[table] c_result
@@ -196,8 +200,20 @@ def _from_arrow_scalar(pyarrow_object, *, DataType data_type=None):
 def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
     if data_type is not None:
         raise ValueError("data_type may not be passed for arrays")
-    pa_table = pa.table([pyarrow_object], [""])
-    return from_arrow(pa_table).columns()[0]
+
+    schema, array = pyarrow_object.__arrow_c_array__()
+    cdef ArrowSchema* c_schema = (
+        <ArrowSchema*>pycapsule.PyCapsule_GetPointer(schema, "arrow_schema")
+    )
+    cdef ArrowArray* c_array = (
+        <ArrowArray*>pycapsule.PyCapsule_GetPointer(array, "arrow_array")
+    )
+
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(cpp_from_arrow_column(c_schema, c_array))
+
+    return Column.from_libcudf(move(c_result))
 
 
 @singledispatch

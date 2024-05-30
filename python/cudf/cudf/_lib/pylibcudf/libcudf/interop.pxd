@@ -7,6 +7,7 @@ from pyarrow.lib cimport CScalar, CTable
 
 from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
 
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
 from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
@@ -19,6 +20,12 @@ cdef extern from "dlpack/dlpack.h" nogil:
 
 # The Arrow structs are not namespaced.
 cdef extern from "cudf/interop.hpp" nogil:
+    cdef struct ArrowSchema:
+        void (*release)(ArrowSchema*) noexcept nogil
+
+    cdef struct ArrowArray:
+        void (*release)(ArrowArray*) noexcept nogil
+
     cdef struct ArrowArrayStream:
         void (*release)(ArrowArrayStream*) noexcept nogil
 
@@ -51,3 +58,6 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
     ) except +
 
     cdef unique_ptr[table] from_arrow_stream(ArrowArrayStream* input) except +
+    cdef unique_ptr[column] from_arrow_column(
+        const ArrowSchema* schema, const ArrowArray* input
+    ) except +
