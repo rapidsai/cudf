@@ -594,7 +594,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     col.validity =
       cudf::detail::create_null_mask(col.num_rows, cudf::mask_state::ALL_NULL, stream, mr);
     col.type = json_col_t::StringColumn;
-    // destroy references of all child columns after
+    // destroy references of all child columns after this step, by calling remove_child_columns
   };
 
   path_from_tree tree_path{column_categories,
