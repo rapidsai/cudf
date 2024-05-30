@@ -168,7 +168,7 @@ TEST_F(SliceListTest, Lists)
   {
     cudf::test::lists_column_wrapper<int> list{{{1, 2, 3}, {4, 5}},
                                                {LCW{}, LCW{}, {7, 8}, LCW{}},
-                                               {{{6}}},
+                                               {{{6}}},  // NOLINT
                                                {{7, 8}, {9, 10, 11}, LCW{}},
                                                {LCW{}, {-1, -2, -3, -4, -5}},
                                                {LCW{}},
@@ -177,7 +177,7 @@ TEST_F(SliceListTest, Lists)
     std::vector<cudf::size_type> indices{1, 3, 3, 6};
 
     std::vector<cudf::test::lists_column_wrapper<int>> expected;
-    expected.push_back(LCW{{LCW{}, LCW{}, {7, 8}, LCW{}}, {{{6}}}});
+    expected.push_back(LCW{{LCW{}, LCW{}, {7, 8}, LCW{}}, {{{6}}}});  // NOLINT
     expected.push_back(LCW{{{7, 8}, {9, 10, 11}, LCW{}}, {LCW{}, {-1, -2, -3, -4, -5}}, {LCW{}}});
 
     std::vector<cudf::column_view> result = cudf::slice(list, indices);
@@ -233,7 +233,7 @@ TEST_F(SliceListTest, ListsWithNulls)
   {
     cudf::test::lists_column_wrapper<int> list{{{{1, 2, 3}, valids}, {4, 5}},
                                                {{LCW{}, LCW{}, {7, 8}, LCW{}}, valids},
-                                               {{{6}}},
+                                               {{{6}}},  // NOLINT
                                                {{{7, 8}, {{9, 10, 11}, valids}, LCW{}}, valids},
                                                {{LCW{}, {-1, -2, -3, -4, -5}}, valids},
                                                {LCW{}},
@@ -242,7 +242,7 @@ TEST_F(SliceListTest, ListsWithNulls)
     std::vector<cudf::size_type> indices{1, 3, 3, 6};
 
     std::vector<cudf::test::lists_column_wrapper<int>> expected;
-    expected.push_back(LCW{{{LCW{}, LCW{}, {7, 8}, LCW{}}, valids}, {{{6}}}});
+    expected.push_back(LCW{{{LCW{}, LCW{}, {7, 8}, LCW{}}, valids}, {{{6}}}});  // NOLINT
     expected.push_back(LCW{{{{7, 8}, {{9, 10, 11}, valids}, LCW{}}, valids},
                            {{LCW{}, {-1, -2, -3, -4, -5}}, valids},
                            {LCW{}}});

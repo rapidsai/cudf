@@ -165,8 +165,8 @@ class regex_parser {
         int16_t m;
       } count;
     } d;
-    Item(int32_t type, char32_t chr) : type{type}, d{chr} {}
-    Item(int32_t type, int32_t id) : type{type}, d{.cclass_id{id}} {}
+    Item(int32_t type, char32_t chr) : type{type}, d{.chr = chr} {}
+    Item(int32_t type, int32_t id) : type{type}, d{.cclass_id = id} {}
     Item(int32_t type, int16_t n, int16_t m) : type{type}, d{.count{n, m}} {}
   };
 

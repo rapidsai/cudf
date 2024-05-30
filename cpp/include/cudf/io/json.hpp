@@ -719,8 +719,8 @@ class json_writer_options {
    * @param sink The sink used for writer output
    * @param table Table to be written to output
    */
-  explicit json_writer_options(sink_info const& sink, table_view const& table)
-    : _sink(sink), _table(table), _rows_per_chunk(table.num_rows())
+  explicit json_writer_options(sink_info sink, table_view table)
+    : _sink(std::move(sink)), _table(std::move(table)), _rows_per_chunk(table.num_rows())
   {
   }
 

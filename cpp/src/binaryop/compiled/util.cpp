@@ -163,7 +163,7 @@ struct is_supported_operation_functor {
   };
 
   template <typename BinaryOperator, typename TypeLhs, typename TypeRhs>
-  inline constexpr bool bool_op(data_type out) const
+  [[nodiscard]] inline constexpr bool bool_op(data_type out) const
   {
     return out.id() == type_id::BOOL8 and
            is_binary_operation_supported<BinaryOperator>{}.template operator()<TypeLhs, TypeRhs>();

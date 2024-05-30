@@ -119,7 +119,7 @@ class flattened_table {
                   std::vector<null_order> const& null_orders_,
                   std::vector<std::unique_ptr<column>>&& columns_,
                   temporary_nullable_data&& nullable_data_)
-    : _flattened_columns{flattened_columns_},
+    : _flattened_columns{std::move(flattened_columns_)},
       _orders{orders_},
       _null_orders{null_orders_},
       _columns{std::move(columns_)},

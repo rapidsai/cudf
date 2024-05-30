@@ -55,14 +55,14 @@ cudf::table construct_table()
   cudf::test::fixed_width_column_wrapper<int32_t> col3(zeros.begin(), zeros.end());
   cudf::test::fixed_width_column_wrapper<float> col4(zeros.begin(), zeros.end());
   cudf::test::fixed_width_column_wrapper<double> col5(zeros.begin(), zeros.end());
-  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col6 = [&ones, num_rows] {
+  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col6 = [&ones] {
     auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
       return numeric::decimal128{ones[i], numeric::scale_type{12}};
     });
     return cudf::test::fixed_width_column_wrapper<numeric::decimal128>(col6_data,
                                                                        col6_data + num_rows);
   }();
-  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col7 = [&ones, num_rows] {
+  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col7 = [&ones] {
     auto col7_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
       return numeric::decimal128{ones[i], numeric::scale_type{-12}};
     });

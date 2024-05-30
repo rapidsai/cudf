@@ -297,8 +297,8 @@ tree_meta_t2 get_tree_representation_cpu(
   };
 
   // Includes quote char for end-of-string token or Skips the quote char for beginning-of-field-name
-  auto get_token_index = [include_quote_char](cuio_json::PdaTokenT const token,
-                                              cuio_json::SymbolOffsetT const token_index) {
+  auto get_token_index = [](cuio_json::PdaTokenT const token,
+                            cuio_json::SymbolOffsetT const token_index) {
     constexpr cuio_json::SymbolOffsetT quote_char_size = 1;
     switch (token) {
       // Strip off or include quote char for StringBegin
@@ -398,10 +398,10 @@ tree_meta_t2 get_tree_representation_cpu(
 
     // Modify the stack if needed
     if (token == cuio_json::token_t::FieldNameBegin) {
-      parent_stack.push({node_id, field_name_node});
+      parent_stack.emplace(node_id, field_name_node);
     } else {
       if (does_push(token)) {
-        parent_stack.push({node_id, no_field_name_node});
+        parent_stack.emplace(node_id, no_field_name_node);
       } else if (does_pop(token)) {
         CUDF_EXPECTS(parent_stack.size() >= 1, "Invalid JSON input.");
         parent_stack.pop();

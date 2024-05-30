@@ -607,8 +607,8 @@ class orc_writer_options {
    * @param sink The sink used for writer output
    * @param table Table to be written to output
    */
-  explicit orc_writer_options(sink_info const& sink, table_view const& table)
-    : _sink(sink), _table(table)
+  explicit orc_writer_options(sink_info sink, table_view table)
+    : _sink(std::move(sink)), _table(std::move(table))
   {
   }
 
@@ -1052,7 +1052,7 @@ class chunked_orc_writer_options {
    *
    * @param sink The sink used for writer output
    */
-  chunked_orc_writer_options(sink_info const& sink) : _sink(sink) {}
+  chunked_orc_writer_options(sink_info sink) : _sink(std::move(sink)) {}
 
  public:
   /**
