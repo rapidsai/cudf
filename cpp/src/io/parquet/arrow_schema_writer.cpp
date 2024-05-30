@@ -48,7 +48,6 @@ using FBString          = flatbuffers::Offset<flatbuffers::String>;
  * @param column_metadata Metadata of the column
  * @param write_mode Flag to indicate that we are guaranteeing a single table write
  * @param utc_timestamps Flag to indicate if timestamps are UTC
- * @param int96_timestamps Flag to indicate if timestamps was written as INT96
  *
  * @return Flatbuffer offset to the constructed field
  */
@@ -56,8 +55,7 @@ FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
                                      cudf::detail::LinkedColPtr const& column,
                                      column_in_metadata const& column_metadata,
                                      single_write_mode const write_mode,
-                                     bool const utc_timestamps,
-                                     bool const int96_timestamps);
+                                     bool const utc_timestamps);
 
 /**
  * @brief Functor to convert cudf column metadata to arrow schema field metadata
@@ -68,7 +66,6 @@ struct dispatch_to_flatbuf {
   column_in_metadata const& col_meta;
   single_write_mode const write_mode;
   bool const utc_timestamps;
-  bool const int96_timestamps;
   Offset& field_offset;
   flatbuf::Type& type_type;
   std::vector<FieldOffset>& children;
@@ -162,11 +159,6 @@ struct dispatch_to_flatbuf {
                    void>
   operator()()
   {
-    // INT96 timestamps have been deprecated in arrow
-    if (int96_timestamps or col_meta.is_enabled_int96_timestamps()) {
-      CUDF_FAIL("INT96 timestamps have been deprecated in arrow schema");
-    }
-
     type_type = flatbuf::Type_Timestamp;
     // Use one of the strings: "UTC", "Etc/UTC" or "+00:00" to indicate a native UTC timestamp
     field_offset = flatbuf::CreateTimestamp(
@@ -177,11 +169,6 @@ struct dispatch_to_flatbuf {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ms>, void> operator()()
   {
-    // INT96 timestamps have been deprecated in arrow
-    if (int96_timestamps or col_meta.is_enabled_int96_timestamps()) {
-      CUDF_FAIL("INT96 timestamps have been deprecated in arrow schema");
-    }
-
     type_type = flatbuf::Type_Timestamp;
     // Use one of the strings: "UTC", "Etc/UTC" or "+00:00" to indicate a native UTC timestamp
     field_offset =
@@ -193,11 +180,6 @@ struct dispatch_to_flatbuf {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_us>, void> operator()()
   {
-    // INT96 timestamps have been deprecated in arrow
-    if (int96_timestamps or col_meta.is_enabled_int96_timestamps()) {
-      CUDF_FAIL("INT96 timestamps have been deprecated in arrow schema");
-    }
-
     type_type = flatbuf::Type_Timestamp;
     // Use one of the strings: "UTC", "Etc/UTC" or "+00:00" to indicate a native UTC timestamp
     field_offset =
@@ -209,11 +191,6 @@ struct dispatch_to_flatbuf {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
   {
-    // INT96 timestamps have been deprecated in arrow
-    if (int96_timestamps or col_meta.is_enabled_int96_timestamps()) {
-      CUDF_FAIL("INT96 timestamps have been deprecated in arrow schema");
-    }
-
     type_type = flatbuf::Type_Timestamp;
     // Use one of the strings: "UTC", "Etc/UTC" or "+00:00" to indicate a native UTC timestamp
     field_offset =
@@ -278,7 +255,7 @@ struct dispatch_to_flatbuf {
     // Hence, we only need to process the second child of the list.
     if constexpr (std::is_same_v<T, cudf::list_view>) {
       children.emplace_back(make_arrow_schema_fields(
-        fbb, col->children[1], col_meta.child(1), write_mode, utc_timestamps, int96_timestamps));
+        fbb, col->children[1], col_meta.child(1), write_mode, utc_timestamps));
       type_type    = flatbuf::Type_List;
       field_offset = flatbuf::CreateList(fbb).Union();
     }
@@ -289,12 +266,8 @@ struct dispatch_to_flatbuf {
                      thrust::make_counting_iterator(col->children.size()),
                      std::back_inserter(children),
                      [&](auto const idx) {
-                       return make_arrow_schema_fields(fbb,
-                                                       col->children[idx],
-                                                       col_meta.child(idx),
-                                                       write_mode,
-                                                       utc_timestamps,
-                                                       int96_timestamps);
+                       return make_arrow_schema_fields(
+                         fbb, col->children[idx], col_meta.child(idx), write_mode, utc_timestamps);
                      });
       type_type    = flatbuf::Type_Struct_;
       field_offset = flatbuf::CreateStruct_(fbb).Union();
@@ -314,23 +287,20 @@ FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
                                      cudf::detail::LinkedColPtr const& column,
                                      column_in_metadata const& column_metadata,
                                      single_write_mode const write_mode,
-                                     bool const utc_timestamps,
-                                     bool const int96_timestamps)
+                                     bool const utc_timestamps)
 {
   Offset field_offset     = 0;
   flatbuf::Type type_type = flatbuf::Type_NONE;
   std::vector<FieldOffset> children;
 
-  cudf::type_dispatcher(column->type(),
-                        dispatch_to_flatbuf{fbb,
-                                            column,
-                                            column_metadata,
-                                            write_mode,
-                                            utc_timestamps,
-                                            int96_timestamps,
-                                            field_offset,
-                                            type_type,
-                                            children});
+  cudf::type_dispatcher(
+    column->type(),
+    dispatch_to_flatbuf{
+      fbb, column, column_metadata, write_mode, utc_timestamps, field_offset, type_type, children});
+
+  std::cout << "Name: " << column_metadata.get_name()
+            << ", Type: " << static_cast<std::underlying_type<type_id>::type>(column->type().id())
+            << std::endl;
 
   auto const fb_name          = fbb.CreateString(column_metadata.get_name());
   auto const fb_children      = fbb.CreateVector(children.data(), children.size());
@@ -345,8 +315,7 @@ FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
 std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector const& linked_columns,
                                                table_input_metadata const& metadata,
                                                single_write_mode const write_mode,
-                                               bool const utc_timestamps,
-                                               bool const int96_timestamps)
+                                               bool const utc_timestamps)
 {
   // Lambda function to convert int32 to a string of uint8 bytes
   auto const convert_int32_to_byte_string = [&](int32_t const value) {
@@ -368,12 +337,8 @@ std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector con
                    thrust::make_tuple(linked_columns.end(), metadata.column_metadata.end())),
                  std::back_inserter(field_offsets),
                  [&](auto const& elem) {
-                   return make_arrow_schema_fields(fbb,
-                                                   thrust::get<0>(elem),
-                                                   thrust::get<1>(elem),
-                                                   write_mode,
-                                                   utc_timestamps,
-                                                   int96_timestamps);
+                   return make_arrow_schema_fields(
+                     fbb, thrust::get<0>(elem), thrust::get<1>(elem), write_mode, utc_timestamps);
                  });
 
   // Build an arrow:schema flatbuffer using the field offset vector and use it as the header to

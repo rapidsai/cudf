@@ -1604,38 +1604,6 @@ def test_parquet_writer_cpu_pyarrow(
     assert_eq(expect, got)
 
 
-@pytest.mark.filterwarnings("ignore:Using CPU")
-def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
-    gdf_fname = tmpdir.join("gdf.parquet")
-
-    if len(pdf) == 0:
-        pdf = pdf.reset_index(drop=True)
-        gdf = gdf.reset_index(drop=True)
-
-    if "col_category" in pdf.columns:
-        pdf = pdf.drop(columns=["col_category"])
-    if "col_category" in gdf.columns:
-        gdf = gdf.drop(columns=["col_category"])
-
-    assert_eq(pdf, gdf)
-
-    # Write out the gdf using the GPU accelerated writer with INT96 timestamps
-    # INT96 timestamps have been deprecated in Arrow so set `store_schema=False`
-    gdf.to_parquet(
-        gdf_fname.strpath,
-        index=None,
-        int96_timestamps=True,
-        store_schema=False,
-    )
-
-    assert os.path.exists(gdf_fname)
-
-    expect = pdf
-    got = pd.read_parquet(gdf_fname)
-
-    # verify INT96 timestamps were converted back to the same data.
-    assert_eq(expect, got, check_categorical=False, check_dtype=False)
-
 
 def test_multifile_parquet_folder(tmpdir):
     test_pdf1 = make_pdf(nrows=10, nvalids=10 // 2, dtype="float64")
@@ -3171,7 +3139,7 @@ def test_parquet_writer_time_delta_physical_type():
         }
     )
     buffer = BytesIO()
-    df.to_parquet(buffer)
+    df.to_parquet(buffer, store_schema=True)
 
     got = pd.read_parquet(buffer)
     expected = pd.DataFrame(
@@ -3209,7 +3177,7 @@ def test_parquet_roundtrip_time_delta():
         }
     )
     buffer = BytesIO()
-    df.to_parquet(buffer)
+    df.to_parquet(buffer, store_schema=True)
     # TODO: Remove `check_dtype` once following issue is fixed in arrow:
     # https://github.com/apache/arrow/issues/33321
     assert_eq(df, cudf.read_parquet(buffer), check_dtype=False)
@@ -3451,7 +3419,7 @@ def test_parquet_writer_roundtrip_with_arrow_schema():
 
     # Write to Parquet
     buffer = BytesIO()
-    expected.to_parquet(buffer)
+    expected.to_parquet(buffer, store_schema=True)
 
     # Read parquet with pyarrow and cudf readers
     got = cudf.DataFrame.from_arrow(pq.read_table(buffer))
@@ -3535,7 +3503,7 @@ def test_parquet_writer_roundtrip_structs_with_arrow_schema(tmpdir, data):
 
     # Write expected data frame to Parquet
     buffer = BytesIO()
-    expected.to_parquet(buffer)
+    expected.to_parquet(buffer, store_schema=True)
 
     # Read Parquet with pyarrow
     pa_got = pq.read_table(buffer)

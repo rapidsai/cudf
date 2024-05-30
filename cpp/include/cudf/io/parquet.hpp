@@ -72,7 +72,7 @@ class parquet_reader_options {
   // Whether to use PANDAS metadata to load columns
   bool _use_pandas_metadata = true;
   // Whether to read and use ARROW schema
-  bool _use_arrow_schema = true;
+  bool _use_arrow_schema = false;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
@@ -603,7 +603,7 @@ class parquet_writer_options {
   // Defaults to true because libcudf timestamps are implicitly UTC
   bool _write_timestamps_as_UTC = true;
   // Whether to write ARROW schema
-  bool _write_arrow_schema = true;
+  bool _write_arrow_schema = false;
   // Column chunks file paths to be set in the raw output metadata. One per output file
   std::vector<std::string> _column_chunks_file_paths;
   // Maximum size of each row group (unless smaller than a single page)
@@ -1327,7 +1327,7 @@ class chunked_parquet_writer_options {
   // Parquet writer can write timestamps as UTC. Defaults to true.
   bool _write_timestamps_as_UTC = true;
   // Whether to write ARROW schema
-  bool _write_arrow_schema = true;
+  bool _write_arrow_schema = false;
   // Maximum size of each row group (unless smaller than a single page)
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)

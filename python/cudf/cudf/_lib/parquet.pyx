@@ -412,7 +412,7 @@ def write_parquet(
     object column_encoding=None,
     object column_type_length=None,
     object output_as_binary=None,
-    write_arrow_schema=True,
+    write_arrow_schema=False,
 ):
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -597,7 +597,7 @@ cdef class ParquetWriter:
         If ``True``, enable dictionary encoding for Parquet page data
         subject to ``max_dictionary_size`` constraints.
         If ``False``, disable dictionary encoding for Parquet page data.
-    write_arrow_schema : bool, default True
+    write_arrow_schema : bool, default False
         If ``True``, enable computing and writing arrow schema to Parquet
         file footer's key-value metadata section.
     See Also
@@ -628,7 +628,7 @@ cdef class ParquetWriter:
                   int max_page_size_rows=20000,
                   int max_dictionary_size=1048576,
                   bool use_dictionary=True,
-                  bool store_schema=True):
+                  bool store_schema=False):
         filepaths_or_buffers = (
             list(filepath_or_buffer)
             if is_list_like(filepath_or_buffer)
