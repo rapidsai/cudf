@@ -95,13 +95,15 @@ class DataFrame:
             raise ValueError("Mismatching name and table length.")
         return cls([Column(c, name) for c, name in zip(table.columns(), names)], [])
 
-    def with_sorted(self, *, like: DataFrame, subset: Set[str] | None = None) -> Self:
+    def sorted_like(
+        self, like: DataFrame, /, *, subset: Set[str] | None = None
+    ) -> Self:
         """Copy sortedness from a dataframe onto self."""
         if like.column_names != self.column_names:
             raise ValueError("Can only copy from identically named frame")
         subset = self.column_names_set if subset is None else subset
         self.columns = [
-            c.with_sorted(like=other) if c.name in subset else c
+            c.sorted_like(other) if c.name in subset else c
             for c, other in zip(self.columns, like.columns)
         ]
         return self
@@ -147,7 +149,7 @@ class DataFrame:
     def filter(self, mask: Column) -> Self:
         """Return a filtered table given a mask."""
         table = plc.stream_compaction.apply_boolean_mask(self.table, mask.obj)
-        return type(self).from_table(table, self.column_names).with_sorted(like=self)
+        return type(self).from_table(table, self.column_names).sorted_like(self)
 
     def slice(self, zlice: tuple[int, int] | None) -> Self:
         """
@@ -172,4 +174,4 @@ class DataFrame:
         # to the end of the frame if it is larger.
         end = min(start + length, self.num_rows)
         (table,) = plc.copying.slice(self.table, [start, end])
-        return type(self).from_table(table, self.column_names).with_sorted(like=self)
+        return type(self).from_table(table, self.column_names).sorted_like(self)

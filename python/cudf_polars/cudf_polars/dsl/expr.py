@@ -740,7 +740,7 @@ class Filter(Expr):
         table = plc.stream_compaction.apply_boolean_mask(
             plc.Table([values.obj]), mask.obj
         )
-        return Column(table.columns()[0], values.name).with_sorted(like=values)
+        return Column(table.columns()[0], values.name).sorted_like(values)
 
 
 class RollingWindow(Expr):
@@ -781,8 +781,8 @@ class Cast(Expr):
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         column = child.evaluate(df, context=context, mapping=mapping)
-        return Column(plc.unary.cast(column.obj, self.dtype), column.name).with_sorted(
-            like=column
+        return Column(plc.unary.cast(column.obj, self.dtype), column.name).sorted_like(
+            column
         )
 
     def collect_agg(self, *, depth: int) -> AggInfo:

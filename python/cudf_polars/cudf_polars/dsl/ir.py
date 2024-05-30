@@ -613,7 +613,7 @@ class Distinct(IR):
             [Column(c, old.name) for c, old in zip(table.columns(), df.columns)], []
         )
         if keys_sorted or self.stable:
-            result = result.with_sorted(like=df)
+            result = result.sorted_like(df)
         return result.slice(self.zlice)
 
 
@@ -787,7 +787,7 @@ class MapFunction(IR):
                     [plc.types.NullOrder.BEFORE],
                 ),
                 first.column_names,
-            ).with_sorted(like=first, subset={key_column})
+            ).sorted_like(first, subset={key_column})
         elif self.name == "rechunk":
             # No-op in our data model
             return self.df.evaluate(cache=cache)
@@ -799,7 +799,7 @@ class MapFunction(IR):
             return DataFrame.from_table(
                 plc.stream_compaction.drop_nulls(df.table, indices, len(indices)),
                 df.column_names,
-            ).with_sorted(like=df)
+            ).sorted_like(df)
         elif self.name == "rename":
             df = self.df.evaluate(cache=cache)
             # final tag is "swapping" which is useful for the
@@ -813,7 +813,7 @@ class MapFunction(IR):
             subset = df.column_names_set - {to_explode}
             return DataFrame.from_table(
                 plc.lists.explode_outer(df.table, index), df.column_names
-            ).with_sorted(like=df, subset=subset)
+            ).sorted_like(df, subset=subset)
         else:
             raise AssertionError("Should never be reached")
 

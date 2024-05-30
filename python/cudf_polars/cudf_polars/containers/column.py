@@ -34,9 +34,9 @@ class Column:
 
     def rename(self, name: str) -> Column:
         """Return a new column sharing data with a new name."""
-        return type(self)(self.obj, name).with_sorted(like=self)
+        return type(self)(self.obj, name).sorted_like(self)
 
-    def with_sorted(self, *, like: Column) -> Self:
+    def sorted_like(self, like: Column, /) -> Self:
         """Copy sortedness properties from a column onto self."""
         return self.set_sorted(
             is_sorted=like.is_sorted, order=like.order, null_order=like.null_order
@@ -72,7 +72,7 @@ class Column:
 
     def copy(self) -> Self:
         """Return a shallow copy of the column."""
-        return type(self)(self.obj, self.name).with_sorted(like=self)
+        return type(self)(self.obj, self.name).sorted_like(self)
 
     def mask_nans(self) -> Self:
         """Return a copy of self with nans masked out."""
