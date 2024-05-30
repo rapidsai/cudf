@@ -943,7 +943,7 @@ def _fast_slow_function_call(
                     )
                 else:
                     try:
-                        _assert_fast_slow_eq(result, slow_result)
+                        _assert_fast_slow_eq(result, slow_result, **kwargs)
                     except AssertionError as e:
                         warnings.warn(
                             "The results from cudf and pandas were different. "
