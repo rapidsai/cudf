@@ -72,7 +72,7 @@ class parquet_reader_options {
   // Whether to use PANDAS metadata to load columns
   bool _use_pandas_metadata = true;
   // Whether to read and use ARROW schema
-  bool _use_arrow_schema = false;
+  bool _use_arrow_schema = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
