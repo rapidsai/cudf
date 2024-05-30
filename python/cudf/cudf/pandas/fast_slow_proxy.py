@@ -19,11 +19,12 @@ from typing import (
     Literal,
     Mapping,
     Optional,
-    Sequence,
     Set,
     Tuple,
     Type,
 )
+
+import numpy as np
 
 from cudf.testing._utils import assert_eq
 
@@ -33,12 +34,6 @@ from .annotation import nvtx
 
 def call_operator(fn, args, kwargs):
     return fn(*args, **kwargs)
-
-
-DEBUG_MODE = (
-    "mode.pandas_debugging" if get_option("mode.pandas_debugging") else None
-)
-ASSERT_FUNC = None
 
 
 _CUDF_PANDAS_NVTX_COLORS = {
@@ -185,8 +180,7 @@ def make_final_proxy_type(
             lambda cls, args, kwargs: setattr(
                 self, "_fsproxy_wrapped", cls(*args, **kwargs)
             ),
-            DEBUG_MODE,
-            ASSERT_FUNC,
+            get_option("mode.pandas_debugging"),
             type(self),
             args,
             kwargs,
@@ -716,8 +710,7 @@ class _CallableProxyMixin:
             # TODO: When Python 3.11 is the minimum supported Python version
             # this can use operator.call
             call_operator,
-            DEBUG_MODE,
-            ASSERT_FUNC,
+            get_option("mode.pandas_debugging"),
             self,
             args,
             kwargs,
@@ -831,7 +824,10 @@ class _FastSlowAttribute:
             else:
                 # for anything else, use a fast-slow attribute:
                 self._attr, _ = _fast_slow_function_call(
-                    getattr, DEBUG_MODE, ASSERT_FUNC, owner, self._name
+                    getattr,
+                    get_option("mode.pandas_debugging"),
+                    owner,
+                    self._name,
                 )
 
                 if isinstance(
@@ -853,7 +849,10 @@ class _FastSlowAttribute:
                         None,  # type: ignore
                     )
                 return _fast_slow_function_call(
-                    getattr, DEBUG_MODE, ASSERT_FUNC, instance, self._name
+                    getattr,
+                    get_option("mode.pandas_debugging"),
+                    instance,
+                    self._name,
                 )[0]
         return self._attr
 
@@ -890,21 +889,16 @@ class _MethodProxy(_FunctionProxy):
 
 
 def _assert_fast_slow_eq(left, right, **kwargs):
-    assert_func = (
-        assert_eq
-        if not kwargs.get("assert_func")
-        else kwargs.get("assert_func")
-    )
-    if type(left).__name__ in _TYPES:
+    assert_func = kwargs.get("assert_func", assert_eq)
+    if _is_final_type(type(left)) or (type(left) in NUMPY_TYPES):
         assert_func(left, right)
 
 
 def _fast_slow_function_call(
     func: Callable,
-    debug_mode: str | None = None,
-    assert_func: Callable | None = None,
-    *args: Sequence[Any],
-    **kwargs: Mapping[Any, Any],
+    mode_pandas_debugging: bool | None = None,
+    *args,
+    **kwargs,
 ) -> Any:
     """
     Call `func` with all `args` and `kwargs` converted to their
@@ -929,8 +923,7 @@ def _fast_slow_function_call(
                 # try slow path
                 raise Exception()
             fast = True
-
-            if get_option(debug_mode):
+            if mode_pandas_debugging:
                 try:
                     with nvtx.annotate(
                         "EXECUTE_SLOW_DEBUG",
@@ -950,9 +943,7 @@ def _fast_slow_function_call(
                     )
                 else:
                     try:
-                        _assert_fast_slow_eq(
-                            result, slow_result, assert_func=assert_func
-                        )
+                        _assert_fast_slow_eq(result, slow_result)
                     except AssertionError as e:
                         warnings.warn(
                             "The results from cudf and pandas were different. "
@@ -1208,118 +1199,7 @@ def _replace_closurevars(
     )
 
 
-_TYPES: Set[str] = {
-    "Timedelta",
-    "Timestamp",
-    "DataFrame",
-    "Series",
-    "Index",
-    "RangeIndex",
-    "SparseDtype",
-    "SparseArray",
-    "CategoricalIndex",
-    "Categorical",
-    "CategoricalDtype",
-    "DatetimeIndex",
-    "DatetimeArray",
-    "DatetimeTZDtype",
-    "TimedeltaIndex",
-    "NumpyExtensionArray",
-    "PandasArray",
-    "TimedeltaArray",
-    "PeriodIndex",
-    "PeriodArray",
-    "PeriodDtype",
-    "Period",
-    "MultiIndex",
-    "Grouper",
-    "StringArray",
-    "StringDtype",
-    "BooleanArray",
-    "BooleanDtype",
-    "IntegerArray",
-    "Int8Dtype",
-    "Int16Dtype",
-    "Int32Dtype",
-    "Int64Dtype",
-    "UInt8Dtype",
-    "UInt16Dtype",
-    "UInt32Dtype",
-    "UInt64Dtype",
-    "IntervalIndex",
-    "IntervalArray",
-    "IntervalDtype",
-    "Interval",
-    "FloatingArray",
-    "Float32Dtype",
-    "Float64Dtype",
-    "FixedForwardWindowIndexer",
-    "VariableOffsetWindowIndexer",
-    "HDFStore",
-    "ExcelFile",
-    "ExcelWriter",
-    "Styler",
-    "USFederalHolidayCalendar",
-    "HolidayCalendarMetaClass",
-    "AbstractHolidayCalendar",
-    "Holiday",
-    "USThanksgivingDay",
-    "USColumbusDay",
-    "USLaborDay",
-    "USMemorialDay",
-    "USMartinLutherKingJr",
-    "USPresidentsDay",
-    "GoodFriday",
-    "EasterMonday",
-    "FY5253",
-    "BDay",
-    "BMonthBegin",
-    "BMonthEnd",
-    "BQuarterBegin",
-    "BQuarterEnd",
-    "BusinessDay",
-    "BusinessHour",
-    "BusinessMonthBegin",
-    "BusinessMonthEnd",
-    "BYearBegin",
-    "BYearEnd",
-    "CBMonthBegin",
-    "CBMonthEnd",
-    "CDay",
-    "CustomBusinessDay",
-    "CustomBusinessHour",
-    "CustomBusinessMonthBegin",
-    "CustomBusinessMonthEnd",
-    "DateOffset",
-    "BaseOffset",
-    "Day",
-    "Easter",
-    "FY5253Quarter",
-    "Hour",
-    "LastWeekOfMonth",
-    "Micro",
-    "Milli",
-    "Minute",
-    "MonthBegin",
-    "MonthEnd",
-    "Nano",
-    "QuarterBegin",
-    "QuarterEnd",
-    "Second",
-    "SemiMonthBegin",
-    "SemiMonthEnd",
-    "Tick",
-    "Week",
-    "WeekOfMonth",
-    "YearBegin",
-    "YearEnd",
-    "Flags",
-    "NamedAgg",
-    "ArrowExtensionArray",
-    "int",
-    "str",
-    "float",
-}
+NUMPY_TYPES: Set[str] = set(np.sctypeDict.values())
 
 
 _SPECIAL_METHODS: Set[str] = {

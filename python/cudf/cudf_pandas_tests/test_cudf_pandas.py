@@ -1424,21 +1424,21 @@ def test_holidays_within_dates(holiday, start, expected):
 
 
 def test_pandas_debugging_mode_option(monkeypatch):
+    import cudf.pandas
     from cudf import Series, option_context
 
+    cudf.pandas.install()
+    import pandas as xpd
+
     def mock_mean(self, *args, **kwargs):
-        return 1.0
+        return np.float64(1.0)
+
+    monkeypatch.setattr(Series, "mean", mock_mean)
 
     with option_context("mode.pandas_debugging", True):
-        import cudf.pandas
-
-        cudf.pandas.install()
-        import pandas as xpd
-
-        monkeypatch.setattr(Series, "mean", mock_mean)
         s = xpd.Series([1, 2])
         with pytest.warns(
             UserWarning,
             match="The results from cudf and pandas were different.",
         ):
-            assert s.mean() == 1.0
+            assert s.mean() == np.float64(1.0)
