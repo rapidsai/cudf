@@ -86,16 +86,13 @@ void test_durations(mask_op_t mask_op, bool use_byte_stream_split, bool arrow_sc
       .use_arrow_schema(arrow_schema);
   auto result = cudf::io::read_parquet(in_opts);
 
+  auto durations_d_got =
+    cudf::cast(result.tbl->view().column(0), cudf::data_type{cudf::type_id::DURATION_DAYS});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_d, durations_d_got->view());
+
   if (arrow_schema) {
-    auto durations_d_got =
-      cudf::cast(result.tbl->view().column(0), cudf::data_type{cudf::type_id::DURATION_DAYS});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_d, durations_d_got->view());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_s, result.tbl->view().column(1));
   } else {
-    auto durations_d_got =
-      cudf::cast(result.tbl->view().column(0), cudf::data_type{cudf::type_id::DURATION_DAYS});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_d, durations_d_got->view());
-
     auto durations_s_got =
       cudf::cast(result.tbl->view().column(1), cudf::data_type{cudf::type_id::DURATION_SECONDS});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_s, durations_s_got->view());

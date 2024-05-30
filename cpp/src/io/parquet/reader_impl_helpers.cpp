@@ -45,7 +45,7 @@ thrust::optional<LogicalType> converted_to_logical_type(SchemaElement const& sch
       case MAP: return LogicalType{LogicalType::MAP};
       case LIST: return LogicalType{LogicalType::LIST};
       case DECIMAL: return LogicalType{DecimalType{schema.decimal_scale, schema.decimal_precision}};
-      case DATE: return LogicalType{LogicalType::DATE};
+      case DATE: return LogicalType{DateType{DateUnit::DAYS}};
       case TIME_MILLIS: return LogicalType{TimeType{true, TimeUnit::MILLIS}};
       case TIME_MICROS: return LogicalType{TimeType{true, TimeUnit::MICROS}};
       case TIMESTAMP_MILLIS: return LogicalType{TimestampType{true, TimeUnit::MILLIS}};

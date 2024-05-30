@@ -1604,7 +1604,6 @@ def test_parquet_writer_cpu_pyarrow(
     assert_eq(expect, got)
 
 
-
 def test_multifile_parquet_folder(tmpdir):
     test_pdf1 = make_pdf(nrows=10, nvalids=10 // 2, dtype="float64")
     test_pdf2 = make_pdf(nrows=20, dtype="float64")
@@ -3130,6 +3129,7 @@ def test_parquet_writer_zstd():
         got = pd.read_parquet(buff)
         assert_eq(expected, got)
 
+
 @pytest.mark.parametrize("store_schema", [True, False])
 def test_parquet_writer_time_delta_physical_type(store_schema):
     df = cudf.DataFrame(
@@ -3147,7 +3147,7 @@ def test_parquet_writer_time_delta_physical_type(store_schema):
 
     got = pd.read_parquet(buffer)
 
-    if (store_schema):
+    if store_schema:
         expected = pd.DataFrame(
             {
                 "s": ["0 days 00:00:01"],
@@ -3197,8 +3197,9 @@ def test_parquet_roundtrip_time_delta(store_schema):
     df.to_parquet(buffer, store_schema=store_schema)
     # `check_dtype` cannot be removed here as timedelta64[s] will change to `timedelta[ms]`
     assert_eq(df, cudf.read_parquet(buffer), check_dtype=False)
-    if (store_schema == True):
-        assert_eq(df, pd.read_parquet(buffer)) 
+    if store_schema:
+        assert_eq(df, pd.read_parquet(buffer))
+
 
 def test_parquet_reader_malformed_file(datadir):
     fname = datadir / "nested-unsigned-malformed.parquet"

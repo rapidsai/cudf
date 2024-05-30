@@ -57,6 +57,15 @@ struct TimeUnit {
   Type type;
 };
 
+struct DateUnit {
+  enum Type : char { DAYS = 0, MILLIS = 1 };
+  Type type;
+};
+
+struct DateType {
+  DateUnit unit = {DateUnit::DAYS};
+};
+
 struct TimeType {
   // Default to true because the timestamps are implicitly in UTC
   // Writer option overrides this default
@@ -97,12 +106,14 @@ struct LogicalType {
   thrust::optional<DecimalType> decimal_type;
   thrust::optional<TimeType> time_type;
   thrust::optional<TimestampType> timestamp_type;
+  thrust::optional<DateType> date_type;
   thrust::optional<IntType> int_type;
 
   LogicalType(Type tp = UNDEFINED) : type(tp) {}
   LogicalType(DecimalType&& dt) : type(DECIMAL), decimal_type(dt) {}
   LogicalType(TimeType&& tt) : type(TIME), time_type(tt) {}
   LogicalType(TimestampType&& tst) : type(TIMESTAMP), timestamp_type(tst) {}
+  LogicalType(DateType&& date) : type(DATE), date_type(date) {}
   LogicalType(IntType&& it) : type(INTEGER), int_type(it) {}
 
   constexpr bool is_time_millis() const

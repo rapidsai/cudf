@@ -155,9 +155,15 @@ struct dispatch_to_flatbuf {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_D> or std::is_same_v<T, cudf::timestamp_s>,
-                   void>
-  operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::timestamp_D>, void> operator()()
+  {
+    type_type = flatbuf::Type_Date;
+    // Use one of the strings: "UTC", "Etc/UTC" or "+00:00" to indicate a native UTC timestamp
+    field_offset = flatbuf::CreateDate(fbb, flatbuf::DateUnit_DAY).Union();
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same_v<T, cudf::timestamp_s>, void> operator()()
   {
     type_type = flatbuf::Type_Timestamp;
     // Use one of the strings: "UTC", "Etc/UTC" or "+00:00" to indicate a native UTC timestamp
@@ -200,8 +206,14 @@ struct dispatch_to_flatbuf {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_D> or std::is_same_v<T, cudf::duration_s>, void>
-  operator()()
+  std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
+  {
+    type_type    = flatbuf::Type_Time;
+    field_offset = flatbuf::CreateTime(fbb, flatbuf::TimeUnit_MILLISECOND).Union();
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
   {
     type_type    = flatbuf::Type_Duration;
     field_offset = flatbuf::CreateDuration(fbb, flatbuf::TimeUnit_SECOND).Union();
