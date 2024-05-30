@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "to_arrow_utilities.hpp"
+#include "arrow_utilities.hpp"
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/interop.hpp>

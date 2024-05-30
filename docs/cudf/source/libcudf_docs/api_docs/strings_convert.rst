@@ -2,4 +2,4 @@ Strings Convert
 ===============
 
 .. doxygengroup:: strings_convert
-   :members:
+   :desc-only:
