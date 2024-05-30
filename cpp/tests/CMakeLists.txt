@@ -269,6 +269,7 @@ ConfigureTest(
   interop/to_arrow_test.cpp
   interop/from_arrow_test.cpp
   interop/from_arrow_device_test.cpp
+  interop/from_arrow_host_test.cpp
   interop/dlpack_test.cpp
   EXTRA_LIB
   nanoarrow
