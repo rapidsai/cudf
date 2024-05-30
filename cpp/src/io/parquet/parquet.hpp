@@ -130,7 +130,7 @@ struct LogicalType {
     return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::MICROS;
   }
 
-  constexpr bool is_timestamp_nanos() const
+  [[nodiscard]] constexpr bool is_timestamp_nanos() const
   {
     return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::NANOS;
   }

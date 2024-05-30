@@ -407,13 +407,7 @@ struct ColumnChunkDesc {
       type_length(datatype_length_),
       physical_type(datatype_),
       level_bits{def_level_bits_, rep_level_bits_},
-      num_data_pages(0),
-      num_dict_pages(0),
-      dict_page(nullptr),
-      str_dict_index(nullptr),
-      valid_map_base{nullptr},
-      column_data_base{nullptr},
-      column_string_base{nullptr},
+
       codec(codec_),
       logical_type(logical_type_),
       ts_clock_rate(ts_clock_rate_),
@@ -421,8 +415,8 @@ struct ColumnChunkDesc {
       src_col_schema(src_col_schema_),
       h_chunk_info(chunk_info_),
       list_bytes_per_row_est(list_bytes_per_row_est_),
-      is_strings_to_cat(strings_to_categorical_),
-      is_large_string_col(false)
+      is_strings_to_cat(strings_to_categorical_)
+
   {
   }
 
