@@ -209,15 +209,28 @@ def to_arrow(cudf_object, metadata=None):
 
 
 @to_arrow.register(DataType)
-def _to_arrow_datatype(cudf_object):
-    if cudf_object.id() == type_id.DECIMAL128:
-        return pa.decimal128(-cudf_object.scale)
-    elif cudf_object.id() in {type_id.LIST, type_id.STRUCT}:
-        # TODO: need column metadata
-        raise ValueError(
-            f"Cannot convert {cudf_object} to PyArrow type"
-        )
-    return ARROW_TO_PYLIBCUDF_TYPES.get(cudf_object.id())
+def _to_arrow_datatype(cudf_object, **kwargs):
+    if cudf_object.id() in {type_id.DECIMAL32, type_id.DECIMAL64, type_id.DECIMAL128}:
+        if not (precision := kwargs.get("precision")):
+            raise ValueError(
+                "Precision must be provided for decimal types"
+            )
+            # no pa.decimal32 or pa.decimal64
+        return pa.decimal128(precision, -cudf_object.scale())
+    elif cudf_object.id() == type_id.STRUCT:
+        if not (fields := kwargs.get("fields")):
+            raise ValueError(
+                "Fields must be provided for struct types"
+            )
+        return pa.struct(fields)
+    elif cudf_object.id() == type_id.LIST:
+        if not (value_type := kwargs.get("value_type")):
+            raise ValueError(
+                "Value type must be provided for list types"
+            )
+        return pa.list_(value_type)
+    else:
+        return ARROW_TO_PYLIBCUDF_TYPES.get(cudf_object.id())
 
 
 @to_arrow.register(Table)
