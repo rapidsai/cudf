@@ -28,7 +28,7 @@ import numpy as np
 
 from cudf.testing._utils import assert_eq
 
-from ..options import get_option
+from ..options import _env_get_bool
 from .annotation import nvtx
 
 
@@ -180,7 +180,7 @@ def make_final_proxy_type(
             lambda cls, args, kwargs: setattr(
                 self, "_fsproxy_wrapped", cls(*args, **kwargs)
             ),
-            get_option("mode.pandas_debugging"),
+            _env_get_bool("MODE_PANDAS_DEBUGGING", False),
             type(self),
             args,
             kwargs,
@@ -710,7 +710,7 @@ class _CallableProxyMixin:
             # TODO: When Python 3.11 is the minimum supported Python version
             # this can use operator.call
             call_operator,
-            get_option("mode.pandas_debugging"),
+            _env_get_bool("MODE_PANDAS_DEBUGGING", False),
             self,
             args,
             kwargs,
@@ -825,7 +825,7 @@ class _FastSlowAttribute:
                 # for anything else, use a fast-slow attribute:
                 self._attr, _ = _fast_slow_function_call(
                     getattr,
-                    get_option("mode.pandas_debugging"),
+                    _env_get_bool("MODE_PANDAS_DEBUGGING", False),
                     owner,
                     self._name,
                 )
@@ -850,7 +850,7 @@ class _FastSlowAttribute:
                     )
                 return _fast_slow_function_call(
                     getattr,
-                    get_option("mode.pandas_debugging"),
+                    _env_get_bool("MODE_PANDAS_DEBUGGING", False),
                     instance,
                     self._name,
                 )[0]

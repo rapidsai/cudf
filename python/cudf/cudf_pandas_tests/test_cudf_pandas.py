@@ -6,11 +6,13 @@ import collections
 import copy
 import datetime
 import operator
+import os
 import pathlib
 import pickle
 import tempfile
 import types
 from io import BytesIO, StringIO
+from unittest import mock
 
 import numpy as np
 import pyarrow as pa
@@ -1425,7 +1427,7 @@ def test_holidays_within_dates(holiday, start, expected):
 
 def test_pandas_debugging_mode_option(monkeypatch):
     import cudf.pandas
-    from cudf import Series, option_context
+    from cudf import Series
 
     cudf.pandas.install()
     import pandas as xpd
@@ -1435,7 +1437,7 @@ def test_pandas_debugging_mode_option(monkeypatch):
 
     monkeypatch.setattr(Series, "mean", mock_mean)
 
-    with option_context("mode.pandas_debugging", True):
+    with mock.patch.dict(os.environ, {"MODE_PANDAS_DEBUGGING": "True"}):
         s = xpd.Series([1, 2])
         with pytest.warns(
             UserWarning,
