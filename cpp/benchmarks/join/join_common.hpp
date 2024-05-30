@@ -178,6 +178,7 @@ void BM_join(state_type& state, Join JoinFunc)
     }
   }
   if constexpr (std::is_same_v<state_type, nvbench::state> and (join_type != join_t::CONDITIONAL)) {
+    state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
     if constexpr (join_type == join_t::MIXED) {
       auto const col_ref_left_0 = cudf::ast::column_reference(0);
       auto const col_ref_right_0 =
@@ -185,23 +186,19 @@ void BM_join(state_type& state, Join JoinFunc)
       auto left_zero_eq_right_zero =
         cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
       state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-        rmm::cuda_stream_view stream_view{launch.get_stream()};
         auto result = JoinFunc(left_table.select(columns_to_join),
                                right_table.select(columns_to_join),
                                left_table.select({1}),
                                right_table.select({1}),
                                left_zero_eq_right_zero,
-                               cudf::null_equality::UNEQUAL,
-                               stream_view);
+                               cudf::null_equality::UNEQUAL);
       });
     }
     if constexpr (join_type == join_t::HASH) {
       state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-        rmm::cuda_stream_view stream_view{launch.get_stream()};
         auto result = JoinFunc(left_table.select(columns_to_join),
                                right_table.select(columns_to_join),
-                               cudf::null_equality::UNEQUAL,
-                               stream_view);
+                               cudf::null_equality::UNEQUAL);
       });
     }
   }
