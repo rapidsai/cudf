@@ -692,8 +692,7 @@ std::vector<range> find_table_splits(table_view const& input,
      d_sizes  = d_segmented_sizes->view().begin<size_type>()] __device__(auto const segment_idx) {
       // Since the number of rows may not divisible by segment_length,
       // the last segment may be shorter than the others.
-      auto const current_length =
-        cuda::std::min(segment_length, num_rows - segment_length * segment_idx);
+      auto const current_length = min(segment_length, num_rows - segment_length * segment_idx);
       auto const size = d_sizes[segment_idx] / CHAR_BIT;  // divide by CHAR_BIT to get size in bytes
       return cumulative_size{static_cast<std::size_t>(current_length),
                              static_cast<std::size_t>(size)};

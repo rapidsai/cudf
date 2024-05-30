@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint8_t
+from libc.stdint cimport int32_t, uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
@@ -57,6 +57,19 @@ cdef extern from "cudf/io/types.hpp" \
         ADAPTIVE = 1,
         ALWAYS = 2,
 
+    cdef extern from "cudf/io/types.hpp" namespace "cudf::io" nogil:
+        cpdef enum class column_encoding:
+            USE_DEFAULT = -1
+            DICTIONARY = 0
+            PLAIN = 1
+            DELTA_BINARY_PACKED = 2
+            DELTA_LENGTH_BYTE_ARRAY =3
+            DELTA_BYTE_ARRAY = 4
+            BYTE_STREAM_SPLIT = 5
+            DIRECT = 6
+            DIRECT_V2 = 7
+            DICTIONARY_V2 = 8
+
     cdef cppclass column_name_info:
         string name
         vector[column_name_info] children
@@ -81,6 +94,9 @@ cdef extern from "cudf/io/types.hpp" \
         column_in_metadata& set_decimal_precision(uint8_t precision)
         column_in_metadata& child(size_type i)
         column_in_metadata& set_output_as_binary(bool binary)
+        column_in_metadata& set_type_length(int32_t type_length)
+        column_in_metadata& set_skip_compression(bool skip)
+        column_in_metadata& set_encoding(column_encoding enc)
         string get_name()
 
     cdef cppclass table_input_metadata:

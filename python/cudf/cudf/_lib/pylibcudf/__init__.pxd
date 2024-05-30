@@ -14,6 +14,7 @@ from . cimport (
     merge,
     reduce,
     replace,
+    reshape,
     rolling,
     search,
     sorting,

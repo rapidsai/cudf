@@ -14,13 +14,8 @@ You can import `cudf` directly and use it like `pandas`:
 
 ```python
 import cudf
-import requests
-from io import StringIO
 
-url = "https://github.com/plotly/datasets/raw/master/tips.csv"
-content = requests.get(url).content.decode("utf-8")
-
-tips_df = cudf.read_csv(StringIO(content))
+tips_df = cudf.read_csv("https://github.com/plotly/datasets/raw/master/tips.csv")
 tips_df["tip_percentage"] = tips_df["tip"] / tips_df["total_bill"] * 100
 
 # display average tip by dining party size
@@ -36,13 +31,8 @@ supported operations and falling back to pandas when needed:
 %load_ext cudf.pandas  # pandas operations now use the GPU!
 
 import pandas as pd
-import requests
-from io import StringIO
 
-url = "https://github.com/plotly/datasets/raw/master/tips.csv"
-content = requests.get(url).content.decode("utf-8")
-
-tips_df = pd.read_csv(StringIO(content))
+tips_df = pd.read_csv("https://github.com/plotly/datasets/raw/master/tips.csv")
 tips_df["tip_percentage"] = tips_df["tip"] / tips_df["total_bill"] * 100
 
 # display average tip by dining party size
@@ -93,7 +83,7 @@ cuDF can be installed with conda (via [miniconda](https://docs.conda.io/projects
 
 ```bash
 conda install -c rapidsai -c conda-forge -c nvidia \
-    cudf=24.06 python=3.11 cuda-version=12.2
+    cudf=24.08 python=3.11 cuda-version=12.2
 ```
 
 We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD

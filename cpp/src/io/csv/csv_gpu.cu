@@ -351,9 +351,19 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         if (dtypes[actual_col].id() == cudf::type_id::STRING) {
           auto end = next_delimiter;
           if (not options.keepquotes) {
-            if ((*field_start == options.quotechar) && (*(end - 1) == options.quotechar)) {
-              ++field_start;
-              --end;
+            if (not options.detect_whitespace_around_quotes) {
+              if ((*field_start == options.quotechar) && (*(end - 1) == options.quotechar)) {
+                ++field_start;
+                --end;
+              }
+            } else {
+              // If the string is quoted, whitespace around the quotes get removed as well
+              auto const trimmed_field = trim_whitespaces(field_start, end);
+              if ((*trimmed_field.first == options.quotechar) &&
+                  (*(trimmed_field.second - 1) == options.quotechar)) {
+                field_start = trimmed_field.first + 1;
+                end         = trimmed_field.second - 1;
+              }
             }
           }
           auto str_list = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);

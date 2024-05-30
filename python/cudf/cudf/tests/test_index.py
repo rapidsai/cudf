@@ -3266,3 +3266,17 @@ def test_index_datetime_repeat():
     actual = gidx.to_frame().repeat(5)
 
     assert_eq(actual.index, expected)
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        cudf.Index([1]),
+        cudf.RangeIndex(1),
+        cudf.MultiIndex(levels=[[0]], codes=[[0]]),
+    ],
+)
+def test_index_assignment_no_shallow_copy(index):
+    df = cudf.DataFrame(range(1))
+    df.index = index
+    assert df.index is index

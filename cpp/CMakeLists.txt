@@ -360,11 +360,12 @@ add_library(
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
+  src/interop/arrow_utilities.cpp
   src/interop/to_arrow.cu
   src/interop/to_arrow_device.cu
   src/interop/from_arrow_device.cu
+  src/interop/from_arrow_host.cu
   src/interop/to_arrow_schema.cpp
-  src/interop/to_arrow_utilities.cpp
   src/interop/detail/arrow_allocator.cpp
   src/io/avro/avro.cpp
   src/io/avro/avro_gpu.cu
@@ -390,8 +391,6 @@ add_library(
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
   src/io/json/read_json.cu
-  src/io/json/legacy/json_gpu.cu
-  src/io/json/legacy/reader_impl.cu
   src/io/json/parser_features.cpp
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
@@ -794,8 +793,8 @@ add_dependencies(cudf jitify_preprocess_run)
 target_link_libraries(
   cudf
   PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
-          $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
+          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
 )
 
 # Add Conda library, and include paths if specified
