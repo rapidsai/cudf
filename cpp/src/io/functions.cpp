@@ -306,14 +306,14 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
 
   // Get file-level statistics, statistics of each column of file
   for (auto const& stats : metadata.ff.statistics) {
-    result.file_stats.push_back(std::string(stats.cbegin(), stats.cend()));
+    result.file_stats.emplace_back(stats.cbegin(), stats.cend());
   }
 
   // Get stripe-level statistics
   for (auto const& stripes_stats : metadata.md.stripeStats) {
     result.stripes_stats.emplace_back();
     for (auto const& stats : stripes_stats.colStats) {
-      result.stripes_stats.back().push_back(std::string(stats.cbegin(), stats.cend()));
+      result.stripes_stats.back().emplace_back(stats.cbegin(), stats.cend());
     }
   }
 

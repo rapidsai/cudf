@@ -123,7 +123,7 @@ class table_view_base {
    * @param column_index The index of the desired column
    * @return A reference to the desired column
    */
-  ColumnView const& column(size_type column_index) const;
+  [[nodiscard]] ColumnView const& column(size_type column_index) const;
 
   /**
    * @brief Returns the number of columns
@@ -224,7 +224,7 @@ class table_view : public detail::table_view_base<column_view> {
    * specified by the elements of `column_indices`
    */
   template <typename InputIterator>
-  table_view select(InputIterator begin, InputIterator end) const
+  [[nodiscard]] table_view select(InputIterator begin, InputIterator end) const
   {
     std::vector<column_view> columns(std::distance(begin, end));
     std::transform(begin, end, columns.begin(), [this](auto index) { return this->column(index); });

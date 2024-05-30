@@ -54,7 +54,7 @@ inline const char* const* EnumNamesCompressionType()
 inline const char* EnumNameCompressionType(CompressionType e)
 {
   if (::flatbuffers::IsOutRange(e, CompressionType_LZ4_FRAME, CompressionType_ZSTD)) return "";
-  const size_t index = static_cast<size_t>(e);
+  const auto index = static_cast<size_t>(e);
   return EnumNamesCompressionType()[index];
 }
 
@@ -90,7 +90,7 @@ inline const char* EnumNameBodyCompressionMethod(BodyCompressionMethod e)
 {
   if (::flatbuffers::IsOutRange(e, BodyCompressionMethod_BUFFER, BodyCompressionMethod_BUFFER))
     return "";
-  const size_t index = static_cast<size_t>(e);
+  const auto index = static_cast<size_t>(e);
   return EnumNamesBodyCompressionMethod()[index];
 }
 
@@ -124,7 +124,7 @@ inline const char* const* EnumNamesMessageHeader()
 inline const char* EnumNameMessageHeader(MessageHeader e)
 {
   if (::flatbuffers::IsOutRange(e, MessageHeader_NONE, MessageHeader_Schema)) return "";
-  const size_t index = static_cast<size_t>(e);
+  const auto index = static_cast<size_t>(e);
   return EnumNamesMessageHeader()[index];
 }
 
@@ -167,11 +167,11 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(8) FieldNode FLATBUFFERS_FINAL_CLASS
   }
   /// The number of value slots in the Arrow array at this level of a nested
   /// tree
-  int64_t length() const { return ::flatbuffers::EndianScalar(length_); }
+  [[nodiscard]] int64_t length() const { return ::flatbuffers::EndianScalar(length_); }
   /// The number of observed nulls. Fields with null_count == 0 may choose not
   /// to write their physical validity bitmap out as a materialized buffer,
   /// instead setting the length of the bitmap buffer to 0.
-  int64_t null_count() const { return ::flatbuffers::EndianScalar(null_count_); }
+  [[nodiscard]] int64_t null_count() const { return ::flatbuffers::EndianScalar(null_count_); }
 };
 FLATBUFFERS_STRUCT_END(FieldNode, 16);
 
@@ -179,16 +179,16 @@ FLATBUFFERS_STRUCT_END(FieldNode, 16);
 /// bodies. Intended for use with RecordBatch but could be used for other
 /// message types
 struct BodyCompression FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef BodyCompressionBuilder Builder;
+  using Builder = BodyCompressionBuilder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE { VT_CODEC = 4, VT_METHOD = 6 };
   /// Compressor library.
   /// For LZ4_FRAME, each compressed buffer must consist of a single frame.
-  cudf::io::parquet::flatbuf::CompressionType codec() const
+  [[nodiscard]] cudf::io::parquet::flatbuf::CompressionType codec() const
   {
     return static_cast<cudf::io::parquet::flatbuf::CompressionType>(GetField<int8_t>(VT_CODEC, 0));
   }
   /// Indicates the way the record batch body was compressed
-  cudf::io::parquet::flatbuf::BodyCompressionMethod method() const
+  [[nodiscard]] cudf::io::parquet::flatbuf::BodyCompressionMethod method() const
   {
     return static_cast<cudf::io::parquet::flatbuf::BodyCompressionMethod>(
       GetField<int8_t>(VT_METHOD, 0));
@@ -201,7 +201,7 @@ struct BodyCompression FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
 };
 
 struct BodyCompressionBuilder {
-  typedef BodyCompression Table;
+  using Table = BodyCompression;
   ::flatbuffers::FlatBufferBuilder& fbb_;
   ::flatbuffers::uoffset_t start_;
   void add_codec(cudf::io::parquet::flatbuf::CompressionType codec)
@@ -241,7 +241,7 @@ inline ::flatbuffers::Offset<BodyCompression> CreateBodyCompression(
 /// batch. Some systems call this a "row batch" internally and others a "record
 /// batch".
 struct RecordBatch FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef RecordBatchBuilder Builder;
+  using Builder = RecordBatchBuilder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_LENGTH               = 4,
     VT_NODES                = 6,
@@ -251,9 +251,10 @@ struct RecordBatch FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   };
   /// number of records / rows. The arrays in the batch should all have this
   /// length
-  int64_t length() const { return GetField<int64_t>(VT_LENGTH, 0); }
+  [[nodiscard]] int64_t length() const { return GetField<int64_t>(VT_LENGTH, 0); }
   /// Nodes correspond to the pre-ordered flattened logical schema
-  const ::flatbuffers::Vector<const cudf::io::parquet::flatbuf::FieldNode*>* nodes() const
+  [[nodiscard]] const ::flatbuffers::Vector<const cudf::io::parquet::flatbuf::FieldNode*>* nodes()
+    const
   {
     return GetPointer<const ::flatbuffers::Vector<const cudf::io::parquet::flatbuf::FieldNode*>*>(
       VT_NODES);
@@ -264,13 +265,14 @@ struct RecordBatch FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   /// example, most primitive arrays will have 2 buffers, 1 for the validity
   /// bitmap and 1 for the values. For struct arrays, there will only be a
   /// single buffer for the validity (nulls) bitmap
-  const ::flatbuffers::Vector<const cudf::io::parquet::flatbuf::Buffer*>* buffers() const
+  [[nodiscard]] const ::flatbuffers::Vector<const cudf::io::parquet::flatbuf::Buffer*>* buffers()
+    const
   {
     return GetPointer<const ::flatbuffers::Vector<const cudf::io::parquet::flatbuf::Buffer*>*>(
       VT_BUFFERS);
   }
   /// Optional compression of the message body
-  const cudf::io::parquet::flatbuf::BodyCompression* compression() const
+  [[nodiscard]] const cudf::io::parquet::flatbuf::BodyCompression* compression() const
   {
     return GetPointer<const cudf::io::parquet::flatbuf::BodyCompression*>(VT_COMPRESSION);
   }
@@ -288,7 +290,7 @@ struct RecordBatch FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   ///
   /// This field may be omitted if and only if the schema contains no Fields with
   /// a variable number of buffers, such as BinaryView and Utf8View.
-  const ::flatbuffers::Vector<int64_t>* variadicBufferCounts() const
+  [[nodiscard]] const ::flatbuffers::Vector<int64_t>* variadicBufferCounts() const
   {
     return GetPointer<const ::flatbuffers::Vector<int64_t>*>(VT_VARIADICBUFFERCOUNTS);
   }
@@ -304,7 +306,7 @@ struct RecordBatch FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
 };
 
 struct RecordBatchBuilder {
-  typedef RecordBatch Table;
+  using Table = RecordBatch;
   ::flatbuffers::FlatBufferBuilder& fbb_;
   ::flatbuffers::uoffset_t start_;
   void add_length(int64_t length) { fbb_.AddElement<int64_t>(RecordBatch::VT_LENGTH, length, 0); }
@@ -385,21 +387,21 @@ inline ::flatbuffers::Offset<RecordBatch> CreateRecordBatchDirect(
 /// may be spread across multiple dictionary batches by using the isDelta
 /// flag
 struct DictionaryBatch FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef DictionaryBatchBuilder Builder;
+  using Builder = DictionaryBatchBuilder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_ID      = 4,
     VT_DATA    = 6,
     VT_ISDELTA = 8
   };
-  int64_t id() const { return GetField<int64_t>(VT_ID, 0); }
-  const cudf::io::parquet::flatbuf::RecordBatch* data() const
+  [[nodiscard]] int64_t id() const { return GetField<int64_t>(VT_ID, 0); }
+  [[nodiscard]] const cudf::io::parquet::flatbuf::RecordBatch* data() const
   {
     return GetPointer<const cudf::io::parquet::flatbuf::RecordBatch*>(VT_DATA);
   }
   /// If isDelta is true the values in the dictionary are to be appended to a
   /// dictionary with the indicated id. If isDelta is false this dictionary
   /// should replace the existing dictionary.
-  bool isDelta() const { return GetField<uint8_t>(VT_ISDELTA, 0) != 0; }
+  [[nodiscard]] bool isDelta() const { return GetField<uint8_t>(VT_ISDELTA, 0) != 0; }
   bool Verify(::flatbuffers::Verifier& verifier) const
   {
     return VerifyTableStart(verifier) && VerifyField<int64_t>(verifier, VT_ID, 8) &&
@@ -409,7 +411,7 @@ struct DictionaryBatch FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
 };
 
 struct DictionaryBatchBuilder {
-  typedef DictionaryBatch Table;
+  using Table = DictionaryBatch;
   ::flatbuffers::FlatBufferBuilder& fbb_;
   ::flatbuffers::uoffset_t start_;
   void add_id(int64_t id) { fbb_.AddElement<int64_t>(DictionaryBatch::VT_ID, id, 0); }
@@ -447,7 +449,7 @@ inline ::flatbuffers::Offset<DictionaryBatch> CreateDictionaryBatch(
 }
 
 struct Message FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef MessageBuilder Builder;
+  using Builder = MessageBuilder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VERSION         = 4,
     VT_HEADER_TYPE     = 6,
@@ -455,27 +457,28 @@ struct Message FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_BODYLENGTH      = 10,
     VT_CUSTOM_METADATA = 12
   };
-  cudf::io::parquet::flatbuf::MetadataVersion version() const
+  [[nodiscard]] cudf::io::parquet::flatbuf::MetadataVersion version() const
   {
     return static_cast<cudf::io::parquet::flatbuf::MetadataVersion>(
       GetField<int16_t>(VT_VERSION, 0));
   }
-  cudf::io::parquet::flatbuf::MessageHeader header_type() const
+  [[nodiscard]] cudf::io::parquet::flatbuf::MessageHeader header_type() const
   {
     return static_cast<cudf::io::parquet::flatbuf::MessageHeader>(
       GetField<uint8_t>(VT_HEADER_TYPE, 0));
   }
-  const void* header() const { return GetPointer<const void*>(VT_HEADER); }
+  [[nodiscard]] const void* header() const { return GetPointer<const void*>(VT_HEADER); }
   template <typename T>
   const T* header_as() const;
-  const cudf::io::parquet::flatbuf::Schema* header_as_Schema() const
+  [[nodiscard]] const cudf::io::parquet::flatbuf::Schema* header_as_Schema() const
   {
     return header_type() == cudf::io::parquet::flatbuf::MessageHeader_Schema
              ? static_cast<const cudf::io::parquet::flatbuf::Schema*>(header())
              : nullptr;
   }
-  int64_t bodyLength() const { return GetField<int64_t>(VT_BODYLENGTH, 0); }
-  const ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::KeyValue>>*
+  [[nodiscard]] int64_t bodyLength() const { return GetField<int64_t>(VT_BODYLENGTH, 0); }
+  [[nodiscard]] const ::flatbuffers::Vector<
+    ::flatbuffers::Offset<cudf::io::parquet::flatbuf::KeyValue>>*
   custom_metadata() const
   {
     return GetPointer<
@@ -501,7 +504,7 @@ Message::header_as<cudf::io::parquet::flatbuf::Schema>() const
 }
 
 struct MessageBuilder {
-  typedef Message Table;
+  using Table = Message;
   ::flatbuffers::FlatBufferBuilder& fbb_;
   ::flatbuffers::uoffset_t start_;
   void add_version(cudf::io::parquet::flatbuf::MetadataVersion version)

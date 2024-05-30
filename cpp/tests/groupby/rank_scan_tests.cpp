@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -244,7 +244,7 @@ TYPED_TEST(typed_groupby_rank_scan_test, mixedStructs)
     0.0, 0.0, 2.0 / 5, 2.0 / 5, 4.0 / 5, 5.0 / 5, 0.0, 0.0, 2.0 / 2, 0.0, 0.0, 2.0 / 2};
 
   std::vector<cudf::groupby::scan_request> requests;
-  requests.emplace_back(cudf::groupby::scan_request());
+  requests.emplace_back();
   requests[0].values = *struct_col;
   requests[0].aggregations.push_back(cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
     cudf::rank_method::DENSE, {}, cudf::null_policy::INCLUDE));
@@ -295,8 +295,8 @@ TYPED_TEST(typed_groupby_rank_scan_test, nestedStructs)
     {"0", "0", "0", "0", "0", "0", "1", "1", "1", "1", "0", "1"}, nulls_at({9, 10, 11})};
 
   std::vector<cudf::groupby::scan_request> requests;
-  requests.emplace_back(cudf::groupby::scan_request());
-  requests.emplace_back(cudf::groupby::scan_request());
+  requests.emplace_back();
+  requests.emplace_back();
   requests[0].values = *nested_structs;
   requests[0].aggregations.push_back(
     cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(cudf::rank_method::DENSE));
@@ -363,8 +363,8 @@ TYPED_TEST(typed_groupby_rank_scan_test, structsWithNullPushdown)
     {"0", "0", "0", "0", "0", "0", "1", "1", "1", "X", "X", "X"}, nulls_at({9, 10, 11})};
 
   std::vector<cudf::groupby::scan_request> requests;
-  requests.emplace_back(cudf::groupby::scan_request());
-  requests.emplace_back(cudf::groupby::scan_request());
+  requests.emplace_back();
+  requests.emplace_back();
   requests[0].values = *possibly_null_structs;
   requests[0].aggregations.push_back(cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(
     cudf::rank_method::DENSE, {}, cudf::null_policy::INCLUDE));

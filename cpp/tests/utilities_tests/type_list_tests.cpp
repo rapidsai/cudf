@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ std::string type_name()
 {
   int status;
   char* realname;
-  realname = abi::__cxa_demangle(typeid(T).name(), 0, 0, &status);
+  realname = abi::__cxa_demangle(typeid(T).name(), nullptr, nullptr, &status);
   std::string name{realname};
   free(realname);
   return name;
@@ -69,10 +69,10 @@ std::string type_name()
 
 TEST(TypeList, GetSize)
 {
-  static_assert(GetSize<Types<>> == 0, "");
-  static_assert(GetSize<Types<int>> == 1, "");
-  static_assert(GetSize<Types<int, int>> == 2, "");
-  static_assert(GetSize<Types<int, void>> == 2, "");
+  static_assert(GetSize<Types<>> == 0);
+  static_assert(GetSize<Types<int>> == 1);
+  static_assert(GetSize<Types<int, int>> == 2);
+  static_assert(GetSize<Types<int, void>> == 2);
 }
 
 TEST(TypeList, GetType)
@@ -149,39 +149,39 @@ TEST(TypeList, CrossProduct)
 
 TEST(TypeList, AllSame)
 {
-  static_assert(AllSame::Call<Types<int, int>>::value, "");
-  static_assert(AllSame::Call<Types<int, int>>::value, "");
-  static_assert(!AllSame::Call<Types<bool, int>>::value, "");
+  static_assert(AllSame::Call<Types<int, int>>::value);
+  static_assert(AllSame::Call<Types<int, int>>::value);
+  static_assert(!AllSame::Call<Types<bool, int>>::value);
 
-  static_assert(AllSame::Call<int, int>::value, "");
-  static_assert(!AllSame::Call<int, bool>::value, "");
+  static_assert(AllSame::Call<int, int>::value);
+  static_assert(!AllSame::Call<int, bool>::value);
 
-  static_assert(AllSame::Call<int, int, int>::value, "");
-  static_assert(!AllSame::Call<int, float, int>::value, "");
-  static_assert(!AllSame::Call<int, int, float>::value, "");
+  static_assert(AllSame::Call<int, int, int>::value);
+  static_assert(!AllSame::Call<int, float, int>::value);
+  static_assert(!AllSame::Call<int, int, float>::value);
 }
 
 TEST(TypeList, Exists)
 {
-  static_assert(Exists<int, Types<int, char, float>>, "");
-  static_assert(!Exists<int, Types<double, char, float>>, "");
-  static_assert(!Exists<int, Types<>>, "");
-  static_assert(Exists<int, Types<double, char, float, int>>, "");
-  static_assert(!Exists<int, Types<double>>, "");
-  static_assert(Exists<int, Types<int>>, "");
+  static_assert(Exists<int, Types<int, char, float>>);
+  static_assert(!Exists<int, Types<double, char, float>>);
+  static_assert(!Exists<int, Types<>>);
+  static_assert(Exists<int, Types<double, char, float, int>>);
+  static_assert(!Exists<int, Types<double>>);
+  static_assert(Exists<int, Types<int>>);
 }
 
 TEST(TypeList, ContainedIn)
 {
-  static_assert(ContainedIn<Types<Types<int, char>>>::Call<Types<int, char>>::value, "");
-  static_assert(!ContainedIn<Types<Types<int, char>>>::Call<Types<int, float>>::value, "");
-  static_assert(!ContainedIn<Types<>>::Call<Types<int, float>>::value, "");
+  static_assert(ContainedIn<Types<Types<int, char>>>::Call<Types<int, char>>::value);
+  static_assert(!ContainedIn<Types<Types<int, char>>>::Call<Types<int, float>>::value);
+  static_assert(!ContainedIn<Types<>>::Call<Types<int, float>>::value);
   static_assert(
-    ContainedIn<Types<Types<int, float>, Types<char, char>>>::Call<Types<int, float>>::value, "");
+    ContainedIn<Types<Types<int, float>, Types<char, char>>>::Call<Types<int, float>>::value);
   static_assert(
-    !ContainedIn<Types<Types<int, float>, Types<char, char>>>::Call<Types<int, double>>::value, "");
-  static_assert(ContainedIn<Types<Types<int, float>, Types<>>>::Call<Types<>>::value, "");
-  static_assert(!ContainedIn<Types<Types<int, float>, Types<int>>>::Call<Types<>>::value, "");
+    !ContainedIn<Types<Types<int, float>, Types<char, char>>>::Call<Types<int, double>>::value);
+  static_assert(ContainedIn<Types<Types<int, float>, Types<>>>::Call<Types<>>::value);
+  static_assert(!ContainedIn<Types<Types<int, float>, Types<int>>>::Call<Types<>>::value);
 }
 
 TEST(TypeList, RemoveIf)

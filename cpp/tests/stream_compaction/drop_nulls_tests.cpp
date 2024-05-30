@@ -34,15 +34,19 @@ struct DropNullsTest : public cudf::test::BaseFixture {};
 TEST_F(DropNullsTest, WholeRowIsNull)
 {
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
-                                                       {1, 1, 0, 1, 1, 0}};
-  cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
-  cudf::test::fixed_width_column_wrapper<double> col3{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
+                                                       {true, true, false, true, true, false}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10},
+                                                       {true, true, false, true, true, false}};
+  cudf::test::fixed_width_column_wrapper<double> col3{{10, 40, 70, 5, 2, 10},
+                                                      {true, true, false, true, true, false}};
   cudf::table_view input{{col1, col2, col3}};
   std::vector<cudf::size_type> keys{0, 1, 2};
   cudf::test::fixed_width_column_wrapper<int16_t> col1_expected{{true, false, false, true},
-                                                                {1, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<int32_t> col2_expected{{10, 40, 5, 2}, {1, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<double> col3_expected{{10, 40, 5, 2}, {1, 1, 1, 1}};
+                                                                {true, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2_expected{{10, 40, 5, 2},
+                                                                {true, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<double> col3_expected{{10, 40, 5, 2},
+                                                               {true, true, true, true}};
   cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
 
   auto got = cudf::drop_nulls(input, keys);
@@ -53,9 +57,11 @@ TEST_F(DropNullsTest, WholeRowIsNull)
 TEST_F(DropNullsTest, NoNull)
 {
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
-                                                       {1, 1, 1, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 1, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<double> col3{{10, 40, 70, 5, 2, 10}, {1, 1, 1, 1, 1, 1}};
+                                                       {true, true, true, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10},
+                                                       {true, true, true, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<double> col3{{10, 40, 70, 5, 2, 10},
+                                                      {true, true, true, true, true, true}};
   cudf::table_view input{{col1, col2, col3}};
   std::vector<cudf::size_type> keys{0, 1, 2};
 
@@ -67,15 +73,19 @@ TEST_F(DropNullsTest, NoNull)
 TEST_F(DropNullsTest, MixedSetOfRows)
 {
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
-                                                       {1, 1, 0, 1, 1, 0}};
-  cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
-  cudf::test::fixed_width_column_wrapper<double> col3{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 1}};
+                                                       {true, true, false, true, true, false}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10},
+                                                       {true, true, false, true, true, false}};
+  cudf::test::fixed_width_column_wrapper<double> col3{{10, 40, 70, 5, 2, 10},
+                                                      {true, true, false, true, true, true}};
   cudf::table_view input{{col1, col2, col3}};
   std::vector<cudf::size_type> keys{0, 1, 2};
   cudf::test::fixed_width_column_wrapper<int16_t> col1_expected{{true, false, false, true},
-                                                                {1, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<int32_t> col2_expected{{10, 40, 5, 2}, {1, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<double> col3_expected{{10, 40, 5, 2}, {1, 1, 1, 1}};
+                                                                {true, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2_expected{{10, 40, 5, 2},
+                                                                {true, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<double> col3_expected{{10, 40, 5, 2},
+                                                               {true, true, true, true}};
   cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
 
   auto got = cudf::drop_nulls(input, keys);
@@ -132,16 +142,19 @@ TEST_F(DropNullsTest, LargeColumn)
 TEST_F(DropNullsTest, MixedSetOfRowsWithThreshold)
 {
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
-                                                       {1, 1, 0, 1, 1, 0}};
-  cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<double> col3{{10, 40, 70, 5, 2, 10}, {1, 1, 1, 1, 1, 1}};
+                                                       {true, true, false, true, true, false}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10},
+                                                       {true, true, false, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<double> col3{{10, 40, 70, 5, 2, 10},
+                                                      {true, true, true, true, true, true}};
   cudf::table_view input{{col1, col2, col3}};
   std::vector<cudf::size_type> keys{0, 1, 2};
   cudf::test::fixed_width_column_wrapper<int16_t> col1_expected{{true, false, false, true, false},
-                                                                {1, 1, 1, 1, 0}};
+                                                                {true, true, true, true, false}};
   cudf::test::fixed_width_column_wrapper<int32_t> col2_expected{{10, 40, 5, 2, 10},
-                                                                {1, 1, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<double> col3_expected{{10, 40, 5, 2, 10}, {1, 1, 1, 1, 1}};
+                                                                {true, true, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<double> col3_expected{{10, 40, 5, 2, 10},
+                                                               {true, true, true, true, true}};
   cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
 
   auto got = cudf::drop_nulls(input, keys, keys.size() - 1);
@@ -180,7 +193,7 @@ TEST_F(DropNullsTest, EmptyColumns)
 TEST_F(DropNullsTest, EmptyKeys)
 {
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
-                                                       {1, 1, 0, 1, 1, 0}};
+                                                       {true, true, false, true, true, false}};
   cudf::table_view input{{col1}};
   std::vector<cudf::size_type> keys{};
 
@@ -191,13 +204,15 @@ TEST_F(DropNullsTest, EmptyKeys)
 TEST_F(DropNullsTest, StringColWithNull)
 {
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{11, 12, 11, 13, 12, 15},
-                                                       {1, 1, 0, 1, 0, 1}};
+                                                       {true, true, false, true, false, true}};
   cudf::test::strings_column_wrapper col2{{"Hi", "Hello", "Hi", "No", "Hello", "Naive"},
-                                          {1, 1, 0, 1, 0, 1}};
+                                          {true, true, false, true, false, true}};
   cudf::table_view input{{col1, col2}};
   std::vector<cudf::size_type> keys{0, 1};
-  cudf::test::fixed_width_column_wrapper<int16_t> col1_expected{{11, 12, 13, 15}, {1, 1, 1, 1}};
-  cudf::test::strings_column_wrapper col2_expected{{"Hi", "Hello", "No", "Naive"}, {1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int16_t> col1_expected{{11, 12, 13, 15},
+                                                                {true, true, true, true}};
+  cudf::test::strings_column_wrapper col2_expected{{"Hi", "Hello", "No", "Naive"},
+                                                   {true, true, true, true}};
   cudf::table_view expected{{col1_expected, col2_expected}};
 
   auto got = cudf::drop_nulls(input, keys);

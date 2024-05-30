@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,7 +110,7 @@ static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
  *
  * @return An empty string
  */
-CUDF_HOST_DEVICE inline string_view string_view::min() { return string_view(); }
+CUDF_HOST_DEVICE inline string_view string_view::min() { return {}; }
 
 /**
  * @brief Return maximum value associated with the string type
@@ -130,7 +130,7 @@ CUDF_HOST_DEVICE inline string_view string_view::max()
   CUDF_CUDA_TRY(
     cudaGetSymbolAddress((void**)&psentinel, cudf::strings::detail::max_string_sentinel));
 #endif
-  return string_view(psentinel, 4);
+  return {psentinel, 4};
 }
 
 __device__ inline size_type string_view::length() const
@@ -439,7 +439,7 @@ __device__ inline string_view string_view::substr(size_type pos, size_type count
   auto const itr  = begin() + pos;
   auto const spos = itr.byte_offset();
   auto const epos = count >= 0 ? (itr + count).byte_offset() : size_bytes();
-  return string_view(data() + spos, epos - spos);
+  return {data() + spos, epos - spos};
 }
 
 __device__ inline size_type string_view::character_offset(size_type bytepos) const

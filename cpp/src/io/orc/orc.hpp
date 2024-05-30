@@ -511,7 +511,7 @@ class ProtobufWriter {
                            TypeKind kind,
                            ColStatsBlob const* stats);
 
-  std::size_t size() const { return m_buff.size(); }
+  [[nodiscard]] std::size_t size() const { return m_buff.size(); }
   uint8_t const* data() { return m_buff.data(); }
 
   std::vector<uint8_t>& buffer() { return m_buff; }

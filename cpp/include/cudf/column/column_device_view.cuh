@@ -442,7 +442,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @return string_view instance representing this element at this index
    */
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
-  __device__ T element(size_type element_index) const noexcept
+  __device__ [[nodiscard]] T element(size_type element_index) const noexcept
   {
     size_type index       = element_index + offset();  // account for this view's _offset
     char const* d_strings = static_cast<char const*>(_data);
@@ -501,7 +501,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @return dictionary32 instance representing this element at this index
    */
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, dictionary32>)>
-  __device__ T element(size_type element_index) const noexcept
+  __device__ [[nodiscard]] T element(size_type element_index) const noexcept
   {
     size_type index    = element_index + offset();  // account for this view's _offset
     auto const indices = d_children[0];
@@ -519,7 +519,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @return numeric::fixed_point representing the element at this index
    */
   template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
-  __device__ T element(size_type element_index) const noexcept
+  __device__ [[nodiscard]] T element(size_type element_index) const noexcept
   {
     using namespace numeric;
     using rep        = typename T::rep;
@@ -858,7 +858,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    */
   [[nodiscard]] __device__ device_span<column_device_view const> children() const noexcept
   {
-    return device_span<column_device_view const>(d_children, _num_children);
+    return {d_children, static_cast<std::size_t>(_num_children)};
   }
 
   /**
@@ -1032,7 +1032,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @return Reference to the element at the specified index
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  __device__ T& element(size_type element_index) const noexcept
+  __device__ [[nodiscard]] T& element(size_type element_index) const noexcept
   {
     return data<T>()[element_index];
   }

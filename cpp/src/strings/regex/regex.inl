@@ -81,12 +81,11 @@ struct alignas(8) relist {
     return true;
   }
 
-  __device__ __forceinline__ restate get_state(int16_t idx) const
+  __device__ [[nodiscard]] __forceinline__ restate get_state(int16_t idx) const
   {
     return restate{ranges[idx * stride], inst_ids[idx * stride]};
   }
-
-  __device__ __forceinline__ int16_t get_size() const { return size; }
+  __device__ [[nodiscard]] __forceinline__ int16_t get_size() const { return size; }
 
  private:
   int16_t size{};
@@ -102,7 +101,7 @@ struct alignas(8) relist {
     mask[pos >> 3] |= uc;
   }
 
-  __device__ __forceinline__ bool readMask(int32_t pos) const
+  __device__ [[nodiscard]] __forceinline__ bool readMask(int32_t pos) const
   {
     u_char const uc = mask[pos >> 3];
     return static_cast<bool>((uc >> (pos & 7)) & 1);

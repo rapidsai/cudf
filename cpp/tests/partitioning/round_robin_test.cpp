@@ -62,7 +62,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
 {
   strings_column_wrapper rrColWrap1(
     {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m"},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+    {true, true, true, true, true, true, true, true, true, true, true, true, false});
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
@@ -90,7 +90,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
 
     strings_column_wrapper expectedDataWrap1(
       {"a", "d", "g", "j", "m", "b", "e", "h", "k", "c", "f", "i", "l"},
-      {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
+      {true, true, true, true, false, true, true, true, true, true, true, true, true});
 
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
@@ -128,7 +128,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
 
     strings_column_wrapper expectedDataWrap1(
       {"c", "f", "i", "l", "a", "d", "g", "j", "m", "b", "e", "h", "k"},
-      {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1});
+      {true, true, true, true, true, true, true, true, false, true, true, true, true});
 
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
@@ -166,7 +166,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
 
     strings_column_wrapper expectedDataWrap1(
       {"b", "e", "h", "k", "c", "f", "i", "l", "a", "d", "g", "j", "m"},
-      {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+      {true, true, true, true, true, true, true, true, true, true, true, true, false});
 
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
@@ -195,8 +195,9 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
 
 TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
 {
-  strings_column_wrapper rrColWrap1({"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
-                                    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  strings_column_wrapper rrColWrap1(
+    {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
+    {true, true, true, true, true, true, true, true, true, true, false});
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
@@ -223,7 +224,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
     auto output_column_view2{p_outputTable->view().column(1)};
 
     strings_column_wrapper expectedDataWrap1(
-      {"a", "d", "g", "j", "b", "e", "h", "k", "c", "f", "i"}, {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+      {"a", "d", "g", "j", "b", "e", "h", "k", "c", "f", "i"},
+      {true, true, true, true, true, true, true, false, true, true, true});
 
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
@@ -260,7 +262,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
     auto output_column_view2{p_outputTable->view().column(1)};
 
     strings_column_wrapper expectedDataWrap1(
-      {"c", "f", "i", "a", "d", "g", "j", "b", "e", "h", "k"}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+      {"c", "f", "i", "a", "d", "g", "j", "b", "e", "h", "k"},
+      {true, true, true, true, true, true, true, true, true, true, false});
 
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
@@ -297,7 +300,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
     auto output_column_view2{p_outputTable->view().column(1)};
 
     strings_column_wrapper expectedDataWrap1(
-      {"b", "e", "h", "k", "c", "f", "i", "a", "d", "g", "j"}, {1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1});
+      {"b", "e", "h", "k", "c", "f", "i", "a", "d", "g", "j"},
+      {true, true, true, false, true, true, true, true, true, true, true});
 
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
@@ -326,8 +330,9 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
 
 TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
 {
-  strings_column_wrapper rrColWrap1({"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
-                                    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  strings_column_wrapper rrColWrap1(
+    {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
+    {true, true, true, true, true, true, true, true, true, true, false});
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
@@ -354,7 +359,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
     auto output_column_view2{p_outputTable->view().column(1)};
 
     strings_column_wrapper expectedDataWrap1(
-      {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+      {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
+      {true, true, true, true, true, true, true, true, true, true, false});
 
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
@@ -392,7 +398,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
     auto output_column_view2{p_outputTable->view().column(1)};
 
     strings_column_wrapper expectedDataWrap1(
-      {"f", "g", "h", "i", "j", "k", "a", "b", "c", "d", "e"}, {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
+      {"f", "g", "h", "i", "j", "k", "a", "b", "c", "d", "e"},
+      {true, true, true, true, true, false, true, true, true, true, true});
 
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
@@ -430,7 +437,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
     auto output_column_view2{p_outputTable->view().column(1)};
 
     strings_column_wrapper expectedDataWrap1(
-      {"b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "a"}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1});
+      {"b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "a"},
+      {true, true, true, true, true, true, true, true, true, false, true});
 
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
@@ -460,8 +468,9 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
 
 TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_11)
 {
-  strings_column_wrapper rrColWrap1({"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
-                                    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  strings_column_wrapper rrColWrap1(
+    {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
+    {true, true, true, true, true, true, true, true, true, true, false});
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
@@ -488,7 +497,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_11)
     auto output_column_view2{p_outputTable->view().column(1)};
 
     strings_column_wrapper expectedDataWrap1(
-      {"j", "k", "a", "b", "c", "d", "e", "f", "g", "h", "i"}, {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+      {"j", "k", "a", "b", "c", "d", "e", "f", "g", "h", "i"},
+      {true, false, true, true, true, true, true, true, true, true, true});
 
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
@@ -527,7 +537,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows)
   strings_column_wrapper rrColWrap1(
     {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k",
      "l", "m", "n", "o", "p", "q", "r", "s", "t", "u"},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+    {true, true, true, true, true, true, true, true, true, true, true,
+     true, true, true, true, true, true, true, true, true, false});
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
@@ -563,7 +574,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows)
     strings_column_wrapper expectedDataWrap1(
       {"a", "d", "g", "j", "m", "p", "s", "b", "e", "h", "k",
        "n", "q", "t", "c", "f", "i", "l", "o", "r", "u"},
-      {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+      {true, true, true, true, true, true, true, true, true, true, true,
+       true, true, true, true, true, true, true, true, true, false});
 
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
@@ -610,7 +622,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows)
     strings_column_wrapper expectedDataWrap1(
       {"c", "f", "i", "l", "o", "r", "u", "a", "d", "g", "j",
        "m", "p", "s", "b", "e", "h", "k", "n", "q", "t"},
-      {1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+      {true, true, true, true, true, true, false, true, true, true, true,
+       true, true, true, true, true, true, true,  true, true, true});
 
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
@@ -640,8 +653,9 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows)
 
 TYPED_TEST(RoundRobinTest, RoundRobinSinglePartition)
 {
-  strings_column_wrapper rrColWrap1({"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
-                                    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  strings_column_wrapper rrColWrap1(
+    {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
+    {true, true, true, true, true, true, true, true, true, true, false});
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
@@ -665,8 +679,9 @@ TYPED_TEST(RoundRobinTest, RoundRobinSinglePartition)
   auto output_column_view1{p_outputTable->view().column(0)};
   auto output_column_view2{p_outputTable->view().column(1)};
 
-  strings_column_wrapper expectedDataWrap1({"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
-                                           {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  strings_column_wrapper expectedDataWrap1(
+    {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
+    {true, true, true, true, true, true, true, true, true, true, false});
 
   auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view1, output_column_view1);
@@ -693,8 +708,9 @@ TYPED_TEST(RoundRobinTest, RoundRobinSinglePartition)
 
 TYPED_TEST(RoundRobinTest, RoundRobinIncorrectNumPartitions)
 {
-  strings_column_wrapper rrColWrap1({"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
-                                    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  strings_column_wrapper rrColWrap1(
+    {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
+    {true, true, true, true, true, true, true, true, true, true, false});
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
@@ -719,8 +735,9 @@ TYPED_TEST(RoundRobinTest, RoundRobinIncorrectNumPartitions)
 
 TYPED_TEST(RoundRobinTest, RoundRobinIncorrectStartPartition)
 {
-  strings_column_wrapper rrColWrap1({"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
-                                    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  strings_column_wrapper rrColWrap1(
+    {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
+    {true, true, true, true, true, true, true, true, true, true, false});
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 

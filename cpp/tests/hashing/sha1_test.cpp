@@ -50,7 +50,7 @@ TEST_F(SHA1HashTest, MultiValue)
      "A very long (greater than 128 bytes/char string) to execute a multi hash-step data point in "
      "the hash function being tested. This string needed to be longer.",
      "All work and no play makes Jack a dull boy",
-     "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~",
+     R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)",
      "Multi-byte characters: é¼³⅝"});
 
   /*
@@ -114,8 +114,8 @@ TEST_F(SHA1HashTest, MultiValue)
 TEST_F(SHA1HashTest, EmptyNullEquivalence)
 {
   // Test that empty strings hash the same as nulls
-  cudf::test::strings_column_wrapper const strings_col1({"", ""}, {1, 0});
-  cudf::test::strings_column_wrapper const strings_col2({"", ""}, {0, 1});
+  cudf::test::strings_column_wrapper const strings_col1({"", ""}, {true, false});
+  cudf::test::strings_column_wrapper const strings_col2({"", ""}, {false, true});
 
   auto const input1 = cudf::table_view({strings_col1});
   auto const input2 = cudf::table_view({strings_col2});
@@ -133,7 +133,7 @@ TEST_F(SHA1HashTest, ListsUnsupported)
     {{""},
      {"", "Some inputs"},
      {"All ", "work ", "and", " no", " play ", "makes Jack", " a dull boy"},
-     {"!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`", "{|}~"}});
+     {R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`)", "{|}~"}});
 
   auto const input = cudf::table_view({strings_list_col});
 

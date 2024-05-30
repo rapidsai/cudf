@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -380,7 +380,7 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpEqualSimpleScale0Null)
 
   auto const col1     = fp_wrapper<RepType>{{1, 2, 3, 4}, {1, 1, 1, 1}, scale_type{0}};
   auto const col2     = fp_wrapper<RepType>{{1, 2, 3, 4}, {0, 0, 0, 0}, scale_type{0}};
-  auto const expected = wrapper<bool>{{0, 1, 0, 1}, {0, 0, 0, 0}};
+  auto const expected = wrapper<bool>{{0, 1, 0, 1}, {false, false, false, false}};
 
   auto const result = cudf::binary_operation(
     col1, col2, cudf::binary_operator::EQUAL, cudf::data_type{cudf::type_id::BOOL8});
@@ -396,7 +396,7 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpEqualSimpleScale2Null)
 
   auto const col1     = fp_wrapper<RepType>{{1, 2, 3, 4}, {1, 1, 1, 1}, scale_type{-2}};
   auto const col2     = fp_wrapper<RepType>{{1, 2, 3, 4}, {0, 0, 0, 0}, scale_type{0}};
-  auto const expected = wrapper<bool>{{0, 1, 0, 1}, {0, 0, 0, 0}};
+  auto const expected = wrapper<bool>{{0, 1, 0, 1}, {false, false, false, false}};
 
   auto const result = cudf::binary_operation(
     col1, col2, cudf::binary_operator::EQUAL, cudf::data_type{cudf::type_id::BOOL8});
@@ -495,7 +495,7 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpNullEqualsSimple)
 
   auto const col1     = fp_wrapper<RepType>{{400, 300, 300, 100}, {1, 1, 1, 0}, scale_type{-2}};
   auto const col2     = fp_wrapper<RepType>{{40, 200, 20, 400}, {1, 0, 1, 0}, scale_type{-1}};
-  auto const expected = wrapper<bool>{{1, 0, 0, 1}, {1, 1, 1, 1}};
+  auto const expected = wrapper<bool>{{1, 0, 0, 1}, {true, true, true, true}};
 
   auto const result = cudf::binary_operation(
     col1, col2, cudf::binary_operator::NULL_EQUALS, cudf::data_type{cudf::type_id::BOOL8});

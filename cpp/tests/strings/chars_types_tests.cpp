@@ -148,7 +148,22 @@ TEST_F(StringsCharsTest, Alphanumeric)
   auto results = cudf::strings::all_characters_of_type(
     strings_view, cudf::strings::string_character_types::ALPHANUM);
 
-  std::vector<bool> h_expected{1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0};
+  std::vector<bool> h_expected{true,
+                               true,
+                               false,
+                               true,
+                               false,
+                               false,
+                               false,
+                               false,
+                               false,
+                               true,
+                               true,
+                               true,
+                               false,
+                               true,
+                               true,
+                               false};
   cudf::test::fixed_width_column_wrapper<bool> expected(
     h_expected.begin(),
     h_expected.end(),
@@ -186,7 +201,22 @@ TEST_F(StringsCharsTest, AlphaNumericSpace)
   auto results = cudf::strings::all_characters_of_type(
     strings_view, (cudf::strings::string_character_types)types);
 
-  std::vector<bool> h_expected{1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1};
+  std::vector<bool> h_expected{true,
+                               true,
+                               false,
+                               true,
+                               true,
+                               false,
+                               false,
+                               false,
+                               false,
+                               true,
+                               true,
+                               true,
+                               true,
+                               true,
+                               true,
+                               true};
   cudf::test::fixed_width_column_wrapper<bool> expected(
     h_expected.begin(),
     h_expected.end(),
@@ -225,7 +255,22 @@ TEST_F(StringsCharsTest, Numerics)
   auto results = cudf::strings::all_characters_of_type(
     strings_view, (cudf::strings::string_character_types)types);
 
-  std::vector<bool> h_expected{0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0};
+  std::vector<bool> h_expected{false,
+                               false,
+                               false,
+                               false,
+                               false,
+                               false,
+                               false,
+                               false,
+                               false,
+                               true,
+                               false,
+                               true,
+                               false,
+                               true,
+                               false,
+                               false};
   cudf::test::fixed_width_column_wrapper<bool> expected(
     h_expected.begin(),
     h_expected.end(),

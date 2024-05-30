@@ -149,11 +149,11 @@ class pinned_allocator {
    *        It is the responsibility of the caller to initialize the
    *        objects at the returned \c pointer.
    */
-  __host__ inline pointer allocate(size_type cnt, const_pointer /*hint*/ = 0)
+  __host__ inline pointer allocate(size_type cnt, const_pointer /*hint*/ = nullptr)
   {
     if (cnt > this->max_size()) { throw std::bad_alloc(); }  // end if
 
-    pointer result(0);
+    pointer result(nullptr);
     CUDF_CUDA_TRY(cudaMallocHost(reinterpret_cast<void**>(&result), cnt * sizeof(value_type)));
     return result;
   }
@@ -183,7 +183,10 @@ class pinned_allocator {
    *  @return The maximum number of objects that may be allocated
    *          by a single call to \p allocate().
    */
-  inline size_type max_size() const { return (std::numeric_limits<size_type>::max)() / sizeof(T); }
+  [[nodiscard]] inline size_type max_size() const
+  {
+    return (std::numeric_limits<size_type>::max)() / sizeof(T);
+  }
 
   /**
    * @brief This method tests this \p pinned_allocator for equality to

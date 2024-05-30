@@ -42,25 +42,27 @@ TEST_F(DictionaryFillTest, StringsColumn)
 
 TEST_F(DictionaryFillTest, WithNulls)
 {
-  cudf::test::fixed_width_column_wrapper<int64_t> input({9, 8, 7, 6, 4}, {0, 1, 1, 0, 1});
+  cudf::test::fixed_width_column_wrapper<int64_t> input({9, 8, 7, 6, 4},
+                                                        {false, true, true, false, true});
   auto dictionary = cudf::dictionary::encode(input);
   cudf::numeric_scalar<int64_t> fv(-10);
   auto results = cudf::fill(dictionary->view(), 0, 2, fv);
   auto decoded = cudf::dictionary::decode(results->view());
-  cudf::test::fixed_width_column_wrapper<int64_t> expected({-10, -10, 7, 6, 4}, {1, 1, 1, 0, 1});
+  cudf::test::fixed_width_column_wrapper<int64_t> expected({-10, -10, 7, 6, 4},
+                                                           {true, true, true, false, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded->view(), expected);
 }
 
 TEST_F(DictionaryFillTest, FillWithNull)
 {
   cudf::test::fixed_width_column_wrapper<double> input({1.2, 8.5, 7.75, 6.25, 4.125},
-                                                       {1, 1, 1, 0, 1});
+                                                       {true, true, true, false, true});
   auto dictionary = cudf::dictionary::encode(input);
   cudf::numeric_scalar<double> fv(0, false);
   auto results = cudf::fill(dictionary->view(), 1, 3, fv);
   auto decoded = cudf::dictionary::decode(results->view());
   cudf::test::fixed_width_column_wrapper<double> expected({1.2, 0.0, 0.0, 0.0, 4.125},
-                                                          {1, 0, 0, 0, 1});
+                                                          {true, false, false, false, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded->view(), expected);
 }
 

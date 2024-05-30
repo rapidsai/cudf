@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -217,7 +217,8 @@ TYPED_TEST_SUITE(ScanTest, TestTypes);
 TYPED_TEST(ScanTest, Min)
 {
   auto const v = make_vector<TypeParam>({123, 64, 63, 99, -5, 123, -16, -120, -111});
-  auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 0, 1, 1, 1, 1, 0, 0, 1});
+  auto const b = thrust::host_vector<bool>(
+    std::vector<bool>{true, false, true, true, true, true, false, false, true});
 
   // no nulls
   this->scan_test(v, {}, *cudf::make_min_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
@@ -249,7 +250,8 @@ TYPED_TEST(ScanTest, Min)
 TYPED_TEST(ScanTest, Max)
 {
   auto const v = make_vector<TypeParam>({-120, 5, 0, -120, -111, 64, 63, 99, 123, -16});
-  auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 0, 1, 1, 1, 1, 0, 1, 0, 1});
+  auto const b = thrust::host_vector<bool>(
+    std::vector<bool>{true, false, true, true, true, true, false, true, false, true});
 
   // inclusive
   // no nulls
@@ -282,7 +284,7 @@ TYPED_TEST(ScanTest, Max)
 TYPED_TEST(ScanTest, Product)
 {
   auto const v = make_vector<TypeParam>({5, -1, 1, 3, -2, 4});
-  auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 1, 1, 0, 1, 1});
+  auto const b = thrust::host_vector<bool>(std::vector<bool>{true, true, true, false, true, true});
 
   // no nulls
   this->scan_test(v, {}, *cudf::make_product_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
@@ -318,7 +320,8 @@ TYPED_TEST(ScanTest, Sum)
       return make_vector<TypeParam>({-120, 5, 6, 113, -111, 64, -63, 9, 34, -16});
     return make_vector<TypeParam>({12, 5, 6, 13, 11, 14, 3, 9, 34, 16});
   }();
-  auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 0, 1, 1, 0, 0, 1, 1, 1, 1});
+  auto const b = thrust::host_vector<bool>(
+    std::vector<bool>{true, false, true, true, false, false, true, true, true, true});
 
   // no nulls
   this->scan_test(v, {}, *cudf::make_sum_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
@@ -379,7 +382,7 @@ TYPED_TEST(ScanTest, EmptyColumn)
 TYPED_TEST(ScanTest, LeadingNulls)
 {
   auto const v = make_vector<TypeParam>({100, 200, 300});
-  auto const b = thrust::host_vector<bool>(std::vector<bool>{0, 1, 1});
+  auto const b = thrust::host_vector<bool>(std::vector<bool>{false, true, true});
 
   // skipna = true (default)
   this->scan_test(v,

@@ -74,7 +74,7 @@ TEST_F(DictionaryRemoveKeysTest, FloatColumn)
       cudf::dictionary::remove_keys(cudf::dictionary_column_view(dictionary->view()), del_keys);
     auto const decoded = cudf::dictionary::decode(result->view());
     cudf::test::fixed_width_column_wrapper<float> expected{{0., 7.125, 0.5, 0., 7.125, 0.5},
-                                                           {0, 1, 1, 0, 1, 1}};
+                                                           {false, true, true, false, true, true}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded->view(), expected);
   }
   {
@@ -90,8 +90,9 @@ TEST_F(DictionaryRemoveKeysTest, FloatColumn)
 
 TEST_F(DictionaryRemoveKeysTest, WithNull)
 {
-  cudf::test::fixed_width_column_wrapper<int64_t> input{{444, 0, 333, 111, 222, 222, 222, 444, 0},
-                                                        {1, 1, 1, 1, 1, 0, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int64_t> input{
+    {444, 0, 333, 111, 222, 222, 222, 444, 0},
+    {true, true, true, true, true, false, true, true, true}};
   cudf::test::fixed_width_column_wrapper<int64_t> del_keys{0, 111, 777};
 
   auto const dictionary = cudf::dictionary::encode(input);
@@ -99,8 +100,9 @@ TEST_F(DictionaryRemoveKeysTest, WithNull)
     auto const result =
       cudf::dictionary::remove_keys(cudf::dictionary_column_view(dictionary->view()), del_keys);
     auto const decoded = cudf::dictionary::decode(result->view());
-    cudf::test::fixed_width_column_wrapper<int64_t> expected{{444, 0, 333, 0, 222, 0, 222, 444, 0},
-                                                             {1, 0, 1, 0, 1, 0, 1, 1, 0}};
+    cudf::test::fixed_width_column_wrapper<int64_t> expected{
+      {444, 0, 333, 0, 222, 0, 222, 444, 0},
+      {true, false, true, false, true, false, true, true, false}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded->view(), expected);
   }
   {
@@ -121,6 +123,6 @@ TEST_F(DictionaryRemoveKeysTest, Errors)
 
   cudf::test::fixed_width_column_wrapper<float> del_keys{1.0, 2.0, 3.0};
   EXPECT_THROW(cudf::dictionary::remove_keys(dictionary->view(), del_keys), cudf::data_type_error);
-  cudf::test::fixed_width_column_wrapper<int64_t> null_keys{{1, 2, 3}, {1, 0, 1}};
+  cudf::test::fixed_width_column_wrapper<int64_t> null_keys{{1, 2, 3}, {true, false, true}};
   EXPECT_THROW(cudf::dictionary::remove_keys(dictionary->view(), null_keys), cudf::logic_error);
 }

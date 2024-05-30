@@ -204,8 +204,7 @@ class fixed_pinned_pool_memory_resource {
 
 static_assert(cuda::mr::resource_with<fixed_pinned_pool_memory_resource,
                                       cuda::mr::device_accessible,
-                                      cuda::mr::host_accessible>,
-              "");
+                                      cuda::mr::host_accessible>);
 
 }  // namespace
 

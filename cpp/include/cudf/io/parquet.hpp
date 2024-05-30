@@ -29,6 +29,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace cudf::io {
@@ -186,7 +187,7 @@ class parquet_reader_options {
    *
    * @return Timestamp type used to cast timestamp columns
    */
-  data_type get_timestamp_type() const { return _timestamp_type; }
+  [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
    * @brief Sets names of the columns to be read.
@@ -712,7 +713,8 @@ class parquet_writer_options {
    *
    * @return Key-Value footer metadata information
    */
-  std::vector<std::map<std::string, std::string>> const& get_key_value_metadata() const
+  [[nodiscard]] std::vector<std::map<std::string, std::string>> const& get_key_value_metadata()
+    const
   {
     return _user_data;
   }
@@ -722,7 +724,7 @@ class parquet_writer_options {
    *
    * @return `true` if timestamps will be written as INT96
    */
-  bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
+  [[nodiscard]] bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
   /**
    * @brief Returns `true` if timestamps will be written as UTC
@@ -736,7 +738,7 @@ class parquet_writer_options {
    *
    * @return Column chunks file paths to be set in the raw output metadata
    */
-  std::vector<std::string> const& get_column_chunks_file_paths() const
+  [[nodiscard]] std::vector<std::string> const& get_column_chunks_file_paths() const
   {
     return _column_chunks_file_paths;
   }
@@ -746,14 +748,14 @@ class parquet_writer_options {
    *
    * @return Maximum row group size, in bytes
    */
-  auto get_row_group_size_bytes() const { return _row_group_size_bytes; }
+  [[nodiscard]] auto get_row_group_size_bytes() const { return _row_group_size_bytes; }
 
   /**
    * @brief Returns maximum row group size, in rows.
    *
    * @return Maximum row group size, in rows
    */
-  auto get_row_group_size_rows() const { return _row_group_size_rows; }
+  [[nodiscard]] auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
    * @brief Returns the maximum uncompressed page size, in bytes.
@@ -762,7 +764,7 @@ class parquet_writer_options {
    *
    * @return Maximum uncompressed page size, in bytes
    */
-  auto get_max_page_size_bytes() const
+  [[nodiscard]] auto get_max_page_size_bytes() const
   {
     return std::min(_max_page_size_bytes, get_row_group_size_bytes());
   }
@@ -774,7 +776,7 @@ class parquet_writer_options {
    *
    * @return Maximum page size, in rows
    */
-  auto get_max_page_size_rows() const
+  [[nodiscard]] auto get_max_page_size_rows() const
   {
     return std::min(_max_page_size_rows, get_row_group_size_rows());
   }
@@ -784,7 +786,10 @@ class parquet_writer_options {
    *
    * @return length min/max will be truncated to
    */
-  auto get_column_index_truncate_length() const { return _column_index_truncate_length; }
+  [[nodiscard]] auto get_column_index_truncate_length() const
+  {
+    return _column_index_truncate_length;
+  }
 
   /**
    * @brief Returns policy for dictionary use.
@@ -1371,7 +1376,8 @@ class chunked_parquet_writer_options {
    *
    * @return Key-Value footer metadata information
    */
-  std::vector<std::map<std::string, std::string>> const& get_key_value_metadata() const
+  [[nodiscard]] std::vector<std::map<std::string, std::string>> const& get_key_value_metadata()
+    const
   {
     return _user_data;
   }
@@ -1381,7 +1387,7 @@ class chunked_parquet_writer_options {
    *
    * @return `true` if timestamps will be written as INT96
    */
-  bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
+  [[nodiscard]] bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
   /**
    * @brief Returns `true` if timestamps will be written as UTC
@@ -1395,14 +1401,14 @@ class chunked_parquet_writer_options {
    *
    * @return Maximum row group size, in bytes
    */
-  auto get_row_group_size_bytes() const { return _row_group_size_bytes; }
+  [[nodiscard]] auto get_row_group_size_bytes() const { return _row_group_size_bytes; }
 
   /**
    * @brief Returns maximum row group size, in rows.
    *
    * @return Maximum row group size, in rows
    */
-  auto get_row_group_size_rows() const { return _row_group_size_rows; }
+  [[nodiscard]] auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
    * @brief Returns maximum uncompressed page size, in bytes.
@@ -1412,7 +1418,7 @@ class chunked_parquet_writer_options {
    *
    * @return Maximum uncompressed page size, in bytes
    */
-  auto get_max_page_size_bytes() const
+  [[nodiscard]] auto get_max_page_size_bytes() const
   {
     return std::min(_max_page_size_bytes, get_row_group_size_bytes());
   }
@@ -1424,7 +1430,7 @@ class chunked_parquet_writer_options {
    *
    * @return Maximum page size, in rows
    */
-  auto get_max_page_size_rows() const
+  [[nodiscard]] auto get_max_page_size_rows() const
   {
     return std::min(_max_page_size_rows, get_row_group_size_rows());
   }
@@ -1434,7 +1440,10 @@ class chunked_parquet_writer_options {
    *
    * @return length min/max will be truncated to
    */
-  auto get_column_index_truncate_length() const { return _column_index_truncate_length; }
+  [[nodiscard]] auto get_column_index_truncate_length() const
+  {
+    return _column_index_truncate_length;
+  }
 
   /**
    * @brief Returns policy for dictionary use.

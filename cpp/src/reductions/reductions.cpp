@@ -34,6 +34,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <utility>
+
 namespace cudf {
 namespace reduction {
 namespace detail {
@@ -44,12 +46,12 @@ struct reduce_dispatch_functor {
   rmm::device_async_resource_ref mr;
   rmm::cuda_stream_view stream;
 
-  reduce_dispatch_functor(column_view const& col,
+  reduce_dispatch_functor(column_view col,
                           data_type output_dtype,
                           std::optional<std::reference_wrapper<scalar const>> init,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
-    : col(col), output_dtype(output_dtype), init(init), mr(mr), stream(stream)
+    : col(std::move(col)), output_dtype(output_dtype), init(init), mr(mr), stream(stream)
   {
   }
 

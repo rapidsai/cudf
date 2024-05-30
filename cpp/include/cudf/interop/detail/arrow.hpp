@@ -24,8 +24,12 @@
 #define ARROW_C_DEVICE_DATA_INTERFACE
 
 // Device type for the allocated memory
-typedef int32_t ArrowDeviceType;
+using ArrowDeviceType = int32_t;
 
+// The Arrow spec specifies using macros rather than enums here to avoid being
+// susceptible to changes in the underlying type chosen by the compiler, but
+// clang-tidy doesn't like this.
+// NOLINTBEGIN
 // CPU device, same as using ArrowArray directly
 #define ARROW_DEVICE_CPU 1
 // CUDA GPU Device
@@ -34,6 +38,7 @@ typedef int32_t ArrowDeviceType;
 #define ARROW_DEVICE_CUDA_HOST 3
 // CUDA managed/unified memory allocated by cudaMallocManaged
 #define ARROW_DEVICE_CUDA_MANAGED 13
+// NOLINTEND
 
 struct ArrowDeviceArray {
   struct ArrowArray array;

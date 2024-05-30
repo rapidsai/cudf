@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ TEST_F(StringsTranslateTest, Translate)
   auto strings_view = cudf::strings_column_view(strings);
 
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> translate_table{
-    make_entry("b", 0), make_entry("a", "A"), make_entry("é", "E"), make_entry("e", "_")};
+    make_entry("b", nullptr), make_entry("a", "A"), make_entry("é", "E"), make_entry("e", "_")};
   auto results = cudf::strings::translate(strings_view, translate_table);
 
   std::vector<char const*> h_expected{"___ ddd", " cc", nullptr, "", "AA", "dEd"};

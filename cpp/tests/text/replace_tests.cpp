@@ -116,7 +116,7 @@ TEST_F(TextReplaceTest, ReplaceTokensErrorTest)
   cudf::strings_column_view strings_view(strings->view());
   cudf::test::strings_column_wrapper notnulls({"", "", ""});
   cudf::strings_column_view notnulls_view(notnulls);
-  cudf::test::strings_column_wrapper nulls({"", ""}, {0, 0});
+  cudf::test::strings_column_wrapper nulls({"", ""}, {false, false});
   cudf::strings_column_view nulls_view(nulls);
 
   EXPECT_THROW(nvtext::replace_tokens(strings_view, nulls_view, notnulls_view), cudf::logic_error);

@@ -104,7 +104,7 @@ class metadata_builder {
    *
    * @returns A vector containing the serialized column metadata
    */
-  std::vector<uint8_t> build() const;
+  [[nodiscard]] std::vector<uint8_t> build() const;
 
   /**
    * @brief Clear the internal buffer containing all added metadata.

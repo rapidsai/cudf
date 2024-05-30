@@ -73,7 +73,7 @@ class cuda_stream_pool {
    *
    * @return the number of stream objects in the pool
    */
-  virtual std::size_t get_stream_pool_size() const = 0;
+  [[nodiscard]] virtual std::size_t get_stream_pool_size() const = 0;
 };
 
 /**

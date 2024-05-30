@@ -60,7 +60,7 @@ TYPED_TEST(StableSort, MixedNullOrder)
   cudf::test::fixed_width_column_wrapper<T> col1({0, 1, 1, 0, 0, 1, 0, 1},
                                                  {0, 1, 1, 1, 1, 1, 1, 1});
   cudf::test::strings_column_wrapper col2({"2", "a", "b", "x", "k", "a", "x", "a"},
-                                          {1, 1, 1, 1, 0, 1, 1, 1});
+                                          {true, true, true, true, false, true, true, true});
 
   cudf::test::fixed_width_column_wrapper<R> expected{{4, 3, 6, 1, 5, 7, 2, 0}};
 
@@ -76,7 +76,8 @@ TYPED_TEST(StableSort, WithNullMax)
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8, 5}, {1, 1, 0, 1, 1, 1}};
-  cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k", "d"}, {1, 1, 0, 1, 1, 1});
+  cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k", "d"},
+                                          {true, true, false, true, true, true});
   cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 10, 2, 10}, {1, 1, 0, 1, 1, 1}};
   cudf::table_view input{{col1, col2, col3}};
 
@@ -140,7 +141,8 @@ TYPED_TEST(StableSort, WithNullMin)
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}, {1, 1, 0, 1, 1}};
-  cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"}, {1, 1, 0, 1, 1});
+  cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"},
+                                          {true, true, false, true, true});
   cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 10, 2}, {1, 1, 0, 1, 1}};
   cudf::table_view input{{col1, col2, col3}};
 

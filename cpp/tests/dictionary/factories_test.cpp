@@ -96,7 +96,8 @@ TEST_F(DictionaryFactoriesTest, ColumnsWithNulls)
 
 TEST_F(DictionaryFactoriesTest, KeysWithNulls)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> keys{{0, 1, 2, 3, 4}, {1, 1, 1, 0, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> keys{{0, 1, 2, 3, 4},
+                                                       {true, true, true, false, true}};
   cudf::test::fixed_width_column_wrapper<uint32_t> indices{5, 4, 3, 2, 1, 0};
   EXPECT_THROW(cudf::make_dictionary_column(keys, indices), cudf::logic_error);
 }
@@ -104,7 +105,8 @@ TEST_F(DictionaryFactoriesTest, KeysWithNulls)
 TEST_F(DictionaryFactoriesTest, IndicesWithNulls)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> keys{0, 1, 2, 3, 4};
-  cudf::test::fixed_width_column_wrapper<uint32_t> indices{{5, 4, 3, 2, 1, 0}, {1, 1, 1, 0, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<uint32_t> indices{{5, 4, 3, 2, 1, 0},
+                                                           {true, true, true, false, true, false}};
   EXPECT_THROW(
     cudf::make_dictionary_column(keys.release(), indices.release(), rmm::device_buffer{}, 0),
     cudf::logic_error);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -485,8 +485,8 @@ std::string schema_parser::get_str()
   char const* cur   = start;
   while (cur < m_end && *cur++ != '"')
     ;
-  int32_t len = static_cast<int32_t>(cur - start - 1);
-  m_cur       = cur;
+  auto len = static_cast<int32_t>(cur - start - 1);
+  m_cur    = cur;
   return s.assign(start, std::max(len, 0));
 }
 

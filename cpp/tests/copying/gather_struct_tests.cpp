@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -408,7 +408,7 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfListOfStructs)
       5, offsets{0, 2, 4, 6, 8, 10}.release(), std::move(expected_struct_col), 0, {});
     std::vector<std::unique_ptr<cudf::column>> expected_vector_of_columns;
     expected_vector_of_columns.push_back(std::move(expected_list_of_structs_column));
-    return structs{std::move(expected_vector_of_columns), {0, 1, 1, 1, 1}};
+    return structs{std::move(expected_vector_of_columns), {false, true, true, true, true}};
   }();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_gather_result, gathered_structs->view());

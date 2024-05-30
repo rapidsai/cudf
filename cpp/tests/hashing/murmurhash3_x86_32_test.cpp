@@ -72,26 +72,28 @@ TEST_F(MurmurHashTest, MultiValueNulls)
      "jumps over the lazy dog.",
      "All work and no play makes Jack a dull boy",
      R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"},
-    {0, 1, 1, 0, 1});
+    {false, true, true, false, true});
   cudf::test::strings_column_wrapper const strings_col2(
     {"different but null",
      "The quick brown fox",
      "jumps over the lazy dog.",
      "I am Jack's complete lack of null value",
      R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"},
-    {0, 1, 1, 0, 1});
+    {false, true, true, false, true});
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
   cudf::test::fixed_width_column_wrapper<int32_t> const ints_col1(
-    {0, 100, -100, limits::min(), limits::max()}, {1, 0, 0, 1, 1});
+    {0, 100, -100, limits::min(), limits::max()}, {true, false, false, true, true});
   cudf::test::fixed_width_column_wrapper<int32_t> const ints_col2(
-    {0, -200, 200, limits::min(), limits::max()}, {1, 0, 0, 1, 1});
+    {0, -200, 200, limits::min(), limits::max()}, {true, false, false, true, true});
 
   // Nulls with different values should be equal
   // Different truth values should be equal
-  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1},
+                                                                {true, true, false, false, true});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255},
+                                                                {true, true, false, false, true});
 
   // Nulls with different values should be equal
   using ts = cudf::timestamp_s;
@@ -101,14 +103,14 @@ TEST_F(MurmurHashTest, MultiValueNulls)
      static_cast<ts::duration>(-100),
      ts::duration::min(),
      ts::duration::max()},
-    {1, 0, 0, 1, 1});
+    {true, false, false, true, true});
   cudf::test::fixed_width_column_wrapper<ts, ts::duration> const secs_col2(
     {ts::duration::zero(),
      static_cast<ts::duration>(-200),
      static_cast<ts::duration>(200),
      ts::duration::min(),
      ts::duration::max()},
-    {1, 0, 0, 1, 1});
+    {true, false, false, true, true});
 
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1, secs_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2, secs_col2});
@@ -165,7 +167,8 @@ TEST_F(MurmurHashTest, NullableList)
   using LCW = cudf::test::lists_column_wrapper<uint64_t>;
   using ICW = cudf::test::fixed_width_column_wrapper<uint32_t>;
 
-  auto const valids = std::vector<bool>{1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0};
+  auto const valids =
+    std::vector<bool>{true, true, true, true, true, true, true, false, true, true, false};
   auto const col =
     LCW{{{}, {}, {1}, {1}, {2, 2}, {2}, {2}, {}, {2, 2}, {2, 2}, {}}, valids.begin()};
   auto expect = ICW{-2023148619,
@@ -203,17 +206,84 @@ TEST_F(MurmurHashTest, ListOfStruct)
 {
   auto col1 = cudf::test::fixed_width_column_wrapper<int32_t>{
     {-1, -1, 0, 2, 2, 2, 1, 2, 0, 2, 0, 2, 0, 2, 0, 0, 1, 2},
-    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
+    {true,
+     true,
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     false,
+     false}};
   auto col2 = cudf::test::strings_column_wrapper{
     {"x", "x", "a", "a", "b", "b", "a", "b", "a", "b", "a", "c", "a", "c", "a", "c", "b", "b"},
-    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1}};
-  auto struct_col = cudf::test::structs_column_wrapper{
-    {col1, col2}, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+    {true,
+     true,
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true}};
+  auto struct_col = cudf::test::structs_column_wrapper{{col1, col2},
+                                                       {false,
+                                                        false,
+                                                        false,
+                                                        false,
+                                                        false,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true}};
 
   auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
 
-  auto list_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto list_nullmask = std::vector<bool>{true,
+                                         true,
+                                         false,
+                                         false,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true};
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
   auto list_column = cudf::make_lists_column(
@@ -279,14 +349,16 @@ TEST_F(MurmurHashTest, ListOfEmptyStruct)
   // [{}, {}]
   // [{}, {}]
 
-  auto struct_validity = std::vector<bool>{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
+  auto struct_validity = std::vector<bool>{
+    false, false, false, false, false, false, false, false, true, true, true, true, true, true};
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end());
   auto struct_col = cudf::make_structs_column(14, {}, null_count, std::move(null_mask));
 
   auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     0, 0, 0, 0, 0, 2, 4, 6, 7, 8, 9, 10, 12, 14};
-  auto list_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto list_nullmask = std::vector<bool>{
+    true, true, false, false, true, true, true, true, true, true, true, true, true};
   std::tie(null_mask, null_count) =
     cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
   auto list_column = cudf::make_lists_column(
@@ -322,7 +394,7 @@ TEST_F(MurmurHashTest, EmptyDeepList)
   auto list1 = cudf::test::lists_column_wrapper<int>{};
 
   auto offsets       = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 0, 0, 0};
-  auto list_nullmask = std::vector<bool>{1, 1, 0, 0};
+  auto list_nullmask = std::vector<bool>{true, true, false, false};
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
   auto list_column = cudf::make_lists_column(

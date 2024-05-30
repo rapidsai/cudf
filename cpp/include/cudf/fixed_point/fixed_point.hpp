@@ -291,14 +291,14 @@ class fixed_point {
    *
    * @return The underlying value of the `fixed_point` number
    */
-  CUDF_HOST_DEVICE inline rep value() const { return _value; }
+  CUDF_HOST_DEVICE [[nodiscard]] inline rep value() const { return _value; }
 
   /**
    * @brief Method that returns the scale of the `fixed_point` number
    *
    * @return The scale of the `fixed_point` number
    */
-  CUDF_HOST_DEVICE inline scale_type scale() const { return _scale; }
+  CUDF_HOST_DEVICE [[nodiscard]] inline scale_type scale() const { return _scale; }
 
   /**
    * @brief Explicit conversion operator to `bool`
@@ -573,7 +573,7 @@ class fixed_point {
    * @param scale The `scale` of the returned `fixed_point` number
    * @return `fixed_point` number with a new `scale`
    */
-  CUDF_HOST_DEVICE inline fixed_point<Rep, Rad> rescaled(scale_type scale) const
+  CUDF_HOST_DEVICE [[nodiscard]] inline fixed_point<Rep, Rad> rescaled(scale_type scale) const
   {
     if (scale == _scale) { return *this; }
     Rep const value = detail::shift<Rep, Rad>(_value, scale_type{scale - _scale});

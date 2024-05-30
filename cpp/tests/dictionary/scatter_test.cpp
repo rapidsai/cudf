@@ -90,10 +90,11 @@ TEST_F(DictionaryScatterTest, ScatterScalar)
 
 TEST_F(DictionaryScatterTest, WithNulls)
 {
-  cudf::test::fixed_width_column_wrapper<int64_t> data_source{{1, 5, 7, 9}, {0, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int64_t> data_source{{1, 5, 7, 9},
+                                                              {false, true, true, true}};
   auto source = cudf::dictionary::encode(data_source);
-  cudf::test::fixed_width_column_wrapper<int64_t> data_target{{1, 5, 5, 3, 7, 1, 4, 2},
-                                                              {0, 1, 0, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int64_t> data_target{
+    {1, 5, 5, 3, 7, 1, 4, 2}, {false, true, false, true, true, true, true, true}};
   auto target = cudf::dictionary::encode(data_target);
 
   cudf::test::fixed_width_column_wrapper<int32_t> scatter_map{7, 2, 3, 1};
@@ -104,15 +105,15 @@ TEST_F(DictionaryScatterTest, WithNulls)
   auto decoded =
     cudf::dictionary::decode(cudf::dictionary_column_view(table_result.front()->view()));
 
-  cudf::test::fixed_width_column_wrapper<int64_t> expected{{1, 9, 5, 7, 7, 1, 4, 1},
-                                                           {0, 1, 1, 1, 1, 1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<int64_t> expected{
+    {1, 9, 5, 7, 7, 1, 4, 1}, {false, true, true, true, true, true, true, false}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, decoded->view());
 }
 
 TEST_F(DictionaryScatterTest, ScalarWithNulls)
 {
-  cudf::test::fixed_width_column_wrapper<int64_t> data_target{{1, 5, 5, 3, 7, 1, 4, 2},
-                                                              {0, 1, 0, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int64_t> data_target{
+    {1, 5, 5, 3, 7, 1, 4, 2}, {false, true, false, true, true, true, true, true}};
   auto target = cudf::dictionary::encode(data_target);
   std::vector<std::reference_wrapper<const cudf::scalar>> source;
   const cudf::numeric_scalar<int64_t> source_slr = cudf::test::make_type_param_scalar<int64_t>(100);
@@ -126,8 +127,8 @@ TEST_F(DictionaryScatterTest, ScalarWithNulls)
   auto decoded =
     cudf::dictionary::decode(cudf::dictionary_column_view(table_result.front()->view()));
 
-  cudf::test::fixed_width_column_wrapper<int64_t> expected{{1, 100, 100, 100, 7, 100, 4, 100},
-                                                           {0, 1, 1, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int64_t> expected{
+    {1, 100, 100, 100, 7, 100, 4, 100}, {false, true, true, true, true, true, true, true}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, decoded->view());
 }
 

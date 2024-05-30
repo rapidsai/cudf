@@ -109,7 +109,7 @@ TEST_F(StringGetValueTest, GetEmpty)
 
 TEST_F(StringGetValueTest, GetFromNullable)
 {
-  cudf::test::strings_column_wrapper col({"this", "is", "a", "test"}, {0, 1, 0, 1});
+  cudf::test::strings_column_wrapper col({"this", "is", "a", "test"}, {false, true, false, true});
   auto s = cudf::get_element(col, 1);
 
   auto typed_s = static_cast<cudf::string_scalar const*>(s.get());
@@ -120,7 +120,7 @@ TEST_F(StringGetValueTest, GetFromNullable)
 
 TEST_F(StringGetValueTest, GetNull)
 {
-  cudf::test::strings_column_wrapper col({"this", "is", "a", "test"}, {0, 1, 0, 1});
+  cudf::test::strings_column_wrapper col({"this", "is", "a", "test"}, {false, true, false, true});
   auto s = cudf::get_element(col, 2);
 
   EXPECT_FALSE(s->is_valid());
@@ -149,8 +149,8 @@ TYPED_TEST(DictionaryGetValueTest, BasicGet)
 TYPED_TEST(DictionaryGetValueTest, GetFromNullable)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> keys({6, 7, 8, 9});
-  cudf::test::fixed_width_column_wrapper<uint32_t> indices({0, 0, 1, 2, 1, 3, 3, 2},
-                                                           {0, 1, 0, 1, 1, 1, 0, 0});
+  cudf::test::fixed_width_column_wrapper<uint32_t> indices(
+    {0, 0, 1, 2, 1, 3, 3, 2}, {false, true, false, true, true, true, false, false});
   auto col = cudf::make_dictionary_column(keys, indices);
 
   auto s = cudf::get_element(*col, 3);
@@ -165,8 +165,8 @@ TYPED_TEST(DictionaryGetValueTest, GetFromNullable)
 TYPED_TEST(DictionaryGetValueTest, GetNull)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> keys({6, 7, 8, 9});
-  cudf::test::fixed_width_column_wrapper<uint32_t> indices({0, 0, 1, 2, 1, 3, 3, 2},
-                                                           {0, 1, 0, 1, 1, 1, 0, 0});
+  cudf::test::fixed_width_column_wrapper<uint32_t> indices(
+    {0, 0, 1, 2, 1, 3, 3, 2}, {false, true, false, true, true, true, false, false});
   auto col = cudf::make_dictionary_column(keys, indices);
 
   auto s = cudf::get_element(*col, 2);

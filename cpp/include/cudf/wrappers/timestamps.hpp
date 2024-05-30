@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,13 +73,13 @@ using timestamp_us = detail::timestamp<cudf::duration_us>;
  */
 using timestamp_ns = detail::timestamp<cudf::duration_ns>;
 
-static_assert(sizeof(timestamp_D) == sizeof(typename timestamp_D::rep), "");
-static_assert(sizeof(timestamp_h) == sizeof(typename timestamp_h::rep), "");
-static_assert(sizeof(timestamp_m) == sizeof(typename timestamp_m::rep), "");
-static_assert(sizeof(timestamp_s) == sizeof(typename timestamp_s::rep), "");
-static_assert(sizeof(timestamp_ms) == sizeof(typename timestamp_ms::rep), "");
-static_assert(sizeof(timestamp_us) == sizeof(typename timestamp_us::rep), "");
-static_assert(sizeof(timestamp_ns) == sizeof(typename timestamp_ns::rep), "");
+static_assert(sizeof(timestamp_D) == sizeof(typename timestamp_D::rep));
+static_assert(sizeof(timestamp_h) == sizeof(typename timestamp_h::rep));
+static_assert(sizeof(timestamp_m) == sizeof(typename timestamp_m::rep));
+static_assert(sizeof(timestamp_s) == sizeof(typename timestamp_s::rep));
+static_assert(sizeof(timestamp_ms) == sizeof(typename timestamp_ms::rep));
+static_assert(sizeof(timestamp_us) == sizeof(typename timestamp_us::rep));
+static_assert(sizeof(timestamp_ns) == sizeof(typename timestamp_ns::rep));
 
 /** @} */  // end of group
 }  // namespace cudf

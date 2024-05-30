@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ using vcol_views  = std::vector<cudf::column_view>;
 auto compute_partial_results(cudf::column_view const& keys, cudf::column_view const& values)
 {
   std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
+  requests.emplace_back();
   requests[0].values = values;
   requests[0].aggregations.emplace_back(cudf::make_count_aggregation<cudf::groupby_aggregation>());
   requests[0].aggregations.emplace_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
@@ -85,7 +85,7 @@ auto merge_M2(vcol_views const& keys_cols, vcol_views const& values_cols)
   auto const values = cudf::concatenate(values_cols);
 
   std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
+  requests.emplace_back();
   requests[0].values = *values;
   requests[0].aggregations.emplace_back(
     cudf::make_merge_m2_aggregation<cudf::groupby_aggregation>());

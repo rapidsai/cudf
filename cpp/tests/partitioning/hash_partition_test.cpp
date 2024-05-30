@@ -140,7 +140,7 @@ TEST_F(HashPartition, MixedColumnTypes)
 
 TEST_F(HashPartition, NullableStrings)
 {
-  strings_column_wrapper strings({"a", "bb", "ccc", "d"}, {1, 1, 1, 1});
+  strings_column_wrapper strings({"a", "bb", "ccc", "d"}, {true, true, true, true});
   cudf::table_view input({strings});
 
   std::vector<cudf::size_type> const columns_to_hash({0});

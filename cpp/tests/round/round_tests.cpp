@@ -336,7 +336,8 @@ TYPED_TEST(RoundTestsFixedPointTypes, TestScaleMovementExceedingMaxPrecision)
   auto const result_even = cudf::round(input, -target_scale, cudf::rounding_method::HALF_EVEN);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_even, result_even->view());
 
-  const std::initializer_list<bool> validity = {1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0};
+  const std::initializer_list<bool> validity = {
+    true, false, true, true, true, false, false, true, true, true, true, false};
   auto const input_null =
     fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, validity, scale_type{1}};
   auto const expected_null =

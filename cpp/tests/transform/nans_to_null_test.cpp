@@ -70,7 +70,7 @@ TYPED_TEST(NaNsToNullTest, WithMask)
   using T = TypeParam;
 
   std::vector<T> input   = {1, NAN, 3, NAN, 5, NAN};
-  std::vector<bool> mask = {1, 1, 1, 1, 0, 0};
+  std::vector<bool> mask = {true, true, true, true, false, false};
   auto input_column =
     cudf::test::fixed_width_column_wrapper<T>(input.begin(), input.end(), mask.begin());
   auto expected_column = this->create_expected(input, mask);
@@ -92,7 +92,7 @@ TYPED_TEST(NaNsToNullTest, NoNANWithMask)
   using T = TypeParam;
 
   std::vector<T> input   = {1, 2, 3, 4, 5, 6};
-  std::vector<bool> mask = {1, 1, 1, 1, 0, 0};
+  std::vector<bool> mask = {true, true, true, true, false, false};
   auto input_column =
     cudf::test::fixed_width_column_wrapper<T>(input.begin(), input.end(), mask.begin());
   auto expected_column = this->create_expected(input, mask);

@@ -87,7 +87,7 @@ struct dictionary_wrapper {
    *
    * @return The value of this dictionary wrapper
    */
-  CUDF_HOST_DEVICE inline value_type value() const { return _value; }
+  CUDF_HOST_DEVICE [[nodiscard]] inline value_type value() const { return _value; }
 
   /**
    * @brief Returns the maximum value of the value type.

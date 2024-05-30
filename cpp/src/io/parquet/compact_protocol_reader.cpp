@@ -42,7 +42,7 @@ class parquet_field {
 
  public:
   virtual ~parquet_field() = default;
-  int field() const { return _field_val; }
+  [[nodiscard]] int field() const { return _field_val; }
 };
 
 std::string field_type_string(FieldType type)

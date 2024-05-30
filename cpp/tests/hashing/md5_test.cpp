@@ -34,7 +34,7 @@ TEST_F(MD5HashTest, MultiValue)
      "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
      "MD5 hash function. This string needed to be longer.",
      "All work and no play makes Jack a dull boy",
-     "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~",
+     R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)",
      "Multi-byte characters: é¼³⅝"});
 
   /*
@@ -92,8 +92,8 @@ TEST_F(MD5HashTest, MultiValue)
 TEST_F(MD5HashTest, EmptyNullEquivalence)
 {
   // Test that empty strings hash the same as nulls
-  cudf::test::strings_column_wrapper const strings_col1({"", ""}, {1, 0});
-  cudf::test::strings_column_wrapper const strings_col2({"", ""}, {0, 1});
+  cudf::test::strings_column_wrapper const strings_col1({"", ""}, {true, false});
+  cudf::test::strings_column_wrapper const strings_col2({"", ""}, {false, true});
 
   auto const input1 = cudf::table_view({strings_col1});
   auto const input2 = cudf::table_view({strings_col2});
@@ -127,7 +127,7 @@ TEST_F(MD5HashTest, StringLists)
       "MD5 hash function. This string needed to be longer.",
       " It needed to be even longer."},
      {"All ", "work ", "and", " no", " play ", "makes Jack", " a dull boy"},
-     {"!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`", "{|}~"}});
+     {R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`)", "{|}~"}});
 
   auto const input1 = cudf::table_view({strings_col});
   auto const input2 = cudf::table_view({strings_list_col});
@@ -171,16 +171,24 @@ TYPED_TEST(MD5HashTestTyped, WithNulls)
 
 TEST_F(MD5HashTest, TestBoolListsWithNulls)
 {
-  cudf::test::fixed_width_column_wrapper<bool> const col1({0, 0, 0, 0, 1, 1, 1, 0, 0},
-                                                          {1, 0, 0, 0, 1, 1, 1, 0, 0});
-  cudf::test::fixed_width_column_wrapper<bool> const col2({0, 0, 0, 1, 0, 1, 0, 1, 0},
-                                                          {1, 0, 0, 1, 0, 1, 0, 1, 0});
-  cudf::test::fixed_width_column_wrapper<bool> const col3({0, 0, 0, 1, 1, 0, 0, 0, 1},
-                                                          {1, 0, 0, 1, 1, 0, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const col1(
+    {0, 0, 0, 0, 1, 1, 1, 0, 0}, {true, false, false, false, true, true, true, false, false});
+  cudf::test::fixed_width_column_wrapper<bool> const col2(
+    {0, 0, 0, 1, 0, 1, 0, 1, 0}, {true, false, false, true, false, true, false, true, false});
+  cudf::test::fixed_width_column_wrapper<bool> const col3(
+    {0, 0, 0, 1, 1, 0, 0, 0, 1}, {true, false, false, true, true, false, false, false, true});
 
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
-  cudf::test::lists_column_wrapper<bool> const list_col(
-    {{0, 0, 0}, {1}, {}, {{1, 1, 1}, validity}, {1, 1}, {1, 1}, {1}, {1}, {1}}, validity);
+  cudf::test::lists_column_wrapper<bool> const list_col({{false, false, false},
+                                                         {true},
+                                                         {},
+                                                         {{true, true, true}, validity},
+                                                         {true, true},
+                                                         {true, true},
+                                                         {true},
+                                                         {true},
+                                                         {true}},
+                                                        validity);
 
   auto const input1 = cudf::table_view({col1, col2, col3});
   auto const input2 = cudf::table_view({list_col});

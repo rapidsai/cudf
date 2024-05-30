@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -478,7 +478,10 @@ class operation : public expression {
    *
    * @return Vector of operands
    */
-  std::vector<std::reference_wrapper<expression const>> get_operands() const { return operands; }
+  [[nodiscard]] std::vector<std::reference_wrapper<expression const>> get_operands() const
+  {
+    return operands;
+  }
 
   /**
    * @copydoc expression::accept

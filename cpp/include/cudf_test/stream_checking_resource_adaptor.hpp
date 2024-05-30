@@ -110,7 +110,7 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
    * @param other The other resource to compare to
    * @return Whether or not the two resources are equivalent
    */
-  bool do_is_equal(device_memory_resource const& other) const noexcept override
+  [[nodiscard]] bool do_is_equal(device_memory_resource const& other) const noexcept override
   {
     if (this == &other) { return true; }
     auto cast = dynamic_cast<stream_checking_resource_adaptor<Upstream> const*>(&other);

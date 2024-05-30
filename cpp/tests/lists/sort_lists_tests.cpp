@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,9 +82,9 @@ TYPED_TEST(SortLists, Null)
 {
   using T = TypeParam;
   if (std::is_same_v<T, bool>) return;
-  std::vector<bool> valids_o{1, 1, 0, 1};
-  std::vector<bool> valids_a{1, 1, 1, 0};
-  std::vector<bool> valids_b{0, 1, 1, 1};
+  std::vector<bool> valids_o{true, true, false, true};
+  std::vector<bool> valids_a{true, true, true, false};
+  std::vector<bool> valids_b{false, true, true, true};
 
   // List<T>
   LCW<T> list{{{3, 2, 4, 1}, valids_o.begin()}, {5}, {10, 8, 9}, {6, 7}};

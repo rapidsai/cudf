@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -143,7 +143,7 @@ TEST_F(DistinctKeepAny, NoColumnInputTable)
 
 TEST_F(DistinctKeepAny, EmptyKeys)
 {
-  int32s_col col{{5, 4, 3, 5, 8, 1}, {1, 0, 1, 1, 1, 1}};
+  int32s_col col{{5, 4, 3, 5, 8, 1}, {true, false, true, true, true, true}};
   int32s_col empty_col{};
   cudf::table_view input{{col}};
   std::vector<cudf::size_type> key_idx{};
