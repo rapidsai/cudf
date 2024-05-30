@@ -153,6 +153,7 @@ class writer::impl {
   dictionary_policy const _dict_policy;
   size_t const _max_dictionary_size;
   std::optional<size_type> const _max_page_fragment_size;
+  bool const _int96_timestamps;
   bool const _utc_timestamps;
   bool const _write_v2_headers;
   bool const _write_arrow_schema;

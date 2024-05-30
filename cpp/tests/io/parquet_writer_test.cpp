@@ -73,8 +73,8 @@ void test_durations(mask_op_t mask_op, bool use_byte_stream_split, bool arrow_sc
       col_meta.set_encoding(cudf::io::column_encoding::BYTE_STREAM_SPLIT);
     }
   }
-  std::string a = (arrow_schema) ? "1" : "0";
-  auto filepath = "/home/coder/Durations" + a + ".parquet";
+
+  auto filepath = temp_env->get_temp_filepath("Durations.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .write_arrow_schema(arrow_schema);

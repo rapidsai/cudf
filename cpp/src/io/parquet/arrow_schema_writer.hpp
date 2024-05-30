@@ -78,6 +78,7 @@ using namespace cudf::io::detail;
 std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector const& linked_columns,
                                                table_input_metadata const& metadata,
                                                single_write_mode const write_mode,
+                                               bool const int96_timestamps,
                                                bool const utc_timestamps);
 
 }  // namespace cudf::io::parquet::detail

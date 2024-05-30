@@ -1604,6 +1604,39 @@ def test_parquet_writer_cpu_pyarrow(
     assert_eq(expect, got)
 
 
+@pytest.mark.filterwarnings("ignore:Using CPU")
+def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+
+    if len(pdf) == 0:
+        pdf = pdf.reset_index(drop=True)
+        gdf = gdf.reset_index(drop=True)
+
+    if "col_category" in pdf.columns:
+        pdf = pdf.drop(columns=["col_category"])
+    if "col_category" in gdf.columns:
+        gdf = gdf.drop(columns=["col_category"])
+
+    assert_eq(pdf, gdf)
+
+    # Write out the gdf using the GPU accelerated writer with INT96 timestamps
+    # TODO: store_schema must be false when working with INT96 timestamps
+    gdf.to_parquet(
+        gdf_fname.strpath,
+        index=None,
+        int96_timestamps=True,
+        store_schema=False,
+    )
+
+    assert os.path.exists(gdf_fname)
+
+    expect = pdf
+    got = pd.read_parquet(gdf_fname)
+
+    # verify INT96 timestamps were converted back to the same data.
+    assert_eq(expect, got, check_categorical=False, check_dtype=False)
+
+
 def test_multifile_parquet_folder(tmpdir):
     test_pdf1 = make_pdf(nrows=10, nvalids=10 // 2, dtype="float64")
     test_pdf2 = make_pdf(nrows=20, dtype="float64")
@@ -3435,17 +3468,19 @@ def test_parquet_writer_roundtrip_with_arrow_schema():
         }
     )
 
-    # Write to Parquet
+    # Write to Parquet with arrow schema
     buffer = BytesIO()
     expected.to_parquet(buffer, store_schema=True)
 
-    # Read parquet with pyarrow and cudf readers
+    # Read parquet with pyarrow, pandas and cudf readers
     got = cudf.DataFrame.from_arrow(pq.read_table(buffer))
-    got2 = cudf.read_parquet(buffer)
+    got2 = cudf.DataFrame.from_pandas(pd.read_parquet(buffer))
+    got3 = cudf.read_parquet(buffer)
 
     # Check results
     assert_eq(expected, got)
     assert_eq(expected, got2)
+    assert_eq(expected, got3)
 
 
 @pytest.mark.parametrize(
@@ -3516,18 +3551,21 @@ def test_parquet_writer_roundtrip_structs_with_arrow_schema(tmpdir, data):
     # Ensure that the structs are faithfully being roundtripped across
     # Parquet with arrow schema
     pa_expected = pa.Table.from_pydict({"struct": data})
+    pd_expected = pa_expected.to_pandas()
 
     expected = cudf.DataFrame.from_arrow(pa_expected)
 
-    # Write expected data frame to Parquet
+    # Write expected data frame to Parquet with arrow schema
     buffer = BytesIO()
     expected.to_parquet(buffer, store_schema=True)
 
-    # Read Parquet with pyarrow
+    # Read Parquet with pyarrow and pandas
     pa_got = pq.read_table(buffer)
+    pd_got = pd.read_parquet(buffer)
 
     # Check results
     assert_eq(pa_expected, pa_got)
+    assert_eq(pd_expected, pd_got)
 
     # Convert to cuDF table and also read Parquet with cuDF reader
     got = cudf.DataFrame.from_arrow(pa_got)
