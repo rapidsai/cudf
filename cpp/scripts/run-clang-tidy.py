@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,30 +22,36 @@ import multiprocessing as mp
 import shutil
 
 
-EXPECTED_VERSION = "16.0.6"
+EXPECTED_VERSION = "19.1.0"
 VERSION_REGEX = re.compile(r"  LLVM version ([0-9.]+)")
 GPU_ARCH_REGEX = re.compile(r"sm_(\d+)")
 SPACES = re.compile(r"\s+")
 SEPARATOR = "-" * 16
+VENDORED_SOURCES = ["cpu_unbz2.cpp", "brotli_dict.cpp"]
+VENDORED_HEADERS = (
+    ".*(Message_generated.h|Schema_generated.h|brotli_dict.hpp|unbz2.hpp|cxxopts.hpp).*"
+)
 
 
 def parse_args():
     argparser = argparse.ArgumentParser("Runs clang-tidy on a project")
-    argparser.add_argument("-cdb", type=str,
+    argparser.add_argument("cdb", type=str,
                            # TODO This is a hack, needs to be fixed
                            default="cpp/build/cuda-11.5.0/clang-tidy/release/compile_commands.clangd.json",
                            help="Path to cmake-generated compilation database"
                            " file. It is always found inside the root of the "
                            "cmake build folder. So make sure that `cmake` has "
                            "been run once before running this script!")
-    argparser.add_argument("-exe", type=str, default="clang-tidy",
+    argparser.add_argument("--exe", type=str, default="clang-tidy",
                            help="Path to clang-tidy exe")
-    argparser.add_argument("-ignore", type=str, default="[.]cu$|examples/kmeans/",
+    argparser.add_argument("--ignore", type=str, default="[.]cu$|examples/kmeans/",
                            help="Regex used to ignore files from checking")
-    argparser.add_argument("-select", type=str, default=None,
+    argparser.add_argument("--select", type=str, default=None,
                            help="Regex used to select files for checking")
     argparser.add_argument("-j", type=int, default=-1,
                            help="Number of parallel jobs to launch.")
+    argparser.add_argument("--fix", action="store_true",
+                           help="Apply fixes to the files. Default is False.")
     args = argparser.parse_args()
     if args.j <= 0:
         args.j = mp.cpu_count()
@@ -105,13 +111,36 @@ def remove_item_plus_one(arr, item):
 
 
 def get_clang_includes(exe):
+    includes = []
+    for compiler_var, language in ("CC", "c"), ("CXX", "c++"):
+        if (compiler := os.getenv(compiler_var)) is not None:
+            in_includes = False
+            result = subprocess.run(
+                [f"{compiler}", "-E", "-Wp,-v", f"-x{language}", "/dev/null"],
+                check=True,
+                capture_output=True,
+            )
+            for line in result.stderr.decode().splitlines():
+                if "include" in line and "search starts here" in line:
+                    in_includes = True
+                    continue
+                if line.startswith("End of search list."):
+                    in_includes = False
+                    continue
+                if in_includes:
+                    includes.append("-isystem")
+                    includes.append(line.strip())
+
     dir = os.getenv("CONDA_PREFIX")
     if dir is None:
         ret = subprocess.check_output("which %s 2>&1" % exe, shell=True)
         ret = ret.decode("utf-8")
         dir = os.path.dirname(os.path.dirname(ret))
     header = os.path.join(dir, "include", "ClangHeaders")
-    return ["-I", header]
+    includes.append("-isystem")
+    includes.append(header)
+
+    return includes
 
 
 def get_tidy_args(cmd, exe):
@@ -159,7 +188,12 @@ def run_clang_tidy(cmd, args):
     command, is_cuda = get_tidy_args(cmd, args.exe)
     tidy_cmd = [args.exe,
                 "-header-filter='.*cudf/cpp/(src|include|bench|comms).*'",
-                cmd["file"], "--", ]
+                f"-exclude-header-filter='{VENDORED_HEADERS}'",
+                "--extra-arg='-Qunused-arguments'",
+                cmd["file"]]
+    if args.fix:
+        tidy_cmd.append("--fix-errors")
+    tidy_cmd.append("--")
     tidy_cmd.extend(command)
     status = True
     out = ""
@@ -214,7 +248,9 @@ def run_tidy_for_all_files(args, all_files):
     pool = None if args.j == 1 else mp.Pool(args.j)
     # actual tidy checker
     for cmd in all_files:
-        # skip files that we don't want to look at
+        # skip files in the build directory
+        if '/_deps/' in cmd["file"] or any(f in cmd["file"] for f in VENDORED_SOURCES):
+            continue
         if args.ignore_compiled is not None and \
            re.search(args.ignore_compiled, cmd["file"]) is not None:
             continue
