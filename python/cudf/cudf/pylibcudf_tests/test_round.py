@@ -35,4 +35,4 @@ def test_round(column, round_mode, decimals):
         plc.interop.to_arrow(column), decimals, round_mode
     )
 
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)
