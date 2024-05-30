@@ -1,0 +1,88 @@
+/*
+ * Copyright (c) 2024, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <cudf/interop.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/concatenate.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
+
+#include <nanoarrow/nanoarrow.h>
+#include <nanoarrow/nanoarrow.hpp>
+
+#include <algorithm>
+#include <memory>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+namespace cudf {
+namespace detail {
+
+
+std::unique_ptr<table> from_arrow_stream(
+  ArrowArrayStream* input,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(input != nullptr,
+               "input ArrowArrayStream must not be NULL",
+               std::invalid_argument);
+
+  // Potential future optimization: Since the from_arrow API accepts an
+  // ArrowSchema we're allocating one here instead of using a view, which we
+  // could avoid with a different underlying implementation.
+  ArrowSchema schema;
+  NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetSchema(input, &schema, nullptr));
+
+  // Assume that each chunk is a column.
+  // TODO: Is that restrictive? If we need to support actual chunking of a
+  // single array, how do we differentiate? Do we need a parameter in the API,
+  // or a different overload?
+  ArrowArray chunk;
+
+  std::vector<std::unique_ptr<cudf::table>> chunks;
+  while (true) {
+    NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetNext(input, &chunk, nullptr));
+    if (chunk.release == nullptr) {
+        break;
+    }
+    chunks.push_back(from_arrow(&schema, &chunk, stream, mr));
+  }
+
+  input->release(input);
+  auto chunk_views = std::vector<table_view>{};
+  chunk_views.reserve(chunks.size());
+  std::transform(chunks.begin(), chunks.end(), std::back_inserter(chunk_views), [](auto const& chunk) { return chunk->view(); });
+  return cudf::concatenate(chunk_views, stream, mr);
+}
+
+}  // namespace detail
+
+
+std::unique_ptr<table> from_arrow_stream(
+  ArrowArrayStream* input,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+
+  return detail::from_arrow_stream(input, stream, mr);
+}
+}  // namespace cudf
