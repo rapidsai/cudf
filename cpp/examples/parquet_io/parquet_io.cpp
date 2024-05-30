@@ -67,7 +67,7 @@ void write_parquet(cudf::table_view input,
                 table_metadata.column_metadata.end(),
                 [=](auto& col_meta) { col_meta.set_encoding(encoding); });
 
-  builder.metadata(table_metadata);
+  builder.metadata(table_metadata).write_arrow_schema(true);
   auto options = builder.build();
   options.set_compression(compression);
   // Either use the input stats level or don't write stats

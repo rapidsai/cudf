@@ -298,10 +298,6 @@ FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
     dispatch_to_flatbuf{
       fbb, column, column_metadata, write_mode, utc_timestamps, field_offset, type_type, children});
 
-  std::cout << "Name: " << column_metadata.get_name()
-            << ", Type: " << static_cast<std::underlying_type<type_id>::type>(column->type().id())
-            << std::endl;
-
   auto const fb_name          = fbb.CreateString(column_metadata.get_name());
   auto const fb_children      = fbb.CreateVector(children.data(), children.size());
   auto const is_nullable      = is_col_nullable(column, column_metadata, write_mode);

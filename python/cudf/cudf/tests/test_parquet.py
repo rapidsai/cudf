@@ -2527,6 +2527,9 @@ def normalized_equals(value1, value2):
         value1 = value1.replace(tzinfo=None)
     if isinstance(value2, datetime.datetime):
         value2 = value2.replace(tzinfo=None)
+    if isinstance(value1, pd.Timedelta):
+        unit = "ms" if value1.unit == "s" else value1.unit
+        value2 = pd.Timedelta(value2, unit=unit)
 
     # if one is datetime then both values are datetimes now
     if isinstance(value1, datetime.datetime):
@@ -2540,7 +2543,8 @@ def normalized_equals(value1, value2):
 
 
 @pytest.mark.parametrize("add_nulls", [True, False])
-def test_parquet_writer_statistics(tmpdir, pdf, add_nulls):
+@pytest.mark.parametrize("store_schema", [True, False])
+def test_parquet_writer_statistics(tmpdir, pdf, add_nulls, store_schema):
     file_path = tmpdir.join("cudf.parquet")
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category", "col_bool"])
@@ -2557,7 +2561,7 @@ def test_parquet_writer_statistics(tmpdir, pdf, add_nulls):
     if add_nulls:
         for col in gdf:
             set_random_null_mask_inplace(gdf[col])
-    gdf.to_parquet(file_path, index=False)
+    gdf.to_parquet(file_path, index=False, store_schema=store_schema)
 
     # Read back from pyarrow
     pq_file = pq.ParquetFile(file_path)
@@ -3126,8 +3130,8 @@ def test_parquet_writer_zstd():
         got = pd.read_parquet(buff)
         assert_eq(expected, got)
 
-
-def test_parquet_writer_time_delta_physical_type():
+@pytest.mark.parametrize("store_schema", [True, False])
+def test_parquet_writer_time_delta_physical_type(store_schema):
     df = cudf.DataFrame(
         {
             "s": cudf.Series([1], dtype="timedelta64[s]"),
@@ -3139,22 +3143,35 @@ def test_parquet_writer_time_delta_physical_type():
         }
     )
     buffer = BytesIO()
-    df.to_parquet(buffer, store_schema=True)
+    df.to_parquet(buffer, store_schema=store_schema)
 
     got = pd.read_parquet(buffer)
-    expected = pd.DataFrame(
-        {
-            "s": ["0 days 00:00:01"],
-            "ms": ["0 days 00:00:00.002000"],
-            "us": ["0 days 00:00:00.000003"],
-            "ns": ["0 days 00:00:00.000004"],
-        },
-        dtype="str",
-    )
+
+    if (store_schema):
+        expected = pd.DataFrame(
+            {
+                "s": ["0 days 00:00:01"],
+                "ms": ["0 days 00:00:00.002000"],
+                "us": ["0 days 00:00:00.000003"],
+                "ns": ["0 days 00:00:00.000004"],
+            },
+            dtype="str",
+        )
+    else:
+        expected = pd.DataFrame(
+            {
+                "s": ["00:00:01"],
+                "ms": ["00:00:00.002000"],
+                "us": ["00:00:00.000003"],
+                "ns": ["00:00:00.000004"],
+            },
+            dtype="str",
+        )
     assert_eq(got.astype("str"), expected)
 
 
-def test_parquet_roundtrip_time_delta():
+@pytest.mark.parametrize("store_schema", [True, False])
+def test_parquet_roundtrip_time_delta(store_schema):
     num_rows = 12345
     df = cudf.DataFrame(
         {
@@ -3177,11 +3194,11 @@ def test_parquet_roundtrip_time_delta():
         }
     )
     buffer = BytesIO()
-    df.to_parquet(buffer, store_schema=True)
-    # TODO: Remove `check_dtype` once following issue is fixed in arrow:
-    # https://github.com/apache/arrow/issues/33321
+    df.to_parquet(buffer, store_schema=store_schema)
+    # `check_dtype` cannot be removed here as timedelta64[s] will change to `timedelta[ms]`
     assert_eq(df, cudf.read_parquet(buffer), check_dtype=False)
-
+    if (store_schema == True):
+        assert_eq(df, pd.read_parquet(buffer)) 
 
 def test_parquet_reader_malformed_file(datadir):
     fname = datadir / "nested-unsigned-malformed.parquet"

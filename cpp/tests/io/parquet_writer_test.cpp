@@ -35,7 +35,7 @@
 using cudf::test::iterators::no_nulls;
 
 template <typename mask_op_t>
-void test_durations(mask_op_t mask_op, bool use_byte_stream_split)
+void test_durations(mask_op_t mask_op, bool use_byte_stream_split, bool arrow_schema)
 {
   std::default_random_engine generator;
   std::uniform_int_distribution<int> distribution_d(0, 30);
@@ -73,23 +73,33 @@ void test_durations(mask_op_t mask_op, bool use_byte_stream_split)
       col_meta.set_encoding(cudf::io::column_encoding::BYTE_STREAM_SPLIT);
     }
   }
-
-  auto filepath = temp_env->get_temp_filepath("Durations.parquet");
+  std::string a = (arrow_schema) ? "1" : "0";
+  auto filepath = "/home/coder/Durations" + a + ".parquet";
   cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .write_arrow_schema(arrow_schema);
+
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .use_arrow_schema(arrow_schema);
   auto result = cudf::io::read_parquet(in_opts);
 
-  auto durations_d_got =
-    cudf::cast(result.tbl->view().column(0), cudf::data_type{cudf::type_id::DURATION_DAYS});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_d, durations_d_got->view());
+  if (arrow_schema) {
+    auto durations_d_got =
+      cudf::cast(result.tbl->view().column(0), cudf::data_type{cudf::type_id::DURATION_DAYS});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_d, durations_d_got->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_s, result.tbl->view().column(1));
+  } else {
+    auto durations_d_got =
+      cudf::cast(result.tbl->view().column(0), cudf::data_type{cudf::type_id::DURATION_DAYS});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_d, durations_d_got->view());
 
-  auto durations_s_got =
-    cudf::cast(result.tbl->view().column(1), cudf::data_type{cudf::type_id::DURATION_SECONDS});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_s, durations_s_got->view());
+    auto durations_s_got =
+      cudf::cast(result.tbl->view().column(1), cudf::data_type{cudf::type_id::DURATION_SECONDS});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_s, durations_s_got->view());
+  }
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_ms, result.tbl->view().column(2));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_us, result.tbl->view().column(3));
@@ -98,10 +108,15 @@ void test_durations(mask_op_t mask_op, bool use_byte_stream_split)
 
 TEST_F(ParquetWriterTest, Durations)
 {
-  test_durations([](auto i) { return true; }, false);
-  test_durations([](auto i) { return (i % 2) != 0; }, false);
-  test_durations([](auto i) { return (i % 3) != 0; }, false);
-  test_durations([](auto i) { return false; }, false);
+  test_durations([](auto i) { return true; }, false, false);
+  test_durations([](auto i) { return (i % 2) != 0; }, false, false);
+  test_durations([](auto i) { return (i % 3) != 0; }, false, false);
+  test_durations([](auto i) { return false; }, false, false);
+
+  test_durations([](auto i) { return true; }, false, true);
+  test_durations([](auto i) { return (i % 2) != 0; }, false, true);
+  test_durations([](auto i) { return (i % 3) != 0; }, false, true);
+  test_durations([](auto i) { return false; }, false, true);
 }
 
 TEST_F(ParquetWriterTest, MultiIndex)
@@ -1866,10 +1881,15 @@ TEST_F(ParquetWriterTest, DecimalByteStreamSplit)
 
 TEST_F(ParquetWriterTest, DurationByteStreamSplit)
 {
-  test_durations([](auto i) { return true; }, true);
-  test_durations([](auto i) { return (i % 2) != 0; }, true);
-  test_durations([](auto i) { return (i % 3) != 0; }, true);
-  test_durations([](auto i) { return false; }, true);
+  test_durations([](auto i) { return true; }, true, false);
+  test_durations([](auto i) { return (i % 2) != 0; }, true, false);
+  test_durations([](auto i) { return (i % 3) != 0; }, true, false);
+  test_durations([](auto i) { return false; }, true, false);
+
+  test_durations([](auto i) { return true; }, true, true);
+  test_durations([](auto i) { return (i % 2) != 0; }, true, true);
+  test_durations([](auto i) { return (i % 3) != 0; }, true, true);
+  test_durations([](auto i) { return false; }, true, true);
 }
 
 TEST_F(ParquetWriterTest, WriteFixedLenByteArray)

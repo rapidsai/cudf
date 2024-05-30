@@ -94,11 +94,13 @@ struct aggregate_writer_metadata {
                      [](auto const& kv) {
                        return KeyValue{kv.first, kv.second};
                      });
-      // Append arrow schema to the key-value metadata
-      if (not arrow_schema_ipc_message.empty()) {
-        this->files[p].key_value_metadata.emplace_back(
-          KeyValue{"ARROW:schema", arrow_schema_ipc_message});
-      }
+    }
+
+    // Append arrow schema to the key-value metadata
+    if (not arrow_schema_ipc_message.empty()) {
+      std::for_each(this->files.begin(), this->files.end(), [&](auto& file) {
+        file.key_value_metadata.emplace_back(KeyValue{"ARROW:schema", arrow_schema_ipc_message});
+      });
     }
   }
 
