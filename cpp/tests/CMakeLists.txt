@@ -56,8 +56,8 @@ function(ConfigureTest CMAKE_TEST_NAME)
 
   target_link_libraries(
     ${CMAKE_TEST_NAME}
-    PRIVATE cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main nvtx3-cpp
-            $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIB}"
+    PRIVATE cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main
+            nvtx3::nvtx3-cpp $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIB}"
   )
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
@@ -190,10 +190,6 @@ ConfigureTest(
 )
 
 # ##################################################################################################
-# * hash_map tests --------------------------------------------------------------------------------
-ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu)
-
-# ##################################################################################################
 # * quantiles tests -------------------------------------------------------------------------------
 ConfigureTest(
   QUANTILES_TEST quantiles/percentile_approx_test.cpp quantiles/quantile_test.cpp
@@ -273,6 +269,7 @@ ConfigureTest(
   interop/to_arrow_test.cpp
   interop/from_arrow_test.cpp
   interop/from_arrow_device_test.cpp
+  interop/from_arrow_host_test.cpp
   interop/dlpack_test.cpp
   EXTRA_LIB
   nanoarrow
