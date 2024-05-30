@@ -59,5 +59,6 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
 
     cdef unique_ptr[table] from_arrow_stream(ArrowArrayStream* input) except +
     cdef unique_ptr[column] from_arrow_column(
-        const ArrowSchema* schema, const ArrowArray* input
+        const ArrowSchema* schema,
+        const ArrowArray* input
     ) except +
