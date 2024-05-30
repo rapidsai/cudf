@@ -962,7 +962,7 @@ def to_parquet(
     column_encoding=None,
     column_type_length=None,
     output_as_binary=None,
-    store_schema=True,
+    store_schema=False,
     *args,
     **kwargs,
 ):
