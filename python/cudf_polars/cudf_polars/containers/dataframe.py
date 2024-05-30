@@ -89,7 +89,25 @@ class DataFrame:
 
     @classmethod
     def from_table(cls, table: plc.Table, names: Sequence[str]) -> Self:
-        """Create from a pylibcudf table."""
+        """
+        Create from a pylibcudf table.
+
+        Parameters
+        ----------
+        table
+            Pylibcudf table to obtain columns from
+        names
+            Names for the columns
+
+        Returns
+        -------
+        New dataframe sharing  data with the input table.
+
+        Raises
+        ------
+        ValueError if the number of provided names does not match the
+        number of columns in the table.
+        """
         # TODO: strict=True when we drop py39
         if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
@@ -98,7 +116,24 @@ class DataFrame:
     def sorted_like(
         self, like: DataFrame, /, *, subset: Set[str] | None = None
     ) -> Self:
-        """Copy sortedness from a dataframe onto self."""
+        """
+        Copy sortedness from a dataframe onto self.
+
+        Parameters
+        ----------
+        like
+            The dataframe to copy from
+        subset
+            Optional subset of columns from which to copy data.
+
+        Returns
+        -------
+        Self with metadata set.
+
+        Raises
+        ------
+        ValueError if there is a name mismatch between self and like.
+        """
         if like.column_names != self.column_names:
             raise ValueError("Can only copy from identically named frame")
         subset = self.column_names_set if subset is None else subset
@@ -112,7 +147,18 @@ class DataFrame:
         """
         Return a new dataframe with extra columns.
 
-        Data is shared.
+        Parameters
+        ----------
+        columns
+            Columns to add
+
+        Returns
+        -------
+        New dataframe
+
+        Notes
+        -----
+        If column names overlap, newer names replace older ones.
         """
         return type(self)([*self.columns, *columns], self.scalars)
 

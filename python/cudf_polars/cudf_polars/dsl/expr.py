@@ -183,12 +183,21 @@ class Expr:
         Notes
         -----
         Do not call this function directly, but rather
-        :func:`evaluate` which handles the mapping lookups.
+        :meth:`evaluate` which handles the mapping lookups.
+
+        The typed return value of :class:`Column` is not true when
+        evaluating :class:`Literal` nodes (which instead produce
+        :class:`Scalar` objects). However, these duck-type to having a
+        pylibcudf container object inside them, and usually they end
+        up appearing in binary expressions which pylibcudf handles
+        appropriately since there are overloads for (column, scalar)
+        pairs. We don't have to handle (scalar, scalar) in binops
+        since the polars optimizer has a constant-folding pass.
 
         Returns
         -------
         Column representing the evaluation of the expression (or maybe
-        a scalar, annoying!).
+        a scalar).
 
         Raises
         ------
