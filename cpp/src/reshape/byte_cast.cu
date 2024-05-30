@@ -137,7 +137,12 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
 
     auto col_content     = std::make_unique<column>(input, stream, mr)->release();
     auto const num_chars = col_content.data->size();
-    auto uint8_col       = std::make_unique<column>(
+
+    CUDF_EXPECTS(num_chars < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+                 "Cannot convert strings column to lists column due to size_type limit",
+                 std::overflow_error);
+
+    auto uint8_col = std::make_unique<column>(
       output_type, num_chars, std::move(*(col_content.data)), rmm::device_buffer{}, 0);
 
     auto result = make_lists_column(
