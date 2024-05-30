@@ -180,7 +180,7 @@ def make_final_proxy_type(
             lambda cls, args, kwargs: setattr(
                 self, "_fsproxy_wrapped", cls(*args, **kwargs)
             ),
-            _env_get_bool("MODE_PANDAS_DEBUGGING", False),
+            _env_get_bool("CUDF_PANDAS_DEBUGGING", False),
             type(self),
             args,
             kwargs,
@@ -710,7 +710,7 @@ class _CallableProxyMixin:
             # TODO: When Python 3.11 is the minimum supported Python version
             # this can use operator.call
             call_operator,
-            _env_get_bool("MODE_PANDAS_DEBUGGING", False),
+            _env_get_bool("CUDF_PANDAS_DEBUGGING", False),
             self,
             args,
             kwargs,
@@ -825,7 +825,7 @@ class _FastSlowAttribute:
                 # for anything else, use a fast-slow attribute:
                 self._attr, _ = _fast_slow_function_call(
                     getattr,
-                    _env_get_bool("MODE_PANDAS_DEBUGGING", False),
+                    _env_get_bool("CUDF_PANDAS_DEBUGGING", False),
                     owner,
                     self._name,
                 )
@@ -850,7 +850,7 @@ class _FastSlowAttribute:
                     )
                 return _fast_slow_function_call(
                     getattr,
-                    _env_get_bool("MODE_PANDAS_DEBUGGING", False),
+                    _env_get_bool("CUDF_PANDAS_DEBUGGING", False),
                     instance,
                     self._name,
                 )[0]
@@ -896,7 +896,7 @@ def _assert_fast_slow_eq(left, right, **kwargs):
 
 def _fast_slow_function_call(
     func: Callable,
-    mode_pandas_debugging: bool | None = None,
+    cudf_pandas_debugging: bool | None = None,
     *args,
     **kwargs,
 ) -> Any:
@@ -923,7 +923,7 @@ def _fast_slow_function_call(
                 # try slow path
                 raise Exception()
             fast = True
-            if mode_pandas_debugging:
+            if cudf_pandas_debugging:
                 try:
                     with nvtx.annotate(
                         "EXECUTE_SLOW_DEBUG",

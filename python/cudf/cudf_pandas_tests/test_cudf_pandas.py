@@ -6,13 +6,11 @@ import collections
 import copy
 import datetime
 import operator
-import os
 import pathlib
 import pickle
 import tempfile
 import types
 from io import BytesIO, StringIO
-from unittest import mock
 
 import numpy as np
 import pyarrow as pa
@@ -1435,9 +1433,9 @@ def test_pandas_debugging_mode_option(monkeypatch):
     def mock_mean(self, *args, **kwargs):
         return np.float64(1.0)
 
-    monkeypatch.setattr(Series, "mean", mock_mean)
-
-    with mock.patch.dict(os.environ, {"MODE_PANDAS_DEBUGGING": "True"}):
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setattr(Series, "mean", mock_mean)
+        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
         with pytest.warns(
             UserWarning,
