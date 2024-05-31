@@ -355,12 +355,13 @@ std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector con
   // create an ipc message flatbuffer
   fbb.Finish(flatbuf::CreateMessage(
     fbb,
-    flatbuf::MetadataVersion_V5,   /* Metadata version V5 (latest) */
-    flatbuf::MessageHeader_Schema, /* Schema type message header */
-    flatbuf::CreateSchema(
-      fbb, flatbuf::Endianness::Endianness_Little, fbb.CreateVector(field_offsets))
-      .Union(),                               /* Build an arrow:schema from the field vector */
-    SCHEMA_HEADER_TYPE_IPC_MESSAGE_BODYLENGTH /* Body length is zero for schema type ipc message */
+    flatbuf::MetadataVersion_V5,    // Metadata version V5 (latest)
+    flatbuf::MessageHeader_Schema,  // Schema type message header
+    flatbuf::CreateSchema(fbb,
+                          flatbuf::Endianness::Endianness_Little,
+                          fbb.CreateVector(field_offsets))
+      .Union(),                                // arrow:schema built from the field vector
+    SCHEMA_HEADER_TYPE_IPC_MESSAGE_BODYLENGTH  // Body length is zero for schema type ipc message
     ));
 
   // Construct the final string and store it here to use its view in base64_encode
