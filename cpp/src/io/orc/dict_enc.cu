@@ -44,12 +44,13 @@ CUDF_KERNEL void rowgroup_char_counts_kernel(device_2dspan<size_type> char_count
   auto const start_row = rowgroup_bounds[row_group_idx][col_idx].begin + str_col.offset();
   auto const num_rows  = rowgroup_bounds[row_group_idx][col_idx].size();
 
-  auto const& offsets    = str_col.child(strings_column_view::offsets_column_index);
-  auto const offsets_itr = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
-  char_counts[str_col_idx][row_group_idx] =
-    (num_rows == 0)
-      ? 0
-      : static_cast<size_type>(offsets_itr[start_row + num_rows] - offsets_itr[start_row]);
+  size_type char_count = 0;
+  if (num_rows > 0) {
+    auto const& offsets    = str_col.child(strings_column_view::offsets_column_index);
+    auto const offsets_itr = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+    char_count = static_cast<size_type>(offsets_itr[start_row + num_rows] - offsets_itr[start_row]);
+  }
+  char_counts[str_col_idx][row_group_idx] = char_count;
 }
 
 void rowgroup_char_counts(device_2dspan<size_type> counts,
