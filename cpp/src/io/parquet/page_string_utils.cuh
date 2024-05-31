@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ inline __device__ void wideStrcpy(uint8_t* dst, uint8_t const* src, size_t len, 
   for (int64_t ichar = out_start_aligned + lane_id * out_datatype_size; ichar < out_end_aligned;
        ichar += warp_size * out_datatype_size) {
     *(out_chars_aligned + (ichar + alignment_offset) / out_datatype_size) =
-      load_uint4((const char*)in_start + ichar);
+      load_uint4((char const*)in_start + ichar);
   }
 
   // Tail logic: copy characters of the current string outside

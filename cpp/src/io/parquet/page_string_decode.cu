@@ -379,7 +379,7 @@ __device__ size_t totalDictEntriesSize(uint8_t const* data,
       if (mytid < batch_len) {
         dict_idx         = dict_val;
         int32_t ofs      = (mytid - ((batch_len + 7) & ~7)) * dict_bits;
-        const uint8_t* p = ptr + (ofs >> 3);
+        uint8_t const* p = ptr + (ofs >> 3);
         ofs &= 7;
         if (p < end) {
           uint32_t c = 8 - ofs;
@@ -399,7 +399,7 @@ __device__ size_t totalDictEntriesSize(uint8_t const* data,
         if (pos + mytid < end_value) {
           uint32_t const dict_pos = (dict_bits > 0) ? dict_idx * sizeof(string_index_pair) : 0;
           if (pos + mytid >= start_value && dict_pos < (uint32_t)dict_size) {
-            const auto* src = reinterpret_cast<const string_index_pair*>(dict_base + dict_pos);
+            auto const* src = reinterpret_cast<string_index_pair const*>(dict_base + dict_pos);
             l_str_len += src->second;
           }
         }
@@ -413,7 +413,7 @@ __device__ size_t totalDictEntriesSize(uint8_t const* data,
       if (mytid == 0) {
         uint32_t const dict_pos = (dict_bits > 0) ? dict_val * sizeof(string_index_pair) : 0;
         if (pos + batch_len > start_value && dict_pos < (uint32_t)dict_size) {
-          const auto* src = reinterpret_cast<const string_index_pair*>(dict_base + dict_pos);
+          auto const* src = reinterpret_cast<string_index_pair const*>(dict_base + dict_pos);
           l_str_len += (batch_len - start_off) * src->second;
         }
       }
@@ -452,7 +452,7 @@ __device__ size_t totalPlainEntriesSize(uint8_t const* data,
 
   // This step is purely serial
   if (!t) {
-    const uint8_t* cur = data;
+    uint8_t const* cur = data;
     int k              = 0;
 
     while (pos < end_value && k < data_size) {
@@ -899,7 +899,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputePageStringSi
         // RLE-packed dictionary indices, first byte indicates index length in bits
         if (col.str_dict_index) {
           // String dictionary: use index
-          dict_base = reinterpret_cast<const uint8_t*>(col.str_dict_index);
+          dict_base = reinterpret_cast<uint8_t const*>(col.str_dict_index);
           dict_size = col.dict_page->num_input_values * sizeof(string_index_pair);
         } else {
           dict_base = col.dict_page->page_data;

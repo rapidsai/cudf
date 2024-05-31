@@ -38,7 +38,7 @@ T enable_hugepage(T&& buf)
   }
 
 #ifdef MADV_HUGEPAGE
-  const auto pagesize = sysconf(_SC_PAGESIZE);
+  auto const pagesize = sysconf(_SC_PAGESIZE);
   void* addr          = const_cast<uint8_t*>(buf->data());
   if (addr == nullptr) { return std::move(buf); }
   auto length{static_cast<std::size_t>(buf->size())};

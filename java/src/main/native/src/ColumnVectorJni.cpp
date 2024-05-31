@@ -109,10 +109,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv* env,
       offsets_length  = env->GetDirectBufferCapacity(j_offsets_obj);
     }
     auto data_buffer =
-      arrow::Buffer::Wrap(static_cast<const char*>(data_address), static_cast<int>(data_length));
-    auto null_buffer    = arrow::Buffer::Wrap(static_cast<const char*>(validity_address),
+      arrow::Buffer::Wrap(static_cast<char const*>(data_address), static_cast<int>(data_length));
+    auto null_buffer    = arrow::Buffer::Wrap(static_cast<char const*>(validity_address),
                                            static_cast<int>(validity_length));
-    auto offsets_buffer = arrow::Buffer::Wrap(static_cast<const char*>(offsets_address),
+    auto offsets_buffer = arrow::Buffer::Wrap(static_cast<char const*>(offsets_address),
                                               static_cast<int>(offsets_length));
 
     std::shared_ptr<arrow::Array> arrow_array;
@@ -171,8 +171,8 @@ Java_ai_rapids_cudf_ColumnVector_stringConcatenation(JNIEnv* env,
   JNI_NULL_CHECK(env, narep, "narep string scalar object is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    const auto& separator_scalar = *reinterpret_cast<cudf::string_scalar*>(separator);
-    const auto& narep_scalar     = *reinterpret_cast<cudf::string_scalar*>(narep);
+    auto const& separator_scalar = *reinterpret_cast<cudf::string_scalar*>(separator);
+    auto const& narep_scalar     = *reinterpret_cast<cudf::string_scalar*>(narep);
     auto null_policy             = separate_nulls ? cudf::strings::separator_on_nulls::YES
                                                   : cudf::strings::separator_on_nulls::NO;
 
@@ -199,8 +199,8 @@ Java_ai_rapids_cudf_ColumnVector_stringConcatenationSepCol(JNIEnv* env,
   JNI_NULL_CHECK(env, col_narep, "column narep string scalar object is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    const auto& separator_narep_scalar = *reinterpret_cast<cudf::string_scalar*>(separator_narep);
-    const auto& col_narep_scalar       = *reinterpret_cast<cudf::string_scalar*>(col_narep);
+    auto const& separator_narep_scalar = *reinterpret_cast<cudf::string_scalar*>(separator_narep);
+    auto const& col_narep_scalar       = *reinterpret_cast<cudf::string_scalar*>(col_narep);
     auto null_policy                   = separate_nulls ? cudf::strings::separator_on_nulls::YES
                                                         : cudf::strings::separator_on_nulls::NO;
 

@@ -53,7 +53,7 @@ class jni_exception : public std::runtime_error {
 /**
  * @brief throw a java exception and a C++ one for flow control.
  */
-inline void throw_java_exception(JNIEnv* const env, const char* class_name, const char* message)
+inline void throw_java_exception(JNIEnv* const env, char const* class_name, char const* message)
 {
   jclass ex_class = env->FindClass(class_name);
   if (ex_class != NULL) { env->ThrowNew(ex_class, message); }
@@ -258,7 +258,7 @@ class native_jArray {
     check_java_exception(env);
   }
 
-  native_jArray(JNIEnv* const env, const std::vector<N_TYPE>& arr)
+  native_jArray(JNIEnv* const env, std::vector<N_TYPE> const& arr)
     : env(env), orig(access.newArray(env, arr.size())), len(arr.size()), data_ptr(NULL)
   {
     check_java_exception(env);
@@ -485,7 +485,7 @@ class unique_jpointerArray {
   {
   }
 
-  unique_jpointerArray(JNIEnv* const env, jlongArray orig, const D& del)
+  unique_jpointerArray(JNIEnv* const env, jlongArray orig, D const& del)
     : wrapped(new native_jpointerArray<T>(env, orig)), del(del)
   {
   }
@@ -494,7 +494,7 @@ class unique_jpointerArray {
   {
   }
 
-  unique_jpointerArray(JNIEnv* const env, int len, const D& del)
+  unique_jpointerArray(JNIEnv* const env, int len, D const& del)
     : wrapped(new native_jpointerArray<T>(env, len)), del(del)
   {
   }
@@ -504,7 +504,7 @@ class unique_jpointerArray {
   {
   }
 
-  unique_jpointerArray(JNIEnv* const env, T* arr, int len, const D& del)
+  unique_jpointerArray(JNIEnv* const env, T* arr, int len, D const& del)
     : wrapped(new native_jpointerArray<T>(env, arr, len)), del(del)
   {
   }
@@ -561,7 +561,7 @@ class native_jstring {
  private:
   JNIEnv* env;
   jstring orig;
-  mutable const char* cstr;
+  mutable char const* cstr;
   mutable size_t cstr_length;
 
   void init_cstr() const
@@ -600,7 +600,7 @@ class native_jstring {
 
   bool is_null() const noexcept { return orig == NULL; }
 
-  const char* get() const
+  char const* get() const
   {
     init_cstr();
     return cstr;
@@ -665,7 +665,7 @@ class native_jobjectArray {
     return ret;
   }
 
-  void set(int index, const T& val)
+  void set(int index, T const& val)
   {
     if (orig == NULL) { throw_java_exception(env, NPE_CLASS, "jobjectArray pointer is NULL"); }
     env->SetObjectArrayElement(orig, index, val);
@@ -685,7 +685,7 @@ class native_jstringArray {
   native_jobjectArray<jstring> arr;
   mutable std::vector<native_jstring> cache;
   mutable std::vector<std::string> cpp_cache;
-  mutable std::vector<const char*> c_cache;
+  mutable std::vector<char const*> c_cache;
 
   void init_cache() const
   {
@@ -753,7 +753,7 @@ class native_jstringArray {
     return cache[index];
   }
 
-  const char** const as_c_array() const
+  char const** const as_c_array() const
   {
     init_c_cache();
     return c_cache.data();
@@ -771,13 +771,13 @@ class native_jstringArray {
     update_caches(index, val);
   }
 
-  void set(int index, const native_jstring& val)
+  void set(int index, native_jstring const& val)
   {
     arr.set(index, val.get_jstring());
     update_caches(index, val.get_jstring());
   }
 
-  void set(int index, const char* val)
+  void set(int index, char const* val)
   {
     jstring str = env->NewStringUTF(val);
     check_java_exception(env);
@@ -791,7 +791,7 @@ class native_jstringArray {
  */
 inline jthrowable cuda_exception(JNIEnv* const env, cudaError_t status, jthrowable cause = NULL)
 {
-  const char* ex_class_name;
+  char const* ex_class_name;
 
   // Calls cudaGetLastError twice. It is nearly certain that a fatal error occurred if the second
   // call doesn't return with cudaSuccess.

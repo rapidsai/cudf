@@ -1254,7 +1254,7 @@ aggregate_reader_metadata::select_columns(
      */
     for (auto const& path : use_names3) {
       auto array_to_find_in = &selected_columns;
-      for (const auto& name_to_find : path) {
+      for (auto const& name_to_find : path) {
         // Check if the path exists in our selected_columns and if not, add it.
         auto found_col = std::find_if(
           array_to_find_in->begin(),

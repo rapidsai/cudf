@@ -2140,7 +2140,7 @@ TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
   EXPECT_EQ(metadata.num_stripes(), total_rows / 1'000'000);
 
   constexpr auto num_rows_to_read = 1'000'000;
-  const auto num_rows_to_skip     = metadata.num_rows() - num_rows_to_read;
+  auto const num_rows_to_skip     = metadata.num_rows() - num_rows_to_read;
 
   // Read the last million rows
   cudf::io::orc_reader_options skip_opts =
@@ -2148,9 +2148,9 @@ TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
       cudf::io::source_info{out_buffer.data(), out_buffer.size()})
       .use_index(false)
       .skip_rows(num_rows_to_skip);
-  const auto got_with_skip = cudf::io::read_orc(skip_opts).tbl;
+  auto const got_with_skip = cudf::io::read_orc(skip_opts).tbl;
 
-  const auto sequence_start = num_rows_to_skip % num_rows;
+  auto const sequence_start = num_rows_to_skip % num_rows;
   column_wrapper<int8_t, typename decltype(sequence)::value_type> skipped_col(
     sequence + sequence_start, sequence + sequence_start + num_rows_to_read, no_nulls());
   table_view expected({skipped_col});
@@ -2163,7 +2163,7 @@ TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
       cudf::io::source_info{out_buffer.data(), out_buffer.size()})
       .use_index(false)
       .stripes({{metadata.num_stripes() - 1}});
-  const auto got_with_stripe_selection = cudf::io::read_orc(stripe_opts).tbl;
+  auto const got_with_stripe_selection = cudf::io::read_orc(stripe_opts).tbl;
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_with_stripe_selection->view());
 }

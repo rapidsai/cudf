@@ -37,7 +37,7 @@ static constexpr int fixed_width_data_buffer_idx = 1;
  * @param arrow_view SchemaView to pull the logical and storage types from
  * @return Column type id
  */
-data_type arrow_to_cudf_type(const ArrowSchemaView* arrow_view);
+data_type arrow_to_cudf_type(ArrowSchemaView const* arrow_view);
 
 /**
  * @brief Map cudf column type id to ArrowType id

@@ -139,13 +139,13 @@ inline const MetadataVersion (&EnumValuesMetadataVersion())[5]
   return values;
 }
 
-inline const char* const* EnumNamesMetadataVersion()
+inline char const* const* EnumNamesMetadataVersion()
 {
-  static const char* const names[6] = {"V1", "V2", "V3", "V4", "V5", nullptr};
+  static char const* const names[6] = {"V1", "V2", "V3", "V4", "V5", nullptr};
   return names;
 }
 
-inline const char* EnumNameMetadataVersion(MetadataVersion e)
+inline char const* EnumNameMetadataVersion(MetadataVersion e)
 {
   if (::flatbuffers::IsOutRange(e, MetadataVersion_V1, MetadataVersion_V5)) return "";
   const size_t index = static_cast<size_t>(e);
@@ -190,14 +190,14 @@ inline const Feature (&EnumValuesFeature())[3]
   return values;
 }
 
-inline const char* const* EnumNamesFeature()
+inline char const* const* EnumNamesFeature()
 {
-  static const char* const names[4] = {
+  static char const* const names[4] = {
     "UNUSED", "DICTIONARY_REPLACEMENT", "COMPRESSED_BODY", nullptr};
   return names;
 }
 
-inline const char* EnumNameFeature(Feature e)
+inline char const* EnumNameFeature(Feature e)
 {
   if (::flatbuffers::IsOutRange(e, Feature_UNUSED, Feature_COMPRESSED_BODY)) return "";
   const size_t index = static_cast<size_t>(e);
@@ -217,13 +217,13 @@ inline const UnionMode (&EnumValuesUnionMode())[2]
   return values;
 }
 
-inline const char* const* EnumNamesUnionMode()
+inline char const* const* EnumNamesUnionMode()
 {
-  static const char* const names[3] = {"Sparse", "Dense", nullptr};
+  static char const* const names[3] = {"Sparse", "Dense", nullptr};
   return names;
 }
 
-inline const char* EnumNameUnionMode(UnionMode e)
+inline char const* EnumNameUnionMode(UnionMode e)
 {
   if (::flatbuffers::IsOutRange(e, UnionMode_Sparse, UnionMode_Dense)) return "";
   const size_t index = static_cast<size_t>(e);
@@ -244,13 +244,13 @@ inline const Precision (&EnumValuesPrecision())[3]
   return values;
 }
 
-inline const char* const* EnumNamesPrecision()
+inline char const* const* EnumNamesPrecision()
 {
-  static const char* const names[4] = {"HALF", "SINGLE", "DOUBLE", nullptr};
+  static char const* const names[4] = {"HALF", "SINGLE", "DOUBLE", nullptr};
   return names;
 }
 
-inline const char* EnumNamePrecision(Precision e)
+inline char const* EnumNamePrecision(Precision e)
 {
   if (::flatbuffers::IsOutRange(e, Precision_HALF, Precision_DOUBLE)) return "";
   const size_t index = static_cast<size_t>(e);
@@ -270,13 +270,13 @@ inline const DateUnit (&EnumValuesDateUnit())[2]
   return values;
 }
 
-inline const char* const* EnumNamesDateUnit()
+inline char const* const* EnumNamesDateUnit()
 {
-  static const char* const names[3] = {"DAY", "MILLISECOND", nullptr};
+  static char const* const names[3] = {"DAY", "MILLISECOND", nullptr};
   return names;
 }
 
-inline const char* EnumNameDateUnit(DateUnit e)
+inline char const* EnumNameDateUnit(DateUnit e)
 {
   if (::flatbuffers::IsOutRange(e, DateUnit_DAY, DateUnit_MILLISECOND)) return "";
   const size_t index = static_cast<size_t>(e);
@@ -299,14 +299,14 @@ inline const TimeUnit (&EnumValuesTimeUnit())[4]
   return values;
 }
 
-inline const char* const* EnumNamesTimeUnit()
+inline char const* const* EnumNamesTimeUnit()
 {
-  static const char* const names[5] = {
+  static char const* const names[5] = {
     "SECOND", "MILLISECOND", "MICROSECOND", "NANOSECOND", nullptr};
   return names;
 }
 
-inline const char* EnumNameTimeUnit(TimeUnit e)
+inline char const* EnumNameTimeUnit(TimeUnit e)
 {
   if (::flatbuffers::IsOutRange(e, TimeUnit_SECOND, TimeUnit_NANOSECOND)) return "";
   const size_t index = static_cast<size_t>(e);
@@ -328,13 +328,13 @@ inline const IntervalUnit (&EnumValuesIntervalUnit())[3]
   return values;
 }
 
-inline const char* const* EnumNamesIntervalUnit()
+inline char const* const* EnumNamesIntervalUnit()
 {
-  static const char* const names[4] = {"YEAR_MONTH", "DAY_TIME", "MONTH_DAY_NANO", nullptr};
+  static char const* const names[4] = {"YEAR_MONTH", "DAY_TIME", "MONTH_DAY_NANO", nullptr};
   return names;
 }
 
-inline const char* EnumNameIntervalUnit(IntervalUnit e)
+inline char const* EnumNameIntervalUnit(IntervalUnit e)
 {
   if (::flatbuffers::IsOutRange(e, IntervalUnit_YEAR_MONTH, IntervalUnit_MONTH_DAY_NANO)) return "";
   const size_t index = static_cast<size_t>(e);
@@ -389,9 +389,9 @@ inline const Type (&EnumValuesType())[27]
   return values;
 }
 
-inline const char* const* EnumNamesType()
+inline char const* const* EnumNamesType()
 {
-  static const char* const names[28] = {
+  static char const* const names[28] = {
     "NONE",          "Null",      "Int",           "FloatingPoint",
     "Binary",        "Utf8",      "Bool",          "Decimal",
     "Date",          "Time",      "Timestamp",     "Interval",
@@ -402,7 +402,7 @@ inline const char* const* EnumNamesType()
   return names;
 }
 
-inline const char* EnumNameType(Type e)
+inline char const* EnumNameType(Type e)
 {
   if (::flatbuffers::IsOutRange(e, Type_NONE, Type_LargeListView)) return "";
   const size_t index = static_cast<size_t>(e);
@@ -544,10 +544,10 @@ struct TypeTraits<cudf::io::parquet::flatbuf::LargeListView> {
   static const Type enum_value = Type_LargeListView;
 };
 
-bool VerifyType(::flatbuffers::Verifier& verifier, const void* obj, Type type);
+bool VerifyType(::flatbuffers::Verifier& verifier, void const* obj, Type type);
 bool VerifyTypeVector(::flatbuffers::Verifier& verifier,
-                      const ::flatbuffers::Vector<::flatbuffers::Offset<void>>* values,
-                      const ::flatbuffers::Vector<uint8_t>* types);
+                      ::flatbuffers::Vector<::flatbuffers::Offset<void>> const* values,
+                      ::flatbuffers::Vector<uint8_t> const* types);
 
 /// ----------------------------------------------------------------------
 /// Dictionary encoding metadata
@@ -566,13 +566,13 @@ inline const DictionaryKind (&EnumValuesDictionaryKind())[1]
   return values;
 }
 
-inline const char* const* EnumNamesDictionaryKind()
+inline char const* const* EnumNamesDictionaryKind()
 {
-  static const char* const names[2] = {"DenseArray", nullptr};
+  static char const* const names[2] = {"DenseArray", nullptr};
   return names;
 }
 
-inline const char* EnumNameDictionaryKind(DictionaryKind e)
+inline char const* EnumNameDictionaryKind(DictionaryKind e)
 {
   if (::flatbuffers::IsOutRange(e, DictionaryKind_DenseArray, DictionaryKind_DenseArray)) return "";
   const size_t index = static_cast<size_t>(e);
@@ -594,13 +594,13 @@ inline const Endianness (&EnumValuesEndianness())[2]
   return values;
 }
 
-inline const char* const* EnumNamesEndianness()
+inline char const* const* EnumNamesEndianness()
 {
-  static const char* const names[3] = {"Little", "Big", nullptr};
+  static char const* const names[3] = {"Little", "Big", nullptr};
   return names;
 }
 
-inline const char* EnumNameEndianness(Endianness e)
+inline char const* EnumNameEndianness(Endianness e)
 {
   if (::flatbuffers::IsOutRange(e, Endianness_Little, Endianness_Big)) return "";
   const size_t index = static_cast<size_t>(e);
@@ -652,7 +652,7 @@ struct NullBuilder {
   }
   ::flatbuffers::Offset<Null> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Null>(end);
     return o;
   }
@@ -685,7 +685,7 @@ struct Struct_Builder {
   }
   ::flatbuffers::Offset<Struct_> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Struct_>(end);
     return o;
   }
@@ -715,7 +715,7 @@ struct ListBuilder {
   }
   ::flatbuffers::Offset<List> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<List>(end);
     return o;
   }
@@ -747,7 +747,7 @@ struct LargeListBuilder {
   }
   ::flatbuffers::Offset<LargeList> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<LargeList>(end);
     return o;
   }
@@ -780,7 +780,7 @@ struct ListViewBuilder {
   }
   ::flatbuffers::Offset<ListView> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<ListView>(end);
     return o;
   }
@@ -812,7 +812,7 @@ struct LargeListViewBuilder {
   }
   ::flatbuffers::Offset<LargeListView> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<LargeListView>(end);
     return o;
   }
@@ -851,7 +851,7 @@ struct FixedSizeListBuilder {
   }
   ::flatbuffers::Offset<FixedSizeList> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<FixedSizeList>(end);
     return o;
   }
@@ -916,7 +916,7 @@ struct MapBuilder {
   }
   ::flatbuffers::Offset<Map> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Map>(end);
     return o;
   }
@@ -941,9 +941,9 @@ struct Union FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   {
     return static_cast<cudf::io::parquet::flatbuf::UnionMode>(GetField<int16_t>(VT_MODE, 0));
   }
-  const ::flatbuffers::Vector<int32_t>* typeIds() const
+  ::flatbuffers::Vector<int32_t> const* typeIds() const
   {
-    return GetPointer<const ::flatbuffers::Vector<int32_t>*>(VT_TYPEIDS);
+    return GetPointer<::flatbuffers::Vector<int32_t> const*>(VT_TYPEIDS);
   }
   bool Verify(::flatbuffers::Verifier& verifier) const
   {
@@ -971,7 +971,7 @@ struct UnionBuilder {
   }
   ::flatbuffers::Offset<Union> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Union>(end);
     return o;
   }
@@ -991,7 +991,7 @@ inline ::flatbuffers::Offset<Union> CreateUnion(
 inline ::flatbuffers::Offset<Union> CreateUnionDirect(
   ::flatbuffers::FlatBufferBuilder& _fbb,
   cudf::io::parquet::flatbuf::UnionMode mode = cudf::io::parquet::flatbuf::UnionMode_Sparse,
-  const std::vector<int32_t>* typeIds        = nullptr)
+  std::vector<int32_t> const* typeIds        = nullptr)
 {
   auto typeIds__ = typeIds ? _fbb.CreateVector<int32_t>(*typeIds) : 0;
   return cudf::io::parquet::flatbuf::CreateUnion(_fbb, mode, typeIds__);
@@ -1027,7 +1027,7 @@ struct IntBuilder {
   }
   ::flatbuffers::Offset<Int> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Int>(end);
     return o;
   }
@@ -1071,7 +1071,7 @@ struct FloatingPointBuilder {
   }
   ::flatbuffers::Offset<FloatingPoint> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<FloatingPoint>(end);
     return o;
   }
@@ -1105,7 +1105,7 @@ struct Utf8Builder {
   }
   ::flatbuffers::Offset<Utf8> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Utf8>(end);
     return o;
   }
@@ -1136,7 +1136,7 @@ struct BinaryBuilder {
   }
   ::flatbuffers::Offset<Binary> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Binary>(end);
     return o;
   }
@@ -1168,7 +1168,7 @@ struct LargeUtf8Builder {
   }
   ::flatbuffers::Offset<LargeUtf8> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<LargeUtf8>(end);
     return o;
   }
@@ -1200,7 +1200,7 @@ struct LargeBinaryBuilder {
   }
   ::flatbuffers::Offset<LargeBinary> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<LargeBinary>(end);
     return o;
   }
@@ -1237,7 +1237,7 @@ struct Utf8ViewBuilder {
   }
   ::flatbuffers::Offset<Utf8View> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Utf8View>(end);
     return o;
   }
@@ -1274,7 +1274,7 @@ struct BinaryViewBuilder {
   }
   ::flatbuffers::Offset<BinaryView> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<BinaryView>(end);
     return o;
   }
@@ -1312,7 +1312,7 @@ struct FixedSizeBinaryBuilder {
   }
   ::flatbuffers::Offset<FixedSizeBinary> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<FixedSizeBinary>(end);
     return o;
   }
@@ -1344,7 +1344,7 @@ struct BoolBuilder {
   }
   ::flatbuffers::Offset<Bool> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Bool>(end);
     return o;
   }
@@ -1379,7 +1379,7 @@ struct RunEndEncodedBuilder {
   }
   ::flatbuffers::Offset<RunEndEncoded> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<RunEndEncoded>(end);
     return o;
   }
@@ -1437,7 +1437,7 @@ struct DecimalBuilder {
   }
   ::flatbuffers::Offset<Decimal> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Decimal>(end);
     return o;
   }
@@ -1489,7 +1489,7 @@ struct DateBuilder {
   }
   ::flatbuffers::Offset<Date> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Date>(end);
     return o;
   }
@@ -1548,7 +1548,7 @@ struct TimeBuilder {
   }
   ::flatbuffers::Offset<Time> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Time>(end);
     return o;
   }
@@ -1687,9 +1687,9 @@ struct Timestamp FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   ///
   /// Whether a timezone string is present indicates different semantics about
   /// the data (see above).
-  const ::flatbuffers::String* timezone() const
+  ::flatbuffers::String const* timezone() const
   {
-    return GetPointer<const ::flatbuffers::String*>(VT_TIMEZONE);
+    return GetPointer<::flatbuffers::String const*>(VT_TIMEZONE);
   }
   bool Verify(::flatbuffers::Verifier& verifier) const
   {
@@ -1717,7 +1717,7 @@ struct TimestampBuilder {
   }
   ::flatbuffers::Offset<Timestamp> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Timestamp>(end);
     return o;
   }
@@ -1737,7 +1737,7 @@ inline ::flatbuffers::Offset<Timestamp> CreateTimestamp(
 inline ::flatbuffers::Offset<Timestamp> CreateTimestampDirect(
   ::flatbuffers::FlatBufferBuilder& _fbb,
   cudf::io::parquet::flatbuf::TimeUnit unit = cudf::io::parquet::flatbuf::TimeUnit_SECOND,
-  const char* timezone                      = nullptr)
+  char const* timezone                      = nullptr)
 {
   auto timezone__ = timezone ? _fbb.CreateString(timezone) : 0;
   return cudf::io::parquet::flatbuf::CreateTimestamp(_fbb, unit, timezone__);
@@ -1771,7 +1771,7 @@ struct IntervalBuilder {
   }
   ::flatbuffers::Offset<Interval> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Interval>(end);
     return o;
   }
@@ -1815,7 +1815,7 @@ struct DurationBuilder {
   }
   ::flatbuffers::Offset<Duration> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Duration>(end);
     return o;
   }
@@ -1836,13 +1836,13 @@ inline ::flatbuffers::Offset<Duration> CreateDuration(
 struct KeyValue FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef KeyValueBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE { VT_KEY = 4, VT_VALUE = 6 };
-  const ::flatbuffers::String* key() const
+  ::flatbuffers::String const* key() const
   {
-    return GetPointer<const ::flatbuffers::String*>(VT_KEY);
+    return GetPointer<::flatbuffers::String const*>(VT_KEY);
   }
-  const ::flatbuffers::String* value() const
+  ::flatbuffers::String const* value() const
   {
-    return GetPointer<const ::flatbuffers::String*>(VT_VALUE);
+    return GetPointer<::flatbuffers::String const*>(VT_VALUE);
   }
   bool Verify(::flatbuffers::Verifier& verifier) const
   {
@@ -1870,7 +1870,7 @@ struct KeyValueBuilder {
   }
   ::flatbuffers::Offset<KeyValue> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<KeyValue>(end);
     return o;
   }
@@ -1888,8 +1888,8 @@ inline ::flatbuffers::Offset<KeyValue> CreateKeyValue(
 }
 
 inline ::flatbuffers::Offset<KeyValue> CreateKeyValueDirect(::flatbuffers::FlatBufferBuilder& _fbb,
-                                                            const char* key   = nullptr,
-                                                            const char* value = nullptr)
+                                                            char const* key   = nullptr,
+                                                            char const* value = nullptr)
 {
   auto key__   = key ? _fbb.CreateString(key) : 0;
   auto value__ = value ? _fbb.CreateString(value) : 0;
@@ -1913,9 +1913,9 @@ struct DictionaryEncoding FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table
   /// cross-language compatibility and performance, implementations are
   /// recommended to prefer signed integer types over unsigned integer types
   /// and to avoid uint64 indices unless they are required by an application.
-  const cudf::io::parquet::flatbuf::Int* indexType() const
+  cudf::io::parquet::flatbuf::Int const* indexType() const
   {
-    return GetPointer<const cudf::io::parquet::flatbuf::Int*>(VT_INDEXTYPE);
+    return GetPointer<cudf::io::parquet::flatbuf::Int const*>(VT_INDEXTYPE);
   }
   /// By default, dictionaries are not ordered, or the order does not have
   /// semantic meaning. In some statistical, applications, dictionary-encoding
@@ -1960,7 +1960,7 @@ struct DictionaryEncodingBuilder {
   }
   ::flatbuffers::Offset<DictionaryEncoding> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<DictionaryEncoding>(end);
     return o;
   }
@@ -1997,9 +1997,9 @@ struct Field FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_CUSTOM_METADATA = 16
   };
   /// Name is not required, in i.e. a List
-  const ::flatbuffers::String* name() const
+  ::flatbuffers::String const* name() const
   {
-    return GetPointer<const ::flatbuffers::String*>(VT_NAME);
+    return GetPointer<::flatbuffers::String const*>(VT_NAME);
   }
   /// Whether or not this field can contain nulls. Should be true in general.
   bool nullable() const { return GetField<uint8_t>(VT_NULLABLE, 0) != 0; }
@@ -2008,185 +2008,185 @@ struct Field FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     return static_cast<cudf::io::parquet::flatbuf::Type>(GetField<uint8_t>(VT_TYPE_TYPE, 0));
   }
   /// This is the type of the decoded value if the field is dictionary encoded.
-  const void* type() const { return GetPointer<const void*>(VT_TYPE); }
+  void const* type() const { return GetPointer<void const*>(VT_TYPE); }
   template <typename T>
-  const T* type_as() const;
-  const cudf::io::parquet::flatbuf::Null* type_as_Null() const
+  T const* type_as() const;
+  cudf::io::parquet::flatbuf::Null const* type_as_Null() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_Null
-             ? static_cast<const cudf::io::parquet::flatbuf::Null*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::Null const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::Int* type_as_Int() const
+  cudf::io::parquet::flatbuf::Int const* type_as_Int() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_Int
-             ? static_cast<const cudf::io::parquet::flatbuf::Int*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::Int const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::FloatingPoint* type_as_FloatingPoint() const
+  cudf::io::parquet::flatbuf::FloatingPoint const* type_as_FloatingPoint() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_FloatingPoint
-             ? static_cast<const cudf::io::parquet::flatbuf::FloatingPoint*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::FloatingPoint const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::Binary* type_as_Binary() const
+  cudf::io::parquet::flatbuf::Binary const* type_as_Binary() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_Binary
-             ? static_cast<const cudf::io::parquet::flatbuf::Binary*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::Binary const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::Utf8* type_as_Utf8() const
+  cudf::io::parquet::flatbuf::Utf8 const* type_as_Utf8() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_Utf8
-             ? static_cast<const cudf::io::parquet::flatbuf::Utf8*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::Utf8 const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::Bool* type_as_Bool() const
+  cudf::io::parquet::flatbuf::Bool const* type_as_Bool() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_Bool
-             ? static_cast<const cudf::io::parquet::flatbuf::Bool*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::Bool const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::Decimal* type_as_Decimal() const
+  cudf::io::parquet::flatbuf::Decimal const* type_as_Decimal() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_Decimal
-             ? static_cast<const cudf::io::parquet::flatbuf::Decimal*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::Decimal const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::Date* type_as_Date() const
+  cudf::io::parquet::flatbuf::Date const* type_as_Date() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_Date
-             ? static_cast<const cudf::io::parquet::flatbuf::Date*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::Date const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::Time* type_as_Time() const
+  cudf::io::parquet::flatbuf::Time const* type_as_Time() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_Time
-             ? static_cast<const cudf::io::parquet::flatbuf::Time*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::Time const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::Timestamp* type_as_Timestamp() const
+  cudf::io::parquet::flatbuf::Timestamp const* type_as_Timestamp() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_Timestamp
-             ? static_cast<const cudf::io::parquet::flatbuf::Timestamp*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::Timestamp const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::Interval* type_as_Interval() const
+  cudf::io::parquet::flatbuf::Interval const* type_as_Interval() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_Interval
-             ? static_cast<const cudf::io::parquet::flatbuf::Interval*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::Interval const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::List* type_as_List() const
+  cudf::io::parquet::flatbuf::List const* type_as_List() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_List
-             ? static_cast<const cudf::io::parquet::flatbuf::List*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::List const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::Struct_* type_as_Struct_() const
+  cudf::io::parquet::flatbuf::Struct_ const* type_as_Struct_() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_Struct_
-             ? static_cast<const cudf::io::parquet::flatbuf::Struct_*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::Struct_ const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::Union* type_as_Union() const
+  cudf::io::parquet::flatbuf::Union const* type_as_Union() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_Union
-             ? static_cast<const cudf::io::parquet::flatbuf::Union*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::Union const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::FixedSizeBinary* type_as_FixedSizeBinary() const
+  cudf::io::parquet::flatbuf::FixedSizeBinary const* type_as_FixedSizeBinary() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_FixedSizeBinary
-             ? static_cast<const cudf::io::parquet::flatbuf::FixedSizeBinary*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::FixedSizeBinary const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::FixedSizeList* type_as_FixedSizeList() const
+  cudf::io::parquet::flatbuf::FixedSizeList const* type_as_FixedSizeList() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_FixedSizeList
-             ? static_cast<const cudf::io::parquet::flatbuf::FixedSizeList*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::FixedSizeList const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::Map* type_as_Map() const
+  cudf::io::parquet::flatbuf::Map const* type_as_Map() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_Map
-             ? static_cast<const cudf::io::parquet::flatbuf::Map*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::Map const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::Duration* type_as_Duration() const
+  cudf::io::parquet::flatbuf::Duration const* type_as_Duration() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_Duration
-             ? static_cast<const cudf::io::parquet::flatbuf::Duration*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::Duration const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::LargeBinary* type_as_LargeBinary() const
+  cudf::io::parquet::flatbuf::LargeBinary const* type_as_LargeBinary() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_LargeBinary
-             ? static_cast<const cudf::io::parquet::flatbuf::LargeBinary*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::LargeBinary const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::LargeUtf8* type_as_LargeUtf8() const
+  cudf::io::parquet::flatbuf::LargeUtf8 const* type_as_LargeUtf8() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_LargeUtf8
-             ? static_cast<const cudf::io::parquet::flatbuf::LargeUtf8*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::LargeUtf8 const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::LargeList* type_as_LargeList() const
+  cudf::io::parquet::flatbuf::LargeList const* type_as_LargeList() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_LargeList
-             ? static_cast<const cudf::io::parquet::flatbuf::LargeList*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::LargeList const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::RunEndEncoded* type_as_RunEndEncoded() const
+  cudf::io::parquet::flatbuf::RunEndEncoded const* type_as_RunEndEncoded() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_RunEndEncoded
-             ? static_cast<const cudf::io::parquet::flatbuf::RunEndEncoded*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::RunEndEncoded const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::BinaryView* type_as_BinaryView() const
+  cudf::io::parquet::flatbuf::BinaryView const* type_as_BinaryView() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_BinaryView
-             ? static_cast<const cudf::io::parquet::flatbuf::BinaryView*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::BinaryView const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::Utf8View* type_as_Utf8View() const
+  cudf::io::parquet::flatbuf::Utf8View const* type_as_Utf8View() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_Utf8View
-             ? static_cast<const cudf::io::parquet::flatbuf::Utf8View*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::Utf8View const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::ListView* type_as_ListView() const
+  cudf::io::parquet::flatbuf::ListView const* type_as_ListView() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_ListView
-             ? static_cast<const cudf::io::parquet::flatbuf::ListView*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::ListView const*>(type())
              : nullptr;
   }
-  const cudf::io::parquet::flatbuf::LargeListView* type_as_LargeListView() const
+  cudf::io::parquet::flatbuf::LargeListView const* type_as_LargeListView() const
   {
     return type_type() == cudf::io::parquet::flatbuf::Type_LargeListView
-             ? static_cast<const cudf::io::parquet::flatbuf::LargeListView*>(type())
+             ? static_cast<cudf::io::parquet::flatbuf::LargeListView const*>(type())
              : nullptr;
   }
   /// Present only if the field is dictionary encoded.
-  const cudf::io::parquet::flatbuf::DictionaryEncoding* dictionary() const
+  cudf::io::parquet::flatbuf::DictionaryEncoding const* dictionary() const
   {
-    return GetPointer<const cudf::io::parquet::flatbuf::DictionaryEncoding*>(VT_DICTIONARY);
+    return GetPointer<cudf::io::parquet::flatbuf::DictionaryEncoding const*>(VT_DICTIONARY);
   }
   /// children apply only to nested data types like Struct, List and Union. For
   /// primitive types children will have length 0.
-  const ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::Field>>* children()
+  ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::Field>> const* children()
     const
   {
     return GetPointer<
-      const ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::Field>>*>(
+      ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::Field>> const*>(
       VT_CHILDREN);
   }
   /// User-defined metadata
-  const ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::KeyValue>>*
+  ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::KeyValue>> const*
   custom_metadata() const
   {
     return GetPointer<
-      const ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::KeyValue>>*>(
+      ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::KeyValue>> const*>(
       VT_CUSTOM_METADATA);
   }
   bool Verify(::flatbuffers::Verifier& verifier) const
@@ -2203,182 +2203,182 @@ struct Field FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
 };
 
 template <>
-inline const cudf::io::parquet::flatbuf::Null* Field::type_as<cudf::io::parquet::flatbuf::Null>()
+inline cudf::io::parquet::flatbuf::Null const* Field::type_as<cudf::io::parquet::flatbuf::Null>()
   const
 {
   return type_as_Null();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::Int* Field::type_as<cudf::io::parquet::flatbuf::Int>()
+inline cudf::io::parquet::flatbuf::Int const* Field::type_as<cudf::io::parquet::flatbuf::Int>()
   const
 {
   return type_as_Int();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::FloatingPoint*
+inline cudf::io::parquet::flatbuf::FloatingPoint const*
 Field::type_as<cudf::io::parquet::flatbuf::FloatingPoint>() const
 {
   return type_as_FloatingPoint();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::Binary*
+inline cudf::io::parquet::flatbuf::Binary const*
 Field::type_as<cudf::io::parquet::flatbuf::Binary>() const
 {
   return type_as_Binary();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::Utf8* Field::type_as<cudf::io::parquet::flatbuf::Utf8>()
+inline cudf::io::parquet::flatbuf::Utf8 const* Field::type_as<cudf::io::parquet::flatbuf::Utf8>()
   const
 {
   return type_as_Utf8();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::Bool* Field::type_as<cudf::io::parquet::flatbuf::Bool>()
+inline cudf::io::parquet::flatbuf::Bool const* Field::type_as<cudf::io::parquet::flatbuf::Bool>()
   const
 {
   return type_as_Bool();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::Decimal*
+inline cudf::io::parquet::flatbuf::Decimal const*
 Field::type_as<cudf::io::parquet::flatbuf::Decimal>() const
 {
   return type_as_Decimal();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::Date* Field::type_as<cudf::io::parquet::flatbuf::Date>()
+inline cudf::io::parquet::flatbuf::Date const* Field::type_as<cudf::io::parquet::flatbuf::Date>()
   const
 {
   return type_as_Date();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::Time* Field::type_as<cudf::io::parquet::flatbuf::Time>()
+inline cudf::io::parquet::flatbuf::Time const* Field::type_as<cudf::io::parquet::flatbuf::Time>()
   const
 {
   return type_as_Time();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::Timestamp*
+inline cudf::io::parquet::flatbuf::Timestamp const*
 Field::type_as<cudf::io::parquet::flatbuf::Timestamp>() const
 {
   return type_as_Timestamp();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::Interval*
+inline cudf::io::parquet::flatbuf::Interval const*
 Field::type_as<cudf::io::parquet::flatbuf::Interval>() const
 {
   return type_as_Interval();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::List* Field::type_as<cudf::io::parquet::flatbuf::List>()
+inline cudf::io::parquet::flatbuf::List const* Field::type_as<cudf::io::parquet::flatbuf::List>()
   const
 {
   return type_as_List();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::Struct_*
+inline cudf::io::parquet::flatbuf::Struct_ const*
 Field::type_as<cudf::io::parquet::flatbuf::Struct_>() const
 {
   return type_as_Struct_();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::Union* Field::type_as<cudf::io::parquet::flatbuf::Union>()
+inline cudf::io::parquet::flatbuf::Union const* Field::type_as<cudf::io::parquet::flatbuf::Union>()
   const
 {
   return type_as_Union();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::FixedSizeBinary*
+inline cudf::io::parquet::flatbuf::FixedSizeBinary const*
 Field::type_as<cudf::io::parquet::flatbuf::FixedSizeBinary>() const
 {
   return type_as_FixedSizeBinary();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::FixedSizeList*
+inline cudf::io::parquet::flatbuf::FixedSizeList const*
 Field::type_as<cudf::io::parquet::flatbuf::FixedSizeList>() const
 {
   return type_as_FixedSizeList();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::Map* Field::type_as<cudf::io::parquet::flatbuf::Map>()
+inline cudf::io::parquet::flatbuf::Map const* Field::type_as<cudf::io::parquet::flatbuf::Map>()
   const
 {
   return type_as_Map();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::Duration*
+inline cudf::io::parquet::flatbuf::Duration const*
 Field::type_as<cudf::io::parquet::flatbuf::Duration>() const
 {
   return type_as_Duration();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::LargeBinary*
+inline cudf::io::parquet::flatbuf::LargeBinary const*
 Field::type_as<cudf::io::parquet::flatbuf::LargeBinary>() const
 {
   return type_as_LargeBinary();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::LargeUtf8*
+inline cudf::io::parquet::flatbuf::LargeUtf8 const*
 Field::type_as<cudf::io::parquet::flatbuf::LargeUtf8>() const
 {
   return type_as_LargeUtf8();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::LargeList*
+inline cudf::io::parquet::flatbuf::LargeList const*
 Field::type_as<cudf::io::parquet::flatbuf::LargeList>() const
 {
   return type_as_LargeList();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::RunEndEncoded*
+inline cudf::io::parquet::flatbuf::RunEndEncoded const*
 Field::type_as<cudf::io::parquet::flatbuf::RunEndEncoded>() const
 {
   return type_as_RunEndEncoded();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::BinaryView*
+inline cudf::io::parquet::flatbuf::BinaryView const*
 Field::type_as<cudf::io::parquet::flatbuf::BinaryView>() const
 {
   return type_as_BinaryView();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::Utf8View*
+inline cudf::io::parquet::flatbuf::Utf8View const*
 Field::type_as<cudf::io::parquet::flatbuf::Utf8View>() const
 {
   return type_as_Utf8View();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::ListView*
+inline cudf::io::parquet::flatbuf::ListView const*
 Field::type_as<cudf::io::parquet::flatbuf::ListView>() const
 {
   return type_as_ListView();
 }
 
 template <>
-inline const cudf::io::parquet::flatbuf::LargeListView*
+inline cudf::io::parquet::flatbuf::LargeListView const*
 Field::type_as<cudf::io::parquet::flatbuf::LargeListView>() const
 {
   return type_as_LargeListView();
@@ -2425,7 +2425,7 @@ struct FieldBuilder {
   }
   ::flatbuffers::Offset<Field> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Field>(end);
     return o;
   }
@@ -2456,13 +2456,13 @@ inline ::flatbuffers::Offset<Field> CreateField(
 
 inline ::flatbuffers::Offset<Field> CreateFieldDirect(
   ::flatbuffers::FlatBufferBuilder& _fbb,
-  const char* name                           = nullptr,
+  char const* name                           = nullptr,
   bool nullable                              = false,
   cudf::io::parquet::flatbuf::Type type_type = cudf::io::parquet::flatbuf::Type_NONE,
   ::flatbuffers::Offset<void> type           = 0,
   ::flatbuffers::Offset<cudf::io::parquet::flatbuf::DictionaryEncoding> dictionary      = 0,
-  const std::vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::Field>>* children = nullptr,
-  const std::vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::KeyValue>>* custom_metadata =
+  std::vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::Field>> const* children = nullptr,
+  std::vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::KeyValue>> const* custom_metadata =
     nullptr)
 {
   auto name__ = name ? _fbb.CreateString(name) : 0;
@@ -2496,24 +2496,24 @@ struct Schema FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   {
     return static_cast<cudf::io::parquet::flatbuf::Endianness>(GetField<int16_t>(VT_ENDIANNESS, 0));
   }
-  const ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::Field>>* fields()
+  ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::Field>> const* fields()
     const
   {
     return GetPointer<
-      const ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::Field>>*>(
+      ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::Field>> const*>(
       VT_FIELDS);
   }
-  const ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::KeyValue>>*
+  ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::KeyValue>> const*
   custom_metadata() const
   {
     return GetPointer<
-      const ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::KeyValue>>*>(
+      ::flatbuffers::Vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::KeyValue>> const*>(
       VT_CUSTOM_METADATA);
   }
   /// Features used in the stream/file.
-  const ::flatbuffers::Vector<int64_t>* features() const
+  ::flatbuffers::Vector<int64_t> const* features() const
   {
-    return GetPointer<const ::flatbuffers::Vector<int64_t>*>(VT_FEATURES);
+    return GetPointer<::flatbuffers::Vector<int64_t> const*>(VT_FEATURES);
   }
   bool Verify(::flatbuffers::Verifier& verifier) const
   {
@@ -2558,7 +2558,7 @@ struct SchemaBuilder {
   }
   ::flatbuffers::Offset<Schema> Finish()
   {
-    const auto end = fbb_.EndTable(start_);
+    auto const end = fbb_.EndTable(start_);
     auto o         = ::flatbuffers::Offset<Schema>(end);
     return o;
   }
@@ -2584,10 +2584,10 @@ inline ::flatbuffers::Offset<Schema> CreateSchema(
 inline ::flatbuffers::Offset<Schema> CreateSchemaDirect(
   ::flatbuffers::FlatBufferBuilder& _fbb,
   cudf::io::parquet::flatbuf::Endianness endianness = cudf::io::parquet::flatbuf::Endianness_Little,
-  const std::vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::Field>>* fields = nullptr,
-  const std::vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::KeyValue>>* custom_metadata =
+  std::vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::Field>> const* fields = nullptr,
+  std::vector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::KeyValue>> const* custom_metadata =
     nullptr,
-  const std::vector<int64_t>* features = nullptr)
+  std::vector<int64_t> const* features = nullptr)
 {
   auto fields__ =
     fields ? _fbb.CreateVector<::flatbuffers::Offset<cudf::io::parquet::flatbuf::Field>>(*fields)
@@ -2602,114 +2602,114 @@ inline ::flatbuffers::Offset<Schema> CreateSchemaDirect(
     _fbb, endianness, fields__, custom_metadata__, features__);
 }
 
-inline bool VerifyType(::flatbuffers::Verifier& verifier, const void* obj, Type type)
+inline bool VerifyType(::flatbuffers::Verifier& verifier, void const* obj, Type type)
 {
   switch (type) {
     case Type_NONE: {
       return true;
     }
     case Type_Null: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::Null*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::Null const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_Int: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::Int*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::Int const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_FloatingPoint: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::FloatingPoint*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::FloatingPoint const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_Binary: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::Binary*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::Binary const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_Utf8: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::Utf8*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::Utf8 const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_Bool: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::Bool*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::Bool const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_Decimal: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::Decimal*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::Decimal const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_Date: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::Date*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::Date const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_Time: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::Time*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::Time const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_Timestamp: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::Timestamp*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::Timestamp const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_Interval: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::Interval*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::Interval const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_List: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::List*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::List const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_Struct_: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::Struct_*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::Struct_ const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_Union: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::Union*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::Union const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_FixedSizeBinary: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::FixedSizeBinary*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::FixedSizeBinary const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_FixedSizeList: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::FixedSizeList*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::FixedSizeList const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_Map: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::Map*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::Map const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_Duration: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::Duration*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::Duration const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_LargeBinary: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::LargeBinary*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::LargeBinary const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_LargeUtf8: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::LargeUtf8*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::LargeUtf8 const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_LargeList: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::LargeList*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::LargeList const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_RunEndEncoded: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::RunEndEncoded*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::RunEndEncoded const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_BinaryView: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::BinaryView*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::BinaryView const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_Utf8View: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::Utf8View*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::Utf8View const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_ListView: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::ListView*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::ListView const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     case Type_LargeListView: {
-      auto ptr = reinterpret_cast<const cudf::io::parquet::flatbuf::LargeListView*>(obj);
+      auto ptr = reinterpret_cast<cudf::io::parquet::flatbuf::LargeListView const*>(obj);
       return verifier.VerifyTable(ptr);
     }
     default: return true;
@@ -2717,8 +2717,8 @@ inline bool VerifyType(::flatbuffers::Verifier& verifier, const void* obj, Type 
 }
 
 inline bool VerifyTypeVector(::flatbuffers::Verifier& verifier,
-                             const ::flatbuffers::Vector<::flatbuffers::Offset<void>>* values,
-                             const ::flatbuffers::Vector<uint8_t>* types)
+                             ::flatbuffers::Vector<::flatbuffers::Offset<void>> const* values,
+                             ::flatbuffers::Vector<uint8_t> const* types)
 {
   if (!values || !types) return !values && !types;
   if (values->size() != types->size()) return false;
@@ -2728,12 +2728,12 @@ inline bool VerifyTypeVector(::flatbuffers::Verifier& verifier,
   return true;
 }
 
-inline const cudf::io::parquet::flatbuf::Schema* GetSchema(const void* buf)
+inline cudf::io::parquet::flatbuf::Schema const* GetSchema(void const* buf)
 {
   return ::flatbuffers::GetRoot<cudf::io::parquet::flatbuf::Schema>(buf);
 }
 
-inline const cudf::io::parquet::flatbuf::Schema* GetSizePrefixedSchema(const void* buf)
+inline cudf::io::parquet::flatbuf::Schema const* GetSizePrefixedSchema(void const* buf)
 {
   return ::flatbuffers::GetSizePrefixedRoot<cudf::io::parquet::flatbuf::Schema>(buf);
 }

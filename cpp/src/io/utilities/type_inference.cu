@@ -255,7 +255,7 @@ cudf::io::column_type_histogram infer_column_type(OptionsView const& options,
 cudf::data_type infer_data_type(
   cudf::io::json_inference_options_view const& options,
   device_span<char const> data,
-  thrust::zip_iterator<thrust::tuple<const size_type*, const size_type*>> offset_length_begin,
+  thrust::zip_iterator<thrust::tuple<size_type const*, size_type const*>> offset_length_begin,
   std::size_t const size,
   rmm::cuda_stream_view stream)
 {

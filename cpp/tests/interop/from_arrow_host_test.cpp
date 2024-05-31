@@ -76,7 +76,7 @@ get_nanoarrow_host_tables(cudf::size_type length)
   ArrowBitmapInit(&struct_validity);
   NANOARROW_THROW_NOT_OK(ArrowBitmapReserve(&struct_validity, length));
   ArrowBitmapAppendInt8Unsafe(
-    &struct_validity, reinterpret_cast<const int8_t*>(test_data.bool_data_validity.data()), length);
+    &struct_validity, reinterpret_cast<int8_t const*>(test_data.bool_data_validity.data()), length);
   arrow->children[5]->length = length;
   ArrowArraySetValidityBitmap(arrow->children[5], &struct_validity);
   arrow->children[5]->null_count =
@@ -267,7 +267,7 @@ TEST_F(FromArrowHostDeviceTest, NestedList)
   EXPECT_EQ(
     NANOARROW_OK,
     ArrowBufferAppend(
-      offset_buf, reinterpret_cast<const void*>(offset.data()), offset.size() * sizeof(int32_t)));
+      offset_buf, reinterpret_cast<void const*>(offset.data()), offset.size() * sizeof(int32_t)));
 
   // move our base list to be the child of the one we just created
   // so that we now have an equivalent value to what we created for cudf
@@ -416,7 +416,7 @@ TEST_F(FromArrowHostDeviceTest, StructColumn)
   EXPECT_EQ(
     NANOARROW_OK,
     ArrowBufferAppend(
-      offset_buf, reinterpret_cast<const void*>(offset.data()), offset.size() * sizeof(int32_t)));
+      offset_buf, reinterpret_cast<void const*>(offset.data()), offset.size() * sizeof(int32_t)));
 
   list_arr.move(array_a->children[3]->children[0]);
 

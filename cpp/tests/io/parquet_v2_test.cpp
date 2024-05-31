@@ -756,7 +756,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
       auto const oi = read_offset_index(source, chunk);
 
       int64_t num_vals = 0;
-      for (const auto& page_loc : oi.page_locations) {
+      for (auto const& page_loc : oi.page_locations) {
         auto const ph = read_page_header(source, page_loc);
         EXPECT_EQ(ph.type, expected_hdr_type);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
@@ -782,7 +782,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
         EXPECT_EQ(ci.null_counts.value()[p], 0);
         EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
       }
-      for (const auto& max_value : ci.max_values)
+      for (auto const& max_value : ci.max_values)
         EXPECT_TRUE(compare_binary(stats.max_value.value(), max_value, ptype, ctype) >= 0);
     }
   }
@@ -860,7 +860,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
       auto const oi = read_offset_index(source, chunk);
 
       int64_t num_vals = 0;
-      for (const auto& page_loc : oi.page_locations) {
+      for (auto const& page_loc : oi.page_locations) {
         auto const ph = read_page_header(source, page_loc);
         EXPECT_EQ(ph.type, expected_hdr_type);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
@@ -891,7 +891,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
         }
         EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
       }
-      for (const auto& max_value : ci.max_values) {
+      for (auto const& max_value : ci.max_values) {
         EXPECT_TRUE(compare_binary(stats.max_value.value(), max_value, ptype, ctype) >= 0);
       }
     }
@@ -955,7 +955,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
       auto const oi = read_offset_index(source, chunk);
 
       int64_t num_vals = 0;
-      for (const auto& page_loc : oi.page_locations) {
+      for (auto const& page_loc : oi.page_locations) {
         auto const ph = read_page_header(source, page_loc);
         EXPECT_EQ(ph.type, expected_hdr_type);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
@@ -1056,7 +1056,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStruct)
       auto const oi = read_offset_index(source, chunk);
 
       int64_t num_vals = 0;
-      for (const auto& page_loc : oi.page_locations) {
+      for (auto const& page_loc : oi.page_locations) {
         auto const ph = read_page_header(source, page_loc);
         EXPECT_EQ(ph.type, expected_hdr_type);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
@@ -1075,10 +1075,10 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStruct)
 
       auto const ptype = fmd.schema[colidx].type;
       auto const ctype = fmd.schema[colidx].converted_type;
-      for (const auto& min_value : ci.min_values) {
+      for (auto const& min_value : ci.min_values) {
         EXPECT_TRUE(compare_binary(stats.min_value.value(), min_value, ptype, ctype) <= 0);
       }
-      for (const auto& max_value : ci.max_values) {
+      for (auto const& max_value : ci.max_values) {
         EXPECT_TRUE(compare_binary(stats.max_value.value(), max_value, ptype, ctype) >= 0);
       }
     }
@@ -1141,7 +1141,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
   // col3 will have num_ordered_rows / 4 nulls total
   int const null_mods[] = {0, 2, 3, 4};
 
-  for (const auto& rg : fmd.row_groups) {
+  for (auto const& rg : fmd.row_groups) {
     for (size_t c = 0; c < rg.columns.size(); c++) {
       auto const& chunk = rg.columns[c];
 
@@ -1342,7 +1342,7 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
 
   read_footer(source, &fmd);
 
-  for (const auto& rg : fmd.row_groups) {
+  for (auto const& rg : fmd.row_groups) {
     for (size_t c = 0; c < rg.columns.size(); c++) {
       auto const& chunk = rg.columns[c];
 
@@ -1369,7 +1369,7 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
       // the first row index is correct
       auto const oi = read_offset_index(source, chunk);
 
-      for (const auto& page_loc : oi.page_locations) {
+      for (auto const& page_loc : oi.page_locations) {
         auto const ph = read_page_header(source, page_loc);
         EXPECT_EQ(ph.type, expected_hdr_type);
         // check null counts in V2 header

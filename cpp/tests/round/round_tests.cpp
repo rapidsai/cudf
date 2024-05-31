@@ -706,7 +706,7 @@ TEST_F(RoundTests, BoolTestHalfUp)
 }
 
 // Use __uint128_t for demonstration.
-constexpr __uint128_t operator""_uint128_t(const char* s)
+constexpr __uint128_t operator""_uint128_t(char const* s)
 {
   __uint128_t ret = 0;
   for (int i = 0; s[i] != '\0'; ++i) {

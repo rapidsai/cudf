@@ -46,7 +46,7 @@ namespace detail {
 cudf::data_type infer_data_type(
   cudf::io::json_inference_options_view const& options,
   device_span<char const> data,
-  thrust::zip_iterator<thrust::tuple<const size_type*, const size_type*>> offset_length_begin,
+  thrust::zip_iterator<thrust::tuple<size_type const*, size_type const*>> offset_length_begin,
   std::size_t const size,
   rmm::cuda_stream_view stream);
 }  // namespace detail
@@ -67,8 +67,8 @@ namespace json::detail {
  * @return The column that contains the parsed data
  */
 std::unique_ptr<column> parse_data(
-  const char* data,
-  thrust::zip_iterator<thrust::tuple<const size_type*, const size_type*>> offset_length_begin,
+  char const* data,
+  thrust::zip_iterator<thrust::tuple<size_type const*, size_type const*>> offset_length_begin,
   size_type col_size,
   data_type col_type,
   rmm::device_buffer&& null_mask,

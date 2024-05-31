@@ -810,7 +810,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
       cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>(stripe_count, num_lvl_columns, _stream);
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
 
-    const bool use_index =
+    bool const use_index =
       _options.use_index &&
       // Do stripes have row group index
       _metadata.is_row_grp_idx_present() &&

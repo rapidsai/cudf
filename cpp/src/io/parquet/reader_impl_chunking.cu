@@ -1027,7 +1027,7 @@ struct decompression_info {
  *
  */
 struct get_decomp_info {
-  device_span<const ColumnChunkDesc> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
   __device__ decompression_info operator()(PageInfo const& p) const
   {

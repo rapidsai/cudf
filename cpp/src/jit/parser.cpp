@@ -208,7 +208,7 @@ std::string ptx_parser::parse_instruction(std::string const& src)
       } else if (is_pragma_instruction) {
         // quote any string
         std::string transformed_piece;
-        for (const auto& c : piece) {
+        for (auto const& c : piece) {
           if (c == '"') {
             transformed_piece += "\\\"";
           } else {

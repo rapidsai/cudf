@@ -23,7 +23,7 @@
 
 namespace cudf {
 namespace detail {
-data_type arrow_to_cudf_type(const ArrowSchemaView* arrow_view)
+data_type arrow_to_cudf_type(ArrowSchemaView const* arrow_view)
 {
   switch (arrow_view->type) {
     case NANOARROW_TYPE_NA: return data_type(type_id::EMPTY);

@@ -140,7 +140,7 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<bool>(ArrowSch
                                                                         bool skip_mask)
 {
   auto data_buffer         = input->buffers[fixed_width_data_buffer_idx];
-  const auto buffer_length = bitmask_allocation_size_bytes(input->length + input->offset);
+  auto const buffer_length = bitmask_allocation_size_bytes(input->length + input->offset);
 
   auto data = rmm::device_buffer(buffer_length, stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(data.data(),
@@ -322,7 +322,7 @@ template <>
 std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_view>(
   ArrowSchemaView* schema, ArrowArray const* input, data_type type, bool skip_mask)
 {
-  const void* offset_buffers[2] = {nullptr, input->buffers[fixed_width_data_buffer_idx]};
+  void const* offset_buffers[2] = {nullptr, input->buffers[fixed_width_data_buffer_idx]};
   ArrowArray offsets_array      = {
          .length     = input->offset + input->length + 1,
          .null_count = 0,

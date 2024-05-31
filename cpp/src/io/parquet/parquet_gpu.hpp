@@ -149,12 +149,12 @@ using zigzag128_t = int64_t;
 #if !defined(__cpp_lib_is_scoped_enum)
 template <typename Enum, bool = std::is_enum_v<Enum>>
 struct is_scoped_enum {
-  static const bool value = not std::is_convertible_v<Enum, std::underlying_type_t<Enum>>;
+  static bool const value = not std::is_convertible_v<Enum, std::underlying_type_t<Enum>>;
 };
 
 template <typename Enum>
 struct is_scoped_enum<Enum, false> {
-  static const bool value = false;
+  static bool const value = false;
 };
 #else
 using std::is_scoped_enum;

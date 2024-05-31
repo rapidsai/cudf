@@ -206,7 +206,7 @@ get_nanoarrow_tables(cudf::size_type length)
   ArrowArrayValidityBitmap(arrow->children[5])->buffer.size_bytes =
     cudf::bitmask_allocation_size_bytes(struct_view.size());
   ArrowArrayValidityBitmap(arrow->children[5])->buffer.data =
-    const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(struct_view.null_mask()));
+    const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(struct_view.null_mask()));
 
   ArrowError error;
   if (ArrowArrayFinishBuilding(arrow.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, &error) !=
@@ -229,7 +229,7 @@ void populate_list_from_col(ArrowArray* arr, cudf::lists_column_view view)
   ArrowArrayValidityBitmap(arr)->buffer.size_bytes =
     cudf::bitmask_allocation_size_bytes(view.size());
   ArrowArrayValidityBitmap(arr)->buffer.data =
-    const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view.null_mask()));
+    const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(view.null_mask()));
 
   NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc));
   ArrowArrayBuffer(arr, 1)->size_bytes = sizeof(int32_t) * view.offsets().size();
@@ -237,7 +237,7 @@ void populate_list_from_col(ArrowArray* arr, cudf::lists_column_view view)
 }
 
 struct BaseArrowFixture : public cudf::test::BaseFixture {
-  void compare_schemas(const ArrowSchema* expected, const ArrowSchema* actual)
+  void compare_schemas(ArrowSchema const* expected, ArrowSchema const* actual)
   {
     EXPECT_STREQ(expected->format, actual->format);
     EXPECT_STREQ(expected->name, actual->name);
@@ -264,9 +264,9 @@ struct BaseArrowFixture : public cudf::test::BaseFixture {
   }
 
   void compare_device_buffers(const size_t nbytes,
-                              const int buffer_idx,
-                              const ArrowArray* expected,
-                              const ArrowArray* actual)
+                              int const buffer_idx,
+                              ArrowArray const* expected,
+                              ArrowArray const* actual)
   {
     std::vector<uint8_t> actual_bytes;
     std::vector<uint8_t> expected_bytes;
@@ -281,9 +281,9 @@ struct BaseArrowFixture : public cudf::test::BaseFixture {
     ASSERT_EQ(expected_bytes, actual_bytes);
   }
 
-  void compare_arrays(const ArrowSchema* schema,
-                      const ArrowArray* expected,
-                      const ArrowArray* actual)
+  void compare_arrays(ArrowSchema const* schema,
+                      ArrowArray const* expected,
+                      ArrowArray const* actual)
   {
     ArrowSchemaView schema_view;
     NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&schema_view, schema, nullptr));
@@ -337,7 +337,7 @@ TYPED_TEST_SUITE(ToArrowDeviceTestDurationsTest, cudf::test::DurationTypes);
 
 TEST_F(ToArrowDeviceTest, EmptyTable)
 {
-  const auto [table, schema, arr] = get_nanoarrow_tables(0);
+  auto const [table, schema, arr] = get_nanoarrow_tables(0);
 
   auto struct_meta          = cudf::column_metadata{"f"};
   struct_meta.children_meta = {{"integral"}, {"string"}};
@@ -653,7 +653,7 @@ TEST_F(ToArrowDeviceTest, StructColumn)
 
   NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(array_a, 0), noop_alloc));
   ArrowArrayValidityBitmap(array_a)->buffer.data =
-    const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view_a.null_mask()));
+    const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(view_a.null_mask()));
 
   populate_from_col<cudf::string_view>(array_a->children[0], view_a.child(0));
   populate_from_col<int32_t>(array_a->children[1], view_a.child(1));
@@ -671,7 +671,7 @@ TEST_F(ToArrowDeviceTest, StructColumn)
 
   NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(array_struct, 0), noop_alloc));
   ArrowArrayValidityBitmap(array_struct)->buffer.data =
-    const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view_struct.null_mask()));
+    const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(view_struct.null_mask()));
 
   populate_from_col<cudf::string_view>(array_struct->children[0], view_struct.child(0));
   populate_from_col<int32_t>(array_struct->children[1], view_struct.child(1));
@@ -736,7 +736,7 @@ TEST_F(ToArrowDeviceTest, FixedPoint64Table)
     NANOARROW_THROW_NOT_OK(
       ArrowBufferSetAllocator(ArrowArrayBuffer(expected_array->children[0], 0), noop_alloc));
     ArrowArrayValidityBitmap(expected_array->children[0])->buffer.data =
-      const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(input.view().column(0).null_mask()));
+      const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(input.view().column(0).null_mask()));
 
     auto data_ptr = reinterpret_cast<uint8_t*>(result_dev_data->data());
     NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(
