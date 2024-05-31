@@ -49,23 +49,23 @@ TYPED_TEST_SUITE(FromArrowDeviceTestDurationsTest, cudf::test::DurationTypes);
 TEST_F(FromArrowDeviceTest, FailConditions)
 {
   // can't pass null for schema or device array
-  EXPECT_THROW(cudf::from_arrow_device(nullptr, nullptr), cudf::logic_error);
+  EXPECT_THROW(cudf::from_arrow_device(nullptr, nullptr), std::invalid_argument);
   // can't pass null for device array
   ArrowSchema schema;
-  EXPECT_THROW(cudf::from_arrow_device(&schema, nullptr), cudf::logic_error);
+  EXPECT_THROW(cudf::from_arrow_device(&schema, nullptr), std::invalid_argument);
   // device_type must be CUDA/CUDA_HOST/CUDA_MANAGED
   // should fail with ARROW_DEVICE_CPU
   ArrowDeviceArray arr;
   arr.device_type = ARROW_DEVICE_CPU;
-  EXPECT_THROW(cudf::from_arrow_device(&schema, &arr), cudf::logic_error);
+  EXPECT_THROW(cudf::from_arrow_device(&schema, &arr), std::invalid_argument);
 
   // can't pass null for schema or device array
-  EXPECT_THROW(cudf::from_arrow_device_column(nullptr, nullptr), cudf::logic_error);
+  EXPECT_THROW(cudf::from_arrow_device_column(nullptr, nullptr), std::invalid_argument);
   // can't pass null for device array
-  EXPECT_THROW(cudf::from_arrow_device_column(&schema, nullptr), cudf::logic_error);
+  EXPECT_THROW(cudf::from_arrow_device_column(&schema, nullptr), std::invalid_argument);
   // device_type must be CUDA/CUDA_HOST/CUDA_MANAGED
   // should fail with ARROW_DEVICE_CPU
-  EXPECT_THROW(cudf::from_arrow_device_column(&schema, &arr), cudf::logic_error);
+  EXPECT_THROW(cudf::from_arrow_device_column(&schema, &arr), std::invalid_argument);
 }
 
 TEST_F(FromArrowDeviceTest, EmptyTable)
