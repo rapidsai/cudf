@@ -97,9 +97,10 @@ void BM_parquet_multithreaded_read_common(nvbench::state& state,
 
   auto [source_sink_vector, total_file_size, num_files] = write_file_data(state, d_types);
   std::vector<cudf::io::source_info> source_info_vector;
-  for (auto& source_sink : source_sink_vector) {
-    source_info_vector.push_back(source_sink.make_source_info());
-  }
+  std::transform(source_sink_vector.begin(),
+                 source_sink_vector.end(),
+                 std::back_inserter(source_info_vector),
+                 [](auto& source_sink) { return source_sink.make_source_info(); });
 
   auto mem_stats_logger = cudf::memory_stats_logger();
 
@@ -178,9 +179,10 @@ void BM_parquet_multithreaded_read_chunked_common(nvbench::state& state,
   cudf::detail::thread_pool threads(num_threads);
   auto [source_sink_vector, total_file_size, num_files] = write_file_data(state, d_types);
   std::vector<cudf::io::source_info> source_info_vector;
-  for (auto& source_sink : source_sink_vector) {
-    source_info_vector.push_back(source_sink.make_source_info());
-  }
+  std::transform(source_sink_vector.begin(),
+                 source_sink_vector.end(),
+                 std::back_inserter(source_info_vector),
+                 [](auto& source_sink) { return source_sink.make_source_info(); });
 
   auto mem_stats_logger = cudf::memory_stats_logger();
 
