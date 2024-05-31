@@ -253,16 +253,18 @@ def to_cudf_compatible_scalar(val, dtype=None):
     elif isinstance(val, datetime.timedelta):
         val = np.timedelta64(val)
 
-    val = _maybe_convert_to_default_type(
-        cudf.api.types.pandas_dtype(type(val))
-    ).type(val)
-
     if dtype is not None:
-        if isinstance(val, str) and np.dtype(dtype).kind == "M":
+        dtype = np.dtype(dtype)
+        if isinstance(val, str) and dtype.kind == "M":
             # pd.Timestamp can handle str, but not np.str_
             val = pd.Timestamp(str(val)).to_datetime64().astype(dtype)
         else:
-            val = val.astype(dtype)
+            # At least datetimes cannot be converted to scalar via dtype.type:
+            val = np.array(val, dtype)[()]
+    else:
+        val = _maybe_convert_to_default_type(
+            cudf.api.types.pandas_dtype(type(val))
+        ).type(val)
 
     if val.dtype.type is np.datetime64:
         time_unit, _ = np.datetime_data(val.dtype)

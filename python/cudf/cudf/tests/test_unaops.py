@@ -81,7 +81,10 @@ def generate_valid_scalar_unaop_combos():
 @pytest.mark.parametrize("slr,dtype,op", generate_valid_scalar_unaop_combos())
 def test_scalar_unary_operations(slr, dtype, op):
     slr_host = np.array([slr])[0].astype(cudf.dtype(dtype))
-    slr_device = cudf.Scalar(slr, dtype=dtype)
+    # The scalar may be out of bounds, so go via array force-cast
+    # NOTE: This is a change in behavior
+    slr = np.array(slr).astype(dtype)[()]
+    slr_device = cudf.Scalar(slr)
 
     expect = op(slr_host)
     got = op(slr_device)
