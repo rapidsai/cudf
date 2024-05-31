@@ -1176,7 +1176,6 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           }
           [[fallthrough]];
         case DOUBLE: s->dtype_len = 8; break;
-        case INT96: s->dtype_len = 12; break;
         case BYTE_ARRAY:
           if (is_decimal) {
             auto const decimal_precision = s->col.logical_type->precision();
@@ -1227,8 +1226,6 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
         }
       } else if (data_type == BYTE_ARRAY && s->col.is_strings_to_cat) {
         s->dtype_len = 4;  // HASH32 output
-      } else if (data_type == INT96) {
-        s->dtype_len = 8;  // Convert to 64-bit timestamp
       }
 
       // during the decoding step we need to offset the global output buffers

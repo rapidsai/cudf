@@ -56,9 +56,7 @@ using block_reduce_storage = detail::block_reduce_storage<dimension>;
  * @tparam block_size Dimension of the block
  * @tparam IO File format for which statistics calculation is being done
  */
-template <int block_size,
-          detail::io_file_format IO,
-          detail::is_int96_timestamp INT96 = detail::is_int96_timestamp::YES>
+template <int block_size, detail::io_file_format IO>
 struct calculate_group_statistics_functor {
   block_reduce_storage<block_size>& temp_storage;
 
@@ -99,16 +97,9 @@ struct calculate_group_statistics_functor {
                               !std::is_same_v<T, list_view>)>* = nullptr>
   __device__ void operator()(stats_state_s& s, uint32_t t)
   {
-    // Temporarily disable stats writing for int96 timestamps
-    // TODO: https://github.com/rapidsai/cudf/issues/10438
-    if constexpr (cudf::is_timestamp<T>() and IO == detail::io_file_format::PARQUET and
-                  INT96 == detail::is_int96_timestamp::YES) {
-      return;
-    }
-
     detail::storage_wrapper<block_size> storage(temp_storage);
 
-    using type_convert = detail::type_conversion<detail::conversion_map<IO, INT96>>;
+    using type_convert = detail::type_conversion<detail::conversion_map<IO>>;
     using CT           = typename type_convert::template type<T>;
     typed_statistics_chunk<CT, detail::statistics_type_category<T, IO>::include_aggregate> chunk;
 
@@ -288,9 +279,7 @@ __device__ void cooperative_load(T& destination, T const* source = nullptr)
  */
 template <int block_size, detail::io_file_format IO>
 CUDF_KERNEL void __launch_bounds__(block_size, 1)
-  gpu_calculate_group_statistics(statistics_chunk* chunks,
-                                 statistics_group const* groups,
-                                 bool const int96_timestamps)
+  gpu_calculate_group_statistics(statistics_chunk* chunks, statistics_group const* groups)
 {
   __shared__ __align__(8) stats_state_s state;
   __shared__ block_reduce_storage<block_size> storage;
@@ -305,23 +294,10 @@ CUDF_KERNEL void __launch_bounds__(block_size, 1)
   // Calculate statistics
   if constexpr (IO == detail::io_file_format::PARQUET) {
     // Do not convert ns to us for int64 timestamps
-    if (not int96_timestamps) {
-      type_dispatcher(
-        state.col.leaf_column->type(),
-        calculate_group_statistics_functor<block_size, IO, detail::is_int96_timestamp::NO>(storage),
-        state,
-        threadIdx.x);
-    }
-    // Temporarily disable stats writing for int96 timestamps
-    // TODO: https://github.com/rapidsai/cudf/issues/10438
-    else {
-      type_dispatcher(
-        state.col.leaf_column->type(),
-        calculate_group_statistics_functor<block_size, IO, detail::is_int96_timestamp::YES>(
-          storage),
-        state,
-        threadIdx.x);
-    }
+    type_dispatcher(state.col.leaf_column->type(),
+                    calculate_group_statistics_functor<block_size, IO>(storage),
+                    state,
+                    threadIdx.x);
   } else {
     type_dispatcher(state.col.leaf_column->type(),
                     calculate_group_statistics_functor<block_size, IO>(storage),
@@ -348,12 +324,11 @@ template <detail::io_file_format IO>
 void calculate_group_statistics(statistics_chunk* chunks,
                                 statistics_group const* groups,
                                 uint32_t num_chunks,
-                                rmm::cuda_stream_view stream,
-                                bool const int96_timestamps = false)
+                                rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
   gpu_calculate_group_statistics<block_size, IO>
-    <<<num_chunks, block_size, 0, stream.value()>>>(chunks, groups, int96_timestamps);
+    <<<num_chunks, block_size, 0, stream.value()>>>(chunks, groups);
 }
 
 /**

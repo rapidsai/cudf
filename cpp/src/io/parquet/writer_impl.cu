@@ -338,7 +338,6 @@ struct leaf_schema_fn {
   schema_tree_node& col_schema;
   cudf::detail::LinkedColPtr const& col;
   column_in_metadata const& col_meta;
-  bool timestamp_is_int96;
   bool timestamp_is_utc;
 
   template <typename T>
@@ -461,50 +460,42 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_s>, void> operator()()
   {
-    col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+    col_schema.type        = Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
     col_schema.ts_scale    = 1000;
-    if (not timestamp_is_int96) {
-      col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
-      col_schema.logical_type   = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::MILLIS}};
-    }
+
+    col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
+    col_schema.logical_type   = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::MILLIS}};
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ms>, void> operator()()
   {
-    col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+    col_schema.type        = Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
-    if (not timestamp_is_int96) {
-      col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
-      col_schema.logical_type   = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::MILLIS}};
-    }
+
+    col_schema.converted_type = ConvertedType::TIMESTAMP_MILLIS;
+    col_schema.logical_type   = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::MILLIS}};
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_us>, void> operator()()
   {
-    col_schema.type        = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+    col_schema.type        = Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
-    if (not timestamp_is_int96) {
-      col_schema.converted_type = ConvertedType::TIMESTAMP_MICROS;
-      col_schema.logical_type   = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::MICROS}};
-    }
+
+    col_schema.converted_type = ConvertedType::TIMESTAMP_MICROS;
+    col_schema.logical_type   = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::MICROS}};
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
   {
-    col_schema.type           = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+    col_schema.type           = Type::INT64;
     col_schema.converted_type = thrust::nullopt;
     col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
-    if (timestamp_is_int96) {
-      col_schema.ts_scale = -1000;  // negative value indicates division by absolute value
-    }
-    // set logical type if it's not int96
-    else {
-      col_schema.logical_type = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::NANOS}};
-    }
+
+    col_schema.logical_type = LogicalType{TimestampType{timestamp_is_utc, TimeUnit::NANOS}};
   }
 
   //  unsupported outside cudf for parquet 1.0.
@@ -629,7 +620,6 @@ std::vector<schema_tree_node> construct_schema_tree(
   cudf::detail::LinkedColVector const& linked_columns,
   table_input_metadata& metadata,
   single_write_mode write_mode,
-  bool int96_timestamps,
   bool utc_timestamps)
 {
   std::vector<schema_tree_node> schema;
@@ -713,12 +703,6 @@ std::vector<schema_tree_node> construct_schema_tree(
               if (s.type == Type::BYTE_ARRAY) {
                 CUDF_LOG_WARN(
                   "BYTE_STREAM_SPLIT encoding is only supported for fixed width columns; the "
-                  "requested encoding will be ignored");
-                return;
-              }
-              if (s.type == Type::INT96) {
-                CUDF_LOG_WARN(
-                  "BYTE_STREAM_SPLIT encoding is not supported for INT96 columns; the "
                   "requested encoding will be ignored");
                 return;
               }
@@ -896,11 +880,8 @@ std::vector<schema_tree_node> construct_schema_tree(
 
         schema_tree_node col_schema{};
 
-        bool timestamp_is_int96 = int96_timestamps or col_meta.is_enabled_int96_timestamps();
-
-        cudf::type_dispatcher(
-          col->type(),
-          leaf_schema_fn{col_schema, col, col_meta, timestamp_is_int96, utc_timestamps});
+        cudf::type_dispatcher(col->type(),
+                              leaf_schema_fn{col_schema, col, col_meta, utc_timestamps});
 
         col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
         col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
@@ -1153,19 +1134,17 @@ void calculate_page_fragments(device_span<PageFragment> frag,
  *
  * @param frag_stats output statistics
  * @param frags Input page fragments
- * @param int96_timestamps Flag to indicate if timestamps will be written as INT96
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void gather_fragment_statistics(device_span<statistics_chunk> frag_stats,
                                 device_span<PageFragment const> frags,
-                                bool int96_timestamps,
                                 rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<statistics_group> frag_stats_group(frag_stats.size(), stream);
 
   InitFragmentStatistics(frag_stats_group, frags, stream);
   detail::calculate_group_statistics<detail::io_file_format::PARQUET>(
-    frag_stats.data(), frag_stats_group.data(), frag_stats.size(), stream, int96_timestamps);
+    frag_stats.data(), frag_stats_group.data(), frag_stats.size(), stream);
   stream.synchronize();
 }
 
@@ -1675,7 +1654,6 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta)
  * @param dict_policy Policy for dictionary use
  * @param max_dictionary_size Maximum dictionary size, in bytes
  * @param single_write_mode Flag to indicate that we are guaranteeing a single table write
- * @param int96_timestamps Flag to indicate if timestamps will be written as INT96
  * @param utc_timestamps Flag to indicate if timestamps are UTC
  * @param write_v2_headers True if V2 page headers are to be written
  * @param out_sink Sink for checking if device write is supported, should not be used to write any
@@ -1700,15 +1678,13 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    dictionary_policy dict_policy,
                                    size_t max_dictionary_size,
                                    single_write_mode write_mode,
-                                   bool int96_timestamps,
                                    bool utc_timestamps,
                                    bool write_v2_headers,
                                    host_span<std::unique_ptr<data_sink> const> out_sink,
                                    rmm::cuda_stream_view stream)
 {
-  auto vec = table_to_linked_columns(input);
-  auto schema_tree =
-    construct_schema_tree(vec, table_meta, write_mode, int96_timestamps, utc_timestamps);
+  auto vec         = table_to_linked_columns(input);
+  auto schema_tree = construct_schema_tree(vec, table_meta, write_mode, utc_timestamps);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<parquet_column_view> parquet_columns;
 
@@ -2002,10 +1978,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
     // and gather fragment statistics
     if (not frag_stats.is_empty()) {
-      gather_fragment_statistics(frag_stats,
-                                 {page_fragments.device_ptr(), static_cast<size_t>(total_frags)},
-                                 int96_timestamps,
-                                 stream);
+      gather_fragment_statistics(
+        frag_stats, {page_fragments.device_ptr(), static_cast<size_t>(total_frags)}, stream);
     }
   }
 
@@ -2309,7 +2283,6 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _dict_policy(options.get_dictionary_policy()),
     _max_dictionary_size(options.get_max_dictionary_size()),
     _max_page_fragment_size(options.get_max_page_fragment_size()),
-    _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
     _sorting_columns(options.get_sorting_columns()),
@@ -2339,7 +2312,6 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _dict_policy(options.get_dictionary_policy()),
     _max_dictionary_size(options.get_max_dictionary_size()),
     _max_page_fragment_size(options.get_max_page_fragment_size()),
-    _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
     _sorting_columns(options.get_sorting_columns()),
@@ -2417,7 +2389,6 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                                            _dict_policy,
                                            _max_dictionary_size,
                                            _single_write_mode,
-                                           _int96_timestamps,
                                            _utc_timestamps,
                                            _write_v2_headers,
                                            _out_sink,

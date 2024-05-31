@@ -58,7 +58,6 @@ def _write_parquet(
     index=None,
     statistics="ROWGROUP",
     metadata_file_path=None,
-    int96_timestamps=False,
     row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
     row_group_size_rows=None,
     max_page_size_bytes=None,
@@ -96,7 +95,6 @@ def _write_parquet(
         "compression": compression,
         "statistics": statistics,
         "metadata_file_path": metadata_file_path,
-        "int96_timestamps": int96_timestamps,
         "row_group_size_bytes": row_group_size_bytes,
         "row_group_size_rows": row_group_size_rows,
         "max_page_size_bytes": max_page_size_bytes,
@@ -141,7 +139,6 @@ def write_to_dataset(
     preserve_index=False,
     return_metadata=False,
     statistics="ROWGROUP",
-    int96_timestamps=False,
     row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
     row_group_size_rows=None,
     max_page_size_bytes=None,
@@ -189,12 +186,6 @@ def write_to_dataset(
     return_metadata : bool, default False
         Return parquet metadata for written data. Returned metadata will
         include the file-path metadata (relative to `root_path`).
-    int96_timestamps : bool, default False
-        If ``True``, write timestamps in int96 format. This will convert
-        timestamps from timestamp[ns], timestamp[ms], timestamp[s], and
-        timestamp[us] to the int96 format, which is the number of Julian
-        days and the number of nanoseconds since midnight of 1970-01-01.
-        If ``False``, timestamps will not be altered.
     row_group_size_bytes: integer or None, default None
         Maximum size of each stripe of the output.
         If None, 134217728 (128MB) will be used.
@@ -273,7 +264,6 @@ def write_to_dataset(
             storage_options=storage_options,
             metadata_file_path=metadata_file_path,
             statistics=statistics,
-            int96_timestamps=int96_timestamps,
             row_group_size_bytes=row_group_size_bytes,
             row_group_size_rows=row_group_size_rows,
             max_page_size_bytes=max_page_size_bytes,
@@ -300,7 +290,6 @@ def write_to_dataset(
             storage_options=storage_options,
             metadata_file_path=metadata_file_path,
             statistics=statistics,
-            int96_timestamps=int96_timestamps,
             row_group_size_bytes=row_group_size_bytes,
             row_group_size_rows=row_group_size_rows,
             max_page_size_bytes=max_page_size_bytes,
@@ -945,7 +934,6 @@ def to_parquet(
     partition_offsets=None,
     statistics="ROWGROUP",
     metadata_file_path=None,
-    int96_timestamps=False,
     row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
     row_group_size_rows=None,
     max_page_size_bytes=None,
@@ -1001,7 +989,6 @@ def to_parquet(
                 preserve_index=index,
                 compression=compression,
                 statistics=statistics,
-                int96_timestamps=int96_timestamps,
                 row_group_size_bytes=row_group_size_bytes,
                 row_group_size_rows=row_group_size_rows,
                 max_page_size_bytes=max_page_size_bytes,
@@ -1032,7 +1019,6 @@ def to_parquet(
             index=index,
             statistics=statistics,
             metadata_file_path=metadata_file_path,
-            int96_timestamps=int96_timestamps,
             row_group_size_bytes=row_group_size_bytes,
             row_group_size_rows=row_group_size_rows,
             max_page_size_bytes=max_page_size_bytes,

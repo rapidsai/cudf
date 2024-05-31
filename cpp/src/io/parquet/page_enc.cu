@@ -115,7 +115,6 @@ constexpr uint32_t physical_type_len(Type physical_type, type_id id, int type_le
     return id == type_id::DECIMAL128 ? sizeof(__int128_t) : type_length;
   }
   switch (physical_type) {
-    case INT96: return 12u;
     case INT64:
     case DOUBLE: return sizeof(int64_t);
     case BOOLEAN: return 1u;
@@ -545,7 +544,6 @@ __device__ size_t delta_data_len(Type physical_type,
   auto const dtype_len_out = physical_type_len(physical_type, type_id, sizeof(int32_t));
   auto const dtype_len     = [&]() -> uint32_t {
     if (physical_type == INT32) { return int32_logical_len(type_id); }
-    if (physical_type == INT96) { return sizeof(int64_t); }
     return dtype_len_out;
   }();
 
@@ -1324,27 +1322,6 @@ constexpr auto julian_calendar_epoch_diff()
   return sys_days{January / 1 / 1970} - (sys_days{November / 24 / -4713} + 12h);
 }
 
-/**
- * @brief Converts number `v` of periods of type `PeriodT` into a pair with nanoseconds since
- * midnight and number of Julian days. Does not deal with time zones. Used by INT96 code.
- *
- * @tparam PeriodT a ratio representing the tick period in duration
- * @param v count of ticks since epoch
- * @return A pair of (nanoseconds, days) where nanoseconds is the number of nanoseconds
- * elapsed in the day and days is the number of days from Julian epoch.
- */
-template <typename PeriodT>
-__device__ auto julian_days_with_time(int64_t v)
-{
-  using namespace cuda::std::chrono;
-  auto const dur_total             = duration<int64_t, PeriodT>{v};
-  auto const dur_days              = floor<days>(dur_total);
-  auto const dur_time_of_day       = dur_total - dur_days;
-  auto const dur_time_of_day_nanos = duration_cast<nanoseconds>(dur_time_of_day);
-  auto const julian_days           = dur_days + ceil<days>(julian_calendar_epoch_diff());
-  return std::make_pair(dur_time_of_day_nanos, julian_days);
-}
-
 // this has been split out into its own kernel because of the amount of shared memory required
 // for the state buffer. encode kernels that don't use the RLE buffer can get started while
 // the level data is encoded.
@@ -1666,7 +1643,6 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   auto const dtype_len_out = physical_type_len(physical_type, type_id, s->col.type_length);
   auto const dtype_len_in  = [&]() -> uint32_t {
     if (physical_type == INT32) { return int32_logical_len(type_id); }
-    if (physical_type == INT96) { return sizeof(int64_t); }
     return dtype_len_out;
   }();
 
@@ -1770,40 +1746,6 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
           }
           encode_value(dst + pos, v, stride);
         } break;
-        case INT96: {
-          // only PLAIN encoding is supported
-          int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
-          int32_t ts_scale = s->col.ts_scale;
-          if (ts_scale != 0) {
-            if (ts_scale < 0) {
-              v /= -ts_scale;
-            } else {
-              v *= ts_scale;
-            }
-          }
-
-          auto const [last_day_nanos, julian_days] = [&] {
-            using namespace cuda::std::chrono;
-            switch (s->col.leaf_column->type().id()) {
-              case type_id::TIMESTAMP_SECONDS:
-              case type_id::TIMESTAMP_MILLISECONDS: {
-                return julian_days_with_time<cuda::std::milli>(v);
-              } break;
-              case type_id::TIMESTAMP_MICROSECONDS:
-              case type_id::TIMESTAMP_NANOSECONDS: {
-                return julian_days_with_time<cuda::std::micro>(v);
-              } break;
-            }
-            return julian_days_with_time<cuda::std::nano>(0);
-          }();
-
-          // the 12 bytes of fixed length data.
-          v = last_day_nanos.count();
-          encode_value(dst + pos, v, 1);
-          uint32_t w = julian_days.count();
-          encode_value(dst + pos + 8, w, 1);
-        } break;
-
         case BYTE_ARRAY: {
           // only PLAIN encoding is supported
           auto const bytes = [](cudf::type_id const type_id,
@@ -1901,7 +1843,6 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   auto const dtype_len_out = physical_type_len(physical_type, type_id, s->col.type_length);
   auto const dtype_len_in  = [&]() -> uint32_t {
     if (physical_type == INT32) { return int32_logical_len(type_id); }
-    if (physical_type == INT96) { return sizeof(int64_t); }
     return dtype_len_out;
   }();
 
@@ -2033,7 +1974,6 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   auto const dtype_len_out = physical_type_len(physical_type, type_id, s->col.type_length);
   auto const dtype_len_in  = [&]() -> uint32_t {
     if (physical_type == INT32) { return int32_logical_len(type_id); }
-    if (physical_type == INT96) { return sizeof(int64_t); }
     return dtype_len_out;
   }();
 

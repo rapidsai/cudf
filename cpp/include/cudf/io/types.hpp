@@ -605,10 +605,9 @@ class column_in_metadata {
   friend table_input_metadata;
   std::string _name = "";
   std::optional<bool> _nullable;
-  bool _list_column_is_map  = false;
-  bool _use_int96_timestamp = false;
-  bool _output_as_binary    = false;
-  bool _skip_compression    = false;
+  bool _list_column_is_map = false;
+  bool _output_as_binary   = false;
+  bool _skip_compression   = false;
   std::optional<uint8_t> _decimal_precision;
   std::optional<int32_t> _parquet_field_id;
   std::optional<int32_t> _type_length;
@@ -669,20 +668,6 @@ class column_in_metadata {
   column_in_metadata& set_list_column_as_map() noexcept
   {
     _list_column_is_map = true;
-    return *this;
-  }
-
-  /**
-   * @brief Specifies whether this timestamp column should be encoded using the deprecated int96
-   * physical type. Only valid for the following column types:
-   * timestamp_s, timestamp_ms, timestamp_us, timestamp_ns
-   *
-   * @param req True = use int96 physical type. False = use int64 physical type
-   * @return this for chaining
-   */
-  column_in_metadata& set_int96_timestamps(bool req) noexcept
-  {
-    _use_int96_timestamp = req;
     return *this;
   }
 
@@ -817,14 +802,6 @@ class column_in_metadata {
    * @return Boolean indicating whether this column is to be encoded as a map
    */
   [[nodiscard]] bool is_map() const noexcept { return _list_column_is_map; }
-
-  /**
-   * @brief Get whether to encode this timestamp column using deprecated int96 physical type
-   *
-   * @return Boolean indicating whether to encode this timestamp column using deprecated int96
-   *         physical type
-   */
-  [[nodiscard]] bool is_enabled_int96_timestamps() const noexcept { return _use_int96_timestamp; }
 
   /**
    * @brief Get whether precision has been set for this decimal column

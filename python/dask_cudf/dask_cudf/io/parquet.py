@@ -354,7 +354,6 @@ class CudfEngine(ArrowDatasetEngine):
                 preserve_index=preserve_index,
                 return_metadata=return_metadata,
                 statistics=kwargs.get("statistics", "ROWGROUP"),
-                int96_timestamps=kwargs.get("int96_timestamps", False),
                 row_group_size_bytes=kwargs.get(
                     "row_group_size_bytes", _ROW_GROUP_SIZE_BYTES_DEFAULT
                 ),
@@ -377,7 +376,6 @@ class CudfEngine(ArrowDatasetEngine):
                     ),
                     partition_offsets=kwargs.get("partition_offsets", None),
                     statistics=kwargs.get("statistics", "ROWGROUP"),
-                    int96_timestamps=kwargs.get("int96_timestamps", False),
                     row_group_size_bytes=kwargs.get(
                         "row_group_size_bytes", _ROW_GROUP_SIZE_BYTES_DEFAULT
                     ),

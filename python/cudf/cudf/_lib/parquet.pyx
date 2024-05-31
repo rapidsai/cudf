@@ -398,7 +398,6 @@ def write_parquet(
     object compression="snappy",
     object statistics="ROWGROUP",
     object metadata_file_path=None,
-    object int96_timestamps=False,
     object row_group_size_bytes=_ROW_GROUP_SIZE_BYTES_DEFAULT,
     object row_group_size_rows=None,
     object max_page_size_bytes=None,
@@ -502,7 +501,6 @@ def write_parquet(
 
     cdef unique_ptr[vector[uint8_t]] out_metadata_c
     cdef vector[string] c_column_chunks_file_paths
-    cdef bool _int96_timestamps = int96_timestamps
     cdef vector[cudf_io_types.partition_info] partitions
 
     # Perform write
@@ -512,7 +510,6 @@ def write_parquet(
         .key_value_metadata(move(user_data))
         .compression(comp_type)
         .stats_level(stat_freq)
-        .int96_timestamps(_int96_timestamps)
         .write_v2_headers(header_version == "2.0")
         .dictionary_policy(dict_policy)
         .utc_timestamps(False)

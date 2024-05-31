@@ -190,9 +190,6 @@ type_id to_type_id(SchemaElement const& schema,
       if (strings_to_categorical) { return type_id::INT32; }
       [[fallthrough]];
     case FIXED_LEN_BYTE_ARRAY: return type_id::STRING;
-    case INT96:
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::TIMESTAMP_NANOSECONDS;
     default: break;
   }
 

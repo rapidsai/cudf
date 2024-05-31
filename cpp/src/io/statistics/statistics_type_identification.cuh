@@ -39,14 +39,13 @@ namespace detail {
 using cudf::io::statistics::byte_array_view;
 
 enum class io_file_format { ORC, PARQUET };
-enum class is_int96_timestamp { YES, NO };
 
-template <io_file_format IO, is_int96_timestamp INT96>
+template <io_file_format IO>
 struct conversion_map;
 
 // Every timestamp or duration type is converted to nanoseconds in ORC statistics
-template <is_int96_timestamp INT96>
-struct conversion_map<io_file_format::ORC, INT96> {
+template <>
+struct conversion_map<io_file_format::ORC> {
   using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ns>,
                            std::pair<cudf::timestamp_us, cudf::timestamp_ns>,
                            std::pair<cudf::timestamp_ns, cudf::timestamp_ns>,
@@ -55,19 +54,9 @@ struct conversion_map<io_file_format::ORC, INT96> {
                            std::pair<cudf::duration_ns, cudf::duration_ns>>;
 };
 
-// In Parquet timestamps and durations with second resolution are converted to
-// milliseconds. Timestamps and durations with nanosecond resolution are
-// converted to microseconds.
-template <>
-struct conversion_map<io_file_format::PARQUET, is_int96_timestamp::YES> {
-  using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
-                           std::pair<cudf::timestamp_ns, cudf::timestamp_us>,
-                           std::pair<cudf::duration_s, cudf::duration_ms>,
-                           std::pair<cudf::duration_ns, cudf::duration_us>>;
-};
 // int64 nanosecond timestamp won't be converted
 template <>
-struct conversion_map<io_file_format::PARQUET, is_int96_timestamp::NO> {
+struct conversion_map<io_file_format::PARQUET> {
   using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
                            std::pair<cudf::duration_s, cudf::duration_ms>>;
 };

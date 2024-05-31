@@ -35,8 +35,7 @@ template <>
 void calculate_group_statistics<detail::io_file_format::ORC>(statistics_chunk* chunks,
                                                              statistics_group const* groups,
                                                              uint32_t num_chunks,
-                                                             rmm::cuda_stream_view stream,
-                                                             bool int96_timestamp);
+                                                             rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace io

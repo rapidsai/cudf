@@ -596,9 +596,6 @@ class parquet_writer_options {
   std::optional<table_input_metadata> _metadata;
   // Optional footer key_value_metadata
   std::vector<std::map<std::string, std::string>> _user_data;
-  // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
-  // If true then overrides any per-column setting in _metadata.
-  bool _write_timestamps_as_int96 = false;
   // Parquet writer can write timestamps as UTC
   // Defaults to true because libcudf timestamps are implicitly UTC
   bool _write_timestamps_as_UTC = true;
@@ -716,13 +713,6 @@ class parquet_writer_options {
   {
     return _user_data;
   }
-
-  /**
-   * @brief Returns `true` if timestamps will be written as INT96
-   *
-   * @return `true` if timestamps will be written as INT96
-   */
-  bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
   /**
    * @brief Returns `true` if timestamps will be written as UTC
@@ -866,14 +856,6 @@ class parquet_writer_options {
    * @param compression The compression type to use
    */
   void set_compression(compression_type compression) { _compression = compression; }
-
-  /**
-   * @brief Sets timestamp writing preferences. INT96 timestamps will be written
-   * if `true` and TIMESTAMP_MICROS will be written if `false`.
-   *
-   * @param req Boolean value to enable/disable writing of INT96 timestamps
-   */
-  void enable_int96_timestamps(bool req) { _write_timestamps_as_int96 = req; }
 
   /**
    * @brief Sets preference for writing timestamps as UTC. Write timestamps as UTC if set to `true`.
@@ -1192,18 +1174,6 @@ class parquet_writer_options_builder {
   }
 
   /**
-   * @brief Sets whether int96 timestamps are written or not in parquet_writer_options.
-   *
-   * @param enabled Boolean value to enable/disable int96 timestamps
-   * @return this for chaining
-   */
-  parquet_writer_options_builder& int96_timestamps(bool enabled)
-  {
-    options._write_timestamps_as_int96 = enabled;
-    return *this;
-  }
-
-  /**
    * @brief Set to true if timestamps are to be written as UTC.
    *
    * @param enabled Boolean value to enable/disable writing of timestamps as UTC.
@@ -1293,9 +1263,6 @@ class chunked_parquet_writer_options {
   std::optional<table_input_metadata> _metadata;
   // Optional footer key_value_metadata
   std::vector<std::map<std::string, std::string>> _user_data;
-  // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
-  // If true then overrides any per-column setting in _metadata.
-  bool _write_timestamps_as_int96 = false;
   // Parquet writer can write timestamps as UTC. Defaults to true.
   bool _write_timestamps_as_UTC = true;
   // Maximum size of each row group (unless smaller than a single page)
@@ -1375,13 +1342,6 @@ class chunked_parquet_writer_options {
   {
     return _user_data;
   }
-
-  /**
-   * @brief Returns `true` if timestamps will be written as INT96
-   *
-   * @return `true` if timestamps will be written as INT96
-   */
-  bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
   /**
    * @brief Returns `true` if timestamps will be written as UTC
@@ -1508,15 +1468,6 @@ class chunked_parquet_writer_options {
    * @param compression The compression type to use
    */
   void set_compression(compression_type compression) { _compression = compression; }
-
-  /**
-   * @brief Sets timestamp writing preferences.
-   *
-   * INT96 timestamps will be written if `true` and TIMESTAMP_MICROS will be written if `false`.
-   *
-   * @param req Boolean value to enable/disable writing of INT96 timestamps
-   */
-  void enable_int96_timestamps(bool req) { _write_timestamps_as_int96 = req; }
 
   /**
    * @brief Sets preference for writing timestamps as UTC. Write timestamps as UTC if set to `true`.
@@ -1681,21 +1632,6 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& compression(compression_type compression)
   {
     options._compression = compression;
-    return *this;
-  }
-
-  /**
-   * @brief Set to true if timestamps should be written as
-   * int96 types instead of int64 types. Even though int96 is deprecated and is
-   * not an internal type for cudf, it needs to be written for backwards
-   * compatibility reasons.
-   *
-   * @param enabled Boolean value to enable/disable int96 timestamps
-   * @return this for chaining
-   */
-  chunked_parquet_writer_options_builder& int96_timestamps(bool enabled)
-  {
-    options._write_timestamps_as_int96 = enabled;
     return *this;
   }
 

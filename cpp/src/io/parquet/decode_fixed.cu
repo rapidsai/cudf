@@ -193,8 +193,6 @@ __device__ inline void gpuDecodeValues(
             }
             break;
         }
-      } else if (dtype == INT96) {
-        gpuOutputInt96Timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
       } else if (dtype_len == 8) {
         if (s->dtype_len_in == 4) {
           // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS

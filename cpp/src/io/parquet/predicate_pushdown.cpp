@@ -86,10 +86,6 @@ struct stats_caster {
     switch (type) {
       case INT32: return targetType<T>(*reinterpret_cast<int32_t const*>(stats_val));
       case INT64: return targetType<T>(*reinterpret_cast<int64_t const*>(stats_val));
-      case INT96:  // Deprecated in parquet specification
-        return targetType<T>(static_cast<__int128_t>(reinterpret_cast<int64_t const*>(stats_val)[0])
-                               << 32 |
-                             reinterpret_cast<int32_t const*>(stats_val)[2]);
       case BYTE_ARRAY: [[fallthrough]];
       case FIXED_LEN_BYTE_ARRAY:
         if (stats_size == sizeof(T)) {

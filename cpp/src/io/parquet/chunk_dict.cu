@@ -145,7 +145,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         switch (col->physical_type) {
           case Type::INT32: return 4;
           case Type::INT64: return 8;
-          case Type::INT96: return 12;
           case Type::FLOAT: return 4;
           case Type::DOUBLE: return 8;
           case Type::BYTE_ARRAY: {
