@@ -1425,11 +1425,11 @@ def test_holidays_within_dates(holiday, start, expected):
 
 
 def test_cudf_pandas_debugging_different_results(monkeypatch):
-    def mock_mean(self, *args, **kwargs):
+    def mock_mean_float(self, *args, **kwargs):
         return np.float64(1.0)
 
     with monkeypatch.context() as monkeycontext:
-        monkeycontext.setattr(cudf.Series, "mean", mock_mean)
+        monkeycontext.setattr(cudf.Series, "mean", mock_mean_float)
         monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
         with pytest.warns(
@@ -1440,11 +1440,11 @@ def test_cudf_pandas_debugging_different_results(monkeypatch):
 
 
 def test_cudf_pandas_debugging_pandas_error(monkeypatch):
-    def mock_mean(self, *args, **kwargs):
+    def mock_mean_exception(self, *args, **kwargs):
         raise Exception()
 
     with monkeypatch.context() as monkeycontext:
-        monkeycontext.setattr(pd.Series, "mean", mock_mean)
+        monkeycontext.setattr(pd.Series, "mean", mock_mean_exception)
         monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
         with pytest.warns(
@@ -1455,11 +1455,11 @@ def test_cudf_pandas_debugging_pandas_error(monkeypatch):
 
 
 def test_cudf_pandas_debugging_failed(monkeypatch):
-    def mock_mean(self, *args, **kwargs):
+    def mock_mean_none(self, *args, **kwargs):
         return None
 
     with monkeypatch.context() as monkeycontext:
-        monkeycontext.setattr(pd.Series, "mean", mock_mean)
+        monkeycontext.setattr(pd.Series, "mean", mock_mean_none)
         monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
         with pytest.warns(
