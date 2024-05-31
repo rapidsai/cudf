@@ -639,7 +639,9 @@ class NumericalColumn(NumericalBaseColumn):
             min_, max_ = iinfo.min, iinfo.max
 
             # best we can do is hope to catch it here and avoid compare
-            if (self.min() >= min_) and (self.max() <= max_):
+            # Use Python floats, which have precise comparison for float64.
+            # NOTE(seberg): it would make sense to limit to the mantissa range.
+            if (float(self.min()) >= min_) and (float(self.max()) <= max_):
                 filled = self.fillna(0)
                 return (cudf.Series(filled) % 1 == 0).all()
             else:
