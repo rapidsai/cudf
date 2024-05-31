@@ -1451,7 +1451,7 @@ def test_cudf_pandas_debugging_pandas_error(monkeypatch):
             UserWarning,
             match="The result from pandas could not be computed.",
         ):
-            assert s.mean() == 1.5
+            assert s.median() == 1.5
 
 
 def test_cudf_pandas_debugging_failed(monkeypatch):
