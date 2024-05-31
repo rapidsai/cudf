@@ -30,7 +30,7 @@ cdef class TableWithMetadata:
     cdef TableWithMetadata from_libcudf(table_with_metadata& tbl_with_meta):
         """Create a Python TableWithMetadata from a libcudf table_with_metadata"""
         cdef TableWithMetadata out = TableWithMetadata.__new__(TableWithMetadata)
-        out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl))
+        out.table = Table.from_libcudf(move(tbl_with_meta.tbl))
         out.metadata = tbl_with_meta.metadata
         return out
 

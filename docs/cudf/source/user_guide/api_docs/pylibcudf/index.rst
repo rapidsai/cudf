@@ -30,3 +30,12 @@ This page provides API documentation for pylibcudf.
     table
     types
     unary
+
+I/O Functions
+=============
+
+.. toctree::
+    :maxdepth: 1
+    :caption: I/O Functions
+
+    avro

@@ -22,7 +22,7 @@ from cudf._lib.pylibcudf.table cimport Table
 
 
 cdef class TableWithMetadata:
-    cdef Table tbl
+    cdef public Table table
     cdef table_metadata metadata
 
     @staticmethod

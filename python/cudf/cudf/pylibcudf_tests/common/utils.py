@@ -47,6 +47,24 @@ def assert_table_eq(plc_table: plc.Table, pa_table: pa.Table) -> None:
         assert_column_eq(plc_col, pa_col)
 
 
+def assert_table_and_meta_eq(
+    plc_table_w_meta: plc.io.types.TableWithMetadata, pa_table: pa.Table
+) -> None:
+    """Verify that the pylibcudf TableWithMetadata and PyArrow table are equal"""
+
+    plc_table = plc_table_w_meta.table
+
+    plc_shape = (plc_table.num_rows(), plc_table.num_columns())
+    print(plc_shape)
+    assert plc_shape == pa_table.shape
+
+    for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
+        assert_column_eq(plc_col, pa_col)
+
+    # Check column name equality
+    assert plc_table_w_meta.column_names == pa_table.column_names
+
+
 def cudf_raises(expected_exception: BaseException, *args, **kwargs):
     # A simple wrapper around pytest.raises that defaults to looking for cudf exceptions
     match = kwargs.get("match", None)
