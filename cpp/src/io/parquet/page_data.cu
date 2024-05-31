@@ -371,6 +371,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
           }
         } else if (dtype == FIXED_LEN_BYTE_ARRAY) {
           gpuOutputString(s, sb, val_src_pos, dst);
+        } else if (dtype == INT96) {
+          gpuOutputInt96Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
         } else if (dtype_len == 8) {
           if (s->dtype_len_in == 4) {
             // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
