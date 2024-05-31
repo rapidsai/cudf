@@ -48,4 +48,4 @@ def test_from_cuda_array_interface(valid_column):
     )
     expect = valid_column
 
-    assert_column_eq(col, expect)
+    assert_column_eq(expect, col)
