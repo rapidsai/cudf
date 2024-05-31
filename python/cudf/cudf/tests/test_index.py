@@ -798,6 +798,9 @@ def test_index_to_series(data):
     "name_data,name_other",
     [("abc", "c"), (None, "abc"), ("abc", pd.NA), ("abc", "abc")],
 )
+@pytest.mark.filterwarnings(
+    "ignore:No codes are cached because compilation:UserWarning"
+)
 def test_index_difference(data, other, sort, name_data, name_other):
     pd_data = pd.Index(data, name=name_data)
     pd_other = pd.Index(other, name=name_other)
@@ -2327,6 +2330,9 @@ def test_range_index_concat(objs):
     ],
 )
 @pytest.mark.parametrize("sort", [None, False, True])
+@pytest.mark.filterwarnings(
+    "ignore:No codes are cached because compilation:UserWarning"
+)
 def test_union_index(idx1, idx2, sort):
     expected = idx1.union(idx2, sort=sort)
 
@@ -2387,6 +2393,9 @@ def test_union_unsigned_vs_signed(dtype1, dtype2):
 )
 @pytest.mark.parametrize("sort", [None, False, True])
 @pytest.mark.parametrize("pandas_compatible", [True, False])
+@pytest.mark.filterwarnings(
+    "ignore:No codes are cached because compilation:UserWarning"
+)
 def test_intersection_index(idx1, idx2, sort, pandas_compatible):
     expected = idx1.intersection(idx2, sort=sort)
 
@@ -2668,6 +2677,9 @@ def test_index_constructor_float(default_float_bitwidth):
     assert_eq(expect, got)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:No codes are cached because compilation:UserWarning"
+)
 def test_rangeindex_union_default_user_option(default_integer_bitwidth):
     # Test that RangeIndex is materialized into 32 bit index under user
     # configuration for union operation.
@@ -2680,6 +2692,9 @@ def test_rangeindex_union_default_user_option(default_integer_bitwidth):
     assert_eq(expected, actual)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:No codes are cached because compilation:UserWarning"
+)
 def test_rangeindex_intersection_default_user_option(default_integer_bitwidth):
     # Test that RangeIndex is materialized into 32 bit index under user
     # configuration for intersection operation.
@@ -2792,6 +2807,9 @@ def test_rangeindex_where_user_option(default_integer_bitwidth):
     assert_eq(expected, actual)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:No codes are cached because compilation:UserWarning"
+)
 def test_rangeindex_append_return_rangeindex():
     idx = cudf.RangeIndex(0, 10)
     result = idx.append([])
@@ -2830,6 +2848,9 @@ def index(request):
         "notna",
         "append",
     ],
+)
+@pytest.mark.filterwarnings(
+    "ignore:No codes are cached because compilation:UserWarning"
 )
 def test_index_methods(index, func):
     gidx = index
