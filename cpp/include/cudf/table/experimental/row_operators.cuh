@@ -1489,6 +1489,13 @@ class device_row_comparator {
     {
     }
 
+    template <typename Element, CUDF_ENABLE_IF(std::is_void_v<Element>)>
+    __device__ bool operator()(size_type const lhs_element_index,
+                               size_type const rhs_element_index) const noexcept
+    {
+      return false;
+    }
+
     /**
      * @brief Compares the specified elements for equality.
      *
@@ -1497,7 +1504,9 @@ class device_row_comparator {
      * @return True if lhs and rhs are equal or if both lhs and rhs are null and nulls are
      * considered equal (`nulls_are_equal` == `null_equality::EQUAL`)
      */
-    template <typename Element, CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>())>
+    template <typename Element,
+              CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>() and
+                             (not std::is_void_v<Element>))>
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
     {
@@ -1517,14 +1526,17 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>() and
-                             (not has_nested_columns or not cudf::is_nested<Element>())),
+                             (not has_nested_columns or not cudf::is_nested<Element>()) and
+                             (not std::is_void_v<Element>)),
               typename... Args>
     __device__ bool operator()(Args...)
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
 
-    template <typename Element, CUDF_ENABLE_IF(has_nested_columns and cudf::is_nested<Element>())>
+    template <typename Element,
+              CUDF_ENABLE_IF(has_nested_columns and cudf::is_nested<Element>() and
+                             (not std::is_void_v<Element>))>
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
     {
@@ -1988,14 +2000,21 @@ class device_row_hasher {
     {
     }
 
-    template <typename T, CUDF_ENABLE_IF(not cudf::is_nested<T>())>
+    template <typename T, CUDF_ENABLE_IF(std::is_void_v<T>)>
+    __device__ hash_value_type operator()(column_device_view const& col,
+                                          size_type row_index) const noexcept
+    {
+      return 0;
+    }
+
+    template <typename T, CUDF_ENABLE_IF(not cudf::is_nested<T>() and not std::is_void_v<T>)>
     __device__ hash_value_type operator()(column_device_view const& col,
                                           size_type row_index) const noexcept
     {
       return _element_hasher.template operator()<T>(col, row_index);
     }
 
-    template <typename T, CUDF_ENABLE_IF(cudf::is_nested<T>())>
+    template <typename T, CUDF_ENABLE_IF(cudf::is_nested<T>() and not std::is_void_v<T>)>
     __device__ hash_value_type operator()(column_device_view const& col,
                                           size_type row_index) const noexcept
     {
