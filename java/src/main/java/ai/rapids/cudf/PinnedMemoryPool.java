@@ -224,7 +224,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
     }
     this.poolHandle = Rmm.newPinnedPoolMemoryResource(poolSize, poolSize);
     if (setCuioHostMemoryResource) {
-      Rmm.setCuioPinnedPoolMemoryResource(this.poolHandle);
+      Rmm.setCudfPinnedPoolMemoryResource(this.poolHandle);
     }
     this.poolSize = poolSize;
   }

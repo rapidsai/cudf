@@ -1049,7 +1049,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releasePinnedPoolMemoryResource(J
   try {
     cudf::jni::auto_set_device(env);
     // set the cuio host memory resource to what it was before, or the same
-    // if we didn't overwrite it with setCuioPinnedPoolMemoryResource
+    // if we didn't overwrite it with setCudfPinnedPoolMemoryResource
     cudf::set_pinned_memory_resource(prior_cudf_pinned_mr());
     pinned_fallback_mr.reset();
     delete reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
