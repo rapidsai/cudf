@@ -548,7 +548,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
   auto reader =
     std::make_unique<detail_parquet::reader>(std::move(datasources), options, stream, mr);
 
-  return reader->read(options);
+  return reader->read();
 }
 
 parquet_metadata read_parquet_metadata(source_info const& src_info)

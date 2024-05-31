@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 import filecmp
 import os
 import warnings
@@ -21,9 +21,7 @@ def test_correct_bert_base_vocab_hash(datadir, tmpdir):
 
     groundtruth_path = os.path.join(datadir, "vocab-hash.txt")
     output_path = tmpdir.join("cudf-vocab-hash.txt")
-    with warnings.catch_warnings():
-        # See https://github.com/rapidsai/cudf/issues/12403
-        warnings.simplefilter(action="ignore", category=RuntimeWarning)
-        hash_vocab(vocab_path, output_path)
+    warnings.simplefilter(action="ignore", category=RuntimeWarning)
+    hash_vocab(vocab_path, output_path)
 
     assert filecmp.cmp(output_path, groundtruth_path, shallow=False)
