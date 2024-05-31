@@ -10,7 +10,6 @@ import pathlib
 import pickle
 import tempfile
 import types
-import unittest.mock as mock
 from io import BytesIO, StringIO
 
 import numpy as np
@@ -1425,12 +1424,14 @@ def test_holidays_within_dates(holiday, start, expected):
     ) == [utc.localize(dt) for dt in expected]
 
 
-def test_cudf_pandas_debugging_different_results():
-    with mock.patch(
-        "cudf.Series.mean", return_value=np.float64(1.0)
-    ), mock.patch.dict("os.environ", {"CUDF_PANDAS_DEBUGGING": "True"}):
-        s = xpd.Series([1, 2])
+def test_cudf_pandas_debugging_different_results(monkeypatch):
+    def mock_mean(self, *args, **kwargs):
+        return np.float64(1.0)
 
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setattr(cudf.Series, "mean", mock_mean)
+        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
+        s = xpd.Series([1, 2])
         with pytest.warns(
             UserWarning,
             match="The results from cudf and pandas were different.",
@@ -1438,15 +1439,14 @@ def test_cudf_pandas_debugging_different_results():
             assert s.mean() == np.float64(1.0)
 
 
-def test_cudf_pandas_debugging_pandas_error():
-    def mock_mean_exception(self, *args, **kwargs):
+def test_cudf_pandas_debugging_pandas_error(monkeypatch):
+    def mock_median(self, *args, **kwargs):
         raise Exception()
 
-    with mock.patch(
-        "pandas.Series.mean", mock_mean_exception
-    ), mock.patch.dict("os.environ", {"CUDF_PANDAS_DEBUGGING": "True"}):
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setattr(pd.Series, "median", mock_median)
+        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
-
         with pytest.warns(
             UserWarning,
             match="The result from pandas could not be computed.",
@@ -1454,14 +1454,16 @@ def test_cudf_pandas_debugging_pandas_error():
             assert s.mean() == 1.5
 
 
-def test_cudf_pandas_debugging_failed():
-    with mock.patch("pandas.Series.mean", return_value=None), mock.patch.dict(
-        "os.environ", {"CUDF_PANDAS_DEBUGGING": "True"}
-    ):
-        s = xpd.Series([1, 2])
+def test_cudf_pandas_debugging_failed(monkeypatch):
+    def mock_std(self, *args, **kwargs):
+        return None
 
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setattr(pd.Series, "std", mock_std)
+        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
+        s = xpd.Series([1, 2])
         with pytest.warns(
             UserWarning,
             match="Pandas debugging mode failed.",
         ):
-            assert s.mean() == 1.5
+            assert s.std() == 0.7071067811865476
