@@ -1,6 +1,7 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t
+
 
 cdef extern from "cudf/strings/regex/flags.hpp" \
         namespace "cudf::strings" nogil:
