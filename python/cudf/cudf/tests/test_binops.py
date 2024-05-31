@@ -262,6 +262,25 @@ def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
     np.testing.assert_almost_equal(result.to_numpy(), binop(arr1, arr2))
 
 
+@pytest.mark.parametrize(
+    "dtype,val",
+    [("int8", 200), ("int32", 2**32), ("uint8", -128), ("uint64", -1)],
+)
+def test_series_compare_integer(dtype, val):
+    # Tests that these actually work, even though they are out of bound.
+    force_cast = np.array(val).astype(dtype)
+    sr = Series(
+        [np.iinfo(dtype).min, np.iinfo(dtype).max, force_cast], dtype=dtype
+    )
+    assert (sr != val).all()
+    assert not (sr == val).any()
+
+    if val < 0:
+        assert (sr > val).all()
+    else:
+        assert (sr < val).all()
+
+
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("cmpop", _cmpops)
 @pytest.mark.parametrize(
@@ -786,7 +805,7 @@ def test_operator_func_series_and_scalar(
     )
     pdf_series_result = getattr(pdf_series, func)(
         np.array(scalar)[()] if use_cudf_scalar else scalar,
-        fill_value=fill_value
+        fill_value=fill_value,
     )
 
     utils.assert_eq(pdf_series_result, gdf_series_result)
