@@ -34,6 +34,7 @@ enum Type : int8_t {
   BOOLEAN              = 0,
   INT32                = 1,
   INT64                = 2,
+  INT96                = 3,  // Deprecated
   FLOAT                = 4,
   DOUBLE               = 5,
   BYTE_ARRAY           = 6,

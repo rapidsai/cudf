@@ -193,26 +193,29 @@ __device__ inline void gpuDecodeValues(
             }
             break;
         }
-      } else if (dtype_len == 8) {
-        if (s->dtype_len_in == 4) {
-          // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
-          // TIME_MILLIS is the only duration type stored as int32:
-          // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-          gpuOutputFast(s, sb, src_pos, static_cast<uint32_t*>(dst));
-        } else if (s->ts_scale) {
-          gpuOutputInt64Timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
-        } else {
-          gpuOutputFast(s, sb, src_pos, static_cast<uint2*>(dst));
-        }
-      } else if (dtype_len == 4) {
-        gpuOutputFast(s, sb, src_pos, static_cast<uint32_t*>(dst));
-      } else {
-        gpuOutputGeneric(s, sb, src_pos, static_cast<uint8_t*>(dst), dtype_len);
       }
+    } else if (dtype == INT96) {
+      gpuOutputInt96Timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
+    } else if (dtype_len == 8) {
+      if (s->dtype_len_in == 4) {
+        // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
+        // TIME_MILLIS is the only duration type stored as int32:
+        // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
+        gpuOutputFast(s, sb, src_pos, static_cast<uint32_t*>(dst));
+      } else if (s->ts_scale) {
+        gpuOutputInt64Timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
+      } else {
+        gpuOutputFast(s, sb, src_pos, static_cast<uint2*>(dst));
+      }
+    } else if (dtype_len == 4) {
+      gpuOutputFast(s, sb, src_pos, static_cast<uint32_t*>(dst));
+    } else {
+      gpuOutputGeneric(s, sb, src_pos, static_cast<uint8_t*>(dst), dtype_len);
     }
-
-    pos += batch_size;
   }
+
+  pos += batch_size;
+}
 }
 
 template <typename state_buf>
