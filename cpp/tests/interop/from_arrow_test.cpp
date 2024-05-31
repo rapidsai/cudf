@@ -182,7 +182,7 @@ TEST_F(FromArrowTest, StructColumn)
       .release();
   auto bool_col = cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}}.release();
   auto list_col = cudf::test::lists_column_wrapper<int64_t>(
-                    {{{1, 2}, {3, 4}, {5}}, {{6}}, {{7}, {8, 9}}})  // NOLINT
+                    {{{1, 2}, {3, 4}, {5}}, {{{6}}}, {{7}, {8, 9}}})  // NOLINT
                     .release();
   vector_of_columns cols2;
   cols2.push_back(std::move(str_col2));
