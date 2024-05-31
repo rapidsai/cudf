@@ -18,8 +18,8 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 
-#include <cudf/io/memory_resource.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
@@ -44,8 +44,8 @@ TEST(IoUtilitiesTest, HostMemoryGetAndSet)
                     size_t{128} * 1024 * 1024);
 
   // set new resource
-  auto last_mr = cudf::io::get_host_memory_resource();
-  cudf::io::set_host_memory_resource(mr);
+  auto last_mr = cudf::get_pinned_memory_resource();
+  cudf::set_pinned_memory_resource(mr);
 
   constexpr int num_rows = 32 * 1024;
   auto valids =
@@ -66,7 +66,7 @@ TEST(IoUtilitiesTest, HostMemoryGetAndSet)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, expected);
 
   // reset memory resource back
-  cudf::io::set_host_memory_resource(last_mr);
+  cudf::set_pinned_memory_resource(last_mr);
 }
 
 TEST(IoUtilitiesTest, Base64EncodeAndDecode)

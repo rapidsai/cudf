@@ -28,13 +28,13 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/json.hpp>
-#include <cudf/io/memory_resource.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 
@@ -2068,7 +2068,7 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringSync)
                     size_t{128} * 1024 * 1024};
 
   // Set new resource
-  auto last_mr = cudf::io::set_host_memory_resource(mr);
+  auto last_mr = cudf::set_pinned_memory_resource(mr);
 
   /**
    * @brief Spark has the specific need to ignore extra characters that come after the first record
@@ -2158,7 +2158,7 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringSync)
     float64_wrapper{c_data.cbegin(), c_data.cend(), c_validity.cbegin()});
 
   // Restore original memory source
-  cudf::io::set_host_memory_resource(last_mr);
+  cudf::set_pinned_memory_resource(last_mr);
 }
 
 TEST_F(JsonReaderTest, MixedTypes)
