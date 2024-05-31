@@ -40,8 +40,9 @@ from pandas.tseries.holiday import (
     get_calendar,
 )
 
-# Accelerated pandas has the real pandas module as an attribute
+# Accelerated pandas has the real pandas and cudf modules as an attributes
 pd = xpd._fsproxy_slow
+cudf = xpd._fsproxy_fast
 
 
 @pytest.fixture
@@ -1423,18 +1424,12 @@ def test_holidays_within_dates(holiday, start, expected):
     ) == [utc.localize(dt) for dt in expected]
 
 
-def test_pandas_debugging_mode_option(monkeypatch):
-    import cudf.pandas
-    from cudf import Series
-
-    cudf.pandas.install()
-    import pandas as xpd
-
+def test_cudf_pandas_debugging_different_results(monkeypatch):
     def mock_mean(self, *args, **kwargs):
         return np.float64(1.0)
 
     with monkeypatch.context() as monkeycontext:
-        monkeycontext.setattr(Series, "mean", mock_mean)
+        monkeycontext.setattr(cudf.Series, "mean", mock_mean)
         monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
         with pytest.warns(
@@ -1442,3 +1437,33 @@ def test_pandas_debugging_mode_option(monkeypatch):
             match="The results from cudf and pandas were different.",
         ):
             assert s.mean() == np.float64(1.0)
+
+
+def test_cudf_pandas_debugging_pandas_error(monkeypatch):
+    def mock_mean(self, *args, **kwargs):
+        raise Exception()
+
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setattr(pd.Series, "mean", mock_mean)
+        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
+        s = xpd.Series([1, 2])
+        with pytest.warns(
+            UserWarning,
+            match="The result from pandas could not be computed.",
+        ):
+            assert s.mean() == 1.5
+
+
+def test_cudf_pandas_debugging_failed(monkeypatch):
+    def mock_mean(self, *args, **kwargs):
+        return None
+
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setattr(pd.Series, "mean", mock_mean)
+        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
+        s = xpd.Series([1, 2])
+        with pytest.warns(
+            UserWarning,
+            match="Pandas debugging mode failed.",
+        ):
+            assert s.mean() == 1.5
