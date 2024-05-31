@@ -51,14 +51,21 @@ std::unique_ptr<table> make_empty_table(ArrowSchema const& schema,
 
   std::vector<std::unique_ptr<cudf::column>> columns;
   for (int i = 0; i < schema.n_children; i++) {
-    ArrowSchema* child = schema.children[i];
+    ArrowSchema* child{schema.children[i]};
     CUDF_EXPECTS(child->n_children == 0,
                  "Nested types in empty columns not yet supported",
                  std::invalid_argument);
     // If the child has children, we need to construct a suitable empty table.
     ArrowSchemaView schema_view;
     NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&schema_view, child, nullptr));
-    columns.push_back(cudf::make_empty_column(arrow_to_cudf_type(&schema_view)));
+
+    auto const type{arrow_to_cudf_type(&schema_view)};
+    columns.push_back([&type] {
+      return type.id() != type_id::EMPTY
+               ? cudf::make_empty_column(type)
+               : std::make_unique<column>(
+                   data_type(type_id::EMPTY), 0, rmm::device_buffer{}, rmm::device_buffer{}, 0);
+    }());
   }
   return std::make_unique<cudf::table>(std::move(columns));
 }

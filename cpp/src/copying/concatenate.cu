@@ -477,6 +477,7 @@ void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_v
                std::overflow_error);
 
   // traverse children
+  if (cols.front().type().id() == cudf::type_id::EMPTY) { return; }
   cudf::type_dispatcher(cols.front().type(), traverse_children{}, cols, stream);
 }
 
@@ -498,6 +499,15 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns_to_conc
     return empty_like(columns_to_concat.front());
   }
 
+  // For empty columns, we can just create an EMPTY column of the appropriate length.
+  if (columns_to_concat.front().type().id() == cudf::type_id::EMPTY) {
+    auto length = std::accumulate(
+      columns_to_concat.begin(), columns_to_concat.end(), 0, [](auto a, auto const& b) {
+        return a + b.size();
+      });
+    return std::make_unique<column>(
+      data_type(type_id::EMPTY), length, rmm::device_buffer{}, rmm::device_buffer{}, length);
+  }
   return type_dispatcher<dispatch_storage_type>(
     columns_to_concat.front().type(), concatenate_dispatch{columns_to_concat, stream, mr});
 }
