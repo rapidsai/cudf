@@ -1424,11 +1424,17 @@ def test_holidays_within_dates(holiday, start, expected):
     ) == [utc.localize(dt) for dt in expected]
 
 
-def test_cudf_pandas_debugging_different_results(monkeypatch):
+@pytest.fixture
+def undo_monkeypatch(monkeypatch):
+    yield monkeypatch
+    monkeypatch.undo()
+
+
+def test_cudf_pandas_debugging_different_results(undo_monkeypatch):
     def mock_mean_float(self, *args, **kwargs):
         return np.float64(1.0)
 
-    with monkeypatch.context() as monkeycontext:
+    with undo_monkeypatch.context() as monkeycontext:
         monkeycontext.setattr(cudf.Series, "mean", mock_mean_float)
         monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
@@ -1437,13 +1443,14 @@ def test_cudf_pandas_debugging_different_results(monkeypatch):
             match="The results from cudf and pandas were different.",
         ):
             assert s.mean() == np.float64(1.0)
+    assert s.mean() == 1.5
 
 
-def test_cudf_pandas_debugging_pandas_error(monkeypatch):
+def test_cudf_pandas_debugging_pandas_error(undo_monkeypatch):
     def mock_mean_exception(self, *args, **kwargs):
         raise Exception()
 
-    with monkeypatch.context() as monkeycontext:
+    with undo_monkeypatch.context() as monkeycontext:
         monkeycontext.setattr(pd.Series, "mean", mock_mean_exception)
         monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
@@ -1454,11 +1461,11 @@ def test_cudf_pandas_debugging_pandas_error(monkeypatch):
             assert s.mean() == 1.5
 
 
-def test_cudf_pandas_debugging_failed(monkeypatch):
+def test_cudf_pandas_debugging_failed(undo_monkeypatch):
     def mock_mean_none(self, *args, **kwargs):
         return None
 
-    with monkeypatch.context() as monkeycontext:
+    with undo_monkeypatch.context() as monkeycontext:
         monkeycontext.setattr(pd.Series, "mean", mock_mean_none)
         monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
