@@ -369,7 +369,7 @@ class base_2dspan {
    * @param data Pointer to the data
    * @param size Size of the 2D span as pair
    */
-  base_2dspan(T* data, size_type size) noexcept : _data{data}, _size{std::move(size)} {}
+  base_2dspan(T* data, size_type size) noexcept : _data{data}, _size{size} {}
 
   /**
    * @brief Returns a pointer to the beginning of the sequence.

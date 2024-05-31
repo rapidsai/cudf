@@ -383,7 +383,7 @@ class hash_join {
    * constructed with null check.
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
-   * the result of performing a full join between two tables w[[nodiscard]] ith `build` and `probe`
+   * the result of performing a full join between two tables with `build` and `probe`
    * as the join keys .
    */
   [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
