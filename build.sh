@@ -70,7 +70,7 @@ BUILD_PER_THREAD_DEFAULT_STREAM=OFF
 BUILD_REPORT_METRICS=OFF
 BUILD_REPORT_INCL_CACHE_STATS=OFF
 USE_PROPRIETARY_NVCOMP=ON
-PYTHON_ARGS_FOR_INSTALL="-m pip install --no-build-isolation --no-deps"
+PYTHON_ARGS_FOR_INSTALL="-m pip install --no-build-isolation --no-deps --config-settings rapidsai.disable-cuda=true"
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
