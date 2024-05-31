@@ -52,10 +52,9 @@ def assert_table_and_meta_eq(
 ) -> None:
     """Verify that the pylibcudf TableWithMetadata and PyArrow table are equal"""
 
-    plc_table = plc_table_w_meta.table
+    plc_table = plc_table_w_meta.tbl
 
     plc_shape = (plc_table.num_rows(), plc_table.num_columns())
-    print(plc_shape)
     assert plc_shape == pa_table.shape
 
     for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
