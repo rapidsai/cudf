@@ -9,6 +9,7 @@ from cudf._lib.pylibcudf.libcudf.strings.regex_flags cimport regex_flags
 from cudf._lib.pylibcudf.libcudf.strings.regex_program cimport regex_program
 
 from cudf._lib.pylibcudf.strings.regex_flags import RegexFlags
+from cudf._lib.pylibcudf.strings.regex_flags cimport regex_flags
 
 
 cdef class RegexProgram:
@@ -17,7 +18,7 @@ cdef class RegexProgram:
         raise ValueError("Do not instantiate RegexProgram directly, use create")
 
     @staticmethod
-    def create(object pattern, object flags):
+    def create(str pattern, regex_flags flags):
         cdef unique_ptr[regex_program] c_prog
         cdef regex_flags c_flags
         cdef string c_pattern = pattern.encode()
