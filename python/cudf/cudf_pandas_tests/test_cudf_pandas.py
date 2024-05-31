@@ -1424,53 +1424,38 @@ def test_holidays_within_dates(holiday, start, expected):
     ) == [utc.localize(dt) for dt in expected]
 
 
-@pytest.fixture
-def undo_monkeypatch(monkeypatch):
-    yield monkeypatch
-    monkeypatch.undo()
-
-
-def test_cudf_pandas_debugging_different_results(undo_monkeypatch):
-    def mock_mean_float(self, *args, **kwargs):
-        return np.float64(1.0)
-
-    with undo_monkeypatch.context() as monkeycontext:
-        monkeycontext.setattr(cudf.Series, "mean", mock_mean_float)
-        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
+@pytest.mark.parametrize(
+    "mock_mean_func, expected_mean, warning_message, patch_object",
+    [
+        (
+            lambda self, *args, **kwargs: np.float64(1.0),
+            np.float64(1.0),
+            "The results from cudf and pandas were different.",
+            cudf.Series,
+        ),
+        (
+            lambda self, *args, **kwargs: Exception(),
+            1.5,
+            "The result from pandas could not be computed.",
+            pd.Series,
+        ),
+        (
+            lambda self, *args, **kwargs: None,
+            1.5,
+            "Pandas debugging mode failed.",
+            pd.Series,
+        ),
+    ],
+)
+def test_cudf_pandas_debugging(
+    monkeypatch, mock_mean_func, expected_mean, warning_message, patch_object
+):
+    with monkeypatch.context() as mp:
+        mp.setattr(patch_object, "mean", mock_mean_func)
+        mp.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
         with pytest.warns(
             UserWarning,
-            match="The results from cudf and pandas were different.",
+            match=warning_message,
         ):
-            assert s.mean() == np.float64(1.0)
-    assert s.mean() == 1.5
-
-
-def test_cudf_pandas_debugging_pandas_error(undo_monkeypatch):
-    def mock_mean_exception(self, *args, **kwargs):
-        raise Exception()
-
-    with undo_monkeypatch.context() as monkeycontext:
-        monkeycontext.setattr(pd.Series, "mean", mock_mean_exception)
-        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
-        s = xpd.Series([1, 2])
-        with pytest.warns(
-            UserWarning,
-            match="The result from pandas could not be computed.",
-        ):
-            assert s.mean() == 1.5
-
-
-def test_cudf_pandas_debugging_failed(undo_monkeypatch):
-    def mock_mean_none(self, *args, **kwargs):
-        return None
-
-    with undo_monkeypatch.context() as monkeycontext:
-        monkeycontext.setattr(pd.Series, "mean", mock_mean_none)
-        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
-        s = xpd.Series([1, 2])
-        with pytest.warns(
-            UserWarning,
-            match="Pandas debugging mode failed.",
-        ):
-            assert s.mean() == 1.5
+            assert s.mean() == expected_mean
