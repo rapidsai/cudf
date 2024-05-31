@@ -19,7 +19,20 @@ def plc_target_col(pa_target_col):
     return plc.interop.from_arrow(pa_target_col)
 
 
-@pytest.fixture(params=["A"], scope="module")
+@pytest.fixture(
+    params=[
+        "A",
+        "de",
+        ".*",
+        "^a",
+        "^A",
+        "[^a-z]",
+        "[a-z]{3,}",
+        "^[A-Z]{2,}",
+        "j|u",
+    ],
+    scope="module",
+)
 def pa_target_scalar(request):
     return pa.scalar(request.param, type=pa.string())
 
