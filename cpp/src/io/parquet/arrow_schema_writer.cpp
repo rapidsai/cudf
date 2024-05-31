@@ -301,6 +301,7 @@ FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
                                      single_write_mode const write_mode,
                                      bool const utc_timestamps)
 {
+  // Variables to be set by the dispatch_to_flatbuf functor
   Offset field_offset     = 0;
   flatbuf::Type type_type = flatbuf::Type_NONE;
   std::vector<FieldOffset> children;
@@ -310,14 +311,15 @@ FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
     dispatch_to_flatbuf{
       fbb, column, column_metadata, write_mode, utc_timestamps, field_offset, type_type, children});
 
-  auto const fb_name          = fbb.CreateString(column_metadata.get_name());
-  auto const fb_children      = fbb.CreateVector(children.data(), children.size());
-  auto const is_nullable      = is_col_nullable(column, column_metadata, write_mode);
-  DictionaryOffset dictionary = 0;
-
   // push to field offsets vector
   return flatbuf::CreateField(
-    fbb, fb_name, is_nullable, type_type, field_offset, dictionary, fb_children);
+    fbb,
+    fbb.CreateString(column_metadata.get_name()),          // name
+    is_col_nullable(column, column_metadata, write_mode),  // nullable
+    type_type,                                             // type id
+    field_offset,                                          // field offset
+    {0},                                                   // DictionaryOffset
+    fbb.CreateVector(children.data(), children.size()));   // children vector
 }
 
 std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector const& linked_columns,
