@@ -6,16 +6,30 @@ from cudf._lib.pylibcudf.column cimport Column
 from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.strings cimport contains as cpp_contains
 from cudf._lib.pylibcudf.strings.regex_program cimport RegexProgram
-from cudf._lib.pylibcudf.scalar cimport Scalar
 
-from cython.operator import dereference
-
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
 
 cpdef Column contains_re(
     Column input,
     RegexProgram prog
 ):
+    """Returns a boolean column identifying rows which match the given
+    regex_program object.
+
+    For details, see :cpp:func:`cudf::strings::contains_re`.
+
+    Parameters
+    ----------
+    input : Column
+        The input strings
+    prog : RegexProgram
+        Regex program instance
+
+    Returns
+    -------
+    pylibcudf.Column
+        New column of boolean results for each string
+    """
+
     cdef unique_ptr[column] result
 
     with nogil:
@@ -25,4 +39,3 @@ cpdef Column contains_re(
         )
 
     return Column.from_libcudf(move(result))
-

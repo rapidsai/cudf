@@ -30,3 +30,12 @@ This page provides API documentation for pylibcudf.
     table
     types
     unary
+
+String Functions
+================
+
+.. toctree::
+    :maxdepth: 1
+    :caption: String Functions
+
+    contains
