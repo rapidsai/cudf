@@ -10,6 +10,7 @@ import pathlib
 import pickle
 import tempfile
 import types
+import unittest.mock as mock
 from io import BytesIO, StringIO
 
 import numpy as np
@@ -1424,38 +1425,43 @@ def test_holidays_within_dates(holiday, start, expected):
     ) == [utc.localize(dt) for dt in expected]
 
 
-@pytest.mark.parametrize(
-    "mock_mean_func, expected_mean, warning_message, patch_object",
-    [
-        (
-            lambda self, *args, **kwargs: np.float64(1.0),
-            np.float64(1.0),
-            "The results from cudf and pandas were different.",
-            cudf.Series,
-        ),
-        (
-            lambda self, *args, **kwargs: Exception(),
-            1.5,
-            "The result from pandas could not be computed.",
-            pd.Series,
-        ),
-        (
-            lambda self, *args, **kwargs: None,
-            1.5,
-            "Pandas debugging mode failed.",
-            pd.Series,
-        ),
-    ],
-)
-def test_cudf_pandas_debugging(
-    monkeypatch, mock_mean_func, expected_mean, warning_message, patch_object
-):
-    with monkeypatch.context() as mp:
-        mp.setattr(patch_object, "mean", mock_mean_func)
-        mp.setenv("CUDF_PANDAS_DEBUGGING", "True")
+def test_cudf_pandas_debugging_different_results():
+    with mock.patch(
+        "cudf.Series.mean", return_value=np.float64(1.0)
+    ), mock.patch.dict("os.environ", {"CUDF_PANDAS_DEBUGGING": "True"}):
         s = xpd.Series([1, 2])
+
         with pytest.warns(
             UserWarning,
-            match=warning_message,
+            match="The results from cudf and pandas were different.",
         ):
-            assert s.mean() == expected_mean
+            assert s.mean() == np.float64(1.0)
+
+
+def test_cudf_pandas_debugging_pandas_error():
+    def mock_mean_exception(self, *args, **kwargs):
+        raise Exception()
+
+    with mock.patch(
+        "pandas.Series.mean", mock_mean_exception
+    ), mock.patch.dict("os.environ", {"CUDF_PANDAS_DEBUGGING": "True"}):
+        s = xpd.Series([1, 2])
+
+        with pytest.warns(
+            UserWarning,
+            match="The result from pandas could not be computed.",
+        ):
+            assert s.mean() == 1.5
+
+
+def test_cudf_pandas_debugging_failed():
+    with mock.patch("pandas.Series.mean", return_value=None), mock.patch.dict(
+        "os.environ", {"CUDF_PANDAS_DEBUGGING": "True"}
+    ):
+        s = xpd.Series([1, 2])
+
+        with pytest.warns(
+            UserWarning,
+            match="Pandas debugging mode failed.",
+        ):
+            assert s.mean() == 1.5
