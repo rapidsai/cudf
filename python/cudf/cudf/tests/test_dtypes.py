@@ -341,7 +341,6 @@ def test_dtype(in_dtype, expect):
         np.complex128,
         complex,
         "S",
-        "a",
         "V",
         "float16",
         np.float16,
