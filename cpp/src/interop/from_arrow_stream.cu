@@ -63,30 +63,18 @@ std::unique_ptr<column> make_empty_column_from_schema(ArrowSchema const* schema,
     }
     case type_id::STRUCT: {
       std::vector<std::unique_ptr<column>> child_columns;
-      for (int i = 0; i < schema->n_children; i++) {
-        child_columns.push_back(make_empty_column_from_schema(schema->children[i], stream, mr));
-      }
+      child_columns.reserve(schema->n_children);
+      std::transform(
+        schema->children,
+        schema->children + schema->n_children,
+        std::back_inserter(child_columns),
+        [&](auto const& child) { return make_empty_column_from_schema(child, stream, mr); });
       return cudf::make_structs_column(0, std::move(child_columns), 0, {}, stream, mr);
     }
     default: {
       return cudf::make_empty_column(type);
     }
   }
-}
-
-std::unique_ptr<table> make_empty_table(ArrowSchema const& schema,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
-{
-  if (schema.n_children == 0) { return std::make_unique<cudf::table>(); }
-
-  // If there are no chunks but the schema has children, we need to construct a suitable empty
-  // table.
-  std::vector<std::unique_ptr<cudf::column>> columns;
-  for (int i = 0; i < schema.n_children; i++) {
-    columns.push_back(make_empty_column_from_schema(schema.children[i], stream, mr));
-  }
-  return std::make_unique<cudf::table>(std::move(columns));
 }
 
 }  // namespace
@@ -112,7 +100,20 @@ std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
   }
   input->release(input);
 
-  if (chunks.empty()) { return make_empty_table(schema, stream, mr); }
+  if (chunks.empty()) {
+    if (schema.n_children == 0) { return std::make_unique<cudf::table>(); }
+
+    // If there are no chunks but the schema has children, we need to construct a suitable empty
+    // table.
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    columns.reserve(chunks.size());
+    std::transform(
+      schema.children,
+      schema.children + schema.n_children,
+      std::back_inserter(columns),
+      [&](auto const& child) { return make_empty_column_from_schema(child, stream, mr); });
+    return std::make_unique<cudf::table>(std::move(columns));
+  }
 
   auto chunk_views = std::vector<table_view>{};
   chunk_views.reserve(chunks.size());
