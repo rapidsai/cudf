@@ -1605,7 +1605,7 @@ def test_parquet_writer_cpu_pyarrow(
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-def test_parquet_writer_column_stats(tmpdir, pdf, gdf, store_schema):
+def test_parquet_writer_column_stats(tmpdir, pdf, gdf):
     gdf_fname = tmpdir.join("gdf.parquet")
 
     if len(pdf) == 0:
