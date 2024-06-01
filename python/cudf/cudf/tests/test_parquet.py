@@ -1604,6 +1604,55 @@ def test_parquet_writer_cpu_pyarrow(
     assert_eq(expect, got)
 
 
+@pytest.mark.filterwarnings("ignore:Using CPU")
+def test_parquet_writer_column_stats(tmpdir, pdf, gdf, store_schema):
+    gdf_fname = tmpdir.join("gdf.parquet")
+
+    if len(pdf) == 0:
+        pdf = pdf.reset_index(drop=True)
+        gdf = gdf.reset_index(drop=True)
+
+    if "col_category" in pdf.columns:
+        pdf = pdf.drop(columns=["col_category"])
+    if "col_category" in gdf.columns:
+        gdf = gdf.drop(columns=["col_category"])
+
+    assert_eq(pdf, gdf)
+
+    # Write out the gdf using the GPU accelerated writer
+    gdf.to_parquet(gdf_fname.strpath, index=None)
+
+    assert os.path.exists(gdf_fname)
+
+    expect = pdf.reset_index(drop=True)
+    got = pd.read_parquet(gdf_fname).reset_index(drop=True)
+
+    # verify timestamps were converted back to the same data.
+    assert_eq(expect, got, check_categorical=False, check_dtype=False)
+
+    # Read back from pyarrow
+    pq_file = pq.ParquetFile(gdf_fname)
+
+    # verify each row group's statistics
+    for rg in range(0, pq_file.num_row_groups):
+        pd_slice = pq_file.read_row_group(rg).to_pandas()
+
+        # statistics are per-column. So need to verify independently
+        for i, col in enumerate(pd_slice):
+            stats = pq_file.metadata.row_group(rg).column(i+1).statistics
+
+            if (col == "col_datetime64[ms]"):
+                print(i+1, col, stats)
+
+            actual_min = cudf.Series(pd_slice[col].explode().explode()).min()
+            stats_min = stats.min
+            assert normalized_equals(actual_min, stats_min)
+
+            actual_max = cudf.Series(pd_slice[col].explode().explode()).max()
+            stats_max = stats.max
+            assert normalized_equals(actual_max, stats_max)
+
+
 def test_multifile_parquet_folder(tmpdir):
     test_pdf1 = make_pdf(nrows=10, nvalids=10 // 2, dtype="float64")
     test_pdf2 = make_pdf(nrows=20, dtype="float64")
