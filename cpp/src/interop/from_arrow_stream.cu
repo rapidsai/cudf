@@ -39,33 +39,52 @@ namespace detail {
 
 namespace {
 
+std::unique_ptr<column> make_empty_column_from_schema(ArrowSchema const* schema,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::mr::device_memory_resource* mr)
+{
+  ArrowSchemaView schema_view;
+  NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&schema_view, schema, nullptr));
+
+  auto const type{arrow_to_cudf_type(&schema_view)};
+  switch (type.id()) {
+    case type_id::EMPTY: {
+      return std::make_unique<column>(
+        data_type(type_id::EMPTY), 0, rmm::device_buffer{}, rmm::device_buffer{}, 0);
+    }
+    case type_id::LIST: {
+      return cudf::make_lists_column(0,
+                                     cudf::make_empty_column(data_type{type_id::INT32}),
+                                     make_empty_column_from_schema(schema->children[0], stream, mr),
+                                     0,
+                                     {},
+                                     stream,
+                                     mr);
+    }
+    case type_id::STRUCT: {
+      std::vector<std::unique_ptr<column>> child_columns;
+      for (int i = 0; i < schema->n_children; i++) {
+        child_columns.push_back(make_empty_column_from_schema(schema->children[i], stream, mr));
+      }
+      return cudf::make_structs_column(0, std::move(child_columns), 0, {}, stream, mr);
+    }
+    default: {
+      return cudf::make_empty_column(type);
+    }
+  }
+}
+
 std::unique_ptr<table> make_empty_table(ArrowSchema const& schema,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  if (schema.n_children == 0) {
-    // If there are no chunks but the schema has children, we need to construct a suitable empty
-    // table.
-    return std::make_unique<cudf::table>();
-  }
+  if (schema.n_children == 0) { return std::make_unique<cudf::table>(); }
 
+  // If there are no chunks but the schema has children, we need to construct a suitable empty
+  // table.
   std::vector<std::unique_ptr<cudf::column>> columns;
   for (int i = 0; i < schema.n_children; i++) {
-    ArrowSchema* child{schema.children[i]};
-    CUDF_EXPECTS(child->n_children == 0,
-                 "Nested types in empty columns not yet supported",
-                 std::invalid_argument);
-    // If the child has children, we need to construct a suitable empty table.
-    ArrowSchemaView schema_view;
-    NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&schema_view, child, nullptr));
-
-    auto const type{arrow_to_cudf_type(&schema_view)};
-    columns.push_back([&type] {
-      return type.id() != type_id::EMPTY
-               ? cudf::make_empty_column(type)
-               : std::make_unique<column>(
-                   data_type(type_id::EMPTY), 0, rmm::device_buffer{}, rmm::device_buffer{}, 0);
-    }());
+    columns.push_back(make_empty_column_from_schema(schema.children[i], stream, mr));
   }
   return std::make_unique<cudf::table>(std::move(columns));
 }
