@@ -1639,10 +1639,10 @@ def test_parquet_writer_column_stats(tmpdir, pdf, gdf, store_schema):
 
         # statistics are per-column. So need to verify independently
         for i, col in enumerate(pd_slice):
-            stats = pq_file.metadata.row_group(rg).column(i+1).statistics
+            stats = pq_file.metadata.row_group(rg).column(i + 1).statistics
 
-            if (col == "col_datetime64[ms]"):
-                print(i+1, col, stats)
+            if col == "col_datetime64[ms]":
+                print(i + 1, col, stats)
 
             actual_min = cudf.Series(pd_slice[col].explode().explode()).min()
             stats_min = stats.min
