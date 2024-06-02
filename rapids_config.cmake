@@ -11,6 +11,10 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 # =============================================================================
+
+set(rapids-cmake-repo PointKernel/rapids-cmake)
+set(rapids-cmake-branch cuco-equal-update)
+
 file(READ "${CMAKE_CURRENT_LIST_DIR}/VERSION" _rapids_version)
 if(_rapids_version MATCHES [[^([0-9][0-9])\.([0-9][0-9])\.([0-9][0-9])]])
   set(RAPIDS_VERSION_MAJOR "${CMAKE_MATCH_1}")
