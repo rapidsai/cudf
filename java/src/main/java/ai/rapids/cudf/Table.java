@@ -323,7 +323,6 @@ public final class Table implements AutoCloseable {
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
    * @param statsFreq       native statistics frequency ID
-   * @param isInt96         true if timestamp type is int96
    * @param precisions      precision list containing all the precisions of the decimal types in
    *                        the columns
    * @param isMapValues     true if a column is a map
@@ -339,7 +338,6 @@ public final class Table implements AutoCloseable {
                                                    String[] metadataValues,
                                                    int compression,
                                                    int statsFreq,
-                                                   boolean[] isInt96,
                                                    int[] precisions,
                                                    boolean[] isMapValues,
                                                    boolean[] isBinaryValues,
@@ -357,7 +355,6 @@ public final class Table implements AutoCloseable {
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
    * @param statsFreq       native statistics frequency ID
-   * @param isInt96         true if timestamp type is int96
    * @param precisions      precision list containing all the precisions of the decimal types in
    *                        the columns
    * @param isMapValues     true if a column is a map
@@ -373,7 +370,6 @@ public final class Table implements AutoCloseable {
                                                      String[] metadataValues,
                                                      int compression,
                                                      int statsFreq,
-                                                     boolean[] isInt96,
                                                      int[] precisions,
                                                      boolean[] isMapValues,
                                                      boolean[] isBinaryValues,
@@ -1753,7 +1749,6 @@ public final class Table implements AutoCloseable {
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          options.getFlatIsTimeTypeInt96(),
           options.getFlatPrecision(),
           options.getFlatIsMap(),
           options.getFlatIsBinary(),
@@ -1773,7 +1768,6 @@ public final class Table implements AutoCloseable {
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          options.getFlatIsTimeTypeInt96(),
           options.getFlatPrecision(),
           options.getFlatIsMap(),
           options.getFlatIsBinary(),

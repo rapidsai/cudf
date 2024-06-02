@@ -32,11 +32,6 @@ public class CompressionMetadataWriterOptions extends ColumnWriterOptions.Struct
   }
 
   @Override
-  boolean[] getFlatIsTimeTypeInt96() {
-    return super.getFlatBooleans(new boolean[]{}, (opt) -> opt.getFlatIsTimeTypeInt96());
-  }
-
-  @Override
   int[] getFlatPrecision() {
     return super.getFlatInts(new int[]{}, (opt) -> opt.getFlatPrecision());
   }

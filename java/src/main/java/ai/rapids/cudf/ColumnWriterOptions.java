@@ -27,8 +27,6 @@ import java.util.List;
  * The native also uses the same "column_in_metadata" for both Parquet and ORC.
  */
 public class ColumnWriterOptions {
-  // `isTimestampTypeInt96` is ignored in ORC
-  private boolean isTimestampTypeInt96;
   private int precision;
   private boolean isNullable;
   private boolean isMap = false;
@@ -134,14 +132,14 @@ public class ColumnWriterOptions {
       return new ColumnWriterOptions(name, false, precision, isNullable, parquetFieldId);
     }
 
-    protected ColumnWriterOptions withTimestamp(String name, boolean isInt96,
+    protected ColumnWriterOptions withTimestamp(String name,
                                                 boolean isNullable) {
-      return new ColumnWriterOptions(name, isInt96, UNKNOWN_PRECISION, isNullable);
+      return new ColumnWriterOptions(name, UNKNOWN_PRECISION, isNullable);
     }
 
-    protected ColumnWriterOptions withTimestamp(String name, boolean isInt96,
+    protected ColumnWriterOptions withTimestamp(String name,
                                                 boolean isNullable, int parquetFieldId) {
-      return new ColumnWriterOptions(name, isInt96, UNKNOWN_PRECISION, isNullable, parquetFieldId);
+      return new ColumnWriterOptions(name, UNKNOWN_PRECISION, isNullable, parquetFieldId);
     }
 
     protected ColumnWriterOptions withBinary(String name, boolean isNullable) {
@@ -301,8 +299,8 @@ public class ColumnWriterOptions {
      * Set a timestamp child meta data
      * @return this for chaining.
      */
-    public T withTimestampColumn(String name, boolean isInt96, boolean nullable, int parquetFieldId) {
-      children.add(withTimestamp(name, isInt96, nullable, parquetFieldId));
+    public T withTimestampColumn(String name, boolean nullable, int parquetFieldId) {
+      children.add(withTimestamp(name, nullable, parquetFieldId));
       return (T) this;
     }
 
@@ -310,8 +308,8 @@ public class ColumnWriterOptions {
      * Set a timestamp child meta data
      * @return this for chaining.
      */
-    public T withTimestampColumn(String name, boolean isInt96, boolean nullable) {
-      children.add(withTimestamp(name, isInt96, nullable));
+    public T withTimestampColumn(String name, boolean nullable) {
+      children.add(withTimestamp(name, nullable));
       return (T) this;
     }
 
@@ -319,8 +317,8 @@ public class ColumnWriterOptions {
      * Set a timestamp child meta data
      * @return this for chaining.
      */
-    public T withTimestampColumn(String name, boolean isInt96) {
-      withTimestampColumn(name, isInt96, false);
+    public T withTimestampColumn(String name) {
+      withTimestampColumn(name, false);
       return (T) this;
     }
 
@@ -328,31 +326,29 @@ public class ColumnWriterOptions {
      * Set a timestamp child meta data
      * @return this for chaining.
      */
-    public T withNullableTimestampColumn(String name, boolean isInt96) {
-      withTimestampColumn(name, isInt96, true);
+    public T withNullableTimestampColumn(String name) {
+      withTimestampColumn(name, true);
       return (T) this;
     }
 
     public abstract V build();
   }
 
-  public ColumnWriterOptions(String columnName, boolean isTimestampTypeInt96,
+  public ColumnWriterOptions(String columnName,
                              int precision, boolean isNullable) {
-    this.isTimestampTypeInt96 = isTimestampTypeInt96;
     this.precision = precision;
     this.isNullable = isNullable;
     this.columnName = columnName;
   }
 
-  public ColumnWriterOptions(String columnName, boolean isTimestampTypeInt96,
+  public ColumnWriterOptions(String columnName,
                              int precision, boolean isNullable, int parquetFieldId) {
-    this(columnName, isTimestampTypeInt96, precision, isNullable);
+    this(columnName, precision, isNullable);
     this.hasParquetFieldId = true;
     this.parquetFieldId = parquetFieldId;
   }
 
   public ColumnWriterOptions(String columnName, boolean isNullable) {
-    this.isTimestampTypeInt96 = false;
     this.precision = UNKNOWN_PRECISION;
     this.isNullable = isNullable;
     this.columnName = columnName;
@@ -376,15 +372,6 @@ public class ColumnWriterOptions {
   @FunctionalInterface
   protected interface IntArrayProducer {
     int[] apply(ColumnWriterOptions opt);
-  }
-
-  boolean[] getFlatIsTimeTypeInt96() {
-    boolean[] ret = {isTimestampTypeInt96};
-    if (childColumnOptions.length > 0) {
-      return getFlatBooleans(ret, (opt) -> opt.getFlatIsTimeTypeInt96());
-    } else {
-      return ret;
-    }
   }
 
   protected boolean[] getFlatBooleans(boolean[] ret, ByteArrayProducer producer) {
@@ -623,12 +610,6 @@ public class ColumnWriterOptions {
     return precision;
   }
 
-  /**
-   * Returns true if the writer is expected to write timestamps in INT96
-   */
-  public boolean isTimestampTypeInt96() {
-    return isTimestampTypeInt96;
-  }
 
   /**
    * Return the child columnOptions for this column
