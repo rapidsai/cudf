@@ -81,8 +81,7 @@ struct floating_converter {
   // To store positive and negative exponents as unsigned values, the stored value for
   // the power-of-2 is exponent + bias. The bias is 127 for floats and 1023 for doubles.
   /// 127 / 1023 for float / double
-  static constexpr IntegralType exponent_bias =
-    cuda::std::numeric_limits<FloatingType>::max_exponent - 1;
+  static constexpr int exponent_bias = cuda::std::numeric_limits<FloatingType>::max_exponent - 1;
 
   /**
    * @brief Reinterpret the bits of a floating-point value as an integer
@@ -113,15 +112,15 @@ struct floating_converter {
   }
 
   /**
-   * @brief Extracts the integral significand of a bit-casted floating-point number
+   * @brief Checks whether the bit-casted floating-point value is +/-0
    *
-   * @param integer_rep The bit-casted floating value to extract the exponent from
-   * @return The integral significand, bit-shifted to a (large) whole number
+   * @param integer_rep The bit-casted floating value to check if is +/-0
+   * @return True if is a zero, else false
    */
-  CUDF_HOST_DEVICE inline static IntegralType get_base2_value(IntegralType integer_rep)
+  CUDF_HOST_DEVICE inline static bool is_zero(IntegralType integer_rep)
   {
-    // Extract the significand, setting the high bit for the understood 1/2
-    return (integer_rep & mantissa_mask) | understood_bit_mask;
+    // It's a zero if every non-sign bit is zero
+    return ((integer_rep & ~sign_mask) == 0);
   }
 
   /**
@@ -137,40 +136,52 @@ struct floating_converter {
   }
 
   /**
-   * @brief Extracts the exponent of a bit-casted floating-point number
+   * @brief Extracts the significand and exponent of a bit-casted floating-point number
    *
-   * @note This returns INT_MIN for +/-0, +/-inf, NaN's, and denormals
-   * For all of these cases, the decimal fixed_point number should be set to zero
+   * @note This returns (1 - exponent_bias) for denormals. Zeros/inf/NaN not handled.
    *
    * @param integer_rep The bit-casted floating value to extract the exponent from
-   * @return The stored base-2 exponent, or INT_MIN for special values
+   * @return The stored base-2 exponent, or (1 - exponent_bias) for denormals
    */
-  CUDF_HOST_DEVICE inline static int get_exp2(IntegralType integer_rep)
+  CUDF_HOST_DEVICE inline static std::pair<IntegralType, int> get_significand_and_exp2(
+    IntegralType integer_rep)
   {
-    // First extract the exponent bits and handle its special values.
-    // To minimize branching, all of these special cases will return INT_MIN.
-    // For all of these cases, the decimal fixed_point number should be set to zero.
+    // Extract the significand
+    auto significand = (integer_rep & mantissa_mask);
+
+    // Extract the exponent bits.
     auto const exponent_bits = integer_rep & exponent_mask;
+
+    // Notes on special values of exponent_bits:
+    // bits = exponent_mask is +/-inf or NaN, but those are handled prior to input.
+    // bits = 0 is either a denormal (handled below) or a zero (handled earlier by caller).
+    int floating_exp2;
     if (exponent_bits == 0) {
-      // Because of the understood set-bit not stored in the mantissa, it is not possible
-      // to store the value zero directly. Instead both +/-0 and denormals are represented with
-      // the exponent bits set to zero.
-      // Thus it's fastest to just floor (generally unwanted) denormals to zero.
-      return INT_MIN;
-    } else if (exponent_bits == exponent_mask) {
-      //+/-inf and NaN values are stored with all of the exponent bits set.
-      // As none of these are representable by integers, we'll return the same value for all cases.
-      return INT_MIN;
+      // Denormal values are 2^(1 - exponent_bias) * Sum_i(B_i * 2^-i)
+      // Where i is the i-th mantissa bit (counting from the LEFT, starting at 1),
+      // and B_i is the value of that bit (0 or 1)
+      // So e.g. for the minimum denormal, only the lowest bit is set:
+      // FLT_TRUE_MIN = 2^(1 - 127) * 2^-23 = 2^-149
+      // DBL_TRUE_MIN = 2^(1 - 1023) * 2^-52 = 2^-1074
+      floating_exp2 = 1 - exponent_bias;
+    } else {
+      // Extract the exponent value: shift the bits down and subtract the bias.
+      auto const shifted_exponent_bits = exponent_bits >> num_mantissa_bits;
+      floating_exp2                    = static_cast<int>(shifted_exponent_bits) - exponent_bias;
+
+      // Set the high bit for the understood 1/2
+      significand |= understood_bit_mask;
     }
 
-    // Extract the exponent value: shift the bits down and subtract the bias.
-    using SignedIntegralType                       = cuda::std::make_signed_t<IntegralType>;
-    SignedIntegralType const shifted_exponent_bits = exponent_bits >> num_mantissa_bits;
-    return shifted_exponent_bits - static_cast<SignedIntegralType>(exponent_bias);
+    // To convert the mantissa to an integer, we effectively applied #-mantissa-bits
+    // powers of 2 to convert the fractional value to an integer, so subtract them off here
+    int const exp2 = floating_exp2 - num_mantissa_bits;
+
+    return {significand, exp2};
   }
 
   /**
-   * @brief Sets the sign bit of a positive floating-point number
+   * @brief Sets the sign bit of a floating-point number
    *
    * @param floating The floating-point value to set the sign of. Must be positive.
    * @param is_negative The sign bit to set for the floating-point number
@@ -192,38 +203,58 @@ struct floating_converter {
   /**
    * @brief Adds to the base-2 exponent of a floating-point number
    *
+   * @note Where called, the input is guaranteed to be a positive whole number.
+   *
    * @param floating The floating value to add to the exponent of. Must be positive.
    * @param exp2 The power-of-2 to add to the floating-point number
    * @return The input floating-point value * 2^exp2
    */
   CUDF_HOST_DEVICE inline static FloatingType add_exp2(FloatingType floating, int exp2)
   {
+    // Note that the input floating-point number is positive (& whole), so we don't have to
+    // worry about the sign here; the sign will be set later in set_is_negative()
+
     // Convert floating to integer
     auto integer_rep = bit_cast_to_integer(floating);
 
     // Extract the currently stored (biased) exponent
+    using SignedType   = std::make_signed_t<IntegralType>;
     auto exponent_bits = integer_rep & exponent_mask;
-    auto stored_exp2   = exponent_bits >> num_mantissa_bits;
+    auto stored_exp2   = static_cast<SignedType>(exponent_bits >> num_mantissa_bits);
 
     // Add the additional power-of-2
     stored_exp2 += exp2;
 
     // Check for exponent over/under-flow.
-    // Note that the input floating-point number is always positive, so we don't have to
-    // worry about the sign here; the sign will be set later in set_is_negative()
     if (stored_exp2 <= 0) {
-      return 0.0;
-    } else if (stored_exp2 >= unshifted_exponent_mask) {
+      // Denormal (zero handled prior to input)
+
+      // Early out if bit shift will zero it anyway.
+      // Note: We must handle this explicitly, as too-large a bit-shift is UB
+      auto const bit_shift = -stored_exp2 + 1;  //+1 due to understood bit set below
+      if (bit_shift > num_mantissa_bits) { return 0.0; }
+
+      // Clear the exponent bits (zero means 2^-126/2^-1022 w/ no understood bit)
+      integer_rep &= (~exponent_mask);
+
+      // The input floating-point number has an "understood" bit that we need to set
+      // prior to bit-shifting. Set the understood bit.
+      integer_rep |= understood_bit_mask;
+
+      // Convert to denormal: bit shift off the low bits
+      integer_rep >>= bit_shift;
+    } else if (stored_exp2 >= static_cast<SignedType>(unshifted_exponent_mask)) {
+      // Overflow: Set infinity
       return cuda::std::numeric_limits<FloatingType>::infinity();
     } else {
-      // Clear existing exponent bits and set new ones
-      exponent_bits = stored_exp2 << num_mantissa_bits;
+      // Normal number: Clear existing exponent bits and set new ones
+      exponent_bits = static_cast<IntegralType>(stored_exp2) << num_mantissa_bits;
       integer_rep &= (~exponent_mask);
       integer_rep |= exponent_bits;
-
-      // Convert back to float
-      return bit_cast_to_floating(integer_rep);
     }
+
+    // Convert back to float
+    return bit_cast_to_floating(integer_rep);
   }
 };
 
@@ -607,6 +638,641 @@ CUDF_HOST_DEVICE inline constexpr T divide_power10(T value, int exp10)
   } else {
     return divide_power10_128bit(value, exp10);
   }
+}
+
+/**
+ * @brief Perform a bit-shift left, guarding against undefined behavior
+ *
+ * @tparam IntegerType Type of input unsigned integer value
+ * @param value The integer whose bits are being shifted
+ * @param bit_shift The number of bits to shift left
+ * @return The bit-shifted integer, except max value if overflow would occur
+ */
+template <typename IntegerType, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<IntegerType>)>
+CUDF_HOST_DEVICE inline IntegerType guarded_left_shift(IntegerType value, int bit_shift)
+{
+  // Bit shifts larger than this are undefined behavior
+  static constexpr int max_safe_bit_shift = cuda::std::numeric_limits<IntegerType>::digits - 1;
+  return (bit_shift <= max_safe_bit_shift) ? value << bit_shift
+                                           : cuda::std::numeric_limits<IntegerType>::max();
+}
+
+/**
+ * @brief Perform a bit-shift right, guarding against undefined behavior
+ *
+ * @tparam IntegerType Type of input unsigned integer value
+ * @param value The integer whose bits are being shifted
+ * @param bit_shift The number of bits to shift right
+ * @return The bit-shifted integer, which is zero on underflow
+ */
+template <typename IntegerType, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<IntegerType>)>
+CUDF_HOST_DEVICE inline IntegerType guarded_right_shift(IntegerType value, int bit_shift)
+{
+  // Bit shifts larger than this are undefined behavior
+  static constexpr int max_safe_bit_shift = cuda::std::numeric_limits<IntegerType>::digits - 1;
+  return (bit_shift <= max_safe_bit_shift) ? value >> bit_shift
+                                           : cuda::std::numeric_limits<IntegerType>::max();
+}
+
+/**
+ * @brief Helper struct with common constants needed by the floating <--> decimal conversions
+ */
+template <typename FloatingType>
+struct shifting_constants {
+  /// Whether the type is double
+  static constexpr bool is_double = cuda::std::is_same_v<FloatingType, double>;
+
+  /// Integer type that can hold the value of the significand
+  using IntegerRep = std::conditional_t<is_double, uint64_t, uint32_t>;
+
+  /// Num bits needed to hold the significand
+  static constexpr auto num_significand_bits = cuda::std::numeric_limits<FloatingType>::digits;
+
+  /// Shift data back and forth in space of a type with 2x the starting bits, to give us enough room
+  using ShiftingRep = std::conditional_t<is_double, __uint128_t, uint64_t>;
+
+  // The significand of a float / double is 24 / 53 bits
+  // However, to uniquely represent each double / float as different #'s in decimal
+  // you need 17 / 9 digits (from std::numeric_limits<T>::max_digits10)
+  // To represent 10^17 / 10^9, you need 57 / 30 bits
+  // So we need to keep track of this # of bits during shifting to ensure no info is lost
+  /// # bits needed to represent the value
+  static constexpr int num_rep_bits = is_double ? 57 : 30;
+
+  // We will be alternately shifting our data back and forth by powers of 2 and 10 to convert
+  // between floating and decimal (see shifting functions for details).
+  // For float -> decimal, we want to start with our significand bits at the top of the
+  // num_rep_bits range, so that we don't lose information we need on intermediary right-shifts.
+  // For normal numbers, this bit shift is a fixed distance, defined by the understood 2^0 bit.
+  // For denormals this bit is not set, and must be determined for each value.
+  /// Bit shift needed to line-up value to the top of the representation range
+  static constexpr int normal_lineup_shift = num_rep_bits - num_significand_bits;
+
+  // To iteratively shift back and forth, our 2's (bit-) and 10's (divide-/multiply-) shifts must
+  // be of nearly the same magnitude, or else we'll over-/under-flow our shifting integer
+
+  // 2^10 is approximately 10^3, so the largest shifts will have a 10/3 ratio
+  // The difference between 2^10 and 10^3 is 1024/1000: 2.4%
+  // So every time we shift by 10 bits and 3 decimal places, the 2s shift is an extra 2.4%
+
+  // This 2.4% error compounds each time we do an iteration.
+  // The min (normal) float is 2^-126.
+  // Min denormal: 2^-126 * 2^-23 (mantissa bits): 2^-149 = ~1.4E-45
+  // With our 10/3 shifting ratio, 149 (bit-shifts) * (3 / 10) = 44.7 (10s-shifts)
+  // 10^(-44.7) = 2E-45, which is off by ~1.4x from 1.4E-45
+
+  // Similarly, the min (normal) double is 2^-1022.
+  // Min denormal: 2^-1022 * 2^-52 (mantissa bits): 2^-1074 = 4.94E-324
+  // With our 10/3 shifting ratio, 1074 (bit-shifts) * (3 / 10) = 322.2 (10s-shifts)
+  // 10^(-322.2) = 6.4E-323, which is off by ~13.2x from 4.94E-324
+
+  // To account for this compounding error, we can either complicate our loop code (slow),
+  // or use extra bits (in the direction we're shifting the 2s!) to compensate:
+  // 4 extra bits for doubles (2^4 = 16 > 13.2x error), 1 extra for floats (2 > 1.4x error)
+  /// # buffer bits to account for shifting error
+  static constexpr int num_2s_shift_buffer_bits = is_double ? 4 : 1;
+
+  // How much room do we have for shifting?
+  // Float: 64-bit ShiftingRep - 31 (rep + buffer) = 33 bits. 2^33 = 8.6E9
+  // Double: 128-bit ShiftingRep - 61 (rep + buffer) = 67 bits. 2^67 = 1.5E20
+  // Thus for double / float we can shift up to 20 / 9 decimal places at once
+
+  // But, we need to stick to our 10-bits / 3-decimals shift ratio to not over/under-flow.
+  // To simplify our loop code, we'll keep to this ratio by instead shifting a max of
+  // 18 / 9 decimal places, for double / float (60 / 30 bits)
+  /// Max at-once decimal place shift
+  static constexpr int max_digits_shift = is_double ? 18 : 9;
+  /// Max at-once bit shift
+  static constexpr int max_bits_shift = max_digits_shift * 10 / 3;
+
+  // Pre-calculate 10^max_digits_shift. Note that 10^18 / 10^9 fits within IntegerRep
+  /// 10^max_digits_shift
+  static constexpr auto max_digits_shift_pow =
+    multiply_power10<IntegerRep>(IntegerRep(1), max_digits_shift);
+};
+
+/**
+ * @brief Increment integer rep of floating point if conversion causes truncation
+ *
+ * @note This fixes problems like 1.2 (value = 1.1999...) at scale -1 -> 11
+ *
+ * @tparam T Type of integer holding the floating-point significand
+ * @param integral_mantissa The integer representation of the floating-point significand
+ * @param exp2 The power of 2 that needs to be applied to the significand
+ * @param exp10 The power of 10 that needs to be applied to the significand
+ * @return significand, incremented if the conversion to decimal causes truncation
+ */
+template <typename T, typename cuda::std::enable_if_t<cuda::std::is_integral_v<T>>* = nullptr>
+CUDF_HOST_DEVICE T increment_on_truncation(T const integral_mantissa,
+                                           int const exp2,
+                                           int const exp10)
+{
+  // The user-supplied scale may truncate information, so we need to talk about rounding.
+  // We have chosen not to round, so we want 1.23456f with scale -4 to be decimal 12345
+
+  // But if we don't round at all, 1.2 (double) with scale -1 is 11 instead of 12!
+  // Why? Because 1.2 (double) is actually stored as 1.1999999... which we truncate to 1.1
+  // While correct (given our choice to truncate), this is surprising and undesirable.
+  // This problem happens because 1.2 is not perfectly representable in floating point,
+  // and the value 1.199999... happened to be closer to 1.2 than the next value (1.2000...1...)
+
+  // If the scale truncates information (we didn't choose to keep exactly 1.1999...), how
+  // do we make sure we store 1.2? All we have to do is add 1 ulp! (unit in the last place)
+  // Then 1.1999... becomes 1.2000...1... which truncates to 1.2.
+  // And if it had been 1.2000...1..., adding 1 ulp still truncates to 1.2, the result is unchanged.
+
+  // The only way that this produces the incorrect result is if, when we entered 1.19999...,
+  // we truly meant 1.19999... (exactly, out to the very last bit), but then decided to truncate
+  // anyway. By choosing to truncate, you're saying you don't actually care about that level of
+  // precision, so being off by < 1 ulp should be just fine, compared to screwing up 1.2 with scale
+  // -1 -> 11
+
+  // So when does the user-supplied scale truncate info?
+  // For powers > 0: When the 10s (scale) shift is larger than the corresponding bit-shift.
+  // For powers < 0: When the 10s shift is less than the corresponding bit-shift.
+
+  // Corresponding bit-shift:
+  // 2^10 is approximately 10^3, but this is off by 1.024%
+  // 1.024^30 is 2.03704, so this is high by one bit for every 30*3 = 90 powers of 10
+  // So 10^N = 2^(10*N/3 - N/90) = 2^(299*N/90)
+  int const corresponding_exp2 = 299 * exp10 / 90;
+
+  // If exp10 > 0, truncate if divide by more 10s than we shift up by 2s
+  // If exp10 < 0, truncate if shift down by more OR THE SAME 2s than multiply by 10s
+  // Truncate on the same: because for our approximation 2^299 > 10^90
+  // Note that this works for both +/- exponents
+  bool const conversion_truncates =
+    (exp2 < corresponding_exp2) || ((exp2 == corresponding_exp2) && (exp2 < 0));
+
+  // (Potentially) increment and return
+  return integral_mantissa + static_cast<T>(conversion_truncates);
+}
+
+/**
+ * @brief Perform lossless base-2 -> base-10 fixed-point conversion for exp10 > 0
+ *
+ * @note Info is lost if the chosen scale factor truncates information.
+ *
+ * @tparam FloatingType The type of the original floating-point value we are converting from
+ * @param base2_value The base-2 fixed-point value we are converting from
+ * @param exp2 The number of powers of 2 to apply to convert from base-2
+ * @param exp10 The number of powers of 10 to apply to reach the desired scale factor
+ * @return Magnitude of the converted-to decimal integer
+ */
+
+template <typename FloatingType,
+          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+CUDF_HOST_DEVICE inline typename shifting_constants<FloatingType>::ShiftingRep
+shift_to_decimal_posexp(typename shifting_constants<FloatingType>::IntegerRep const base2_value,
+                        int exp2,
+                        int exp10)
+{
+  // To convert to decimal, we need to apply the input powers of 2 and 10
+  // The result will be (integer) base2_value * (2^exp2) / (10^exp10)
+  // Output type is ShiftingRep
+
+  // Here exp10 > 0 and exp2 > 0, so we need to shift left by 2s and divide by 10s.
+  // To do this losslessly, we will iterate back and forth between them, shifting
+  // up by 2s and down by 10s until all of the powers have been applied.
+
+  // However the input base2_value type has virtually no spare room to shift our data
+  // without over- or under-flowing and losing precision.
+  // So we'll cast up to ShiftingRep: uint64 for float's, __uint128_t for double's
+  using Constants   = shifting_constants<FloatingType>;
+  using ShiftingRep = typename Constants::ShiftingRep;
+  auto shifting_rep = static_cast<ShiftingRep>(base2_value);
+
+  // We want to start by lining up our bits in num_rep_bits (see comments on normal_lineup_shift),
+  // but since we start by bit-shifting up anyway, combine the normal_lineup_shift & max_bits_shift.
+  // Note that since we're shifting 2s up, we need num_2s_shift_buffer_bits space on the high side,
+  // which we do (our max bit shift is low enough that we don't shift into the highest bits)
+  static constexpr int max_init_shift = Constants::normal_lineup_shift + Constants::max_bits_shift;
+
+  // If our total bit shift is less than this, we don't need to iterate
+  if (exp2 <= max_init_shift) {
+    // Shift bits left, divide by 10s to apply the scale factor, and we're done.
+    return divide_power10<ShiftingRep>(shifting_rep << exp2, exp10);
+  }
+
+  // We need to iterate. Do the combined initial shift
+  shifting_rep <<= max_init_shift;
+  exp2 -= max_init_shift;
+
+  // Iterate, dividing by 10s and shifting up by 2s until we're almost done
+  while (exp10 > Constants::max_digits_shift) {
+    // More decimal places to shift than we have room: Divide the max number of 10s
+
+    // Note that the result of this division is guaranteed to fit within the low half of the bits.
+    // The highest set bit is num_rep_bits + num_2s_shift_buffer_bits + max_bits_shift
+    // For float this is 30 + 1 + 30 = 61, for double 57 + 4 + 60 = 121
+    // 2^61 / 10^9 (~2^30) is ~2^31, and 2^121 / 10^18 (~2^60) is ~2^61
+    // As a future optimization, we could use a faster division routine that takes this account.
+    shifting_rep /= Constants::max_digits_shift_pow;
+    exp10 -= Constants::max_digits_shift;
+
+    // If our remaining bit shift is less than the max, we're finished iterating
+    if (exp2 <= Constants::max_bits_shift) {
+      // Shift bits left, divide by 10s to apply the scale factor, and we're done.
+      // Note: This divide result may not fit in the low half of the bit range
+      return divide_power10<ShiftingRep>(shifting_rep << exp2, exp10);
+    }
+
+    // Shift the max number of bits left again
+    shifting_rep <<= Constants::max_bits_shift;
+    exp2 -= Constants::max_bits_shift;
+  }
+
+  // Last 10s-shift: Divdie all remaining decimal places, shift all remaining bits, then bail
+  // Note: This divide result may not fit in the low half of the bit range
+  // But the divisor is less than the max-shift, and thus fits within 64 / 32 bits
+  if constexpr (Constants::is_double) {
+    shifting_rep = divide_power10_64bit(shifting_rep, exp10);
+  } else {
+    shifting_rep = divide_power10_32bit(shifting_rep, exp10);
+  }
+
+  // Final bit shift: Shift may be large, guard against UB
+  // NOTE: This can overflow!
+  return guarded_left_shift(shifting_rep, exp2);
+}
+
+/**
+ * @brief Perform lossless base-2 -> base-10 fixed-point conversion for exp10 < 0
+ *
+ * @note Info is lost if the chosen scale factor truncates information.
+ *
+ * @tparam FloatingType The type of the original floating-point value we are converting from
+ * @param base2_value The base-2 fixed-point value we are converting from
+ * @param exp2 The number of powers of 2 to apply to convert from base-2
+ * @param exp10 The number of powers of 10 to apply to reach the desired scale factor
+ * @return Magnitude of the converted-to decimal integer
+ */
+template <typename Rep,
+          typename FloatingType,
+          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+CUDF_HOST_DEVICE inline typename shifting_constants<FloatingType>::ShiftingRep
+shift_to_decimal_negexp(typename shifting_constants<FloatingType>::IntegerRep const base2_value,
+                        int exp2,
+                        int exp10)
+{
+  // This is similar to shift_to_decimal_posexp(), except exp10 < 0 & exp2 < 0
+  // See comments in that function for details.
+  // Instead here we need to multiply by 10s and shift right by 2s
+
+  // Convert to using positive values so we don't have keep negating each time we multiply
+  int exp2_mag  = -exp2;
+  int exp10_mag = -exp10;
+
+  // ShiftingRep: uint64 for float's, __uint128_t for double's
+  using Constants   = shifting_constants<FloatingType>;
+  using ShiftingRep = typename Constants::ShiftingRep;
+  ShiftingRep shifting_rep;
+
+  // For performing final 10s-shift
+  auto final_shifts_low10s = [&]() {
+    // Last 10s-shift: multiply all remaining decimal places, shift all remaining bits, then bail
+    // The multiplier is less than the max-shift, and thus fits within 64 / 32 bits
+    if constexpr (Constants::is_double) {
+      shifting_rep = multiply_power10_64bit(shifting_rep, exp10_mag);
+    } else {
+      shifting_rep = multiply_power10_32bit(shifting_rep, exp10_mag);
+    }
+
+    // Final bit shift: Shift may be large, guard against UB
+    return guarded_right_shift(shifting_rep, exp2_mag);
+  };
+
+  // If our total decimal shift is less than the max, we don't need to iterate
+  if (exp10_mag <= Constants::max_digits_shift) {
+    shifting_rep = base2_value;
+    return final_shifts_low10s();
+  }
+
+  // We want to start by lining up our bits to num_rep_bits, but since we'll be bit-shifting
+  // down, we need even more low bits as a buffer (see comments on these constants)
+  auto const lineup_shift       = Constants::num_rep_bits - count_significant_bits(base2_value);
+  auto const num_init_bit_shift = lineup_shift + Constants::num_2s_shift_buffer_bits;
+
+  // Constants::num_2s_shift_buffer_bits; Note: This shift is safe to do in the smaller IntegerRep
+  // as it is up to bit 61 / 31
+  shifting_rep = base2_value << num_init_bit_shift;
+  exp2_mag += num_init_bit_shift;
+
+  // Iterate, multiplying by 10s and shifting down by 2s until we're almost done
+  do {
+    // More decimal places to shift than we have room: Multiply the max number of 10s
+    shifting_rep *= Constants::max_digits_shift_pow;
+    exp10_mag -= Constants::max_digits_shift;
+
+    // If our remaining bit shift is less than the max, we're finished iterating
+    if (exp2_mag <= Constants::max_bits_shift) {
+      // Last bit-shift: Shift all remaining bits, apply the remaining scale, then bail
+      shifting_rep >>= exp2_mag;
+
+      // We need to convert to the output rep for the final scale-factor multiply, because if (e.g.)
+      // float -> dec128 and some large exp10_mag, it might overflow the 64bit shifting rep.
+      // It's not needed for exp10 > 0 because we're dividing by 10s there instead of multiplying.
+      using UnsignedRep = cuda::std::make_unsigned_t<Rep>;
+      // NOTE: This can overflow! (Both multiply and cast)
+      return multiply_power10<UnsignedRep>(static_cast<UnsignedRep>(shifting_rep), exp10_mag);
+    }
+
+    // More bits to shift than we have room: Shift the max number of 2s
+    shifting_rep >>= Constants::max_bits_shift;
+    exp2_mag -= Constants::max_bits_shift;
+  } while (exp10_mag > Constants::max_digits_shift);
+
+  // Do our final shifts
+  return final_shifts_low10s();
+}
+
+/**
+ * @brief Perform lossless floating-point -> integer decimal conversion
+ *
+ * @note Info is lost if the chosen scale factor truncates information.
+ *
+ * @tparam Rep The type of integer we are converting to, to store the decimal value
+ * @tparam FloatingType The type of floating-point object we are converting from
+ * @param floating The floating point value to convert
+ * @param scale The desired base-10 scale factor: decimal value = returned value * 10^scale
+ * @return Integer representation of the floating-point value, given the desired scale
+ */
+template <typename Rep,
+          typename FloatingType,
+          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& floating,
+                                                         scale_type const& scale)
+{
+  // Extract components of the floating point number
+  using converter        = floating_converter<FloatingType>;
+  auto const integer_rep = converter::bit_cast_to_integer(floating);
+  if (converter::is_zero(integer_rep)) { return 0; }
+
+  // Note that the base2_value here is an unsigned integer with sizeof(FloatingType)
+  auto const is_negative                  = converter::get_is_negative(integer_rep);
+  auto const [base2_value, floating_exp2] = converter::get_significand_and_exp2(integer_rep);
+
+  auto const exp2  = floating_exp2;  // Can't capture from a parameter pack
+  auto const exp10 = static_cast<int>(scale);
+
+  // Increment if truncating to yield expected value, see function for discussion
+  auto const incremented = increment_on_truncation(base2_value, exp2, exp10);
+
+  // Apply the powers of 2 and 10 to convert to decimal.
+  // The result will be incremented * (2^exp2) / (10^exp10)
+  //
+  // Note that while this code is branchy, the decimal scale factor is part of the
+  // column type itself, so every thread will take the same branches on exp10.
+  // Also data within a column tends to be similar, so they will often take the
+  // same branches on exp2 as well.
+  //
+  // NOTE: All returns here can overflow (e.g. unsigned -> signed)
+  auto const magnitude = [&]() -> Rep {
+    using UnsignedRep = cuda::std::make_unsigned_t<Rep>;
+
+    if (exp10 == 0) {
+      // NOTE: Left Bit-shift can overflow! As can cast! (e.g. double -> decimal32)
+      // Bit shifts may be large, guard against UB
+      if (exp2 >= 0) {
+        return guarded_left_shift(static_cast<UnsignedRep>(incremented), exp2);
+      } else {
+        return guarded_right_shift(incremented, -exp2);
+      }
+    } else if (exp10 > 0) {
+      if (exp2 <= 0) {
+        // Power-2/10 shifts both downward: order doesn't matter, apply and bail.
+        // Guard against shift being undefined behavior
+        auto const shifted = guarded_right_shift(incremented, -exp2);
+        return divide_power10<decltype(shifted)>(shifted, exp10);
+      }
+      return shift_to_decimal_posexp<FloatingType>(incremented, exp2, exp10);
+    } else {  // exp10 < 0
+      if (exp2 >= 0) {
+        // Power-2/10 shifts both upward: order doesn't matter, apply and bail.
+        // NOTE: Either shift, multiply, or cast (e.g. double -> decimal32) can overflow!
+        auto const shifted = guarded_left_shift(static_cast<UnsignedRep>(incremented), exp2);
+        return multiply_power10<UnsignedRep>(shifted, -exp10);
+      }
+      return shift_to_decimal_negexp<Rep, FloatingType>(incremented, exp2, exp10);
+    }
+  }();
+
+  // Reapply the sign and return
+  return is_negative ? -magnitude : magnitude;
+}
+
+/**
+ * @brief Perform (nearly) lossless base-10 -> base-2 fixed-point conversion for exp10 > 0
+ *
+ * @note Intended to only be called internally.
+ *
+ * @tparam DecimalRep The decimal integer type we are converting from
+ * @tparam FloatingType The type of floating point object we are converting to
+ * @param decimal_rep The decimal integer to convert
+ * @param exp10 The number of powers of 10 to apply to undo the scale factor.
+ * @return A pair of the base-2 value and the remaining powers of 2 to be applied.
+ */
+template <typename FloatingType,
+          typename DecimalRep,
+          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+CUDF_HOST_DEVICE inline auto shift_to_binary_posexp(DecimalRep decimal_rep, int exp10)
+{
+  // This is the reverse of shift_to_decimal_posexp(), see that for more details.
+
+  // ShiftingRep: uint64 for float's, __uint128_t for double's
+  using Constants   = shifting_constants<FloatingType>;
+  using ShiftingRep = typename Constants::ShiftingRep;
+
+  // We would start by lining up our data to num_rep_bits, but since we'll be bit-shifting
+  // down, we need even more low bits as a buffer (see comments on these constants)
+  auto const num_significant_bits = count_significant_bits(decimal_rep);
+  int exp2 = num_significant_bits - (Constants::num_rep_bits + Constants::num_2s_shift_buffer_bits);
+
+  // Perform the initial bit shift
+  ShiftingRep shifting_rep;
+  if constexpr (sizeof(ShiftingRep) < sizeof(DecimalRep)) {
+    // Shift within DecimalRep before dropping to the smaller ShiftingRep
+    decimal_rep  = (exp2 >= 0) ? (decimal_rep >> exp2) : (decimal_rep << -exp2);
+    shifting_rep = static_cast<ShiftingRep>(decimal_rep);
+  } else {
+    // Scale up to ShiftingRep before shifting
+    shifting_rep = static_cast<ShiftingRep>(decimal_rep);
+    shifting_rep = (exp2 >= 0) ? (shifting_rep >> exp2) : (shifting_rep << -exp2);
+  }
+
+  // Iterate, multiplying by 10s and shifting down by 2s until we're almost done
+  while (exp10 > Constants::max_digits_shift) {
+    // More decimal places to shift than we have room: Multiply the max number of 10s
+    shifting_rep *= Constants::max_digits_shift_pow;
+    exp10 -= Constants::max_digits_shift;
+
+    // Then make more room by bit shifting down by the max # of 2s
+    shifting_rep >>= Constants::max_bits_shift;
+    exp2 += Constants::max_bits_shift;
+  }
+
+  // Last 10s-shift: multiply all remaining decimal places
+  // The multiplier is less than the max-shift, and thus fits within 64 / 32 bits
+  if constexpr (Constants::is_double) {
+    shifting_rep = multiply_power10_64bit(shifting_rep, exp10);
+  } else {
+    shifting_rep = multiply_power10_32bit(shifting_rep, exp10);
+  }
+
+  // Our shifting_rep is now the integer mantissa, return it and the powers of 2
+  return std::pair{shifting_rep, exp2};
+}
+
+/**
+ * @brief Perform (nearly) lossless base-10 -> base-2 fixed-point conversion for exp10 < 0
+ *
+ * @note Intended to only be called internally.
+ * @note A 1-ulp loss may occur, but only for magnitudes E-270 or smaller.
+ *
+ * @tparam DecimalRep The decimal integer type we are converting from
+ * @tparam FloatingType The type of floating point object we are converting to
+ * @param decimal_rep The decimal integer to convert
+ * @param exp10 The number of powers of 10 to apply to undo the scale factor.
+ * @return A pair of the base-2 value and the remaining powers of 2 to be applied.
+ */
+template <typename FloatingType,
+          typename DecimalRep,
+          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+CUDF_HOST_DEVICE inline auto shift_to_binary_negexp(DecimalRep decimal_rep, int const exp10)
+{
+  // This is the reverse of shift_to_decimal_negexp(), see that for more details.
+
+  // ShiftingRep: uint64 for float's, __uint128_t for double's
+  using Constants   = shifting_constants<FloatingType>;
+  using ShiftingRep = typename Constants::ShiftingRep;
+
+  // We would start by lining up our data to num_rep_bits, but if we originated with a floating
+  // number, we had to keep track of extra bits on the low-side because we were bit-shifting down.
+  //
+  // Those bits were not rounded. If we didn't truncate those bits before, we don't want to now
+  // either to ensure that we end up at the same floating point value that we started with.
+  //
+  // We could try to round here instead, but we don't know if we came from a floating-point value
+  // or not, so any rounding may not be desired.
+  //
+  // Note that here we are bit-shifting up, so we also need num_2s_shift_buffer_bits
+  // room on the high side. We have barely enough room for this for floats, but we're one bit
+  // over for doubles. So for doubles we'll keep one less bit on the low-side.
+  //
+  // This MAY cause a discrepancy in the last bit of our double from the value that we started with.
+  // However we only need all 4 bits for extremely large exponents
+  // (one bit to start + one extra bit every 90 powers of 10, so < E-270).
+  // And it's only a partial bit, and the eventual cast to double rounds, so we
+  // are often (always?) fine anyway (e.g. DBL_MIN & DBL_TRUE_MIN work fine).
+  //
+  // See comments on these constants for more details.
+  auto const num_significant_bits = count_significant_bits(decimal_rep);
+  int exp2 = num_significant_bits - (Constants::num_rep_bits + Constants::num_2s_shift_buffer_bits);
+  if constexpr (Constants::is_double) { ++exp2; }
+
+  // Max bit shift left to give us the most room for shifting 10s: Multiply by 2s
+  exp2 -= Constants::max_bits_shift;
+
+  // Perform the initial bit shift
+  ShiftingRep shifting_rep;
+  if constexpr (sizeof(ShiftingRep) < sizeof(DecimalRep)) {
+    // Shift within DecimalRep before dropping to the smaller ShiftingRep
+    decimal_rep  = (exp2 >= 0) ? (decimal_rep >> exp2) : (decimal_rep << -exp2);
+    shifting_rep = static_cast<ShiftingRep>(decimal_rep);
+  } else {
+    // Scale up to ShiftingRep before shifting
+    shifting_rep = static_cast<ShiftingRep>(decimal_rep);
+    shifting_rep = (exp2 >= 0) ? (shifting_rep >> exp2) : (shifting_rep << -exp2);
+  }
+
+  // Convert to using positive values upfront, simpler than doing later.
+  int exp10_mag = -exp10;
+
+  // Iterate, dividing by 10s and shifting up by 2s until we're almost done
+  while (exp10_mag > Constants::max_digits_shift) {
+    // More decimal places to shift than we have room: Divide the max number of 10s
+    // Note that the result of this division is guaranteed to fit within low 64/32 bits
+    // See discussion in shift_to_decimal_posexp() for more details
+    shifting_rep /= Constants::max_digits_shift_pow;
+    exp10_mag -= Constants::max_digits_shift;
+
+    // Then make more room by bit shifting up by the max # of 2s
+    shifting_rep <<= Constants::max_bits_shift;
+    exp2 -= Constants::max_bits_shift;
+  }
+
+  // Last 10s-shift: Divdie all remaining decimal places.
+  // This divide result may not fit in the low half of the bit range
+  // But the divisor is less than the max-shift, and thus fits within 64 / 32 bits
+  if constexpr (Constants::is_double) {
+    shifting_rep = divide_power10_64bit(shifting_rep, exp10_mag);
+  } else {
+    shifting_rep = divide_power10_32bit(shifting_rep, exp10_mag);
+  }
+
+  // Our shifting_rep is now the integer mantissa, return it and the powers of 2
+  return std::pair{shifting_rep, exp2};
+}
+
+/**
+ * @brief Perform (nearly) lossless integer decimal -> floating-point conversion
+ *
+ * @note A 1 ulp loss may occur, but only to doubles with magnitude <= 1E-270
+ *
+ * @tparam FloatingType The type of floating-point object we are converting to
+ * @tparam Rep The decimal integer type we are converting from
+ * @param value The decimal integer to convert
+ * @param scale The base-10 scale factor for the input integer
+ * @return Floating-point representation of the scaled integral value
+ */
+template <typename FloatingType,
+          typename Rep,
+          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+CUDF_HOST_DEVICE inline FloatingType convert_integral_to_floating(Rep const& value,
+                                                                  scale_type const& scale)
+{
+  // Check the sign of the input
+  bool const is_negative = (value < 0);
+
+  // Convert to unsigned for bit counting/shifting
+  using UnsignedType        = cuda::std::make_unsigned_t<Rep>;
+  auto const unsigned_value = [&]() -> UnsignedType {
+    // Use built-in abs functions where available
+    if constexpr (cuda::std::is_same_v<Rep, int64_t>) {
+      return cuda::std::llabs(value);
+    } else if constexpr (!cuda::std::is_same_v<Rep, __int128_t>) {
+      return cuda::std::abs(value);
+    }
+
+    // No abs function for 128bit types, so have to do it manually.
+    // Must guard against minimum value, as we can't just negate it: not representable.
+    if (value == cuda::std::numeric_limits<__int128_t>::min()) {
+      return static_cast<UnsignedType>(value);
+    } else {
+      return static_cast<UnsignedType>(is_negative ? -value : value);
+    }
+  }();
+
+  // Shift by powers of 2 and 10 to get our integer mantissa
+  auto const [mantissa, exp2] = [&]() {
+    auto const exp10 = static_cast<int32_t>(scale);
+    if (exp10 >= 0) {
+      return shift_to_binary_posexp<FloatingType>(unsigned_value, exp10);
+    } else {  // exp10 < 0
+      return shift_to_binary_negexp<FloatingType>(unsigned_value, exp10);
+    }
+  }();
+
+  // Zero has special exponent bits, just handle it here
+  if (mantissa == 0) { return FloatingType(0.0f); }
+
+  // Cast our integer mantissa to floating point
+  auto const floating = static_cast<FloatingType>(mantissa);  // IEEE-754 rounds to even
+
+  // Apply the sign and the remaining powers of 2
+  using converter      = floating_converter<FloatingType>;
+  auto const magnitude = converter::add_exp2(floating, exp2);
+  return converter::set_is_negative(magnitude, is_negative);
 }
 
 }  // namespace detail
