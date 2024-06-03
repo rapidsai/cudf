@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar
 import datetime
 import functools
 import locale
@@ -338,6 +339,34 @@ class DatetimeColumn(column.ColumnBase):
 
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
+
+    def _get_field_names(
+        self,
+        field: Literal["month", "weekday"],
+        labels: list[str],
+        locale: str | None = None,
+    ) -> ColumnBase:
+        if locale is not None:
+            raise NotImplementedError(
+                "Setting a locale is currently not supported. "
+                "Results will be returned in your current locale."
+            )
+        col_labels = as_column(labels)
+        indices = self.get_dt_field(field)
+        has_nulls = indices.has_nulls()
+        if has_nulls:
+            indices = indices.fillna(len(col_labels))
+        return col_labels.take(indices, nullify=True, check_bounds=has_nulls)
+
+    def get_day_names(self, locale: str | None = None) -> ColumnBase:
+        return self._get_field_names(
+            "weekday", list(calendar.day_name), locale=locale
+        )
+
+    def get_month_names(self, locale: str | None = None) -> ColumnBase:
+        return self._get_field_names(
+            "month", list(calendar.month_name), locale=locale
+        )
 
     def ceil(self, freq: str) -> ColumnBase:
         return libcudf.datetime.ceil_datetime(self, freq)

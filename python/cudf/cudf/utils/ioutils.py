@@ -739,6 +739,11 @@ prune_columns : bool, default False
 
     If True, only return those columns mentioned in the dtype argument.
     If `False` dtype argument is used a type inference suggestion.
+on_bad_lines : {'error', 'recover'}, default 'error'
+    Specifies what to do upon encountering a bad line. Allowed values are :
+
+    - ``'error'``, raise an Exception when a bad line is encountered.
+    - ``'recover'``, fills the row with <NA> when a bad line is encountered.
 Returns
 -------
 result : Series or DataFrame, depending on the value of `typ`.
