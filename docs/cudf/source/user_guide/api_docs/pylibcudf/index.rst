@@ -6,7 +6,7 @@ This page provides API documentation for pylibcudf.
 
 .. toctree::
     :maxdepth: 1
-    :caption: API Documentation
+    :caption: Top-level modules
 
     aggregation
     binaryop
@@ -22,6 +22,7 @@ This page provides API documentation for pylibcudf.
     reduce
     reshape
     rolling
+    round
     scalar
     search
     stream_compaction
@@ -30,3 +31,9 @@ This page provides API documentation for pylibcudf.
     table
     types
     unary
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Submodules
+
+    strings/index.rst

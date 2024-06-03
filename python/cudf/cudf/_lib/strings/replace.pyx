@@ -80,7 +80,7 @@ def replace_multi(Column source_strings,
     Returns a Column after replacing occurrences of
     patterns `target_strings` with `repl_strings` in `source_strings`.
     """
-    return Column.from_pylibcudf(plc.strings.replace.replace(
+    return Column.from_pylibcudf(plc.strings.replace.replace_multi(
         source_strings.to_pylibcudf(mode="read"),
         target_strings.to_pylibcudf(mode="read"),
         repl_strings.to_pylibcudf(mode="read"),

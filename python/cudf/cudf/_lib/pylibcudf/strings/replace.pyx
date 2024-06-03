@@ -11,17 +11,17 @@ from cudf._lib.pylibcudf.libcudf.scalar.scalar_factories cimport (
 )
 from cudf._lib.pylibcudf.libcudf.strings.replace cimport (
     replace as cpp_replace,
+    replace_multiple as cpp_replace_multiple,
     replace_slice as cpp_replace_slice,
 )
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
 from cudf._lib.pylibcudf.scalar cimport Scalar
-from cudf._lib.pylibcudf.strings.replace cimport ColumnOrScalar
 
 
 cpdef Column replace(
     Column input,
-    ColumnOrScalar target,
-    ColumnOrScalar repl,
+    Scalar target,
+    Scalar repl,
     size_type maxrepl = -1
 ):
     """Replaces target string within each string with the specified replacement string.
@@ -34,22 +34,13 @@ cpdef Column replace(
     ----------
     input : Column
         The input strings
-    target : Union[Column, Scalar]
-        String to search for in each string or Column containing strings
-        to search for in the input column.
-
-        If target is a Column, repl must also be a Column.
-    repl : Union[Column, Scalar]
-        String to replace target with, or Column (of equal length to target)
-        of replacement strings.
-
-        If repl is a Column, target must also be a Column.
+    target : Scalar
+        String to search for in each string.
+    repl : Scalar
+        String to replace target with.
     maxrepl : size_type, default -1
         Maximum times to replace if target appears multiple times in the input string.
         Default of -1 specifies replace all occurrences of target in each string.
-
-        This option is not supported when target and repl are of type Column.
-        (all occurrences of target will always be replaced in that case)
 
     Returns
     -------
@@ -61,30 +52,58 @@ cpdef Column replace(
         const string_scalar* target_str
         const string_scalar* repl_str
 
-    if ColumnOrScalar is Scalar:
-        target_str = <string_scalar *>(target.c_obj.get())
-        repl_str = <string_scalar *>(repl.c_obj.get())
+    target_str = <string_scalar *>(target.c_obj.get())
+    repl_str = <string_scalar *>(repl.c_obj.get())
 
-        with nogil:
-            c_result = move(cpp_replace(
-                input.view(),
-                target_str[0],
-                repl_str[0],
-                maxrepl,
-            ))
-    else:
-        # Column case
+    with nogil:
+        c_result = move(cpp_replace(
+            input.view(),
+            target_str[0],
+            repl_str[0],
+            maxrepl,
+        ))
 
-        if maxrepl != -1:
-            raise ValueError("maxrepl is not supported as a valid "
-                             "argument when target and repl are Columns")
+    return Column.from_libcudf(move(c_result))
 
-        with nogil:
-            c_result = move(cpp_replace(
-                input.view(),
-                target.view(),
-                repl.view(),
-            ))
+
+cpdef Column replace_multiple(
+    Column input,
+    Column target,
+    Column repl,
+    size_type maxrepl = -1
+):
+    """Replaces target string within each string with the specified replacement string.
+
+    Null string entries will return null output string entries.
+
+    For details, see :cpp:func:`replace_multiple`.
+
+    Parameters
+    ----------
+    input : Column
+        The input strings
+    target : Column
+        Column containing strings to search for in the input column.
+    repl : Column
+        Column containing strings to replace target with.
+        Each target, when found, will be replaced by the value at the
+        corresponding index in the repl Column.
+
+        Must be of the same length as target.
+
+    Returns
+    -------
+    pylibcudf.Column
+        New string column with target replaced.
+    """
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(cpp_replace_multiple(
+            input.view(),
+            target.view(),
+            repl.view(),
+        ))
 
     return Column.from_libcudf(move(c_result))
 

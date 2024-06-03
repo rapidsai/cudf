@@ -73,7 +73,7 @@ def test_replace(
         max_replacements=maxrepl,
     )
 
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)
 
 
 @pytest.mark.parametrize("startstop", [(0, -1), (0, 0), (1, 3)])
@@ -93,13 +93,15 @@ def test_replace_slice(pa_data_col, plc_data_col, scalar_repl, startstop):
 
     expected = pa.compute.utf8_replace_slice(pa_data_col, start, stop, pa_repl)
 
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)
 
 
 def test_replace_col(pa_data_col, plc_data_col, col_repl_target, col_repl):
     pa_target, plc_target = col_repl_target
     pa_repl, plc_repl = col_repl
-    got = plc.strings.replace.replace(plc_data_col, plc_target, plc_repl)
+    got = plc.strings.replace.replace_multiple(
+        plc_data_col, plc_target, plc_repl
+    )
 
     # There's nothing in pyarrow that does string replace with columns
     # for targets/repls, so let's implement our own in python
@@ -121,16 +123,4 @@ def test_replace_col(pa_data_col, plc_data_col, col_repl_target, col_repl):
         type=pa.string(),
     )
 
-    assert_column_eq(got, expected)
-
-
-def test_replace_col_invalid_arg(plc_data_col, col_repl_target, col_repl):
-    _, plc_target = col_repl_target
-    _, plc_repl = col_repl
-    with pytest.raises(
-        ValueError,
-        match="maxrepl is not supported as a valid argument when target and repl are Columns",
-    ):
-        plc.strings.replace.replace(
-            plc_data_col, plc_target, plc_repl, maxrepl=10
-        )
+    assert_column_eq(expected, got)

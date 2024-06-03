@@ -4,14 +4,17 @@ from cudf._lib.pylibcudf.column cimport Column
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
 from cudf._lib.pylibcudf.scalar cimport Scalar
 
-ctypedef fused ColumnOrScalar:
-    Column
-    Scalar
 
 cpdef Column replace(
     Column input,
-    ColumnOrScalar target,
-    ColumnOrScalar repl,
+    Scalar target,
+    Scalar repl,
+    size_type maxrepl = *
+)
+cpdef Column replace_multiple(
+    Column input,
+    Column target,
+    Column repl,
     size_type maxrepl = *
 )
 cpdef Column replace_slice(
