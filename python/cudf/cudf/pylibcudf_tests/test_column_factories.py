@@ -102,7 +102,6 @@ def mask_state(request):
 def test_make_empty_column_dtype(pa_type):
     pa_col = pa.array([], type=pa_type)
 
-    # TODO: DataType.from_arrow()?
     plc_type = plc.interop.from_arrow(pa_col).type()
 
     if isinstance(pa_type, (pa.ListType, pa.StructType)):
@@ -117,7 +116,6 @@ def test_make_empty_column_dtype(pa_type):
 def test_make_empty_column_typeid(pa_type):
     pa_col = pa.array([], type=pa_type)
 
-    # TODO: DataType.from_arrow()?
     tid = plc.interop.from_arrow(pa_col).type().id()
 
     if isinstance(pa_type, (pa.ListType, pa.StructType)):

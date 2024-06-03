@@ -30,7 +30,7 @@ def test_struct_dtype_roundtrip():
     with pytest.raises(ValueError):
         plc.interop.to_arrow(plc_type)
 
-    arrow_type = plc.interop.to_arrow(plc_type, fields=struct_type)
+    arrow_type = plc.interop.to_arrow(plc_type, fields=[struct_type.field(i) for i in range(struct_type.num_fields))
     assert arrow_type == struct_type
 
 
