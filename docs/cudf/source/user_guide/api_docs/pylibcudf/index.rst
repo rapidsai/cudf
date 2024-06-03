@@ -22,6 +22,7 @@ This page provides API documentation for pylibcudf.
     reduce
     reshape
     rolling
+    round
     scalar
     search
     stream_compaction
