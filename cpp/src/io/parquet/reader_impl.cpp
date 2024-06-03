@@ -267,14 +267,26 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   }
 
   // launch byte stream split decoder
-  if (BitAnd(kernel_mask, decode_kernel_mask::BYTE_STREAM_SPLIT_FLAT) != 0) {
-    DecodeSplitPageDataFlat(subpass.pages,
-                            pass.chunks,
-                            num_rows,
-                            skip_rows,
-                            level_type_size,
-                            error_code.data(),
-                            streams[s_idx++]);
+  if (BitAnd(kernel_mask, decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT) != 0) {
+    DecodeSplitPageFixedWidthData(subpass.pages,
+                                      pass.chunks,
+                                      num_rows,
+                                      skip_rows,
+                                      level_type_size,
+                                      false,
+                                      error_code.data(),
+                                      streams[s_idx++]);
+  }
+
+  if (BitAnd(kernel_mask, decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED) != 0) {
+    DecodeSplitPageFixedWidthData(subpass.pages,
+                                  pass.chunks,
+                                  num_rows,
+                                  skip_rows,
+                                  level_type_size,
+                                  true,
+                                  error_code.data(),
+                                  streams[s_idx++]);
   }
 
   // launch byte stream split decoder
@@ -294,6 +306,18 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                         num_rows,
                         skip_rows,
                         level_type_size,
+                        false,
+                        error_code.data(),
+                        streams[s_idx++]);
+  }
+
+   if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED) != 0) {
+    DecodePageDataFixed(subpass.pages,
+                        pass.chunks,
+                        num_rows,
+                        skip_rows,
+                        level_type_size,
+                        true,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -304,6 +328,18 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                             num_rows,
                             skip_rows,
                             level_type_size,
+                            false,
+                            error_code.data(),
+                            streams[s_idx++]);
+  }
+
+  if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_DICT_NESTED) != 0) {
+    DecodePageDataFixedDict(subpass.pages,
+                            pass.chunks,
+                            num_rows,
+                            skip_rows,
+                            level_type_size,
+                            true,
                             error_code.data(),
                             streams[s_idx++]);
   }
