@@ -463,10 +463,6 @@ void traverse_children::operator()<cudf::list_view>(host_span<column_view const>
  */
 void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(cudf::all_have_same_types(cols.begin(), cols.end()),
-               "Type mismatch in columns to concatenate.",
-               cudf::data_type_error);
-
   // total size of all concatenated rows
   size_t const total_row_count =
     std::accumulate(cols.begin(), cols.end(), std::size_t{}, [](size_t a, auto const& b) {
@@ -476,8 +472,22 @@ void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_v
                "Total number of concatenated rows exceeds the column size limit",
                std::overflow_error);
 
+  if (std::any_of(cols.begin(), cols.end(), [](column_view const& c) {
+        return c.type().id() == cudf::type_id::EMPTY;
+      })) {
+    CUDF_EXPECTS(
+      std::all_of(cols.begin(),
+                  cols.end(),
+                  [](column_view const& c) { return c.type().id() == cudf::type_id::EMPTY; }),
+      "Mismatch in columns to concatenate.",
+      cudf::data_type_error);
+    return;
+  }
+  CUDF_EXPECTS(cudf::all_have_same_types(cols.begin(), cols.end()),
+               "Type mismatch in columns to concatenate.",
+               cudf::data_type_error);
+
   // traverse children
-  if (cols.front().type().id() == cudf::type_id::EMPTY) { return; }
   cudf::type_dispatcher(cols.front().type(), traverse_children{}, cols, stream);
 }
 
