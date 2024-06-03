@@ -51,6 +51,9 @@ cdef class DataType:
             self.c_obj == (<DataType>other).c_obj
         )
 
+    def __hash__(self):
+        return hash((self.c_obj.id(), self.c_obj.scale()))
+
     @staticmethod
     cdef DataType from_libcudf(data_type dt):
         """Create a DataType from a libcudf data_type.

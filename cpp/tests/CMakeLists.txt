@@ -575,6 +575,7 @@ ConfigureTest(
   large_strings/merge_tests.cpp
   large_strings/parquet_tests.cpp
   large_strings/reshape_tests.cpp
+  large_strings/split_strings_tests.cpp
   GPUS 1
   PERCENT 100
 )
