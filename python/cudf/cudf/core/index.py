@@ -38,6 +38,7 @@ from cudf.api.types import (
     is_integer,
     is_list_like,
     is_scalar,
+    is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
@@ -1623,7 +1624,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     @property
     @_cudf_nvtx_annotate
     def str(self):
-        if isinstance(self._values, cudf.core.column.StringColumn):
+        if is_string_dtype(self.dtype):
             return StringMethods(parent=self)
         else:
             raise AttributeError(
@@ -2118,6 +2119,45 @@ class DatetimeIndex(Index):
         """
         res = extract_quarter(self._values)
         return Index(res, dtype="int8")
+
+    @_cudf_nvtx_annotate
+    def day_name(self, locale: str | None = None) -> Index:
+        """
+        Return the day names. Currently supports English locale only.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> datetime_index = cudf.date_range("2016-12-31", "2017-01-08", freq="D")
+        >>> datetime_index
+        DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
+                       '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07'],
+                      dtype='datetime64[ns]', freq='D')
+        >>> datetime_index.day_name()
+        Index(['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+               'Friday', 'Saturday'], dtype='object')
+        """
+        day_names = self._column.get_day_names(locale)
+        return Index._from_data({self.name: day_names})
+
+    @_cudf_nvtx_annotate
+    def month_name(self, locale: str | None = None) -> Index:
+        """
+        Return the month names. Currently supports English locale only.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> datetime_index = cudf.date_range("2017-12-30", periods=6, freq='W')
+        >>> datetime_index
+        DatetimeIndex(['2017-12-30', '2018-01-06', '2018-01-13', '2018-01-20',
+                    '2018-01-27', '2018-02-03'],
+                      dtype='datetime64[ns]', freq='7D')
+        >>> datetime_index.month_name()
+        Index(['December', 'January', 'January', 'January', 'January', 'February'], dtype='object')
+        """
+        month_names = self._column.get_month_names(locale)
+        return Index._from_data({self.name: month_names})
 
     @_cudf_nvtx_annotate
     def isocalendar(self):

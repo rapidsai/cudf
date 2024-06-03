@@ -1,8 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+import abc
 import copyreg
 import importlib
+import os
 import pickle
 import sys
 
@@ -386,17 +388,35 @@ TimedeltaIndex = make_final_proxy_type(
     },
 )
 
-NumpyExtensionArray = make_final_proxy_type(
-    "NumpyExtensionArray",
-    _Unusable,
-    pd.arrays.NumpyExtensionArray,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
-    additional_attributes={
-        "_ndarray": _FastSlowAttribute("_ndarray"),
-        "_dtype": _FastSlowAttribute("_dtype"),
-    },
-)
+try:
+    from pandas.arrays import NumpyExtensionArray as pd_NumpyExtensionArray
+
+    NumpyExtensionArray = make_final_proxy_type(
+        "NumpyExtensionArray",
+        _Unusable,
+        pd_NumpyExtensionArray,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+        additional_attributes={
+            "_ndarray": _FastSlowAttribute("_ndarray"),
+            "_dtype": _FastSlowAttribute("_dtype"),
+        },
+    )
+
+except ImportError:
+    from pandas.arrays import PandasArray as pd_PandasArray
+
+    PandasArray = make_final_proxy_type(
+        "PandasArray",
+        _Unusable,
+        pd_PandasArray,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+        additional_attributes={
+            "_ndarray": _FastSlowAttribute("_ndarray"),
+            "_dtype": _FastSlowAttribute("_dtype"),
+        },
+    )
 
 TimedeltaArray = make_final_proxy_type(
     "TimedeltaArray",
@@ -839,7 +859,12 @@ ExcelWriter = make_final_proxy_type(
     pd.ExcelWriter,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "__fspath__": _FastSlowAttribute("__fspath__"),
+    },
+    bases=(os.PathLike,),
+    metaclasses=(abc.ABCMeta,),
 )
 
 try:
@@ -1014,7 +1039,7 @@ AbstractHolidayCalendar = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
-    meta_class=pd_HolidayCalendarMetaClass,
+    metaclasses=(pd_HolidayCalendarMetaClass,),
 )
 
 Holiday = make_final_proxy_type(
