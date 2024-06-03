@@ -155,8 +155,7 @@ class PandasCompatListProcessor:
         try:
             newnode["refuri"] = self.builder.get_relative_uri(
                 docname, pandascompat["docname"]
-            )
-            newnode["refuri"] += "#" + pandascompat["target"]["refid"]
+            ) + "#" + pandascompat["target"]["refid"]
         except NoUri:
             # ignore if no URI can be determined, e.g. for LaTeX output
             pass
