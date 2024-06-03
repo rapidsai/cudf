@@ -28,3 +28,12 @@ def test_copy_bitmask(column, nullable):
 
     assert expected.size == got.size
     assert expected.tobytes() == got.tobytes()
+
+
+def test_bitmask_allocation_size_bytes():
+    assert plc.null_mask.bitmask_allocation_size_bytes(0) == 0
+    assert plc.null_mask.bitmask_allocation_size_bytes(1) == 64
+    assert plc.null_mask.bitmask_allocation_size_bytes(512) == 64
+    assert plc.null_mask.bitmask_allocation_size_bytes(513) == 128
+    assert plc.null_mask.bitmask_allocation_size_bytes(1024) == 128
+    assert plc.null_mask.bitmask_allocation_size_bytes(1025) == 192
