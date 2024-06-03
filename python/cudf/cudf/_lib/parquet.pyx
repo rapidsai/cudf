@@ -26,6 +26,7 @@ from libc.stdint cimport uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.pair cimport pair
 from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
@@ -128,50 +129,22 @@ def _parse_metadata(meta):
     return file_is_range_index, file_index_cols, file_column_dtype
 
 
-cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
-                   use_pandas_metadata=True,
-                   Expression filters=None):
-    """
-    Cython function to call into libcudf API, see `read_parquet`.
+cdef pair[parquet_reader_options, bool] _setup_parquet_reader_options(
+     cudf_io_types.source_info source,
+     vector[vector[size_type]] row_groups,
+     bool use_pandas_metadata,
+     Expression filters,
+     object columns):
 
-    filters, if not None, should be an Expression that evaluates to a
-    boolean predicate as a function of columns being read.
-
-    See Also
-    --------
-    cudf.io.parquet.read_parquet
-    cudf.io.parquet.to_parquet
-    """
-
-    # Convert NativeFile buffers to NativeFileDatasource,
-    # but save original buffers in case we need to use
-    # pyarrow for metadata processing
-    # (See: https://github.com/rapidsai/cudf/issues/9599)
-    pa_buffers = []
-    for i, datasource in enumerate(filepaths_or_buffers):
-        if isinstance(datasource, NativeFile):
-            pa_buffers.append(datasource)
-            filepaths_or_buffers[i] = NativeFileDatasource(datasource)
-
-    cdef cudf_io_types.source_info source = make_source_info(
-        filepaths_or_buffers)
-
-    cdef bool cpp_use_pandas_metadata = use_pandas_metadata
-
-    cdef vector[vector[size_type]] cpp_row_groups
+    cdef parquet_reader_options args
+    cdef parquet_reader_options_builder builder
     cdef data_type cpp_timestamp_type = cudf_types.data_type(
         cudf_types.type_id.EMPTY
     )
-    if row_groups is not None:
-        cpp_row_groups = row_groups
-
-    # Setup parquet reader arguments
-    cdef parquet_reader_options args
-    cdef parquet_reader_options_builder builder
     builder = (
         parquet_reader_options.builder(source)
-        .row_groups(cpp_row_groups)
-        .use_pandas_metadata(cpp_use_pandas_metadata)
+        .row_groups(row_groups)
+        .use_pandas_metadata(use_pandas_metadata)
         .use_arrow_schema(True)
         .timestamp_type(cpp_timestamp_type)
     )
@@ -187,28 +160,28 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         for col in columns:
             cpp_columns.push_back(str(col).encode())
         args.set_columns(cpp_columns)
-    # Filters don't handle the range index correctly
     allow_range_index &= filters is None
 
-    # Read Parquet
-    cdef cudf_io_types.table_with_metadata c_result
+    return pair[parquet_reader_options, bool](args, allow_range_index)
 
-    with nogil:
-        c_result = move(parquet_reader(args))
-
-    names = [info.name.decode() for info in c_result.metadata.schema_info]
-
-    # Access the Parquet per_file_user_data to find the index
+cdef object _process_metadata(object df,
+                              table_metadata table_meta,
+                              list names,
+                              object row_groups,
+                              object filepaths_or_buffers,
+                              list pa_buffers,
+                              bool allow_range_index,
+                              bool use_pandas_metadata):
+    update_struct_field_names(df, table_meta.schema_info)
     index_col = None
-    cdef vector[unordered_map[string, string]] per_file_user_data = \
-        c_result.metadata.per_file_user_data
-
+    is_range_index = True
     column_index_type = None
     index_col_names = None
-    is_range_index = True
+    meta = None
+    cdef vector[unordered_map[string, string]] per_file_user_data = \
+        table_meta.per_file_user_data
     for single_file in per_file_user_data:
         json_str = single_file[b'pandas'].decode('utf-8')
-        meta = None
         if json_str != "":
             meta = json.loads(json_str)
             file_is_range_index, index_col, column_index_type = _parse_metadata(meta)
@@ -222,29 +195,16 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                         if c['field_name'] == idx_col:
                             index_col_names[idx_col] = c['name']
 
-    df = cudf.DataFrame._from_data(*data_from_unique_ptr(
-        move(c_result.tbl),
-        column_names=names
-    ))
-
-    update_struct_field_names(df, c_result.metadata.schema_info)
-
     if meta is not None:
-        # Book keep each column metadata as the order
-        # of `meta["columns"]` and `column_names` are not
-        # guaranteed to be deterministic and same always.
         meta_data_per_column = {
             col_meta['name']: col_meta for col_meta in meta["columns"]
         }
-
-        # update the decimal precision of each column
         for col in names:
             if isinstance(df._data[col].dtype, cudf.core.dtypes.DecimalDtype):
                 df._data[col].dtype.precision = (
                     meta_data_per_column[col]["metadata"]["precision"]
                 )
 
-    # Set the index column
     if index_col is not None and len(index_col) > 0:
         if is_range_index:
             if not allow_range_index:
@@ -264,7 +224,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             if row_groups is not None:
                 per_file_metadata = [
                     pa.parquet.read_metadata(
-                        # Pyarrow cannot read directly from bytes
                         io.BytesIO(s) if isinstance(s, bytes) else s
                     ) for s in (
                         pa_buffers or filepaths_or_buffers
@@ -321,9 +280,65 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             if use_pandas_metadata:
                 df.index.names = index_col
 
-    # Set column dtype for empty types.
     if len(df._data.names) == 0 and column_index_type is not None:
         df._data.label_dtype = cudf.dtype(column_index_type)
+
+    return df
+
+
+cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
+                   use_pandas_metadata=True,
+                   Expression filters=None):
+    """
+    Cython function to call into libcudf API, see `read_parquet`.
+
+    filters, if not None, should be an Expression that evaluates to a
+    boolean predicate as a function of columns being read.
+
+    See Also
+    --------
+    cudf.io.parquet.read_parquet
+    cudf.io.parquet.to_parquet
+    """
+
+    # Convert NativeFile buffers to NativeFileDatasource,
+    # but save original buffers in case we need to use
+    # pyarrow for metadata processing
+    # (See: https://github.com/rapidsai/cudf/issues/9599)
+    pa_buffers = []
+    for i, datasource in enumerate(filepaths_or_buffers):
+        if isinstance(datasource, NativeFile):
+            pa_buffers.append(datasource)
+            filepaths_or_buffers[i] = NativeFileDatasource(datasource)
+
+    cdef cudf_io_types.source_info source = make_source_info(
+        filepaths_or_buffers)
+
+    cdef vector[vector[size_type]] cpp_row_groups
+    if row_groups is not None:
+        cpp_row_groups = row_groups
+
+    # Setup parquet reader arguments
+    cdef parquet_reader_options args
+    cdef pair[parquet_reader_options, bool] c_res = _setup_parquet_reader_options(
+            source, cpp_row_groups, use_pandas_metadata, filters, columns)
+    args, allow_range_index = c_res.first, c_res.second
+
+    # Read Parquet
+    cdef cudf_io_types.table_with_metadata c_result
+
+    with nogil:
+        c_result = move(parquet_reader(args))
+
+    names = [info.name.decode() for info in c_result.metadata.schema_info]
+
+    df = cudf.DataFrame._from_data(*data_from_unique_ptr(
+        move(c_result.tbl),
+        column_names=names
+    ))
+    df = _process_metadata(df, c_result.metadata, names, row_groups,
+                           filepaths_or_buffers, pa_buffers,
+                           allow_range_index, use_pandas_metadata)
     return df
 
 cpdef read_parquet_metadata(filepaths_or_buffers):
@@ -791,7 +806,6 @@ cdef class ParquetReader:
 
     def __cinit__(self, filepaths_or_buffers, columns=None, row_groups=None,
                   use_pandas_metadata=True,
-                  Expression filters=None,
                   size_t chunk_read_limit=0,
                   size_t pass_read_limit=1024000000):
 
@@ -812,38 +826,12 @@ cdef class ParquetReader:
         self.cpp_use_pandas_metadata = use_pandas_metadata
 
         cdef vector[vector[size_type]] cpp_row_groups
-        cdef data_type cpp_timestamp_type = cudf_types.data_type(
-            cudf_types.type_id.EMPTY
-        )
         if row_groups is not None:
             cpp_row_groups = row_groups
-
-        # Setup parquet reader arguments
         cdef parquet_reader_options args
-        cdef parquet_reader_options_builder builder
-        builder = (
-            parquet_reader_options.builder(source)
-            .row_groups(cpp_row_groups)
-            .use_pandas_metadata(self.cpp_use_pandas_metadata)
-            .timestamp_type(cpp_timestamp_type)
-        )
-        if filters is not None:
-            builder = builder.filter(<expression &>dereference(filters.c_obj.get()))
-
-        args = move(builder.build())
-        cdef vector[string] cpp_columns
-        self.allow_range_index = True
-        if columns is not None:
-            cpp_columns.reserve(len(columns))
-            self.allow_range_index = len(columns) > 0
-            for col in columns:
-                cpp_columns.push_back(str(col).encode())
-            args.set_columns(cpp_columns)
-        # Filters don't handle the range index correctly
-        self.allow_range_index &= filters is None
-
-        self.chunk_read_limit = chunk_read_limit
-        self.pass_read_limit = pass_read_limit
+        cdef pair[parquet_reader_options, bool] c_res = _setup_parquet_reader_options(
+            source, cpp_row_groups, use_pandas_metadata, None, columns)
+        args, self.allow_range_index = c_res.first, c_res.second
 
         with nogil:
             self.reader.reset(
@@ -873,28 +861,6 @@ cdef class ParquetReader:
         if not self.initialized:
             self.names = [info.name.decode() for info in c_result.metadata.schema_info]
             self.result_meta = c_result.metadata
-            self.per_file_user_data = c_result.metadata.per_file_user_data
-
-            # Access the Parquet per_file_user_data to find the index
-
-            self.column_index_type = None
-            self.index_col_names = None
-            self.is_range_index = True
-            for single_file in self.per_file_user_data:
-                json_str = single_file[b'pandas'].decode('utf-8')
-                if json_str != "":
-                    self.pandas_meta = json.loads(json_str)
-                    file_is_range_index, self.index_col, self.column_index_type = \
-                        _parse_metadata(self.pandas_meta)
-                    self.is_range_index &= file_is_range_index
-
-                    if not file_is_range_index and self.index_col is not None \
-                            and self.index_col_names is None:
-                        self.index_col_names = {}
-                        for idx_col in self.index_col:
-                            for c in self.pandas_meta['columns']:
-                                if c['field_name'] == idx_col:
-                                    self.index_col_names[idx_col] = c['name']
 
         df = cudf.DataFrame._from_data(*data_from_unique_ptr(
             move(c_result.tbl),
@@ -909,102 +875,9 @@ cdef class ParquetReader:
         while self._has_next():
             dfs.append(self._read_chunk())
         df = cudf.concat(dfs)
-        update_struct_field_names(df, self.result_meta.schema_info)
-        if self.pandas_meta is not None:
-            # Book keep each column metadata as the order
-            # of `meta["columns"]` and `column_names` are not
-            # guaranteed to be deterministic and same always.
-            meta_data_per_column = {
-                col_meta['name']: col_meta for col_meta in self.pandas_meta["columns"]
-            }
-
-            # update the decimal precision of each column
-            for col in self.names:
-                if isinstance(df._data[col].dtype, cudf.core.dtypes.DecimalDtype):
-                    df._data[col].dtype.precision = (
-                        meta_data_per_column[col]["metadata"]["precision"]
-                    )
-
-        # Set the index column
-        if self.index_col is not None and len(self.index_col) > 0:
-            if self.is_range_index:
-                if not self.allow_range_index:
-                    return df
-
-                if len(self.per_file_user_data) > 1:
-                    range_index_meta = {
-                        "kind": "range",
-                        "name": None,
-                        "start": 0,
-                        "stop": len(df),
-                        "step": 1
-                    }
-                else:
-                    range_index_meta = self.index_col[0]
-
-                if self.row_groups is not None:
-                    per_file_metadata = [
-                        pa.parquet.read_metadata(
-                            # Pyarrow cannot read directly from bytes
-                            io.BytesIO(s) if isinstance(s, bytes) else s
-                        ) for s in (
-                            self.pa_buffers or self.filepaths_or_buffers
-                        )
-                    ]
-
-                    filtered_idx = []
-                    for i, file_meta in enumerate(per_file_metadata):
-                        row_groups_i = []
-                        start = 0
-                        for row_group in range(file_meta.num_row_groups):
-                            stop = start + file_meta.row_group(row_group).num_rows
-                            row_groups_i.append((start, stop))
-                            start = stop
-
-                        for rg in self.row_groups[i]:
-                            filtered_idx.append(
-                                cudf.RangeIndex(
-                                    start=row_groups_i[rg][0],
-                                    stop=row_groups_i[rg][1],
-                                    step=range_index_meta['step']
-                                )
-                            )
-
-                    if len(filtered_idx) > 0:
-                        idx = cudf.concat(filtered_idx)
-                    else:
-                        idx = cudf.Index(cudf.core.column.column_empty(0))
-                else:
-                    idx = cudf.RangeIndex(
-                        start=range_index_meta['start'],
-                        stop=range_index_meta['stop'],
-                        step=range_index_meta['step'],
-                        name=range_index_meta['name']
-                    )
-
-                df._index = idx
-            elif set(self.index_col).issubset(self.names):
-                index_data = df[self.index_col]
-                actual_index_names = list(self.index_col_names.values())
-                if len(index_data._data) == 1:
-                    idx = cudf.Index(
-                        index_data._data.columns[0],
-                        name=actual_index_names[0]
-                    )
-                else:
-                    idx = cudf.MultiIndex.from_frame(
-                        index_data,
-                        names=actual_index_names
-                    )
-                df.drop(columns=self.index_col, inplace=True)
-                df._index = idx
-            else:
-                if self.cpp_use_pandas_metadata:
-                    df.index.names = self.index_col
-
-        # Set column dtype for empty types.
-        if len(df._data.names) == 0 and self.column_index_type is not None:
-            df._data.label_dtype = cudf.dtype(self.column_index_type)
+        df = _process_metadata(df, self.result_meta, self.names, self.row_groups,
+                               self.filepaths_or_buffers, self.pa_buffers,
+                               self.allow_range_index, self.cpp_use_pandas_metadata)
         return df
 
 cpdef merge_filemetadata(object filemetadata_list):
