@@ -124,22 +124,22 @@ public class ColumnWriterOptions {
 
     protected ColumnWriterOptions withDecimal(String name, int precision,
                                               boolean isNullable) {
-      return new ColumnWriterOptions(name, false, precision, isNullable);
+      return new ColumnWriterOptions(name, precision, isNullable);
     }
 
     protected ColumnWriterOptions withDecimal(String name, int precision,
                                               boolean isNullable, int parquetFieldId) {
-      return new ColumnWriterOptions(name, false, precision, isNullable, parquetFieldId);
+      return new ColumnWriterOptions(name, precision, isNullable, parquetFieldId);
     }
 
     protected ColumnWriterOptions withTimestamp(String name,
                                                 boolean isNullable) {
-      return new ColumnWriterOptions(name, UNKNOWN_PRECISION, isNullable);
+      return new ColumnWriterOptions(name, isNullable);
     }
 
     protected ColumnWriterOptions withTimestamp(String name,
                                                 boolean isNullable, int parquetFieldId) {
-      return new ColumnWriterOptions(name, UNKNOWN_PRECISION, isNullable, parquetFieldId);
+      return new ColumnWriterOptions(name, isNullable, parquetFieldId);
     }
 
     protected ColumnWriterOptions withBinary(String name, boolean isNullable) {
@@ -334,15 +334,13 @@ public class ColumnWriterOptions {
     public abstract V build();
   }
 
-  public ColumnWriterOptions(String columnName,
-                             int precision, boolean isNullable) {
+  public ColumnWriterOptions(String columnName, int precision, boolean isNullable) {
     this.precision = precision;
     this.isNullable = isNullable;
     this.columnName = columnName;
   }
 
-  public ColumnWriterOptions(String columnName,
-                             int precision, boolean isNullable, int parquetFieldId) {
+  public ColumnWriterOptions(String columnName, int precision, boolean isNullable, int parquetFieldId) {
     this(columnName, precision, isNullable);
     this.hasParquetFieldId = true;
     this.parquetFieldId = parquetFieldId;
