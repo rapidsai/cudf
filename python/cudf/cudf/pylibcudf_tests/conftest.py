@@ -46,7 +46,7 @@ def numeric_pa_type(request):
 
 
 @pytest.fixture(
-    scope="session", params=[opt.value for opt in plc.types.Interpolation]
+    scope="session", params=[opt for opt in plc.types.Interpolation]
 )
 def interp_opt(request):
     return request.param
@@ -54,7 +54,7 @@ def interp_opt(request):
 
 @pytest.fixture(
     scope="session",
-    params=[opt.value for opt in plc.types.Sorted],
+    params=[opt for opt in plc.types.Sorted],
 )
 def sorted_opt(request):
     return request.param

@@ -17,14 +17,6 @@ from cudf._lib.pylibcudf.libcudf.types cimport (
     type_id,
 )
 
-from cudf._lib.pylibcudf.libcudf.types import \
-    interpolation as Interpolation  # no-cython-lint
-from cudf._lib.pylibcudf.libcudf.types import \
-    null_order as NullOrder  # no-cython-lint
-from cudf._lib.pylibcudf.libcudf.types import \
-    sorted as Sorted  # no-cython-lint
-from cudf._lib.pylibcudf.libcudf.types import order as Order  # no-cython-lint
-
 
 cdef class DataType:
     cdef data_type c_obj

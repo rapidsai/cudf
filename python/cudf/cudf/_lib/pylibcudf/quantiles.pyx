@@ -33,6 +33,8 @@ cpdef Column quantile(
 
     Parameters
     ----------
+    input: Column
+        The Column to calculate quantiles on.
     q: array-like that implements buffer-protocol
         The quantiles to calculate in range [0,1]
     interp: Interpolation, default Interpolation.LINEAR
@@ -97,6 +99,8 @@ cpdef Table quantiles(
 
     Parameters
     ----------
+    input: Table
+        The Table to calculate row quantiles on.
     q: array-like that implements buffer-protocol
         The quantiles to calculate in range [0,1]
     interp: Interpolation, default Interpolation.LINEAR
@@ -128,7 +132,8 @@ cpdef Table quantiles(
         vector[null_order] null_precedence_vec = null_precedence
 
     # Copy from memoryview into vector
-    q_vec.assign(&q[0], &q[0] + len(q))
+    if len(q) > 0:
+        q_vec.assign(&q[0], &q[0] + len(q))
 
     with nogil:
         c_result = move(

@@ -58,7 +58,7 @@ def plc_tbl_data(request):
     return plc.interop.from_arrow(pa.Table.from_arrays(**request.param))
 
 
-@pytest.mark.parametrize("q", [[0], [0.5], [0.1, 0.5, 0.7, 0.9]])
+@pytest.mark.parametrize("q", [[], [0], [0.5], [0.1, 0.5, 0.7, 0.9]])
 @pytest.mark.parametrize("exact", [True, False])
 def test_quantile(pa_col_data, plc_col_data, interp_opt, q, exact):
     q = np.asarray(q, dtype="float64")
@@ -75,7 +75,11 @@ def test_quantile(pa_col_data, plc_col_data, interp_opt, q, exact):
     if exact:
         pa_col_data = pc.cast(pa_col_data, pa.float64())
 
-    exp = pc.quantile(pa_col_data, q=q, interpolation=pa_interp_opt)
+    if len(q) > 0:
+        # pyarrow quantile doesn't support empty q
+        exp = pc.quantile(pa_col_data, q=q, interpolation=pa_interp_opt)
+    else:
+        exp = pa.array([], type=pa.float64())
 
     if not exact:
         exp = pc.cast(exp, pa_col_data.type, safe=False)
@@ -84,7 +88,7 @@ def test_quantile(pa_col_data, plc_col_data, interp_opt, q, exact):
 
 
 @pytest.mark.parametrize(
-    "q", [[0.1], [0.2], [0.3], [0.4], [0.5], [0.1, 0.5, 0.7, 0.9]]
+    "q", [[], [0.1], [0.2], [0.3], [0.4], [0.5], [0.1, 0.5, 0.7, 0.9]]
 )
 @pytest.mark.parametrize(
     "column_order", [[plc.types.Order.ASCENDING, plc.types.Order.ASCENDING]]
@@ -109,33 +113,51 @@ def test_quantiles(
 
     q = np.asarray(q, dtype="float64")
 
-    pa_tbl_data = plc.interop.to_arrow(plc_tbl_data)
-    # TODO: why are column names not preserved by pylibcudf
     pa_tbl_data = plc.interop.to_arrow(plc_tbl_data, ["a", "b"])
 
     res = plc.quantiles.quantiles(
         plc_tbl_data, q, interp_opt, sorted_opt, column_order, null_precedence
     )
 
-    pa_interp_opt = interp_mapping[interp_opt]
+    if len(q) > 0:
+        # pyarrow quantile doesn't support empty q
+        pa_interp_opt = interp_mapping[interp_opt]
 
-    if sorted_opt == plc.types.Sorted.NO:
-        order_mapper = {
-            plc.types.Order.ASCENDING: "ascending",
-            plc.types.Order.DESCENDING: "descending",
-        }
-        pa_tbl_data = pa_tbl_data.sort_by(
-            [
-                (name, order_mapper[order])
-                for name, order in zip(pa_tbl_data.column_names, column_order)
-            ],
-            null_placement="at_start"
-            if null_precedence[0] == plc.types.NullOrder.BEFORE
-            else "at_end",
+        if sorted_opt == plc.types.Sorted.NO:
+            order_mapper = {
+                plc.types.Order.ASCENDING: "ascending",
+                plc.types.Order.DESCENDING: "descending",
+            }
+            pa_tbl_data = pa_tbl_data.sort_by(
+                [
+                    (name, order_mapper[order])
+                    for name, order in zip(
+                        pa_tbl_data.column_names, column_order
+                    )
+                ],
+                null_placement="at_start"
+                if null_precedence[0] == plc.types.NullOrder.BEFORE
+                else "at_end",
+            )
+        row_idxs = pc.quantile(
+            np.arange(0, len(pa_tbl_data)), q=q, interpolation=pa_interp_opt
         )
-    row_idxs = pc.quantile(
-        np.arange(0, len(pa_tbl_data)), q=q, interpolation=pa_interp_opt
-    )
-    exp = pa_tbl_data.take(row_idxs)
+        exp = pa_tbl_data.take(row_idxs)
+    else:
+        exp = pa.Table.from_arrays(
+            [[] for _ in range(len(pa_tbl_data.schema))],
+            schema=pa_tbl_data.schema,
+        )
 
     assert_table_eq(exp, res)
+
+
+@pytest.mark.parametrize(
+    "invalid_interp",
+    [plc.types.Interpolation.LINEAR, plc.types.Interpolation.MIDPOINT],
+)
+def test_quantiles_invalid_interp(plc_tbl_data, invalid_interp):
+    with pytest.raises(ValueError):
+        plc.quantiles.quantiles(
+            plc_tbl_data, q=np.array([0.1]), interp=invalid_interp
+        )
