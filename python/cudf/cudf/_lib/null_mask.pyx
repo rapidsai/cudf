@@ -1,23 +1,11 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from enum import Enum
-
 from cudf._lib import pylibcudf
+from cudf._lib.pylibcudf.null_mask import MaskState
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 
 from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.null_mask cimport underlying_type_t_mask_state
-from cudf._lib.pylibcudf.libcudf.types cimport mask_state, size_type
-
-
-class MaskState(Enum):
-    """
-    Enum for null mask creation state
-    """
-    UNALLOCATED = <underlying_type_t_mask_state> mask_state.UNALLOCATED
-    UNINITIALIZED = <underlying_type_t_mask_state> mask_state.UNINITIALIZED
-    ALL_VALID = <underlying_type_t_mask_state> mask_state.ALL_VALID
-    ALL_NULL = <underlying_type_t_mask_state> mask_state.ALL_NULL
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 
 @acquire_spill_lock()
@@ -29,7 +17,7 @@ def copy_bitmask(Column col):
     if col.base_mask is None:
         return None
 
-    rmm_db = pylibcudf.null_mask.copy_bitmask(input_col.to_pylibcudf(mode="read"))
+    rmm_db = pylibcudf.null_mask.copy_bitmask(col.to_pylibcudf(mode="read"))
     buf = as_buffer(rmm_db)
     return buf
 
@@ -54,34 +42,24 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
     state : ``MaskState``, default ``MaskState.UNINITIALIZED``
         State the null mask should be created in
     """
-    if not isinstance(state, MaskState):
-        raise TypeError(
-            "`state` is required to be of type `MaskState`, got "
-            + (type(state).__name__)
-        )
-
-    cdef mask_state c_mask_state = <mask_state>(
-        <underlying_type_t_mask_state>(state.value)
-    )
-
-    rmm_db = pylibcudf.null_mask.create_null_mask(size, c_mask_state)
+    rmm_db = pylibcudf.null_mask.create_null_mask(size, state)
     buf = as_buffer(rmm_db)
     return buf
 
 
 @acquire_spill_lock()
-def bitmask_and(columns: list):
+def bitmask_and(list columns):
     rmm_db, other = pylibcudf.null_mask.bitmask_and(
-        pylibcudf.Table([col.to_pylibcudf(mode="read") for col in columns]).view()
+        [col.to_pylibcudf(mode="read") for col in columns]
     )
     buf = as_buffer(rmm_db)
     return buf, other
 
 
 @acquire_spill_lock()
-def bitmask_or(columns: list):
+def bitmask_or(list columns):
     rmm_db, other = pylibcudf.null_mask.bitmask_or(
-        pylibcudf.Table([col.to_pylibcudf(mode="read") for col in columns]).view()
+        [col.to_pylibcudf(mode="read") for col in columns]
     )
     buf = as_buffer(rmm_db)
     return buf, other
