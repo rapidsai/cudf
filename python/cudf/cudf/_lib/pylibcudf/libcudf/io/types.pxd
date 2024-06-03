@@ -15,7 +15,6 @@ cimport cudf._lib.pylibcudf.libcudf.io.datasource as cudf_io_datasource
 cimport cudf._lib.pylibcudf.libcudf.table.table_view as cudf_table_view
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
-from cudf._lib.pylibcudf.libcudf.utilities.host_span cimport host_span
 
 
 cdef extern from "cudf/io/types.hpp" \

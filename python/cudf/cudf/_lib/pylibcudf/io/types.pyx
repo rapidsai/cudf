@@ -16,13 +16,24 @@ import os
 
 
 cdef class TableWithMetadata:
+    """A container holding a table and its associated metadata
+    (e.g. column names)
+
+    For details, see :cpp:class:`cudf::io::table_with_metadata`.
+    """
 
     @property
     def columns(self):
+        """
+        Return a list containing the columns of the table
+        """
         return self.tbl._columns
 
     @property
     def column_names(self):
+        """
+        Return a list containing the column names of the table
+        """
         # TODO: Handle nesting (columns with child columns)
         return [col_info.name.decode() for col_info in self.metadata.schema_info]
 
@@ -35,24 +46,36 @@ cdef class TableWithMetadata:
         return out
 
 cdef class SourceInfo:
+    """A class containing details on a source to read from.
+
+    For details, see :cpp:class:`cudf::io::source_info`.
+
+    Parameters
+    ----------
+    sources : List[Union[str, bytes, io.BytesIO]]
+        A homogeneous list of sources (this can be a string filename,
+        bytes, or an io.BytesIO) to read from.
+
+        Mixing different types of sources will raise a `ValueError`.
+    """
 
     def __init__(self, list sources):
         if not sources:
             raise ValueError("Need to pass at least one source")
 
-        if isinstance(sources[0], os.PathLike) or isinstance(sources[0], str):
-            sources = [str(src) for src in sources]
-
         cdef vector[string] c_files
-        if isinstance(sources[0], str):
-            # If source is a file, return source_info where type=FILEPATH
-            if not all(os.path.isfile(file) for file in sources):
-                raise FileNotFoundError(errno.ENOENT,
-                                        os.strerror(errno.ENOENT),
-                                        sources)
 
+        if isinstance(sources[0], (os.PathLike, str)):
             c_files.reserve(len(sources))
+
             for src in sources:
+                if not isinstance(src, (os.PathLike, str)):
+                    raise ValueError("All sources must be of the same type!")
+                if not os.path.isfile(src):
+                    raise FileNotFoundError(errno.ENOENT,
+                                            os.strerror(errno.ENOENT),
+                                            src)
+
                 c_files.push_back(<string> str(src).encode())
 
             self.c_obj = move(source_info(c_files))
@@ -65,6 +88,8 @@ cdef class SourceInfo:
         if isinstance(sources[0], bytes):
             empty_buffer = True
             for buffer in sources:
+                if not isinstance(buffer, bytes):
+                    raise ValueError("All sources must be of the same type!")
                 if (len(buffer) > 0):
                     c_buffer = buffer
                     c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0],
@@ -72,6 +97,8 @@ cdef class SourceInfo:
                     empty_buffer = False
         elif isinstance(sources[0], io.BytesIO):
             for bio in sources:
+                if not isinstance(bio, io.BytesIO):
+                    raise ValueError("All sources must be of the same type!")
                 c_buffer = bio.getbuffer()  # check if empty?
                 c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0],
                                                      c_buffer.shape[0]))
