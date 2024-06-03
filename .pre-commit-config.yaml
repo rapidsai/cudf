@@ -7,11 +7,13 @@ repos:
       - id: trailing-whitespace
         exclude: |
           (?x)^(
+            ^cpp/cmake/thirdparty/patches/.*|
             ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
           )
       - id: end-of-file-fixer
         exclude: |
           (?x)^(
+            ^cpp/cmake/thirdparty/patches/.*|
             ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
           )
   - repo: https://github.com/PyCQA/isort
@@ -127,7 +129,7 @@ repos:
             ^CHANGELOG.md$
           )
   - repo: https://github.com/rapidsai/dependency-file-generator
-    rev: v1.13.4
+    rev: v1.13.11
     hooks:
       - id: rapids-dependency-file-generator
         args: ["--clean"]

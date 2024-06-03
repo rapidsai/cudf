@@ -1755,7 +1755,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplaceMulti(
     cudf::strings_column_view scvtargets(*cvtargets);
     cudf::column_view* cvrepls = reinterpret_cast<cudf::column_view*>(repls_cv);
     cudf::strings_column_view scvrepls(*cvrepls);
-    return release_as_jlong(cudf::strings::replace(scv, scvtargets, scvrepls));
+    return release_as_jlong(cudf::strings::replace_multiple(scv, scvtargets, scvrepls));
   }
   CATCH_STD(env, 0);
 }
