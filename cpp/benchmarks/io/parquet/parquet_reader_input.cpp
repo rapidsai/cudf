@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,9 @@ void parquet_read_common(cudf::size_type num_rows_to_read,
 }
 
 template <data_type DataType>
-void BM_parquet_read_data_common(nvbench::state& state, data_profile const& profile, nvbench::type_list<nvbench::enum_type<DataType>>)
+void BM_parquet_read_data_common(nvbench::state& state,
+                                 data_profile const& profile,
+                                 nvbench::type_list<nvbench::enum_type<DataType>>)
 {
   auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
@@ -67,10 +69,8 @@ void BM_parquet_read_data_common(nvbench::state& state, data_profile const& prof
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
-    auto const tbl = create_random_table(
-      cycle_dtypes(d_type, num_cols),
-      table_size_bytes{data_size},
-      profile);
+    auto const tbl =
+      create_random_table(cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, profile);
     auto const view = tbl->view();
 
     cudf::io::parquet_writer_options write_opts =
@@ -84,20 +84,29 @@ void BM_parquet_read_data_common(nvbench::state& state, data_profile const& prof
 }
 
 template <data_type DataType>
-void BM_parquet_read_data(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>> type_list)
+void BM_parquet_read_data(nvbench::state& state,
+                          nvbench::type_list<nvbench::enum_type<DataType>> type_list)
 {
   auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
-  BM_parquet_read_data_common<DataType>(state, data_profile_builder().cardinality(cardinality).avg_run_length(run_length), type_list);
+  BM_parquet_read_data_common<DataType>(
+    state, data_profile_builder().cardinality(cardinality).avg_run_length(run_length), type_list);
 }
 
 template <data_type DataType>
-void BM_parquet_read_fixed_width_struct(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>> type_list)
+void BM_parquet_read_fixed_width_struct(nvbench::state& state,
+                                        nvbench::type_list<nvbench::enum_type<DataType>> type_list)
 {
   auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
-  std::vector<cudf::type_id> s_types{cudf::type_id::INT32, cudf::type_id::FLOAT32, cudf::type_id::INT64};
-  BM_parquet_read_data_common<DataType>(state, data_profile_builder().cardinality(cardinality).avg_run_length(run_length).struct_types(s_types), type_list);
+  std::vector<cudf::type_id> s_types{
+    cudf::type_id::INT32, cudf::type_id::FLOAT32, cudf::type_id::INT64};
+  BM_parquet_read_data_common<DataType>(state,
+                                        data_profile_builder()
+                                          .cardinality(cardinality)
+                                          .avg_run_length(run_length)
+                                          .struct_types(s_types),
+                                        type_list);
 }
 
 void BM_parquet_read_io_compression(nvbench::state& state)

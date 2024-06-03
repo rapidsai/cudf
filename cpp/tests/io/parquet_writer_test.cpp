@@ -1783,7 +1783,8 @@ TEST_F(ParquetWriterTest, DeltaBinaryStartsWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
-std::pair<std::unique_ptr<cudf::table>, cudf::io::table_input_metadata> make_byte_stream_split_table(bool as_struct)
+std::pair<std::unique_ptr<cudf::table>, cudf::io::table_input_metadata>
+make_byte_stream_split_table(bool as_struct)
 {
   constexpr auto num_rows = 100;
   std::mt19937 engine{31337};
@@ -1799,7 +1800,7 @@ std::pair<std::unique_ptr<cudf::table>, cudf::io::table_input_metadata> make_byt
 
   // throw in a list to make sure both decoders are working
   auto col4 = make_parquet_list_col<int32_t>(engine, num_rows, 5, true);
-  
+
   std::vector<std::unique_ptr<cudf::column>> columns;
   columns.reserve(5);
   columns.push_back(col0.release());
@@ -1807,40 +1808,42 @@ std::pair<std::unique_ptr<cudf::table>, cudf::io::table_input_metadata> make_byt
   columns.push_back(col2.release());
   columns.push_back(col3.release());
   columns.push_back(std::move(col4));
-  
+
   return [&]() -> std::pair<std::unique_ptr<cudf::table>, cudf::io::table_input_metadata> {
     auto const encoding = cudf::io::column_encoding::BYTE_STREAM_SPLIT;
 
     // make as a nested struct
-    if(as_struct){
-      auto valids = cudf::detail::make_counting_transform_iterator(0, [](int i) { return i % 2 == 0; });
+    if (as_struct) {
+      auto valids =
+        cudf::detail::make_counting_transform_iterator(0, [](int i) { return i % 2 == 0; });
       auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
 
       std::vector<std::unique_ptr<cudf::column>> table_cols;
-      table_cols.push_back(cudf::make_structs_column(num_rows, std::move(columns), null_count, std::move(null_mask)));
-      
-      auto tbl = std::make_unique<cudf::table>(std::move(table_cols));
+      table_cols.push_back(
+        cudf::make_structs_column(num_rows, std::move(columns), null_count, std::move(null_mask)));
+
+      auto tbl      = std::make_unique<cudf::table>(std::move(table_cols));
       auto expected = table_view{*tbl};
 
       cudf::io::table_input_metadata expected_metadata(expected);
       expected_metadata.column_metadata[0].set_name("struct");
       expected_metadata.column_metadata[0].set_encoding(encoding);
-      
+
       expected_metadata.column_metadata[0].child(0).set_name("int32s");
       expected_metadata.column_metadata[0].child(1).set_name("int64s");
       expected_metadata.column_metadata[0].child(2).set_name("floats");
       expected_metadata.column_metadata[0].child(3).set_name("doubles");
       expected_metadata.column_metadata[0].child(4).set_name("int32list");
-      for(int idx=0; idx<=3; idx++){
+      for (int idx = 0; idx <= 3; idx++) {
         expected_metadata.column_metadata[0].child(idx).set_encoding(encoding);
       }
       expected_metadata.column_metadata[0].child(4).child(1).set_encoding(encoding);
 
       return {std::move(tbl), expected_metadata};
     }
-    
+
     // make flat
-    auto tbl = std::make_unique<cudf::table>(std::move(columns));
+    auto tbl      = std::make_unique<cudf::table>(std::move(columns));
     auto expected = table_view{*tbl};
 
     cudf::io::table_input_metadata expected_metadata(expected);
@@ -1849,7 +1852,7 @@ std::pair<std::unique_ptr<cudf::table>, cudf::io::table_input_metadata> make_byt
     expected_metadata.column_metadata[2].set_name("floats");
     expected_metadata.column_metadata[3].set_name("doubles");
     expected_metadata.column_metadata[4].set_name("int32list");
-    for(int idx=0; idx<=3; idx++){
+    for (int idx = 0; idx <= 3; idx++) {
       expected_metadata.column_metadata[idx].set_encoding(encoding);
     }
 
@@ -1861,7 +1864,7 @@ std::pair<std::unique_ptr<cudf::table>, cudf::io::table_input_metadata> make_byt
 TEST_F(ParquetWriterTest, ByteStreamSplit)
 {
   auto [expected, expected_metadata] = make_byte_stream_split_table(false);
-  
+
   auto const filepath = temp_env->get_temp_filepath("ByteStreamSplit.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
@@ -1878,7 +1881,7 @@ TEST_F(ParquetWriterTest, ByteStreamSplit)
 TEST_F(ParquetWriterTest, ByteStreamSplitStruct)
 {
   auto [expected, expected_metadata] = make_byte_stream_split_table(true);
-  
+
   auto const filepath = temp_env->get_temp_filepath("ByteStreamSplitStruct.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
