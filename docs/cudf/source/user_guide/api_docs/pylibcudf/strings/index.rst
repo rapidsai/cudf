@@ -1,5 +1,5 @@
-String Functions
-================
+strings
+=======
 
 .. toctree::
     :maxdepth: 1
