@@ -656,7 +656,7 @@ class Sort(Expr):
         column = child.evaluate(df, context=context, mapping=mapping)
         (stable, nulls_last, descending) = self.options
         order, null_order = sorting.sort_order(
-            [descending], nulls_last=nulls_last, num_keys=1
+            [descending], nulls_last=[nulls_last], num_keys=1
         )
         do_sort = plc.sorting.stable_sort if stable else plc.sorting.sort
         table = do_sort(plc.Table([column.obj]), order, null_order)
@@ -672,7 +672,7 @@ class SortBy(Expr):
     def __init__(
         self,
         dtype: plc.DataType,
-        options: tuple[bool, bool, tuple[bool]],
+        options: tuple[bool, tuple[bool], tuple[bool]],
         column: Expr,
         *by: Expr,
     ):
