@@ -40,7 +40,7 @@ from pandas.tseries.holiday import (
     get_calendar,
 )
 
-# Accelerated pandas has the real pandas and cudf modules as an attributes
+# Accelerated pandas has the real pandas and cudf modules as attributes
 pd = xpd._fsproxy_slow
 cudf = xpd._fsproxy_fast
 
@@ -1425,45 +1425,58 @@ def test_holidays_within_dates(holiday, start, expected):
 
 
 def test_cudf_pandas_debugging_different_results(monkeypatch):
-    def mock_mean(self, *args, **kwargs):
+    cudf_mean = cudf.Series.mean
+
+    def mock_mean_one(self, *args, **kwargs):
         return np.float64(1.0)
 
     with monkeypatch.context() as monkeycontext:
-        monkeycontext.setattr(cudf.Series, "mean", mock_mean)
+        monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", mock_mean_one)
         monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
         with pytest.warns(
             UserWarning,
             match="The results from cudf and pandas were different.",
         ):
-            assert s.mean() == np.float64(1.0)
+            assert s.mean() == 1.0
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", cudf_mean)
 
 
 def test_cudf_pandas_debugging_pandas_error(monkeypatch):
-    def mock_median(self, *args, **kwargs):
+    pd_mean = pd.Series.mean
+
+    def mock_mean_exception(self, *args, **kwargs):
         raise Exception()
 
     with monkeypatch.context() as monkeycontext:
-        monkeycontext.setattr(pd.Series, "median", mock_median)
+        monkeycontext.setattr(
+            xpd.Series.mean, "_fsproxy_slow", mock_mean_exception
+        )
         monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
         with pytest.warns(
             UserWarning,
             match="The result from pandas could not be computed.",
         ):
-            assert s.median() == 1.5
+            s = xpd.Series([1, 2])
+            assert s.mean() == 1.5
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
 
 
 def test_cudf_pandas_debugging_failed(monkeypatch):
-    def mock_std(self, *args, **kwargs):
+    pd_mean = pd.Series.mean
+
+    def mock_mean_none(self, *args, **kwargs):
         return None
 
     with monkeypatch.context() as monkeycontext:
-        monkeycontext.setattr(pd.Series, "std", mock_std)
+        monkeycontext.setattr(xpd.Series.mean, "_fsproxy_slow", mock_mean_none)
         monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
         with pytest.warns(
             UserWarning,
             match="Pandas debugging mode failed.",
         ):
-            assert s.std() == 0.7071067811865476
+            s = xpd.Series([1, 2])
+            assert s.mean() == 1.5
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)

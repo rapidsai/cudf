@@ -26,9 +26,8 @@ from typing import (
 
 import numpy as np
 
-from cudf.testing._utils import assert_eq
-
 from ..options import _env_get_bool
+from ..testing._utils import assert_eq
 from .annotation import nvtx
 
 
@@ -890,7 +889,7 @@ class _MethodProxy(_FunctionProxy):
 
 def _assert_fast_slow_eq(left, right, **kwargs):
     assert_func = kwargs.get("assert_func", assert_eq)
-    if _is_final_type(type(left)) or (type(left) in NUMPY_TYPES):
+    if _is_final_type(type(left)) or type(left) in NUMPY_TYPES:
         assert_func(left, right)
 
 
