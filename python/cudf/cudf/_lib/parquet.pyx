@@ -196,15 +196,21 @@ cdef object _process_metadata(object df,
                             index_col_names[idx_col] = c['name']
 
     if meta is not None:
+        # Book keep each column metadata as the order
+        # of `meta["columns"]` and `column_names` are not
+        # guaranteed to be deterministic and same always.
         meta_data_per_column = {
             col_meta['name']: col_meta for col_meta in meta["columns"]
         }
+
+        # update the decimal precision of each column
         for col in names:
             if isinstance(df._data[col].dtype, cudf.core.dtypes.DecimalDtype):
                 df._data[col].dtype.precision = (
                     meta_data_per_column[col]["metadata"]["precision"]
                 )
 
+    # Set the index column
     if index_col is not None and len(index_col) > 0:
         if is_range_index:
             if not allow_range_index:
@@ -224,6 +230,7 @@ cdef object _process_metadata(object df,
             if row_groups is not None:
                 per_file_metadata = [
                     pa.parquet.read_metadata(
+                        # Pyarrow cannot read directly from bytes
                         io.BytesIO(s) if isinstance(s, bytes) else s
                     ) for s in (
                         pa_buffers or filepaths_or_buffers
