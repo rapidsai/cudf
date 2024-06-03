@@ -243,19 +243,12 @@ class Select(IR):
 
     df: IR
     """Input dataframe."""
-    cse: list[expr.NamedExpr]
-    """
-    List of common subexpressions that will appear in the selected expressions.
-
-    These must be evaluated before the returned expressions.
-    """
     expr: list[expr.NamedExpr]
     """List of expressions to evaluate to form the new dataframe."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]):
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        df = df.with_columns([e.evaluate(df) for e in self.cse])
         return DataFrame([e.evaluate(df) for e in self.expr])
 
 
@@ -541,20 +534,13 @@ class HStack(IR):
 
     df: IR
     """Input dataframe."""
-    cse: list[expr.NamedExpr]
-    """
-    List of common subexpressions that will appear in the selected expressions.
-
-    These must be evaluated before the returned expressions.
-    """
     columns: list[expr.NamedExpr]
     """List of expressions to produce new columns."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        ctx = df.copy().with_columns([e.evaluate(df) for e in self.cse])
-        return df.with_columns([c.evaluate(ctx) for c in self.columns])
+        return df.with_columns([c.evaluate(df) for c in self.columns])
 
 
 @dataclass(slots=True)
