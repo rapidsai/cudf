@@ -80,7 +80,7 @@ def test_quantile(pa_col_data, plc_col_data, interp_opt, q, exact):
     if not exact:
         exp = pc.cast(exp, pa_col_data.type, safe=False)
 
-    assert_column_eq(res, exp)
+    assert_column_eq(exp, res)
 
 
 @pytest.mark.parametrize(
@@ -111,7 +111,7 @@ def test_quantiles(
 
     pa_tbl_data = plc.interop.to_arrow(plc_tbl_data)
     # TODO: why are column names not preserved by pylibcudf
-    pa_tbl_data = pa_tbl_data.rename_columns(["a", "b"])
+    pa_tbl_data = plc.interop.to_arrow(plc_tbl_data, ["a", "b"])
 
     res = plc.quantiles.quantiles(
         plc_tbl_data, q, interp_opt, sorted_opt, column_order, null_precedence
@@ -138,4 +138,4 @@ def test_quantiles(
     )
     exp = pa_tbl_data.take(row_idxs)
 
-    assert_table_eq(res, exp)
+    assert_table_eq(exp, res)
