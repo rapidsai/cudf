@@ -38,62 +38,6 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-// create a cudf::table and equivalent arrow table with host memory
-std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, nanoarrow::UniqueArray>
-get_nanoarrow_host_tables_for_stream(cudf::size_type length)
-{
-  auto [table, schema, test_data] = get_nanoarrow_cudf_table(length);
-
-  auto int64_array = get_nanoarrow_array<int64_t>(test_data.int64_data, test_data.validity);
-  auto string_array =
-    get_nanoarrow_array<cudf::string_view>(test_data.string_data, test_data.validity);
-  cudf::dictionary_column_view view(table->get_column(2).view());
-  auto keys       = cudf::test::to_host<int64_t>(view.keys()).first;
-  auto indices    = cudf::test::to_host<uint32_t>(view.indices()).first;
-  auto dict_array = get_nanoarrow_dict_array(std::vector<int64_t>(keys.begin(), keys.end()),
-                                             std::vector<int32_t>(indices.begin(), indices.end()),
-                                             test_data.validity);
-  auto boolarray  = get_nanoarrow_array<bool>(test_data.bool_data, test_data.bool_validity);
-  auto list_array = get_nanoarrow_list_array<int64_t>(test_data.list_int64_data,
-                                                      test_data.list_offsets,
-                                                      test_data.list_int64_data_validity,
-                                                      test_data.bool_data_validity);
-
-  nanoarrow::UniqueArray arrow;
-  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(arrow.get(), schema.get(), nullptr));
-  arrow->length = length;
-
-  int64_array.move(arrow->children[0]);
-  string_array.move(arrow->children[1]);
-  dict_array.move(arrow->children[2]);
-  boolarray.move(arrow->children[3]);
-  list_array.move(arrow->children[4]);
-
-  int64_array  = get_nanoarrow_array<int64_t>(test_data.int64_data, test_data.validity);
-  string_array = get_nanoarrow_array<cudf::string_view>(test_data.string_data, test_data.validity);
-  int64_array.move(arrow->children[5]->children[0]);
-  string_array.move(arrow->children[5]->children[1]);
-
-  ArrowBitmap struct_validity;
-  ArrowBitmapInit(&struct_validity);
-  NANOARROW_THROW_NOT_OK(ArrowBitmapReserve(&struct_validity, length));
-  ArrowBitmapAppendInt8Unsafe(
-    &struct_validity, reinterpret_cast<const int8_t*>(test_data.bool_data_validity.data()), length);
-  arrow->children[5]->length = length;
-  ArrowArraySetValidityBitmap(arrow->children[5], &struct_validity);
-  arrow->children[5]->null_count =
-    length - ArrowBitCountSet(ArrowArrayValidityBitmap(arrow->children[5])->buffer.data, 0, length);
-
-  ArrowError error;
-  if (ArrowArrayFinishBuilding(arrow.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, &error) !=
-      NANOARROW_OK) {
-    std::cerr << ArrowErrorMessage(&error) << std::endl;
-    CUDF_FAIL("failed to build example arrays");
-  }
-
-  return std::make_tuple(std::move(table), std::move(schema), std::move(arrow));
-}
-
 static void null_release_array(ArrowArray* stream) {}
 
 struct VectorOfArrays {
@@ -171,7 +115,7 @@ TEST_F(FromArrowStreamTest, BasicTest)
   nanoarrow::UniqueSchema schema;
   std::vector<nanoarrow::UniqueArray> arrays;
   for (auto i = 0; i < num_copies; ++i) {
-    auto [tbl, sch, arr] = get_nanoarrow_host_tables_for_stream(0);
+    auto [tbl, sch, arr] = get_nanoarrow_host_tables(0);
     tables.push_back(std::move(tbl));
     arrays.push_back(std::move(arr));
     if (i == 0) { sch.move(schema.get()); }
@@ -190,7 +134,7 @@ TEST_F(FromArrowStreamTest, BasicTest)
 
 TEST_F(FromArrowStreamTest, EmptyTest)
 {
-  auto [tbl, sch, arr] = get_nanoarrow_host_tables_for_stream(0);
+  auto [tbl, sch, arr] = get_nanoarrow_host_tables(0);
   std::vector<cudf::table_view> table_views{tbl->view()};
   auto expected = cudf::concatenate(table_views);
 
