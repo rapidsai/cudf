@@ -219,7 +219,7 @@ def _to_arrow_datatype(cudf_object, **kwargs):
 
     Translation of some types requires extra information as a keyword
     argument. Specifically:
-    
+
     - When translating a decimal type, provide ``precision``
     - When translating a struct type, provide ``fields``
     - When translating a list type, provide the wrapped ``value_type``
