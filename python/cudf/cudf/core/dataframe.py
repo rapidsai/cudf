@@ -2574,7 +2574,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             yield (k, self[k])
 
     @_cudf_nvtx_annotate
-    def equals(self, other):
+    def equals(self, other) -> bool:
         ret = super().equals(other)
         # If all other checks matched, validate names.
         if ret:
@@ -5305,9 +5305,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         out_index = self.index.to_pandas()
         out_data = {
-            i: col.to_pandas(
-                index=out_index, nullable=nullable, arrow_type=arrow_type
-            )
+            i: col.to_pandas(nullable=nullable, arrow_type=arrow_type)
             for i, col in enumerate(self._data.columns)
         }
 

@@ -56,7 +56,7 @@ def test_agg(df, agg):
     q = df.select(expr)
 
     # https://github.com/rapidsai/cudf/issues/15852
-    check_dtype = agg not in {"count", "n_unique", "median"}
+    check_dtype = agg not in {"n_unique", "median"}
     if not check_dtype and q.schema["a"] != pl.Float64:
         with pytest.raises(AssertionError):
             assert_gpu_result_equal(q)
