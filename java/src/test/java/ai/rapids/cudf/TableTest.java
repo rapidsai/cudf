@@ -9031,7 +9031,7 @@ public class TableTest extends CudfTestBase {
         .withColumn(true, "c1", -1)
         .withDecimalColumn("c2", 9, true, 2)
         .withStructColumn(sBuilder.build())
-        .withTimestampColumn("c4", true, true, -4)
+        .withTimestampColumn("c4", true, -4)
         .withColumns( true, "c5")
         .build();
 
