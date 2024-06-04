@@ -54,7 +54,9 @@
 #include <memory>
 #include <optional>
 #include <type_traits>
+#include <unordered_set>
 #include <utility>
+#include <variant>
 
 namespace cudf {
 
@@ -117,9 +119,22 @@ struct dispatch_void_conditional_generator {
  */
 template <typename T>
 using dispatch_void_if_nested_t =
-  dispatch_void_conditional_t<std::is_same_v<id_to_type<type_id::STRUCT>, T> or
-                                std::is_same_v<id_to_type<type_id::LIST>, T>,
-                              T>;
+  dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
+                                      id_to_type<type_id::LIST>>::type<T>;
+
+/**
+ * @brief Returns `void` if it's a compound type
+ *
+ */
+template <typename T>
+using dispatch_void_if_compound_t =
+  dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
+                                      id_to_type<type_id::LIST>,
+                                      id_to_type<type_id::DECIMAL128>,
+                                      id_to_type<type_id::DECIMAL64>,
+                                      id_to_type<type_id::DECIMAL32>,
+                                      id_to_type<type_id::STRING>,
+                                      id_to_type<type_id::DICTIONARY32>>::type<T>;
 /**
  * @brief A map from cudf::type_id to cudf type that excludes LIST and STRUCT types.
  *
@@ -2120,6 +2135,58 @@ class row_hasher {
     Nullate nullate = {}, uint32_t seed = DEFAULT_HASH_SEED) const
   {
     return DeviceRowHasher<hash_function, Nullate, dispatch_cond>(nullate, *d_t, seed);
+  }
+
+  /**
+   * @brief Get the hash operator to use on the device
+   *
+   * Returns a variant unary callable, `F`, with signature `hash_function::hash_value_type
+   * F(size_type)`. Concrete type in the returned variant is determined at runtime based on
+   * column_types.
+   *
+   * `F(i)` returns the hash of row i.
+   *
+   * @tparam Nullate A cudf::nullate type describing whether to check for nulls
+   * @param column_types Column types in the row, determined at runtime
+   * @param nullate Indicates if any input column contains nulls
+   * @param seed The seed to use for the hash function
+   * @return A hash operator to use on the device
+   */
+  template <template <typename> class hash_function = cudf::hashing::detail::default_hash,
+            template <template <typename> class, typename, template <typename> typename>
+            class DeviceRowHasher = device_row_hasher,
+            typename Nullate>
+  auto conditional_dispatch_device_hasher(std::unordered_set<cudf::type_id> column_types,
+                                          Nullate nullate = {},
+                                          uint32_t seed   = DEFAULT_HASH_SEED) const
+  {
+    using row_hasher_t =
+      std::variant<DeviceRowHasher<hash_function, Nullate, type_identity_t>,
+                   DeviceRowHasher<hash_function, Nullate, dispatch_void_if_nested_t>,
+                   DeviceRowHasher<hash_function, Nullate, dispatch_void_if_compound_t>>;
+    auto find_any = [](std::initializer_list<cudf::type_id> ids,
+                       std::unordered_set<cudf::type_id> const& search_set) {
+      for (auto id : ids) {
+        if (search_set.find(id) != search_set.end()) return true;
+      }
+      return false;
+    };
+
+    if (find_any({type_id::STRUCT, type_id::LIST}, column_types)) {
+      return row_hasher_t{
+        DeviceRowHasher<hash_function, Nullate, type_identity_t>(nullate, *d_t, seed)};
+    } else if (find_any({type_id::DECIMAL32,
+                         type_id::DECIMAL64,
+                         type_id::DECIMAL128,
+                         type_id::STRING,
+                         type_id::DICTIONARY32},
+                        column_types)) {
+      return row_hasher_t{
+        DeviceRowHasher<hash_function, Nullate, dispatch_void_if_nested_t>(nullate, *d_t, seed)};
+    } else {
+      return row_hasher_t{
+        DeviceRowHasher<hash_function, Nullate, dispatch_void_if_compound_t>(nullate, *d_t, seed)};
+    }
   }
 
  private:

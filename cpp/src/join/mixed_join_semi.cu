@@ -43,7 +43,9 @@
 
 #include <optional>
 #include <set>
+#include <unordered_set>
 #include <utility>
+#include <variant>
 
 namespace cudf {
 namespace detail {
@@ -201,14 +203,14 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
 
   auto iter     = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
   auto find_any = [](std::initializer_list<cudf::type_id> ids,
-                     std::set<cudf::type_id> const& search_set) {
+                     std::unordered_set<cudf::type_id> const& search_set) {
     for (auto id : ids) {
       if (search_set.find(id) != search_set.end()) return true;
     }
     return false;
   };
 
-  std::set<cudf::type_id> build_column_types, probe_column_types;
+  std::unordered_set<cudf::type_id> build_column_types, probe_column_types;
   for (auto col : build) {
     build_column_types.insert(col.type().id());
   }
@@ -216,11 +218,16 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     probe_column_types.insert(col.type().id());
   }
 
+  auto const row_hash_build = cudf::experimental::row::hash::row_hasher{preprocessed_build};
+  auto const hash_build =
+    row_hash_build.conditional_dispatch_device_hasher(build_column_types, build_nulls);
+  auto const row_hash_probe = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  auto const hash_probe =
+    row_hash_probe.conditional_dispatch_device_hasher(probe_column_types, has_nulls);
+
   // skip rows that are null here.
   if ((compare_nulls == null_equality::EQUAL) or (not nullable(build))) {
     if (find_any({type_id::STRUCT, type_id::LIST}, build_column_types)) {
-      auto const row_hash_build = cudf::experimental::row::hash::row_hasher{preprocessed_build};
-      auto const hash_build     = row_hash_build.device_hasher(build_nulls);
       auto const equality_build_equality =
         row_comparator_build.equal_to<false>(build_nulls, compare_nulls);
       auto const equality_build_conditional =
@@ -235,8 +242,12 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                equality_build_conditional(lhs_index_type{lhs_row_index},
                                           rhs_index_type{rhs_row_index});
       };
+      std::visit(
+        [&](auto&& hasher) {
+          hash_table.insert(iter, iter + right_num_rows, hasher, equality_build, stream.value());
+        },
+        hash_build);
 
-      hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
     } else if (find_any({type_id::DECIMAL32,
                          type_id::DECIMAL64,
                          type_id::DECIMAL128,
@@ -246,8 +257,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
       using cond =
         cudf::experimental::dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
                                                                 id_to_type<type_id::LIST>>;
-      auto const row_hash_build = cudf::experimental::row::hash::row_hasher{preprocessed_build};
-      auto const hash_build     = row_hash_build.device_hasher<cond::type>(build_nulls);
       auto const equality_build_equality =
         row_comparator_build.equal_to<false, cond::type>(build_nulls, compare_nulls);
       auto const equality_build_conditional =
@@ -262,7 +271,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                equality_build_conditional(lhs_index_type{lhs_row_index},
                                           rhs_index_type{rhs_row_index});
       };
-      hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
+      std::visit(
+        [&](auto&& hasher) {
+          hash_table.insert(iter, iter + right_num_rows, hasher, equality_build, stream.value());
+        },
+        hash_build);
     } else {
       using cond =
         cudf::experimental::dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
@@ -272,8 +285,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                                                                 id_to_type<type_id::DECIMAL32>,
                                                                 id_to_type<type_id::STRING>,
                                                                 id_to_type<type_id::DICTIONARY32>>;
-      auto const row_hash_build = cudf::experimental::row::hash::row_hasher{preprocessed_build};
-      auto const hash_build     = row_hash_build.device_hasher<cond::type>(build_nulls);
       auto const equality_build_equality =
         row_comparator_build.equal_to<false, cond::type>(build_nulls, compare_nulls);
       auto const equality_build_conditional =
@@ -288,7 +299,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                equality_build_conditional(lhs_index_type{lhs_row_index},
                                           rhs_index_type{rhs_row_index});
       };
-      hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
+      std::visit(
+        [&](auto&& hasher) {
+          hash_table.insert(iter, iter + right_num_rows, hasher, equality_build, stream.value());
+        },
+        hash_build);
     }
   } else {
     thrust::counting_iterator<cudf::size_type> stencil(0);
@@ -297,8 +312,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
     if (find_any({type_id::STRUCT, type_id::LIST}, build_column_types)) {
-      auto const row_hash_build = cudf::experimental::row::hash::row_hasher{preprocessed_build};
-      auto const hash_build     = row_hash_build.device_hasher(build_nulls);
       auto const equality_build_equality =
         row_comparator_build.equal_to<false>(build_nulls, compare_nulls);
       auto const equality_build_conditional =
@@ -313,9 +326,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                equality_build_conditional(lhs_index_type{lhs_row_index},
                                           rhs_index_type{rhs_row_index});
       };
-      // insert valid rows
-      hash_table.insert_if(
-        iter, iter + right_num_rows, stencil, pred, hash_build, equality_build, stream.value());
+      std::visit(
+        [&](auto&& hasher) {
+          hash_table.insert(iter, iter + right_num_rows, hasher, equality_build, stream.value());
+        },
+        hash_build);
     } else if (find_any({type_id::DECIMAL32,
                          type_id::DECIMAL64,
                          type_id::DECIMAL128,
@@ -325,8 +340,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
       using cond =
         cudf::experimental::dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
                                                                 id_to_type<type_id::LIST>>;
-      auto const row_hash_build = cudf::experimental::row::hash::row_hasher{preprocessed_build};
-      auto const hash_build     = row_hash_build.device_hasher<cond::type>(build_nulls);
       auto const equality_build_equality =
         row_comparator_build.equal_to<false, cond::type>(build_nulls, compare_nulls);
       auto const equality_build_conditional =
@@ -341,9 +354,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                equality_build_conditional(lhs_index_type{lhs_row_index},
                                           rhs_index_type{rhs_row_index});
       };
-      // insert valid rows
-      hash_table.insert_if(
-        iter, iter + right_num_rows, stencil, pred, hash_build, equality_build, stream.value());
+      std::visit(
+        [&](auto&& hasher) {
+          hash_table.insert(iter, iter + right_num_rows, hasher, equality_build, stream.value());
+        },
+        hash_build);
     } else {
       using cond =
         cudf::experimental::dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
@@ -353,8 +368,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                                                                 id_to_type<type_id::DECIMAL32>,
                                                                 id_to_type<type_id::STRING>,
                                                                 id_to_type<type_id::DICTIONARY32>>;
-      auto const row_hash_build = cudf::experimental::row::hash::row_hasher{preprocessed_build};
-      auto const hash_build     = row_hash_build.device_hasher<cond::type>(build_nulls);
+
       auto const equality_build_equality =
         row_comparator_build.equal_to<false, cond::type>(build_nulls, compare_nulls);
       auto const equality_build_conditional =
@@ -369,9 +383,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                equality_build_conditional(lhs_index_type{lhs_row_index},
                                           rhs_index_type{rhs_row_index});
       };
-      // insert valid rows
-      hash_table.insert_if(
-        iter, iter + right_num_rows, stencil, pred, hash_build, equality_build, stream.value());
+      std::visit(
+        [&](auto&& hasher) {
+          hash_table.insert(iter, iter + right_num_rows, hasher, equality_build, stream.value());
+        },
+        hash_build);
     }
   }
 
@@ -383,106 +399,42 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   // Vector used to indicate indices from left/probe table which are present in output
   auto left_table_keep_mask = rmm::device_uvector<bool>(probe.num_rows(), stream);
 
-  if (find_any({type_id::STRUCT, type_id::LIST}, probe_column_types)) {
-    auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-    auto const hash_probe = row_hash.device_hasher(has_nulls);
-    if (has_nulls) {
-      mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>
-        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_conditional_view,
-          *right_conditional_view,
-          *probe_view,
-          *build_view,
-          hash_probe,
-          equality_probe,
-          hash_table_view,
-          cudf::device_span<bool>(left_table_keep_mask),
-          parser.device_expression_data);
-    } else {
-      mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>
-        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_conditional_view,
-          *right_conditional_view,
-          *probe_view,
-          *build_view,
-          hash_probe,
-          equality_probe,
-          hash_table_view,
-          cudf::device_span<bool>(left_table_keep_mask),
-          parser.device_expression_data);
-    }
-  } else if (find_any({type_id::DECIMAL32,
-                       type_id::DECIMAL64,
-                       type_id::DECIMAL128,
-                       type_id::STRING,
-                       type_id::DICTIONARY32},
-                      probe_column_types)) {
-    auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-    auto const hash_probe = row_hash.device_hasher<
-      cudf::experimental::dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
-                                                              id_to_type<type_id::LIST>>::type>(
-      has_nulls);
-    if (has_nulls) {
-      mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>
-        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_conditional_view,
-          *right_conditional_view,
-          *probe_view,
-          *build_view,
-          hash_probe,
-          equality_probe,
-          hash_table_view,
-          cudf::device_span<bool>(left_table_keep_mask),
-          parser.device_expression_data);
-    } else {
-      mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>
-        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_conditional_view,
-          *right_conditional_view,
-          *probe_view,
-          *build_view,
-          hash_probe,
-          equality_probe,
-          hash_table_view,
-          cudf::device_span<bool>(left_table_keep_mask),
-          parser.device_expression_data);
-    }
+  if (has_nulls) {
+    std::visit(
+      [&](auto&& hasher) {
+        mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>
+          <<<config.num_blocks,
+             config.num_threads_per_block,
+             shmem_size_per_block,
+             stream.value()>>>(*left_conditional_view,
+                               *right_conditional_view,
+                               *probe_view,
+                               *build_view,
+                               hasher,
+                               equality_probe,
+                               hash_table_view,
+                               cudf::device_span<bool>(left_table_keep_mask),
+                               parser.device_expression_data);
+      },
+      hash_probe);
   } else {
-    auto const row_hash = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-    auto const hash_probe =
-      row_hash.device_hasher<cudf::experimental::dispatch_void_conditional_generator<
-        id_to_type<type_id::STRUCT>,
-        id_to_type<type_id::LIST>,
-        id_to_type<type_id::DECIMAL128>,
-        id_to_type<type_id::DECIMAL64>,
-        id_to_type<type_id::DECIMAL32>,
-        id_to_type<type_id::STRING>,
-        id_to_type<type_id::DICTIONARY32>>::type>(has_nulls);
-    if (has_nulls) {
-      mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>
-        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_conditional_view,
-          *right_conditional_view,
-          *probe_view,
-          *build_view,
-          hash_probe,
-          equality_probe,
-          hash_table_view,
-          cudf::device_span<bool>(left_table_keep_mask),
-          parser.device_expression_data);
-    } else {
-      mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>
-        <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_conditional_view,
-          *right_conditional_view,
-          *probe_view,
-          *build_view,
-          hash_probe,
-          equality_probe,
-          hash_table_view,
-          cudf::device_span<bool>(left_table_keep_mask),
-          parser.device_expression_data);
-    }
+    std::visit(
+      [&](auto&& hasher) {
+        mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>
+          <<<config.num_blocks,
+             config.num_threads_per_block,
+             shmem_size_per_block,
+             stream.value()>>>(*left_conditional_view,
+                               *right_conditional_view,
+                               *probe_view,
+                               *build_view,
+                               hasher,
+                               equality_probe,
+                               hash_table_view,
+                               cudf::device_span<bool>(left_table_keep_mask),
+                               parser.device_expression_data);
+      },
+      hash_probe);
   }
 
   auto gather_map = std::make_unique<rmm::device_uvector<size_type>>(probe.num_rows(), stream, mr);
