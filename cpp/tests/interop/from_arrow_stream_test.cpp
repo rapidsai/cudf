@@ -34,6 +34,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -93,7 +94,6 @@ get_nanoarrow_host_tables_for_stream(cudf::size_type length)
   return std::make_tuple(std::move(table), std::move(schema), std::move(arrow));
 }
 
-static void null_release_schema(ArrowSchema* stream) {}
 static void null_release_array(ArrowArray* stream) {}
 
 struct VectorOfArrays {
@@ -104,16 +104,11 @@ struct VectorOfArrays {
   static int get_schema(ArrowArrayStream* stream, ArrowSchema* out_schema)
   {
     auto private_data = static_cast<VectorOfArrays*>(stream->private_data);
-    // Copy the schema attributes every time, but leave the release function as null since the
-    // schema is owned by the VectorOfArrays and released upon its destruction.
-    out_schema->format     = private_data->schema->format;
-    out_schema->name       = private_data->schema->name;
-    out_schema->metadata   = private_data->schema->metadata;
-    out_schema->flags      = private_data->schema->flags;
-    out_schema->n_children = private_data->schema->n_children;
-    out_schema->children   = private_data->schema->children;
-    out_schema->dictionary = private_data->schema->dictionary;
-    out_schema->release    = null_release_schema;
+    // TODO: Can the deep copy be avoided here? I tried creating a new schema
+    // with a shallow copy of the fields and seeing the release function to a
+    // no-op, but that resulted in the children being freed somehow in the
+    // EmptyTest (I didn't investigate further).
+    ArrowSchemaDeepCopy(private_data->schema.get(), out_schema);
 
     return 0;
   }
@@ -125,9 +120,14 @@ struct VectorOfArrays {
       out_array->release = nullptr;
       return 0;
     }
-    // Copy the attributes, but leave the release function as null since the
-    // array is owned by the VectorOfArrays and released upon its destruction.
-    auto ret_array        = private_data->arrays[private_data->index++].get();
+    auto ret_array = private_data->arrays[private_data->index++].get();
+    // TODO: This shallow copy seems to work, but is it safe, especially with
+    // respect to the children? I believe we should be safe from double-freeing
+    // because everything will check for a null release pointer before freeing,
+    // but that could produce use-after-free bugs especially with the children
+    // since that pointer is just copied over. My current tests won't reflect
+    // that but creating multiple streams from the same set of arrays would.
+    // Is that even a valid use case?
     out_array->length     = ret_array->length;
     out_array->null_count = ret_array->null_count;
     out_array->offset     = ret_array->offset;
@@ -186,4 +186,16 @@ TEST_F(FromArrowStreamTest, BasicTest)
   makeStreamFromArrays(std::move(arrays), std::move(schema), &stream);
   auto result = cudf::from_arrow_stream(&stream);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result->view());
+}
+
+TEST_F(FromArrowStreamTest, EmptyTest)
+{
+  auto [tbl, sch, arr] = get_nanoarrow_host_tables_for_stream(0);
+  std::vector<cudf::table_view> table_views{tbl->view()};
+  auto expected = cudf::concatenate(table_views);
+
+  ArrowArrayStream stream;
+  makeStreamFromArrays({}, std::move(sch), &stream);
+  auto result = cudf::from_arrow_stream(&stream);
+  cudf::have_same_types(expected->view(), result->view());
 }
