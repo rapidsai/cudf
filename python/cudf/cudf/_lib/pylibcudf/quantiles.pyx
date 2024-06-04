@@ -98,7 +98,7 @@ cpdef Table quantiles(
         The Table to calculate row quantiles on.
     q: array-like
         The quantiles to calculate in range [0,1]
-    interp: Interpolation, default Interpolation.LINEAR
+    interp: Interpolation, default Interpolation.NEAREST
         The strategy used to select between values adjacent to a specified quantile.
 
         Must be a non-arithmetic interpolation strategy
