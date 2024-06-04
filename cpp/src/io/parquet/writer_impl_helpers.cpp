@@ -1,0 +1,107 @@
+/*
+ * Copyright (c) 2024, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * @file writer_impl_helpers.cpp
+ * @brief Helper function implementation for Parquet writer
+ */
+
+#include "writer_impl_helpers.hpp"
+
+namespace cudf::io::parquet::detail {
+
+using namespace cudf::io::detail;
+
+Compression to_parquet_compression(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::AUTO:
+    case compression_type::SNAPPY: return Compression::SNAPPY;
+    case compression_type::ZSTD: return Compression::ZSTD;
+    case compression_type::LZ4:
+      // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
+      return Compression::LZ4_RAW;
+    case compression_type::NONE: return Compression::UNCOMPRESSED;
+    default: CUDF_FAIL("Unsupported compression type");
+  }
+}
+
+nvcomp::compression_type to_nvcomp_compression_type(Compression codec)
+{
+  if (codec == Compression::SNAPPY) return nvcomp::compression_type::SNAPPY;
+  if (codec == Compression::ZSTD) return nvcomp::compression_type::ZSTD;
+  // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
+  if (codec == Compression::LZ4_RAW) return nvcomp::compression_type::LZ4;
+  CUDF_FAIL("Unsupported compression type");
+}
+
+uint32_t page_alignment(Compression codec)
+{
+  if (codec == Compression::UNCOMPRESSED or
+      nvcomp::is_compression_disabled(to_nvcomp_compression_type(codec))) {
+    return 1u;
+  }
+
+  return 1u << nvcomp::compress_input_alignment_bits(to_nvcomp_compression_type(codec));
+}
+
+size_t max_compression_output_size(Compression codec, uint32_t compression_blocksize)
+{
+  if (codec == Compression::UNCOMPRESSED) return 0;
+
+  return compress_max_output_chunk_size(to_nvcomp_compression_type(codec), compression_blocksize);
+}
+
+void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta)
+{
+  // Fill unnamed columns' names in table_meta
+  std::function<void(column_in_metadata&, std::string)> add_default_name =
+    [&](column_in_metadata& col_meta, std::string default_name) {
+      if (col_meta.get_name().empty()) col_meta.set_name(default_name);
+      for (size_type i = 0; i < col_meta.num_children(); ++i) {
+        add_default_name(col_meta.child(i), col_meta.get_name() + "_" + std::to_string(i));
+      }
+    };
+  for (size_t i = 0; i < table_meta->column_metadata.size(); ++i) {
+    add_default_name(table_meta->column_metadata[i], "_col" + std::to_string(i));
+  }
+}
+
+[[nodiscard]] bool is_col_nullable(cudf::detail::LinkedColPtr const& column,
+                                   column_in_metadata const& column_metadata,
+                                   single_write_mode write_mode)
+{
+  if (column_metadata.is_nullability_defined()) {
+    CUDF_EXPECTS(column_metadata.nullable() or column->null_count() == 0,
+                 "Mismatch in metadata prescribed nullability and input column. "
+                 "Metadata for input column with nulls cannot prescribe nullability = false");
+    return column_metadata.nullable();
+  }
+  // For chunked write, when not provided nullability, we assume the worst case scenario
+  // that all columns are nullable.
+  return write_mode == single_write_mode::NO or column->nullable();
+}
+
+[[nodiscard]] bool is_col_fixed_width(column_view const& column)
+{
+  if (column.type().id() == type_id::STRUCT) {
+    return std::all_of(column.child_begin(), column.child_end(), is_col_fixed_width);
+  }
+
+  return is_fixed_width(column.type());
+}
+
+}  // namespace cudf::io::parquet::detail

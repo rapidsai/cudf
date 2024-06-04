@@ -25,6 +25,7 @@
 #include "io/utilities/base64_utilities.hpp"
 #include "ipc/Message_generated.h"
 #include "ipc/Schema_generated.h"
+#include "writer_impl_helpers.hpp"
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/utilities/error.hpp>
@@ -243,19 +244,20 @@ struct dispatch_to_flatbuf {
   template <typename T>
   std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
   {
-    if constexpr (std::is_same_v<T, numeric::decimal128>) {
-      type_type = flatbuf::Type_Decimal;
-      field_offset =
-        flatbuf::CreateDecimal(fbb, col_meta.get_decimal_precision(), col->type().scale(), 128)
-          .Union();
-    }
-    // cuDF-PQ writer supports ``decimal32`` and ``decimal64`` types, not directly supported by
-    // Arrow without explicit conversion. See more:
-    // https://github.com/rapidsai/cudf/blob/branch-24.08/cpp/src/interop/to_arrow.cu#L155.
-    else {
-      // TODO: Should we fail here or just not write arrow schema?.
+    if constexpr (not std::is_same_v<T, numeric::decimal128>) {
+      // ``decimal32`` and ``decimal64`` types are not supported by
+      // Arrow without explicit conversion.
       CUDF_FAIL("Fixed point types smaller than `decimal128` are not supported in arrow schema");
     }
+
+    type_type    = flatbuf::Type_Decimal;
+    field_offset = flatbuf::CreateDecimal(fbb,
+                                          (col_meta.is_decimal_precision_set())
+                                            ? col_meta.get_decimal_precision()
+                                            : MAX_DECIMAL128_PRECISION,
+                                          col->type().scale(),
+                                          128)
+                     .Union();
   }
 
   template <typename T>

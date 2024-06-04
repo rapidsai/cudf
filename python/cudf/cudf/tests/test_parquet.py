@@ -3528,7 +3528,13 @@ def test_parquet_writer_roundtrip_with_arrow_schema(index):
             "uint32": cudf.Series([1234, 123, 4123], dtype="uint32"),
             "list": list([[1, 2], [1, 2], [1, 2]]),
             "bool": cudf.Series([True, None, False], dtype=bool),
-            "fixed_pt": cudf.Series([0.00, 1.0, None]).astype(
+            "fixed32": cudf.Series([0.00, 1.0, None]).astype(
+                cudf.Decimal32Dtype(7, 2)
+            ),
+            "fixed64": cudf.Series([0.00, 1.0, None]).astype(
+                cudf.Decimal64Dtype(7, 2)
+            ),
+            "fixed128": cudf.Series([0.00, 1.0, None]).astype(
                 cudf.Decimal128Dtype(7, 2)
             ),
             "datetime": cudf.Series([1234, 123, 4123], dtype="datetime64[ms]"),
@@ -3541,6 +3547,10 @@ def test_parquet_writer_roundtrip_with_arrow_schema(index):
     # Write to Parquet with arrow schema for faithful roundtrip
     buffer = BytesIO()
     expected.to_parquet(buffer, store_schema=True, index=index)
+
+    # Convert decimal types to d128
+    expected = expected.astype({'fixed32': cudf.Decimal128Dtype(9, 2)})
+    expected = expected.astype({'fixed64': cudf.Decimal128Dtype(18, 2)})
 
     # Read parquet with pyarrow, pandas and cudf readers
     got = cudf.DataFrame.from_arrow(pq.read_table(buffer))

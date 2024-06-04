@@ -503,6 +503,50 @@ TEST_F(ParquetWriterTest, DecimalWrite)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, table);
 }
 
+TEST_F(ParquetWriterTest, DecimalWriteWithArrowSchema)
+{
+  constexpr cudf::size_type num_rows = 500;
+  auto seq_col0                      = random_values<int32_t>(num_rows);
+  auto seq_col1                      = random_values<int64_t>(num_rows);
+
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+
+  auto col0 = cudf::test::fixed_point_column_wrapper<int32_t>{
+    seq_col0.begin(), seq_col0.end(), valids, numeric::scale_type{5}};
+  auto col1 = cudf::test::fixed_point_column_wrapper<int64_t>{
+    seq_col1.begin(), seq_col1.end(), valids, numeric::scale_type{-9}};
+
+  auto table = table_view({col0, col1});
+
+  auto filepath = temp_env->get_temp_filepath("DecimalWriteWithArrowSchema.parquet");
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table)
+      .write_arrow_schema(true);
+
+  cudf::io::table_input_metadata expected_metadata(table);
+  // verify success if equal precision is given
+  expected_metadata.column_metadata[0].set_decimal_precision(
+    cudf::io::parquet::detail::MAX_DECIMAL32_PRECISION);
+  expected_metadata.column_metadata[1].set_decimal_precision(
+    cudf::io::parquet::detail::MAX_DECIMAL64_PRECISION);
+  args.set_metadata(std::move(expected_metadata));
+  cudf::io::write_parquet(args);
+
+  auto expected_col0 = cudf::test::fixed_point_column_wrapper<__int128_t>{
+    seq_col0.begin(), seq_col0.end(), valids, numeric::scale_type{5}};
+  auto expected_col1 = cudf::test::fixed_point_column_wrapper<__int128_t>{
+    seq_col1.begin(), seq_col1.end(), valids, numeric::scale_type{-9}};
+
+  auto expected_table = table_view({expected_col0, expected_col1});
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, expected_table);
+}
+
 TEST_F(ParquetWriterTest, RowGroupSizeInvalid)
 {
   auto const unused_table = std::make_unique<table>();
