@@ -4,6 +4,7 @@
 from . cimport (
     aggregation,
     binaryop,
+    column_factories,
     concatenate,
     copying,
     filling,
@@ -40,6 +41,7 @@ __all__ = [
     "binaryop",
     "concatenate",
     "copying",
+    "column_factories",
     "filling",
     "gpumemoryview",
     "groupby",
