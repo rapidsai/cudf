@@ -3417,7 +3417,9 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema():
 def test_parquet_chunked_reader(
     chunk_read_limit, pass_read_limit, use_pandas_metadata, row_groups
 ):
-    df = pd.DataFrame({"a": [1, 2, 3, 4] * 1000000})
+    df = pd.DataFrame(
+        {"a": [1, 2, 3, 4] * 1000000, "b": ["av", "qw", "hi", "xyz"] * 1000000}
+    )
     buffer = BytesIO()
     df.to_parquet(buffer)
     reader = ParquetReader(
