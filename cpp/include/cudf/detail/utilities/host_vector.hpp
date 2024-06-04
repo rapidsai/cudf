@@ -178,6 +178,6 @@ class rmm_host_allocator {
  * @brief A vector class with rmm host memory allocator
  */
 template <typename T>
-using rmm_host_vector = thrust::host_vector<T, rmm_host_allocator<T>>;
+using host_vector = thrust::host_vector<T, rmm_host_allocator<T>>;
 
 }  // namespace cudf::detail

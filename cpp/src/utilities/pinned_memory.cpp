@@ -53,7 +53,7 @@ class fixed_pinned_pool_memory_resource {
     pool_->deallocate_async(pool_begin_, pool_size_, stream_);
   }
 
-  void* do_allocate_async(std::size_t bytes, std::size_t alignment, cuda::stream_ref stream)
+  void* allocate_async(std::size_t bytes, std::size_t alignment, cuda::stream_ref stream)
   {
     if (bytes <= pool_size_) {
       try {
@@ -66,10 +66,22 @@ class fixed_pinned_pool_memory_resource {
     return upstream_mr_.allocate_async(bytes, alignment, stream);
   }
 
-  void do_deallocate_async(void* ptr,
-                           std::size_t bytes,
-                           std::size_t alignment,
-                           cuda::stream_ref stream) noexcept
+  void* allocate_async(std::size_t bytes, cuda::stream_ref stream)
+  {
+    return allocate_async(bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
+  }
+
+  void* allocate(std::size_t bytes, std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
+  {
+    auto const result = allocate_async(bytes, alignment, stream_);
+    stream_.wait();
+    return result;
+  }
+
+  void deallocate_async(void* ptr,
+                        std::size_t bytes,
+                        std::size_t alignment,
+                        cuda::stream_ref stream) noexcept
   {
     if (bytes <= pool_size_ && ptr >= pool_begin_ && ptr <= pool_end_) {
       pool_->deallocate_async(ptr, bytes, alignment, stream);
@@ -78,34 +90,9 @@ class fixed_pinned_pool_memory_resource {
     }
   }
 
-  void* allocate_async(std::size_t bytes, cuda::stream_ref stream)
-  {
-    return do_allocate_async(bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
-  }
-
-  void* allocate_async(std::size_t bytes, std::size_t alignment, cuda::stream_ref stream)
-  {
-    return do_allocate_async(bytes, alignment, stream);
-  }
-
-  void* allocate(std::size_t bytes, std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
-  {
-    auto const result = do_allocate_async(bytes, alignment, stream_);
-    stream_.wait();
-    return result;
-  }
-
   void deallocate_async(void* ptr, std::size_t bytes, cuda::stream_ref stream) noexcept
   {
-    return do_deallocate_async(ptr, bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
-  }
-
-  void deallocate_async(void* ptr,
-                        std::size_t bytes,
-                        std::size_t alignment,
-                        cuda::stream_ref stream) noexcept
-  {
-    return do_deallocate_async(ptr, bytes, alignment, stream);
+    return deallocate_async(ptr, bytes, rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
   }
 
   void deallocate(void* ptr,
