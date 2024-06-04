@@ -226,8 +226,8 @@ std::unique_ptr<column> rescale(column_view input,
  *
  * A floating point value is convertible if it is not null, not `NaN`, and not `inf`.
  *
- * Note that convertible input values may still be out of representible range of the target fixed
- * point type and need to be checked separately.
+ * Note that convertible input values may be out of the representable range of the target fixed
+ * point type. Values out of the representable range need to be checked separately.
  */
 template <typename FloatType>
 struct is_convertible_floating_point {
@@ -238,9 +238,8 @@ struct is_convertible_floating_point {
     static_assert(std::is_floating_point_v<FloatType>);
 
     if (d_input.is_null(idx)) { return false; }
-
     auto const value = d_input.element<FloatType>(idx);
-    return !std::isnan(value) && !std::isinf(value);
+    return std::isfinite(value);
   }
 };
 
