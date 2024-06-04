@@ -87,10 +87,8 @@ class Frame(BinaryOperand, Scannable):
         return self._data.columns
 
     @property
-    def _dtypes(self):
-        return dict(
-            zip(self._data.names, (col.dtype for col in self._data.columns))
-        )
+    def _dtypes(self) -> abc.Iterator:
+        return zip(self._data.names, (col.dtype for col in self._data.columns))
 
     @property
     def ndim(self) -> int:
@@ -1980,7 +1978,7 @@ class Frame(BinaryOperand, Scannable):
 
         return [
             type(self),
-            str(self._dtypes),
+            str(dict(self._dtypes)),
             normalize_token(self.to_pandas()),
         ]
 

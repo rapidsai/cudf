@@ -893,7 +893,7 @@ class IndexedFrame(Frame):
             ) = _get_replacement_values_for_columns(
                 to_replace=to_replace,
                 value=value,
-                columns_dtype_map=self._dtypes,
+                columns_dtype_map=dict(self._dtypes),
             )
 
             for name, col in self._data.items():
@@ -6317,7 +6317,7 @@ class IndexedFrame(Frame):
 
         return [
             type(self),
-            str(self._dtypes),
+            str(dict(self._dtypes)),
             *[
                 normalize_token(col.dtype.categories)
                 for col in self._columns
