@@ -111,19 +111,6 @@ class _PickleConstructor:
 _DELETE = object()
 
 
-def create_composite_metaclass(base_meta, additional_meta):
-    """
-    Dynamically creates a composite metaclass that inherits from both provided metaclasses.
-    This ensures that the metaclass behaviors of both base_meta and additional_meta are preserved.
-    """
-
-    class CompositeMeta(base_meta, additional_meta):
-        def __new__(cls, name, bases, namespace):
-            return super().__new__(cls, name, bases, namespace)
-
-    return CompositeMeta
-
-
 def make_final_proxy_type(
     name: str,
     fast_type: type,
@@ -135,7 +122,7 @@ def make_final_proxy_type(
     additional_attributes: Mapping[str, Any] | None = None,
     postprocess: Callable[[_FinalProxy, Any, Any], Any] | None = None,
     bases: Tuple = (),
-    meta_class=None,
+    metaclasses: Tuple = (),
 ) -> Type[_FinalProxy]:
     """
     Defines a fast-slow proxy type for a pair of "final" fast and slow
@@ -166,6 +153,8 @@ def make_final_proxy_type(
         construct said unwrapped object. See also `_maybe_wrap_result`.
     bases
         Optional tuple of base classes to insert into the mro.
+    metaclasses
+        Optional tuple of metaclasses to unify with the base proxy metaclass.
 
     Notes
     -----
@@ -247,15 +236,18 @@ def make_final_proxy_type(
             cls_dict[slow_name] = _FastSlowAttribute(
                 slow_name, private=slow_name.startswith("_")
             )
-    if meta_class is None:
-        meta_class = _FastSlowProxyMeta
-    else:
-        meta_class = create_composite_metaclass(_FastSlowProxyMeta, meta_class)
 
+    metaclass = _FastSlowProxyMeta
+    if metaclasses:
+        metaclass = types.new_class(  # type: ignore
+            f"{name}_Meta",
+            metaclasses + (_FastSlowProxyMeta,),
+            {},
+        )
     cls = types.new_class(
         name,
         (*bases, _FinalProxy),
-        {"metaclass": meta_class},
+        {"metaclass": metaclass},
         lambda ns: ns.update(cls_dict),
     )
     functools.update_wrapper(

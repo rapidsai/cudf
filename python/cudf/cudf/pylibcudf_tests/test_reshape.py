@@ -27,7 +27,7 @@ def test_interleave_columns(reshape_data, reshape_plc_tbl):
 
     expect = pa.concat_arrays(interleaved_data)
 
-    assert_column_eq(res, expect)
+    assert_column_eq(expect, res)
 
 
 @pytest.mark.parametrize("cnt", [0, 1, 3])
@@ -40,4 +40,4 @@ def test_tile(reshape_data, reshape_plc_tbl, cnt):
         tiled_data, schema=plc.interop.to_arrow(reshape_plc_tbl).schema
     )
 
-    assert_table_eq(res, expect)
+    assert_table_eq(expect, res)

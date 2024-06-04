@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,7 +82,7 @@ void BM_orc_write_encode(nvbench::state& state, nvbench::type_list<nvbench::enum
   state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
 }
 
-template <cudf::io::io_type IO, cudf::io::compression_type Compression>
+template <io_type IO, cudf::io::compression_type Compression>
 void BM_orc_write_io_compression(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<IO>, nvbench::enum_type<Compression>>)
@@ -183,9 +183,7 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL_SIGNED,
                                             data_type::LIST,
                                             data_type::STRUCT>;
 
-using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
-                                        cudf::io::io_type::HOST_BUFFER,
-                                        cudf::io::io_type::VOID>;
+using io_list = nvbench::enum_type_list<io_type::FILEPATH, io_type::HOST_BUFFER, io_type::VOID>;
 
 using compression_list =
   nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;

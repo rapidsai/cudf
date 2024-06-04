@@ -11,6 +11,7 @@ This page provides API documentation for pylibcudf.
     aggregation
     binaryop
     column
+    column_factories
     concatenate
     copying
     filling
@@ -22,6 +23,7 @@ This page provides API documentation for pylibcudf.
     reduce
     reshape
     rolling
+    round
     scalar
     search
     stream_compaction

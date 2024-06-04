@@ -6,6 +6,7 @@ import collections
 import copy
 import datetime
 import operator
+import os
 import pathlib
 import pickle
 import tempfile
@@ -1480,3 +1481,7 @@ def test_cudf_pandas_debugging_failed(monkeypatch):
             s = xpd.Series([1, 2])
             assert s.mean() == 1.5
     monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
+
+
+def test_excelwriter_pathlike():
+    assert isinstance(pd.ExcelWriter("foo.xlsx"), os.PathLike)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ TEST_F(StringsReplaceTest, Replace)
   auto const target = cudf::string_scalar("é", true, cudf::test::get_default_stream());
   auto const repl   = cudf::string_scalar(" ", true, cudf::test::get_default_stream());
   cudf::strings::replace(view, target, repl, -1, cudf::test::get_default_stream());
-  cudf::strings::replace(view, view, view, cudf::test::get_default_stream());
+  cudf::strings::replace_multiple(view, view, view, cudf::test::get_default_stream());
   cudf::strings::replace_slice(view, repl, 1, 2, cudf::test::get_default_stream());
 
   auto const pattern = std::string("[a-z]");
