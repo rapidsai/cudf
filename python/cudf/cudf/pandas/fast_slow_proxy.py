@@ -26,9 +26,37 @@ from typing import (
 
 import numpy as np
 
+from rmm import RMMError
+
 from ..options import _env_get_bool
 from ..testing._utils import assert_eq
 from .annotation import nvtx
+
+
+class CudfPandasDebugWarning(UserWarning):
+    pass
+
+
+class CudfPandasDebugFallbackWarning(UserWarning):
+    pass
+
+
+class CudfPandasDebugOOMWarning(CudfPandasDebugFallbackWarning):
+    pass
+
+
+class CudfPandasDebugNotImplementedErrorWarning(
+    CudfPandasDebugFallbackWarning
+):
+    pass
+
+
+class CudfPandasDebugAttributeErrorWarning(CudfPandasDebugFallbackWarning):
+    pass
+
+
+class CudfPandasDebugTypeErrorWarning(CudfPandasDebugFallbackWarning):
+    pass
 
 
 def call_operator(fn, args, kwargs):
@@ -943,7 +971,8 @@ def _fast_slow_function_call(
                 except Exception as e:
                     warnings.warn(
                         "The result from pandas could not be computed. "
-                        f"The exception was {e}."
+                        f"The exception was {e}.",
+                        CudfPandasDebugWarning,
                     )
                 else:
                     try:
@@ -951,16 +980,41 @@ def _fast_slow_function_call(
                     except AssertionError as e:
                         warnings.warn(
                             "The results from cudf and pandas were different. "
-                            f"The exception was {e}."
+                            f"The exception was {e}.",
+                            CudfPandasDebugWarning,
                         )
                     except Exception as e:
                         warnings.warn(
                             "Pandas debugging mode failed. "
-                            f"The exception was {e}."
+                            f"The exception was {e}.",
+                            CudfPandasDebugWarning,
                         )
-            if cudf_pandas_fallback_debugging:
-                pass
-    except Exception:
+    except Exception as e:
+        if cudf_pandas_fallback_debugging:
+            if isinstance(e, (RMMError, MemoryError)):
+                warnings.warn(
+                    "Out of Memory Error. Falling back to the slow path. "
+                    f"The exception was {e}.",
+                    CudfPandasDebugOOMWarning,
+                )
+            elif isinstance(e, NotImplementedError):
+                warnings.warn(
+                    "NotImplementedError. Falling back to the slow path. "
+                    f"The exception was {e}.",
+                    CudfPandasDebugNotImplementedErrorWarning,
+                )
+            elif isinstance(e, AttributeError):
+                warnings.warn(
+                    "AttributeEror. Falling back to the slow path. "
+                    f"The exception was {e}.",
+                    CudfPandasDebugAttributeErrorWarning,
+                )
+            elif isinstance(e, TypeError):
+                warnings.warn(
+                    "TypeError. Falling back to the slow path. "
+                    f"The exception was {e}.",
+                    CudfPandasDebugTypeErrorWarning,
+                )
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],

@@ -18,8 +18,10 @@ import pytest
 from numba import NumbaDeprecationWarning
 from pytz import utc
 
+from rmm import RMMError
+
 from cudf.pandas import LOADED, Profiler
-from cudf.pandas.fast_slow_proxy import _Unusable
+from cudf.pandas.fast_slow_proxy import CudfPandasDebugWarning, _Unusable
 
 if not LOADED:
     raise ImportError("These tests must be run with cudf.pandas loaded")
@@ -1435,7 +1437,7 @@ def test_cudf_pandas_debugging_different_results(monkeypatch):
         monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
         with pytest.warns(
-            UserWarning,
+            CudfPandasDebugWarning,
             match="The results from cudf and pandas were different.",
         ):
             assert s.mean() == 1.0
@@ -1455,7 +1457,7 @@ def test_cudf_pandas_debugging_pandas_error(monkeypatch):
         monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
         with pytest.warns(
-            UserWarning,
+            CudfPandasDebugWarning,
             match="The result from pandas could not be computed.",
         ):
             s = xpd.Series([1, 2])
@@ -1474,9 +1476,29 @@ def test_cudf_pandas_debugging_failed(monkeypatch):
         monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
         s = xpd.Series([1, 2])
         with pytest.warns(
-            UserWarning,
+            CudfPandasDebugWarning,
             match="Pandas debugging mode failed.",
         ):
             s = xpd.Series([1, 2])
             assert s.mean() == 1.5
     monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
+
+
+def test_cudf_pandas_debug_oom_fallback(monkeypatch):
+    cudf_mean = cudf.Series.mean
+
+    def mock_mean_rmm_error(self, *args, **kwargs):
+        raise RMMError
+
+    with monkeypatch.context() as monkeycontext:
+        monkeypatch.setattr(
+            xpd.Series.mean, "_fsproxy_fast", mock_mean_rmm_error
+        )
+        monkeycontext.setenv("CUDF_PANDAS_FALLBACK_DEBUGGING", "True")
+        s = xpd.Series([1, 2])
+        with pytest.warns(
+            CudfPandasDebugWarning,
+            match="Out of Memory Error.",
+        ):
+            assert s.mean() == 1.5
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", cudf_mean)
