@@ -1,9 +1,10 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 from libcpp.vector cimport vector
 
+from cudf._lib.pylibcudf.libcudf.types cimport interpolation, sorted
+
 from .column cimport Column
 from .table cimport Table
-from .types cimport interpolation, sorted
 
 
 cpdef Column quantile(
