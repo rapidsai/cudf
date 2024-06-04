@@ -5783,23 +5783,14 @@ class StringColumn(column.ColumnBase):
     def to_pandas(
         self,
         *,
-        index: Optional[pd.Index] = None,
         nullable: bool = False,
         arrow_type: bool = False,
-    ) -> pd.Series:
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
-        if arrow_type:
-            return pd.Series(
-                pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
-            )
-        elif nullable:
+    ) -> pd.Index:
+        if nullable and not arrow_type:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
-            return pd.Series(pandas_array, copy=False, index=index)
+            return pd.Index(pandas_array, copy=False)
         else:
-            return super().to_pandas(index=index, nullable=nullable)
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         to_dtype = cudf.api.types.dtype(to_dtype)
