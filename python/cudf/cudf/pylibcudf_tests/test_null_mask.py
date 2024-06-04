@@ -6,6 +6,7 @@ import pytest
 import rmm
 
 import cudf._lib.pylibcudf as plc
+from cudf._lib.pylibcudf.null_mask import MaskState
 
 
 @pytest.fixture(params=[False, True])
@@ -37,3 +38,23 @@ def test_bitmask_allocation_size_bytes():
     assert plc.null_mask.bitmask_allocation_size_bytes(513) == 128
     assert plc.null_mask.bitmask_allocation_size_bytes(1024) == 128
     assert plc.null_mask.bitmask_allocation_size_bytes(1025) == 192
+
+
+@pytest.mark.parametrize("size", [0, 1, 512, 1024])
+@pytest.mark.parametrize(
+    "state",
+    [
+        MaskState.UNALLOCATED,
+        MaskState.UNINITIALIZED,
+        MaskState.ALL_VALID,
+        MaskState.ALL_NULL,
+    ],
+)
+def test_create_null_mask(size, state):
+    mask = plc.null_mask.create_null_mask(size, state)
+
+    assert mask.size == (
+        0
+        if state == MaskState.UNALLOCATED
+        else plc.null_mask.bitmask_allocation_size_bytes(size)
+    )
