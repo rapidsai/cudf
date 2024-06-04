@@ -54,6 +54,7 @@ ARROW_TO_PYLIBCUDF_TYPES = {
     pa.timestamp('ms'): type_id.TIMESTAMP_MILLISECONDS,
     pa.timestamp('us'): type_id.TIMESTAMP_MICROSECONDS,
     pa.timestamp('ns'): type_id.TIMESTAMP_NANOSECONDS,
+    pa.date32(): type_id.TIMESTAMP_DAYS,
 }
 
 LIBCUDF_TO_ARROW_TYPES = {
