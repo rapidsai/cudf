@@ -27,15 +27,19 @@ cdef class TableWithMetadata:
         """
         Return a list containing the columns of the table
         """
-        return self.tbl._columns
+        return self.tbl.columns()
 
     @property
     def column_names(self):
         """
         Return a list containing the column names of the table
         """
-        # TODO: Handle nesting (columns with child columns)
-        return [col_info.name.decode() for col_info in self.metadata.schema_info]
+        cdef list names = []
+        for col_info in self.metadata.schema_info:
+            # TODO: Handle nesting (columns with child columns)
+            assert col_info.children.size() == 0, "Child column names are not handled!"
+            names.append(col_info.name.decode())
+        return names
 
     @staticmethod
     cdef TableWithMetadata from_libcudf(table_with_metadata& tbl_with_meta):

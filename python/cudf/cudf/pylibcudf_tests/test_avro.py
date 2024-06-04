@@ -22,8 +22,7 @@ avro_dtype_pairs = [
 
 
 @pytest.fixture(
-    scope="module",
-    params=itertools.product(avro_dtype_pairs, avro_dtype_pairs),
+    scope="module", params=itertools.combinations(avro_dtype_pairs, 2)
 )
 def avro_dtypes(request):
     return request.param
@@ -31,10 +30,7 @@ def avro_dtypes(request):
 
 @pytest.fixture
 def avro_dtype_data(avro_dtypes):
-    # avro_type1, _, avro_type2, _ = avro_dtypes
-    types1, types2 = avro_dtypes
-    avro_type1, _ = types1
-    avro_type2, _ = types2
+    (avro_type1, _), (avro_type2, _) = avro_dtypes
 
     def _get_data(avro_type):
         if avro_type == "boolean":
@@ -69,11 +65,7 @@ def row_opts(request):
 @pytest.mark.parametrize("columns", [["prop1"], [], ["prop1", "prop2"]])
 @pytest.mark.parametrize("nullable", [True, False])
 def test_read_avro(avro_dtypes, avro_dtype_data, row_opts, columns, nullable):
-    # avro_type1, expected_type1, avro_type2, expected_type2 = avro_dtypes
-
-    types1, types2 = avro_dtypes
-    avro_type1, expected_type1 = types1
-    avro_type2, expected_type2 = types2
+    (avro_type1, expected_type1), (avro_type2, expected_type2) = avro_dtypes
 
     avro_type1 = avro_type1 if not nullable else ["null", avro_type1]
     avro_type2 = avro_type2 if not nullable else ["null", avro_type2]

@@ -14,7 +14,7 @@ from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 cpdef TableWithMetadata read_avro(
     SourceInfo source_info,
-    list columns = [],  # no-cython-lint
+    list columns = None,
     size_type skip_rows = 0,
     size_type num_rows = -1
 ):
@@ -27,7 +27,8 @@ cpdef TableWithMetadata read_avro(
     ----------
     source_info: SourceInfo
         The SourceInfo object to read the avro dataset from.
-    columns: list, default []
+    columns: list, default None
+        Optional columns to read, if not provided, reads all columns in the file.
     skip_rows: size_type, default 0
         The number of rows to skip.
     num_rows: size_type, default -1
