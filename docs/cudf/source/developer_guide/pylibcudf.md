@@ -247,7 +247,7 @@ cpdef ColumnOrTable empty_like(ColumnOrTable input)
 [Cython supports specializing the contents of fused-type functions based on the argument types](https://cython.readthedocs.io/en/latest/src/userguide/fusedtypes.html#type-checking-specializations), so any type-specific logic may be encoded using the appropriate conditionals.
 See the pylibcudf source for examples of how to implement such functions.
 
-In the event that an libcudf overload takes in a different amount of arguments compared to another overload, you should specify the maximum amount of arguments in the Cython definition,
-with the arguments not shared between overloads set to None. If a user tries to pass in an unsupported argument for a specific overload type, you should raise NotImplementedError/ValueError.
+In the event that libcudf provides multiple overloads for the same function with differing numbers of arguments, specify the maximum number of arguments in the Cython definition,
+and set arguments not shared between overloads to `None`. If a user tries to pass in an unsupported argument for a specific overload type, you should raise `ValueError`.
 
 Finally, consider making an libcudf issue if you think this inconsistency can be addressed on the libcudf side.
