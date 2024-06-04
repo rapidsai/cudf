@@ -23,7 +23,7 @@ cdef extern from "cudf/strings/replace.hpp" namespace "cudf::strings" nogil:
         string_scalar repl,
         int32_t maxrepl) except +
 
-    cdef unique_ptr[column] replace(
+    cdef unique_ptr[column] replace_multiple(
         column_view source_strings,
         column_view target_strings,
         column_view repl_strings) except +

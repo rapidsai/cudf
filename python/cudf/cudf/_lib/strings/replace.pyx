@@ -12,6 +12,7 @@ from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
 from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from cudf._lib.pylibcudf.libcudf.strings.replace cimport (
     replace as cpp_replace,
+    replace_multiple as cpp_replace_multiple,
     replace_slice as cpp_replace_slice,
 )
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
@@ -126,7 +127,7 @@ def replace_multi(Column source_strings,
     cdef column_view repl_view = repl_strings.view()
 
     with nogil:
-        c_result = move(cpp_replace(
+        c_result = move(cpp_replace_multiple(
             source_view,
             target_view,
             repl_view

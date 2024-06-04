@@ -54,7 +54,7 @@ def assert_column_eq(
     assert lhs.equals(rhs)
 
 
-def assert_table_eq(plc_table: plc.Table, pa_table: pa.Table) -> None:
+def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
     """Verify that a pylibcudf table and PyArrow table are equal."""
     plc_shape = (plc_table.num_rows(), plc_table.num_columns())
     assert plc_shape == pa_table.shape
