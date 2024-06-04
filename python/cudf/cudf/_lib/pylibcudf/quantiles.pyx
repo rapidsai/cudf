@@ -21,7 +21,7 @@ from .types cimport interpolation
 
 cpdef Column quantile(
     Column input,
-    const double[:] q,
+    vector[double] q,
     interpolation interp = interpolation.LINEAR,
     Column ordered_indices = None,
     bool exact=True
@@ -48,6 +48,8 @@ cpdef Column quantile(
     exact: bool, default True
         Returns doubles if True. Otherwise, returns same type as input
 
+    For details, see :cpp:func:`quantile`.
+
     Returns
     -------
     Column
@@ -55,7 +57,6 @@ cpdef Column quantile(
     """
     cdef:
         unique_ptr[column] c_result
-        vector[double] q_vec
         column_view ordered_indices_view
 
     if ordered_indices is None:
@@ -63,15 +64,11 @@ cpdef Column quantile(
     else:
         ordered_indices_view = ordered_indices.view()
 
-    # Copy from memoryview into vector
-    if len(q) > 0:
-        q_vec.assign(&q[0], &q[0] + len(q))
-
     with nogil:
         c_result = move(
             cpp_quantile(
                 input.view(),
-                q_vec,
+                q,
                 interp,
                 ordered_indices_view,
                 exact,
@@ -83,13 +80,11 @@ cpdef Column quantile(
 
 cpdef Table quantiles(
     Table input,
-    const double[:] q,
+    vector[double] q,
     interpolation interp = interpolation.NEAREST,
     sorted is_input_sorted = sorted.NO,
-    # cython-lint complains that this a dangerous default value but
-    # we don't modify these parameters, and so should be good to go
-    list column_order = [],  # no-cython-lint
-    list null_precedence = [],  # no-cython-lint
+    list column_order = None,
+    list null_precedence = None,
 ):
     """Computes row quantiles with interpolation.
 
@@ -101,7 +96,7 @@ cpdef Table quantiles(
     ----------
     input: Table
         The Table to calculate row quantiles on.
-    q: array-like that implements buffer-protocol
+    q: array-like
         The quantiles to calculate in range [0,1]
     interp: Interpolation, default Interpolation.LINEAR
         The strategy used to select between values adjacent to a specified quantile.
@@ -111,14 +106,21 @@ cpdef Table quantiles(
         {`Interpolation.HIGHER`, `Interpolation.LOWER`, `Interpolation.NEAREST`})
     is_input_sorted: Sorted, default Sorted.NO
         Whether the input table has been pre-sorted or not.
-    column_order: list, default []
-        A list of `Order` enums, indicating the desired sort order for each column.
+    column_order: list, default None
+        A list of :py:class:`~cudf._lib.pylibcudf.types.Order` enums,
+        indicating the desired sort order for each column.
+        By default, will sort all columns so that they are in ascending order.
 
         Ignored if `is_input_sorted` is `Sorted.YES`
-    null_precedence: list, default []
-        A list of `NullOrder` enums, indicating how nulls should be sorted.
+    null_precedence: list, default None
+        A list of :py:class:`~cudf._lib.pylibcudf.types.NullOrder` enums,
+        indicating how nulls should be sorted.
+        By default, will sort all columns so that nulls appear before
+        all other elements.
 
         Ignored if `is_input_sorted` is `Sorted.YES`
+
+    For details, see :cpp:func:`quantiles`.
 
     Returns
     -------
@@ -127,19 +129,19 @@ cpdef Table quantiles(
     """
     cdef:
         unique_ptr[table] c_result
-        vector[double] q_vec
-        vector[order] column_order_vec = column_order
-        vector[null_order] null_precedence_vec = null_precedence
+        vector[order] column_order_vec
+        vector[null_order] null_precedence_vec
 
-    # Copy from memoryview into vector
-    if len(q) > 0:
-        q_vec.assign(&q[0], &q[0] + len(q))
+    if column_order is not None:
+        column_order_vec = column_order
+    if null_precedence is not None:
+        null_precedence_vec = null_precedence
 
     with nogil:
         c_result = move(
             cpp_quantiles(
                 input.view(),
-                q_vec,
+                q,
                 interp,
                 is_input_sorted,
                 column_order_vec,

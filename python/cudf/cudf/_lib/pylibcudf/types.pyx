@@ -14,14 +14,6 @@ from cudf._lib.pylibcudf.libcudf.types import null_order as NullOrder  # no-cyth
 from cudf._lib.pylibcudf.libcudf.types import order as Order  # no-cython-lint, isort:skip
 from cudf._lib.pylibcudf.libcudf.types import sorted as Sorted  # no-cython-lint, isort:skip
 
-from cudf._lib.pylibcudf.libcudf.types import \
-    interpolation as Interpolation  # no-cython-lint
-from cudf._lib.pylibcudf.libcudf.types import \
-    null_order as NullOrder  # no-cython-lint
-from cudf._lib.pylibcudf.libcudf.types import \
-    sorted as Sorted  # no-cython-lint
-from cudf._lib.pylibcudf.libcudf.types import order as Order  # no-cython-lint
-
 
 cdef class DataType:
     """Indicator for the logical data type of an element in a column.
