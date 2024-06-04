@@ -625,10 +625,8 @@ class IndexedFrame(Frame):
         )
 
     @_cudf_nvtx_annotate
-    def equals(self, other):  # noqa: D102
-        if not super().equals(other):
-            return False
-        return self.index.equals(other.index)
+    def equals(self, other) -> bool:  # noqa: D102
+        return super().equals(other) and self.index.equals(other.index)
 
     @property
     def index(self):
@@ -4896,10 +4894,10 @@ class IndexedFrame(Frame):
 
     def astype(
         self,
-        dtype,
+        dtype: dict[Any, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
-    ):
+    ) -> Self:
         """Cast the object to the given dtype.
 
         Parameters
@@ -5010,13 +5008,11 @@ class IndexedFrame(Frame):
             raise ValueError("invalid error value specified")
 
         try:
-            data = super().astype(dtype, copy)
+            return super().astype(dtype, copy)
         except Exception as e:
             if errors == "raise":
                 raise e
             return self
-
-        return self._from_data(data, index=self.index)
 
     @_cudf_nvtx_annotate
     def drop(

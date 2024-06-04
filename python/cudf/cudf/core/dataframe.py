@@ -2590,7 +2590,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             yield (k, self[k])
 
     @_cudf_nvtx_annotate
-    def equals(self, other):
+    def equals(self, other) -> bool:
         ret = super().equals(other)
         # If all other checks matched, validate names.
         if ret:
