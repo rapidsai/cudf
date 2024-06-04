@@ -445,7 +445,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._as_int_index()[index]
 
     @_cudf_nvtx_annotate
-    def equals(self, other):
+    def equals(self, other) -> bool:
         if isinstance(other, RangeIndex):
             return self._range == other._range
         return self._as_int_index().equals(other)
@@ -1060,6 +1060,16 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @classmethod
     @_cudf_nvtx_annotate
+    def _from_data_like_self(
+        cls, data: MutableMapping, name: Any = no_default
+    ) -> Self:
+        out = _index_from_data(data, name)
+        if name is not no_default:
+            out.name = name
+        return out
+
+    @classmethod
+    @_cudf_nvtx_annotate
     def from_arrow(cls, obj):
         try:
             return cls(ColumnBase.from_arrow(obj))
@@ -1180,12 +1190,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return self._column.is_unique
 
     @_cudf_nvtx_annotate
-    def equals(self, other):
-        if (
-            other is None
-            or not isinstance(other, BaseIndex)
-            or len(self) != len(other)
-        ):
+    def equals(self, other) -> bool:
+        if not isinstance(other, BaseIndex) or len(self) != len(other):
             return False
 
         check_dtypes = False
@@ -1231,7 +1237,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @_cudf_nvtx_annotate
     def astype(self, dtype, copy: bool = True):
-        return _index_from_data(super().astype({self.name: dtype}, copy))
+        return super().astype({self.name: dtype}, copy)
 
     @_cudf_nvtx_annotate
     def get_indexer(self, target, method=None, limit=None, tolerance=None):
@@ -1562,10 +1568,11 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.Index:
-        return pd.Index(
-            self._values.to_pandas(nullable=nullable, arrow_type=arrow_type),
-            name=self.name,
+        result = self._column.to_pandas(
+            nullable=nullable, arrow_type=arrow_type
         )
+        result.name = self.name
+        return result
 
     def append(self, other):
         if is_list_like(other):
@@ -2121,6 +2128,45 @@ class DatetimeIndex(Index):
         return Index(res, dtype="int8")
 
     @_cudf_nvtx_annotate
+    def day_name(self, locale: str | None = None) -> Index:
+        """
+        Return the day names. Currently supports English locale only.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> datetime_index = cudf.date_range("2016-12-31", "2017-01-08", freq="D")
+        >>> datetime_index
+        DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
+                       '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07'],
+                      dtype='datetime64[ns]', freq='D')
+        >>> datetime_index.day_name()
+        Index(['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+               'Friday', 'Saturday'], dtype='object')
+        """
+        day_names = self._column.get_day_names(locale)
+        return Index._from_data({self.name: day_names})
+
+    @_cudf_nvtx_annotate
+    def month_name(self, locale: str | None = None) -> Index:
+        """
+        Return the month names. Currently supports English locale only.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> datetime_index = cudf.date_range("2017-12-30", periods=6, freq='W')
+        >>> datetime_index
+        DatetimeIndex(['2017-12-30', '2018-01-06', '2018-01-13', '2018-01-20',
+                    '2018-01-27', '2018-02-03'],
+                      dtype='datetime64[ns]', freq='7D')
+        >>> datetime_index.month_name()
+        Index(['December', 'January', 'January', 'January', 'January', 'February'], dtype='object')
+        """
+        month_names = self._column.get_month_names(locale)
+        return Index._from_data({self.name: month_names})
+
+    @_cudf_nvtx_annotate
     def isocalendar(self):
         """
         Returns a DataFrame with the year, week, and day
@@ -2146,23 +2192,10 @@ class DatetimeIndex(Index):
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.DatetimeIndex:
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
-        elif nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-
-        result = self._values.to_pandas(arrow_type=arrow_type)
-        if arrow_type:
-            return pd.Index(result, name=self.name)
-        else:
-            freq = (
-                self._freq._maybe_as_fast_pandas_offset()
-                if self._freq is not None
-                else None
-            )
-            return pd.DatetimeIndex(result, name=self.name, freq=freq)
+        result = super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        if not arrow_type and self._freq is not None:
+            result.freq = self._freq._maybe_as_fast_pandas_offset()
+        return result
 
     @_cudf_nvtx_annotate
     def _get_dt_field(self, field):
@@ -2481,23 +2514,6 @@ class TimedeltaIndex(Index):
         ):
             return pd.Timedelta(value)
         return value
-
-    @_cudf_nvtx_annotate
-    def to_pandas(
-        self, *, nullable: bool = False, arrow_type: bool = False
-    ) -> pd.TimedeltaIndex:
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
-        elif nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-
-        result = self._values.to_pandas(arrow_type=arrow_type)
-        if arrow_type:
-            return pd.Index(result, name=self.name)
-        else:
-            return pd.TimedeltaIndex(result, name=self.name)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate

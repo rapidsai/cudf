@@ -52,6 +52,11 @@ cudf::io::source_info cuio_source_sink_pair::make_source_info()
   switch (type) {
     case io_type::FILEPATH: return cudf::io::source_info(file_name);
     case io_type::HOST_BUFFER: return cudf::io::source_info(h_buffer.data(), h_buffer.size());
+    case io_type::PINNED_BUFFER: {
+      pinned_buffer.resize(h_buffer.size());
+      std::copy(h_buffer.begin(), h_buffer.end(), pinned_buffer.begin());
+      return cudf::io::source_info(pinned_buffer.data(), pinned_buffer.size());
+    }
     case io_type::DEVICE_BUFFER: {
       // TODO: make cuio_source_sink_pair stream-friendly and avoid implicit use of the default
       // stream
@@ -71,7 +76,8 @@ cudf::io::sink_info cuio_source_sink_pair::make_sink_info()
   switch (type) {
     case io_type::VOID: return cudf::io::sink_info(void_sink.get());
     case io_type::FILEPATH: return cudf::io::sink_info(file_name);
-    case io_type::HOST_BUFFER: [[fallthrough]];
+    case io_type::HOST_BUFFER:
+    case io_type::PINNED_BUFFER:
     case io_type::DEVICE_BUFFER: return cudf::io::sink_info(&h_buffer);
     default: CUDF_FAIL("invalid output type");
   }
@@ -84,7 +90,8 @@ size_t cuio_source_sink_pair::size()
     case io_type::FILEPATH:
       return static_cast<size_t>(
         std::ifstream(file_name, std::ifstream::ate | std::ifstream::binary).tellg());
-    case io_type::HOST_BUFFER: [[fallthrough]];
+    case io_type::HOST_BUFFER:
+    case io_type::PINNED_BUFFER:
     case io_type::DEVICE_BUFFER: return h_buffer.size();
     default: CUDF_FAIL("invalid output type");
   }
@@ -204,13 +211,13 @@ void try_drop_l3_cache()
                "Failed to execute the drop cache command");
 }
 
-cudf::io::io_type retrieve_io_type_enum(std::string_view io_string)
+io_type retrieve_io_type_enum(std::string_view io_string)
 {
-  if (io_string == "FILEPATH") { return cudf::io::io_type::FILEPATH; }
-  if (io_string == "HOST_BUFFER") { return cudf::io::io_type::HOST_BUFFER; }
-  if (io_string == "DEVICE_BUFFER") { return cudf::io::io_type::DEVICE_BUFFER; }
-  if (io_string == "VOID") { return cudf::io::io_type::VOID; }
-  if (io_string == "USER_IMPLEMENTED") { return cudf::io::io_type::USER_IMPLEMENTED; }
+  if (io_string == "FILEPATH") { return io_type::FILEPATH; }
+  if (io_string == "HOST_BUFFER") { return io_type::HOST_BUFFER; }
+  if (io_string == "PINNED_BUFFER") { return io_type::PINNED_BUFFER; }
+  if (io_string == "DEVICE_BUFFER") { return io_type::DEVICE_BUFFER; }
+  if (io_string == "VOID") { return io_type::VOID; }
   CUDF_FAIL("Unsupported io_type.");
 }
 
