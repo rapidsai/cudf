@@ -897,6 +897,13 @@ class Frame(BinaryOperand, Scannable):
         # so handling indices and dictionary as two different columns.
         # This needs be removed once we have hooked libcudf dictionary32
         # with categorical.
+        if any(
+            isinstance(x.type, pa.DictionaryType)
+            and isinstance(x, pa.ChunkedArray)
+            for x in data
+        ):
+            data = data.combine_chunks()
+
         dict_indices = {}
         dict_dictionaries = {}
         dict_ordered = {}

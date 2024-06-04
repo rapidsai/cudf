@@ -34,6 +34,7 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
+#include <thrust/binary_search.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
