@@ -3549,8 +3549,8 @@ def test_parquet_writer_roundtrip_with_arrow_schema(index):
     expected.to_parquet(buffer, store_schema=True, index=index)
 
     # Convert decimal types to d128
-    expected = expected.astype({'fixed32': cudf.Decimal128Dtype(9, 2)})
-    expected = expected.astype({'fixed64': cudf.Decimal128Dtype(18, 2)})
+    expected = expected.astype({"fixed32": cudf.Decimal128Dtype(9, 2)})
+    expected = expected.astype({"fixed64": cudf.Decimal128Dtype(18, 2)})
 
     # Read parquet with pyarrow, pandas and cudf readers
     got = cudf.DataFrame.from_arrow(pq.read_table(buffer))
