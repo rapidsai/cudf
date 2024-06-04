@@ -288,7 +288,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         return libcudf.reduce.reduce("any", self, dtype=np.bool_)
 
-    def dropna(self) -> ColumnBase:
+    def dropna(self) -> Self:
         return drop_nulls([self])[0]._with_type_metadata(self.dtype)
 
     def to_arrow(self) -> pa.Array:
@@ -702,7 +702,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         Returns a copy with null filled.
         """
         return libcudf.replace.replace_nulls(
-            input_col=self, replacement=fill_value, method=method
+            input_col=self.nans_to_nulls(),
+            replacement=fill_value,
+            method=method,
         )._with_type_metadata(self.dtype)
 
     def isnull(self) -> ColumnBase:
@@ -1246,6 +1248,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         raise TypeError(
             f"Operation {unaryop} not supported for dtype {self.dtype}."
         )
+
+    def nans_to_nulls(self: Self) -> Self:
+        """Convert NaN to NA."""
+        return self
 
     def normalize_binop_value(
         self, other: ScalarLike
@@ -1809,9 +1815,7 @@ def as_column(
 
         data = as_buffer(arbitrary, exposed=cudf.get_option("copy_on_write"))
         col = build_column(data, dtype=arbitrary.dtype, mask=mask)
-        if (
-            nan_as_null or (mask is None and nan_as_null is None)
-        ) and col.dtype.kind == "f":
+        if nan_as_null or (mask is None and nan_as_null is None):
             col = col.nans_to_nulls()
         if dtype is not None:
             col = col.astype(dtype)

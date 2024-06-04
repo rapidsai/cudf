@@ -536,7 +536,7 @@ class NumericalColumn(NumericalBaseColumn):
             return col
 
         if method is not None:
-            return super(NumericalColumn, col).fillna(fill_value, method)
+            return super().fillna(fill_value, method)
 
         if fill_value is None:
             raise ValueError("Must specify either 'fill_value' or 'method'")
@@ -545,7 +545,7 @@ class NumericalColumn(NumericalBaseColumn):
             isinstance(fill_value, cudf.Scalar)
             and fill_value.dtype == col.dtype
         ):
-            return super(NumericalColumn, col).fillna(fill_value, method)
+            return super().fillna(fill_value, method)
 
         if np.isscalar(fill_value):
             # cast safely to the same dtype as self
@@ -572,7 +572,7 @@ class NumericalColumn(NumericalBaseColumn):
             else:
                 fill_value = fill_value.astype(col.dtype)
 
-        return super(NumericalColumn, col).fillna(fill_value, method)
+        return super().fillna(fill_value, method)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         """
