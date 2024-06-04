@@ -2022,11 +2022,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             index = self.index.to_pandas()
         else:
             index = None  # type: ignore[assignment]
-        s = self._column.to_pandas(
-            index=index, nullable=nullable, arrow_type=arrow_type
+        return pd.Series(
+            self._column.to_pandas(nullable=nullable, arrow_type=arrow_type),
+            index=index,
+            name=self.name,
         )
-        s.name = self.name
-        return s
 
     @property  # type: ignore
     @_cudf_nvtx_annotate

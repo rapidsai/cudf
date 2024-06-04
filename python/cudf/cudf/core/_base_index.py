@@ -149,7 +149,7 @@ class BaseIndex(Serializable):
         """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
-    def equals(self, other):
+    def equals(self, other) -> bool:
         """
         Determine if two Index objects contain the same elements.
 

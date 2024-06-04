@@ -445,7 +445,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._as_int_index()[index]
 
     @_cudf_nvtx_annotate
-    def equals(self, other):
+    def equals(self, other) -> bool:
         if isinstance(other, RangeIndex):
             return self._range == other._range
         return self._as_int_index().equals(other)
@@ -1060,6 +1060,16 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @classmethod
     @_cudf_nvtx_annotate
+    def _from_data_like_self(
+        cls, data: MutableMapping, name: Any = no_default
+    ) -> Self:
+        out = _index_from_data(data, name)
+        if name is not no_default:
+            out.name = name
+        return out
+
+    @classmethod
+    @_cudf_nvtx_annotate
     def from_arrow(cls, obj):
         try:
             return cls(ColumnBase.from_arrow(obj))
@@ -1180,12 +1190,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return self._column.is_unique
 
     @_cudf_nvtx_annotate
-    def equals(self, other):
-        if (
-            other is None
-            or not isinstance(other, BaseIndex)
-            or len(self) != len(other)
-        ):
+    def equals(self, other) -> bool:
+        if not isinstance(other, BaseIndex) or len(self) != len(other):
             return False
 
         check_dtypes = False
@@ -1231,7 +1237,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @_cudf_nvtx_annotate
     def astype(self, dtype, copy: bool = True):
-        return _index_from_data(super().astype({self.name: dtype}, copy))
+        return super().astype({self.name: dtype}, copy)
 
     @_cudf_nvtx_annotate
     def get_indexer(self, target, method=None, limit=None, tolerance=None):
@@ -1562,10 +1568,11 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.Index:
-        return pd.Index(
-            self._values.to_pandas(nullable=nullable, arrow_type=arrow_type),
-            name=self.name,
+        result = self._column.to_pandas(
+            nullable=nullable, arrow_type=arrow_type
         )
+        result.name = self.name
+        return result
 
     def append(self, other):
         if is_list_like(other):
@@ -2185,23 +2192,10 @@ class DatetimeIndex(Index):
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.DatetimeIndex:
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
-        elif nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-
-        result = self._values.to_pandas(arrow_type=arrow_type)
-        if arrow_type:
-            return pd.Index(result, name=self.name)
-        else:
-            freq = (
-                self._freq._maybe_as_fast_pandas_offset()
-                if self._freq is not None
-                else None
-            )
-            return pd.DatetimeIndex(result, name=self.name, freq=freq)
+        result = super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        if not arrow_type and self._freq is not None:
+            result.freq = self._freq._maybe_as_fast_pandas_offset()
+        return result
 
     @_cudf_nvtx_annotate
     def _get_dt_field(self, field):
@@ -2520,23 +2514,6 @@ class TimedeltaIndex(Index):
         ):
             return pd.Timedelta(value)
         return value
-
-    @_cudf_nvtx_annotate
-    def to_pandas(
-        self, *, nullable: bool = False, arrow_type: bool = False
-    ) -> pd.TimedeltaIndex:
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
-        elif nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-
-        result = self._values.to_pandas(arrow_type=arrow_type)
-        if arrow_type:
-            return pd.Index(result, name=self.name)
-        else:
-            return pd.TimedeltaIndex(result, name=self.name)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
