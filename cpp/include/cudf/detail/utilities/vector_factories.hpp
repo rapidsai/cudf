@@ -442,7 +442,7 @@ thrust::host_vector<typename Container::value_type> make_host_vector_sync(
 }
 
 /**
- * @brief Asynchronously construct a `host_vector` of the given size
+ * @brief Asynchronously construct a pinned `cudf::detail::host_vector` of the given size
  *
  * @note This function does not synchronize `stream`.
  *
@@ -458,7 +458,7 @@ host_vector<T> make_pinned_vector_async(size_t size, rmm::cuda_stream_view strea
 }
 
 /**
- * @brief Synchronously construct a `cudf::detail::host_vector` of the given size
+ * @brief Synchronously construct a pinned `cudf::detail::host_vector` of the given size
  *
  * @note This function synchronizes `stream`.
  *
