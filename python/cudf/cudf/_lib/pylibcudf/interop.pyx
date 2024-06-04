@@ -113,7 +113,10 @@ def _from_arrow_datatype(pyarrow_object):
     elif isinstance(pyarrow_object, pa.ListType):
         return DataType(type_id.LIST)
     else:
-        return DataType(ARROW_TO_PYLIBCUDF_TYPES.get(pyarrow_object))
+        try:
+            return DataType(ARROW_TO_PYLIBCUDF_TYPES[pyarrow_object])
+        except KeyError:
+            raise TypeError(f"Unable to convert {pyarrow_object} to cudf datatype")
 
 
 @from_arrow.register(pa.Table)
@@ -211,6 +214,16 @@ def to_arrow(cudf_object, metadata=None):
 
 @to_arrow.register(DataType)
 def _to_arrow_datatype(cudf_object, **kwargs):
+    """
+    Convert a datatype to arrow.
+
+    Translation of some types requires extra information as a keyword
+    argument. Specifically:
+    
+    - When translating a decimal type, provide ``precision``
+    - When translating a struct type, provide ``fields``
+    - When translating a list type, provide the wrapped ``value_type``
+    """
     if cudf_object.id() in {type_id.DECIMAL32, type_id.DECIMAL64, type_id.DECIMAL128}:
         if not (precision := kwargs.get("precision")):
             raise ValueError(
@@ -231,7 +244,12 @@ def _to_arrow_datatype(cudf_object, **kwargs):
             )
         return pa.list_(value_type)
     else:
-        return ARROW_TO_PYLIBCUDF_TYPES.get(cudf_object.id())
+        try:
+            return ARROW_TO_PYLIBCUDF_TYPES[cudf_object.id()]
+        except KeyError:
+            raise TypeError(
+                f"Unable to convert {cudf_object.id()} to arrow datatype"
+            )
 
 
 @to_arrow.register(Table)
