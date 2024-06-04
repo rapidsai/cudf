@@ -42,9 +42,6 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -252,52 +249,6 @@ void update_chunk_encoding_stats(ColumnChunkMetaData& chunk_meta,
   }
 
   if (not result.empty()) { chunk_meta.encoding_stats = std::move(result); }
-}
-
-/**
- * @brief Compute size (in bytes) of the data stored in the given column.
- *
- * @param column The input column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @return The data size of the input
- */
-size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
-{
-  if (column.is_empty()) { return 0; }
-
-  if (is_fixed_width(column.type())) {
-    return size_of(column.type()) * column.size();
-  } else if (column.type().id() == type_id::STRING) {
-    auto const scol = strings_column_view(column);
-    return cudf::strings::detail::get_offset_value(
-             scol.offsets(), column.size() + column.offset(), stream) -
-           cudf::strings::detail::get_offset_value(scol.offsets(), column.offset(), stream);
-  } else if (column.type().id() == type_id::STRUCT) {
-    auto const scol = structs_column_view(column);
-    size_t ret      = 0;
-    for (int i = 0; i < scol.num_children(); i++) {
-      ret += column_size(scol.get_sliced_child(i, stream), stream);
-    }
-    return ret;
-  } else if (column.type().id() == type_id::LIST) {
-    auto const lcol = lists_column_view(column);
-    return column_size(lcol.get_sliced_child(stream), stream);
-  }
-
-  CUDF_FAIL("Unexpected compound type");
-}
-
-// checks to see if the given column has a fixed size.  This doesn't
-// check every row, so assumes string and list columns are not fixed, even
-// if each row is the same width.
-// TODO: update this if FIXED_LEN_BYTE_ARRAY is ever supported for writes.
-bool is_col_fixed_width(column_view const& column)
-{
-  if (column.type().id() == type_id::STRUCT) {
-    return std::all_of(column.child_begin(), column.child_end(), is_col_fixed_width);
-  }
-
-  return is_fixed_width(column.type());
 }
 
 /**
@@ -1642,85 +1593,87 @@ rmm::device_uvector<__int128_t> convert_data_to_decimal128(column_view const& co
 }
 
 /**
- * @brief Helper function to convert decimal32 and decimal64 columns to decimal128 data,
+ * @brief Function to convert decimal32 and decimal64 columns to decimal128 data,
  *        update the input table metadata, and return a new vector of column views.
  *
  * @param[in,out] table_meta The table metadata
- * @param input The input table
  * @param[in,out] d128_vectors Vector containing the computed decimal128 data buffers.
+ * @param input The input table
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return A device vector containing the converted decimal128 data
  */
 std::vector<column_view> convert_decimal_columns_and_metadata(
   table_input_metadata& table_meta,
-  table_view const& table,
   std::vector<rmm::device_uvector<__int128_t>>& d128_vectors,
+  table_view const& table,
   rmm::cuda_stream_view stream)
 {
-  std::vector<column_view> converted_column_views{table.begin(), table.end()};
-
-  std::function<void(column_view&, column_in_metadata&)> convert_column =
-    [&](column_view& column, column_in_metadata& metadata) -> void {
+  // Lambda function to convert each decimal32/decimal64 column to decimal128.
+  std::function<column_view(column_view, column_in_metadata&)> convert_column =
+    [&](column_view column, column_in_metadata& metadata) -> column_view {
     // Vector of passable-by-reference children column views
-    std::vector<column_view> converted_children{column.child_begin(), column.child_end()};
+    std::vector<column_view> converted_children;
+
     // Process children column views first
-    std::for_each(
+    std::transform(
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(column.num_children()),
-      [&](auto const idx) { convert_column(converted_children[idx], metadata.child(idx)); });
+      std::back_inserter(converted_children),
+      [&](auto const idx) { return convert_column(column.child(idx), metadata.child(idx)); });
 
     // Process this column view. Only convert if decimal32 and decimal64 column.
     switch (column.type().id()) {
       case type_id::DECIMAL32:
         // Convert data to decimal128 type
-        d128_vectors.push_back(convert_data_to_decimal128<int32_t>(column, stream));
+        d128_vectors.emplace_back(convert_data_to_decimal128<int32_t>(column, stream));
         // Update metadata
         metadata.set_decimal_precision(MAX_DECIMAL32_PRECISION);
         metadata.set_type_length(size_of(data_type{type_id::DECIMAL128, column.type().scale()}));
         // Create a new column view from the d128 data vector
-        column = column_view{data_type{type_id::DECIMAL128, column.type().scale()},
-                             column.size(),
-                             d128_vectors.back().data(),
-                             column.null_mask(),
-                             column.null_count(),
-                             column.offset(),
-                             converted_children};
-        break;
+        return {data_type{type_id::DECIMAL128, column.type().scale()},
+                column.size(),
+                d128_vectors.back().data(),
+                column.null_mask(),
+                column.null_count(),
+                column.offset(),
+                converted_children};
       case type_id::DECIMAL64:
         // Convert data to decimal128 type
-        d128_vectors.push_back(convert_data_to_decimal128<int64_t>(column, stream));
+        d128_vectors.emplace_back(convert_data_to_decimal128<int64_t>(column, stream));
         // Update metadata
         metadata.set_decimal_precision(MAX_DECIMAL64_PRECISION);
         metadata.set_type_length(size_of(data_type{type_id::DECIMAL128, column.type().scale()}));
         // Create a new column view from the d128 data vector
-        column = column_view{data_type{type_id::DECIMAL128, column.type().scale()},
-                             column.size(),
-                             d128_vectors.back().data(),
-                             column.null_mask(),
-                             column.null_count(),
-                             column.offset(),
-                             converted_children};
-        break;
+        return {data_type{type_id::DECIMAL128, column.type().scale()},
+                column.size(),
+                d128_vectors.back().data(),
+                column.null_mask(),
+                column.null_count(),
+                column.offset(),
+                converted_children};
       default:
         // Update the children vector keeping everything else the same
-        column = column_view{column.type(),
-                             column.size(),
-                             column.head(),
-                             column.null_mask(),
-                             column.null_count(),
-                             column.offset(),
-                             converted_children};
-        break;
+        return {column.type(),
+                column.size(),
+                column.head(),
+                column.null_mask(),
+                column.null_count(),
+                column.offset(),
+                converted_children};
     }
   };
 
+  // Vector of converted column views
+  std::vector<column_view> converted_column_views;
+
   // Convert each column view
-  std::for_each(thrust::make_zip_iterator(thrust::make_tuple(converted_column_views.begin(),
-                                                             table_meta.column_metadata.begin())),
-                thrust::make_zip_iterator(thrust::make_tuple(converted_column_views.end(),
-                                                             table_meta.column_metadata.end())),
-                [&](auto elem) { convert_column(thrust::get<0>(elem), thrust::get<1>(elem)); });
+  std::transform(
+    thrust::make_zip_iterator(
+      thrust::make_tuple(table.begin(), table_meta.column_metadata.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(table.end(), table_meta.column_metadata.end())),
+    std::back_inserter(converted_column_views),
+    [&](auto elem) { return convert_column(thrust::get<0>(elem), thrust::get<1>(elem)); });
 
   return converted_column_views;
 }
@@ -1786,7 +1739,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   // and initialize LinkedColVector
   auto vec = table_to_linked_columns(
     (write_arrow_schema)
-      ? table_view({convert_decimal_columns_and_metadata(table_meta, input, d128_vectors, stream)})
+      ? table_view({convert_decimal_columns_and_metadata(table_meta, d128_vectors, input, stream)})
       : input);
 
   auto schema_tree = construct_parquet_schema_tree(

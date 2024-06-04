@@ -52,6 +52,15 @@ size_t max_compression_output_size(Compression codec, uint32_t compression_block
 void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta);
 
 /**
+ * @brief Compute size (in bytes) of the data stored in the given column.
+ *
+ * @param column The input column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return The data size of the input
+ */
+size_t column_size(column_view const& column, rmm::cuda_stream_view stream);
+
+/**
  * @brief Returns ``true`` if the column is nullable or if the write mode is not
  *        set to write the table all at once instead of chunked
  *

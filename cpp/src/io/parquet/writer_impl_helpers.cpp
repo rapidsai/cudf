@@ -21,6 +21,11 @@
 
 #include "writer_impl_helpers.hpp"
 
+#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/structs/structs_column_view.hpp>
+
 namespace cudf::io::parquet::detail {
 
 using namespace cudf::io::detail;
@@ -78,6 +83,32 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta)
   for (size_t i = 0; i < table_meta->column_metadata.size(); ++i) {
     add_default_name(table_meta->column_metadata[i], "_col" + std::to_string(i));
   }
+}
+
+size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
+{
+  if (column.is_empty()) { return 0; }
+
+  if (is_fixed_width(column.type())) {
+    return size_of(column.type()) * column.size();
+  } else if (column.type().id() == type_id::STRING) {
+    auto const scol = strings_column_view(column);
+    return cudf::strings::detail::get_offset_value(
+             scol.offsets(), column.size() + column.offset(), stream) -
+           cudf::strings::detail::get_offset_value(scol.offsets(), column.offset(), stream);
+  } else if (column.type().id() == type_id::STRUCT) {
+    auto const scol = structs_column_view(column);
+    size_t ret      = 0;
+    for (int i = 0; i < scol.num_children(); i++) {
+      ret += column_size(scol.get_sliced_child(i, stream), stream);
+    }
+    return ret;
+  } else if (column.type().id() == type_id::LIST) {
+    auto const lcol = lists_column_view(column);
+    return column_size(lcol.get_sliced_child(stream), stream);
+  }
+
+  CUDF_FAIL("Unexpected compound type");
 }
 
 [[nodiscard]] bool is_col_nullable(cudf::detail::LinkedColPtr const& column,
