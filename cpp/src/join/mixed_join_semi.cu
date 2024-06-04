@@ -65,27 +65,33 @@ struct make_pair_function_semi {
 
 /**
  * @brief Equality comparator that composes two row_equality comparators.
+ *
+ * Note: We could replace this with a C++ lambda. But we intend to std::visit the comparator, and
+ * due to a NVCC restriction, device lambdas cannot be defined inside of generic lambda expressions.
+ * Thus, we fall back to using a regular functor.
  */
-// class double_row_equality {
-//  public:
-//   double_row_equality(row_equality equality_comparator, row_equality conditional_comparator)
-//     : _equality_comparator{equality_comparator}, _conditional_comparator{conditional_comparator}
-//   {
-//   }
+template <typename EqualityComparator, typename ConditionalComparator>
+class double_row_equality {
+ public:
+  double_row_equality(EqualityComparator equality_comparator,
+                      ConditionalComparator conditional_comparator)
+    : _equality_comparator{equality_comparator}, _conditional_comparator{conditional_comparator}
+  {
+  }
 
-//   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
-//   {
-//     using experimental::row::lhs_index_type;
-//     using experimental::row::rhs_index_type;
+  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
+  {
+    using experimental::row::lhs_index_type;
+    using experimental::row::rhs_index_type;
 
-//     return _equality_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index}) &&
-//            _conditional_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index});
-//   }
+    return _equality_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index}) &&
+           _conditional_comparator(lhs_index_type{lhs_row_index}, rhs_index_type{rhs_row_index});
+  }
 
-//  private:
-//   row_equality _equality_comparator;
-//   row_equality _conditional_comparator;
-// };
+ private:
+  EqualityComparator _equality_comparator;
+  ConditionalComparator _conditional_comparator;
+};
 
 }  // namespace
 
@@ -201,14 +207,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
 
   make_pair_function_semi pair_func_build{};
 
-  auto iter     = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
-  auto find_any = [](std::initializer_list<cudf::type_id> ids,
-                     std::unordered_set<cudf::type_id> const& search_set) {
-    for (auto id : ids) {
-      if (search_set.find(id) != search_set.end()) return true;
-    }
-    return false;
-  };
+  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
 
   std::unordered_set<cudf::type_id> build_column_types, probe_column_types;
   for (auto col : build) {
@@ -219,176 +218,39 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   }
 
   auto const row_hash_build = cudf::experimental::row::hash::row_hasher{preprocessed_build};
-  auto const hash_build =
-    row_hash_build.conditional_dispatch_device_hasher(build_column_types, build_nulls);
+  auto const hash_build     = row_hash_build.device_hasher(build_column_types, build_nulls);
   auto const row_hash_probe = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-  auto const hash_probe =
-    row_hash_probe.conditional_dispatch_device_hasher(probe_column_types, has_nulls);
+  auto const hash_probe     = row_hash_probe.device_hasher(probe_column_types, has_nulls);
+  auto const equality_build_equality =
+    row_comparator_build.equal_to(build_column_types, build_nulls, compare_nulls);
+  auto const equality_build_conditional =
+    row_comparator_conditional_build.equal_to(build_column_types, build_nulls, compare_nulls);
 
   // skip rows that are null here.
   if ((compare_nulls == null_equality::EQUAL) or (not nullable(build))) {
-    if (find_any({type_id::STRUCT, type_id::LIST}, build_column_types)) {
-      auto const equality_build_equality =
-        row_comparator_build.equal_to<false>(build_nulls, compare_nulls);
-      auto const equality_build_conditional =
-        row_comparator_conditional_build.equal_to<false>(build_nulls, compare_nulls);
-      auto equality_build = [equality_build_equality, equality_build_conditional] __device__(
-                              size_type lhs_row_index, size_type rhs_row_index) {
-        using experimental::row::lhs_index_type;
-        using experimental::row::rhs_index_type;
-
-        return equality_build_equality(lhs_index_type{lhs_row_index},
-                                       rhs_index_type{rhs_row_index}) &&
-               equality_build_conditional(lhs_index_type{lhs_row_index},
-                                          rhs_index_type{rhs_row_index});
-      };
-      std::visit(
-        [&](auto&& hasher) {
-          hash_table.insert(iter, iter + right_num_rows, hasher, equality_build, stream.value());
-        },
-        hash_build);
-
-    } else if (find_any({type_id::DECIMAL32,
-                         type_id::DECIMAL64,
-                         type_id::DECIMAL128,
-                         type_id::STRING,
-                         type_id::DICTIONARY32},
-                        build_column_types)) {
-      using cond =
-        cudf::experimental::dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
-                                                                id_to_type<type_id::LIST>>;
-      auto const equality_build_equality =
-        row_comparator_build.equal_to<false, cond::type>(build_nulls, compare_nulls);
-      auto const equality_build_conditional =
-        row_comparator_conditional_build.equal_to<false, cond::type>(build_nulls, compare_nulls);
-      auto equality_build = [equality_build_equality, equality_build_conditional] __device__(
-                              size_type lhs_row_index, size_type rhs_row_index) {
-        using experimental::row::lhs_index_type;
-        using experimental::row::rhs_index_type;
-
-        return equality_build_equality(lhs_index_type{lhs_row_index},
-                                       rhs_index_type{rhs_row_index}) &&
-               equality_build_conditional(lhs_index_type{lhs_row_index},
-                                          rhs_index_type{rhs_row_index});
-      };
-      std::visit(
-        [&](auto&& hasher) {
-          hash_table.insert(iter, iter + right_num_rows, hasher, equality_build, stream.value());
-        },
-        hash_build);
-    } else {
-      using cond =
-        cudf::experimental::dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
-                                                                id_to_type<type_id::LIST>,
-                                                                id_to_type<type_id::DECIMAL128>,
-                                                                id_to_type<type_id::DECIMAL64>,
-                                                                id_to_type<type_id::DECIMAL32>,
-                                                                id_to_type<type_id::STRING>,
-                                                                id_to_type<type_id::DICTIONARY32>>;
-      auto const equality_build_equality =
-        row_comparator_build.equal_to<false, cond::type>(build_nulls, compare_nulls);
-      auto const equality_build_conditional =
-        row_comparator_conditional_build.equal_to<false, cond::type>(build_nulls, compare_nulls);
-      auto equality_build = [equality_build_equality, equality_build_conditional] __device__(
-                              size_type lhs_row_index, size_type rhs_row_index) {
-        using experimental::row::lhs_index_type;
-        using experimental::row::rhs_index_type;
-
-        return equality_build_equality(lhs_index_type{lhs_row_index},
-                                       rhs_index_type{rhs_row_index}) &&
-               equality_build_conditional(lhs_index_type{lhs_row_index},
-                                          rhs_index_type{rhs_row_index});
-      };
-      std::visit(
-        [&](auto&& hasher) {
-          hash_table.insert(iter, iter + right_num_rows, hasher, equality_build, stream.value());
-        },
-        hash_build);
-    }
+    std::visit(
+      [&](auto&& hasher, auto&& equality_comparator, auto&& conditional_comparator) {
+        auto const comparator = double_row_equality{equality_comparator, conditional_comparator};
+        hash_table.insert(iter, iter + right_num_rows, hasher, comparator, stream.value());
+      },
+      hash_build,
+      equality_build_equality,
+      equality_build_conditional);
   } else {
     thrust::counting_iterator<cudf::size_type> stencil(0);
     auto const [row_bitmask, _] =
       cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource());
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
-
-    if (find_any({type_id::STRUCT, type_id::LIST}, build_column_types)) {
-      auto const equality_build_equality =
-        row_comparator_build.equal_to<false>(build_nulls, compare_nulls);
-      auto const equality_build_conditional =
-        row_comparator_conditional_build.equal_to<false>(build_nulls, compare_nulls);
-      auto equality_build = [equality_build_equality, equality_build_conditional] __device__(
-                              size_type lhs_row_index, size_type rhs_row_index) {
-        using experimental::row::lhs_index_type;
-        using experimental::row::rhs_index_type;
-
-        return equality_build_equality(lhs_index_type{lhs_row_index},
-                                       rhs_index_type{rhs_row_index}) &&
-               equality_build_conditional(lhs_index_type{lhs_row_index},
-                                          rhs_index_type{rhs_row_index});
-      };
-      std::visit(
-        [&](auto&& hasher) {
-          hash_table.insert(iter, iter + right_num_rows, hasher, equality_build, stream.value());
-        },
-        hash_build);
-    } else if (find_any({type_id::DECIMAL32,
-                         type_id::DECIMAL64,
-                         type_id::DECIMAL128,
-                         type_id::STRING,
-                         type_id::DICTIONARY32},
-                        build_column_types)) {
-      using cond =
-        cudf::experimental::dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
-                                                                id_to_type<type_id::LIST>>;
-      auto const equality_build_equality =
-        row_comparator_build.equal_to<false, cond::type>(build_nulls, compare_nulls);
-      auto const equality_build_conditional =
-        row_comparator_conditional_build.equal_to<false, cond::type>(build_nulls, compare_nulls);
-      auto equality_build = [equality_build_equality, equality_build_conditional] __device__(
-                              size_type lhs_row_index, size_type rhs_row_index) {
-        using experimental::row::lhs_index_type;
-        using experimental::row::rhs_index_type;
-
-        return equality_build_equality(lhs_index_type{lhs_row_index},
-                                       rhs_index_type{rhs_row_index}) &&
-               equality_build_conditional(lhs_index_type{lhs_row_index},
-                                          rhs_index_type{rhs_row_index});
-      };
-      std::visit(
-        [&](auto&& hasher) {
-          hash_table.insert(iter, iter + right_num_rows, hasher, equality_build, stream.value());
-        },
-        hash_build);
-    } else {
-      using cond =
-        cudf::experimental::dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
-                                                                id_to_type<type_id::LIST>,
-                                                                id_to_type<type_id::DECIMAL128>,
-                                                                id_to_type<type_id::DECIMAL64>,
-                                                                id_to_type<type_id::DECIMAL32>,
-                                                                id_to_type<type_id::STRING>,
-                                                                id_to_type<type_id::DICTIONARY32>>;
-
-      auto const equality_build_equality =
-        row_comparator_build.equal_to<false, cond::type>(build_nulls, compare_nulls);
-      auto const equality_build_conditional =
-        row_comparator_conditional_build.equal_to<false, cond::type>(build_nulls, compare_nulls);
-      auto equality_build = [equality_build_equality, equality_build_conditional] __device__(
-                              size_type lhs_row_index, size_type rhs_row_index) {
-        using experimental::row::lhs_index_type;
-        using experimental::row::rhs_index_type;
-
-        return equality_build_equality(lhs_index_type{lhs_row_index},
-                                       rhs_index_type{rhs_row_index}) &&
-               equality_build_conditional(lhs_index_type{lhs_row_index},
-                                          rhs_index_type{rhs_row_index});
-      };
-      std::visit(
-        [&](auto&& hasher) {
-          hash_table.insert(iter, iter + right_num_rows, hasher, equality_build, stream.value());
-        },
-        hash_build);
-    }
+    std::visit(
+      [&](auto&& hasher, auto&& equality_comparator, auto&& conditional_comparator) {
+        auto const comparator = double_row_equality{equality_comparator, conditional_comparator};
+        // insert valid rows
+        hash_table.insert_if(
+          iter, iter + right_num_rows, stencil, pred, hasher, comparator, stream.value());
+      },
+      hash_build,
+      equality_build_equality,
+      equality_build_conditional);
   }
 
   auto hash_table_view = hash_table.get_device_view();

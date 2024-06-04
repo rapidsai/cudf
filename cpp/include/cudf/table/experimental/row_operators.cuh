@@ -1501,6 +1501,14 @@ class device_row_comparator {
     {
     }
 
+    /**
+     * @brief Dummy operator for dispatch to void type. Ideally, we want this to be unreachable, but
+     * using CUDF_UNREACHABLE leads to an increase in register usage and is avoided.
+     *
+     * @note A correct implementation should never call this function.
+     *
+     * @return False
+     */
     template <typename Element, CUDF_ENABLE_IF(std::is_void_v<Element>)>
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
@@ -1510,6 +1518,9 @@ class device_row_comparator {
 
     /**
      * @brief Compares the specified elements for equality.
+     *
+     * is_equality_comparable differs from implementation for std::equality_comparable and considers
+     * void as and equality comparable type. Thus we need to disable this for when type is void.
      *
      * @param lhs_element_index The index of the first element
      * @param rhs_element_index The index of the second element
@@ -1765,6 +1776,69 @@ class self_comparator {
       nullate, *d_t, *d_t, nulls_are_equal, comparator};
   }
 
+  /**
+   * @brief Get the variant of comparison operator to use on the device
+   *
+   * Returns a binary callable variant, `F`, with signature `bool F(size_type, size_type)`.
+   *
+   * `F(i,j)` returns true if and only if row `i` compares equal to row `j`.
+   *
+   * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+   * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual
+   * values rather than logical elements, defaults to a comparator for which `NaN == NaN`.
+   * @param column_types Column types in the row to be compared
+   * @param nullate Indicates if any input column contains nulls.
+   * @param nulls_are_equal Indicates if nulls are equal.
+   * @param comparator Physical element equality comparison functor.
+   * @return A binary callable object variant
+   */
+  template <typename Nullate,
+            typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
+  auto equal_to(std::unordered_set<cudf::type_id> column_types,
+                Nullate nullate                       = {},
+                null_equality nulls_are_equal         = null_equality::EQUAL,
+                PhysicalEqualityComparator comparator = {}) const noexcept
+  {
+    using row_comparator_t = std::variant<
+      device_row_comparator<true, Nullate, PhysicalEqualityComparator, type_identity_t>,
+      device_row_comparator<false, Nullate, PhysicalEqualityComparator, dispatch_void_if_nested_t>,
+      device_row_comparator<false,
+                            Nullate,
+                            PhysicalEqualityComparator,
+                            dispatch_void_if_compound_t>>;
+
+    auto find_any = [](std::initializer_list<cudf::type_id> ids,
+                       std::unordered_set<cudf::type_id> const& search_set) {
+      for (auto id : ids) {
+        if (search_set.find(id) != search_set.end()) return true;
+      }
+      return false;
+    };
+
+    if (find_any({type_id::STRUCT, type_id::LIST}, column_types)) {
+      return row_comparator_t{
+        device_row_comparator<true, Nullate, PhysicalEqualityComparator, type_identity_t>{
+          nullate, *d_t, *d_t, nulls_are_equal, comparator}};
+    } else if (find_any({type_id::DECIMAL32,
+                         type_id::DECIMAL64,
+                         type_id::DECIMAL128,
+                         type_id::STRING,
+                         type_id::DICTIONARY32},
+                        column_types)) {
+      return row_comparator_t{device_row_comparator<false,
+                                                    Nullate,
+                                                    PhysicalEqualityComparator,
+                                                    dispatch_void_if_nested_t>{
+        nullate, *d_t, *d_t, nulls_are_equal, comparator}};
+    } else {
+      return row_comparator_t{device_row_comparator<false,
+                                                    Nullate,
+                                                    PhysicalEqualityComparator,
+                                                    dispatch_void_if_compound_t>{
+        nullate, *d_t, *d_t, nulls_are_equal, comparator}};
+    }
+  }
+
  private:
   std::shared_ptr<preprocessed_table> d_t;
 };
@@ -1881,6 +1955,80 @@ class two_table_comparator {
                                                                  PhysicalEqualityComparator,
                                                                  dispatch_conditional_t>(
       nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)};
+  }
+
+  /**
+   * @brief Return the binary operator for comparing rows in the table.
+   *
+   * Returns a binary callable variant, `F`, with signatures `bool F(lhs_index_type,
+   * rhs_index_type)` and `bool F(rhs_index_type, lhs_index_type)`.
+   *
+   * `F(lhs_index_type i, rhs_index_type j)` returns true if and only if row `i` of the left table
+   * compares equal to row `j` of the right table.
+   *
+   * Similarly, `F(rhs_index_type i, lhs_index_type j)` returns true if and only if row `i` of the
+   * right table compares equal to row `j` of the left table.
+   *
+   * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+   * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual
+   * values rather than logical elements, defaults to a comparator for which `NaN == NaN`.
+   * @param column_types Column types in the row to be compared
+   * @param nullate Indicates if any input column contains nulls.
+   * @param nulls_are_equal Indicates if nulls are equal.
+   * @param comparator Physical element equality comparison functor.
+   * @return A binary callable object variant
+   */
+  template <typename Nullate,
+            typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
+  auto equal_to(std::unordered_set<cudf::type_id> column_types,
+                Nullate nullate                       = {},
+                null_equality nulls_are_equal         = null_equality::EQUAL,
+                PhysicalEqualityComparator comparator = {}) const noexcept
+  {
+    using row_comparator_t = std::variant<
+      strong_index_comparator_adapter<
+        device_row_comparator<true, Nullate, PhysicalEqualityComparator, type_identity_t>>,
+      strong_index_comparator_adapter<device_row_comparator<false,
+                                                            Nullate,
+                                                            PhysicalEqualityComparator,
+                                                            dispatch_void_if_nested_t>>,
+      strong_index_comparator_adapter<device_row_comparator<false,
+                                                            Nullate,
+                                                            PhysicalEqualityComparator,
+                                                            dispatch_void_if_compound_t>>>;
+
+    auto find_any = [](std::initializer_list<cudf::type_id> ids,
+                       std::unordered_set<cudf::type_id> const& search_set) {
+      for (auto id : ids) {
+        if (search_set.find(id) != search_set.end()) return true;
+      }
+      return false;
+    };
+
+    if (find_any({type_id::STRUCT, type_id::LIST}, column_types)) {
+      return row_comparator_t{strong_index_comparator_adapter{
+        device_row_comparator<true, Nullate, PhysicalEqualityComparator, type_identity_t>(
+          nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)}};
+    } else if (find_any({type_id::DECIMAL32,
+                         type_id::DECIMAL64,
+                         type_id::DECIMAL128,
+                         type_id::STRING,
+                         type_id::DICTIONARY32},
+                        column_types)) {
+      return row_comparator_t{
+        strong_index_comparator_adapter{device_row_comparator<false,
+                                                              Nullate,
+                                                              PhysicalEqualityComparator,
+                                                              dispatch_void_if_nested_t>(
+          nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)}};
+    } else {
+      return row_comparator_t{
+        strong_index_comparator_adapter{device_row_comparator<false,
+                                                              Nullate,
+                                                              PhysicalEqualityComparator,
+                                                              dispatch_void_if_compound_t>(
+          nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)}};
+    }
   }
 
  private:
@@ -2013,6 +2161,14 @@ class device_row_hasher {
     {
     }
 
+    /**
+     * @brief Dummy operator for dispatch to void type. Ideally, we want this to be unreachable, but
+     * using CUDF_UNREACHABLE leads to an increase in register usage and is avoided.
+     *
+     * @note A correct implementation should never call this function.
+     *
+     * @return 0
+     */
     template <typename T, CUDF_ENABLE_IF(std::is_void_v<T>)>
     __device__ hash_value_type operator()(column_device_view const& col,
                                           size_type row_index) const noexcept
@@ -2156,9 +2312,9 @@ class row_hasher {
             template <template <typename> class, typename, template <typename> typename>
             class DeviceRowHasher = device_row_hasher,
             typename Nullate>
-  auto conditional_dispatch_device_hasher(std::unordered_set<cudf::type_id> column_types,
-                                          Nullate nullate = {},
-                                          uint32_t seed   = DEFAULT_HASH_SEED) const
+  auto device_hasher(std::unordered_set<cudf::type_id> column_types,
+                     Nullate nullate = {},
+                     uint32_t seed   = DEFAULT_HASH_SEED) const
   {
     using row_hasher_t =
       std::variant<DeviceRowHasher<hash_function, Nullate, type_identity_t>,
