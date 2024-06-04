@@ -134,7 +134,7 @@ ignore = [
 fixable = ["ALL"]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**/test_*.py" = ["D", "INP"]
+"**/tests/**/*.py" = ["D"]
 
 [tool.ruff.lint.flake8-pytest-style]
 # https://docs.astral.sh/ruff/settings/#lintflake8-pytest-style
