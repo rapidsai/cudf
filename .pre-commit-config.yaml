@@ -150,6 +150,10 @@ repos:
             cpp/src/io/parquet/ipc/Message_generated[.]h$|
             cpp/src/io/parquet/ipc/Schema_generated[.]h$
           )
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.13.0
+    hooks:
+    - id: markdownlint-cli2
 
 default_language_version:
       python: python3
