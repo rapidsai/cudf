@@ -582,6 +582,7 @@ class StringFunction(Expr):
             pl_expr.StringFunction.Uppercase,
             pl_expr.StringFunction.EndsWith,
             pl_expr.StringFunction.StartsWith,
+            pl_expr.StringFunction.Contains,
         ):
             raise NotImplementedError(f"String function {self.name}")
 
@@ -613,6 +614,21 @@ class StringFunction(Expr):
             return Column(
                 plc.strings.find.starts_with(column.obj, suffix.obj), column.name
             )
+        elif self.name == pl_expr.StringFunction.Contains:
+            col, substr = columns
+            literal, strict = self.options
+            if not strict:
+                # libcudf always errors if the pattern isn't valid
+                raise NotImplementedError("strict=False not supported in contains")
+            if literal:
+                return Column(plc.strings.find.contains(col.obj, substr.obj), col.name)
+            else:
+                # TODO: hack
+                pattern = plc.interop.to_arrow(substr.obj).as_py()
+                prog = plc.strings.regex_program.RegexProgram.create(
+                    pattern, flags=plc.strings.regex_flags.RegexFlags.DEFAULT
+                )
+                return Column(plc.strings.contains.contains_re(col.obj, prog), col.name)
         else:
             raise NotImplementedError(f"StringFunction {self.name}")
 
