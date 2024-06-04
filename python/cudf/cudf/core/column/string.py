@@ -7,7 +7,6 @@ import warnings
 from functools import cached_property
 from typing import (
     TYPE_CHECKING,
-    Any,
     Optional,
     Sequence,
     Tuple,
@@ -21,7 +20,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda
-from typing_extensions import Self
 
 import cudf
 import cudf.api.types
@@ -5855,21 +5853,6 @@ class StringColumn(column.ColumnBase):
         else:
             res = self
         return libcudf.replace.replace(res, df._data["old"], df._data["new"])
-
-    def fillna(
-        self,
-        fill_value: Any = None,
-        method: Optional[str] = None,
-    ) -> Self:
-        if fill_value is not None:
-            if not is_scalar(fill_value):
-                fill_value = column.as_column(fill_value, dtype=self.dtype)
-            elif cudf._lib.scalar._is_null_host_scalar(fill_value):
-                # Trying to fill <NA> with <NA> value? Return copy.
-                return self.copy(deep=True)
-            else:
-                fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
-        return super().fillna(fill_value, method=method)
 
     def normalize_binop_value(
         self, other

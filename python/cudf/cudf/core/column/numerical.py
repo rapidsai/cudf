@@ -3,7 +3,16 @@
 from __future__ import annotations
 
 import functools
-from typing import Any, Callable, Optional, Sequence, Tuple, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Literal,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+    cast,
+)
 
 import cupy as cp
 import numpy as np
@@ -524,8 +533,8 @@ class NumericalColumn(NumericalBaseColumn):
 
     def fillna(
         self,
-        fill_value: Any = None,
-        method: Optional[str] = None,
+        fill_value: ScalarLike | ColumnBase,
+        method: Literal["ffill", "bfill", None] = None,
     ) -> Self:
         """
         Fill null values with *fill_value*

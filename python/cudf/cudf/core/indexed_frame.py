@@ -3238,20 +3238,19 @@ class IndexedFrame(Frame):
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):  # noqa: D102
-        if method is not None:
-            # Do not remove until pandas 3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
-            warnings.warn(
-                f"{type(self).__name__}.fillna with 'method' is "
-                "deprecated and will raise in a future version. "
-                "Use obj.ffill() or obj.bfill() instead.",
-                FutureWarning,
-            )
+        if isinstance(value, pd.Series):
+            value = cudf.Series.from_pandas(value)
+        elif isinstance(value, abc.Mapping):
+            value = cudf.Series(value)
+        if isinstance(
+            value, (cudf.DataFrame, cudf.Series)
+        ) and not self.index.equals(value.index):
+            value = value.reindex(self.index)
+            value = value._data
         old_index = self.index
         ret = super().fillna(value, method, axis, inplace, limit)
         if inplace:
+            # TODO: Can this case be removed if Frame.fillna uses _from_data_like_self?
             self.index = old_index
         else:
             ret.index = old_index

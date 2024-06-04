@@ -33,6 +33,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import Dtype
 from cudf.api.types import is_bool_dtype, is_dtype_equal, is_scalar
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
@@ -740,6 +741,16 @@ class Frame(BinaryOperand, Scannable):
             raise ValueError("Cannot specify both 'value' and 'method'.")
 
         if method:
+            # Do not remove until pandas 3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
+            warnings.warn(
+                f"{type(self).__name__}.fillna with 'method' is "
+                "deprecated and will raise in a future version. "
+                "Use obj.ffill() or obj.bfill() instead.",
+                FutureWarning,
+            )
             if method not in {"ffill", "bfill", "pad", "backfill"}:
                 raise NotImplementedError(
                     f"Fill method {method} is not supported"
@@ -749,57 +760,28 @@ class Frame(BinaryOperand, Scannable):
             elif method == "backfill":
                 method = "bfill"
 
-        # TODO: This logic should be handled in different subclasses since
-        # different Frames support different types of values.
-        if isinstance(value, cudf.Series):
-            value = value.reindex(self._data.names)
-        elif isinstance(value, cudf.DataFrame):
-            if not self.index.equals(value.index):  # type: ignore[attr-defined]
-                value = value.reindex(self.index)  # type: ignore[attr-defined]
-            else:
-                value = value
-        elif not isinstance(value, abc.Mapping):
+        if is_scalar(value):
+            # Do we need a deepcopy here?
             value = {name: copy.deepcopy(value) for name in self._data.names}
-        else:
-            value = {
-                key: value.reindex(self.index)  # type: ignore[attr-defined]
-                if isinstance(value, cudf.Series)
-                else value
-                for key, value in value.items()
-            }
-
-        filled_data = {}
-        for col_name, col in self._data.items():
-            if col_name in value and method is None:
-                replace_val = value[col_name]
-            else:
-                replace_val = None
-            should_fill = (
-                (
-                    col_name in value
-                    and col.has_nulls(include_nan=True)
-                    and not libcudf.scalar._is_null_host_scalar(replace_val)
-                )
-                or method is not None
-                or (
-                    isinstance(col, cudf.core.column.CategoricalColumn)
-                    and not libcudf.scalar._is_null_host_scalar(replace_val)
-                )
+        elif not isinstance(value, abc.Mapping):
+            raise TypeError(
+                f'"value" parameter must be a scalar, dict '
+                f"or Series, but you passed a "
+                f'"{type(value).__name__}"'
             )
-            if should_fill:
-                filled_data[col_name] = col.fillna(replace_val, method)
+
+        filled_columns = []
+        for col_name, col in self._data.items():
+            if col_name not in value:
+                filled_col = col.copy()
             else:
-                filled_data[col_name] = col.copy(deep=True)
+                filled_col = col.fillna(value[col_name], method)
+            filled_columns.append(filled_col)
 
         return self._mimic_inplace(
             self._from_data(
-                data=ColumnAccessor(
-                    data=filled_data,
-                    multiindex=self._data.multiindex,
-                    level_names=self._data.level_names,
-                    rangeindex=self._data.rangeindex,
-                    label_dtype=self._data.label_dtype,
-                    verify=False,
+                self._data._from_columns_like_self(
+                    filled_columns, verify=False
                 )
             ),
             inplace=inplace,

@@ -5,7 +5,16 @@ from __future__ import annotations
 import warnings
 from collections import abc
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    cast,
+)
 
 import numpy as np
 import pandas as pd
@@ -1067,8 +1076,8 @@ class CategoricalColumn(column.ColumnBase):
 
     def fillna(
         self,
-        fill_value: Any = None,
-        method: Optional[str] = None,
+        fill_value: ScalarLike | ColumnBase,
+        method: Literal["ffill", "bfill", None] = None,
     ) -> Self:
         """
         Fill null values with *fill_value*

@@ -8,12 +8,11 @@ import functools
 import locale
 import re
 from locale import nl_langinfo
-from typing import TYPE_CHECKING, Any, Literal, Optional, Sequence, Tuple, cast
+from typing import TYPE_CHECKING, Literal, Optional, Sequence, Tuple, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -26,7 +25,7 @@ from cudf._typing import (
     DtypeObj,
     ScalarLike,
 )
-from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
+from cudf.api.types import is_datetime64_dtype, is_timedelta64_dtype
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column, string
@@ -627,22 +626,6 @@ class DatetimeColumn(column.ColumnBase):
             return result_col.fillna(op == "__ne__")
         else:
             return result_col
-
-    def fillna(
-        self,
-        fill_value: Any = None,
-        method: Optional[str] = None,
-    ) -> Self:
-        if fill_value is not None:
-            if cudf.utils.utils._isnat(fill_value):
-                return self.copy(deep=True)
-            if is_scalar(fill_value):
-                if not isinstance(fill_value, cudf.Scalar):
-                    fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
-            else:
-                fill_value = column.as_column(fill_value, nan_as_null=False)
-
-        return super().fillna(fill_value, method)
 
     def indices_of(
         self, value: ScalarLike
