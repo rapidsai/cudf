@@ -22,12 +22,7 @@ from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.extensions import no_default
-from cudf.api.types import (
-    is_bool_dtype,
-    is_float_dtype,
-    is_list_like,
-    is_numeric_dtype,
-)
+from cudf.api.types import is_bool_dtype, is_list_like, is_numeric_dtype
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, StructDtype, as_column
@@ -335,12 +330,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             FutureWarning,
         )
         index = self.grouping.keys.unique().sort_values().to_pandas()
-        obj_dtypes = self.obj._dtypes
         return pd.DataFrame(
-            {
-                name: [obj_dtypes[name]] * len(index)
-                for name in self.obj._data.names
-            },
+            {name: [dtype] * len(index) for name, dtype in self.obj._dtypes},
             index=index,
         )
 
@@ -499,8 +490,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # treats NaNs the way we treat nulls.
         if cudf.get_option("mode.pandas_compatible"):
             if any(
-                is_float_dtype(typ)
-                for typ in self.grouping.values._dtypes.values()
+                col.dtype.kind == "f" for col in self.grouping.values._columns
             ):
                 raise NotImplementedError(
                     "NaNs are not supported in groupby.rank."
