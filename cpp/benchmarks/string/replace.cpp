@@ -52,7 +52,7 @@ static void BM_replace(benchmark::State& state, replace_type rt)
       case scalar: cudf::strings::replace(input, target, repl); break;
       case slice: cudf::strings::replace_slice(input, repl, 1, 10); break;
       case multi:
-        cudf::strings::replace(
+        cudf::strings::replace_multiple(
           input, cudf::strings_column_view(targets), cudf::strings_column_view(repls));
         break;
     }
