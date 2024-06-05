@@ -12,7 +12,6 @@ from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
 from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
     concatenate_list_elements as cpp_concatenate_list_elements,
     concatenate_null_policy,
-    concatenate_rows as cpp_concatenate_rows,
 )
 from cudf._lib.pylibcudf.libcudf.lists.contains cimport (
     contains,
@@ -32,7 +31,6 @@ from cudf._lib.pylibcudf.libcudf.lists.stream_compaction cimport (
     distinct as cpp_distinct,
 )
 from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
-from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
 from cudf._lib.pylibcudf.libcudf.types cimport (
     nan_equality,
     null_equality,
@@ -41,10 +39,7 @@ from cudf._lib.pylibcudf.libcudf.types cimport (
     size_type,
 )
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport (
-    columns_from_pylibcudf_table,
-    table_view_from_columns,
-)
+from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 from cudf._lib import pylibcudf
 
@@ -223,16 +218,9 @@ def index_of_column(Column col, Column search_keys):
 
 @acquire_spill_lock()
 def concatenate_rows(list source_columns):
-    cdef unique_ptr[column] c_result
-
-    cdef table_view c_table_view = table_view_from_columns(source_columns)
-
-    with nogil:
-        c_result = move(cpp_concatenate_rows(
-            c_table_view,
-        ))
-
-    return Column.from_unique_ptr(move(c_result))
+    return pylibcudf.lists.concatenate_rows(
+        pylibcudf.Table([c.to_pylibcudf(mode="read") for c in source_columns])
+    )
 
 
 @acquire_spill_lock()
