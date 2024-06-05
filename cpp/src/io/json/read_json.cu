@@ -24,6 +24,7 @@
 #include <cudf/io/detail/json.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
+#include <cudf/concatenate.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
@@ -76,7 +77,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   auto constexpr num_delimiter_chars = 1;
 
   if (compression == compression_type::NONE) {
-    std::vector<size_type> delimiter_map{};
+    std::vector<size_t> delimiter_map{};
     std::vector<size_t> prefsum_source_sizes(sources.size());
     std::vector<std::unique_ptr<datasource::buffer>> h_buffers;
     delimiter_map.reserve(sources.size());
@@ -84,7 +85,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     std::transform_inclusive_scan(sources.begin(),
                                   sources.end(),
                                   prefsum_source_sizes.begin(),
-                                  std::plus<int>{},
+                                  std::plus<size_t>{},
                                   [](const std::unique_ptr<datasource>& s) { return s->size(); });
     auto upper =
       std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
@@ -259,25 +260,11 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
     readbufspan.size() - first_delim_pos - shift_for_nonzero_offset);
 }
 
-table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
+table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& reader_opts,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
-{
+                              rmm::device_async_resource_ref mr) {
   CUDF_FUNC_RANGE();
-
-  if (reader_opts.get_byte_range_offset() != 0 or reader_opts.get_byte_range_size() != 0) {
-    CUDF_EXPECTS(reader_opts.is_enabled_lines(),
-                 "Specifying a byte range is supported only for JSON Lines");
-  }
-
-  if (sources.size() > 1) {
-    CUDF_EXPECTS(reader_opts.get_compression() == compression_type::NONE,
-                 "Multiple compressed inputs are not supported");
-    CUDF_EXPECTS(reader_opts.is_enabled_lines(),
-                 "Multiple inputs are supported only for JSON Lines format");
-  }
-
   datasource::owning_buffer<rmm::device_uvector<char>> bufview =
     get_record_range_raw_input(sources, reader_opts, stream);
 
@@ -297,6 +284,56 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
     cudf::device_span<char const>(reinterpret_cast<char const*>(bufview.data()), bufview.size());
   stream.synchronize();
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
+}
+
+table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
+                              json_reader_options const& reader_opts,
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  if (reader_opts.get_byte_range_offset() != 0 or reader_opts.get_byte_range_size() != 0) {
+    CUDF_EXPECTS(reader_opts.is_enabled_lines(),
+                 "Specifying a byte range is supported only for JSON Lines");
+  }
+
+  if (sources.size() > 1) {
+    CUDF_EXPECTS(reader_opts.get_compression() == compression_type::NONE,
+                 "Multiple compressed inputs are not supported");
+    CUDF_EXPECTS(reader_opts.is_enabled_lines(),
+                 "Multiple inputs are supported only for JSON Lines format");
+  }
+
+  size_t const batch_size = std::numeric_limits<int>::max();
+  int const num_batches = std::ceil((double)sources_size(sources, 0, 0) / batch_size);
+  if(num_batches == 1) return read_batch(sources, reader_opts, stream, mr);
+
+  std::vector<size_t> prefsum_source_sizes(sources.size());
+  std::transform_inclusive_scan(sources.begin(),
+                                sources.end(),
+                                prefsum_source_sizes.begin(),
+                                std::plus<size_t>{},
+                                [](const std::unique_ptr<datasource>& s) { return s->size(); });
+
+  auto start_source_it = sources.begin();
+  std::vector<cudf::io::table_with_metadata> partial_tables;
+  for(int batch = 0; batch < num_batches; batch++) {
+    auto end_prefsum_it = std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), (batch + 1) * batch_size);
+    auto end_source_it = sources.begin() + std::distance(prefsum_source_sizes.begin(), end_prefsum_it);
+    partial_tables.emplace_back(read_batch(host_span<std::unique_ptr<datasource>>(start_source_it, std::distance(start_source_it, end_source_it)), reader_opts, stream, mr));
+    start_source_it = end_source_it;
+  }
+  auto partial_table_views = std::vector<cudf::table_view>(partial_tables.size());
+  std::transform(partial_tables.begin(), partial_tables.end(), partial_table_views.begin(), [](auto& table) {
+    return table.tbl->view();
+  });
+  std::vector<column_name_info> concatenated_table_schema_info;
+  std::for_each(partial_tables.begin(), partial_tables.end(), [&concatenated_table_schema_info](auto &ptbl) {
+      auto const &ptbl_schema = ptbl.metadata.schema_info;
+      concatenated_table_schema_info.insert(concatenated_table_schema_info.end(), ptbl_schema.begin(), ptbl_schema.end());
+      });
+  return table_with_metadata{cudf::concatenate(partial_table_views), {concatenated_table_schema_info}};
 }
 
 }  // namespace cudf::io::json::detail
