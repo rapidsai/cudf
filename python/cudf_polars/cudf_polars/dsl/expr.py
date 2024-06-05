@@ -446,9 +446,14 @@ class BooleanFunction(Expr):
         if self.name in (
             pl_expr.BooleanFunction.IsFinite,
             pl_expr.BooleanFunction.IsInfinite,
-            pl_expr.BooleanFunction.IsIn,
         ):
             raise NotImplementedError(f"{self.name}")
+        if self.name == pl_expr.BooleanFunction.IsIn and not all(
+            c.dtype == self.children[0].dtype for c in self.children
+        ):
+            # TODO: If polars IR doesn't put the casts in, we need to
+            # mimic the supertype promotion rules.
+            raise NotImplementedError("IsIn doesn't support supertype casting")
 
     @staticmethod
     def _distinct(
@@ -638,6 +643,9 @@ class BooleanFunction(Expr):
                     self.dtype,
                 )
             )
+        elif self.name == pl_expr.BooleanFunction.IsIn:
+            needles, haystack = columns
+            return Column(plc.search.contains(haystack.obj, needles.obj))
         else:
             raise NotImplementedError(
                 f"BooleanFunction {self.name}"

@@ -133,3 +133,30 @@ def test_boolean_horizontal(request, expr, has_nulls, wide):
     q = ldf.select(expr)
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        pl.col("b"),
+        pytest.param(
+            pl.Series([1, 5, 7], dtype=pl.Int64()),
+            marks=pytest.mark.xfail(reason="No handler for series literals"),
+        ),
+        pytest.param(
+            pl.lit(1, dtype=pl.Int32()),
+            marks=pytest.mark.xfail(reason="No supertype casting in the IR"),
+        ),
+    ],
+)
+def test_is_in(target):
+    ldf = pl.LazyFrame(
+        {
+            "a": pl.Series([1, 2, 3], dtype=pl.Int64),
+            "b": pl.Series([3, 4, 2], dtype=pl.Int64),
+        }
+    )
+
+    q = ldf.select(pl.col("a").is_in(target))
+
+    assert_gpu_result_equal(q)
