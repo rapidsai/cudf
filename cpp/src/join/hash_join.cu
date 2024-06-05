@@ -42,6 +42,7 @@
 #include <cstddef>
 #include <iostream>
 #include <numeric>
+#include <variant>
 
 namespace cudf {
 namespace detail {
@@ -187,12 +188,14 @@ probe_join_hash_table(
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
 
   auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
+  std::unordered_set<cudf::type_id> probe_column_types;
+  for (auto col : probe_table) {
+    probe_column_types.insert(col.type().id());
+  }
 
   auto const row_hash           = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-  auto const hash_probe         = row_hash.device_hasher(probe_nulls);
+  auto const hash_probe         = row_hash.device_hasher(probe_column_types, probe_nulls);
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
-  auto const iter               = cudf::detail::make_counting_transform_iterator(
-    0, make_pair_function{hash_probe, empty_key_sentinel});
 
   cudf::size_type const probe_table_num_rows = probe_table.num_rows();
 
@@ -207,13 +210,18 @@ probe_join_hash_table(
     pair_equality equality{device_comparator};
 
     if (join == cudf::detail::join_kind::FULL_JOIN or join == cudf::detail::join_kind::LEFT_JOIN) {
-      [[maybe_unused]] auto [out1_zip_end, out2_zip_end] =
-        hash_table.pair_retrieve_outer(iter,
-                                       iter + probe_table_num_rows,
-                                       out1_zip_begin,
-                                       out2_zip_begin,
-                                       equality,
-                                       stream.value());
+      [[maybe_unused]] auto [out1_zip_end, out2_zip_end] = std::visit(
+        [&](auto&& hasher) {
+          auto const iter = cudf::detail::make_counting_transform_iterator(
+            0, make_pair_function{hasher, empty_key_sentinel});
+          return hash_table.pair_retrieve_outer(iter,
+                                                iter + probe_table_num_rows,
+                                                out1_zip_begin,
+                                                out2_zip_begin,
+                                                equality,
+                                                stream.value());
+        },
+        hash_probe);
 
       if (join == cudf::detail::join_kind::FULL_JOIN) {
         auto const actual_size = thrust::distance(out1_zip_begin, out1_zip_end);
@@ -221,22 +229,23 @@ probe_join_hash_table(
         right_indices->resize(actual_size, stream);
       }
     } else {
-      hash_table.pair_retrieve(iter,
-                               iter + probe_table_num_rows,
-                               out1_zip_begin,
-                               out2_zip_begin,
-                               equality,
-                               stream.value());
+      std::visit(
+        [&](auto&& hasher) {
+          auto const iter = cudf::detail::make_counting_transform_iterator(
+            0, make_pair_function{hasher, empty_key_sentinel});
+          hash_table.pair_retrieve(iter,
+                                   iter + probe_table_num_rows,
+                                   out1_zip_begin,
+                                   out2_zip_begin,
+                                   equality,
+                                   stream.value());
+        },
+        hash_probe);
     }
   };
-
-  if (cudf::detail::has_nested_columns(probe_table)) {
-    auto const device_comparator = row_comparator.equal_to<true>(probe_nulls, compare_nulls);
-    comparator_helper(device_comparator);
-  } else {
-    auto const device_comparator = row_comparator.equal_to<false>(probe_nulls, compare_nulls);
-    comparator_helper(device_comparator);
-  }
+  auto const device_comparator =
+    row_comparator.equal_to(probe_column_types, probe_nulls, compare_nulls);
+  std::visit([&](auto&& comparator) { comparator_helper(comparator); }, device_comparator);
 
   return std::pair(std::move(left_indices), std::move(right_indices));
 }
