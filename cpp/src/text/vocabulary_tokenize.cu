@@ -86,11 +86,13 @@ struct vocab_equal {
     return lhs == rhs;  // all rows are expected to be unique
   }
   // used by find
-  [[maybe_unused]] __device__ bool operator()(cudf::size_type lhs,
-                                              cudf::string_view const& rhs) const noexcept
+#pragma nv_diagnostic push
+#pragma nv_diag_suppress 177
+  __device__ bool operator()(cudf::size_type lhs, cudf::string_view const& rhs) const noexcept
   {
     return d_strings.element<cudf::string_view>(lhs) == rhs;
   }
+#pragma nv_diagnostic pop
   __device__ bool operator()(cudf::string_view const& lhs, cudf::size_type rhs) const noexcept
   {
     return d_strings.element<cudf::string_view>(rhs) == lhs;

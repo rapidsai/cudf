@@ -76,14 +76,17 @@ struct comparator_adapter {
   {
   }
 
-  __device__ auto operator()([[maybe_unused]] lhs_index_type lhs_index,
-                             [[maybe_unused]] lhs_index_type rhs_index) const
+#pragma nv_diagnostic push
+#pragma nv_diag_suppress 177
+  __device__ constexpr auto operator()(lhs_index_type lhs_index,
+                                       lhs_index_type rhs_index) const noexcept
   {
     auto const lhs = static_cast<size_type>(lhs_index);
     auto const rhs = static_cast<size_type>(rhs_index);
 
     return _self_equal(lhs, rhs);
   }
+#pragma nv_diagnostic pop
 
   __device__ constexpr auto operator()(rhs_index_type lhs_index,
                                        rhs_index_type rhs_index) const noexcept
