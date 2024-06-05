@@ -107,13 +107,13 @@ cpdef Table quantiles(
     is_input_sorted: Sorted, default Sorted.NO
         Whether the input table has been pre-sorted or not.
     column_order: list, default None
-        A list of :py:class:`~cudf._lib.pylibcudf.types.Order` enums,
+        A list of :py:class:`~.types.Order` enums,
         indicating the desired sort order for each column.
         By default, will sort all columns so that they are in ascending order.
 
         Ignored if `is_input_sorted` is `Sorted.YES`
     null_precedence: list, default None
-        A list of :py:class:`~cudf._lib.pylibcudf.types.NullOrder` enums,
+        A list of :py:class:`~.types.NullOrder` enums,
         indicating how nulls should be sorted.
         By default, will sort all columns so that nulls appear before
         all other elements.
