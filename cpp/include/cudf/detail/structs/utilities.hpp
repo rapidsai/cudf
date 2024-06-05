@@ -114,7 +114,7 @@ class flattened_table {
    * @param columns_ Newly allocated columns to back the table_view
    * @param nullable_data_ Newly generated temporary data that needs to be kept alive
    */
-  flattened_table(table_view const& flattened_columns_,
+  flattened_table(table_view flattened_columns_,
                   std::vector<order> const& orders_,
                   std::vector<null_order> const& null_orders_,
                   std::vector<std::unique_ptr<column>>&& columns_,
