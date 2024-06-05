@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
+import pytest
 from utils import assert_column_eq
 
 from cudf._lib import pylibcudf as plc
@@ -19,14 +20,27 @@ def test_concatenate_rows():
     assert_column_eq(res, expect)
 
 
-def test_concatenate_list_elements():
-    test_data = [[[1, 2], [3, 4], [5]], [[6], [], [7, 8, 9]]]
-
+@pytest.mark.parametrize(
+    "test_data, drop_na, expected",
+    [
+        (
+            [[[1, 2], [3, 4], [5]], [[6], None, [7, 8, 9]]],
+            False,
+            [[1, 2, 3, 4, 5], None],
+        ),
+        (
+            [[[1, 2], [3, 4], [5, None]], [[6], [None], [7, 8, 9]]],
+            True,
+            [[1, 2, 3, 4, 5, None], [6, None, 7, 8, 9]],
+        ),
+    ],
+)
+def test_concatenate_list_elements(test_data, drop_na, expected):
     arr = pa.array(test_data)
     plc_column = plc.interop.from_arrow(arr)
 
-    res = plc.lists.concatenate_list_elements(plc_column, False)
+    res = plc.lists.concatenate_list_elements(plc_column, drop_na)
 
-    expect = pa.array([[1, 2, 3, 4, 5], [6, 7, 8, 9]])
+    expect = pa.array(expected)
 
     assert_column_eq(res, expect)
