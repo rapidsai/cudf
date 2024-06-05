@@ -13,6 +13,8 @@ import polars as pl
 
 import cudf._lib.pylibcudf as plc
 
+__all__ = ["from_polars"]
+
 
 @cache
 def from_polars(dtype: pl.DataType) -> plc.DataType:
@@ -84,6 +86,7 @@ def from_polars(dtype: pl.DataType) -> plc.DataType:
         # TODO: Hopefully
         return plc.DataType(plc.TypeId.EMPTY)
     elif isinstance(dtype, pl.List):
+        # TODO: This doesn't consider the value type.
         return plc.DataType(plc.TypeId.LIST)
     else:
         raise NotImplementedError(f"{dtype=} conversion not supported")

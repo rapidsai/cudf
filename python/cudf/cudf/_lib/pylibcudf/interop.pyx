@@ -55,6 +55,7 @@ ARROW_TO_PYLIBCUDF_TYPES = {
     pa.timestamp('us'): type_id.TIMESTAMP_MICROSECONDS,
     pa.timestamp('ns'): type_id.TIMESTAMP_NANOSECONDS,
     pa.date32(): type_id.TIMESTAMP_DAYS,
+    pa.null(): type_id.EMPTY,
 }
 
 LIBCUDF_TO_ARROW_TYPES = {
@@ -245,7 +246,7 @@ def _to_arrow_datatype(cudf_object, **kwargs):
         return pa.list_(value_type)
     else:
         try:
-            return ARROW_TO_PYLIBCUDF_TYPES[cudf_object.id()]
+            return LIBCUDF_TO_ARROW_TYPES[cudf_object.id()]
         except KeyError:
             raise TypeError(
                 f"Unable to convert {cudf_object.id()} to arrow datatype"
