@@ -68,12 +68,14 @@ function(ConfigureTest CMAKE_TEST_NAME)
     INSTALL_COMPONENT_SET testing
   )
 
-  set_tests_properties(
-    ${CMAKE_TEST_NAME}
-    PROPERTIES
-      ENVIRONMENT
-      "GTEST_CUDF_STREAM_MODE=new_${_CUDF_TEST_STREAM_MODE}_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_${_CUDF_TEST_STREAM_MODE}>"
-  )
+  if(CUDF_BUILD_STREAMS_TEST_UTIL)
+    set_tests_properties(
+      ${CMAKE_TEST_NAME}
+      PROPERTIES
+        ENVIRONMENT
+        "GTEST_CUDF_STREAM_MODE=new_${_CUDF_TEST_STREAM_MODE}_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_${_CUDF_TEST_STREAM_MODE}>"
+    )
+  endif()
 endfunction()
 
 # ##################################################################################################
@@ -401,14 +403,10 @@ ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
 ConfigureTest(SPAN_TEST_DEVICE_VECTOR utilities_tests/span_tests.cu)
 
 # Overwrite the environments set by ConfigureTest
-set_tests_properties(
-  SPAN_TEST
-  PROPERTIES
-    ENVIRONMENT
-    "GTEST_FILTER=-${_allowlist_filter};GTEST_CUDF_STREAM_MODE=new_cudf_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_cudf>"
-)
-set_tests_properties(
-  SPAN_TEST_DEVICE_VECTOR PROPERTIES ENVIRONMENT "GTEST_FILTER=${_allowlist_filter}"
+set_property(
+  TEST SPAN_TEST SPAN_TEST_DEVICE_VECTOR
+  APPEND
+  PROPERTY ENVIRONMENT "GTEST_FILTER=-${_allowlist_filter}"
 )
 
 # ##################################################################################################
