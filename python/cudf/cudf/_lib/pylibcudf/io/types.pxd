@@ -1,7 +1,4 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-
-from libcpp.memory cimport unique_ptr
-
 from cudf._lib.pylibcudf.libcudf.io.types cimport (
     column_encoding,
     column_in_metadata,
