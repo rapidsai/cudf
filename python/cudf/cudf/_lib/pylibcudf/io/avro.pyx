@@ -21,8 +21,6 @@ cpdef TableWithMetadata read_avro(
     """
     Reads an Avro dataset into a set of columns.
 
-    For details, see :cpp:func:`read_avro`.
-
     Parameters
     ----------
     source_info: SourceInfo
