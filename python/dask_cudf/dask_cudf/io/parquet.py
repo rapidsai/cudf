@@ -6,7 +6,7 @@ from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
 
 import numpy as np
-from pandas.api.types import is_datetime64_any_dtype
+import pandas as pd
 from pyarrow import dataset as pa_ds, parquet as pq
 
 from dask import dataframe as dd
@@ -47,7 +47,7 @@ class CudfEngine(ArrowDatasetEngine):
         except NotImplementedError:
             # Try dropping unsupported timezone information
             for k, v in meta_pd.dtypes.items():
-                if is_datetime64_any_dtype(v) and v.tz is not None:
+                if isinstance(v, pd.DatetimeTZDtype) and v.tz is not None:
                     meta_pd[k] = meta_pd[k].dt.tz_localize(None)
             meta_cudf = cudf.from_pandas(meta_pd)
 
