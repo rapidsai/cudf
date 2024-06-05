@@ -13,6 +13,7 @@ import pytest
 
 import cudf
 from cudf import Series
+from cudf.api.types import is_decimal_dtype, is_float_dtype
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.index import as_index
@@ -3042,6 +3043,46 @@ def test_equality_ops_index_mismatch(fn):
     pb = b.to_pandas(nullable=True)
     expected = getattr(pa, fn)(pb)
     actual = getattr(a, fn)(b).to_pandas(nullable=True)
+
+    utils.assert_eq(expected, actual)
+
+
+TYPE_MISMATCH_INPUTS = [
+    [1, 2, 3],
+    ["a", "b", "c"],
+    [0.0, 3.14, np.nan],
+    [
+        decimal.Decimal("1.324324"),
+        decimal.Decimal("2.71"),
+        decimal.Decimal("3.14"),
+    ],
+    [pd.Timedelta(10), pd.Timedelta(123456789), pd.Timedelta(-99999999999)],
+    [pd.Timestamp(10), pd.Timestamp(123456789), pd.Timestamp(-99999999999)],
+    # TODO: Categorical columns need significant work in _binaryop
+    # pd.Categorical(["a", "b", "c"]),
+    # TODO: Need binary operations for (in)equality in libcudf between list columns
+    # [[1, 2], [3, 4, 5], [6, 7, 8, 9]],
+    # TODO: Need binary operations for (in)equality in libcudf between struct columns
+    # [{"a": 0}, {"a": 1}, {"a": 2}]
+]
+
+
+@pytest.mark.parametrize("left", TYPE_MISMATCH_INPUTS)
+@pytest.mark.parametrize("right", TYPE_MISMATCH_INPUTS)
+@pytest.mark.parametrize("fn", ["eq", "ne"])
+def test_equality_ops_type_mismatch(left, right, fn):
+    a = cudf.Series(left, nan_as_null=False)
+    b = cudf.Series(right, nan_as_null=False)
+
+    if (is_float_dtype(a) and is_decimal_dtype(b)) or (
+        is_float_dtype(b) and is_decimal_dtype(a)
+    ):
+        pytest.skip("Cannot compare float/decimal types.")
+
+    pa = a.to_pandas()
+    pb = b.to_pandas()
+    expected = getattr(operator, fn)(pa, pb)
+    actual = getattr(operator, fn)(a, b)
 
     utils.assert_eq(expected, actual)
 

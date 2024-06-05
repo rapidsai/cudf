@@ -31,7 +31,7 @@ from cudf._lib.column import Column
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import is_integer, is_scalar, is_string_dtype
 from cudf.core.buffer import Buffer
-from cudf.core.column import column, datetime
+from cudf.core.column import as_column, column, datetime
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.utils.docutils import copy_docstring
@@ -5910,9 +5910,14 @@ class StringColumn(column.ColumnBase):
             elif op == "__ne__":
                 return self.isnull()
 
-        other = self._wrap_binop_normalization(other)
-        if other is NotImplemented:
+        normalized_other = self._wrap_binop_normalization(other)
+        if normalized_other is NotImplemented:
+            if op in {"__eq__", "__ne__"} and isinstance(other, ColumnBase):
+                return as_column(
+                    op != "__eq__", length=len(self), dtype="bool"
+                )
             return NotImplemented
+        other = normalized_other
 
         if isinstance(other, (StringColumn, str, cudf.Scalar)):
             if isinstance(other, cudf.Scalar) and other.dtype != "O":
