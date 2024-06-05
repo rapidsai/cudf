@@ -617,32 +617,6 @@ class BooleanFunction(Expr):
                     (c.obj for c in columns),
                 )
             )
-        elif self.name == pl_expr.BooleanFunction.IsBetween:
-            column, lo, hi = columns
-            (closed,) = self.options
-            lop, rop = self._BETWEEN_OPS[closed]
-            lo_obj = (
-                lo.obj_scalar
-                if lo.is_scalar and lo.obj.size() != column.obj.size()
-                else lo.obj
-            )
-            hi_obj = (
-                hi.obj_scalar
-                if hi.is_scalar and hi.obj.size() != column.obj.size()
-                else hi.obj
-            )
-            return Column(
-                plc.binaryop.binary_operation(
-                    plc.binaryop.binary_operation(
-                        column.obj, lo_obj, lop, output_type=self.dtype
-                    ),
-                    plc.binaryop.binary_operation(
-                        column.obj, hi_obj, rop, output_type=self.dtype
-                    ),
-                    plc.binaryop.BinaryOperator.LOGICAL_AND,
-                    self.dtype,
-                )
-            )
         elif self.name == pl_expr.BooleanFunction.IsIn:
             needles, haystack = columns
             return Column(plc.search.contains(haystack.obj, needles.obj))
