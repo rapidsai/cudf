@@ -76,7 +76,7 @@ std::unique_ptr<cudf::column> drop_whitespace(cudf::column_view const& col)
   cudf::strings_column_view strings(col);
   cudf::strings_column_view targets(whitespace);
   cudf::strings_column_view replacements(repl);
-  return cudf::strings::replace(strings, targets, replacements);
+  return cudf::strings::replace_multiple(strings, targets, replacements);
 }
 
 struct JsonPathTests : public cudf::test::BaseFixture {};

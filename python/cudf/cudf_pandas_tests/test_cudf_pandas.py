@@ -6,6 +6,7 @@ import collections
 import copy
 import datetime
 import operator
+import os
 import pathlib
 import pickle
 import tempfile
@@ -1421,3 +1422,7 @@ def test_holidays_within_dates(holiday, start, expected):
             utc.localize(xpd.Timestamp(start)),
         )
     ) == [utc.localize(dt) for dt in expected]
+
+
+def test_excelwriter_pathlike():
+    assert isinstance(pd.ExcelWriter("foo.xlsx"), os.PathLike)
