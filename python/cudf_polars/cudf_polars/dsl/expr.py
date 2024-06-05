@@ -484,32 +484,48 @@ class BooleanFunction(Expr):
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
-                source_value=plc.interop.from_arrow(pa.scalar(True)),  # noqa: FBT003
-                target_value=plc.interop.from_arrow(pa.scalar(False)),  # noqa: FBT003
+                source_value=plc.interop.from_arrow(
+                    pa.scalar(value=True, type=plc.interop.to_arrow(self.dtype))
+                ),
+                target_value=plc.interop.from_arrow(
+                    pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
+                ),
             )
         elif self.name == pl_expr.BooleanFunction.IsLastDistinct:
             (column,) = columns
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-                source_value=plc.interop.from_arrow(pa.scalar(True)),  # noqa: FBT003
-                target_value=plc.interop.from_arrow(pa.scalar(False)),  # noqa: FBT003
+                source_value=plc.interop.from_arrow(
+                    pa.scalar(value=True, type=plc.interop.to_arrow(self.dtype))
+                ),
+                target_value=plc.interop.from_arrow(
+                    pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
+                ),
             )
         elif self.name == pl_expr.BooleanFunction.IsUnique:
             (column,) = columns
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
-                source_value=plc.interop.from_arrow(pa.scalar(True)),  # noqa: FBT003
-                target_value=plc.interop.from_arrow(pa.scalar(False)),  # noqa: FBT003
+                source_value=plc.interop.from_arrow(
+                    pa.scalar(value=True, type=plc.interop.to_arrow(self.dtype))
+                ),
+                target_value=plc.interop.from_arrow(
+                    pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
+                ),
             )
         elif self.name == pl_expr.BooleanFunction.IsDuplicated:
             (column,) = columns
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
-                source_value=plc.interop.from_arrow(pa.scalar(False)),  # noqa: FBT003
-                target_value=plc.interop.from_arrow(pa.scalar(True)),  # noqa: FBT003
+                source_value=plc.interop.from_arrow(
+                    pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
+                ),
+                target_value=plc.interop.from_arrow(
+                    pa.scalar(value=True, type=plc.interop.to_arrow(self.dtype))
+                ),
             )
         elif self.name == pl_expr.BooleanFunction.AllHorizontal:
             name = columns[0].name
@@ -717,7 +733,9 @@ class Gather(Expr):
             bounds_policy = plc.copying.OutOfBoundsPolicy.NULLIFY
             obj = plc.replace.replace_nulls(
                 indices.obj,
-                plc.interop.from_arrow(pa.scalar(n), data_type=indices.obj.data_type()),
+                plc.interop.from_arrow(
+                    pa.scalar(n, type=plc.interop.to_arrow(indices.obj.data_type()))
+                ),
             )
         else:
             bounds_policy = plc.copying.OutOfBoundsPolicy.DONT_CHECK
@@ -893,11 +911,13 @@ class Agg(Expr):
         )
 
     def _count(self, column: Column) -> Column:
-        # TODO: dtype handling
         return Column(
             plc.Column.from_scalar(
                 plc.interop.from_arrow(
-                    pa.scalar(column.obj.size() - column.obj.null_count()),
+                    pa.scalar(
+                        column.obj.size() - column.obj.null_count(),
+                        type=plc.interop.to_arrow(self.dtype),
+                    ),
                 ),
                 1,
             ),
@@ -909,7 +929,7 @@ class Agg(Expr):
             return Column(
                 plc.Column.from_scalar(
                     plc.interop.from_arrow(
-                        pa.scalar(float("nan")), data_type=self.dtype
+                        pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
                     ),
                     1,
                 ),
@@ -924,7 +944,7 @@ class Agg(Expr):
             return Column(
                 plc.Column.from_scalar(
                     plc.interop.from_arrow(
-                        pa.scalar(float("nan")), data_type=self.dtype
+                        pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
                     ),
                     1,
                 ),
