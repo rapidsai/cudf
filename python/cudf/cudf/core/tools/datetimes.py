@@ -18,7 +18,6 @@ from cudf._lib.strings.convert.convert_integers import (
 )
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
-from cudf.core.index import as_index
 
 # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/core/tools/datetimes.py#L1112
 _unit_map = {
@@ -287,13 +286,13 @@ def to_datetime(
                 utc=utc,
             )
             if isinstance(arg, (cudf.BaseIndex, pd.Index)):
-                return as_index(col, name=arg.name)
+                return cudf.Index(col, name=arg.name)
             elif isinstance(arg, (cudf.Series, pd.Series)):
                 return cudf.Series(col, index=arg.index, name=arg.name)
             elif is_scalar(arg):
                 return col.element_indexing(0)
             else:
-                return as_index(col)
+                return cudf.Index(col)
     except Exception as e:
         if errors == "raise":
             raise e

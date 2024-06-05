@@ -596,7 +596,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             name_from_data = data.name
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
             if isinstance(data, pd.Series):
-                index_from_data = as_index(data.index)
+                index_from_data = cudf.Index(data.index)
             elif isinstance(data, Series):
                 index_from_data = data.index
         elif isinstance(data, ColumnAccessor):
@@ -612,7 +612,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 column = as_column(
                     list(data.values()), nan_as_null=nan_as_null, dtype=dtype
                 )
-                index_from_data = as_index(list(data.keys()))
+                index_from_data = cudf.Index(list(data.keys()))
         else:
             # Using `getattr_static` to check if
             # `data` is on device memory and perform
@@ -649,7 +649,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             name = name_from_data
 
         if index is not None:
-            index = as_index(index)
+            index = cudf.Index(index)
 
         if index_from_data is not None:
             first_index = index_from_data
@@ -2022,11 +2022,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             index = self.index.to_pandas()
         else:
             index = None  # type: ignore[assignment]
-        s = self._column.to_pandas(
-            index=index, nullable=nullable, arrow_type=arrow_type
+        return pd.Series(
+            self._column.to_pandas(nullable=nullable, arrow_type=arrow_type),
+            index=index,
+            name=self.name,
         )
-        s.name = self.name
-        return s
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -5241,7 +5241,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
     if isinstance(a, cudf.Series) and isinstance(b, cudf.Series):
         b = b.reindex(a.index)
-        index = as_index(a.index)
+        index = cudf.Index(a.index)
 
     a_col = as_column(a)
     a_array = cupy.asarray(a_col.data_array_view(mode="read"))
