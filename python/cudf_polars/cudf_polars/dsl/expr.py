@@ -316,7 +316,7 @@ class NamedExpr:
         obj = self.value.evaluate(df, context=context, mapping=mapping)
         if isinstance(obj, Scalar):
             return NamedColumn(
-                plc.Column.from_scalar(obj.obj, df.num_rows),
+                plc.Column.from_scalar(obj.obj, 1),
                 self.name,
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,

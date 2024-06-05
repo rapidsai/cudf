@@ -59,6 +59,38 @@ __all__ = [
 ]
 
 
+def broadcast(
+    *columns: NamedColumn, target_length: int | None = None
+) -> list[NamedColumn]:
+    lengths = {column.obj.size() for column in columns}
+    if len(lengths - {1}) > 1:
+        raise RuntimeError("Mismatching column lengths")
+    if lengths == {1}:
+        if target_length is None:
+            return list(columns)
+        nrows = target_length
+    elif len(lengths) == 1:
+        if target_length is not None:
+            assert target_length in lengths
+        return list(columns)
+    else:
+        (nrows,) = lengths - {1}
+        if target_length is not None:
+            assert target_length == nrows
+    return [
+        column
+        if column.obj.size() != 1
+        else NamedColumn(
+            plc.Column.from_scalar(plc.copying.get_element(column.obj, 0), nrows),
+            column.name,
+            is_sorted=plc.types.Sorted.YES,
+            order=plc.types.Order.ASCENDING,
+            null_order=plc.types.NullOrder.BEFORE,
+        )
+        for column in columns
+    ]
+
+
 @dataclass(slots=True)
 class IR:
     """Abstract plan node, representing an unevaluated dataframe."""
@@ -171,7 +203,7 @@ class Scan(IR):
         if self.predicate is None:
             return df
         else:
-            mask = self.predicate.evaluate(df)
+            (mask,) = broadcast(self.predicate.evaluate(df), target_length=df.num_rows)
             return df.filter(mask)
 
 
@@ -231,7 +263,7 @@ class DataFrameScan(IR):
             c.obj.type() == dtype for c, dtype in zip(df.columns, self.schema.values())
         )
         if self.predicate is not None:
-            mask = self.predicate.evaluate(df)
+            (mask,) = broadcast(self.predicate.evaluate(df), target_length=df.num_rows)
             return df.filter(mask)
         else:
             return df
@@ -249,7 +281,9 @@ class Select(IR):
     def evaluate(self, *, cache: dict[int, DataFrame]):
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        return DataFrame([e.evaluate(df) for e in self.expr])
+        # Handle any broadcasting
+        columns = broadcast(*(e.evaluate(df) for e in self.expr))
+        return DataFrame(columns)
 
 
 @dataclass(slots=True)
@@ -268,7 +302,9 @@ class Reduce(IR):
     def evaluate(self, *, cache: dict[int, DataFrame]):
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        return DataFrame([e.evaluate(df) for e in self.expr])
+        columns = broadcast(*(e.evaluate(df) for e in self.expr))
+        assert all(column.obj.size() == 1 for column in columns)
+        return DataFrame(columns)
 
 
 def placeholder_column(n: int):
@@ -358,7 +394,9 @@ class GroupBy(IR):
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        keys = [k.evaluate(df) for k in self.keys]
+        keys = broadcast(
+            *(k.evaluate(df) for k in self.keys), target_length=df.num_rows
+        )
         # TODO: use sorted information, need to expose column_order
         # and null_precedence in pylibcudf groupby constructor
         # sorted = (
@@ -475,8 +513,17 @@ class Join(IR):
         """Evaluate and return a dataframe."""
         left = self.left.evaluate(cache=cache)
         right = self.right.evaluate(cache=cache)
-        left_on = DataFrame([e.evaluate(left) for e in self.left_on])
-        right_on = DataFrame([e.evaluate(right) for e in self.right_on])
+        left_on = DataFrame(
+            broadcast(
+                *(e.evaluate(left) for e in self.left_on), target_length=left.num_rows
+            )
+        )
+        right_on = DataFrame(
+            broadcast(
+                *(e.evaluate(right) for e in self.right_on),
+                target_length=right.num_rows,
+            )
+        )
         how, join_nulls, zlice, suffix, coalesce = self.options
         null_equality = (
             plc.types.NullEquality.EQUAL
@@ -540,7 +587,12 @@ class HStack(IR):
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        return df.with_columns([c.evaluate(df) for c in self.columns])
+        columns = [c.evaluate(df) for c in self.columns]
+        # TODO: a bit of a hack, should inherit the should_broadcast
+        # property of polars' ProjectionOptions on the hstack node.
+        if not any(e.name.startswith("__POLARS_CSER_0x") for e in self.columns):
+            columns = broadcast(*columns, target_length=df.num_rows)
+        return df.with_columns(columns)
 
 
 @dataclass(slots=True)
@@ -653,7 +705,9 @@ class Sort(IR):
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        sort_keys = [k.evaluate(df) for k in self.by]
+        sort_keys = broadcast(
+            *(k.evaluate(df) for k in self.by), target_length=df.num_rows
+        )
         names = {c.name: i for i, c in enumerate(df.columns)}
         # TODO: More robust identification here.
         keys_in_result = [
@@ -709,7 +763,8 @@ class Filter(IR):
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        return df.filter(self.mask.evaluate(df))
+        (mask,) = broadcast(self.mask.evaluate(df), target_length=df.num_rows)
+        return df.filter(mask)
 
 
 @dataclass(slots=True)
@@ -723,7 +778,10 @@ class Projection(IR):
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         # This can reorder things.
-        return df.select(list(self.schema.keys()))
+        columns = broadcast(
+            *df.select(list(self.schema.keys())).columns, target_length=df.num_rows
+        )
+        return DataFrame(columns)
 
 
 @dataclass(slots=True)
