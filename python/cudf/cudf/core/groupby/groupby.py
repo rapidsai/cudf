@@ -2800,15 +2800,13 @@ class _Grouping(Serializable):
         nkeys = len(self._key_columns)
 
         if nkeys == 0:
-            return cudf.core.index.as_index([], name=None)
+            return cudf.Index([], name=None)
         elif nkeys > 1:
             return cudf.MultiIndex._from_data(
                 dict(zip(range(nkeys), self._key_columns))
             )._set_names(self.names)
         else:
-            return cudf.core.index.as_index(
-                self._key_columns[0], name=self.names[0]
-            )
+            return cudf.Index(self._key_columns[0], name=self.names[0])
 
     @property
     def values(self) -> cudf.core.frame.Frame:
