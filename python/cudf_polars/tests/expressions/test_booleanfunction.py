@@ -67,7 +67,7 @@ def test_boolean_function_unary(request, expr, has_nans, has_nulls):
 
     df = pl.LazyFrame({"a": pl.Series(values, dtype=pl.Float32())})
 
-    q = df.select(expr(pl.col("a")))
+    q = df.select(expr(pl.col("a")), expr(pl.col("a")).not_().alias("b"))
 
     assert_gpu_result_equal(q)
 

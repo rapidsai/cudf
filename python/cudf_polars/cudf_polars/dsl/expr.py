@@ -646,6 +646,11 @@ class BooleanFunction(Expr):
         elif self.name == pl_expr.BooleanFunction.IsIn:
             needles, haystack = columns
             return Column(plc.search.contains(haystack.obj, needles.obj))
+        elif self.name == pl_expr.BooleanFunction.Not:
+            (column,) = columns
+            return Column(
+                plc.unary.unary_operation(column.obj, plc.unary.UnaryOperator.NOT)
+            )
         else:
             raise NotImplementedError(
                 f"BooleanFunction {self.name}"
