@@ -8,25 +8,24 @@ import cudf._lib.pylibcudf as plc
 
 
 @pytest.fixture(scope="module")
-def pa_data_col():
-    return pa.array(["a", "c", "A", "aa", None, "aaaaaaaaa", "AAAA", "ÁÁÁÁ"])
-
-
-@pytest.fixture(scope="module")
-def plc_data_col(pa_data_col):
-    return plc.interop.from_arrow(pa_data_col)
+def data_col():
+    pa_data_col = pa.array(
+        ["a", "c", "A", "aa", None, "aaaaaaaaa", "AAAA", "ÁÁÁÁ"],
+        type=pa.string(),
+    )
+    return pa_data_col, plc.interop.from_arrow(pa_data_col)
 
 
 @pytest.fixture(scope="module", params=["a", "c", "A", "Á", "aa", "ÁÁÁ"])
 def scalar_repl_target(request):
     pa_target = pa.scalar(request.param, type=pa.string())
-    return (request.param, plc.interop.from_arrow(pa_target))
+    return request.param, plc.interop.from_arrow(pa_target)
 
 
 @pytest.fixture(scope="module", params=["b", "B", "", "B́"])
 def scalar_repl(request):
     pa_repl = pa.scalar(request.param, type=pa.string())
-    return (request.param, plc.interop.from_arrow(pa_repl))
+    return request.param, plc.interop.from_arrow(pa_repl)
 
 
 @pytest.fixture(
@@ -57,9 +56,8 @@ def col_repl(request):
 
 
 @pytest.mark.parametrize("maxrepl", [-1, 1, 2, 10])
-def test_replace(
-    pa_data_col, plc_data_col, scalar_repl_target, scalar_repl, maxrepl
-):
+def test_replace(data_col, scalar_repl_target, scalar_repl, maxrepl):
+    pa_data_col, plc_data_col = data_col
     pa_target, plc_target = scalar_repl_target
     pa_repl, plc_repl = scalar_repl
     got = plc.strings.replace.replace(
@@ -77,7 +75,8 @@ def test_replace(
 
 
 @pytest.mark.parametrize("startstop", [(0, -1), (0, 0), (1, 3)])
-def test_replace_slice(pa_data_col, plc_data_col, scalar_repl, startstop):
+def test_replace_slice(data_col, scalar_repl, startstop):
+    pa_data_col, plc_data_col = data_col
     pa_repl, plc_repl = scalar_repl
     start, stop = startstop
     got = plc.strings.replace.replace_slice(
@@ -96,7 +95,8 @@ def test_replace_slice(pa_data_col, plc_data_col, scalar_repl, startstop):
     assert_column_eq(expected, got)
 
 
-def test_replace_col(pa_data_col, plc_data_col, col_repl_target, col_repl):
+def test_replace_col(data_col, col_repl_target, col_repl):
+    pa_data_col, plc_data_col = data_col
     pa_target, plc_target = col_repl_target
     pa_repl, plc_repl = col_repl
     got = plc.strings.replace.replace_multiple(
