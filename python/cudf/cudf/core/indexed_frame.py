@@ -622,10 +622,8 @@ class IndexedFrame(Frame):
         )
 
     @_cudf_nvtx_annotate
-    def equals(self, other):  # noqa: D102
-        if not super().equals(other):
-            return False
-        return self.index.equals(other.index)
+    def equals(self, other) -> bool:  # noqa: D102
+        return super().equals(other) and self.index.equals(other.index)
 
     @property
     def index(self):
@@ -890,7 +888,7 @@ class IndexedFrame(Frame):
             ) = _get_replacement_values_for_columns(
                 to_replace=to_replace,
                 value=value,
-                columns_dtype_map=self._dtypes,
+                columns_dtype_map=dict(self._dtypes),
             )
 
             for name, col in self._data.items():
@@ -3637,7 +3635,7 @@ class IndexedFrame(Frame):
         sort: bool = True,
         allow_non_unique: bool = False,
     ) -> Self:
-        index = cudf.core.index.as_index(index)
+        index = cudf.Index(index)
 
         if self.index.equals(index):
             return self
@@ -3712,7 +3710,7 @@ class IndexedFrame(Frame):
                 raise ValueError(
                     "cannot reindex on an axis with duplicate labels"
                 )
-            index = cudf.core.index.as_index(
+            index = cudf.Index(
                 index, name=getattr(index, "name", self.index.name)
             )
 
@@ -4885,10 +4883,10 @@ class IndexedFrame(Frame):
 
     def astype(
         self,
-        dtype,
+        dtype: dict[Any, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
-    ):
+    ) -> Self:
         """Cast the object to the given dtype.
 
         Parameters
@@ -4999,13 +4997,11 @@ class IndexedFrame(Frame):
             raise ValueError("invalid error value specified")
 
         try:
-            data = super().astype(dtype, copy)
+            return super().astype(dtype, copy)
         except Exception as e:
             if errors == "raise":
                 raise e
             return self
-
-        return self._from_data(data, index=self.index)
 
     @_cudf_nvtx_annotate
     def drop(
@@ -6306,11 +6302,11 @@ class IndexedFrame(Frame):
 
         return [
             type(self),
-            str(self._dtypes),
+            str(dict(self._dtypes)),
             *[
-                normalize_token(cat.categories)
-                for cat in self._dtypes.values()
-                if cat == "category"
+                normalize_token(col.dtype.categories)
+                for col in self._columns
+                if col.dtype == "category"
             ],
             normalize_token(self.index),
             normalize_token(self.hash_values().values_host),

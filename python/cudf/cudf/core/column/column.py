@@ -190,10 +190,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def to_pandas(
         self,
         *,
-        index: Optional[pd.Index] = None,
         nullable: bool = False,
         arrow_type: bool = False,
-    ) -> pd.Series:
+    ) -> pd.Index:
         """Convert object to pandas type.
 
         The default implementation falls back to PyArrow for the conversion.
@@ -208,15 +207,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise NotImplementedError(f"{nullable=} is not implemented.")
         pa_array = self.to_arrow()
         if arrow_type:
-            return pd.Series(
-                pd.arrays.ArrowExtensionArray(pa_array), index=index
-            )
+            return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
         else:
-            pd_series = pa_array.to_pandas()
-
-            if index is not None:
-                pd_series.index = index
-            return pd_series
+            return pd.Index(pa_array.to_pandas())
 
     @property
     def values_host(self) -> "np.ndarray":
