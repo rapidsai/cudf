@@ -577,6 +577,9 @@ class StringFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
+        self._validate_input()
+
+    def _validate_input(self):
         if self.name not in (
             pl_expr.StringFunction.Lowercase,
             pl_expr.StringFunction.Uppercase,
@@ -585,6 +588,12 @@ class StringFunction(Expr):
             pl_expr.StringFunction.Contains,
         ):
             raise NotImplementedError(f"String function {self.name}")
+        if self.name == pl_expr.StringFunction.Contains:
+            _, strict = self.options
+            if not strict:
+                raise NotImplementedError("strict=False not supported in contains")
+            if not isinstance(self.children[1], Literal):
+                raise NotImplementedError("contains pattern must be a single scalar")
 
     def do_evaluate(
         self,
@@ -615,20 +624,21 @@ class StringFunction(Expr):
                 plc.strings.find.starts_with(column.obj, suffix.obj), column.name
             )
         elif self.name == pl_expr.StringFunction.Contains:
-            col, substr = columns
-            literal, strict = self.options
-            if not strict:
-                # libcudf always errors if the pattern isn't valid
-                raise NotImplementedError("strict=False not supported in contains")
+            column, pattern = columns
+            literal, _ = self.options
             if literal:
-                return Column(plc.strings.find.contains(col.obj, substr.obj), col.name)
+                return Column(
+                    plc.strings.find.contains(column.obj, pattern.obj), column.name
+                )
             else:
                 # TODO: hack
-                pattern = plc.interop.to_arrow(substr.obj).as_py()
+                pattern = plc.interop.to_arrow(pattern.obj).as_py()
                 prog = plc.strings.regex_program.RegexProgram.create(
                     pattern, flags=plc.strings.regex_flags.RegexFlags.DEFAULT
                 )
-                return Column(plc.strings.contains.contains_re(col.obj, prog), col.name)
+                return Column(
+                    plc.strings.contains.contains_re(column.obj, prog), column.name
+                )
         else:
             raise NotImplementedError(f"StringFunction {self.name}")
 
