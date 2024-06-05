@@ -56,9 +56,9 @@ cdef class SourceInfo:
 
     Parameters
     ----------
-    sources : List[Union[str, bytes, io.BytesIO]]
+    sources : List[Union[str, os.PathLike, bytes, io.BytesIO]]
         A homogeneous list of sources (this can be a string filename,
-        bytes, or an io.BytesIO) to read from.
+        an os.PathLike, bytes, or an io.BytesIO) to read from.
 
         Mixing different types of sources will raise a `ValueError`.
     """
