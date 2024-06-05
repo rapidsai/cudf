@@ -40,7 +40,7 @@ cpdef Column replace(
         String to replace target with.
     maxrepl : size_type, default -1
         Maximum times to replace if target appears multiple times in the input string.
-        Default of -1 specifies replace all occurrences of target in each string.
+        Default of -1 specifies to replace all occurrences of target in each string.
 
     Returns
     -------

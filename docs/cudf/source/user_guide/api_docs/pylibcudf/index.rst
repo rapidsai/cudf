@@ -35,6 +35,6 @@ This page provides API documentation for pylibcudf.
 
 .. toctree::
     :maxdepth: 2
-    :caption: Submodules
+    :caption: Subpackages
 
     strings/index.rst
