@@ -504,7 +504,6 @@ def test_groupby_apply_jit_unary_reductions(
     func, dtype, dataset, groupby_jit_datasets
 ):
     dataset = groupby_jit_datasets[dataset]
-
     groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
 
 
@@ -1259,7 +1258,7 @@ def test_groupby_unsupported_columns():
     pdg = pdf.groupby("x").sum(numeric_only=True)
     # cudf does not yet support numeric_only, so our default is False (unlike
     # pandas, which defaults to inferring and throws a warning about it).
-    gdg = gdf.groupby("x").sum()
+    gdg = gdf.groupby("x").sum(numeric_only=True)
     assert_groupby_results_equal(pdg, gdg)
 
 
@@ -1891,9 +1890,6 @@ def test_groupby_nth(n, by):
     assert_groupby_results_equal(expect, got, check_dtype=False)
 
 
-@pytest.mark.xfail(
-    reason="https://github.com/pandas-dev/pandas/issues/43209",
-)
 def test_raise_data_error():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
     gdf = cudf.from_pandas(pdf)
@@ -1904,12 +1900,13 @@ def test_raise_data_error():
     )
 
 
-def test_drop_unsupported_multi_agg():
+def test_multi_agg():
     gdf = cudf.DataFrame(
         {"a": [1, 1, 2, 2], "b": [1, 2, 3, 4], "c": ["a", "b", "c", "d"]}
     )
+    pdf = gdf.to_pandas()
     assert_groupby_results_equal(
-        gdf.groupby("a").agg(["count", "mean"]),
+        pdf.groupby("a").agg({"b": ["count", "mean"], "c": ["count"]}),
         gdf.groupby("a").agg({"b": ["count", "mean"], "c": ["count"]}),
     )
 
@@ -2158,7 +2155,9 @@ def test_groupby_list_columns_excluded():
     pandas_agg_result = pdf.groupby("a").agg("mean", numeric_only=True)
 
     assert_groupby_results_equal(
-        pandas_result, gdf.groupby("a").mean(), check_dtype=False
+        pandas_result,
+        gdf.groupby("a").mean(numeric_only=True),
+        check_dtype=False,
     )
 
     assert_groupby_results_equal(
@@ -3826,3 +3825,63 @@ def test_groupby_shift_series_multiindex():
     result = ser.groupby(level=0).shift(1)
     expected = ser.to_pandas().groupby(level=0).shift(1)
     assert_eq(expected, result)
+
+
+@pytest.mark.parametrize(
+    "func", ["min", "max", "sum", "mean", "idxmin", "idxmax"]
+)
+@pytest.mark.parametrize(
+    "by,data",
+    [
+        ("a", {"a": [1, 2, 3]}),
+        (["a", "id"], {"id": [0, 0, 1], "a": [1, 2, 3]}),
+        ("a", {"a": [1, 2, 3], "b": ["A", "B", "C"]}),
+        ("id", {"id": [0, 0, 1], "a": [1, 2, 3], "b": ["A", "B", "C"]}),
+        (["b", "id"], {"id": [0, 0, 1], "b": ["A", "B", "C"]}),
+        ("b", {"b": ["A", "B", "C"]}),
+    ],
+)
+def test_group_by_reduce_numeric_only(by, data, func):
+    # Test that simple groupby reductions support numeric_only=True
+    df = cudf.DataFrame(data)
+    expected = getattr(df.to_pandas().groupby(by, sort=True), func)(
+        numeric_only=True
+    )
+    result = getattr(df.groupby(by, sort=True), func)(numeric_only=True)
+    assert_eq(expected, result)
+
+
+@pytest.mark.parametrize(
+    "op", ["cummax", "cummin", "cumprod", "cumsum", "mean", "median"]
+)
+def test_group_by_raises_string_error(op):
+    df = cudf.DataFrame({"a": [1, 2, 3, 4, 5], "b": ["a", "b", "c", "d", "e"]})
+
+    with pytest.raises(TypeError):
+        df.groupby(df.a).agg(op)
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        "cummax",
+        "cummin",
+        "cumprod",
+        "cumsum",
+        "mean",
+        "median",
+        "prod",
+        "sum",
+        list,
+    ],
+)
+def test_group_by_raises_category_error(op):
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5],
+            "b": cudf.Series(["a", "b", "c", "d", "e"], dtype="category"),
+        }
+    )
+
+    with pytest.raises(TypeError):
+        df.groupby(df.a).agg(op)

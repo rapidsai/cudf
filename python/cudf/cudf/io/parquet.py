@@ -63,11 +63,16 @@ def _write_parquet(
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,
+    max_dictionary_size=None,
     partitions_info=None,
     storage_options=None,
     force_nullable_schema=False,
     header_version="1.0",
     use_dictionary=True,
+    skip_compression=None,
+    column_encoding=None,
+    column_type_length=None,
+    output_as_binary=None,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -96,10 +101,15 @@ def _write_parquet(
         "row_group_size_rows": row_group_size_rows,
         "max_page_size_bytes": max_page_size_bytes,
         "max_page_size_rows": max_page_size_rows,
+        "max_dictionary_size": max_dictionary_size,
         "partitions_info": partitions_info,
         "force_nullable_schema": force_nullable_schema,
         "header_version": header_version,
         "use_dictionary": use_dictionary,
+        "skip_compression": skip_compression,
+        "column_encoding": column_encoding,
+        "column_type_length": column_type_length,
+        "output_as_binary": output_as_binary,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -138,6 +148,12 @@ def write_to_dataset(
     max_page_size_rows=None,
     storage_options=None,
     force_nullable_schema=False,
+    header_version="1.0",
+    use_dictionary=True,
+    skip_compression=None,
+    column_encoding=None,
+    column_type_length=None,
+    output_as_binary=None,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -202,6 +218,30 @@ def write_to_dataset(
         If True, writes all columns as `null` in schema.
         If False, columns are written as `null` if they contain null values,
         otherwise as `not null`.
+    header_version : {{'1.0', '2.0'}}, default "1.0"
+        Controls whether to use version 1.0 or version 2.0 page headers when
+        encoding. Version 1.0 is more portable, but version 2.0 enables the
+        use of newer encoding schemes.
+    force_nullable_schema : bool, default False.
+        If True, writes all columns as `null` in schema.
+        If False, columns are written as `null` if they contain null values,
+        otherwise as `not null`.
+    skip_compression : set, optional, default None
+        If a column name is present in the set, that column will not be compressed,
+        regardless of the ``compression`` setting.
+    column_encoding : dict, optional, default None
+        Sets the page encoding to use on a per-column basis. The key is a column
+        name, and the value is one of: 'PLAIN', 'DICTIONARY', 'DELTA_BINARY_PACKED',
+        'DELTA_LENGTH_BYTE_ARRAY', 'DELTA_BYTE_ARRAY', 'BYTE_STREAM_SPLIT', or
+        'USE_DEFAULT'.
+    column_type_length : dict, optional, default None
+        Specifies the width in bytes of ``FIXED_LEN_BYTE_ARRAY`` column elements.
+        The key is a column name and the value is an integer. The named column
+        will be output as unannotated binary (i.e. the column will behave as if
+        ``output_as_binary`` was set).
+    output_as_binary : set, optional, default None
+        If a column name is present in the set, that column will be output as
+        unannotated binary, rather than the default 'UTF-8'.
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
@@ -239,6 +279,12 @@ def write_to_dataset(
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
             force_nullable_schema=force_nullable_schema,
+            header_version=header_version,
+            use_dictionary=use_dictionary,
+            skip_compression=skip_compression,
+            column_encoding=column_encoding,
+            column_type_length=column_type_length,
+            output_as_binary=output_as_binary,
         )
 
     else:
@@ -260,6 +306,12 @@ def write_to_dataset(
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
             force_nullable_schema=force_nullable_schema,
+            header_version=header_version,
+            use_dictionary=use_dictionary,
+            skip_compression=skip_compression,
+            column_encoding=column_encoding,
+            column_type_length=column_type_length,
+            output_as_binary=output_as_binary,
         )
 
     return metadata
@@ -267,17 +319,45 @@ def write_to_dataset(
 
 @ioutils.doc_read_parquet_metadata()
 @_cudf_nvtx_annotate
-def read_parquet_metadata(path):
+def read_parquet_metadata(filepath_or_buffer):
     """{docstring}"""
-    import pyarrow.parquet as pq
+    # Multiple sources are passed as a list. If a single source is passed,
+    # wrap it in a list for unified processing downstream.
+    if not is_list_like(filepath_or_buffer):
+        filepath_or_buffer = [filepath_or_buffer]
 
-    pq_file = pq.ParquetFile(path)
+    # Start by trying to construct a filesystem object
+    fs, paths = ioutils._get_filesystem_and_paths(
+        path_or_data=filepath_or_buffer, storage_options=None
+    )
 
-    num_rows = pq_file.metadata.num_rows
-    num_row_groups = pq_file.num_row_groups
-    col_names = pq_file.schema.names
+    # Check if filepath or buffer
+    filepath_or_buffer = paths if paths else filepath_or_buffer
 
-    return num_rows, num_row_groups, col_names
+    # List of filepaths or buffers
+    filepaths_or_buffers = []
+
+    for source in filepath_or_buffer:
+        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
+            path_or_data=source,
+            compression=None,
+            fs=fs,
+            use_python_file_object=True,
+            open_file_options=None,
+            storage_options=None,
+            bytes_per_thread=None,
+        )
+
+        if compression is not None:
+            raise ValueError(
+                "URL content-encoding decompression is not supported"
+            )
+        if isinstance(tmp_source, list):
+            filepath_or_buffer.extend(tmp_source)
+        else:
+            filepaths_or_buffers.append(tmp_source)
+
+    return libparquet.read_parquet_metadata(filepaths_or_buffers)
 
 
 @_cudf_nvtx_annotate
@@ -870,11 +950,16 @@ def to_parquet(
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,
+    max_dictionary_size=None,
     storage_options=None,
     return_metadata=False,
     force_nullable_schema=False,
     header_version="1.0",
     use_dictionary=True,
+    skip_compression=None,
+    column_encoding=None,
+    column_type_length=None,
+    output_as_binary=None,
     *args,
     **kwargs,
 ):
@@ -924,6 +1009,12 @@ def to_parquet(
                 return_metadata=return_metadata,
                 storage_options=storage_options,
                 force_nullable_schema=force_nullable_schema,
+                header_version=header_version,
+                use_dictionary=use_dictionary,
+                skip_compression=skip_compression,
+                column_encoding=column_encoding,
+                column_type_length=column_type_length,
+                output_as_binary=output_as_binary,
             )
 
         partition_info = (
@@ -946,11 +1037,16 @@ def to_parquet(
             row_group_size_rows=row_group_size_rows,
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
+            max_dictionary_size=max_dictionary_size,
             partitions_info=partition_info,
             storage_options=storage_options,
             force_nullable_schema=force_nullable_schema,
             header_version=header_version,
             use_dictionary=use_dictionary,
+            skip_compression=skip_compression,
+            column_encoding=column_encoding,
+            column_type_length=column_type_length,
+            output_as_binary=output_as_binary,
         )
 
     else:
@@ -965,15 +1061,10 @@ def to_parquet(
         if index is None:
             index = True
 
-        # Convert partition_file_name to a call back
-        if partition_file_name:
-            partition_file_name = lambda x: partition_file_name  # noqa: E731
-
         pa_table = df.to_arrow(preserve_index=index)
         return pq.write_to_dataset(
             pa_table,
             root_path=path,
-            partition_filename_cb=partition_file_name,
             partition_cols=partition_cols,
             *args,
             **kwargs,
@@ -1220,9 +1311,9 @@ class ParquetDatasetWriter:
     ) -> None:
         if isinstance(path, str) and path.startswith("s3://"):
             self.fs_meta = {"is_s3": True, "actual_path": path}
-            self.dir_: Optional[
-                tempfile.TemporaryDirectory
-            ] = tempfile.TemporaryDirectory()
+            self.dir_: Optional[tempfile.TemporaryDirectory] = (
+                tempfile.TemporaryDirectory()
+            )
             self.path = self.dir_.name
         else:
             self.fs_meta = {}

@@ -19,6 +19,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -33,7 +34,7 @@ std::unique_ptr<cudf::column> make_structs_column(
   size_type null_count,
   rmm::device_buffer&& null_mask,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(null_count <= 0 || !null_mask.is_empty(),
                "Struct column with nulls must be nullable.");

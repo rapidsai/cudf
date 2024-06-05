@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import itertools
 from contextlib import ExitStack as does_not_raise
@@ -201,12 +201,7 @@ def test_to_dlpack_mixed_dtypes():
     "shape",
     [
         (0, 3),
-        pytest.param(
-            (3, 0),
-            marks=pytest.mark.xfail(
-                reason="Index information not available via from_dlpack"
-            ),
-        ),
+        (3, 0),
         (0, 0),
     ],
 )

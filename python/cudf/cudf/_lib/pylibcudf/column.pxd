@@ -3,9 +3,12 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
-from cudf._lib.cpp.types cimport bitmask_type, size_type
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport (
+    column_view,
+    mutable_column_view,
+)
+from cudf._lib.pylibcudf.libcudf.types cimport bitmask_type, size_type
 
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
@@ -43,6 +46,7 @@ cdef class Column:
     cpdef gpumemoryview data(self)
     cpdef gpumemoryview null_mask(self)
     cpdef list children(self)
+    cpdef Column copy(self)
 
     cpdef ListColumnView list_view(self)
 

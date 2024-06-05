@@ -29,8 +29,12 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/filling.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
+
+#include <thrust/iterator/constant_iterator.h>
 
 #include <numeric>
 #include <stdexcept>
@@ -164,37 +168,6 @@ TEST_F(StringColumnTest, ConcatenateColumnView)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringColumnTest, ConcatenateColumnViewLarge)
-{
-  // Test large concatenate, causes out of bound device memory errors if kernel
-  // indexing is not int64_t.
-  // 1.5GB bytes, 5k columns
-  constexpr size_t num_strings        = 10000;
-  constexpr size_t string_length      = 150000;
-  constexpr size_t strings_per_column = 2;
-  constexpr size_t num_columns        = num_strings / strings_per_column;
-
-  std::vector<std::string> strings;
-  std::vector<char const*> h_strings;
-  std::vector<cudf::test::strings_column_wrapper> strings_column_wrappers;
-  std::vector<cudf::column_view> strings_columns;
-
-  std::string s(string_length, 'a');
-  for (size_t i = 0; i < num_strings; ++i)
-    h_strings.push_back(s.data());
-
-  for (size_t i = 0; i < num_columns; ++i)
-    strings_column_wrappers.push_back(cudf::test::strings_column_wrapper(
-      h_strings.data() + i * strings_per_column, h_strings.data() + (i + 1) * strings_per_column));
-  for (auto& wrapper : strings_column_wrappers)
-    strings_columns.push_back(wrapper);
-
-  auto results = cudf::concatenate(strings_columns);
-
-  cudf::test::strings_column_wrapper expected(h_strings.begin(), h_strings.end());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-}
-
 TEST_F(StringColumnTest, ConcatenateManyColumns)
 {
   std::vector<char const*> h_strings{
@@ -216,6 +189,8 @@ TEST_F(StringColumnTest, ConcatenateManyColumns)
 
 TEST_F(StringColumnTest, ConcatenateTooLarge)
 {
+  if (cudf::strings::detail::is_large_strings_enabled()) { return; }
+
   std::string big_str(1000000, 'a');  // 1 million bytes x 5 = 5 million bytes
   cudf::test::strings_column_wrapper input{big_str, big_str, big_str, big_str, big_str};
   std::vector<cudf::column_view> input_cols;
@@ -402,7 +377,7 @@ TEST_F(OverflowTest, OverflowTest)
   }
 
   // string column, overflow on chars
-  {
+  if (!cudf::strings::detail::is_large_strings_enabled()) {
     constexpr auto size = static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     // try and concatenate 6 string columns of with 1 billion chars in each
@@ -525,7 +500,7 @@ TEST_F(OverflowTest, Presliced)
   }
 
   // strings, overflow on chars
-  {
+  if (!cudf::strings::detail::is_large_strings_enabled()) {
     constexpr cudf::size_type total_chars_size = 1024 * 1024 * 1024;
     constexpr cudf::size_type string_size      = 64;
     constexpr cudf::size_type num_rows         = total_chars_size / string_size;
@@ -1255,7 +1230,7 @@ TEST_F(ListsColumnTest, ConcatenateMismatchedHierarchies)
     cudf::test::lists_column_wrapper<int> b{{{LCW{}}}};
     cudf::test::lists_column_wrapper<int> c{{LCW{}}};
 
-    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b, c})), cudf::logic_error);
+    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b, c})), cudf::data_type_error);
   }
 
   {
@@ -1264,7 +1239,7 @@ TEST_F(ListsColumnTest, ConcatenateMismatchedHierarchies)
     cudf::test::lists_column_wrapper<int> b{{{LCW{}}}};
     cudf::test::lists_column_wrapper<int> c{{LCW{}}};
 
-    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b, c})), cudf::logic_error);
+    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b, c})), cudf::data_type_error);
   }
 
   {
@@ -1272,14 +1247,14 @@ TEST_F(ListsColumnTest, ConcatenateMismatchedHierarchies)
     cudf::test::lists_column_wrapper<int> b{1, 2, 3};
     cudf::test::lists_column_wrapper<int> c{{3, 4, 5}};
 
-    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b, c})), cudf::logic_error);
+    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b, c})), cudf::data_type_error);
   }
 
   {
     cudf::test::lists_column_wrapper<int> a{{{1, 2, 3}}};
     cudf::test::lists_column_wrapper<int> b{{4, 5}};
 
-    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b})), cudf::logic_error);
+    EXPECT_THROW(cudf::concatenate(std::vector<column_view>({a, b})), cudf::data_type_error);
   }
 }
 
@@ -1634,7 +1609,7 @@ TEST_F(FixedPointTest, FixedPointScaleMismatch)
   auto const b = fp_wrapper(vec.begin() + 300, vec.begin() + 700, scale_type{-2});
   auto const c = fp_wrapper(vec.begin() + 700, vec.end(), /*****/ scale_type{-3});
 
-  EXPECT_THROW(cudf::concatenate(std::vector<cudf::column_view>{a, b, c}), cudf::logic_error);
+  EXPECT_THROW(cudf::concatenate(std::vector<cudf::column_view>{a, b, c}), cudf::data_type_error);
 }
 
 struct DictionaryConcatTest : public cudf::test::BaseFixture {};
@@ -1679,7 +1654,7 @@ TEST_F(DictionaryConcatTest, ErrorsTest)
   cudf::test::fixed_width_column_wrapper<int32_t> integers({10, 30, 20});
   auto dictionary2 = cudf::dictionary::encode(integers);
   std::vector<cudf::column_view> views({dictionary1->view(), dictionary2->view()});
-  EXPECT_THROW(cudf::concatenate(views), cudf::logic_error);
+  EXPECT_THROW(cudf::concatenate(views), cudf::data_type_error);
   std::vector<cudf::column_view> empty;
   EXPECT_THROW(cudf::concatenate(empty), cudf::logic_error);
 }

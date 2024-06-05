@@ -17,9 +17,9 @@
 #pragma once
 
 #ifdef CUFILE_FOUND
-#include "thread_pool.hpp"
-
 #include <cudf_test/file_utilities.hpp>
+
+#include <cudf/utilities/thread_pool.hpp>
 
 #include <cufile.h>
 #endif
@@ -36,6 +36,9 @@ namespace io {
 namespace detail {
 
 [[noreturn]] void throw_on_file_open_failure(std::string const& filepath, bool is_create);
+
+// Call before any cuFile API calls to ensure the CUDA context is initialized.
+void force_init_cuda_context();
 
 /**
  * @brief Class that provides RAII for file handling.

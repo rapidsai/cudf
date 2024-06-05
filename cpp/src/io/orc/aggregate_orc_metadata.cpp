@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "aggregate_orc_metadata.hpp"
+#include "io/orc/aggregate_orc_metadata.hpp"
 
 #include "io/utilities/row_selection.hpp"
 
@@ -152,22 +152,28 @@ aggregate_orc_metadata::aggregate_orc_metadata(
   }
 }
 
-std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>>
+std::tuple<int64_t, int64_t, std::vector<metadata::orc_stripe_info>>
 aggregate_orc_metadata::select_stripes(
   std::vector<std::vector<size_type>> const& user_specified_stripes,
   int64_t skip_rows,
-  std::optional<size_type> const& num_rows,
+  std::optional<size_type> const& num_read_rows,
   rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS((skip_rows == 0 and not num_rows.has_value()) or user_specified_stripes.empty(),
+  CUDF_EXPECTS((skip_rows == 0 and not num_read_rows.has_value()) or user_specified_stripes.empty(),
                "Can't use both the row selection and the stripe selection");
 
   auto [rows_to_skip, rows_to_read] = [&]() {
-    if (not user_specified_stripes.empty()) { return std::pair<int64_t, size_type>{0, 0}; }
-    return cudf::io::detail::skip_rows_num_rows_from_options(skip_rows, num_rows, get_num_rows());
+    if (not user_specified_stripes.empty()) { return std::pair<int64_t, int64_t>{0, 0}; }
+    return cudf::io::detail::skip_rows_num_rows_from_options(
+      skip_rows, num_read_rows, get_num_rows());
   }();
 
-  std::vector<metadata::stripe_source_mapping> selected_stripes_mapping;
+  struct stripe_source_mapping {
+    int source_idx;
+    std::vector<metadata::orc_stripe_info> stripe_info;
+  };
+
+  std::vector<stripe_source_mapping> selected_stripes_mapping;
 
   if (!user_specified_stripes.empty()) {
     CUDF_EXPECTS(user_specified_stripes.size() == per_file_metadata.size(),
@@ -176,7 +182,8 @@ aggregate_orc_metadata::select_stripes(
     // Each vector entry represents a source file; each nested vector represents the
     // user_defined_stripes to get from that source file
     for (size_t src_file_idx = 0; src_file_idx < user_specified_stripes.size(); ++src_file_idx) {
-      std::vector<OrcStripeInfo> stripe_infos;
+      std::vector<metadata::orc_stripe_info> stripe_infos;
+      stripe_infos.reserve(user_specified_stripes[src_file_idx].size());
 
       // Coalesce stripe info at the source file later since that makes downstream processing much
       // easier in impl::read
@@ -185,38 +192,57 @@ aggregate_orc_metadata::select_stripes(
           stripe_idx >= 0 and stripe_idx < static_cast<decltype(stripe_idx)>(
                                              per_file_metadata[src_file_idx].ff.stripes.size()),
           "Invalid stripe index");
-        stripe_infos.push_back(
-          std::pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
-        rows_to_read += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
+        stripe_infos.push_back({&per_file_metadata[src_file_idx].ff.stripes[stripe_idx],
+                                nullptr,
+                                static_cast<int>(src_file_idx)});
+
+        auto const stripe_rows =
+          per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
+        CUDF_EXPECTS(stripe_rows < static_cast<uint64_t>(std::numeric_limits<size_type>::max()),
+                     "The number of rows in one stripe exceeds the column size limit.",
+                     std::overflow_error);
+        rows_to_read += static_cast<int64_t>(stripe_rows);
       }
-      selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
+      selected_stripes_mapping.emplace_back(
+        stripe_source_mapping{static_cast<int>(src_file_idx), std::move(stripe_infos)});
     }
   } else {
     int64_t count            = 0;
     int64_t stripe_skip_rows = 0;
-    // Iterate all source files, each source file has corelating metadata
+    // Iterate all source files, each source file has correlating metadata
     for (size_t src_file_idx = 0;
          src_file_idx < per_file_metadata.size() && count < rows_to_skip + rows_to_read;
          ++src_file_idx) {
-      std::vector<OrcStripeInfo> stripe_infos;
+      std::vector<metadata::orc_stripe_info> stripe_infos;
+      stripe_infos.reserve(per_file_metadata[src_file_idx].ff.stripes.size());
 
       for (size_t stripe_idx = 0; stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size() &&
                                   count < rows_to_skip + rows_to_read;
            ++stripe_idx) {
-        count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
+        auto const stripe_rows =
+          per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
+        CUDF_EXPECTS(stripe_rows < static_cast<uint64_t>(std::numeric_limits<size_type>::max()),
+                     "The number of rows in one stripe exceeds the column size limit.",
+                     std::overflow_error);
+        count += static_cast<int64_t>(stripe_rows);
+
         if (count > rows_to_skip || count == 0) {
-          stripe_infos.push_back(
-            std::pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
+          stripe_infos.push_back({&per_file_metadata[src_file_idx].ff.stripes[stripe_idx],
+                                  nullptr,
+                                  static_cast<int>(src_file_idx)});
         } else {
           stripe_skip_rows = count;
         }
       }
 
-      selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
+      selected_stripes_mapping.emplace_back(
+        stripe_source_mapping{static_cast<int>(src_file_idx), std::move(stripe_infos)});
     }
     // Need to remove skipped rows from the stripes which are not selected.
     rows_to_skip -= stripe_skip_rows;
   }
+
+  std::vector<metadata::orc_stripe_info> output;
 
   // Read each stripe's stripefooter metadata
   for (auto& mapping : selected_stripes_mapping) {
@@ -224,7 +250,7 @@ aggregate_orc_metadata::select_stripes(
     per_file_metadata[mapping.source_idx].stripefooters.resize(mapping.stripe_info.size());
 
     for (size_t i = 0; i < mapping.stripe_info.size(); i++) {
-      auto const stripe         = mapping.stripe_info[i].first;
+      auto const stripe         = mapping.stripe_info[i].stripe_info;
       auto const sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
       auto const sf_comp_length = stripe->footerLength;
       CUDF_EXPECTS(
@@ -236,12 +262,17 @@ aggregate_orc_metadata::select_stripes(
         {buffer->data(), buffer->size()}, stream);
       ProtobufReader(sf_data.data(), sf_data.size())
         .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
-      mapping.stripe_info[i].second = &per_file_metadata[mapping.source_idx].stripefooters[i];
+      mapping.stripe_info[i].stripe_footer =
+        &per_file_metadata[mapping.source_idx].stripefooters[i];
       if (stripe->indexLength == 0) { row_grp_idx_present = false; }
     }
+
+    output.insert(output.end(),
+                  std::make_move_iterator(mapping.stripe_info.begin()),
+                  std::make_move_iterator(mapping.stripe_info.end()));
   }
 
-  return {rows_to_skip, rows_to_read, selected_stripes_mapping};
+  return {rows_to_skip, rows_to_read, std::move(output)};
 }
 
 column_hierarchy aggregate_orc_metadata::select_columns(

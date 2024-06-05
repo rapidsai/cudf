@@ -31,8 +31,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/functional.h>
 #include <thrust/transform_reduce.h>
@@ -782,7 +784,8 @@ template <typename SymbolT>
 struct to_string_view_pair {
   SymbolT const* data;
   to_string_view_pair(SymbolT const* _data) : data(_data) {}
-  __device__ auto operator()(thrust::tuple<size_type, size_type> ip)
+  __device__ thrust::pair<char const*, std::size_t> operator()(
+    thrust::tuple<size_type, size_type> ip)
   {
     return thrust::pair<char const*, std::size_t>{data + thrust::get<0>(ip),
                                                   static_cast<std::size_t>(thrust::get<1>(ip))};
@@ -796,7 +799,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
                                             rmm::device_scalar<size_type>& d_null_count,
                                             cudf::io::parse_options_view const& options,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   //  CUDF_FUNC_RANGE();
 
@@ -804,7 +807,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
     rmm::exec_policy(stream),
     str_tuples,
     str_tuples + col_size,
-    [] __device__(auto t) { return t.second; },
+    cuda::proclaim_return_type<std::size_t>([] __device__(auto t) { return t.second; }),
     size_type{0},
     thrust::maximum<size_type>{});
 
@@ -914,7 +917,7 @@ std::unique_ptr<column> parse_data(
   size_type null_count,
   cudf::io::parse_options_view const& options,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 

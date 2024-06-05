@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "compact_protocol_reader.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/utilities/config_utils.hpp"
 #include "io/utilities/time_utils.cuh"
@@ -101,7 +102,7 @@ void print_cumulative_page_info(device_span<PageInfo const> d_pages,
       printf("\tP %s: {%lu, %lu, %lu}\n",
              is_list ? "(L)" : "",
              pidx,
-             c_info[pidx].row_index,
+             c_info[pidx].end_row_index,
              c_info[pidx].size_bytes);
     }
   }
@@ -121,16 +122,17 @@ void print_cumulative_row_info(host_span<cumulative_page_info const> sizes,
   printf("------------\nCumulative sizes %s (index, row_index, size_bytes, page_key)\n",
          label.c_str());
   for (size_t idx = 0; idx < sizes.size(); idx++) {
-    printf("{%lu, %lu, %lu, %d}", idx, sizes[idx].row_index, sizes[idx].size_bytes, sizes[idx].key);
+    printf(
+      "{%lu, %lu, %lu, %d}", idx, sizes[idx].end_row_index, sizes[idx].size_bytes, sizes[idx].key);
     if (splits.has_value()) {
       // if we have a split at this row count and this is the last instance of this row count
       auto start             = thrust::make_transform_iterator(splits->begin(),
                                                    [](row_range const& i) { return i.skip_rows; });
       auto end               = start + splits->size();
-      auto split             = std::find(start, end, sizes[idx].row_index);
+      auto split             = std::find(start, end, sizes[idx].end_row_index);
       auto const split_index = [&]() -> int {
-        if (split != end &&
-            ((idx == sizes.size() - 1) || (sizes[idx + 1].row_index > sizes[idx].row_index))) {
+        if (split != end && ((idx == sizes.size() - 1) ||
+                             (sizes[idx + 1].end_row_index > sizes[idx].end_row_index))) {
           return static_cast<int>(std::distance(start, split));
         }
         return idx == 0 ? 0 : -1;
@@ -259,8 +261,9 @@ struct set_row_index {
     auto const& page          = pages[i];
     auto const& chunk         = chunks[page.chunk_idx];
     size_t const page_end_row = chunk.start_row + page.chunk_row + page.num_rows;
-    // if we have been passed in a cap, apply it
-    c_info[i].end_row_index = max_row > 0 ? min(max_row, page_end_row) : page_end_row;
+    // this cap is necessary because in the chunked reader, we use estimations for the row
+    // counts for list columns, which can result in values > than the absolute number of rows.
+    c_info[i].end_row_index = min(max_row, page_end_row);
   }
 };
 
@@ -364,33 +367,28 @@ int64_t find_next_split(int64_t cur_pos,
 /**
  * @brief Converts cuDF units to Parquet units.
  *
- * @return A tuple of Parquet type width, Parquet clock rate and Parquet decimal type.
+ * @return A tuple of Parquet clock rate and Parquet decimal type.
  */
-[[nodiscard]] std::tuple<int32_t, int32_t, int8_t> conversion_info(
+[[nodiscard]] std::tuple<int32_t, thrust::optional<LogicalType>> conversion_info(
   type_id column_type_id,
   type_id timestamp_type_id,
   Type physical,
-  thrust::optional<ConvertedType> converted,
-  int32_t length)
+  thrust::optional<LogicalType> logical_type)
 {
-  int32_t type_width = (physical == FIXED_LEN_BYTE_ARRAY) ? length : 0;
-  int32_t clock_rate = 0;
-  if (column_type_id == type_id::INT8 or column_type_id == type_id::UINT8) {
-    type_width = 1;  // I32 -> I8
-  } else if (column_type_id == type_id::INT16 or column_type_id == type_id::UINT16) {
-    type_width = 2;  // I32 -> I16
-  } else if (column_type_id == type_id::INT32) {
-    type_width = 4;  // str -> hash32
-  } else if (is_chrono(data_type{column_type_id})) {
-    clock_rate = to_clockrate(timestamp_type_id);
+  int32_t const clock_rate =
+    is_chrono(data_type{column_type_id}) ? to_clockrate(timestamp_type_id) : 0;
+
+  // TODO(ets): this is leftover from the original code, but will we ever output decimal as
+  // anything but fixed point?
+  if (logical_type.has_value() and logical_type->type == LogicalType::DECIMAL) {
+    // if decimal but not outputting as float or decimal, then convert to no logical type
+    if (column_type_id != type_id::FLOAT64 and
+        not cudf::is_fixed_point(data_type{column_type_id})) {
+      return std::make_tuple(clock_rate, thrust::nullopt);
+    }
   }
 
-  int8_t converted_type = converted.value_or(UNKNOWN);
-  if (converted_type == DECIMAL && column_type_id != type_id::FLOAT64 &&
-      not cudf::is_fixed_point(data_type{column_type_id})) {
-    converted_type = UNKNOWN;  // Not converting to float64 or decimal
-  }
-  return std::make_tuple(type_width, clock_rate, converted_type);
+  return std::make_tuple(clock_rate, std::move(logical_type));
 }
 
 /**
@@ -466,6 +464,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                                                      thrust::make_discard_iterator(),
                                                      key_offsets.begin())
                                  .second;
+
   size_t const num_unique_keys = key_offsets_end - key_offsets.begin();
   thrust::exclusive_scan(
     rmm::exec_policy_nosync(stream), key_offsets.begin(), key_offsets.end(), key_offsets.begin());
@@ -1149,12 +1148,12 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
 
 }  // anonymous namespace
 
-void reader::impl::handle_chunking(bool uses_custom_row_bounds)
+void reader::impl::handle_chunking(read_mode mode)
 {
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
     // setup the next pass
-    setup_next_pass(uses_custom_row_bounds);
+    setup_next_pass(mode);
   }
 
   auto& pass = *_pass_itm_data;
@@ -1182,15 +1181,15 @@ void reader::impl::handle_chunking(bool uses_custom_row_bounds)
       if (_file_itm_data._current_input_pass == _file_itm_data.num_passes()) { return; }
 
       // setup the next pass
-      setup_next_pass(uses_custom_row_bounds);
+      setup_next_pass(mode);
     }
   }
 
   // setup the next sub pass
-  setup_next_subpass(uses_custom_row_bounds);
+  setup_next_subpass(mode);
 }
 
-void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
+void reader::impl::setup_next_pass(read_mode mode)
 {
   auto const num_passes = _file_itm_data.num_passes();
 
@@ -1261,7 +1260,7 @@ void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
     detect_malformed_pages(
       pass.pages,
       pass.chunks,
-      uses_custom_row_bounds ? std::nullopt : std::make_optional(pass.num_rows),
+      uses_custom_row_bounds(mode) ? std::nullopt : std::make_optional(pass.num_rows),
       _stream);
 
     // decompress dictionary data if applicable.
@@ -1297,10 +1296,12 @@ void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
     printf("\tnum_rows: %'lu\n", pass.num_rows);
     printf("\tbase mem usage: %'lu\n", pass.base_mem_size);
     auto const num_columns = _input_columns.size();
+    std::vector<size_type> h_page_offsets =
+      cudf::detail::make_std_vector_sync(pass.page_offsets, _stream);
     for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
       printf("\t\tColumn %'lu: num_pages(%'d)\n",
              c_idx,
-             pass.page_offsets[c_idx + 1] - pass.page_offsets[c_idx]);
+             h_page_offsets[c_idx + 1] - h_page_offsets[c_idx]);
     }
 #endif
 
@@ -1308,7 +1309,7 @@ void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
   }
 }
 
-void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
+void reader::impl::setup_next_subpass(read_mode mode)
 {
   auto& pass    = *_pass_itm_data;
   pass.subpass  = std::make_unique<subpass_intermediate_data>();
@@ -1367,11 +1368,12 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
     // can be considerable.
     include_decompression_scratch_size(pass.chunks, pass.pages, c_info, _stream);
 
-    auto iter = thrust::make_counting_iterator(0);
+    auto iter               = thrust::make_counting_iterator(0);
+    auto const pass_max_row = pass.skip_rows + pass.num_rows;
     thrust::for_each(rmm::exec_policy_nosync(_stream),
                      iter,
                      iter + pass.pages.size(),
-                     set_row_index{pass.chunks, pass.pages, c_info, 0});
+                     set_row_index{pass.chunks, pass.pages, c_info, pass_max_row});
     // print_cumulative_page_info(pass.pages, pass.chunks, c_info, _stream);
 
     // get the next batch of pages
@@ -1442,7 +1444,7 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
 
   // preprocess pages (computes row counts for lists, computes output chunks and computes
   // the actual row counts we will be able load out of this subpass)
-  preprocess_subpass_pages(uses_custom_row_bounds, _output_chunk_read_limit);
+  preprocess_subpass_pages(mode, _output_chunk_read_limit);
 
 #if defined(PARQUET_CHUNK_LOGGING)
   printf("\tSubpass: skip_rows(%'lu), num_rows(%'lu), remaining read limit(%'lu)\n",
@@ -1453,11 +1455,12 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
   printf("\t\tTotal expected usage: %'lu\n",
          total_expected_size == 0 ? subpass.decomp_page_data.size() + pass.base_mem_size
                                   : total_expected_size + pass.base_mem_size);
+  std::vector<page_span> h_page_indices = cudf::detail::make_std_vector_sync(page_indices, _stream);
   for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
     printf("\t\tColumn %'lu: pages(%'lu - %'lu)\n",
            c_idx,
-           page_indices[c_idx].start,
-           page_indices[c_idx].end);
+           h_page_indices[c_idx].start,
+           h_page_indices[c_idx].end);
   }
   printf("\t\tOutput chunks:\n");
   for (size_t idx = 0; idx < subpass.output_chunk_read_info.size(); idx++) {
@@ -1515,12 +1518,11 @@ void reader::impl::create_global_chunk_info()
       auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
       auto& schema   = _metadata->get_schema(col.schema_idx);
 
-      auto [type_width, clock_rate, converted_type] =
-        conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
-                        _timestamp_type.id(),
+      auto [clock_rate, logical_type] =
+        conversion_info(to_type_id(schema, _strings_to_categorical, _options.timestamp_type.id()),
+                        _options.timestamp_type.id(),
                         schema.type,
-                        schema.converted_type,
-                        schema.type_length);
+                        schema.logical_type);
 
       // for lists, estimate the number of bytes per row. this is used by the subpass reader to
       // determine where to split the decompression boundaries
@@ -1538,7 +1540,7 @@ void reader::impl::create_global_chunk_info()
                                        nullptr,
                                        col_meta.num_values,
                                        schema.type,
-                                       type_width,
+                                       schema.type_length,
                                        row_group_start,
                                        row_group_rows,
                                        schema.max_definition_level,
@@ -1547,14 +1549,13 @@ void reader::impl::create_global_chunk_info()
                                        required_bits(schema.max_definition_level),
                                        required_bits(schema.max_repetition_level),
                                        col_meta.codec,
-                                       converted_type,
-                                       schema.logical_type,
-                                       schema.decimal_precision,
+                                       logical_type,
                                        clock_rate,
                                        i,
                                        col.schema_idx,
                                        chunk_info,
-                                       list_bytes_per_row_est));
+                                       list_bytes_per_row_est,
+                                       schema.type == BYTE_ARRAY and _strings_to_categorical));
     }
 
     remaining_rows -= row_group_rows;

@@ -23,6 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
 
@@ -297,9 +298,9 @@ struct TransduceToNormalizedWS {
 
 namespace detail {
 
-rmm::device_uvector<SymbolT> normalize_single_quotes(rmm::device_uvector<SymbolT>&& inbuf,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource* mr)
+void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<SymbolT>>& indata,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr)
 {
   auto parser = fst::detail::make_fst(
     fst::detail::make_symbol_group_lut(normalize_quotes::qna_sgs),
@@ -307,10 +308,10 @@ rmm::device_uvector<SymbolT> normalize_single_quotes(rmm::device_uvector<SymbolT
     fst::detail::make_translation_functor(normalize_quotes::TransduceToNormalizedQuotes{}),
     stream);
 
-  rmm::device_uvector<SymbolT> outbuf(inbuf.size() * 2, stream, mr);
+  rmm::device_uvector<SymbolT> outbuf(indata.size() * 2, stream, mr);
   rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
-  parser.Transduce(inbuf.data(),
-                   static_cast<SymbolOffsetT>(inbuf.size()),
+  parser.Transduce(indata.data(),
+                   static_cast<SymbolOffsetT>(indata.size()),
                    outbuf.data(),
                    thrust::make_discard_iterator(),
                    outbuf_size.data(),
@@ -318,12 +319,13 @@ rmm::device_uvector<SymbolT> normalize_single_quotes(rmm::device_uvector<SymbolT
                    stream);
 
   outbuf.resize(outbuf_size.value(stream), stream);
-  return outbuf;
+  datasource::owning_buffer<rmm::device_uvector<SymbolT>> outdata(std::move(outbuf));
+  std::swap(indata, outdata);
 }
 
-rmm::device_uvector<SymbolT> normalize_whitespace(rmm::device_uvector<SymbolT>&& inbuf,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+void normalize_whitespace(datasource::owning_buffer<rmm::device_uvector<SymbolT>>& indata,
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr)
 {
   auto parser = fst::detail::make_fst(
     fst::detail::make_symbol_group_lut(normalize_whitespace::wna_sgs),
@@ -331,10 +333,10 @@ rmm::device_uvector<SymbolT> normalize_whitespace(rmm::device_uvector<SymbolT>&&
     fst::detail::make_translation_functor(normalize_whitespace::TransduceToNormalizedWS{}),
     stream);
 
-  rmm::device_uvector<SymbolT> outbuf(inbuf.size(), stream, mr);
+  rmm::device_uvector<SymbolT> outbuf(indata.size(), stream, mr);
   rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
-  parser.Transduce(inbuf.data(),
-                   static_cast<SymbolOffsetT>(inbuf.size()),
+  parser.Transduce(indata.data(),
+                   static_cast<SymbolOffsetT>(indata.size()),
                    outbuf.data(),
                    thrust::make_discard_iterator(),
                    outbuf_size.data(),
@@ -342,7 +344,8 @@ rmm::device_uvector<SymbolT> normalize_whitespace(rmm::device_uvector<SymbolT>&&
                    stream);
 
   outbuf.resize(outbuf_size.value(stream), stream);
-  return outbuf;
+  datasource::owning_buffer<rmm::device_uvector<SymbolT>> outdata(std::move(outbuf));
+  std::swap(indata, outdata);
 }
 
 }  // namespace detail

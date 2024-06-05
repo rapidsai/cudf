@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #include <cudf/reduction.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 namespace cudf {
 
 namespace detail {
@@ -29,7 +31,7 @@ std::unique_ptr<column> scan(column_view const& input,
                              scan_type inclusive,
                              null_policy null_handling,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   if (agg.kind == aggregation::RANK) {
     CUDF_EXPECTS(inclusive == scan_type::INCLUSIVE,
@@ -58,10 +60,11 @@ std::unique_ptr<column> scan(column_view const& input,
                              scan_aggregation const& agg,
                              scan_type inclusive,
                              null_policy null_handling,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::scan(input, agg, inclusive, null_handling, cudf::get_default_stream(), mr);
+  return detail::scan(input, agg, inclusive, null_handling, stream, mr);
 }
 
 }  // namespace cudf
