@@ -191,7 +191,7 @@ class BufferOwner(Serializable):
         """Create an owner from a buffer or array like object
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
-        be convertible to a buffer object using `numpy.array()`
+        be convertible to a buffer object using `numpy.asanyarray()`
 
         The host memory is copied to a new device allocation.
 
@@ -209,7 +209,7 @@ class BufferOwner(Serializable):
         """
 
         # Convert to numpy array, this will not copy data in most cases.
-        ary = numpy.array(data, copy=False, subok=True)
+        ary = numpy.asanyarray(data)
         # Extract pointer and size
         ptr, size = get_ptr_and_size(ary.__array_interface__)
         # Copy to device memory

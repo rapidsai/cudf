@@ -289,6 +289,7 @@ class IndexedFrame(Frame):
     @property
     def _num_rows(self) -> int:
         # Important to use the index because the data may be empty.
+        # TODO: Remove once DataFrame.__init__ is cleaned up
         return len(self.index)
 
     @property
@@ -448,6 +449,7 @@ class IndexedFrame(Frame):
     def _check_data_index_length_match(self) -> None:
         # Validate that the number of rows in the data matches the index if the
         # data is not empty. This is a helper for the constructor.
+        # TODO: Use self._num_rows once DataFrame.__init__ is cleaned up
         if self._data.nrows > 0 and self._data.nrows != len(self.index):
             raise ValueError(
                 f"Length of values ({self._data.nrows}) does not "
@@ -623,10 +625,8 @@ class IndexedFrame(Frame):
         )
 
     @_cudf_nvtx_annotate
-    def equals(self, other):  # noqa: D102
-        if not super().equals(other):
-            return False
-        return self.index.equals(other.index)
+    def equals(self, other) -> bool:  # noqa: D102
+        return super().equals(other) and self.index.equals(other.index)
 
     @property
     def index(self):
@@ -639,7 +639,7 @@ class IndexedFrame(Frame):
         new_length = len(value)
 
         # A DataFrame with 0 columns can have an index of arbitrary length.
-        if len(self._data) > 0 and new_length != old_length:
+        if self._num_columns > 0 and new_length != old_length:
             raise ValueError(
                 f"Length mismatch: Expected axis has {old_length} elements, "
                 f"new values have {len(value)} elements"
@@ -1129,7 +1129,7 @@ class IndexedFrame(Frame):
             common = self._data.to_pandas_index().union(
                 other.index.to_pandas()
             )
-            if len(common) > len(self._data.names) or len(common) > len(
+            if len(common) > self._num_columns or len(common) > len(
                 other.index
             ):
                 raise ValueError("matrices are not aligned")
@@ -2757,7 +2757,7 @@ class IndexedFrame(Frame):
             out = self[labels]
             if ignore_index:
                 out._data.rangeindex = True
-                out._data.names = list(range(len(self._data.names)))
+                out._data.names = list(range(self._num_columns))
 
         return self._mimic_inplace(out, inplace=inplace)
 
@@ -3638,7 +3638,7 @@ class IndexedFrame(Frame):
         sort: bool = True,
         allow_non_unique: bool = False,
     ) -> Self:
-        index = cudf.core.index.as_index(index)
+        index = cudf.Index(index)
 
         if self.index.equals(index):
             return self
@@ -3713,7 +3713,7 @@ class IndexedFrame(Frame):
                 raise ValueError(
                     "cannot reindex on an axis with duplicate labels"
                 )
-            index = cudf.core.index.as_index(
+            index = cudf.Index(
                 index, name=getattr(index, "name", self.index.name)
             )
 
@@ -4894,10 +4894,10 @@ class IndexedFrame(Frame):
 
     def astype(
         self,
-        dtype,
+        dtype: dict[Any, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
-    ):
+    ) -> Self:
         """Cast the object to the given dtype.
 
         Parameters
@@ -5008,13 +5008,11 @@ class IndexedFrame(Frame):
             raise ValueError("invalid error value specified")
 
         try:
-            data = super().astype(dtype, copy)
+            return super().astype(dtype, copy)
         except Exception as e:
             if errors == "raise":
                 raise e
             return self
-
-        return self._from_data(data, index=self.index)
 
     @_cudf_nvtx_annotate
     def drop(
