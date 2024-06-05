@@ -306,6 +306,11 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                  "Multiple inputs are supported only for JSON Lines format");
   }
 
+  std::for_each(sources.begin(), sources.end(), [](const auto& source) {
+    CUDF_EXPECTS(source->size() < std::numeric_limits<int>::max(),
+                 "The size of each source file must be less than INT_MAX bytes");
+  });
+
   size_t const batch_size = std::numeric_limits<int>::max();
   int const num_batches   = std::ceil((double)sources_size(sources, 0, 0) / batch_size);
   if (num_batches == 1) return read_batch(sources, reader_opts, stream, mr);
