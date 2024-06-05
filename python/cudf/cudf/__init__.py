@@ -1,5 +1,7 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
+
 import os
+
 os.environ["LIBCUDF_LARGE_STRINGS_ENABLED"] = "1"
 
 # _setup_numba _must be called before numba.cuda is imported, because
