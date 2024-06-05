@@ -6,7 +6,7 @@ This page provides API documentation for pylibcudf.
 
 .. toctree::
     :maxdepth: 1
-    :caption: API Documentation
+    :caption: Top-level modules
 
     aggregation
     binaryop
@@ -33,11 +33,8 @@ This page provides API documentation for pylibcudf.
     types
     unary
 
-String Functions
-================
-
 .. toctree::
-    :maxdepth: 1
-    :caption: String Functions
+    :maxdepth: 2
+    :caption: Subpackages
 
-    contains
+    strings/index.rst

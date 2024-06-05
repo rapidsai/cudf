@@ -79,18 +79,16 @@ class Frame(BinaryOperand, Scannable):
         return self._data.nrows
 
     @property
-    def _column_names(self) -> Tuple[Any, ...]:  # TODO: Tuple[str]?
-        return tuple(self._data.names)
+    def _column_names(self) -> Tuple[Any, ...]:
+        return self._data.names
 
     @property
-    def _columns(self) -> Tuple[Any, ...]:  # TODO: Tuple[Column]?
-        return tuple(self._data.columns)
+    def _columns(self) -> Tuple[ColumnBase, ...]:
+        return self._data.columns
 
     @property
-    def _dtypes(self):
-        return dict(
-            zip(self._data.names, (col.dtype for col in self._data.columns))
-        )
+    def _dtypes(self) -> abc.Iterator:
+        return zip(self._data.names, (col.dtype for col in self._data.columns))
 
     @property
     def ndim(self) -> int:
@@ -1969,7 +1967,7 @@ class Frame(BinaryOperand, Scannable):
 
         return [
             type(self),
-            str(self._dtypes),
+            str(dict(self._dtypes)),
             normalize_token(self.to_pandas()),
         ]
 
