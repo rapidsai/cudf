@@ -18,6 +18,7 @@
 
 #include "hostdevice_span.hpp"
 
+#include <cudf/detail/utilities/cuda_copy.hpp>
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -124,8 +125,7 @@ class hostdevice_vector {
 
   void host_to_device_async(rmm::cuda_stream_view stream)
   {
-    CUDF_CUDA_TRY(
-      cudaMemcpyAsync(device_ptr(), host_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
+    copy_pinned_to_device_async(device_ptr(), host_ptr(), size(), stream);
   }
 
   void host_to_device_sync(rmm::cuda_stream_view stream)
@@ -136,8 +136,7 @@ class hostdevice_vector {
 
   void device_to_host_async(rmm::cuda_stream_view stream)
   {
-    CUDF_CUDA_TRY(
-      cudaMemcpyAsync(host_ptr(), device_ptr(), size_bytes(), cudaMemcpyDefault, stream.value()));
+    copy_device_to_pinned_async(host_ptr(), device_ptr(), size(), stream);
   }
 
   void device_to_host_sync(rmm::cuda_stream_view stream)
