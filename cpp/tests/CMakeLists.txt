@@ -668,9 +668,11 @@ target_include_directories(JIT_PARSER_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOU
 
 # ##################################################################################################
 # * stream testing ---------------------------------------------------------------------------------
-ConfigureTest(
-  STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
-)
+if(CUDF_BUILD_STREAMS_TEST_UTIL)
+  ConfigureTest(
+    STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
+  )
+endif()
 
 ConfigureTest(STREAM_BINARYOP_TEST streams/binaryop_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_CONCATENATE_TEST streams/concatenate_test.cpp STREAM_MODE testing)
