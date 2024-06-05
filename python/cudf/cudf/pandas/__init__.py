@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+import os
+os.environ["LIBCUDF_LARGE_STRINGS_ENABLED"] = "1"
 
 from .magics import load_ipython_extension
 from .profiler import Profiler
