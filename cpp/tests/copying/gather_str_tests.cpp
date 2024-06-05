@@ -125,7 +125,7 @@ TEST_F(GatherTestStr, GatherDontCheckOutOfBounds)
                                       rmm::mr::get_current_device_resource());
 
   std::vector<char const*> h_expected;
-  for (int& itr : h_map) {
+  for (int itr : h_map) {
     h_expected.push_back(h_strings[itr]);
   }
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
