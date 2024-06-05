@@ -40,7 +40,7 @@ TEST_F(StringsManyTest, Replace)
     return view.size() * (n++);
   });
 
-  auto large_input = cudf::concatenate(input_cols);  // 300 million rows
+  auto large_input = cudf::concatenate(input_cols);  // 480 million rows
   auto const sv    = cudf::strings_column_view(large_input->view());
   EXPECT_EQ(sv.size(), view.size() * multiplier);
   EXPECT_EQ(sv.offsets().type(), cudf::data_type{cudf::type_id::INT64});
