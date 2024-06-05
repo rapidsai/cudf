@@ -37,7 +37,7 @@ def plc_data(pa_data):
 def test_capitalize(plc_data, pa_data):
     got = plc.strings.capitalize.capitalize(plc_data)
     expected = pa.compute.utf8_capitalize(pa_data)
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)
 
 
 def test_title(plc_data, pa_data):
@@ -45,10 +45,10 @@ def test_title(plc_data, pa_data):
         plc_data, plc.strings.char_types.StringCharacterTypes.CASE_TYPES
     )
     expected = pa.compute.utf8_title(pa_data)
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)
 
 
 def test_is_title(plc_data, pa_data):
     got = plc.strings.capitalize.is_title(plc_data)
     expected = pa.compute.utf8_is_title(pa_data)
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)

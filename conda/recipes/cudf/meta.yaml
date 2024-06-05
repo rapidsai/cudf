@@ -61,6 +61,7 @@ requirements:
   host:
     - python
     - cython >=3.0.3
+    - rapids-build-backend >=0.3.0,<0.4.0.dev0
     - scikit-build-core >=0.7.0
     - dlpack >=0.8,<1.0
     - numpy 1.23

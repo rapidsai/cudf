@@ -138,7 +138,7 @@ def test_gather(target_table, pa_target_table, index_column, pa_index_column):
         plc.copying.OutOfBoundsPolicy.DONT_CHECK,
     )
     expected = pa_target_table.take(pa_index_column)
-    assert_table_eq(result, expected)
+    assert_table_eq(expected, result)
 
 
 def test_gather_map_has_nulls(target_table):
@@ -240,7 +240,7 @@ def test_scatter_table(
             pa_target_table,
         )
 
-    assert_table_eq(result, expected)
+    assert_table_eq(expected, result)
 
 
 def test_scatter_table_num_col_mismatch(
@@ -315,7 +315,7 @@ def test_scatter_scalars(
         pa_target_table,
     )
 
-    assert_table_eq(result, expected)
+    assert_table_eq(expected, result)
 
 
 def test_scatter_scalars_num_scalars_mismatch(
@@ -409,7 +409,7 @@ def test_copy_range_in_place(
             ),
             pa_target_column,
         )
-        assert_column_eq(mutable_target_column, expected)
+        assert_column_eq(expected, mutable_target_column)
 
 
 def test_copy_range_in_place_out_of_bounds(
@@ -480,7 +480,7 @@ def test_copy_range(
             ),
             pa_target_column,
         )
-        assert_column_eq(result, expected)
+        assert_column_eq(expected, result)
     else:
         with pytest.raises(TypeError):
             plc.copying.copy_range(
@@ -528,7 +528,7 @@ def test_shift(
         expected = pa.concat_arrays(
             [pa.array([pa_source_scalar] * shift), pa_target_column[:-shift]]
         )
-        assert_column_eq(result, expected)
+        assert_column_eq(expected, result)
     else:
         with pytest.raises(TypeError):
             plc.copying.shift(target_column, shift, source_scalar)
@@ -550,7 +550,7 @@ def test_slice_column(target_column, pa_target_column):
     lower_bounds = bounds[::2]
     result = plc.copying.slice(target_column, bounds)
     for lb, ub, slice_ in zip(lower_bounds, upper_bounds, result):
-        assert_column_eq(slice_, pa_target_column[lb:ub])
+        assert_column_eq(pa_target_column[lb:ub], slice_)
 
 
 def test_slice_column_wrong_length(target_column):
@@ -574,7 +574,7 @@ def test_slice_table(target_table, pa_target_table):
     lower_bounds = bounds[::2]
     result = plc.copying.slice(target_table, bounds)
     for lb, ub, slice_ in zip(lower_bounds, upper_bounds, result):
-        assert_table_eq(slice_, pa_target_table[lb:ub])
+        assert_table_eq(pa_target_table[lb:ub], slice_)
 
 
 def test_split_column(target_column, pa_target_column):
@@ -582,7 +582,7 @@ def test_split_column(target_column, pa_target_column):
     lower_bounds = [0] + upper_bounds[:-1]
     result = plc.copying.split(target_column, upper_bounds)
     for lb, ub, split in zip(lower_bounds, upper_bounds, result):
-        assert_column_eq(split, pa_target_column[lb:ub])
+        assert_column_eq(pa_target_column[lb:ub], split)
 
 
 def test_split_column_decreasing(target_column):
@@ -600,7 +600,7 @@ def test_split_table(target_table, pa_target_table):
     lower_bounds = [0] + upper_bounds[:-1]
     result = plc.copying.split(target_table, upper_bounds)
     for lb, ub, split in zip(lower_bounds, upper_bounds, result):
-        assert_table_eq(split, pa_target_table[lb:ub])
+        assert_table_eq(pa_target_table[lb:ub], split)
 
 
 def test_copy_if_else_column_column(
@@ -622,7 +622,7 @@ def test_copy_if_else_column_column(
         pa_target_column,
         pa_other_column,
     )
-    assert_column_eq(result, expected)
+    assert_column_eq(expected, result)
 
 
 def test_copy_if_else_wrong_type(target_column, mask):
@@ -699,7 +699,7 @@ def test_copy_if_else_column_scalar(
         pa_mask,
         *pa_args,
     )
-    assert_column_eq(result, expected)
+    assert_column_eq(expected, result)
 
 
 def test_boolean_mask_scatter_from_table(
@@ -753,7 +753,7 @@ def test_boolean_mask_scatter_from_table(
             pa_source_table, pa_mask, pa_target_table
         )
 
-    assert_table_eq(result, expected)
+    assert_table_eq(expected, result)
 
 
 def test_boolean_mask_scatter_from_wrong_num_cols(source_table, target_table):
@@ -828,7 +828,7 @@ def test_boolean_mask_scatter_from_scalars(
         pa_target_table,
     )
 
-    assert_table_eq(result, expected)
+    assert_table_eq(expected, result)
 
 
 def test_get_element(input_column, pa_input_column):
