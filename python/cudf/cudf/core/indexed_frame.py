@@ -1917,7 +1917,7 @@ class IndexedFrame(Frame):
             converted = col.nans_to_nulls()
             if converted is col:
                 converted = converted.copy()
-            result.append(col)
+            result.append(converted)
         return self._from_data_like_self(
             self._data._from_columns_like_self(result)
         )
