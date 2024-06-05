@@ -9,10 +9,6 @@ from libcpp.utility cimport move
 from cudf._lib.column cimport Column
 from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
-    concatenate_list_elements as cpp_concatenate_list_elements,
-    concatenate_null_policy,
-)
 from cudf._lib.pylibcudf.libcudf.lists.contains cimport (
     contains,
     index_of as cpp_index_of,
@@ -218,24 +214,20 @@ def index_of_column(Column col, Column search_keys):
 
 @acquire_spill_lock()
 def concatenate_rows(list source_columns):
-    return pylibcudf.lists.concatenate_rows(
-        pylibcudf.Table([c.to_pylibcudf(mode="read") for c in source_columns])
+    return Column.from_pylibcudf(
+        pylibcudf.lists.concatenate_rows(
+            pylibcudf.Table([
+                c.to_pylibcudf(mode="read") for c in source_columns
+            ])
+        )
     )
 
 
 @acquire_spill_lock()
 def concatenate_list_elements(Column input_column, dropna=False):
-    cdef concatenate_null_policy policy = (
-        concatenate_null_policy.IGNORE if dropna
-        else concatenate_null_policy.NULLIFY_OUTPUT_ROW
+    return Column.from_pylibcudf(
+        pylibcudf.lists.concatenate_list_elements(
+            input_column.to_pylibcudf(mode="read"),
+            dropna,
+        )
     )
-    cdef column_view c_input = input_column.view()
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(cpp_concatenate_list_elements(
-            c_input,
-            policy
-        ))
-
-    return Column.from_unique_ptr(move(c_result))

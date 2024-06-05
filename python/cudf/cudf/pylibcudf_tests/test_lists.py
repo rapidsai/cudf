@@ -17,3 +17,16 @@ def test_concatenate_rows():
     expect = pa.array([pair[0] + pair[1] for pair in zip(*test_data)])
 
     assert_column_eq(res, expect)
+
+
+def test_concatenate_list_elements():
+    test_data = [[[1, 2], [3, 4], [5]], [[6], [], [7, 8, 9]]]
+
+    arr = pa.array(test_data)
+    plc_column = plc.interop.from_arrow(arr)
+
+    res = plc.lists.concatenate_list_elements(plc_column, False)
+
+    expect = pa.array([[1, 2, 3, 4, 5], [6, 7, 8, 9]])
+
+    assert_column_eq(res, expect)
