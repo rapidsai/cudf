@@ -146,9 +146,13 @@ class Scan(IR):
             assert_never(self.typ)
         if row_index is not None:
             name, offset = row_index
-            # TODO: dtype
-            step = plc.interop.from_arrow(pa.scalar(1))
-            init = plc.interop.from_arrow(pa.scalar(offset))
+            dtype = self.schema[name]
+            step = plc.interop.from_arrow(
+                pa.scalar(1, type=plc.interop.to_arrow(dtype))
+            )
+            init = plc.interop.from_arrow(
+                pa.scalar(offset, type=plc.interop.to_arrow(dtype))
+            )
             index = Column(
                 plc.filling.sequence(df.num_rows, init, step), name
             ).set_sorted(

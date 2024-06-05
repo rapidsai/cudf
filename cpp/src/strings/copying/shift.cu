@@ -67,9 +67,9 @@ struct shift_chars_fn {
     if (offset < 0) {
       auto const last_index = -offset;
       if (idx < last_index) {
-        auto const first_index =
-          offset + d_column.child(strings_column_view::offsets_column_index)
-                     .element<size_type>(d_column.offset() + d_column.size());
+        auto const offsets     = d_column.child(strings_column_view::offsets_column_index);
+        auto const off_itr     = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+        auto const first_index = offset + off_itr[d_column.offset() + d_column.size()];
         return d_column.head<char>()[idx + first_index];
       } else {
         auto const char_index = idx - last_index;
@@ -79,9 +79,9 @@ struct shift_chars_fn {
       if (idx < offset) {
         return d_filler.data()[idx % d_filler.size_bytes()];
       } else {
-        return d_column.head<char>()[idx - offset +
-                                     d_column.child(strings_column_view::offsets_column_index)
-                                       .element<size_type>(d_column.offset())];
+        auto const offsets = d_column.child(strings_column_view::offsets_column_index);
+        auto const off_itr = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+        return d_column.head<char>()[idx - offset + off_itr[d_column.offset()]];
       }
     }
   }
