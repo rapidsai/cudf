@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,7 +70,7 @@ cudf::size_type json_write_bm_data(cudf::io::sink_info sink,
   return view.num_rows();
 }
 
-template <cudf::io::io_type IO>
+template <io_type IO>
 void BM_json_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type<IO>>)
 {
   cuio_source_sink_pair source_sink(IO);
@@ -87,7 +87,7 @@ void BM_json_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_typ
   json_read_common(source_sink, num_rows, state);
 }
 
-template <data_type DataType, cudf::io::io_type IO>
+template <data_type DataType, io_type IO>
 void BM_json_read_data_type(
   nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IO>>)
 {
@@ -107,16 +107,14 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::LIST,
                                             data_type::STRUCT>;
 
-using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
-                                        cudf::io::io_type::HOST_BUFFER,
-                                        cudf::io::io_type::DEVICE_BUFFER>;
+using io_list =
+  nvbench::enum_type_list<io_type::FILEPATH, io_type::HOST_BUFFER, io_type::DEVICE_BUFFER>;
 
 using compression_list =
   nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
 
 NVBENCH_BENCH_TYPES(BM_json_read_data_type,
-                    NVBENCH_TYPE_AXES(d_type_list,
-                                      nvbench::enum_type_list<cudf::io::io_type::DEVICE_BUFFER>))
+                    NVBENCH_TYPE_AXES(d_type_list, nvbench::enum_type_list<io_type::DEVICE_BUFFER>))
   .set_name("json_read_data_type")
   .set_type_axes_names({"data_type", "io"})
   .set_min_samples(4);

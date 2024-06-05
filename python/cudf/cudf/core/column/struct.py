@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Optional
 
 import pandas as pd
 import pyarrow as pa
@@ -60,25 +59,15 @@ class StructColumn(ColumnBase):
     def to_pandas(
         self,
         *,
-        index: Optional[pd.Index] = None,
         nullable: bool = False,
         arrow_type: bool = False,
-    ) -> pd.Series:
+    ) -> pd.Index:
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
-        elif nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-        pa_array = self.to_arrow()
-        if arrow_type:
-            return pd.Series(
-                pd.arrays.ArrowExtensionArray(pa_array), index=index
-            )
+        if arrow_type or nullable:
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
-            return pd.Series(pa_array.tolist(), dtype="object", index=index)
+            return pd.Index(self.to_arrow().tolist(), dtype="object")
 
     @cached_property
     def memory_usage(self):
