@@ -5,16 +5,7 @@ from __future__ import annotations
 import warnings
 from collections import abc
 from functools import cached_property
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Literal,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -1074,51 +1065,42 @@ class CategoricalColumn(column.ColumnBase):
 
         return result
 
-    def fillna(
-        self,
-        fill_value: ScalarLike | ColumnBase,
-        method: Literal["ffill", "bfill", None] = None,
-    ) -> Self:
-        """
-        Fill null values with *fill_value*
-        """
-        if fill_value is not None:
-            fill_is_scalar = np.isscalar(fill_value)
-
-            if fill_is_scalar:
-                if fill_value == _DEFAULT_CATEGORICAL_VALUE:
-                    fill_value = self.codes.dtype.type(fill_value)
-                else:
-                    try:
-                        fill_value = self._encode(fill_value)
-                        fill_value = self.codes.dtype.type(fill_value)
-                    except ValueError as err:
-                        err_msg = "fill value must be in categories"
-                        raise ValueError(err_msg) from err
-            else:
-                fill_value = column.as_column(fill_value, nan_as_null=False)
-                if isinstance(fill_value, CategoricalColumn):
-                    if self.dtype != fill_value.dtype:
-                        raise TypeError(
-                            "Cannot set a Categorical with another, "
-                            "without identical categories"
-                        )
-                # TODO: only required if fill_value has a subset of the
-                # categories:
-                fill_value = fill_value._set_categories(
-                    self.categories,
-                    is_unique=True,
+    def _validate_fillna_value(
+        self, fill_value: ScalarLike | ColumnLike
+    ) -> cudf.Scalar | ColumnBase:
+        """Align fill_value for .fillna based on column type."""
+        if cudf.api.types.is_scalar(fill_value):
+            if fill_value != _DEFAULT_CATEGORICAL_VALUE:
+                try:
+                    fill_value = self._encode(fill_value)
+                except ValueError as err:
+                    raise ValueError(
+                        f"{fill_value=} must be in categories"
+                    ) from err
+            return cudf.Scalar(fill_value, dtype=self.codes.dtype)
+        else:
+            fill_value = column.as_column(fill_value, nan_as_null=False)
+            if (
+                isinstance(fill_value.dtype, CategoricalDtype)
+                and self.dtype != fill_value.dtype
+            ):
+                raise TypeError(
+                    "Cannot set a Categorical with another, "
+                    "without identical categories"
                 )
-                fill_value = column.as_column(fill_value.codes).astype(
-                    self.codes.dtype
-                )
+            # TODO: only required if fill_value has a subset of the
+            # categories:
+            fill_value = fill_value._set_categories(
+                self.categories,
+                is_unique=True,
+            )
+            return fill_value.codes.astype(self.codes.dtype)
 
-        # Validation of `fill_value` will have to be performed
-        # before returning self.
-        if not self.nullable:
-            return self
-
-        return super().fillna(fill_value, method=method)
+        # TODO: Categorical.fillna had this check. Still relevant?
+        # # Validation of `fill_value` will have to be performed
+        # # before returning self.
+        # if not self.nullable:
+        #     return self
 
     def indices_of(
         self, value: ScalarLike
