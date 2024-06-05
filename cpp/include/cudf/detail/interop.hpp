@@ -62,7 +62,7 @@ DLManagedTensor* to_dlpack(table_view const& input,
 
 // Creating arrow as per given type_id and buffer arguments
 template <typename... Ts>
-std::shared_ptr<arrow::Array> to_arrow_array(type_id id, Ts&&... args)
+std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
 {
   switch (id) {
     case type_id::BOOL8: return std::make_shared<arrow::BooleanArray>(std::forward<Ts>(args)...);
@@ -123,7 +123,7 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
  * @copydoc cudf::to_arrow(cudf::scalar const& input, column_metadata const& metadata,
  * rmm::cuda_stream_view stream, arrow::MemoryPool* ar_mr)
  */
-std::shared_ptr<arrow::Scalar> to_arrow(scalar const& input,
+std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
                                         column_metadata const& metadata,
                                         rmm::cuda_stream_view stream,
                                         arrow::MemoryPool* ar_mr);

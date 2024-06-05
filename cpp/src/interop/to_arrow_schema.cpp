@@ -45,30 +45,30 @@ struct dispatch_to_arrow_type {
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   int operator()(column_view input_view, column_metadata const&, ArrowSchema* out)
   {
-    type_id id = input_view.type().id();
+    cudf::type_id id = input_view.type().id();
     switch (id) {
-      case type_id::TIMESTAMP_SECONDS:
+      case cudf::type_id::TIMESTAMP_SECONDS:
         return ArrowSchemaSetTypeDateTime(
           out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_SECOND, nullptr);
-      case type_id::TIMESTAMP_MILLISECONDS:
+      case cudf::type_id::TIMESTAMP_MILLISECONDS:
         return ArrowSchemaSetTypeDateTime(
           out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_MILLI, nullptr);
-      case type_id::TIMESTAMP_MICROSECONDS:
+      case cudf::type_id::TIMESTAMP_MICROSECONDS:
         return ArrowSchemaSetTypeDateTime(
           out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_MICRO, nullptr);
-      case type_id::TIMESTAMP_NANOSECONDS:
+      case cudf::type_id::TIMESTAMP_NANOSECONDS:
         return ArrowSchemaSetTypeDateTime(
           out, NANOARROW_TYPE_TIMESTAMP, NANOARROW_TIME_UNIT_NANO, nullptr);
-      case type_id::DURATION_SECONDS:
+      case cudf::type_id::DURATION_SECONDS:
         return ArrowSchemaSetTypeDateTime(
           out, NANOARROW_TYPE_DURATION, NANOARROW_TIME_UNIT_SECOND, nullptr);
-      case type_id::DURATION_MILLISECONDS:
+      case cudf::type_id::DURATION_MILLISECONDS:
         return ArrowSchemaSetTypeDateTime(
           out, NANOARROW_TYPE_DURATION, NANOARROW_TIME_UNIT_MILLI, nullptr);
-      case type_id::DURATION_MICROSECONDS:
+      case cudf::type_id::DURATION_MICROSECONDS:
         return ArrowSchemaSetTypeDateTime(
           out, NANOARROW_TYPE_DURATION, NANOARROW_TIME_UNIT_MICRO, nullptr);
-      case type_id::DURATION_NANOSECONDS:
+      case cudf::type_id::DURATION_NANOSECONDS:
         return ArrowSchemaSetTypeDateTime(
           out, NANOARROW_TYPE_DURATION, NANOARROW_TIME_UNIT_NANO, nullptr);
       default: return ArrowSchemaSetType(out, id_to_arrow_type(id));

@@ -44,7 +44,7 @@ namespace cudf {
  */
 std::unique_ptr<scalar> make_numeric_scalar(
   data_type type,
-  rmm::cuda_stream_view stream      = get_default_stream(),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -61,7 +61,7 @@ std::unique_ptr<scalar> make_numeric_scalar(
  */
 std::unique_ptr<scalar> make_timestamp_scalar(
   data_type type,
-  rmm::cuda_stream_view stream      = get_default_stream(),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -78,7 +78,7 @@ std::unique_ptr<scalar> make_timestamp_scalar(
  */
 std::unique_ptr<scalar> make_duration_scalar(
   data_type type,
-  rmm::cuda_stream_view stream      = get_default_stream(),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -95,7 +95,7 @@ std::unique_ptr<scalar> make_duration_scalar(
  */
 std::unique_ptr<scalar> make_fixed_width_scalar(
   data_type type,
-  rmm::cuda_stream_view stream      = get_default_stream(),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -112,7 +112,7 @@ std::unique_ptr<scalar> make_fixed_width_scalar(
  */
 std::unique_ptr<scalar> make_string_scalar(
   std::string const& string,
-  rmm::cuda_stream_view stream      = get_default_stream(),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -127,7 +127,7 @@ std::unique_ptr<scalar> make_string_scalar(
  */
 std::unique_ptr<scalar> make_default_constructed_scalar(
   data_type type,
-  rmm::cuda_stream_view stream      = get_default_stream(),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -142,7 +142,7 @@ std::unique_ptr<scalar> make_default_constructed_scalar(
  */
 std::unique_ptr<scalar> make_empty_scalar_like(
   column_view const& input,
-  rmm::cuda_stream_view stream      = get_default_stream(),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -157,7 +157,7 @@ std::unique_ptr<scalar> make_empty_scalar_like(
 template <typename T>
 std::unique_ptr<scalar> make_fixed_width_scalar(
   T value,
-  rmm::cuda_stream_view stream      = get_default_stream(),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   return std::make_unique<scalar_type_t<T>>(value, true, stream, mr);
@@ -177,7 +177,7 @@ template <typename T>
 std::unique_ptr<scalar> make_fixed_point_scalar(
   typename T::rep value,
   numeric::scale_type scale,
-  rmm::cuda_stream_view stream      = get_default_stream(),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   return std::make_unique<scalar_type_t<T>>(value, scale, true, stream, mr);
@@ -193,7 +193,7 @@ std::unique_ptr<scalar> make_fixed_point_scalar(
  */
 std::unique_ptr<scalar> make_list_scalar(
   column_view elements,
-  rmm::cuda_stream_view stream      = get_default_stream(),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -208,7 +208,7 @@ std::unique_ptr<scalar> make_list_scalar(
  */
 std::unique_ptr<scalar> make_struct_scalar(
   table_view const& data,
-  rmm::cuda_stream_view stream      = get_default_stream(),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -223,7 +223,7 @@ std::unique_ptr<scalar> make_struct_scalar(
  */
 std::unique_ptr<scalar> make_struct_scalar(
   host_span<column_view const> data,
-  rmm::cuda_stream_view stream      = get_default_stream(),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
