@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 
@@ -17,6 +17,7 @@ from cudf_polars.containers.column import NamedColumn
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence, Set
 
+    import pyarrow as pa
     from typing_extensions import Self
 
     import cudf
@@ -44,12 +45,12 @@ class DataFrame:
 
     def to_polars(self) -> pl.DataFrame:
         """Convert to a polars DataFrame."""
-        return pl.from_arrow(
-            plc.interop.to_arrow(
-                self.table,
-                [plc.interop.ColumnMetadata(name=c.name) for c in self.columns],
-            )
+        table: pa.Table = plc.interop.to_arrow(
+            self.table,
+            [plc.interop.ColumnMetadata(name=c.name) for c in self.columns],
         )
+
+        return cast(pl.DataFrame, pl.from_arrow(table))
 
     @cached_property
     def column_names_set(self) -> frozenset[str]:

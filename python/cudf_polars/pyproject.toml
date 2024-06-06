@@ -62,8 +62,6 @@ target-version = "py39"
 fix = true
 
 [tool.ruff.lint]
-# __init__.py must re-export everything it imports
-ignore-init-module-imports = false
 select = [
   "E", # pycodestyle
   "W", # pycodestyle
