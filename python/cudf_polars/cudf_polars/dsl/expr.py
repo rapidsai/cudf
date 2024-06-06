@@ -605,11 +605,16 @@ class StringFunction(Expr):
         ):
             raise NotImplementedError(f"String function {self.name}")
         if self.name == pl_expr.StringFunction.Contains:
-            _, strict = self.options
-            if not strict:
-                raise NotImplementedError("strict=False not supported in contains")
-            if not isinstance(self.children[1], Literal):
-                raise NotImplementedError("contains pattern must be a single scalar")
+            literal, strict = self.options
+            if not literal:
+                if not strict:
+                    raise NotImplementedError(
+                        "f{strict=} is not supported for regex contains"
+                    )
+                if not isinstance(self.children[1], Literal):
+                    raise NotImplementedError(
+                        "Regex contains only supports a scalar pattern"
+                    )
 
     def do_evaluate(
         self,

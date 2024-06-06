@@ -2,10 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from functools import partial
+
 import pytest
 
 import polars as pl
 
+from cudf_polars.callback import execute_with_cudf
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
@@ -43,4 +46,4 @@ def test_contains_invalid(pat):
     with pytest.raises(pl.exceptions.ComputeError):
         query.collect()
     with pytest.raises(pl.exceptions.ComputeError):
-        query.collect(use_gpu=True)
+        query.collect(post_opt_callback=partial(execute_with_cudf, raise_on_fail=True))
