@@ -23,7 +23,7 @@ def assert_gpu_result_equal(
     *,
     check_row_order: bool = True,
     check_column_order: bool = True,
-    check_dtype: bool = True,
+    check_dtypes: bool = True,
     check_exact: bool = True,
     rtol: float = 1e-05,
     atol: float = 1e-08,
@@ -40,7 +40,7 @@ def assert_gpu_result_equal(
         Expect rows to be in same order
     check_column_order
         Expect columns to be in same order
-    check_dtype
+    check_dtypes
         Expect dtypes to match
     check_exact
         Require exact equality for floats, if `False` compare using
@@ -68,7 +68,7 @@ def assert_gpu_result_equal(
         got,
         check_row_order=check_row_order,
         check_column_order=check_column_order,
-        check_dtype=check_dtype,
+        check_dtypes=check_dtypes,
         check_exact=check_exact,
         rtol=rtol,
         atol=atol,

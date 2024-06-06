@@ -26,11 +26,11 @@ from polars.polars import _expr_nodes as pl_expr
 
 import cudf._lib.pylibcudf as plc
 
-from cudf_polars.containers import Column, Scalar
+from cudf_polars.containers import Column, NamedColumn, Scalar
 from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     import polars.type_aliases as pl_types
 
@@ -110,7 +110,7 @@ class Expr:
         """
         return hash((type(self), self._ctor_arguments(self.children)))
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         """Hash of an expression with caching."""
         try:
             return self._hash_value
@@ -139,18 +139,18 @@ class Expr:
             other.children
         )
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         """Equality of expressions."""
         if type(self) != type(other) or hash(self) != hash(other):
             return False
         else:
             return self.is_equal(other)
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> bool:
         """Inequality of expressions."""
         return not self.__eq__(other)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """String representation of an expression with caching."""
         try:
             return self._repr_value
@@ -164,7 +164,7 @@ class Expr:
         df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
+        mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:  # TODO: return type is a lie for Literal
         """
         Evaluate this expression given a dataframe for context.
@@ -185,15 +185,6 @@ class Expr:
         Do not call this function directly, but rather
         :meth:`evaluate` which handles the mapping lookups.
 
-        The typed return value of :class:`Column` is not true when
-        evaluating :class:`Literal` nodes (which instead produce
-        :class:`Scalar` objects). However, these duck-type to having a
-        pylibcudf container object inside them, and usually they end
-        up appearing in binary expressions which pylibcudf handles
-        appropriately since there are overloads for (column, scalar)
-        pairs. We don't have to handle (scalar, scalar) in binops
-        since the polars optimizer has a constant-folding pass.
-
         Returns
         -------
         Column representing the evaluation of the expression (or maybe
@@ -201,9 +192,10 @@ class Expr:
 
         Raises
         ------
-        NotImplementedError if we couldn't evaluate the expression.
-        Ideally all these are returned during translation to the IR,
-        but for now we are not perfect.
+        NotImplementedError
+            If we couldn't evaluate the expression. Ideally all these
+            are returned during translation to the IR, but for now we
+            are not perfect.
         """
         raise NotImplementedError(f"Evaluation of {type(self).__name__}")
 
@@ -212,7 +204,7 @@ class Expr:
         df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
+        mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:  # TODO: return type is a lie for Literal
         """
         Evaluate this expression given a dataframe for context.
@@ -234,16 +226,26 @@ class Expr:
         this method provides logic to handle lookups in the
         substitution mapping.
 
+        The typed return value of :class:`Column` is not true when
+        evaluating :class:`Literal` nodes (which instead produce
+        :class:`Scalar` objects). However, these duck-type to having a
+        pylibcudf container object inside them, and usually they end
+        up appearing in binary expressions which pylibcudf handles
+        appropriately since there are overloads for (column, scalar)
+        pairs. We don't have to handle (scalar, scalar) in binops
+        since the polars optimizer has a constant-folding pass.
+
         Returns
         -------
         Column representing the evaluation of the expression (or maybe
-        a scalar, annoying!).
+        a scalar).
 
         Raises
         ------
-        NotImplementedError if we couldn't evaluate the expression.
-        Ideally all these are returned during translation to the IR,
-        but for now we are not perfect.
+        NotImplementedError
+            If we couldn't evaluate the expression. Ideally all these
+            are returned during translation to the IR, but for now we
+            are not perfect.
         """
         if mapping is None:
             return self.do_evaluate(df, context=context, mapping=mapping)
@@ -269,41 +271,74 @@ class Expr:
 
         Raises
         ------
-        NotImplementedError if we can't currently perform the
-        aggregation request (for example nested aggregations like
-        ``a.max().min()``).
+        NotImplementedError
+            If we can't currently perform the aggregation request, for
+            example nested aggregations like ``a.max().min()``.
         """
         raise NotImplementedError(
             f"Collecting aggregation info for {type(self).__name__}"
         )
 
 
-class NamedExpr(Expr):
-    __slots__ = ("name", "children")
-    _non_child = ("dtype", "name")
+class NamedExpr:
+    # NamedExpr does not inherit from Expr since it does not appear
+    # when evaluating expressions themselves, only when constructing
+    # named return values in dataframe (IR) nodes.
+    __slots__ = ("name", "value")
 
-    def __init__(self, dtype: plc.DataType, name: str, value: Expr) -> None:
-        super().__init__(dtype)
+    def __init__(self, name: str, value: Expr) -> None:
         self.name = name
-        self.children = (value,)
+        self.value = value
 
-    def do_evaluate(
+    def __hash__(self) -> int:
+        """Hash of the expression."""
+        return hash((type(self), self.name, self.value))
+
+    def __repr__(self) -> str:
+        """Repr of the expression."""
+        return f"NamedExpr({self.name}, {self.value}"
+
+    def __eq__(self, other) -> bool:
+        """Equality of two expressions."""
+        return (
+            type(self) is type(other)
+            and self.name == other.name
+            and self.value == other.value
+        )
+
+    def __ne__(self, other) -> bool:
+        """Inequality of expressions."""
+        return not self.__eq__(other)
+
+    def evaluate(
         self,
         df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
-    ) -> Column:
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> NamedColumn:
         """Evaluate this expression given a dataframe for context."""
-        (child,) = self.children
-        return Column(
-            child.evaluate(df, context=context, mapping=mapping).obj, self.name
-        )
+        obj = self.value.evaluate(df, context=context, mapping=mapping)
+        if isinstance(obj, Scalar):
+            return NamedColumn(
+                plc.Column.from_scalar(obj.obj, 1),
+                self.name,
+                is_sorted=plc.types.Sorted.YES,
+                order=plc.types.Order.ASCENDING,
+                null_order=plc.types.NullOrder.BEFORE,
+            )
+        else:
+            return NamedColumn(
+                obj.obj,
+                self.name,
+                is_sorted=obj.is_sorted,
+                order=obj.order,
+                null_order=obj.null_order,
+            )
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
-        (value,) = self.children
-        return value.collect_agg(depth=depth)
+        return self.value.collect_agg(depth=depth)
 
 
 class Literal(Expr):
@@ -311,21 +346,21 @@ class Literal(Expr):
     _non_child = ("dtype", "value")
     value: pa.Scalar
 
-    def __init__(self, dtype: plc.DataType, value: Any) -> None:
+    def __init__(self, dtype: plc.DataType, value: pa.Scalar) -> None:
         super().__init__(dtype)
-        self.value = pa.scalar(value)
+        assert value.type == plc.interop.to_arrow(dtype)
+        self.value = value
 
     def do_evaluate(
         self,
         df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
+        mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        # TODO: obey dtype
-        obj = plc.interop.from_arrow(self.value)
-        return Scalar(obj)  # type: ignore
+        # datatype of pyarrow scalar is correct by construction.
+        return Scalar(plc.interop.from_arrow(self.value))  # type: ignore
 
 
 class Col(Expr):
@@ -342,7 +377,7 @@ class Col(Expr):
         df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
+        mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         return df._column_map[self.name]
@@ -358,7 +393,7 @@ class Len(Expr):
         df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
+        mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         # TODO: type is wrong, and dtype
@@ -415,8 +450,7 @@ class BooleanFunction(Expr):
                 [source_value],
                 indices,
                 plc.Table([plc.Column.from_scalar(target_value, table.num_rows())]),
-            ).columns()[0],
-            column.name,
+            ).columns()[0]
         )
 
     _BETWEEN_OPS: ClassVar[
@@ -448,7 +482,7 @@ class BooleanFunction(Expr):
         df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
+        mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         columns = [
@@ -467,18 +501,18 @@ class BooleanFunction(Expr):
             )
         if self.name == pl_expr.BooleanFunction.IsNull:
             (column,) = columns
-            return Column(plc.unary.is_null(column.obj), column.name)
+            return Column(plc.unary.is_null(column.obj))
         elif self.name == pl_expr.BooleanFunction.IsNotNull:
             (column,) = columns
-            return Column(plc.unary.is_valid(column.obj), column.name)
+            return Column(plc.unary.is_valid(column.obj))
         elif self.name == pl_expr.BooleanFunction.IsNan:
             # TODO: copy over null mask since is_nan(null) => null in polars
             (column,) = columns
-            return Column(plc.unary.is_nan(column.obj), column.name)
+            return Column(plc.unary.is_nan(column.obj))
         elif self.name == pl_expr.BooleanFunction.IsNotNan:
             # TODO: copy over null mask since is_not_nan(null) => null in polars
             (column,) = columns
-            return Column(plc.unary.is_not_nan(column.obj), column.name)
+            return Column(plc.unary.is_not_nan(column.obj))
         elif self.name == pl_expr.BooleanFunction.IsFirstDistinct:
             (column,) = columns
             return self._distinct(
@@ -528,7 +562,6 @@ class BooleanFunction(Expr):
                 ),
             )
         elif self.name == pl_expr.BooleanFunction.AllHorizontal:
-            name = columns[0].name
             if any(c.obj.null_count() > 0 for c in columns):
                 raise NotImplementedError("Kleene logic for all_horizontal")
             return Column(
@@ -539,11 +572,9 @@ class BooleanFunction(Expr):
                         output_type=self.dtype,
                     ),
                     (c.obj for c in columns),
-                ),
-                name,
+                )
             )
         elif self.name == pl_expr.BooleanFunction.AnyHorizontal:
-            name = columns[0].name
             if any(c.obj.null_count() > 0 for c in columns):
                 raise NotImplementedError("Kleene logic for any_horizontal")
             return Column(
@@ -554,8 +585,7 @@ class BooleanFunction(Expr):
                         output_type=self.dtype,
                     ),
                     (c.obj for c in columns),
-                ),
-                name,
+                )
             )
         elif self.name == pl_expr.BooleanFunction.IsBetween:
             column, lo, hi = columns
@@ -571,8 +601,7 @@ class BooleanFunction(Expr):
                     ),
                     plc.binaryop.BinaryOperator.LOGICAL_AND,
                     self.dtype,
-                ),
-                column.name,
+                )
             )
         else:
             raise NotImplementedError(f"BooleanFunction {self.name}")
@@ -606,7 +635,7 @@ class StringFunction(Expr):
         df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
+        mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         columns = [
@@ -615,20 +644,16 @@ class StringFunction(Expr):
         ]
         if self.name == pl_expr.StringFunction.Lowercase:
             (column,) = columns
-            return Column(plc.strings.case.to_lower(column.obj), column.name)
+            return Column(plc.strings.case.to_lower(column.obj))
         elif self.name == pl_expr.StringFunction.Uppercase:
             (column,) = columns
-            return Column(plc.strings.case.to_upper(column.obj), column.name)
+            return Column(plc.strings.case.to_upper(column.obj))
         elif self.name == pl_expr.StringFunction.EndsWith:
             column, suffix = columns
-            return Column(
-                plc.strings.find.ends_with(column.obj, suffix.obj), column.name
-            )
+            return Column(plc.strings.find.ends_with(column.obj, suffix.obj))
         elif self.name == pl_expr.StringFunction.StartsWith:
             column, suffix = columns
-            return Column(
-                plc.strings.find.starts_with(column.obj, suffix.obj), column.name
-            )
+            return Column(plc.strings.find.starts_with(column.obj, suffix.obj))
         else:
             raise NotImplementedError(f"StringFunction {self.name}")
 
@@ -649,19 +674,22 @@ class Sort(Expr):
         df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
+        mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         column = child.evaluate(df, context=context, mapping=mapping)
         (stable, nulls_last, descending) = self.options
         order, null_order = sorting.sort_order(
-            [descending], nulls_last=nulls_last, num_keys=1
+            [descending], nulls_last=[nulls_last], num_keys=1
         )
         do_sort = plc.sorting.stable_sort if stable else plc.sorting.sort
         table = do_sort(plc.Table([column.obj]), order, null_order)
-        return Column(table.columns()[0], column.name).set_sorted(
-            is_sorted=plc.types.Sorted.YES, order=order[0], null_order=null_order[0]
+        return Column(
+            table.columns()[0],
+            is_sorted=plc.types.Sorted.YES,
+            order=order[0],
+            null_order=null_order[0],
         )
 
 
@@ -672,7 +700,7 @@ class SortBy(Expr):
     def __init__(
         self,
         dtype: plc.DataType,
-        options: tuple[bool, bool, tuple[bool]],
+        options: tuple[bool, tuple[bool], tuple[bool]],
         column: Expr,
         *by: Expr,
     ):
@@ -685,7 +713,7 @@ class SortBy(Expr):
         df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
+        mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         column, *by = (
@@ -700,7 +728,7 @@ class SortBy(Expr):
         table = do_sort(
             plc.Table([column.obj]), plc.Table([c.obj for c in by]), order, null_order
         )
-        return Column(table.columns()[0], column.name)
+        return Column(table.columns()[0])
 
 
 class Gather(Expr):
@@ -716,7 +744,7 @@ class Gather(Expr):
         df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
+        mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         values, indices = (
@@ -741,7 +769,7 @@ class Gather(Expr):
             bounds_policy = plc.copying.OutOfBoundsPolicy.DONT_CHECK
             obj = indices.obj
         table = plc.copying.gather(plc.Table([values.obj]), obj, bounds_policy)
-        return Column(table.columns()[0], values.name)
+        return Column(table.columns()[0])
 
 
 class Filter(Expr):
@@ -757,7 +785,7 @@ class Filter(Expr):
         df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
+        mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         values, mask = (
@@ -767,7 +795,7 @@ class Filter(Expr):
         table = plc.stream_compaction.apply_boolean_mask(
             plc.Table([values.obj]), mask.obj
         )
-        return Column(table.columns()[0], values.name).sorted_like(values)
+        return Column(table.columns()[0]).sorted_like(values)
 
 
 class RollingWindow(Expr):
@@ -803,14 +831,12 @@ class Cast(Expr):
         df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
+        mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         column = child.evaluate(df, context=context, mapping=mapping)
-        return Column(plc.unary.cast(column.obj, self.dtype), column.name).sorted_like(
-            column
-        )
+        return Column(plc.unary.cast(column.obj, self.dtype)).sorted_like(column)
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
@@ -907,7 +933,9 @@ class Agg(Expr):
                 plc.reduce.reduce(column.obj, request, self.dtype),
                 1,
             ),
-            column.name,
+            is_sorted=plc.types.Sorted.YES,
+            order=plc.types.Order.ASCENDING,
+            null_order=plc.types.NullOrder.BEFORE,
         )
 
     def _count(self, column: Column) -> Column:
@@ -921,7 +949,9 @@ class Agg(Expr):
                 ),
                 1,
             ),
-            column.name,
+            is_sorted=plc.types.Sorted.YES,
+            order=plc.types.Order.ASCENDING,
+            null_order=plc.types.NullOrder.BEFORE,
         )
 
     def _min(self, column: Column, *, propagate_nans: bool) -> Column:
@@ -933,7 +963,9 @@ class Agg(Expr):
                     ),
                     1,
                 ),
-                column.name,
+                is_sorted=plc.types.Sorted.YES,
+                order=plc.types.Order.ASCENDING,
+                null_order=plc.types.NullOrder.BEFORE,
             )
         if column.nan_count > 0:
             column = column.mask_nans()
@@ -948,25 +980,37 @@ class Agg(Expr):
                     ),
                     1,
                 ),
-                column.name,
+                is_sorted=plc.types.Sorted.YES,
+                order=plc.types.Order.ASCENDING,
+                null_order=plc.types.NullOrder.BEFORE,
             )
         if column.nan_count > 0:
             column = column.mask_nans()
         return self._reduce(column, request=plc.aggregation.max())
 
     def _first(self, column: Column) -> Column:
-        return Column(plc.copying.slice(column.obj, [0, 1])[0], column.name)
+        return Column(
+            plc.copying.slice(column.obj, [0, 1])[0],
+            is_sorted=plc.types.Sorted.YES,
+            order=plc.types.Order.ASCENDING,
+            null_order=plc.types.NullOrder.BEFORE,
+        )
 
     def _last(self, column: Column) -> Column:
         n = column.obj.size()
-        return Column(plc.copying.slice(column.obj, [n - 1, n])[0], column.name)
+        return Column(
+            plc.copying.slice(column.obj, [n - 1, n])[0],
+            is_sorted=plc.types.Sorted.YES,
+            order=plc.types.Order.ASCENDING,
+            null_order=plc.types.NullOrder.BEFORE,
+        )
 
     def do_evaluate(
         self,
         df,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
+        mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         if context is not ExecutionContext.FRAME:
@@ -1018,7 +1062,7 @@ class BinOp(Expr):
         df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: dict[Expr, Column] | None = None,
+        mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         left, right = (
@@ -1027,7 +1071,6 @@ class BinOp(Expr):
         )
         return Column(
             plc.binaryop.binary_operation(left.obj, right.obj, self.op, self.dtype),
-            "what",
         )
 
     def collect_agg(self, *, depth: int) -> AggInfo:
