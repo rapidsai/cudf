@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
@@ -30,6 +31,7 @@
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -518,32 +520,37 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   bool const insert_end =
     not(last_row_offset.has_value() or
         (global_offsets.size() > 0 and global_offsets.back_element(stream) == chunk_offset));
-  rmm::device_uvector<int32_t> offsets{
-    global_offsets.size() + insert_begin + insert_end, stream, mr};
-  if (insert_begin) { offsets.set_element_to_zero_async(0, stream); }
-  if (insert_end) {
-    offsets.set_element(offsets.size() - 1, chunk_offset - *first_row_offset, stream);
-  }
+  auto const chars_bytes = chunk_offset - *first_row_offset;
+  auto offsets           = cudf::strings::detail::create_offsets_child_column(
+    chars_bytes, global_offsets.size() + insert_begin + insert_end, stream, mr);
+  auto offsets_itr =
+    cudf::detail::offsetalator_factory::make_output_iterator(offsets->mutable_view());
+  auto set_offset_value = [offsets_itr, stream](size_type index, int64_t value) {
+    cudf::detail::device_single_thread(
+      [offsets_itr, index, value] __device__() mutable { offsets_itr[index] = value; }, stream);
+  };
+  if (insert_begin) { set_offset_value(0, 0); }
+  if (insert_end) { set_offset_value(offsets->size() - 1, chars_bytes); }
   thrust::transform(rmm::exec_policy(stream),
                     global_offsets.begin(),
                     global_offsets.end(),
-                    offsets.begin() + insert_begin,
-                    cuda::proclaim_return_type<int32_t>(
+                    offsets_itr + insert_begin,
+                    cuda::proclaim_return_type<int64_t>(
                       [baseline = *first_row_offset] __device__(byte_offset global_offset) {
-                        return static_cast<int32_t>(global_offset - baseline);
+                        return (global_offset - baseline);
                       }));
-  auto string_count = offsets.size() - 1;
+  auto string_count = offsets->size() - 1;
   if (strip_delimiters) {
     auto it = cudf::detail::make_counting_transform_iterator(
       0,
       cuda::proclaim_return_type<thrust::pair<char*, int32_t>>(
-        [ofs        = offsets.data(),
+        [ofs        = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view()),
          chars      = chars.data(),
          delim_size = static_cast<size_type>(delimiter.size()),
          last_row   = static_cast<size_type>(string_count) - 1,
          insert_end] __device__(size_type row) {
           auto const begin = ofs[row];
-          auto const len   = ofs[row + 1] - begin;
+          auto const len   = static_cast<size_type>(ofs[row + 1] - begin);
           if (row == last_row && insert_end) {
             return thrust::make_pair(chars + begin, len);
           } else {
@@ -552,12 +559,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
         }));
     return cudf::strings::detail::make_strings_column(it, it + string_count, stream, mr);
   } else {
-    return cudf::make_strings_column(
-      string_count,
-      std::make_unique<cudf::column>(std::move(offsets), rmm::device_buffer{}, 0),
-      chars.release(),
-      0,
-      {});
+    return cudf::make_strings_column(string_count, std::move(offsets), chars.release(), 0, {});
   }
 }
 
