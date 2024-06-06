@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "rmm/mr/pinned_host_memory_resource.hpp"
-#include "rmm/resource_ref.hpp"
+#include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <benchmarks/io/cuio_common.hpp>
 
