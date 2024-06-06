@@ -28,6 +28,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -296,8 +297,13 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
     auto tmp_data_buffer                 = allocate_arrow_buffer(0, ar_mr);
     tmp_offset_buffer->mutable_data()[0] = 0;
 
-    return std::make_shared<arrow::StringArray>(
-      0, std::move(tmp_offset_buffer), std::move(tmp_data_buffer));
+    if (cudf::strings::detail::is_large_strings_enabled()) {
+      return std::make_shared<arrow::LargeStringArray>(
+        0, std::move(tmp_offset_buffer), std::move(tmp_data_buffer));
+    } else {
+      return std::make_shared<arrow::StringArray>(
+        0, std::move(tmp_offset_buffer), std::move(tmp_data_buffer));
+    }
   }
   auto offset_buffer = child_arrays[strings_column_view::offsets_column_index]->data()->buffers[1];
   auto const sview   = strings_column_view{input_view};
@@ -306,11 +312,19 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
                               static_cast<std::size_t>(sview.chars_size(stream))},
     ar_mr,
     stream);
-  return std::make_shared<arrow::StringArray>(static_cast<int64_t>(input_view.size()),
-                                              offset_buffer,
-                                              data_buffer,
-                                              fetch_mask_buffer(input_view, ar_mr, stream),
-                                              static_cast<int64_t>(input_view.null_count()));
+  if (cudf::strings::detail::is_large_strings_enabled()) {
+    return std::make_shared<arrow::LargeStringArray>(static_cast<int64_t>(input_view.size()),
+                                                     offset_buffer,
+                                                     data_buffer,
+                                                     fetch_mask_buffer(input_view, ar_mr, stream),
+                                                     static_cast<int64_t>(input_view.null_count()));
+  } else {
+    return std::make_shared<arrow::StringArray>(static_cast<int64_t>(input_view.size()),
+                                                offset_buffer,
+                                                data_buffer,
+                                                fetch_mask_buffer(input_view, ar_mr, stream),
+                                                static_cast<int64_t>(input_view.null_count()));
+  }
 }
 
 template <>
