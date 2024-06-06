@@ -30,7 +30,7 @@ import cudf
 import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
-from cudf_polars.containers import Column, DataFrame
+from cudf_polars.containers import DataFrame, NamedColumn
 from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
@@ -59,6 +59,38 @@ __all__ = [
 ]
 
 
+def broadcast(
+    *columns: NamedColumn, target_length: int | None = None
+) -> list[NamedColumn]:
+    lengths = {column.obj.size() for column in columns}
+    if len(lengths - {1}) > 1:
+        raise RuntimeError("Mismatching column lengths")
+    if lengths == {1}:
+        if target_length is None:
+            return list(columns)
+        nrows = target_length
+    elif len(lengths) == 1:
+        if target_length is not None:
+            assert target_length in lengths
+        return list(columns)
+    else:
+        (nrows,) = lengths - {1}
+        if target_length is not None:
+            assert target_length == nrows
+    return [
+        column
+        if column.obj.size() != 1
+        else NamedColumn(
+            plc.Column.from_scalar(plc.copying.get_element(column.obj, 0), nrows),
+            column.name,
+            is_sorted=plc.types.Sorted.YES,
+            order=plc.types.Order.ASCENDING,
+            null_order=plc.types.NullOrder.BEFORE,
+        )
+        for column in columns
+    ]
+
+
 @dataclass(slots=True)
 class IR:
     """Abstract plan node, representing an unevaluated dataframe."""
@@ -83,9 +115,10 @@ class IR:
 
         Raises
         ------
-        NotImplementedError if we couldn't evaluate things. Ideally
-        this should not occur, since the translation phase should pick
-        up things that we cannot handle.
+        NotImplementedError
+            If we couldn't evaluate things. Ideally this should not occur,
+            since the translation phase should pick up things that we
+            cannot handle.
         """
         raise NotImplementedError
 
@@ -96,7 +129,7 @@ class PythonScan(IR):
 
     options: Any
     """Arbitrary options."""
-    predicate: expr.Expr | None
+    predicate: expr.NamedExpr | None
     """Filter to apply to the constructed dataframe before returning it."""
 
 
@@ -117,7 +150,7 @@ class Scan(IR):
     - ``row_index: tuple[name, offset] | None``: Add an integer index
         column with given name.
     """
-    predicate: expr.Expr | None
+    predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
 
     def __post_init__(self):
@@ -153,14 +186,14 @@ class Scan(IR):
             init = plc.interop.from_arrow(
                 pa.scalar(offset, type=plc.interop.to_arrow(dtype))
             )
-            index = Column(
-                plc.filling.sequence(df.num_rows, init, step), name
-            ).set_sorted(
+            index = NamedColumn(
+                plc.filling.sequence(df.num_rows, init, step),
+                name,
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.AFTER,
             )
-            df = DataFrame([index, *df.columns], [])
+            df = DataFrame([index, *df.columns])
         # TODO: should be true, but not the case until we get
         # cudf-classic out of the loop for IO since it converts date32
         # to datetime.
@@ -171,7 +204,7 @@ class Scan(IR):
         if self.predicate is None:
             return df
         else:
-            mask = self.predicate.evaluate(df)
+            (mask,) = broadcast(self.predicate.evaluate(df), target_length=df.num_rows)
             return df.filter(mask)
 
 
@@ -208,7 +241,7 @@ class DataFrameScan(IR):
     """Polars LazyFrame object."""
     projection: list[str]
     """List of columns to project out."""
-    predicate: expr.Expr | None
+    predicate: expr.NamedExpr | None
     """Mask to apply."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
@@ -231,7 +264,7 @@ class DataFrameScan(IR):
             c.obj.type() == dtype for c, dtype in zip(df.columns, self.schema.values())
         )
         if self.predicate is not None:
-            mask = self.predicate.evaluate(df)
+            (mask,) = broadcast(self.predicate.evaluate(df), target_length=df.num_rows)
             return df.filter(mask)
         else:
             return df
@@ -243,20 +276,15 @@ class Select(IR):
 
     df: IR
     """Input dataframe."""
-    cse: list[expr.Expr]
-    """
-    List of common subexpressions that will appear in the selected expressions.
-
-    These must be evaluated before the returned expressions.
-    """
-    expr: list[expr.Expr]
+    expr: list[expr.NamedExpr]
     """List of expressions to evaluate to form the new dataframe."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]):
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        df = df.with_columns([e.evaluate(df) for e in self.cse])
-        return DataFrame([e.evaluate(df) for e in self.expr], [])
+        # Handle any broadcasting
+        columns = broadcast(*(e.evaluate(df) for e in self.expr))
+        return DataFrame(columns)
 
 
 @dataclass(slots=True)
@@ -269,13 +297,15 @@ class Reduce(IR):
 
     df: IR
     """Input dataframe."""
-    expr: list[expr.Expr]
+    expr: list[expr.NamedExpr]
     """List of expressions to evaluate to form the new dataframe."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]):
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        return DataFrame([e.evaluate(df) for e in self.expr], [])
+        columns = broadcast(*(e.evaluate(df) for e in self.expr))
+        assert all(column.obj.size() == 1 for column in columns)
+        return DataFrame(columns)
 
 
 def placeholder_column(n: int):
@@ -314,9 +344,9 @@ class GroupBy(IR):
 
     df: IR
     """Input dataframe."""
-    agg_requests: list[expr.Expr]
+    agg_requests: list[expr.NamedExpr]
     """List of expressions to evaluate groupwise."""
-    keys: list[expr.Expr]
+    keys: list[expr.NamedExpr]
     """List of expressions forming the keys."""
     maintain_order: bool
     """Should the order of the input dataframe be maintained?"""
@@ -339,9 +369,10 @@ class GroupBy(IR):
 
         Raises
         ------
-        NotImplementedError for unsupported expression nodes.
+        NotImplementedError
+            For unsupported expression nodes.
         """
-        if isinstance(agg, (expr.NamedExpr, expr.BinOp, expr.Cast)):
+        if isinstance(agg, (expr.BinOp, expr.Cast)):
             return max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, expr.Agg):
             if agg.name == "implode":
@@ -358,14 +389,16 @@ class GroupBy(IR):
             raise NotImplementedError("Maintaining order in groupby")
         if self.options.rolling:
             raise NotImplementedError("rolling window/groupby")
-        if any(GroupBy.check_agg(a) > 1 for a in self.agg_requests):
+        if any(GroupBy.check_agg(a.value) > 1 for a in self.agg_requests):
             raise NotImplementedError("Nested aggregations in groupby")
         self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        keys = [k.evaluate(df) for k in self.keys]
+        keys = broadcast(
+            *(k.evaluate(df) for k in self.keys), target_length=df.num_rows
+        )
         # TODO: use sorted information, need to expose column_order
         # and null_precedence in pylibcudf groupby constructor
         # sorted = (
@@ -379,7 +412,7 @@ class GroupBy(IR):
         )
         # TODO: uniquify
         requests = []
-        replacements = []
+        replacements: list[expr.Expr] = []
         for info in self.agg_infos:
             for pre_eval, req, rep in info.requests:
                 if pre_eval is None:
@@ -389,17 +422,20 @@ class GroupBy(IR):
                 requests.append(plc.groupby.GroupByRequest(col, [req]))
                 replacements.append(rep)
         group_keys, raw_tables = grouper.aggregate(requests)
-        raw_columns = []
+        # TODO: names
+        raw_columns: list[NamedColumn] = []
         for i, table in enumerate(raw_tables):
             (column,) = table.columns()
-            raw_columns.append(Column(column, f"column{i}"))
+            raw_columns.append(NamedColumn(column, f"tmp{i}"))
         mapping = dict(zip(replacements, raw_columns))
-        result_keys = [Column(gk, k.name) for gk, k in zip(group_keys.columns(), keys)]
-        result_subs = DataFrame(raw_columns, [])
+        result_keys = [
+            NamedColumn(gk, k.name) for gk, k in zip(group_keys.columns(), keys)
+        ]
+        result_subs = DataFrame(raw_columns)
         results = [
             req.evaluate(result_subs, mapping=mapping) for req in self.agg_requests
         ]
-        return DataFrame([*result_keys, *results], []).slice(self.options.slice)
+        return DataFrame([*result_keys, *results]).slice(self.options.slice)
 
 
 @dataclass(slots=True)
@@ -410,9 +446,9 @@ class Join(IR):
     """Left frame."""
     right: IR
     """Right frame."""
-    left_on: list[expr.Expr]
+    left_on: list[expr.NamedExpr]
     """List of expressions used as keys in the left frame."""
-    right_on: list[expr.Expr]
+    right_on: list[expr.NamedExpr]
     """List of expressions used as keys in the right frame."""
     options: tuple[
         Literal["inner", "left", "full", "leftsemi", "leftanti"],
@@ -479,8 +515,17 @@ class Join(IR):
         """Evaluate and return a dataframe."""
         left = self.left.evaluate(cache=cache)
         right = self.right.evaluate(cache=cache)
-        left_on = DataFrame([e.evaluate(left) for e in self.left_on], [])
-        right_on = DataFrame([e.evaluate(right) for e in self.right_on], [])
+        left_on = DataFrame(
+            broadcast(
+                *(e.evaluate(left) for e in self.left_on), target_length=left.num_rows
+            )
+        )
+        right_on = DataFrame(
+            broadcast(
+                *(e.evaluate(right) for e in self.right_on),
+                target_length=right.num_rows,
+            )
+        )
         how, join_nulls, zlice, suffix, coalesce = self.options
         null_equality = (
             plc.types.NullEquality.EQUAL
@@ -510,7 +555,7 @@ class Join(IR):
             if coalesce and how != "inner":
                 left = left.replace_columns(
                     *(
-                        Column(
+                        NamedColumn(
                             plc.replace.replace_nulls(left_col.obj, right_col.obj),
                             left_col.name,
                         )
@@ -538,20 +583,18 @@ class HStack(IR):
 
     df: IR
     """Input dataframe."""
-    cse: list[expr.Expr]
-    """
-    List of common subexpressions that will appear in the selected expressions.
-
-    These must be evaluated before the returned expressions.
-    """
-    columns: list[expr.Expr]
+    columns: list[expr.NamedExpr]
     """List of expressions to produce new columns."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        ctx = df.copy().with_columns([e.evaluate(df) for e in self.cse])
-        return df.with_columns([c.evaluate(ctx) for c in self.columns])
+        columns = [c.evaluate(df) for c in self.columns]
+        # TODO: a bit of a hack, should inherit the should_broadcast
+        # property of polars' ProjectionOptions on the hstack node.
+        if not any(e.name.startswith("__POLARS_CSER_0x") for e in self.columns):
+            columns = broadcast(*columns, target_length=df.num_rows)
+        return df.with_columns(columns)
 
 
 @dataclass(slots=True)
@@ -614,7 +657,10 @@ class Distinct(IR):
                 plc.types.NanEquality.ALL_EQUAL,
             )
         result = DataFrame(
-            [Column(c, old.name) for c, old in zip(table.columns(), df.columns)], []
+            [
+                NamedColumn(c, old.name).sorted_like(old)
+                for c, old in zip(table.columns(), df.columns)
+            ]
         )
         if keys_sorted or self.stable:
             result = result.sorted_like(df)
@@ -627,7 +673,7 @@ class Sort(IR):
 
     df: IR
     """Input."""
-    by: list[expr.Expr]
+    by: list[expr.NamedExpr]
     """List of expressions to produce sort keys."""
     do_sort: Callable[..., plc.Table]
     """pylibcudf sorting function."""
@@ -642,7 +688,7 @@ class Sort(IR):
         self,
         schema: dict,
         df: IR,
-        by: list[expr.Expr],
+        by: list[expr.NamedExpr],
         options: Any,
         zlice: tuple[int, int] | None,
     ):
@@ -661,7 +707,9 @@ class Sort(IR):
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        sort_keys = [k.evaluate(df) for k in self.by]
+        sort_keys = broadcast(
+            *(k.evaluate(df) for k in self.by), target_length=df.num_rows
+        )
         names = {c.name: i for i, c in enumerate(df.columns)}
         # TODO: More robust identification here.
         keys_in_result = [
@@ -675,7 +723,9 @@ class Sort(IR):
             self.order,
             self.null_order,
         )
-        columns = [Column(c, old.name) for c, old in zip(table.columns(), df.columns)]
+        columns = [
+            NamedColumn(c, old.name) for c, old in zip(table.columns(), df.columns)
+        ]
         # If a sort key is in the result table, set the sortedness property
         for k, i in enumerate(keys_in_result):
             columns[i] = columns[i].set_sorted(
@@ -683,7 +733,7 @@ class Sort(IR):
                 order=self.order[k],
                 null_order=self.null_order[k],
             )
-        return DataFrame(columns, []).slice(self.zlice)
+        return DataFrame(columns).slice(self.zlice)
 
 
 @dataclass(slots=True)
@@ -709,13 +759,14 @@ class Filter(IR):
 
     df: IR
     """Input."""
-    mask: expr.Expr
+    mask: expr.NamedExpr
     """Expression evaluating to a mask."""
 
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        return df.filter(self.mask.evaluate(df))
+        (mask,) = broadcast(self.mask.evaluate(df), target_length=df.num_rows)
+        return df.filter(mask)
 
 
 @dataclass(slots=True)
@@ -729,7 +780,10 @@ class Projection(IR):
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         # This can reorder things.
-        return df.select(list(self.schema.keys()))
+        columns = broadcast(
+            *df.select(list(self.schema.keys())).columns, target_length=df.num_rows
+        )
+        return DataFrame(columns)
 
 
 @dataclass(slots=True)
@@ -856,10 +910,8 @@ class HConcat(IR):
     def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
-        columns, scalars = zip(*((df.columns, df.scalars) for df in dfs))
         return DataFrame(
-            list(itertools.chain.from_iterable(columns)),
-            list(itertools.chain.from_iterable(scalars)),
+            list(itertools.chain.from_iterable(df.columns for df in dfs)),
         )
 
 
