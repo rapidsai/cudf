@@ -76,6 +76,9 @@ cpdef Column concatenate_list_elements(Column input, bool dropna):
     -------
     Column
         A new Column of concatenated list elements
+    dropna : bool
+        If true, null list elements will be ignored
+        from concatenation. Otherwise the row will be nulled out.
     """
     cdef concatenate_null_policy null_policy = (
         concatenate_null_policy.IGNORE if dropna

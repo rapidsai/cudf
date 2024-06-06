@@ -2,7 +2,6 @@
 
 from libcpp cimport bool
 
-from cudf._lib.pylibcudf.libcudf.lists.combine cimport concatenate_null_policy
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 from .column cimport Column
