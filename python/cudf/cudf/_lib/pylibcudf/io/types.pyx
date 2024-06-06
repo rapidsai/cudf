@@ -1,15 +1,21 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from cpython.buffer cimport PyBUF_READ
+from cpython.memoryview cimport PyMemoryView_FromMemory
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+from cudf._lib.pylibcudf.libcudf.io.data_sink cimport data_sink
 from cudf._lib.pylibcudf.libcudf.io.types cimport (
+    column_name_info,
     host_buffer,
     source_info,
     table_with_metadata,
 )
 
+import codecs
 import errno
 import io
 import os
@@ -20,7 +26,39 @@ cdef class TableWithMetadata:
     (e.g. column names)
 
     For details, see :cpp:class:`cudf::io::table_with_metadata`.
+
+    Parameters
+    ----------
+    tbl: Table
+        The input table.
+    column_names: list
+        A list of tuples each containing the name of each column
+        and the names of its child columns (in the same format).
+        e.g.
+        [("id", []), ("name", [("first", []), ("last", [])])]
+
     """
+    def __init__(self, Table tbl, list column_names):
+        self.tbl = tbl
+
+        self.metadata.schema_info = move(self._make_column_info(column_names))
+
+    cdef vector[column_name_info] _make_column_info(self, list column_names):
+        cdef vector[column_name_info] col_name_infos
+        cdef column_name_info info
+
+        col_name_infos.reserve(len(column_names))
+
+        for name, child_names in column_names:
+            if not isinstance(name, str):
+                raise ValueError("Column name must be a string!")
+
+            info.name = move(<string> name.encode())
+            info.children = move(self._make_column_info(child_names))
+
+            col_name_infos.push_back(info)
+
+        return col_name_infos
 
     @property
     def columns(self):
@@ -48,6 +86,7 @@ cdef class TableWithMetadata:
         out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl))
         out.metadata = tbl_with_meta.metadata
         return out
+
 
 cdef class SourceInfo:
     """A class containing details on a source to read from.
@@ -108,3 +147,85 @@ cdef class SourceInfo:
                                                      c_buffer.shape[0]))
 
         self.c_obj = source_info(c_host_buffers)
+
+
+# Adapts a python io.IOBase object as a libcudf IO data_sink. This lets you
+# write from cudf to any python file-like object (File/BytesIO/SocketIO etc)
+cdef cppclass iobase_data_sink(data_sink):
+    object buf
+
+    iobase_data_sink(object buf_):
+        this.buf = buf_
+
+    void host_write(const void * data, size_t size) with gil:
+        if isinstance(buf, io.StringIO):
+            buf.write(PyMemoryView_FromMemory(<char*>data, size, PyBUF_READ)
+                      .tobytes().decode())
+        else:
+            buf.write(PyMemoryView_FromMemory(<char*>data, size, PyBUF_READ))
+
+    void flush() with gil:
+        buf.flush()
+
+    size_t bytes_written() with gil:
+        return buf.tell()
+
+
+cdef class SinkInfo:
+    """A class containing details on a source to read from.
+
+    For details, see :cpp:class:`cudf::io::sink_info`.
+
+    Parameters
+    ----------
+    sinks : List[Union[str, os.PathLike,
+                        io.BytesIO, io.IOBase,
+                        io.StringIO, io.TextIOBase]]
+
+        A homogeneous list of sinks (this can be a string filename,
+        bytes, or one of the Python I/O classes) to read from.
+
+        Mixing different types of sinks will raise a `ValueError`.
+    """
+
+    def __init__(self, list sinks):
+        cdef vector[data_sink *] data_sinks
+
+        cdef vector[string] paths
+        if isinstance(sinks[0], io.StringIO):
+            data_sinks.reserve(len(sinks))
+            for s in sinks:
+                self.sink_storage.push_back(
+                    unique_ptr[data_sink](new iobase_data_sink(s))
+                )
+                data_sinks.push_back(self.sink_storage.back().get())
+            self.c_obj = sink_info(data_sinks)
+        elif isinstance(sinks[0], io.TextIOBase):
+            data_sinks.reserve(len(sinks))
+            for s in sinks:
+                # Files opened in text mode expect writes to be str rather than
+                # bytes, which requires conversion from utf-8. If the underlying
+                # buffer is utf-8, we can bypass this conversion by writing
+                # directly to it.
+                if codecs.lookup(s.encoding).name not in {"utf-8", "ascii"}:
+                    raise NotImplementedError(f"Unsupported encoding {s.encoding}")
+                self.sink_storage.push_back(
+                    unique_ptr[data_sink](new iobase_data_sink(s.buffer))
+                )
+                data_sinks.push_back(self.sink_storage.back().get())
+            self.c_obj = sink_info(data_sinks)
+        elif isinstance(sinks[0], io.IOBase):
+            data_sinks.reserve(len(sinks))
+            for s in sinks:
+                self.sink_storage.push_back(
+                    unique_ptr[data_sink](new iobase_data_sink(s))
+                )
+                data_sinks.push_back(self.sink_storage.back().get())
+            self.c_obj = sink_info(data_sinks)
+        elif isinstance(sinks[0], (basestring, os.PathLike)):
+            paths.reserve(len(sinks))
+            for s in sinks:
+                paths.push_back(<string> os.path.expanduser(s).encode())
+            self.c_obj = sink_info(move(paths))
+        else:
+            raise TypeError("Unrecognized input type: {}".format(type(sinks)))
