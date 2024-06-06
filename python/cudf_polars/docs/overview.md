@@ -176,7 +176,7 @@ around their pylibcudf counterparts. We have four (in
 1. `Scalar` (a wrapper around a pylibcudf `Scalar`)
 2. `Column` (a wrapper around a pylibcudf `Column`)
 3. `NamedColumn` a `Column` with an additional name
-3. `DataFrame` (a wrapper around a pylibcudf `Table`)
+4. `DataFrame` (a wrapper around a pylibcudf `Table`)
 
 The interfaces offered by these are somewhat in flux, but broadly
 speaking, a `DataFrame` is just a list of `NamedColumn`s which each
