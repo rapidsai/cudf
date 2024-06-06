@@ -621,9 +621,9 @@ cdef class ParquetWriter:
         If ``True``, enable dictionary encoding for Parquet page data
         subject to ``max_dictionary_size`` constraints.
         If ``False``, disable dictionary encoding for Parquet page data.
-    write_arrow_schema : bool, default False
+    store_schema : bool, default False
         If ``True``, enable computing and writing arrow schema to Parquet
-        file footer's key-value metadata section.
+        file footer's key-value metadata section for faithful round-tripping.
     See Also
     --------
     cudf.io.parquet.write_parquet

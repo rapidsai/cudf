@@ -156,6 +156,7 @@ def write_to_dataset(
     column_encoding=None,
     column_type_length=None,
     output_as_binary=None,
+    store_schema=False,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -244,6 +245,9 @@ def write_to_dataset(
     output_as_binary : set, optional, default None
         If a column name is present in the set, that column will be output as
         unannotated binary, rather than the default 'UTF-8'.
+    store_schema : bool, default False
+        If ``True``, enable computing and writing arrow schema to Parquet
+        file footer's key-value metadata section for faithful round-tripping.
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
@@ -287,6 +291,7 @@ def write_to_dataset(
             column_encoding=column_encoding,
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
+            store_schema=store_schema,
         )
 
     else:
@@ -314,6 +319,7 @@ def write_to_dataset(
             column_encoding=column_encoding,
             column_type_length=column_type_length,
             output_as_binary=output_as_binary,
+            store_schema=store_schema,
         )
 
     return metadata
@@ -1018,6 +1024,7 @@ def to_parquet(
                 column_encoding=column_encoding,
                 column_type_length=column_type_length,
                 output_as_binary=output_as_binary,
+                store_schema=store_schema,
             )
 
         partition_info = (

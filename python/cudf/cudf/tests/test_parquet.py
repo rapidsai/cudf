@@ -2555,6 +2555,10 @@ def normalized_equals(value1, value2):
         value1 = None
     if value2 is pd.NA or value2 is pd.NaT:
         value2 = None
+    if isinstance(value1, np.datetime64):
+        value1 = pd.Timestamp(value1).to_pydatetime()
+    if isinstance(value2, np.datetime64):
+        value2 = pd.Timestamp(value2).to_pydatetime()
     if isinstance(value1, pd.Timestamp):
         value1 = value1.to_pydatetime()
     if isinstance(value2, pd.Timestamp):
@@ -3489,7 +3493,6 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema(tmpdir, data):
     # Check results
     assert_eq(expected, got)
 
-<<<<<<< arrow-schema-support-pq-writer
     # Reset buffer
     buffer = BytesIO()
 
@@ -3500,6 +3503,9 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema(tmpdir, data):
     got = cudf.read_parquet(buffer)
     # Convert to cudf table for an apple to apple comparison
     expected = cudf.from_pandas(pdf)
+
+    # Check results
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize("index", [None, True, False])
@@ -3641,7 +3647,6 @@ def test_parquet_writer_roundtrip_structs_with_arrow_schema(
     # Ensure that the structs are faithfully being roundtripped across
     # Parquet with arrow schema
     pa_expected = pa.Table.from_pydict({"struct": data})
-    pd_expected = pa_expected.to_pandas()
 
     expected = cudf.DataFrame.from_arrow(pa_expected)
 
@@ -3649,18 +3654,15 @@ def test_parquet_writer_roundtrip_structs_with_arrow_schema(
     buffer = BytesIO()
     expected.to_parquet(buffer, store_schema=True, index=index)
 
-    # Read Parquet with pyarrow and pandas
+    # Read Parquet with pyarrow
     pa_got = pq.read_table(buffer)
-    pd_got = pd.read_parquet(buffer)
 
     # drop the index column for comparison: __index_level_0__
     if index:
         pa_got = pa_got.drop(columns="__index_level_0__")
-        pd_got = pd_got.drop(columns="__index_level_0__")
 
     # Check results
     assert_eq(pa_expected, pa_got)
-    assert_eq(pd_expected, pd_got)
 
     # Convert to cuDF table and also read Parquet with cuDF reader
     got = cudf.DataFrame.from_arrow(pa_got)
@@ -3669,7 +3671,7 @@ def test_parquet_writer_roundtrip_structs_with_arrow_schema(
     # Check results
     assert_eq(expected, got)
     assert_eq(expected, got2)
-=======
+
 
 @pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
 @pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
@@ -3695,4 +3697,3 @@ def test_parquet_chunked_reader(
     )
     actual = reader.read()
     assert_eq(expected, actual)
->>>>>>> branch-24.08
