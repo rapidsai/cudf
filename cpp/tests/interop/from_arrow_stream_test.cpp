@@ -38,8 +38,6 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-static void null_release_array(ArrowArray* stream) {}
-
 struct VectorOfArrays {
   std::vector<nanoarrow::UniqueArray> arrays;
   nanoarrow::UniqueSchema schema;
@@ -48,12 +46,7 @@ struct VectorOfArrays {
   static int get_schema(ArrowArrayStream* stream, ArrowSchema* out_schema)
   {
     auto private_data = static_cast<VectorOfArrays*>(stream->private_data);
-    // TODO: Can the deep copy be avoided here? I tried creating a new schema
-    // with a shallow copy of the fields and seeing the release function to a
-    // no-op, but that resulted in the children being freed somehow in the
-    // EmptyTest (I didn't investigate further).
     ArrowSchemaDeepCopy(private_data->schema.get(), out_schema);
-
     return 0;
   }
 
@@ -64,24 +57,7 @@ struct VectorOfArrays {
       out_array->release = nullptr;
       return 0;
     }
-    auto ret_array = private_data->arrays[private_data->index++].get();
-    // TODO: This shallow copy seems to work, but is it safe, especially with
-    // respect to the children? I believe we should be safe from double-freeing
-    // because everything will check for a null release pointer before freeing,
-    // but that could produce use-after-free bugs especially with the children
-    // since that pointer is just copied over. My current tests won't reflect
-    // that but creating multiple streams from the same set of arrays would.
-    // Is that even a valid use case?
-    out_array->length     = ret_array->length;
-    out_array->null_count = ret_array->null_count;
-    out_array->offset     = ret_array->offset;
-    out_array->n_buffers  = ret_array->n_buffers;
-    out_array->buffers    = ret_array->buffers;
-    out_array->n_children = ret_array->n_children;
-    out_array->children   = ret_array->children;
-    out_array->dictionary = ret_array->dictionary;
-    out_array->release    = null_release_array;
-
+    ArrowArrayMove(private_data->arrays[private_data->index++].get(), out_array);
     return 0;
   }
 
