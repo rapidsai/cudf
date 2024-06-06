@@ -25,15 +25,24 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <limits>
 #include <vector>
 
 struct StringsManyTest : public cudf::test::StringsLargeTest {};
 
 TEST_F(StringsManyTest, Replace)
 {
-  auto const expected  = this->very_long_column();
-  auto const view      = cudf::column_view(expected);
-  int const multiplier = 16;
+  auto const expected = this->very_long_column();
+  auto const view     = cudf::column_view(expected);
+  // force addressing (rows > max_size_type/sizeof(int64)) in a 64-bit offsets column
+  int constexpr max_size_type = std::numeric_limits<cudf::size_type>::max();
+  // minimum number of duplicates to achieve large strings (64-bit offsets)
+  int const min_size_multiplier =
+    (max_size_type / cudf::strings_column_view(view).chars_size(cudf::get_default_stream())) + 1;
+  // minimum row multiplier to create max_size_type/sizeof(int64) = 268,435,455 rows
+  int const min_row_multiplier = ((max_size_type / sizeof(int64_t)) / view.size()) + 1;
+  int const multiplier         = std::max(min_size_multiplier, min_row_multiplier);
+
   std::vector<cudf::column_view> input_cols(multiplier, view);
   std::vector<cudf::size_type> splits;
   std::generate_n(std::back_inserter(splits), multiplier - 1, [view, n = 1]() mutable {
