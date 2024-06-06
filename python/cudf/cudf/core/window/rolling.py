@@ -253,7 +253,9 @@ class Rolling(GetAttrGetItemMixin, Reducible):
         applied = (
             self._apply_agg_column(col, agg_name) for col in self.obj._columns
         )
-        return self.obj._from_columns_like_self(applied)
+        return self.obj._from_data_like_self(
+            self.obj._data._from_columns_like_self(applied)
+        )
 
     def _reduce(
         self,
@@ -518,17 +520,6 @@ class RollingGroupby(Rolling):
         index = cudf.MultiIndex._from_data(
             {**self._group_keys._data, **self.obj.index._data}
         )
-        #     cudf.DataFrame(
-        #         {
-        #             key: value
-        #             for key, value in itertools.chain(
-        #                 self._group_keys._data.items(),
-        #                 self.obj.index._data.items(),
-        #             )
-        #         }
-        #     )
-        # )
-
         result = super()._apply_agg(agg_name)
         result.index = index
         return result

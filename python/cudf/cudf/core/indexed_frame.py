@@ -344,8 +344,6 @@ class IndexedFrame(Frame):
                 index.names = index_names
             else:
                 index.name = index_names[0]
-        # else:
-        #     index = self.index
 
         data = dict(zip(column_names, data_columns))
         frame = self.__class__._from_data(data)
@@ -436,7 +434,9 @@ class IndexedFrame(Frame):
                 # pandas returns an int64 dtype for all int or bool dtypes.
                 result_col = result_col.astype(np.int64)
             results.append(getattr(result_col, op)())
-        return self._from_columns_like_self(results)
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(results)
+        )
 
     def _check_data_index_length_match(self) -> None:
         # Validate that the number of rows in the data matches the index if the
@@ -902,7 +902,9 @@ class IndexedFrame(Frame):
                     #     `to_replace_per_column` to `replacements_per_column`.
                     replaced = col.copy(deep=True)
                 copy_data.append(replaced)
-            result = self._from_columns_like_self(copy_data)
+            result = self._from_data_like_self(
+                self._data._from_columns_like_self(copy_data)
+            )
         else:
             result = self.copy()
 
@@ -1029,7 +1031,9 @@ class IndexedFrame(Frame):
             col.clip(low, high)
             for col, low, high in zip(self._columns, lower, upper)
         )
-        output = self._from_columns_like_self(data)
+        output = self._from_data_like_self(
+            self._data._from_columns_like_self(data)
+        )
         return self._mimic_inplace(output, inplace=inplace)
 
     @_cudf_nvtx_annotate
@@ -2035,7 +2039,9 @@ class IndexedFrame(Frame):
             # Interpolation methods may or may not need the index
             columns.append(interpolator(col, index=data.index))
 
-        result = self._from_columns_like_self(columns)
+        result = self._from_data_like_self(
+            self._data._from_columns_like_self(columns)
+        )
         result.index = data.index
 
         return (
@@ -2063,7 +2069,9 @@ class IndexedFrame(Frame):
         data_columns = (
             col.shift(periods, fill_value) for col in self._columns
         )
-        return self._from_columns_like_self(data_columns)
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(data_columns)
+        )
 
     @_cudf_nvtx_annotate
     def truncate(self, before=None, after=None, axis=0, copy=True):
@@ -3644,7 +3652,9 @@ class IndexedFrame(Frame):
             result = result.sort_values(sort_col_id)
             del result[sort_col_id]
 
-        out = self._from_columns_like_self(result._columns)
+        out = self._from_data(
+            self._data._from_columns_like_self(result._columns)
+        )
         out.index = result.index
         out.index.names = self.index.names
         return out
@@ -3885,7 +3895,9 @@ class IndexedFrame(Frame):
             else col.copy(deep=True)
             for name, col in self._data.items()
         )
-        return self._from_columns_like_self(cols)
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(cols)
+        )
 
     def resample(
         self,
@@ -6249,10 +6261,12 @@ class IndexedFrame(Frame):
                     level_names=self._data.level_names,
                     label_dtype=self._data.label_dtype,
                 ),
-                index=source.index,
             )
         else:
-            result = source._from_columns_like_self(result_columns)
+            result = source._from_data_like_self(
+                self._data._from_columns_like_self(result_columns)
+            )
+        result.index = source.index
         return result.astype(np.float64)
 
     def convert_dtypes(
