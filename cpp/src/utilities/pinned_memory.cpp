@@ -83,7 +83,7 @@ class fixed_pinned_pool_memory_resource {
                         std::size_t alignment,
                         cuda::stream_ref stream) noexcept
   {
-    if (bytes <= pool_size_ && ptr >= pool_begin_ && ptr <= pool_end_) {
+    if (bytes <= pool_size_ && ptr >= pool_begin_ && ptr < pool_end_) {
       pool_->deallocate_async(ptr, bytes, alignment, stream);
     } else {
       upstream_mr_.deallocate_async(ptr, bytes, alignment, stream);
@@ -113,13 +113,13 @@ class fixed_pinned_pool_memory_resource {
     return !operator==(other);
   }
 
-  [[maybe_unused]] friend void get_property(fixed_pinned_pool_memory_resource const&,
-                                            cuda::mr::device_accessible) noexcept
+  friend void get_property(fixed_pinned_pool_memory_resource const&,
+                           cuda::mr::device_accessible) noexcept
   {
   }
 
-  [[maybe_unused]] friend void get_property(fixed_pinned_pool_memory_resource const&,
-                                            cuda::mr::host_accessible) noexcept
+  friend void get_property(fixed_pinned_pool_memory_resource const&,
+                           cuda::mr::host_accessible) noexcept
   {
   }
 };
@@ -148,7 +148,7 @@ CUDF_EXPORT rmm::host_device_async_resource_ref& make_default_pinned_mr(
     }();
 
     // rmm requires the pool size to be a multiple of 256 bytes
-    auto const aligned_size = (size + 255) & ~255;
+    auto const aligned_size = rmm::align_up(size, rmm::RMM_DEFAULT_HOST_ALIGNMENT);
     CUDF_LOG_INFO("Pinned pool size = {}", aligned_size);
 
     // make the pool with max size equal to the initial size
