@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "cudf/detail/utilities/vector_factories.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/text/device_data_chunks.hpp"
 #include "io/utilities/config_utils.hpp"
@@ -22,6 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
 #include <cudf/utilities/default_stream.hpp>

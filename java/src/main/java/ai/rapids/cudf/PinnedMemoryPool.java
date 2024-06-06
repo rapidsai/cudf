@@ -128,7 +128,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
    *
    * @param poolSize size of the pool to initialize.
    * @param gpuId    gpu id to set to get memory pool from, -1 means to use default
-   * @param setCudfPinnedPoolMemoryResource true if this pinned pool should be used by cuIO for host memory
+   * @param setCudfPinnedPoolMemoryResource true if this pinned pool should be used by cuDF for pinned memory
    */
   public static synchronized void initialize(long poolSize, int gpuId, boolean setCudfPinnedPoolMemoryResource) {
     if (isInitialized()) {

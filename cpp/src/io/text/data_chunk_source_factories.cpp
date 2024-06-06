@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include "cudf/detail/utilities/vector_factories.hpp"
 #include "io/text/device_data_chunks.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/host_vector.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 
 #include <rmm/device_buffer.hpp>
