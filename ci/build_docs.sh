@@ -46,9 +46,11 @@ pushd docs/cudf
 make dirhtml
 mkdir -p "${RAPIDS_DOCS_DIR}/cudf/html"
 mv build/dirhtml/* "${RAPIDS_DOCS_DIR}/cudf/html"
-make text
-mkdir -p "${RAPIDS_DOCS_DIR}/cudf/txt"
-mv build/text/* "${RAPIDS_DOCS_DIR}/cudf/txt"
+if [[ "${RAPIDS_BUILD_TYPE}" != "pull-request" ]]; then
+  make text
+  mkdir -p "${RAPIDS_DOCS_DIR}/cudf/txt"
+  mv build/text/* "${RAPIDS_DOCS_DIR}/cudf/txt"
+fi
 popd
 
 rapids-logger "Build dask-cuDF Sphinx docs"
@@ -56,9 +58,11 @@ pushd docs/dask_cudf
 make dirhtml
 mkdir -p "${RAPIDS_DOCS_DIR}/dask-cudf/html"
 mv build/dirhtml/* "${RAPIDS_DOCS_DIR}/dask-cudf/html"
-make text
-mkdir -p "${RAPIDS_DOCS_DIR}/dask-cudf/txt"
-mv build/text/* "${RAPIDS_DOCS_DIR}/dask-cudf/txt"
+if [[ "${RAPIDS_BUILD_TYPE}" != "pull-request" ]]; then
+  make text
+  mkdir -p "${RAPIDS_DOCS_DIR}/dask-cudf/txt"
+  mv build/text/* "${RAPIDS_DOCS_DIR}/dask-cudf/txt"
+fi
 popd
 
 rapids-upload-docs
