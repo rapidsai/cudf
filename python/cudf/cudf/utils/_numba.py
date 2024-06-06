@@ -2,7 +2,10 @@
 
 import glob
 import os
+import re
+import subprocess
 import sys
+import tempfile
 from functools import lru_cache
 
 from numba import config as numba_config
@@ -139,6 +142,51 @@ def _setup_numba():
                 patch_numba_linker()
 
 
+def _get_ptx_and_cuda_version_from_nvcc():
+    """
+    Get the CUDA version and PTX version from the output of nvcc.
+
+    This function runs `nvcc --version` and parses the output to get the CUDA
+    version. It then creates an empty temporary file with suffix .cu and runs
+    `nvcc -ptx` on it to get the PTX version.
+
+    This can be used to support building cuDF with new CUDA versions as long as
+    the same new CUDA version is also used at runtime.
+    """
+
+    try:
+        process_output = subprocess.run(
+            ["nvcc", "--version"], capture_output=True
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError("Failed to get version from nvcc.") from e
+
+    output_lines = process_output.stdout.decode().splitlines()
+
+    match = re.search(r"release (\d+)\.(\d+)", output_lines[3])
+    if match is None:
+        raise RuntimeError("Failed to parse CUDA version from nvcc output.")
+    cuda_version = tuple(int(v) for v in match.groups())
+
+    # Create an empty temporary file with suffix .cu
+    with tempfile.NamedTemporaryFile(suffix=".cu", delete=False) as empty_cu:
+        empty_name = empty_cu.name
+        # Use the -ptx flag to build an empty file and write it to stdout
+        ptx_output = subprocess.check_output(
+            ["nvcc", "-ptx", empty_name, "-o", "-"]
+        ).decode()
+    ptx_version = _get_ptx_version_from_ptx_content(ptx_output.split("\n"))
+
+    return ptx_version, cuda_version
+
+
+def _get_ptx_version_from_ptx_content(lines):
+    for line in lines:
+        if line.startswith(".version"):
+            return line.strip("\n").split(" ")[1]
+    raise ValueError("Could not read PTX version.")
+
+
 def _get_cuda_version_from_ptx_file(path):
     """
     https://docs.nvidia.com/cuda/parallel-thread-execution/
@@ -160,13 +208,7 @@ def _get_cuda_version_from_ptx_file(path):
 
     """
     with open(path) as ptx_file:
-        for line in ptx_file:
-            if line.startswith(".version"):
-                ver_line = line
-                break
-        else:
-            raise ValueError("Could not read CUDA version from ptx file.")
-    version = ver_line.strip("\n").split(" ")[1]
+        version = _get_ptx_version_from_ptx_content(ptx_file)
     # This dictionary maps from supported versions of NVVM to the
     # PTX version it produces. The lowest value should be the minimum
     # CUDA version required to compile the library. Currently CUDA 11.5
@@ -186,6 +228,14 @@ def _get_cuda_version_from_ptx_file(path):
 
     cuda_ver = ver_map.get(version)
     if cuda_ver is None:
+        try:
+            nvcc_ptx_version, nvcc_cuda_version = (
+                _get_ptx_and_cuda_version_from_nvcc()
+            )
+            if version == nvcc_ptx_version:
+                return nvcc_cuda_version
+        except Exception:
+            pass
         raise ValueError(
             f"Could not map PTX version {version} to a CUDA version"
         )
