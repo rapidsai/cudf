@@ -1398,10 +1398,10 @@ TEST_F(ParquetWriterTest, INT96Stats)
 
   // check that int96 timestamp min and max statistics are written properly
 
-  // 2020-3-21 14:20:13.000781 = 0x5a15e19b40c08 (1584800413781000) =
+  // 2020-3-21 14:20:13.000781 = 0x5a15e19b40c08 (1584800413781000)
   std::vector<uint8_t> expected_min{0x08, 0x0c, 0xb4, 0x19, 0x5e, 0xa1, 0x05, 0x00};
 
-  // 2025-7-14 7:38:45.418688 = 0x639debfe7aec0
+  // 2025-7-14 7:38:45.418688 = 0x639debfe7aec0 (1752478725418688)
   std::vector<uint8_t> expected_max{0xc0, 0xae, 0xe7, 0xbf, 0xde, 0x39, 0x06, 0x00};
 
   column_wrapper<cudf::timestamp_us> big_ts_col{
