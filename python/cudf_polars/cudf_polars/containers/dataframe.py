@@ -101,8 +101,9 @@ class DataFrame:
 
         Raises
         ------
-        ValueError if the number of provided names does not match the
-        number of columns in the table.
+        ValueError
+            If the number of provided names does not match the
+            number of columns in the table.
         """
         if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
@@ -130,7 +131,8 @@ class DataFrame:
 
         Raises
         ------
-        ValueError if there is a name mismatch between self and like.
+        ValueError
+            If there is a name mismatch between self and like.
         """
         if like.column_names != self.column_names:
             raise ValueError("Can only copy from identically named frame")

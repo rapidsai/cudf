@@ -246,8 +246,8 @@ def translate_ir(visitor: Any, *, n: int | None = None) -> ir.IR:
 
     Raises
     ------
-    NotImplementedError if we can't translate the nodes due to
-    unsupported functionality.
+    NotImplementedError
+        If we can't translate the nodes due to unsupported functionality.
     """
     ctx: AbstractContextManager = (
         set_node(visitor, n) if n is not None else noop_context
@@ -282,7 +282,8 @@ def translate_named_expr(visitor: Any, *, n: pl_expr.PyExprIR) -> expr.NamedExpr
 
     Raises
     ------
-    NotImplementedError if any translation fails due to unsupported functionality.
+    NotImplementedError
+        If any translation fails due to unsupported functionality.
     """
     return expr.NamedExpr(n.output_name, translate_expr(visitor, n=n.node))
 
@@ -427,7 +428,8 @@ def translate_expr(visitor: Any, *, n: int) -> expr.Expr:
 
     Raises
     ------
-    NotImplementedError if any translation fails due to unsupported functionality.
+    NotImplementedError
+        If any translation fails due to unsupported functionality.
     """
     node = visitor.view_expression(n)
     dtype = dtypes.from_polars(visitor.get_dtype(n))

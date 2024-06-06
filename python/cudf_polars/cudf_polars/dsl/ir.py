@@ -115,9 +115,10 @@ class IR:
 
         Raises
         ------
-        NotImplementedError if we couldn't evaluate things. Ideally
-        this should not occur, since the translation phase should pick
-        up things that we cannot handle.
+        NotImplementedError
+            If we couldn't evaluate things. Ideally this should not occur,
+            since the translation phase should pick up things that we
+            cannot handle.
         """
         raise NotImplementedError
 
@@ -368,7 +369,8 @@ class GroupBy(IR):
 
         Raises
         ------
-        NotImplementedError for unsupported expression nodes.
+        NotImplementedError
+            For unsupported expression nodes.
         """
         if isinstance(agg, (expr.BinOp, expr.Cast)):
             return max(GroupBy.check_agg(child) for child in agg.children)

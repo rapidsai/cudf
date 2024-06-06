@@ -192,9 +192,10 @@ class Expr:
 
         Raises
         ------
-        NotImplementedError if we couldn't evaluate the expression.
-        Ideally all these are returned during translation to the IR,
-        but for now we are not perfect.
+        NotImplementedError
+            If we couldn't evaluate the expression. Ideally all these
+            are returned during translation to the IR, but for now we
+            are not perfect.
         """
         raise NotImplementedError(f"Evaluation of {type(self).__name__}")
 
@@ -241,9 +242,10 @@ class Expr:
 
         Raises
         ------
-        NotImplementedError if we couldn't evaluate the expression.
-        Ideally all these are returned during translation to the IR,
-        but for now we are not perfect.
+        NotImplementedError
+            If we couldn't evaluate the expression. Ideally all these
+            are returned during translation to the IR, but for now we
+            are not perfect.
         """
         if mapping is None:
             return self.do_evaluate(df, context=context, mapping=mapping)
@@ -269,9 +271,9 @@ class Expr:
 
         Raises
         ------
-        NotImplementedError if we can't currently perform the
-        aggregation request (for example nested aggregations like
-        ``a.max().min()``).
+        NotImplementedError
+            If we can't currently perform the aggregation request, for
+            example nested aggregations like ``a.max().min()``.
         """
         raise NotImplementedError(
             f"Collecting aggregation info for {type(self).__name__}"
@@ -279,6 +281,9 @@ class Expr:
 
 
 class NamedExpr:
+    # NamedExpr does not inherit from Expr since it does not appear
+    # when evaluating expressions themselves, only when constructing
+    # named return values in dataframe (IR) nodes.
     __slots__ = ("name", "value")
 
     def __init__(self, name: str, value: Expr) -> None:
