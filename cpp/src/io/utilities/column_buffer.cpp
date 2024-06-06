@@ -191,6 +191,10 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
         auto data      = col_content.data.release();
         auto char_size = data->size();
 
+        CUDF_EXPECTS(char_size < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+                     "Cannot convert strings column to lists column due to size_type limit",
+                     std::overflow_error);
+
         auto uint8_col = std::make_unique<column>(
           data_type{type_id::UINT8}, char_size, std::move(*data), rmm::device_buffer{}, 0);
 

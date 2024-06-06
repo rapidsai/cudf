@@ -8,4 +8,5 @@ from . cimport (
     find,
     regex_flags,
     regex_program,
+    replace,
 )

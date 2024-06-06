@@ -8,4 +8,5 @@ from . import (
     find,
     regex_flags,
     regex_program,
+    replace,
 )
