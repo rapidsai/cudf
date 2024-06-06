@@ -21,6 +21,7 @@ import cudf
 from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column, column_empty
+from cudf.core.lazy import parse_lazy_argument
 from cudf.utils import ioutils
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
@@ -529,6 +530,7 @@ def read_parquet(
     open_file_options=None,
     bytes_per_thread=None,
     dataset_kwargs=None,
+    lazy=None,
     *args,
     **kwargs,
 ):
@@ -546,6 +548,28 @@ def read_parquet(
                 "use_python_file_object is set to False."
             )
         open_file_options = {}
+
+    if parse_lazy_argument(lazy):
+        import dask_cudf
+
+        assert engine == "cudf"
+        return cudf.core.lazy.DataFrame._fsproxy_wrap(
+            dask_cudf.read_parquet(
+                path=filepath_or_buffer,
+                columns=columns,
+                filters=filters,
+                storage_options=storage_options,
+                calculate_divisions=None,
+                ignore_metadata_file=False,
+                metadata_task_size=None,
+                split_row_groups=False,
+                npartitions=1,
+                lazy=False,
+                *args,
+                **kwargs,
+            ),
+            None,
+        )
 
     if bytes_per_thread is None:
         bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
