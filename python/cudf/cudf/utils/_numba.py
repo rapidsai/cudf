@@ -12,7 +12,7 @@ from numba import config as numba_config
 # strings_udf. This is the easiest way to break an otherwise circular import
 # loop of _lib.*->cudautils->_numba->_lib.strings_udf
 @lru_cache
-def _get_cc_60_ptx_file():
+def _get_cc_70_ptx_file():
     from cudf._lib import strings_udf
 
     return os.path.join(
@@ -20,7 +20,7 @@ def _get_cc_60_ptx_file():
         "..",
         "core",
         "udf",
-        "shim_60.ptx",
+        "shim_70.ptx",
     )
 
 
@@ -38,8 +38,8 @@ def _get_best_ptx_file(archs, max_compute_capability):
 
 def _get_ptx_file(path, prefix):
     if "RAPIDS_NO_INITIALIZE" in os.environ:
-        # cc=60 ptx is always built
-        cc = int(os.environ.get("STRINGS_UDF_CC", "60"))
+        # cc=70 ptx is always built
+        cc = int(os.environ.get("STRINGS_UDF_CC", "70"))
     else:
         from numba import cuda
 
@@ -120,17 +120,22 @@ def _setup_numba():
     versions = safe_get_versions()
     if versions != NO_DRIVER:
         driver_version, runtime_version = versions
-        ptx_toolkit_version = _get_cuda_version_from_ptx_file(
-            _get_cc_60_ptx_file()
-        )
 
         # MVC is required whenever any PTX is newer than the driver
         # This could be the shipped PTX file or the PTX emitted by
         # the version of NVVM on the user system, the latter aligning
         # with the runtime version
-        if (driver_version < ptx_toolkit_version) or (
-            driver_version < runtime_version
-        ):
+        should_patch = False
+        if driver_version < runtime_version:
+            should_patch = True
+        else:
+            ptx_toolkit_version = _get_cuda_version_from_ptx_file(
+                _get_cc_70_ptx_file()
+            )
+            if driver_version < ptx_toolkit_version:
+                should_patch = True
+
+        if should_patch:
             if driver_version < (12, 0):
                 patch_numba_linker_cuda_11()
             else:
@@ -182,6 +187,7 @@ def _get_cuda_version_from_ptx_file(path):
         "8.2": (12, 2),
         "8.3": (12, 3),
         "8.4": (12, 4),
+        "8.5": (12, 5),
     }
 
     cuda_ver = ver_map.get(version)
