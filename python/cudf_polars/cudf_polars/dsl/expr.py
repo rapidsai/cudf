@@ -875,9 +875,6 @@ class Agg(Expr):
         self, dtype: plc.DataType, name: str, options: Any, value: Expr
     ) -> None:
         super().__init__(dtype)
-        # TODO: fix polars name
-        if name == "nunique":
-            name = "n_unique"
         self.name = name
         self.options = options
         self.children = (value,)
