@@ -311,6 +311,18 @@ _register_option(
     _make_contains_validator([False, True]),
 )
 
+_register_option(
+    "lazy",
+    _env_get_bool("CUDF_LAZY", False),
+    textwrap.dedent(
+        """
+        Enables lazy dataframe and series.
+        \tValid values are True or False. Default is False.
+        """
+    ),
+    _make_contains_validator([False, True]),
+)
+
 
 class option_context(ContextDecorator):
     """
