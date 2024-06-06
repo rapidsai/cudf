@@ -491,7 +491,7 @@ def write_parquet(
             "Valid values are '1.0' and '2.0'"
         )
 
-    dict_policy = (
+    cdef cudf_io_types.dictionary_policy dict_policy = (
         cudf_io_types.dictionary_policy.ADAPTIVE
         if use_dictionary
         else cudf_io_types.dictionary_policy.NEVER

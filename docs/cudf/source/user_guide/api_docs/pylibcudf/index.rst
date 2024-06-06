@@ -17,6 +17,7 @@ This page provides API documentation for pylibcudf.
     filling
     gpumemoryview
     groupby
+    io/index.rst
     join
     lists
     merge
