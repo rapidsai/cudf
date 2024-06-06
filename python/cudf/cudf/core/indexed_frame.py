@@ -318,17 +318,11 @@ class IndexedFrame(Frame):
         columns: List[ColumnBase],
         column_names: Optional[abc.Iterable[str]] = None,
         index_names: Optional[List[str]] = None,
-        *,
-        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
     ) -> Self:
         """Construct a `Frame` from a list of columns with metadata from self.
 
         If `index_names` is set, the first `len(index_names)` columns are
         used to construct the index of the frame.
-
-        If override_dtypes is provided then any non-None entry will be
-        used for the dtype of the matching column in preference to the
-        dtype of the column in self.
         """
         if column_names is None:
             column_names = self._column_names
@@ -356,7 +350,6 @@ class IndexedFrame(Frame):
         return frame._copy_type_metadata(
             self,
             include_index=bool(index_names),
-            override_dtypes=override_dtypes,
         )
 
     def __round__(self, digits=0):
@@ -1926,18 +1919,14 @@ class IndexedFrame(Frame):
         )
 
     def _copy_type_metadata(
-        self,
-        other: Self,
-        include_index: bool = True,
-        *,
-        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
+        self: Self, other: Self, include_index: bool = True
     ) -> Self:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
         See `ColumnBase._with_type_metadata` for more information.
         """
-        super()._copy_type_metadata(other, override_dtypes=override_dtypes)
+        super()._copy_type_metadata(other)
         if (
             include_index
             and self.index is not None
@@ -5233,36 +5222,42 @@ class IndexedFrame(Frame):
         # duplicated. If ignore_index is set, the original index is not
         # exploded and will be replaced with a `RangeIndex`.
         if not isinstance(self._data[explode_column].dtype, ListDtype):
-            data = self._data.copy(deep=True)
-            idx = None if ignore_index else self.index.copy(deep=True)
-            return self.__class__._from_data(data, index=idx)
+            result = self.copy()
+            if ignore_index:
+                result.index = RangeIndex(self._num_rows)
+            return result
 
         column_index = self._column_names.index(explode_column)
-        if not ignore_index and self.index is not None:
-            index_offset = self.index.nlevels
+        if not ignore_index:
+            idx_cols = self.index._data.columns
         else:
-            index_offset = 0
+            idx_cols = ()
 
         exploded = libcudf.lists.explode_outer(
-            [
-                *(self.index._data.columns if not ignore_index else ()),
-                *self._columns,
-            ],
-            column_index + index_offset,
+            [*idx_cols, *self._columns],
+            column_index + len(idx_cols),
         )
         # We must copy inner datatype of the exploded list column to
         # maintain struct dtype key names
         exploded_dtype = cast(
             ListDtype, self._columns[column_index].dtype
         ).element_type
+        casted_cols = []
+        for i, (explode, (_, dtype)) in enumerate(
+            zip(exploded[len(idx_cols) :], self._dtypes)
+        ):
+            if i == column_index:
+                casted = explode._with_type_metadata(dtype)
+            else:
+                casted = explode._with_type_metadata(exploded_dtype)
+            casted_cols.append(casted)
+
+        exploded = exploded[: len(idx_cols)] + casted_cols
+
         return self._from_columns_like_self(
             exploded,
             self._column_names,
             self._index_names if not ignore_index else None,
-            override_dtypes=(
-                exploded_dtype if i == column_index else None
-                for i in range(len(self._columns))
-            ),
         )
 
     @_cudf_nvtx_annotate

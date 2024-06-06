@@ -2045,9 +2045,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return midx
 
     @_cudf_nvtx_annotate
-    def _copy_type_metadata(
-        self: MultiIndex, other: MultiIndex, *, override_dtypes=None
-    ) -> MultiIndex:
+    def _copy_type_metadata(self: MultiIndex, other: MultiIndex) -> MultiIndex:
         res = super()._copy_type_metadata(other)
         if isinstance(other, MultiIndex):
             res._names = other._names
