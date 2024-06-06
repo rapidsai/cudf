@@ -1391,6 +1391,46 @@ TEST_F(ParquetWriterTest, NoNullsAsNonNullable)
   EXPECT_NO_THROW(cudf::io::write_parquet(out_opts));
 }
 
+TEST_F(ParquetWriterTest, INT96Stats)
+{
+  using namespace cuda::std::chrono;
+  using namespace cudf::io;
+
+  // check that int96 timestamp min and max statistics are written properly
+
+  // 2020-3-21 14:20:13.000781 = 0x5a15e19b40c08 (1584800413781000) =
+  std::vector<uint8_t> expected_min{0x08, 0x0c, 0xb4, 0x19, 0x5e, 0xa1, 0x05, 0x00};
+
+  // 2025-7-14 7:38:45.418688 = 0x639debfe7aec0
+  std::vector<uint8_t> expected_max{0xc0, 0xae, 0xe7, 0xbf, 0xde, 0x39, 0x06, 0x00};
+
+  column_wrapper<cudf::timestamp_us> big_ts_col{
+    sys_days{year{2025} / month{7} / day{14}} + 7h + 38min + 45s + 418688us,
+    sys_days{year{2022} / month{3} / day{12}} + 1h + 2min + 45s + 2us,
+    sys_days{year{2020} / month{3} / day{21}} + 14h + 20min + 13s + microseconds{781ms}};
+
+  table_view expected({big_ts_col});
+
+  auto const filepath = temp_env->get_temp_filepath("INT96Stats.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .int96_timestamps(true);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::detail::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+
+  auto const stats = get_statistics(fmd.row_groups[0].columns[0]);
+
+  ASSERT_TRUE(stats.min_value.has_value());
+  ASSERT_TRUE(stats.max_value.has_value());
+
+  EXPECT_EQ(expected_min, stats.min_value);
+  EXPECT_EQ(expected_max, stats.max_value);
+}
+
 TEST_F(ParquetWriterTest, TimestampMicrosINT96NoOverflow)
 {
   using namespace cuda::std::chrono;

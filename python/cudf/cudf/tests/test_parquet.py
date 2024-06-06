@@ -2545,6 +2545,10 @@ def normalized_equals(value1, value2):
         value1 = None
     if value2 is pd.NA or value2 is pd.NaT:
         value2 = None
+    if isinstance(value1, np.datetime64):
+        value1 = pd.Timestamp(value1).to_pydatetime()
+    if isinstance(value2, np.datetime64):
+        value2 = pd.Timestamp(value2).to_pydatetime()
     if isinstance(value1, pd.Timestamp):
         value1 = value1.to_pydatetime()
     if isinstance(value2, pd.Timestamp):
