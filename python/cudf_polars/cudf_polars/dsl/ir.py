@@ -279,12 +279,16 @@ class Select(IR):
     """Input dataframe."""
     expr: list[expr.NamedExpr]
     """List of expressions to evaluate to form the new dataframe."""
+    should_broadcast: bool
+    """Should columns be broadcast?"""
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         # Handle any broadcasting
-        columns = broadcast(*(e.evaluate(df) for e in self.expr))
+        columns = [e.evaluate(df) for e in self.expr]
+        if self.should_broadcast:
+            columns = broadcast(*columns)
         return DataFrame(columns)
 
 
@@ -587,15 +591,24 @@ class HStack(IR):
     """Input dataframe."""
     columns: list[expr.NamedExpr]
     """List of expressions to produce new columns."""
+    should_broadcast: bool
+    """Should columns be broadcast?"""
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         columns = [c.evaluate(df) for c in self.columns]
-        # TODO: a bit of a hack, should inherit the should_broadcast
-        # property of polars' ProjectionOptions on the hstack node.
-        if not any(e.name.startswith("__POLARS_CSER_0x") for e in self.columns):
+        if self.should_broadcast:
             columns = broadcast(*columns, target_length=df.num_rows)
+        else:
+            # Polars ensures this is true, but let's make sure nothing
+            # went wrong. In this case, the parent node is a
+            # guaranteed to be a Select which will take care of making
+            # sure that everything is the same length. The result
+            # table that might have mismatching column lengths will
+            # never be turned into a pylibcudf Table with all columns
+            # by the Select, which is why this is safe.
+            assert all(e.name.startswith("__POLARS_CSER_0x") for e in self.columns)
         return df.with_columns(columns)
 
 
