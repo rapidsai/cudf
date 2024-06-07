@@ -165,6 +165,10 @@ class PythonScan(IR):
     predicate: expr.NamedExpr | None
     """Filter to apply to the constructed dataframe before returning it."""
 
+    def __post_init__(self):
+        """Validate preconditions."""
+        raise NotImplementedError("PythonScan not implemented")
+
 
 @dataclasses.dataclass(slots=True)
 class Scan(IR):
