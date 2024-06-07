@@ -1,7 +1,5 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-# TODO: remove need for this
-# ruff: noqa: D101
 """
 DSL nodes for the LogicalPlan of polars.
 
@@ -15,11 +13,11 @@ can be considered as functions:
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import types
-from dataclasses import dataclass
 from functools import cache
-from typing import TYPE_CHECKING, Any, Callable, ClassVar
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, NoReturn
 
 import pyarrow as pa
 from typing_extensions import assert_never
@@ -34,7 +32,10 @@ from cudf_polars.containers import DataFrame, NamedColumn
 from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
+    from collections.abc import MutableMapping
     from typing import Literal
+
+    from cudf_polars.typing import Schema
 
 
 __all__ = [
@@ -91,14 +92,14 @@ def broadcast(
     ]
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class IR:
     """Abstract plan node, representing an unevaluated dataframe."""
 
-    schema: dict[str, plc.DataType]
+    schema: Schema
     """Mapping from column names to their data types."""
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """
         Evaluate the node and return a dataframe.
 
@@ -123,7 +124,7 @@ class IR:
         raise NotImplementedError
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class PythonScan(IR):
     """Representation of input from a python function."""
 
@@ -133,7 +134,7 @@ class PythonScan(IR):
     """Filter to apply to the constructed dataframe before returning it."""
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class Scan(IR):
     """Input from files."""
 
@@ -153,14 +154,14 @@ class Scan(IR):
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate preconditions."""
         if self.file_options.n_rows is not None:
             raise NotImplementedError("row limit in scan")
         if self.typ not in ("csv", "parquet"):
             raise NotImplementedError(f"Unhandled scan type: {self.typ}")
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         options = self.file_options
         with_columns = options.with_columns
@@ -172,9 +173,9 @@ class Scan(IR):
                 )
             )
         elif self.typ == "parquet":
-            df = DataFrame.from_cudf(
-                cudf.read_parquet(self.paths, columns=with_columns)
-            )
+            cdf = cudf.read_parquet(self.paths, columns=with_columns)
+            assert isinstance(cdf, cudf.DataFrame)
+            df = DataFrame.from_cudf(cdf)
         else:
             assert_never(self.typ)
         if row_index is not None:
@@ -208,7 +209,7 @@ class Scan(IR):
             return df.filter(mask)
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class Cache(IR):
     """
     Return a cached plan node.
@@ -221,7 +222,7 @@ class Cache(IR):
     value: IR
     """The unevaluated node to cache."""
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         try:
             return cache[self.key]
@@ -229,7 +230,7 @@ class Cache(IR):
             return cache.setdefault(self.key, self.value.evaluate(cache=cache))
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class DataFrameScan(IR):
     """
     Input from an existing polars DataFrame.
@@ -244,7 +245,7 @@ class DataFrameScan(IR):
     predicate: expr.NamedExpr | None
     """Mask to apply."""
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         pdf = pl.DataFrame._from_pydf(self.df)
         if self.projection is not None:
@@ -270,7 +271,7 @@ class DataFrameScan(IR):
             return df
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class Select(IR):
     """Produce a new dataframe selecting given expressions from an input."""
 
@@ -279,7 +280,7 @@ class Select(IR):
     expr: list[expr.NamedExpr]
     """List of expressions to evaluate to form the new dataframe."""
 
-    def evaluate(self, *, cache: dict[int, DataFrame]):
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         # Handle any broadcasting
@@ -287,7 +288,7 @@ class Select(IR):
         return DataFrame(columns)
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class Reduce(IR):
     """
     Produce a new dataframe selecting given expressions from an input.
@@ -300,7 +301,7 @@ class Reduce(IR):
     expr: list[expr.NamedExpr]
     """List of expressions to evaluate to form the new dataframe."""
 
-    def evaluate(self, *, cache: dict[int, DataFrame]):
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         columns = broadcast(*(e.evaluate(df) for e in self.expr))
@@ -308,7 +309,7 @@ class Reduce(IR):
         return DataFrame(columns)
 
 
-def placeholder_column(n: int):
+def placeholder_column(n: int) -> plc.Column:
     """
     Produce a placeholder pylibcudf column with NO BACKING DATA.
 
@@ -338,7 +339,7 @@ def placeholder_column(n: int):
     )
 
 
-@dataclass(slots=False)
+@dataclasses.dataclass(slots=False)
 class GroupBy(IR):
     """Perform a groupby."""
 
@@ -352,6 +353,7 @@ class GroupBy(IR):
     """Should the order of the input dataframe be maintained?"""
     options: Any
     """Options controlling style of groupby."""
+    agg_infos: list[expr.AggInfo] = dataclasses.field(init=False)
 
     @staticmethod
     def check_agg(agg: expr.Expr) -> int:
@@ -383,7 +385,7 @@ class GroupBy(IR):
         else:
             raise NotImplementedError(f"No handler for {agg=}")
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Check whether all the aggregations are implemented."""
         if self.options.rolling is None and self.maintain_order:
             raise NotImplementedError("Maintaining order in groupby")
@@ -393,7 +395,7 @@ class GroupBy(IR):
             raise NotImplementedError("Nested aggregations in groupby")
         self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         keys = broadcast(
@@ -438,7 +440,7 @@ class GroupBy(IR):
         return DataFrame([*result_keys, *results]).slice(self.options.slice)
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class Join(IR):
     """A join of two dataframes."""
 
@@ -466,7 +468,7 @@ class Join(IR):
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate preconditions."""
         if self.options[0] == "cross":
             raise NotImplementedError("cross join not implemented")
@@ -511,7 +513,7 @@ class Join(IR):
         else:
             assert_never(how)
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         left = self.left.evaluate(cache=cache)
         right = self.right.evaluate(cache=cache)
@@ -577,7 +579,7 @@ class Join(IR):
         return result.slice(zlice)
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class HStack(IR):
     """Add new columns to a dataframe."""
 
@@ -586,7 +588,7 @@ class HStack(IR):
     columns: list[expr.NamedExpr]
     """List of expressions to produce new columns."""
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         columns = [c.evaluate(df) for c in self.columns]
@@ -597,7 +599,7 @@ class HStack(IR):
         return df.with_columns(columns)
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class Distinct(IR):
     """Produce a new dataframe with distinct rows."""
 
@@ -619,7 +621,7 @@ class Distinct(IR):
         "any": plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
     }
 
-    def __init__(self, schema: dict, df: IR, options: Any):
+    def __init__(self, schema: Schema, df: IR, options: Any) -> None:
         self.schema = schema
         self.df = df
         (keep, subset, maintain_order, zlice) = options
@@ -628,7 +630,7 @@ class Distinct(IR):
         self.stable = maintain_order
         self.zlice = zlice
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         if self.subset is None:
@@ -667,7 +669,7 @@ class Distinct(IR):
         return result.slice(self.zlice)
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class Sort(IR):
     """Sort a dataframe."""
 
@@ -686,12 +688,12 @@ class Sort(IR):
 
     def __init__(
         self,
-        schema: dict,
+        schema: Schema,
         df: IR,
         by: list[expr.NamedExpr],
         options: Any,
         zlice: tuple[int, int] | None,
-    ):
+    ) -> None:
         self.schema = schema
         self.df = df
         self.by = by
@@ -704,7 +706,7 @@ class Sort(IR):
             plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
         )
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         sort_keys = broadcast(
@@ -736,7 +738,7 @@ class Sort(IR):
         return DataFrame(columns).slice(self.zlice)
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class Slice(IR):
     """Slice a dataframe."""
 
@@ -747,13 +749,13 @@ class Slice(IR):
     length: int
     """Length of the slice."""
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         return df.slice((self.offset, self.length))
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class Filter(IR):
     """Filter a dataframe with a boolean mask."""
 
@@ -762,21 +764,21 @@ class Filter(IR):
     mask: expr.NamedExpr
     """Expression evaluating to a mask."""
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         (mask,) = broadcast(self.mask.evaluate(df), target_length=df.num_rows)
         return df.filter(mask)
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class Projection(IR):
     """Select a subset of columns from a dataframe."""
 
     df: IR
     """Input."""
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         # This can reorder things.
@@ -786,7 +788,7 @@ class Projection(IR):
         return DataFrame(columns)
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class MapFunction(IR):
     """Apply some function to a dataframe."""
 
@@ -807,7 +809,7 @@ class MapFunction(IR):
         ]
     )
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate preconditions."""
         if self.name not in MapFunction._NAMES:
             raise NotImplementedError(f"Unhandled map function {self.name}")
@@ -824,7 +826,7 @@ class MapFunction(IR):
             if key_column not in self.df.dfs[0].schema:
                 raise ValueError(f"Key column {key_column} not found")
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         if self.name == "merge_sorted":
             # merge_sorted operates on Union inputs
@@ -876,7 +878,7 @@ class MapFunction(IR):
             raise AssertionError("Should never be reached")
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class Union(IR):
     """Concatenate dataframes vertically."""
 
@@ -885,13 +887,13 @@ class Union(IR):
     zlice: tuple[int, int] | None
     """Optional slice to apply after concatenation."""
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validated preconditions."""
         schema = self.dfs[0].schema
         if not all(s.schema == schema for s in self.dfs[1:]):
             raise ValueError("Schema mismatch")
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         # TODO: only evaluate what we need if we have a slice
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
@@ -900,14 +902,14 @@ class Union(IR):
         ).slice(self.zlice)
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class HConcat(IR):
     """Concatenate dataframes horizontally."""
 
     dfs: list[IR]
     """List of inputs."""
 
-    def evaluate(self, *, cache: dict[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
         return DataFrame(
@@ -915,7 +917,7 @@ class HConcat(IR):
         )
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class ExtContext(IR):
     """
     Concatenate dataframes horizontally.
@@ -928,7 +930,7 @@ class ExtContext(IR):
     extra: list[IR]
     """List of extra inputs."""
 
-    def __post_init__(self):
+    def __post_init__(self) -> NoReturn:
         """Validate preconditions."""
         raise NotImplementedError(
             "ExtContext will be deprecated, use horizontal concat instead."

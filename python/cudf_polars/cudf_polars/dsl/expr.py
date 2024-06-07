@@ -139,14 +139,14 @@ class Expr:
             other.children
         )
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: Any) -> bool:
         """Equality of expressions."""
         if type(self) != type(other) or hash(self) != hash(other):
             return False
         else:
             return self.is_equal(other)
 
-    def __ne__(self, other) -> bool:
+    def __ne__(self, other: Any) -> bool:
         """Inequality of expressions."""
         return not self.__eq__(other)
 
@@ -285,6 +285,8 @@ class NamedExpr:
     # when evaluating expressions themselves, only when constructing
     # named return values in dataframe (IR) nodes.
     __slots__ = ("name", "value")
+    value: Expr
+    name: str
 
     def __init__(self, name: str, value: Expr) -> None:
         self.name = name
@@ -298,7 +300,7 @@ class NamedExpr:
         """Repr of the expression."""
         return f"NamedExpr({self.name}, {self.value}"
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: Any) -> bool:
         """Equality of two expressions."""
         return (
             type(self) is type(other)
@@ -306,7 +308,7 @@ class NamedExpr:
             and self.value == other.value
         )
 
-    def __ne__(self, other) -> bool:
+    def __ne__(self, other: Any) -> bool:
         """Inequality of expressions."""
         return not self.__eq__(other)
 
@@ -344,9 +346,10 @@ class NamedExpr:
 class Literal(Expr):
     __slots__ = ("value",)
     _non_child = ("dtype", "value")
-    value: pa.Scalar
+    value: pa.Scalar[Any]
+    children: tuple[()]
 
-    def __init__(self, dtype: plc.DataType, value: pa.Scalar) -> None:
+    def __init__(self, dtype: plc.DataType, value: pa.Scalar[Any]) -> None:
         super().__init__(dtype)
         assert value.type == plc.interop.to_arrow(dtype)
         self.value = value
@@ -367,6 +370,7 @@ class Col(Expr):
     __slots__ = ("name",)
     _non_child = ("dtype", "name")
     name: str
+    children: tuple[()]
 
     def __init__(self, dtype: plc.DataType, name: str) -> None:
         self.dtype = dtype
@@ -388,6 +392,8 @@ class Col(Expr):
 
 
 class Len(Expr):
+    children: tuple[()]
+
     def do_evaluate(
         self,
         df: DataFrame,
@@ -410,8 +416,15 @@ class Len(Expr):
 class BooleanFunction(Expr):
     __slots__ = ("name", "options", "children")
     _non_child = ("dtype", "name", "options")
+    children: tuple[Expr, ...]
 
-    def __init__(self, dtype: plc.DataType, name: str, options: tuple, *children: Expr):
+    def __init__(
+        self,
+        dtype: plc.DataType,
+        name: pl_expr.BooleanFunction,
+        options: tuple[Any, ...],
+        *children: Expr,
+    ) -> None:
         super().__init__(dtype)
         self.options = options
         self.name = name
@@ -610,14 +623,15 @@ class BooleanFunction(Expr):
 class StringFunction(Expr):
     __slots__ = ("name", "options", "children")
     _non_child = ("dtype", "name", "options")
+    children: tuple[Expr, ...]
 
     def __init__(
         self,
         dtype: plc.DataType,
         name: pl_expr.StringFunction,
-        options: tuple,
+        options: tuple[Any, ...],
         *children: Expr,
-    ):
+    ) -> None:
         super().__init__(dtype)
         self.options = options
         self.name = name
@@ -661,10 +675,11 @@ class StringFunction(Expr):
 class Sort(Expr):
     __slots__ = ("options", "children")
     _non_child = ("dtype", "options")
+    children: tuple[Expr]
 
     def __init__(
         self, dtype: plc.DataType, options: tuple[bool, bool, bool], column: Expr
-    ):
+    ) -> None:
         super().__init__(dtype)
         self.options = options
         self.children = (column,)
@@ -696,6 +711,7 @@ class Sort(Expr):
 class SortBy(Expr):
     __slots__ = ("options", "children")
     _non_child = ("dtype", "options")
+    children: tuple[Expr, ...]
 
     def __init__(
         self,
@@ -703,7 +719,7 @@ class SortBy(Expr):
         options: tuple[bool, tuple[bool], tuple[bool]],
         column: Expr,
         *by: Expr,
-    ):
+    ) -> None:
         super().__init__(dtype)
         self.options = options
         self.children = (column, *by)
@@ -734,8 +750,9 @@ class SortBy(Expr):
 class Gather(Expr):
     __slots__ = ("children",)
     _non_child = ("dtype",)
+    children: tuple[Expr, Expr]
 
-    def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr):
+    def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr) -> None:
         super().__init__(dtype)
         self.children = (values, indices)
 
@@ -775,6 +792,7 @@ class Gather(Expr):
 class Filter(Expr):
     __slots__ = ("children",)
     _non_child = ("dtype",)
+    children: tuple[Expr, Expr]
 
     def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr):
         super().__init__(dtype)
@@ -801,8 +819,9 @@ class Filter(Expr):
 class RollingWindow(Expr):
     __slots__ = ("options", "children")
     _non_child = ("dtype", "options")
+    children: tuple[Expr]
 
-    def __init__(self, dtype: plc.DataType, options: Any, agg: Expr):
+    def __init__(self, dtype: plc.DataType, options: Any, agg: Expr) -> None:
         super().__init__(dtype)
         self.options = options
         self.children = (agg,)
@@ -811,8 +830,9 @@ class RollingWindow(Expr):
 class GroupedRollingWindow(Expr):
     __slots__ = ("options", "children")
     _non_child = ("dtype", "options")
+    children: tuple[Expr, ...]
 
-    def __init__(self, dtype: plc.DataType, options: Any, agg: Expr, *by: Expr):
+    def __init__(self, dtype: plc.DataType, options: Any, agg: Expr, *by: Expr) -> None:
         super().__init__(dtype)
         self.options = options
         self.children = (agg, *by)
@@ -821,8 +841,9 @@ class GroupedRollingWindow(Expr):
 class Cast(Expr):
     __slots__ = ("children",)
     _non_child = ("dtype",)
+    children: tuple[Expr]
 
-    def __init__(self, dtype: plc.DataType, value: Expr):
+    def __init__(self, dtype: plc.DataType, value: Expr) -> None:
         super().__init__(dtype)
         self.children = (value,)
 
@@ -848,6 +869,7 @@ class Cast(Expr):
 class Agg(Expr):
     __slots__ = ("name", "options", "op", "request", "children")
     _non_child = ("dtype", "name", "options")
+    children: tuple[Expr]
 
     def __init__(
         self, dtype: plc.DataType, name: str, options: Any, value: Expr
@@ -1007,7 +1029,7 @@ class Agg(Expr):
 
     def do_evaluate(
         self,
-        df,
+        df: DataFrame,
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
@@ -1022,6 +1044,7 @@ class Agg(Expr):
 class BinOp(Expr):
     __slots__ = ("op", "children")
     _non_child = ("dtype", "op")
+    children: tuple[Expr, Expr]
 
     def __init__(
         self,
