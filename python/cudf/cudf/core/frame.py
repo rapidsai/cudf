@@ -31,7 +31,7 @@ from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import Dtype
+from cudf._typing import Dtype, ScalarLike
 from cudf.api.types import is_bool_dtype, is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock
@@ -616,7 +616,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def fillna(
         self,
-        value=None,
+        value: None | ScalarLike | abc.Mapping | cudf.Series = None,
         method: Optional[Literal["ffill", "bfill", "pad", "backfill"]] = None,
         axis=None,
         inplace: bool = False,
@@ -749,8 +749,8 @@ class Frame(BinaryOperand, Scannable):
 
         if is_scalar(value):
             # Do we need a deepcopy here?
-            value = {name: copy.deepcopy(value) for name in self._data.names}
-        elif not isinstance(value, abc.Mapping):
+            value = {name: copy.deepcopy(value) for name in self._column_names}
+        elif not isinstance(value, (abc.Mapping, cudf.Series)):
             raise TypeError(
                 f'"value" parameter must be a scalar, dict '
                 f"or Series, but you passed a "

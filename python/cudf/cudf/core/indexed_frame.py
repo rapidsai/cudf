@@ -3233,15 +3233,6 @@ class IndexedFrame(Frame):
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):  # noqa: D102
-        if isinstance(value, pd.Series):
-            value = cudf.Series.from_pandas(value)
-        elif isinstance(value, abc.Mapping):
-            value = cudf.Series(value)
-        if isinstance(
-            value, (cudf.DataFrame, cudf.Series)
-        ) and not self.index.equals(value.index):
-            value = value.reindex(self.index)
-            value = value._data
         old_index = self.index
         ret = super().fillna(value, method, axis, inplace, limit)
         if inplace:

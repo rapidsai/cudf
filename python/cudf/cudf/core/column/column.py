@@ -705,9 +705,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if not self.has_nulls(include_nan=True):
             return self.copy()
         elif method is None:
-            if is_scalar(
+            if is_scalar(fill_value) and libcudf.scalar._is_null_host_scalar(
                 fill_value
-            ) and libcudf._lib.scalar._is_null_host_scalar(fill_value):
+            ):
                 return self.copy()
             else:
                 fill_value = self._validate_fillna_value(fill_value)

@@ -7,6 +7,7 @@ import inspect
 import pickle
 import textwrap
 import warnings
+from collections import abc
 from shutil import get_terminal_size
 from typing import (
     Any,
@@ -1806,6 +1807,21 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         result = super().drop_duplicates(keep=keep, ignore_index=ignore_index)
 
         return self._mimic_inplace(result, inplace=inplace)
+
+    @_cudf_nvtx_annotate
+    def fillna(
+        self, value=None, method=None, axis=None, inplace=False, limit=None
+    ):
+        if isinstance(value, pd.Series):
+            value = Series.from_pandas(value)
+        elif isinstance(value, abc.Mapping):
+            value = Series(value)
+        if isinstance(value, cudf.Series):
+            if not self.index.equals(value.index):
+                value = value.reindex(self.index)
+        return super().fillna(
+            value=value, method=method, axis=axis, inplace=inplace, limit=limit
+        )
 
     def between(self, left, right, inclusive="both") -> Series:
         """
