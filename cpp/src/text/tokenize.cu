@@ -206,11 +206,12 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   CUDF_EXPECTS(
     strings_column.null_count() == 0, "input must not contain nulls", std::invalid_argument);
 
-  auto offsets = strings_column.offsets();
-  auto offset  = cudf::strings::detail::get_offset_value(offsets, strings_column.offset(), stream);
-  auto chars_bytes = cudf::strings::detail::get_offset_value(
-                       offsets, strings_column.offset() + strings_count, stream) -
-                     offset;
+  auto const offsets = strings_column.offsets();
+  auto const offset =
+    cudf::strings::detail::get_offset_value(offsets, strings_column.offset(), stream);
+  auto const chars_bytes = cudf::strings::detail::get_offset_value(
+                             offsets, strings_column.offset() + strings_count, stream) -
+                           offset;
   // no bytes -- this could happen in an all-empty column
   if (chars_bytes == 0) { return cudf::make_empty_column(cudf::type_id::STRING); }
   auto d_chars =
