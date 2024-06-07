@@ -53,7 +53,7 @@ struct input_offsetalator : base_normalator<input_offsetalator, int64_t> {
    */
   __device__ inline int64_t operator[](size_type idx) const
   {
-    void const* tp = p_ + (idx * this->width_);
+    void const* tp = p_ + (static_cast<int64_t>(idx) * this->width_);
     return this->width_ == sizeof(int32_t) ? static_cast<int64_t>(*static_cast<int32_t const*>(tp))
                                            : *static_cast<int64_t const*>(tp);
   }
@@ -79,7 +79,7 @@ struct input_offsetalator : base_normalator<input_offsetalator, int64_t> {
     cudf_assert((dtype.id() == type_id::INT32 || dtype.id() == type_id::INT64) &&
                 "Unexpected offsets type");
 #endif
-    p_ += (this->width_ * offset);
+    p_ += (this->width_ * static_cast<int64_t>(offset));
   }
 
  protected:
@@ -121,7 +121,7 @@ struct output_offsetalator : base_normalator<output_offsetalator, int64_t> {
   __device__ inline output_offsetalator const operator[](size_type idx) const
   {
     output_offsetalator tmp{*this};
-    tmp.p_ += (idx * this->width_);
+    tmp.p_ += (static_cast<int64_t>(idx) * this->width_);
     return tmp;
   }
 

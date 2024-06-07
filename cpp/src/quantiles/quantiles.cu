@@ -34,6 +34,7 @@
 #include <thrust/iterator/transform_iterator.h>
 
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
 namespace cudf {
@@ -78,7 +79,8 @@ std::unique_ptr<table> quantiles(table_view const& input,
 
   CUDF_EXPECTS(interp == interpolation::HIGHER || interp == interpolation::LOWER ||
                  interp == interpolation::NEAREST,
-               "multi-column quantiles require a non-arithmetic interpolation strategy.");
+               "multi-column quantiles require a non-arithmetic interpolation strategy.",
+               std::invalid_argument);
 
   CUDF_EXPECTS(input.num_rows() > 0, "multi-column quantiles require at least one input row.");
 
