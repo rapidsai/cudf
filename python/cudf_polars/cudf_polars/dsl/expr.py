@@ -222,7 +222,7 @@ class Expr:
 
         Notes
         -----
-        Individual subclasses should implement :meth:`do_allocate`,
+        Individual subclasses should implement :meth:`do_evaluate`,
         this method provides logic to handle lookups in the
         substitution mapping.
 
@@ -319,7 +319,27 @@ class NamedExpr:
         context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> NamedColumn:
-        """Evaluate this expression given a dataframe for context."""
+        """
+        Evaluate this expression given a dataframe for context.
+
+        Parameters
+        ----------
+        df
+            DataFrame providing context
+        context
+            Execution context
+        mapping
+            Substitution mapping
+
+        Returns
+        -------
+        NamedColumn attaching a name to an evaluated Column
+
+        See Also
+        --------
+        :meth:`Expr.evaluate` for details, this function just adds the
+        name to a column produced from an expression.
+        """
         obj = self.value.evaluate(df, context=context, mapping=mapping)
         if isinstance(obj, Scalar):
             return NamedColumn(
