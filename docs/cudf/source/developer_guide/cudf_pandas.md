@@ -30,6 +30,17 @@ Note that users should never have to interact with the wrapped objects directly 
 This code is purely for demonstrative purposes.
 ```
 
+We can check whether an object is a proxy type with `cudf.pandas.is_proxy_object`.
+```
+  from cudf.pandas import is_proxy_object
+
+  is_proxy_object(s1) # returns False
+
+  is_proxy_object(s2) # returns False
+
+  is_proxy_object(s3) # returns True
+```
+
 #### The Different Kinds of Proxy Types
 In `cudf.pandas`, there are two main kinds of proxy types: final types and intermediate types.
 
