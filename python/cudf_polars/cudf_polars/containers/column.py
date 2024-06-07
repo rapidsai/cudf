@@ -17,7 +17,7 @@ __all__: list[str] = ["Column", "NamedColumn"]
 
 
 class Column:
-    """A column with sortedness metadata."""
+    """An immutable column with sortedness metadata."""
 
     obj: plc.Column
     is_sorted: plc.types.Sorted
@@ -41,10 +41,10 @@ class Column:
         self.order = order
         self.null_order = null_order
 
-    @property
+    @functools.cached_property
     def obj_scalar(self) -> plc.Scalar:
         """
-        View the column object as a pylibcudf Scalar.
+        A copy of the column object as a pylibcudf Scalar.
 
         Returns
         -------
