@@ -297,13 +297,8 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
     auto tmp_data_buffer                 = allocate_arrow_buffer(0, ar_mr);
     tmp_offset_buffer->mutable_data()[0] = 0;
 
-    if (cudf::strings::detail::is_large_strings_enabled()) {
-      return std::make_shared<arrow::LargeStringArray>(
-        0, std::move(tmp_offset_buffer), std::move(tmp_data_buffer));
-    } else {
-      return std::make_shared<arrow::StringArray>(
-        0, std::move(tmp_offset_buffer), std::move(tmp_data_buffer));
-    }
+    return std::make_shared<arrow::StringArray>(
+      0, std::move(tmp_offset_buffer), std::move(tmp_data_buffer));
   }
   auto offset_buffer = child_arrays[strings_column_view::offsets_column_index]->data()->buffers[1];
   auto const sview   = strings_column_view{input_view};
@@ -312,7 +307,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
                               static_cast<std::size_t>(sview.chars_size(stream))},
     ar_mr,
     stream);
-  if (sview.offsets().type().id()==cudf::type_id::INT64) {
+  if (sview.offsets().type().id() == cudf::type_id::INT64) {
     return std::make_shared<arrow::LargeStringArray>(static_cast<int64_t>(input_view.size()),
                                                      offset_buffer,
                                                      data_buffer,
