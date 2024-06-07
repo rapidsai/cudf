@@ -174,7 +174,7 @@ def write_json(
             plc.io.SinkInfo([path_or_buf]),
             plc.io.TableWithMetadata(
                 plc.Table([
-                    c.to_pylibcudf(mode="read") for c in table._data.columns
+                    c.to_pylibcudf(mode="read") for c in table._columns
                 ]),
                 colnames
             ),
