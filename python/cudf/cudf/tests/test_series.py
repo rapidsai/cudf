@@ -2841,3 +2841,10 @@ def test_series_from_series_index_no_shallow_copy():
     ser1 = cudf.Series(range(3), index=list("abc"))
     ser2 = cudf.Series(ser1)
     assert ser1.index is ser2.index
+
+
+@pytest.mark.parametrize("value", [1, 1.1])
+def test_nans_to_nulls_noop_copies_column(value):
+    ser1 = cudf.Series([value])
+    ser2 = ser1.nans_to_nulls()
+    assert ser1._column is not ser2._column

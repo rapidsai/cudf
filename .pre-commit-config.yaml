@@ -134,7 +134,7 @@ repos:
       - id: rapids-dependency-file-generator
         args: ["--clean"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.3
+    rev: v0.4.8
     hooks:
       - id: ruff
         files: python/.*$
