@@ -25,6 +25,26 @@ cpdef void write_json(
     str false_value = "false"
 ):
     """
+    Writes a :py:class:`~cudf._lib.pylibcudf.types.Table` to JSON format.
+
+    Parameters
+    ----------
+    sink_info: SinkInfo
+        The SinkInfo object to write the JSON to.
+    table_w_meta: TableWithMetadata
+        The TableWithMetadata object containing the Table to write
+    na_rep: str, default ""
+        The string representation for null values.
+    include_nulls: bool, default False
+        Enables/Disables output of nulls as 'null'.
+    lines: bool, default False
+        If `True`, write output in the JSON lines format.
+    rows_per_chunk: int, default 2,147,483,647
+        The maximum number of rows to write at a time.
+    true_value: str, default "true"
+        The string representation for values != 0 in INT8 types.
+    false_value: str, default "false"
+        The string representation for values == 0 in INT8 types.
     """
     cdef table_metadata tbl_meta = table_w_meta.metadata
     cdef string na_rep_c = na_rep.encode()
