@@ -235,6 +235,7 @@ class CudfEngine(ArrowDatasetEngine):
         # Extract supported kwargs from `kwargs`
         read_kwargs = kwargs.get("read", {})
         read_kwargs.update(open_file_options or {})
+        read_kwargs["lazy"] = kwargs.get("lazy", None)
         check_file_size = read_kwargs.pop("check_file_size", None)
 
         # Wrap reading logic in a `try` block so that we can
