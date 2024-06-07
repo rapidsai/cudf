@@ -13,11 +13,14 @@ from cudf.pandas.fast_slow_proxy import _Unusable, make_final_proxy_type
 from cudf.utils import docutils
 
 _parse_lazy_argument_docstring = """
-Determine whether to use lazy or regular dataframes
+Determine whether to use lazy or regular dataframes.
 
 The `arg` argument takes precedence thus if not None, the boolean value
-of the `arg` argument is returned.
-If `arg` is None, the cudf `lazy` option is returned.
+of the `arg` argument is returned. A ValueError is raised if `arg` is
+True and dask_cudf/dask-expr isn't available.
+
+If `arg` is None, True is returned if the cudf `lazy` option is True
+and dask_cudf/dask-expr is available. Otherwise, False is returned.
 
 Parameters
 ----------
@@ -27,7 +30,7 @@ arg
 
 Returns
 -------
-The boolean answer
+The boolean answer. If True, dask_cudf is guaranteed to be available.
 """
 
 try:
@@ -36,11 +39,9 @@ except ImportError:
 
     @docutils.doc_apply(_parse_lazy_argument_docstring)
     def parse_lazy_argument(arg: Optional[bool]) -> bool:
-        if arg is None:
-            arg = get_option("lazy")
-        if not arg:
+        if arg is True:
             raise ValueError("Using the 'lazy' option requires dask_cudf")
-        return arg
+        return False
 else:
 
     def _slow_attr(name: str):
@@ -54,7 +55,7 @@ else:
         dask_cudf.expr._collection.DataFrame,
         cudf.DataFrame,
         fast_to_slow=lambda fast: fast.compute(),
-        slow_to_fast=_Unusable(),  # da.from_pandas,
+        slow_to_fast=_Unusable(),
         additional_attributes={
             "__str__": _slow_attr("__str__"),
             "__repr__": _slow_attr("__repr__"),
@@ -73,8 +74,8 @@ else:
         },
     )
 
-    GroupBy = make_final_proxy_type(
-        "GroupBy",
+    DataFrameGroupBy = make_final_proxy_type(
+        "DataFrameGroupBy",
         dask_cudf.expr._groupby.GroupBy,
         cudf.core.groupby.groupby.DataFrameGroupBy,
         fast_to_slow=lambda fast: fast.compute(),
@@ -102,3 +103,29 @@ else:
         if arg is None:
             arg = get_option("lazy")
         return arg
+
+    def lazy_wrap_dataframe(
+        df: cudf.DataFrame | dask_cudf.DataFrame, *, noop_on_error: bool
+    ) -> cudf.DataFrame | dask_cudf.DataFrame:
+        """Wrap a datafrane in a lazy proxy.
+
+        Parameters
+        ----------
+        df
+            The dataframe to wrap.
+        noop_on_error
+            If True, NotImplementedError and ValueError exceptions are
+            ignored and `df` is returned as-is.
+
+        Returns
+        -------
+        The wrapped dataframe or possible `df` as-is if noop_on_error is True.
+        """
+        try:
+            if not isinstance(df, dask_cudf.DataFrame):
+                df = dask_cudf.from_cudf(df, npartitions=1)
+            return DataFrame._fsproxy_wrap(df, func=None)
+        except (NotImplementedError, ValueError):
+            if noop_on_error:
+                return df
+            raise

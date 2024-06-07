@@ -21,7 +21,7 @@ import cudf
 from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column, column_empty
-from cudf.core.lazy import parse_lazy_argument
+from cudf.core.lazy import lazy_wrap_dataframe, parse_lazy_argument
 from cudf.utils import ioutils
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
@@ -552,9 +552,11 @@ def read_parquet(
     if parse_lazy_argument(lazy):
         import dask_cudf
 
-        assert engine == "cudf"
-        return cudf.core.lazy.DataFrame._fsproxy_wrap(
-            dask_cudf.read_parquet(
+        if lazy is True and engine != "cudf":
+            raise ValueError('to read lazily `engine == "cudf"`')
+
+        return lazy_wrap_dataframe(
+            df=dask_cudf.read_parquet(
                 path=filepath_or_buffer,
                 columns=columns,
                 filters=filters,
@@ -568,7 +570,7 @@ def read_parquet(
                 *args,
                 **kwargs,
             ),
-            None,
+            noop_on_error=lazy is None,
         )
 
     if bytes_per_thread is None:
