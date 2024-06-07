@@ -1055,14 +1055,15 @@ struct dispatch_grouped_range_rolling_window {
  */
 struct to_duration_bounds {
   template <typename OrderBy, std::enable_if_t<cudf::is_timestamp<OrderBy>(), void>* = nullptr>
-  range_window_bounds operator()(size_type num_days) const
+  range_window_bounds operator()(size_type num_days, rmm::cuda_stream_view stream) const
   {
     using DurationT = typename OrderBy::duration;
-    return range_window_bounds::get(duration_scalar<DurationT>{duration_D{num_days}, true});
+    return range_window_bounds::get(duration_scalar<DurationT>{duration_D{num_days}, true, stream},
+                                    stream);
   }
 
   template <typename OrderBy, std::enable_if_t<!cudf::is_timestamp<OrderBy>(), void>* = nullptr>
-  range_window_bounds operator()(size_type) const
+  range_window_bounds operator()(size_type, rmm::cuda_stream_view) const
   {
     CUDF_FAIL("Expected timestamp orderby column.");
   }
@@ -1093,9 +1094,11 @@ data_type get_duration_type_for(cudf::data_type timestamp_type)
  * @param timestamp_type Data-type of the orderby column to which the `num_days` is to be adapted.
  * @return range_window_bounds A `range_window_bounds` to be used with the new API.
  */
-range_window_bounds to_range_bounds(cudf::size_type num_days, cudf::data_type timestamp_type)
+range_window_bounds to_range_bounds(cudf::size_type num_days,
+                                    cudf::data_type timestamp_type,
+                                    rmm::cuda_stream_view stream)
 {
-  return cudf::type_dispatcher(timestamp_type, to_duration_bounds{}, num_days);
+  return cudf::type_dispatcher(timestamp_type, to_duration_bounds{}, num_days, stream);
 }
 
 /**
@@ -1109,11 +1112,13 @@ range_window_bounds to_range_bounds(cudf::size_type num_days, cudf::data_type ti
  * @return range_window_bounds A `range_window_bounds` to be used with the new API.
  */
 range_window_bounds to_range_bounds(cudf::window_bounds const& days_bounds,
-                                    cudf::data_type timestamp_type)
+                                    cudf::data_type timestamp_type,
+                                    rmm::cuda_stream_view stream)
 {
   return days_bounds.is_unbounded()
-           ? range_window_bounds::unbounded(get_duration_type_for(timestamp_type))
-           : cudf::type_dispatcher(timestamp_type, to_duration_bounds{}, days_bounds.value());
+           ? range_window_bounds::unbounded(get_duration_type_for(timestamp_type), stream)
+           : cudf::type_dispatcher(
+               timestamp_type, to_duration_bounds{}, days_bounds.value(), stream);
 }
 
 }  // namespace
@@ -1211,8 +1216,8 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto preceding = to_range_bounds(preceding_window_in_days, timestamp_column.type());
-  auto following = to_range_bounds(following_window_in_days, timestamp_column.type());
+  auto preceding = to_range_bounds(preceding_window_in_days, timestamp_column.type(), stream);
+  auto following = to_range_bounds(following_window_in_days, timestamp_column.type(), stream);
 
   return detail::grouped_range_rolling_window(group_keys,
                                               timestamp_column,
@@ -1251,9 +1256,9 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
 {
   CUDF_FUNC_RANGE();
   range_window_bounds preceding =
-    to_range_bounds(preceding_window_in_days, timestamp_column.type());
+    to_range_bounds(preceding_window_in_days, timestamp_column.type(), stream);
   range_window_bounds following =
-    to_range_bounds(following_window_in_days, timestamp_column.type());
+    to_range_bounds(following_window_in_days, timestamp_column.type(), stream);
 
   return detail::grouped_range_rolling_window(group_keys,
                                               timestamp_column,

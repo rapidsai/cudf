@@ -223,10 +223,12 @@ TEST_F(GroupedRangeRollingTest, RangeWindowBounds)
                                                                     {0, 0, 0, 0, 1, 1, 1, 1, 1, 1}};
 
   cudf::range_window_bounds preceding = cudf::range_window_bounds::get(
-    cudf::numeric_scalar<int>{int{1}, true, cudf::test::get_default_stream()});
+    cudf::numeric_scalar<int>{int{1}, true, cudf::test::get_default_stream()},
+    cudf::test::get_default_stream());
 
   cudf::range_window_bounds following = cudf::range_window_bounds::get(
-    cudf::numeric_scalar<int>{int{1}, true, cudf::test::get_default_stream()});
+    cudf::numeric_scalar<int>{int{1}, true, cudf::test::get_default_stream()},
+    cudf::test::get_default_stream());
 
   auto const min_periods = cudf::size_type{1};
 
