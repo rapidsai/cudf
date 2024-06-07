@@ -420,10 +420,7 @@ class IndexedFrame(Frame):
         results = {}
         for name, col in self._data.items():
             if skipna:
-                try:
-                    result_col = col.nans_to_nulls()
-                except AttributeError:
-                    result_col = col
+                result_col = col.nans_to_nulls()
             else:
                 if col.has_nulls(include_nan=True):
                     first_index = col.isnull().find_first_value(True)
@@ -1915,12 +1912,12 @@ class IndexedFrame(Frame):
         1  <NA>  3.14
         2  <NA>  <NA>
         """
-        result = (
-            col.nans_to_nulls()
-            if isinstance(col, cudf.core.column.NumericalColumn)
-            else col.copy()
-            for col in self._data.columns
-        )
+        result = []
+        for col in self._data.columns:
+            converted = col.nans_to_nulls()
+            if converted is col:
+                converted = converted.copy()
+            result.append(converted)
         return self._from_data_like_self(
             self._data._from_columns_like_self(result)
         )
@@ -4228,10 +4225,7 @@ class IndexedFrame(Frame):
                 thresh = len(df)
 
         for name, col in df._data.items():
-            try:
-                check_col = col.nans_to_nulls()
-            except AttributeError:
-                check_col = col
+            check_col = col.nans_to_nulls()
             no_threshold_valid_count = (
                 len(col) - check_col.null_count
             ) < thresh
@@ -4261,12 +4255,7 @@ class IndexedFrame(Frame):
         if len(subset) == 0:
             return self.copy(deep=True)
 
-        data_columns = [
-            col.nans_to_nulls()
-            if isinstance(col, cudf.core.column.NumericalColumn)
-            else col
-            for col in self._columns
-        ]
+        data_columns = [col.nans_to_nulls() for col in self._columns]
 
         return self._from_columns_like_self(
             libcudf.stream_compaction.drop_nulls(
