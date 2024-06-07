@@ -816,10 +816,8 @@ class CategoricalColumn(column.ColumnBase):
             .values_host
         )
 
-        cats = col.categories
-        if cats.dtype.kind in "biuf":
-            cats = cats.nans_to_nulls().dropna()  # type: ignore[attr-defined]
-        elif not isinstance(cats.dtype, IntervalDtype):
+        cats = col.categories.nans_to_nulls()
+        if not isinstance(cats.dtype, IntervalDtype):
             # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.
             # TODO: work on interval index dropna
