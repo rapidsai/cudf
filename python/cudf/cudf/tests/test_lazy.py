@@ -32,4 +32,19 @@ def test_merge():
     assert isinstance(lazy_df2, cudf.core.lazy.DataFrame)
     expect = df1.merge(df2, on="a")
     got = lazy_df1.merge(lazy_df2, on="a")
+    assert lazy_df1._fsproxy_state is _State.FAST
+    assert lazy_df2._fsproxy_state is _State.FAST
+    assert got._fsproxy_state is _State.FAST
     assert_eq(got, expect)
+    assert got._fsproxy_state is _State.SLOW
+
+
+def test_groupby_and_sum():
+    df = cudf.DataFrame({"a": [1, 2, 2, 3, 3, 4]})
+    lazy_df = lazy_wrap_dataframe(df, noop_on_error=False)
+    assert isinstance(lazy_df, cudf.core.lazy.DataFrame)
+    expect = df.groupby(by="a").sum()
+    got = lazy_df.groupby(by="a").sum()
+    assert got._fsproxy_state is _State.FAST
+    assert_eq(got, expect)
+    assert got._fsproxy_state is _State.SLOW
