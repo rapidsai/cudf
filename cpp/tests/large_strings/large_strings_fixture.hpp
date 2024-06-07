@@ -33,13 +33,24 @@ class LargeStringsData;
 struct StringsLargeTest : public cudf::test::BaseFixture {
   /**
    * @brief Returns a column of long strings
+   *
+   * This returns 8 rows of 400 bytes
    */
   cudf::column_view wide_column();
 
   /**
    * @brief Returns a long column of strings
+   *
+   * This returns 5 million rows of 50 bytes
    */
   cudf::column_view long_column();
+
+  /**
+   * @brief Returns a very long column of strings
+   *
+   * This returns 30 million rows of 5 bytes
+   */
+  cudf::column_view very_long_column();
 
   large_strings_enabler g_ls_enabler;
   static LargeStringsData* g_ls_data;
