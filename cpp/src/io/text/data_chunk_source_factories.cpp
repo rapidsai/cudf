@@ -17,7 +17,7 @@
 #include "io/text/device_data_chunks.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/host_vector.hpp>
+#include <cudf/detail/utilities/host_uvector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 
@@ -33,7 +33,7 @@ namespace {
 
 struct host_ticket {
   cudaEvent_t event;
-  std::unique_ptr<cudf::detail::host_vector<char>> buffer;
+  std::unique_ptr<cudf::detail::host_uvector<char>> buffer;
 };
 
 /**
@@ -86,7 +86,7 @@ class datasource_chunk_reader : public data_chunk_reader {
 
       // resize the host buffer as necessary to contain the requested number of bytes
       if (h_ticket.buffer == nullptr or h_ticket.buffer->size() < read_size) {
-        h_ticket.buffer = std::make_unique<cudf::detail::host_vector<char>>(
+        h_ticket.buffer = std::make_unique<cudf::detail::host_uvector<char>>(
           cudf::detail::make_pinned_vector_sync<char>(read_size, stream));
       }
 
@@ -153,7 +153,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
 
     // resize the host buffer as necessary to contain the requested number of bytes
     if (h_ticket.buffer == nullptr or h_ticket.buffer->size() < read_size) {
-      h_ticket.buffer = std::make_unique<cudf::detail::host_vector<char>>(
+      h_ticket.buffer = std::make_unique<cudf::detail::host_uvector<char>>(
         cudf::detail::make_pinned_vector_sync<char>(read_size, stream));
     }
 

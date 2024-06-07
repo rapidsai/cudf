@@ -21,7 +21,7 @@
  * @file vector_factories.hpp
  */
 
-#include <cudf/detail/utilities/host_vector.hpp>
+#include <cudf/detail/utilities/host_uvector.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
@@ -442,7 +442,7 @@ thrust::host_vector<typename Container::value_type> make_host_vector_sync(
 }
 
 /**
- * @brief Asynchronously construct a pinned `cudf::detail::host_vector` of the given size
+ * @brief Asynchronously construct a pinned `cudf::detail::host_uvector` of the given size
  *
  * @note This function does not synchronize `stream`.
  *
@@ -452,13 +452,13 @@ thrust::host_vector<typename Container::value_type> make_host_vector_sync(
  * @return A host_vector of the given size
  */
 template <typename T>
-host_vector<T> make_pinned_vector_async(size_t size, rmm::cuda_stream_view stream)
+host_uvector<T> make_pinned_vector_async(size_t size, rmm::cuda_stream_view stream)
 {
-  return host_vector<T>(size, {cudf::get_pinned_memory_resource(), stream});
+  return host_uvector<T>(size, cudf::get_pinned_memory_resource(), stream);
 }
 
 /**
- * @brief Synchronously construct a pinned `cudf::detail::host_vector` of the given size
+ * @brief Synchronously construct a pinned `cudf::detail::host_uvector` of the given size
  *
  * @note This function synchronizes `stream`.
  *
@@ -468,7 +468,7 @@ host_vector<T> make_pinned_vector_async(size_t size, rmm::cuda_stream_view strea
  * @return A host_vector of the given size
  */
 template <typename T>
-host_vector<T> make_pinned_vector_sync(size_t size, rmm::cuda_stream_view stream)
+host_uvector<T> make_pinned_vector_sync(size_t size, rmm::cuda_stream_view stream)
 {
   auto result = make_pinned_vector_async<T>(size, stream);
   stream.synchronize();
