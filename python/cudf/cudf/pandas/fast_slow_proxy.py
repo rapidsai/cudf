@@ -1135,6 +1135,12 @@ def _replace_closurevars(
     )
 
 
+def is_proxy_object(obj):
+    if type(type(obj)) == _FastSlowProxyMeta:
+        return True
+    return False
+
+
 _SPECIAL_METHODS: Set[str] = {
     "__abs__",
     "__add__",

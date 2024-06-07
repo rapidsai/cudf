@@ -545,3 +545,20 @@ def test_tuple_with_attrs_transform():
     assert b == bprime and b is not bprime
     assert c == cprime and c is not cprime
     assert d == dprime and d is not dprime
+
+
+def test_is_proxy_object():
+    import cudf.pandas
+
+    cudf.pandas.install()
+    import pandas as pd
+
+    np_arr = np.array([1])
+
+    s = pd.Series([1])
+
+    np_arr_proxy = s.to_numpy()
+
+    assert not cudf.pandas.fast_slow_proxy(np_arr)
+    assert cudf.pandas.fast_slow_proxy(np_arr_proxy)
+    assert cudf.pandas.fast_slow_proxy(s)
