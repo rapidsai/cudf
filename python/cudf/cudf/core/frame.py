@@ -79,18 +79,16 @@ class Frame(BinaryOperand, Scannable):
         return self._data.nrows
 
     @property
-    def _column_names(self) -> Tuple[Any, ...]:  # TODO: Tuple[str]?
-        return tuple(self._data.names)
+    def _column_names(self) -> Tuple[Any, ...]:
+        return self._data.names
 
     @property
-    def _columns(self) -> Tuple[Any, ...]:  # TODO: Tuple[Column]?
-        return tuple(self._data.columns)
+    def _columns(self) -> Tuple[ColumnBase, ...]:
+        return self._data.columns
 
     @property
-    def _dtypes(self):
-        return dict(
-            zip(self._data.names, (col.dtype for col in self._data.columns))
-        )
+    def _dtypes(self) -> abc.Iterator:
+        return zip(self._data.names, (col.dtype for col in self._data.columns))
 
     @property
     def ndim(self) -> int:
@@ -273,20 +271,13 @@ class Frame(BinaryOperand, Scannable):
         return self._num_rows
 
     @_cudf_nvtx_annotate
-    def astype(self, dtype, copy: bool = False):
-        result_data = {
-            col_name: col.astype(dtype.get(col_name, col.dtype), copy=copy)
+    def astype(self, dtype: dict[Any, Dtype], copy: bool = False) -> Self:
+        casted = (
+            col.astype(dtype.get(col_name, col.dtype), copy=copy)
             for col_name, col in self._data.items()
-        }
-
-        return ColumnAccessor(
-            data=result_data,
-            multiindex=self._data.multiindex,
-            level_names=self._data.level_names,
-            rangeindex=self._data.rangeindex,
-            label_dtype=self._data.label_dtype,
-            verify=False,
         )
+        ca = self._data._from_columns_like_self(casted, verify=False)
+        return self._from_data_like_self(ca)
 
     @_cudf_nvtx_annotate
     def equals(self, other) -> bool:
@@ -349,11 +340,7 @@ class Frame(BinaryOperand, Scannable):
         """
         if self is other:
             return True
-        if (
-            other is None
-            or not isinstance(other, type(self))
-            or len(self) != len(other)
-        ):
+        if not isinstance(other, type(self)) or len(self) != len(other):
             return False
 
         return all(
@@ -1980,7 +1967,7 @@ class Frame(BinaryOperand, Scannable):
 
         return [
             type(self),
-            str(self._dtypes),
+            str(dict(self._dtypes)),
             normalize_token(self.to_pandas()),
         ]
 

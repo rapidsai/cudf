@@ -62,8 +62,6 @@ target-version = "py39"
 fix = true
 
 [tool.ruff.lint]
-# __init__.py must re-export everything it imports
-ignore-init-module-imports = false
 select = [
   "E", # pycodestyle
   "W", # pycodestyle
@@ -134,7 +132,7 @@ ignore = [
 fixable = ["ALL"]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**/test_*.py" = ["D", "INP"]
+"**/tests/**/*.py" = ["D"]
 
 [tool.ruff.lint.flake8-pytest-style]
 # https://docs.astral.sh/ruff/settings/#lintflake8-pytest-style
