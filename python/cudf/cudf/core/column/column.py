@@ -190,10 +190,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def to_pandas(
         self,
         *,
-        index: Optional[pd.Index] = None,
         nullable: bool = False,
         arrow_type: bool = False,
-    ) -> pd.Series:
+    ) -> pd.Index:
         """Convert object to pandas type.
 
         The default implementation falls back to PyArrow for the conversion.
@@ -208,15 +207,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise NotImplementedError(f"{nullable=} is not implemented.")
         pa_array = self.to_arrow()
         if arrow_type:
-            return pd.Series(
-                pd.arrays.ArrowExtensionArray(pa_array), index=index
-            )
+            return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
         else:
-            pd_series = pa_array.to_pandas()
-
-            if index is not None:
-                pd_series.index = index
-            return pd_series
+            return pd.Index(pa_array.to_pandas())
 
     @property
     def values_host(self) -> "np.ndarray":
@@ -719,7 +712,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             else:
                 fill_value = self._validate_fillna_value(fill_value)
         return libcudf.replace.replace_nulls(
-            input_col=self.nan_as_null(), replacement=fill_value, method=method
+            input_col=self.nans_to_nulls(),
+            replacement=fill_value,
+            method=method,
         )._with_type_metadata(self.dtype)
 
     def isnull(self) -> ColumnBase:
@@ -1830,9 +1825,7 @@ def as_column(
 
         data = as_buffer(arbitrary, exposed=cudf.get_option("copy_on_write"))
         col = build_column(data, dtype=arbitrary.dtype, mask=mask)
-        if (
-            nan_as_null or (mask is None and nan_as_null is None)
-        ) and col.dtype.kind == "f":
+        if nan_as_null or (mask is None and nan_as_null is None):
             col = col.nans_to_nulls()
         if dtype is not None:
             col = col.astype(dtype)

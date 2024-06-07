@@ -789,12 +789,11 @@ class CategoricalColumn(column.ColumnBase):
     def to_pandas(
         self,
         *,
-        index: Optional[pd.Index] = None,
         nullable: bool = False,
         arrow_type: bool = False,
-    ) -> pd.Series:
+    ) -> pd.Index:
         if nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
 
@@ -817,10 +816,8 @@ class CategoricalColumn(column.ColumnBase):
             .values_host
         )
 
-        cats = col.categories
-        if cats.dtype.kind in "biuf":
-            cats = cats.nans_to_nulls().dropna()  # type: ignore[attr-defined]
-        elif not isinstance(cats.dtype, IntervalDtype):
+        cats = col.categories.nans_to_nulls()
+        if not isinstance(cats.dtype, IntervalDtype):
             # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.
             # TODO: work on interval index dropna
@@ -828,7 +825,7 @@ class CategoricalColumn(column.ColumnBase):
         data = pd.Categorical.from_codes(
             codes, categories=cats.to_pandas(), ordered=col.ordered
         )
-        return pd.Series(data, index=index)
+        return pd.Index(data)
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array."""
