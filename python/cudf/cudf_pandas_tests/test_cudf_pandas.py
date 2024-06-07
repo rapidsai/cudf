@@ -1462,6 +1462,7 @@ def test_cudf_pandas_debugging_pandas_error(monkeypatch):
         ):
             s = xpd.Series([1, 2])
             assert s.mean() == 1.5
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
     monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
 
 
@@ -1481,6 +1482,7 @@ def test_cudf_pandas_debugging_failed(monkeypatch):
         ):
             s = xpd.Series([1, 2])
             assert s.mean() == 1.5
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
     monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
 
 
