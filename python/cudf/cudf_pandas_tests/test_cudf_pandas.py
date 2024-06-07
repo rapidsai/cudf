@@ -1440,6 +1440,7 @@ def test_cudf_pandas_debugging_different_results(monkeypatch):
             match="The results from cudf and pandas were different.",
         ):
             assert s.mean() == 1.0
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
     monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", cudf_mean)
 
 
