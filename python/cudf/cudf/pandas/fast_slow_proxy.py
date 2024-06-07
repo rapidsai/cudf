@@ -1135,7 +1135,15 @@ def _replace_closurevars(
     )
 
 
-def is_proxy_object(obj):
+def is_proxy_object(obj: Any) -> bool:
+    """Determine if an object is proxy object
+
+    Parameters
+    ----------
+    obj : object
+        Any python object.
+
+    """
     if type(type(obj)) == _FastSlowProxyMeta:
         return True
     return False

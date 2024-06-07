@@ -20,7 +20,7 @@ from numba import NumbaDeprecationWarning
 from pytz import utc
 
 from cudf.pandas import LOADED, Profiler
-from cudf.pandas.fast_slow_proxy import _Unusable
+from cudf.pandas.fast_slow_proxy import _Unusable, is_proxy_object
 
 if not LOADED:
     raise ImportError("These tests must be run with cudf.pandas loaded")
@@ -1426,3 +1426,15 @@ def test_holidays_within_dates(holiday, start, expected):
 
 def test_excelwriter_pathlike():
     assert isinstance(pd.ExcelWriter("foo.xlsx"), os.PathLike)
+
+
+def test_is_proxy_object():
+    np_arr = np.array([1])
+
+    s = xpd.Series([1])
+
+    np_arr_proxy = s.to_numpy()
+
+    assert not is_proxy_object(np_arr)
+    assert is_proxy_object(np_arr_proxy)
+    assert is_proxy_object(s)
