@@ -53,12 +53,12 @@ struct hasher_adapter {
 
   __device__ constexpr auto operator()(lhs_index_type idx) const noexcept
   {
-    return _haystack_hasher(static_cast<size_type>(idx));
+    return _needle_hasher(static_cast<size_type>(idx));
   }
 
   __device__ constexpr auto operator()(rhs_index_type idx) const noexcept
   {
-    return _needle_hasher(static_cast<size_type>(idx));
+    return _haystack_hasher(static_cast<size_type>(idx));
   }
 
  private:
