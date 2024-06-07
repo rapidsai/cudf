@@ -27,10 +27,21 @@ namespace cudf::detail {
 template <typename T>
 class host_uvector {
  public:
-  host_uvector(std::size_t size, rmm::host_async_resource_ref mr, rmm::cuda_stream_view stream)
+  using value_type      = T;
+  using size_type       = std::size_t;
+  using reference       = value_type&;
+  using const_reference = value_type const&;
+  using pointer         = value_type*;
+  using const_pointer   = value_type const*;
+  using iterator        = pointer;
+  using const_iterator  = const_pointer;
+
+  host_uvector(size_type size, rmm::host_async_resource_ref mr, rmm::cuda_stream_view stream)
     : _size{size}, _capacity{size}, _mr{mr}, _stream{stream}
   {
-    if (_size != 0) { _data = static_cast<T*>(mr.allocate_async(_size * sizeof(T), _stream)); }
+    if (_size != 0) {
+      _data = static_cast<pointer>(mr.allocate_async(_size * sizeof(value_type), _stream));
+    }
   }
 
   host_uvector(host_uvector const&) = delete;
@@ -50,7 +61,7 @@ class host_uvector {
   host_uvector& operator=(host_uvector&& other)
   {
     if (this != &other) {
-      if (_data != nullptr) { _mr.deallocate_async(_data, _size * sizeof(T), _stream); }
+      if (_data != nullptr) { _mr.deallocate_async(_data, _size * sizeof(value_type), _stream); }
       _data           = other._data;
       _size           = other._size;
       _capacity       = other._capacity;
@@ -65,17 +76,18 @@ class host_uvector {
 
   ~host_uvector()
   {
-    if (_data != nullptr) { _mr.deallocate_async(_data, _size * sizeof(T), _stream); }
+    if (_data != nullptr) { _mr.deallocate_async(_data, _size * sizeof(value_type), _stream); }
   }
 
-  void resize(std::size_t new_size)
+  void resize(size_type new_size)
   {
     if (new_size > _capacity) {
-      auto new_data = static_cast<T*>(_mr.allocate_async(new_size * sizeof(T), _stream));
+      auto new_data =
+        static_cast<pointer>(_mr.allocate_async(new_size * sizeof(value_type), _stream));
       _stream.synchronize();
       if (_data != nullptr) {
         std::copy(_data, _data + _size, new_data);
-        _mr.deallocate_async(_data, _size * sizeof(T), _stream);
+        _mr.deallocate_async(_data, _size * sizeof(value_type), _stream);
       }
       _data     = new_data;
       _capacity = new_size;
@@ -83,21 +95,22 @@ class host_uvector {
     _size = new_size;
   }
 
-  void reserve(std::size_t new_capacity)
+  void reserve(size_type new_capacity)
   {
     if (new_capacity > _capacity) {
-      auto new_data = static_cast<T*>(_mr.allocate_async(new_capacity * sizeof(T), _stream));
+      auto new_data =
+        static_cast<pointer>(_mr.allocate_async(new_capacity * sizeof(value_type), _stream));
       _stream.synchronize();
       if (_data != nullptr) {
         std::copy(_data, _data + _size, new_data);
-        _mr.deallocate_async(_data, _size * sizeof(T), _stream);
+        _mr.deallocate_async(_data, _size * sizeof(value_type), _stream);
       }
       _data     = new_data;
       _capacity = new_capacity;
     }
   }
 
-  void push_back(T const& value)
+  void push_back(const_reference value)
   {
     if (_size == _capacity) { reserve(_capacity == 0 ? 2 : _capacity * 2); }
     _data[_size++] = value;
@@ -105,36 +118,36 @@ class host_uvector {
 
   void clear() { _size = 0; }
 
-  [[nodiscard]] std::size_t size() const { return _size; }
+  [[nodiscard]] size_type size() const { return _size; }
   [[nodiscard]] std::int64_t ssize() const { return _size; }
   [[nodiscard]] bool is_empty() const { return _size == 0; }
-  [[nodiscard]] std::size_t capacity() const { return _capacity; }
+  [[nodiscard]] size_type capacity() const { return _capacity; }
 
-  [[nodiscard]] T& operator[](std::size_t idx) { return _data[idx]; }
-  [[nodiscard]] T const& operator[](std::size_t idx) const { return _data[idx]; }
+  [[nodiscard]] reference operator[](size_type idx) { return _data[idx]; }
+  [[nodiscard]] const_reference operator[](size_type idx) const { return _data[idx]; }
 
-  [[nodiscard]] T* data() { return _data; }
-  [[nodiscard]] T const* data() const { return _data; }
+  [[nodiscard]] pointer data() { return _data; }
+  [[nodiscard]] const_pointer data() const { return _data; }
 
-  [[nodiscard]] T& front() { return _data[0]; }
-  [[nodiscard]] T const& front() const { return _data[0]; }
+  [[nodiscard]] reference front() { return _data[0]; }
+  [[nodiscard]] const_reference front() const { return _data[0]; }
 
-  [[nodiscard]] T& back() { return _data[_size - 1]; }
-  [[nodiscard]] T const& back() const { return _data[_size - 1]; }
+  [[nodiscard]] reference back() { return _data[_size - 1]; }
+  [[nodiscard]] const_reference back() const { return _data[_size - 1]; }
 
-  [[nodiscard]] T* begin() { return _data; }
-  [[nodiscard]] T const* begin() const { return _data; }
+  [[nodiscard]] iterator begin() { return _data; }
+  [[nodiscard]] const_iterator begin() const { return _data; }
 
-  [[nodiscard]] T* end() { return _data + _size; }
-  [[nodiscard]] T const* end() const { return _data + _size; }
+  [[nodiscard]] iterator end() { return _data + _size; }
+  [[nodiscard]] const_iterator end() const { return _data + _size; }
 
   [[nodiscard]] rmm::host_async_resource_ref memory_resource() const { return _mr; }
   [[nodiscard]] rmm::cuda_stream_view stream() const { return _stream; }
 
  private:
-  T* _data{nullptr};
-  std::size_t _size;
-  std::size_t _capacity;
+  pointer _data{nullptr};
+  size_type _size;
+  size_type _capacity;
   rmm::host_async_resource_ref _mr;
   rmm::cuda_stream_view _stream;
 };
