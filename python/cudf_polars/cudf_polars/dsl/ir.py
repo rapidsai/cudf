@@ -556,7 +556,7 @@ class Join(IR):
                 None,
             )
         else:
-            assert_never(how)
+            assert_never(how)  # pragma: no cover
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -921,7 +921,7 @@ class Union(IR):
         """Validated preconditions."""
         schema = self.dfs[0].schema
         if not all(s.schema == schema for s in self.dfs[1:]):
-            raise ValueError("Schema mismatch")
+            raise NotImplementedError("Schema mismatch")
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
