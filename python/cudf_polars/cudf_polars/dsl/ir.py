@@ -213,7 +213,7 @@ class Scan(IR):
             assert isinstance(cdf, cudf.DataFrame)
             df = DataFrame.from_cudf(cdf)
         else:
-            assert_never(self.typ)
+            assert_never(self.typ)  # pragma: no cover
         if row_index is not None:
             name, offset = row_index
             dtype = self.schema[name]

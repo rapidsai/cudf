@@ -6,6 +6,7 @@ import pytest
 
 import polars as pl
 
+from cudf_polars import translate_ir
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
@@ -86,3 +87,12 @@ def test_scan(df, columns, mask):
     if columns is not None:
         q = df.select(*columns)
     assert_gpu_result_equal(q)
+
+
+def test_scan_unsupported_raises(tmp_path):
+    df = pl.DataFrame({"a": [1, 2, 3]})
+
+    df.write_ndjson(tmp_path / "df.json")
+    q = pl.scan_ndjson(tmp_path / "df.json")
+    with pytest.raises(NotImplementedError):
+        _ = translate_ir(q._ldf.visit())
