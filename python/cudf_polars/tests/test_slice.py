@@ -11,11 +11,11 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 @pytest.mark.parametrize(
     "offset",
-    [0, 1, 2],
+    [0, 1, 2, -10, -20, -1, -2, 20],
 )
 @pytest.mark.parametrize(
     "len",
-    [0, 2, 12],
+    [0, 2, 12, 11],
 )
 def test_slice(offset, len):
     ldf = pl.DataFrame(
