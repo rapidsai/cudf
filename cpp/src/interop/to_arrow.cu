@@ -312,7 +312,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
                               static_cast<std::size_t>(sview.chars_size(stream))},
     ar_mr,
     stream);
-  if (cudf::strings::detail::is_large_strings_enabled()) {
+  if (sview.offsets().type().id()==cudf::type_id::INT64) {
     return std::make_shared<arrow::LargeStringArray>(static_cast<int64_t>(input_view.size()),
                                                      offset_buffer,
                                                      data_buffer,
