@@ -10,11 +10,31 @@ import cudf
 import cudf.core.groupby.groupby
 from cudf.options import get_option
 from cudf.pandas.fast_slow_proxy import _Unusable, make_final_proxy_type
+from cudf.utils import docutils
+
+_parse_lazy_argument_docstring = """
+Determine whether to use lazy or regular dataframes
+
+The `arg` argument takes precedence thus if not None, the boolean value
+of the `arg` argument is returned.
+If `arg` is None, the cudf `lazy` option is returned.
+
+Parameters
+----------
+arg
+    Optional boolean argument that takes precedence over the cudf `lazy`
+    option.
+
+Returns
+-------
+The boolean answer
+"""
 
 try:
     import dask_cudf
 except ImportError:
 
+    @docutils.doc_apply(_parse_lazy_argument_docstring)
     def parse_lazy_argument(arg: Optional[bool]) -> bool:
         if arg is None:
             arg = get_option("lazy")
@@ -77,6 +97,7 @@ else:
         },
     )
 
+    @docutils.doc_apply(_parse_lazy_argument_docstring)
     def parse_lazy_argument(arg: Optional[bool]) -> bool:
         if arg is None:
             arg = get_option("lazy")
