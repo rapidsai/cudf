@@ -1431,10 +1431,12 @@ def test_excelwriter_pathlike():
 def test_is_proxy_object():
     np_arr = np.array([1])
 
-    s = xpd.Series([1])
+    s1 = xpd.Series([1])
+    s2 = xpd.Series([1])
 
-    np_arr_proxy = s.to_numpy()
+    np_arr_proxy = s1.to_numpy()
 
     assert not is_proxy_object(np_arr)
     assert is_proxy_object(np_arr_proxy)
-    assert is_proxy_object(s)
+    assert is_proxy_object(s1)
+    assert not is_proxy_object(s2)
