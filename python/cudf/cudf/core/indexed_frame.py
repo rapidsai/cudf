@@ -3230,19 +3230,6 @@ class IndexedFrame(Frame):
         ]
 
     @_cudf_nvtx_annotate
-    def fillna(
-        self, value=None, method=None, axis=None, inplace=False, limit=None
-    ):  # noqa: D102
-        old_index = self.index
-        ret = super().fillna(value, method, axis, inplace, limit)
-        if inplace:
-            # TODO: Can this case be removed if Frame.fillna uses _from_data_like_self?
-            self.index = old_index
-        else:
-            ret.index = old_index
-        return ret
-
-    @_cudf_nvtx_annotate
     def bfill(self, value=None, axis=None, inplace=None, limit=None):
         """
         Synonym for :meth:`Series.fillna` with ``method='bfill'``.

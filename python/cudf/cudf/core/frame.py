@@ -764,7 +764,7 @@ class Frame(BinaryOperand, Scannable):
             filled_columns.append(filled_col)
 
         return self._mimic_inplace(
-            self._from_data(
+            self._from_data_like_self(
                 self._data._from_columns_like_self(
                     filled_columns, verify=False
                 )
