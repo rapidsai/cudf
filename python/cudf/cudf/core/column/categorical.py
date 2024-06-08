@@ -1093,12 +1093,6 @@ class CategoricalColumn(column.ColumnBase):
             )
             return fill_value.codes.astype(self.codes.dtype)
 
-        # TODO: Categorical.fillna had this check. Still relevant?
-        # # Validation of `fill_value` will have to be performed
-        # # before returning self.
-        # if not self.nullable:
-        #     return self
-
     def indices_of(
         self, value: ScalarLike
     ) -> cudf.core.column.NumericalColumn:
