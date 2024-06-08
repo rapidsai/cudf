@@ -1819,7 +1819,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if isinstance(value, cudf.Series):
             if not self.index.equals(value.index):
                 value = value.reindex(self.index)
-            # TODO: copy value._column?
             value = {
                 col_name: value._column for col_name in self._column_names
             }

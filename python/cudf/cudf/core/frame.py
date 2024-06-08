@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import itertools
 import operator
 import pickle
@@ -748,8 +747,7 @@ class Frame(BinaryOperand, Scannable):
                 method = "bfill"
 
         if is_scalar(value):
-            # Do we need a deepcopy here?
-            value = {name: copy.deepcopy(value) for name in self._column_names}
+            value = {name: value for name in self._column_names}
         elif not isinstance(value, (abc.Mapping, cudf.Series)):
             raise TypeError(
                 f'"value" parameter must be a scalar, dict '
