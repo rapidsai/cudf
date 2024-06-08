@@ -65,6 +65,7 @@ class OddRowAccessor:
         return self._obj[2 * i - 1]
 
 
+# todo
 @pytest.mark.parametrize("gidx", [cudf.Index(list(range(0, 50)))])
 def test_index_accessor(gidx):
     pidx = gidx.to_pandas()
@@ -73,6 +74,7 @@ def test_index_accessor(gidx):
         assert_eq(gidx.odd[i], pidx.odd[i])
 
 
+# todo
 @pytest.mark.parametrize("gs", [cudf.Series(list(range(1, 50)))])
 def test_series_accessor(gs):
     ps = gs.to_pandas()
@@ -84,7 +86,9 @@ def test_series_accessor(gs):
 @pytest.mark.parametrize(
     "gdf", [cudf.datasets.randomdata(nrows=6, dtypes={"x": int, "y": int})]
 )
+# todo
 @pytest.mark.parametrize("gidx", [cudf.Index(list(range(1, 50)))])
+# todo
 @pytest.mark.parametrize("gs", [cudf.Series(list(range(1, 50)))])
 def test_accessor_space_separate(gdf, gidx, gs):
     assert not id(gdf._accessors) == id(gidx._accessors)

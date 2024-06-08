@@ -80,6 +80,7 @@ def test_dropna_dataframe(data, how, axis, inplace):
 
 
 @pytest.mark.parametrize("how", ["all", "any"])
+# todo
 @pytest.mark.parametrize(
     "data",
     [
@@ -203,6 +204,7 @@ def test_dropna_thresh_cols(thresh, subset, inplace):
     )
 
 
+# todo
 @pytest.mark.parametrize(
     "data",
     [

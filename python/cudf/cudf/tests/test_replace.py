@@ -19,6 +19,7 @@ from cudf.testing._utils import (
 )
 
 
+# todo
 @pytest.mark.parametrize(
     "gsr",
     [
@@ -27,6 +28,7 @@ from cudf.testing._utils import (
         cudf.Series(list(range(400)) + [None]),
     ],
 )
+# todo
 @pytest.mark.parametrize(
     "to_replace,value",
     [
@@ -405,6 +407,7 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
         ).astype(Decimal128Dtype(20, 7)),
     ],
 )
+# todo
 @pytest.mark.parametrize(
     "fill_value",
     [
@@ -1312,6 +1315,7 @@ def test_series_replace_errors():
     )
 
 
+# todo
 @pytest.mark.parametrize(
     "gsr,old,new,expected",
     [
