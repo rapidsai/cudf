@@ -1432,7 +1432,7 @@ def test_is_proxy_object():
     np_arr = np.array([1])
 
     s1 = xpd.Series([1])
-    s2 = xpd.Series([1])
+    s2 = pd.Series([1])
 
     np_arr_proxy = s1.to_numpy()
 
