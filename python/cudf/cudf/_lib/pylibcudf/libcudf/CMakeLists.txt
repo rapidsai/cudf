@@ -22,4 +22,5 @@ rapids_cython_create_modules(
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" ASSOCIATED_TARGETS cudf MODULE_PREFIX cpp
 )
+add_subdirectory(io)
 add_subdirectory(strings)

@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint8_t
+from libc.stdint cimport int32_t, uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
@@ -19,9 +19,9 @@ cdef extern from "cudf/io/json.hpp" \
         data_type type
         map[string, schema_element] child_types
 
-    cdef enum json_recovery_mode_t:
-        FAIL "cudf::io::json_recovery_mode_t::FAIL"
-        RECOVER_WITH_NULL "cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL"
+    cpdef enum class json_recovery_mode_t(int32_t):
+        FAIL
+        RECOVER_WITH_NULL
 
     cdef cppclass json_reader_options:
         json_reader_options() except +

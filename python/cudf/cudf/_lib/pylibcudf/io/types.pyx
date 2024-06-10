@@ -5,6 +5,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.pylibcudf.libcudf.io.types cimport (
+    column_name_info,
     host_buffer,
     source_info,
     table_with_metadata,
@@ -36,9 +37,24 @@ cdef class TableWithMetadata:
         """
         cdef list names = []
         for col_info in self.metadata.schema_info:
-            # TODO: Handle nesting (columns with child columns)
-            assert col_info.children.size() == 0, "Child column names are not handled!"
             names.append(col_info.name.decode())
+        return names
+
+    @property
+    def child_names(self):
+        """
+        Return a dictionary mapping the names of columns with children
+        to the names of their child columns
+        """
+        return TableWithMetadata._parse_col_names(self.metadata.schema_info)
+
+    @staticmethod
+    cdef dict _parse_col_names(vector[column_name_info] infos):
+        cdef dict child_names = dict()
+        cdef dict names = dict()
+        for col_info in infos:
+            child_names = TableWithMetadata._parse_col_names(col_info.children)
+            names[col_info.name.decode()] = child_names
         return names
 
     @staticmethod
@@ -106,5 +122,11 @@ cdef class SourceInfo:
                 c_buffer = bio.getbuffer()  # check if empty?
                 c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0],
                                                      c_buffer.shape[0]))
+        else:
+            raise ValueError("Sources must be a list of str/paths, "
+                             "bytes, or io.BytesIO")
+
+        if empty_buffer is True:
+            c_host_buffers.push_back(host_buffer(<char*>NULL, 0))
 
         self.c_obj = source_info(c_host_buffers)
