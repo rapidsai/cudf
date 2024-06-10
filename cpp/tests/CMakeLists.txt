@@ -570,6 +570,7 @@ ConfigureTest(
   large_strings/concatenate_tests.cpp
   large_strings/case_tests.cpp
   large_strings/large_strings_fixture.cpp
+  large_strings/many_strings_tests.cpp
   large_strings/merge_tests.cpp
   large_strings/parquet_tests.cpp
   large_strings/reshape_tests.cpp
