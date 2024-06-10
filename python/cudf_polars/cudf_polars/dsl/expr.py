@@ -667,36 +667,39 @@ class StringFunction(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        columns = [
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        ]
-        if self.name == pl_expr.StringFunction.Lowercase:
-            (column,) = columns
-            return Column(plc.strings.case.to_lower(column.obj))
-        elif self.name == pl_expr.StringFunction.Uppercase:
-            (column,) = columns
-            return Column(plc.strings.case.to_upper(column.obj))
-        elif self.name == pl_expr.StringFunction.EndsWith:
-            column, suffix = columns
-            return Column(plc.strings.find.ends_with(column.obj, suffix.obj))
-        elif self.name == pl_expr.StringFunction.StartsWith:
-            column, suffix = columns
-            return Column(plc.strings.find.starts_with(column.obj, suffix.obj))
-        elif self.name == pl_expr.StringFunction.Contains:
-            column, pattern = columns
+        if self.name == pl_expr.StringFunction.Contains:
+            child, pattern = self.children
+            column = child.evaluate(df, context=context, mapping=mapping)
+            assert isinstance(pattern, Literal)
+
             literal, _ = self.options
             if literal:
-                return Column(plc.strings.find.contains(column.obj, pattern.obj))
+                return Column(plc.strings.find.contains(column.obj, pattern.value))
             else:
-                # TODO: hack
-                pattern = plc.interop.to_arrow(pattern.obj).as_py()
                 prog = plc.strings.regex_program.RegexProgram.create(
-                    pattern, flags=plc.strings.regex_flags.RegexFlags.DEFAULT
+                    pattern.value.as_py(),
+                    flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
                 )
                 return Column(plc.strings.contains.contains_re(column.obj, prog))
         else:
-            raise NotImplementedError(f"StringFunction {self.name}")
+            columns = [
+                child.evaluate(df, context=context, mapping=mapping)
+                for child in self.children
+            ]
+            if self.name == pl_expr.StringFunction.Lowercase:
+                (column,) = columns
+                return Column(plc.strings.case.to_lower(column.obj))
+            elif self.name == pl_expr.StringFunction.Uppercase:
+                (column,) = columns
+                return Column(plc.strings.case.to_upper(column.obj))
+            elif self.name == pl_expr.StringFunction.EndsWith:
+                column, suffix = columns
+                return Column(plc.strings.find.ends_with(column.obj, suffix.obj))
+            elif self.name == pl_expr.StringFunction.StartsWith:
+                column, suffix = columns
+                return Column(plc.strings.find.starts_with(column.obj, suffix.obj))
+            else:
+                raise NotImplementedError(f"StringFunction {self.name}")
 
 
 class Sort(Expr):
