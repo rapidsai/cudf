@@ -2688,6 +2688,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self._data = ColumnAccessor(
             data=dict(zip(other.names, self._data.columns)),
             multiindex=other.multiindex,
+            rangeindex=other.rangeindex,
             level_names=other.level_names,
             label_dtype=other.label_dtype,
             verify=False,
@@ -7534,7 +7535,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
-        column_names: abc.Iterable[str],
+        column_names: Optional[abc.Iterable[str]] = None,
         index_names: Optional[List[str]] = None,
         *,
         override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
