@@ -11,7 +11,7 @@ import pyarrow as pa
 from typing_extensions import Self
 
 import cudf
-from cudf._typing import Dtype, NotImplementedType, ScalarLike
+from cudf._typing import NotImplementedType, ScalarLike
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
@@ -114,24 +114,6 @@ class SingleColumnFrame(Frame, NotIterable):
     @_cudf_nvtx_annotate
     def values_host(self) -> numpy.ndarray:  # noqa: D102
         return self._column.values_host
-
-    @_cudf_nvtx_annotate
-    def to_cupy(
-        self,
-        dtype: Union[Dtype, None] = None,
-        copy: bool = True,
-        na_value=None,
-    ) -> cupy.ndarray:  # noqa: D102
-        return super().to_cupy(dtype, copy, na_value)
-
-    @_cudf_nvtx_annotate
-    def to_numpy(
-        self,
-        dtype: Union[Dtype, None] = None,
-        copy: bool = True,
-        na_value=None,
-    ) -> numpy.ndarray:  # noqa: D102
-        return super().to_numpy(dtype, copy, na_value)
 
     @classmethod
     @_cudf_nvtx_annotate
