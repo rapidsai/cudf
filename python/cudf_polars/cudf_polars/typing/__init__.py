@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Literal, Protocol, TypeAlias
 
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
@@ -89,3 +89,16 @@ class NodeTraverser(Protocol):
     ) -> None:
         """Set the callback replacing the current node in the plan."""
         ...
+
+
+OptimizationArgs: TypeAlias = Literal[
+    "type_coercion",
+    "predicate_pushdown",
+    "projection_pushdown",
+    "simplify_expression",
+    "slice_pushdown",
+    "comm_subplan_elim",
+    "comm_subexpr_elim",
+    "cluster_with_columns",
+    "no_optimization",
+]
