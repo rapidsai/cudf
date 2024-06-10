@@ -189,12 +189,19 @@ cudf::size_type distinct_count(column_view const& input,
 {
   if (0 == input.size()) { return 0; }
 
+  if (input.null_count() == input.size()) {
+    if (null_handling == null_policy::INCLUDE) {
+      return 1;
+    } else {
+      return 0;
+    }
+  }
+
   auto count = detail::distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
 
-  // Check for nulls.
+  // Check for nulls. If the null policy is EXCLUDE and null values were found,
+  // we decrement the count.
   auto const has_null = input.has_nulls();
-  // If the null policy is INCLUDE and all the values were null, return count (1).
-  if (null_handling == null_policy::INCLUDE and has_null and count == 1) { return count; }
   // If the null policy is EXCLUDE and null values were found,
   // we decrement the count.
   if (null_handling == null_policy::EXCLUDE and has_null) { --count; }
