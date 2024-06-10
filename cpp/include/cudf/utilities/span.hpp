@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/host_uvector.hpp>
-
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/device_vector.hpp>
@@ -213,10 +211,6 @@ struct is_host_span_supported_container<  //
 template <typename T, typename Alloc>
 struct is_host_span_supported_container<  //
   thrust::host_vector<T, Alloc>> : std::true_type {};
-
-template <typename T>
-struct is_host_span_supported_container<  //
-  cudf::detail::host_uvector<T>> : std::true_type {};
 
 template <typename T, typename Alloc>
 struct is_host_span_supported_container<  //

@@ -18,7 +18,7 @@
 #include "io/text/device_data_chunks.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/host_uvector.hpp>
+#include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 
@@ -34,7 +34,7 @@ namespace {
 
 struct host_ticket {
   cudaEvent_t event{};  // tracks the completion of the last device-to-host copy.
-  cudf::detail::host_uvector<char> buffer;
+  cudf::detail::host_vector<char> buffer;
 
   host_ticket() : buffer{cudf::detail::make_pinned_vector_sync<char>(0, cudf::get_default_stream())}
   {
