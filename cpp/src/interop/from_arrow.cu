@@ -301,13 +301,18 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
     throw std::runtime_error("Unsupported array type");
   }
 
-  auto chars_column = dispatch_to_cudf_column{}.operator()<int8_t>(
-    *char_array, data_type(type_id::INT8), true, stream, mr);
+  rmm::device_uvector<char> chars(char_array->length(), stream, mr);
+  auto data_buffer = char_array->data()->buffers[1];
+  CUDF_CUDA_TRY(cudaMemcpyAsync(chars.data(),
+                                reinterpret_cast<uint8_t const*>(data_buffer->address()),
+                                chars.size(),
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   auto const num_rows = offsets_column->size() - 1;
   auto out_col        = make_strings_column(num_rows,
                                      std::move(offsets_column),
-                                     std::move(chars_column->release().data.release()[0]),
+                                     chars.release(),
                                      array.null_count(),
                                      std::move(*get_mask_buffer(array, stream, mr)));
 
