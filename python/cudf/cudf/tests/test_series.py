@@ -2737,12 +2737,15 @@ def test_series_dtype_astypes(data):
     assert_eq(result, expected)
 
 
-def test_series_from_large_string():
-    pa_large_string_array = pa.array(["a", "b", "c"]).cast(pa.large_string())
-    got = cudf.Series(pa_large_string_array)
-    expected = pd.Series(pa_large_string_array)
+@pytest.mark.parametrize("pa_type", [pa.string, pa.large_string])
+def test_series_from_large_string(pa_type):
+    pa_string_array = pa.array(["a", "b", "c"]).cast(pa_type())
+    got = cudf.Series(pa_string_array)
+    expected = pd.Series(pa_string_array)
 
     assert_eq(expected, got)
+
+    assert pa_string_array.equals(got.to_arrow())
 
 
 @pytest.mark.parametrize(
