@@ -67,36 +67,33 @@ template <typename T>
 using type_identity_t = T;
 
 /**
- * @brief Recursive template to recursively apply conditional types
+ * @brief Recursive template to apply type transformations sequentially. Transformations are
+ * applied first-to-last in the order specified.
  *
- * @tparam T Base type
- * @tparam Rest Chained conditional_t to apply
+ * @tparam T Base type or initial type on which transformations are applied
+ * @tparam Rest Type transformations to apply
  */
 template <typename T, template <typename> typename... Rest>
-struct nested_conditional;
+struct transform_sequence;
 
-/**
- * @brief Primary template
- */
+/// @copydoc transform_sequence
 template <typename T, template <typename> typename First, template <typename> typename... Rest>
-struct nested_conditional<T, First, Rest...> {
-  /// The type to dispatch to if the type is nested
-  using type = typename nested_conditional<First<T>, Rest...>::type;
+struct transform_sequence<T, First, Rest...> {
+  using type =
+    typename transform_sequence<First<T>, Rest...>::type;  ///< Resolved type after transformations
 };
 
-/**
- * @brief Base case specialization
- */
+/// @copydoc transform_sequence
 template <typename T>
-struct nested_conditional<T> {
+struct transform_sequence<T> {
   using type = T;  ///< The underlying type
 };
 
 /**
- * @brief Helper alias for nested_conditional
+ * @brief Helper alias for transform_sequence
  */
 template <typename T, template <typename> typename... Rest>
-using nested_conditional_t = typename nested_conditional<T, Rest...>::type;
+using transform_sequence_t = typename transform_sequence<T, Rest...>::type;
 
 /**
  * @brief Void dispatcher helper
@@ -1419,10 +1416,10 @@ class device_row_comparator {
 
   template <cudf::type_id T>
   using dispatch_void_if_nested =
-    nested_conditional<id_to_type<T>, dispatch_conditional_t, dispatch_void_if_nested_t>;
+    transform_sequence<id_to_type<T>, dispatch_conditional_t, dispatch_void_if_nested_t>;
 
   template <cudf::type_id T>
-  using conditional_t = nested_conditional<id_to_type<T>, dispatch_conditional_t>;
+  using dispatch_conditional = transform_sequence<id_to_type<T>, dispatch_conditional_t>;
 
  public:
   /**
@@ -1437,7 +1434,7 @@ class device_row_comparator {
                                        size_type const rhs_index) const noexcept
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
-      return cudf::type_dispatcher<conditional_t>(
+      return cudf::type_dispatcher<dispatch_conditional>(
         l.type(),
         element_comparator{check_nulls, l, r, nulls_are_equal, comparator},
         lhs_index,
@@ -2113,11 +2110,11 @@ class device_row_hasher {
   friend class row_hasher;  ///< Allow row_hasher to access private members.
   template <cudf::type_id T>
   using dispatch_storage_type =
-    nested_conditional<id_to_type<T>, dispatch_conditional_t, device_storage_type_t>;
+    transform_sequence<id_to_type<T>, dispatch_conditional_t, device_storage_type_t>;
 
   template <cudf::type_id T>
   using dispatch_void_if_nested =
-    nested_conditional<id_to_type<T>, dispatch_conditional_t, dispatch_void_if_nested_t>;
+    transform_sequence<id_to_type<T>, dispatch_conditional_t, dispatch_void_if_nested_t>;
 
  public:
   /**
