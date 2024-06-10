@@ -128,6 +128,16 @@ __device__ __forceinline__ void reprog_device::reljunk::swaplist()
 }
 
 /**
+ * @brief Check for supported new-line characters
+ *
+ * '\n, \r, \u0085, \u2028, or \u2029'
+ */
+__device__ __forceinline__ bool is_newline(char32_t const ch)
+{
+  return (ch == '\n' || ch == '\r' || ch == 0x00c285 || ch == 0x00e280a8 || ch == 0x00e280a9);
+}
+
+/**
  * @brief Utility to check a specific character against this class instance.
  *
  * @param ch A 4-byte UTF-8 character.
@@ -262,12 +272,10 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
         case BOL:
           if (pos == 0) break;
           if (jnk.startchar != '^') { return thrust::nullopt; }
-          --itr;
-          startchar = static_cast<char_utf8>('\n');
+          break;
         case CHAR: {
-          auto const find_itr = find_char(startchar, dstr, itr);
-          if (find_itr.byte_offset() >= dstr.size_bytes()) { return thrust::nullopt; }
-          itr = find_itr + (jnk.starttype == BOL);
+          itr = find_char(startchar, dstr, itr);
+          if (itr.byte_offset() >= dstr.size_bytes()) { return thrust::nullopt; }
           pos = itr.position();
           break;
         }
@@ -313,26 +321,30 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
             id_activate = inst.u2.next_id;
             expanded    = true;
             break;
-          case BOL:
-            if ((pos == 0) || ((inst.u1.c == '^') && (dstr[pos - 1] == '\n'))) {
+          case BOL: {
+            auto titr = itr;
+            if ((pos == 0) || ((inst.u1.c == '^') && (is_newline(*(--titr))))) {
               id_activate = inst.u2.next_id;
               expanded    = true;
             }
             break;
+          }
           case EOL:
             // after the last character OR:
             // - for MULTILINE, if current character is new-line
             // - for non-MULTILINE, the very last character of the string can also be a new-line
             if (last_character ||
-                ((c == '\n') && (inst.u1.c != 'Z') &&
-                 ((inst.u1.c == '$') || (itr.byte_offset() + 1 == dstr.size_bytes())))) {
+                (is_newline(c) && (inst.u1.c != 'Z') &&
+                 ((inst.u1.c == '$') ||
+                  (itr.byte_offset() + bytes_in_char_utf8(c) == dstr.size_bytes())))) {
               id_activate = inst.u2.next_id;
               expanded    = true;
             }
             break;
           case BOW:
           case NBOW: {
-            auto const prev_c       = pos > 0 ? dstr[pos - 1] : 0;
+            auto titr               = itr;
+            auto const prev_c       = pos > 0 ? *(--titr) : 0;
             auto const word_class   = reclass_device{CCLASS_W};
             bool const curr_is_word = word_class.is_match(c, _codepoint_flags);
             bool const prev_is_word = word_class.is_match(prev_c, _codepoint_flags);
@@ -368,7 +380,7 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
           if (inst.u1.c == c) id_activate = inst.u2.next_id;
           break;
         case ANY:
-          if (c != '\n') id_activate = inst.u2.next_id;
+          if (!is_newline(c)) { id_activate = inst.u2.next_id; }
           break;
         case ANYNL: id_activate = inst.u2.next_id; break;
         case NCCLASS:

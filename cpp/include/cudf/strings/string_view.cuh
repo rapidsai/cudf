@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -190,9 +190,14 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
 
 __device__ inline string_view::const_iterator& string_view::const_iterator::operator--()
 {
-  if (byte_pos > 0)
-    while (strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(p[--byte_pos])) == 0)
-      ;
+  if (byte_pos > 0) {
+    if (byte_pos == char_pos) {
+      --byte_pos;
+    } else {
+      while (strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(p[--byte_pos])) == 0)
+        ;
+    }
+  }
   --char_pos;
   return *this;
 }

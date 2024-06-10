@@ -612,6 +612,43 @@ TEST_F(StringsContainsTests, MultiLine)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
 }
 
+TEST_F(StringsContainsTests, SpecialNewLines)
+{
+  auto input = cudf::test::strings_column_wrapper({"zzé\xE2\x80\xA8qqq\xC2\x85zzé",
+                                                   "qqq\xC2\x85zzé\xE2\x80\xA8lll",
+                                                   "zzé",
+                                                   "",
+                                                   "zzé\xC2\x85",
+                                                   "zze\xE2\x80\xA9zzé\xC2\x85"});
+  auto view  = cudf::strings_column_view(input);
+
+  auto pattern = std::string("^zzé$");
+  auto prog    = cudf::strings::regex_program::create(pattern);
+  auto prog_ml =
+    cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::MULTILINE);
+
+  auto expected_contains = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 0, 1, 1});
+  auto results           = cudf::strings::contains_re(view, *prog_ml);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_contains);
+  expected_contains = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 1, 0, 1, 0});
+  results           = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_contains);
+
+  auto expected_matches = cudf::test::fixed_width_column_wrapper<bool>({1, 0, 1, 0, 1, 0});
+  results               = cudf::strings::matches_re(view, *prog_ml);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_matches);
+  expected_matches = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 1, 0, 1, 0});
+  results          = cudf::strings::matches_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_matches);
+
+  auto expected_count = cudf::test::fixed_width_column_wrapper<int32_t>({2, 1, 1, 0, 1, 1});
+  results             = cudf::strings::count_re(view, *prog_ml);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
+  expected_count = cudf::test::fixed_width_column_wrapper<int32_t>({0, 0, 1, 0, 1, 0});
+  results        = cudf::strings::count_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
+}
+
 TEST_F(StringsContainsTests, EndOfString)
 {
   auto input = cudf::test::strings_column_wrapper(
