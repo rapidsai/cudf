@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 import pandas as pd
 import pytest
 
@@ -29,6 +29,19 @@ def test_convert_dtypes(data, dtype):
     nullable = dtype not in ("category", "datetime64[ns]")
     got = gs.convert_dtypes().to_pandas(nullable=nullable)
     assert_eq(expect, got)
+
+
+def test_convert_integer_false_convert_floating_true():
+    data = [1.000000000000000000000000001, 1]
+    expected = pd.Series(data).convert_dtypes(
+        convert_integer=False, convert_floating=True
+    )
+    result = (
+        cudf.Series(data)
+        .convert_dtypes(convert_integer=False, convert_floating=True)
+        .to_pandas(nullable=True)
+    )
+    pd.testing.assert_series_equal(result, expected)
 
 
 # Now write the same test, but construct a DataFrame
