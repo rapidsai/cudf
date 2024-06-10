@@ -130,7 +130,7 @@ class Column:
     def mask_nans(self) -> Self:
         """Return a copy of self with nans masked out."""
         if self.nan_count > 0:
-            raise NotImplementedError
+            raise NotImplementedError("Need to port transform.hpp to pylibcudf")
         return self.copy()
 
     @functools.cached_property
