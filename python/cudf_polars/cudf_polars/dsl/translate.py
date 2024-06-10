@@ -64,7 +64,9 @@ noop_context: nullcontext[None] = nullcontext()
 def _translate_ir(
     node: Any, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    raise NotImplementedError(f"Translation for {type(node).__name__}")
+    raise NotImplementedError(
+        f"Translation for {type(node).__name__}"
+    )  # pragma: no cover
 
 
 @_translate_ir.register
@@ -173,7 +175,7 @@ def _(
 @_translate_ir.register
 def _(
     node: pl_ir.Reduce, visitor: NodeTraverser, schema: dict[str, plc.DataType]
-) -> ir.IR:
+) -> ir.IR:  # pragma: no cover; polars doesn't emit this node yet
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         exprs = [translate_named_expr(visitor, n=e) for e in node.expr]
@@ -334,7 +336,9 @@ def translate_named_expr(
 def _translate_expr(
     node: Any, visitor: NodeTraverser, dtype: plc.DataType
 ) -> expr.Expr:
-    raise NotImplementedError(f"Translation for {type(node).__name__}")
+    raise NotImplementedError(
+        f"Translation for {type(node).__name__}"
+    )  # pragma: no cover
 
 
 @_translate_expr.register

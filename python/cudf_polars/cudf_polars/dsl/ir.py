@@ -153,7 +153,9 @@ class IR:
             since the translation phase should pick up things that we
             cannot handle.
         """
-        raise NotImplementedError
+        raise NotImplementedError(
+            f"Evaluation of {type(self).__name__}"
+        )  # pragma: no cover
 
 
 @dataclasses.dataclass(slots=True)
@@ -195,7 +197,9 @@ class Scan(IR):
         if self.file_options.n_rows is not None:
             raise NotImplementedError("row limit in scan")
         if self.typ not in ("csv", "parquet"):
-            raise NotImplementedError(f"Unhandled scan type: {self.typ}")
+            raise NotImplementedError(
+                f"Unhandled scan type: {self.typ}"
+            )  # pragma: no cover; other types are not yet transpiled
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -346,7 +350,9 @@ class Reduce(IR):
     expr: list[expr.NamedExpr]
     """List of expressions to evaluate to form the new dataframe."""
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame]
+    ) -> DataFrame:  # pragma: no cover; polars doesn't emit this node yet
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         columns = broadcast(*(e.evaluate(df) for e in self.expr))
