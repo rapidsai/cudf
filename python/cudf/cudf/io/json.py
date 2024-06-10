@@ -27,6 +27,7 @@ def read_json(
     storage_options=None,
     mixed_types_as_string=False,
     prune_columns=False,
+    on_bad_lines="error",
     *args,
     **kwargs,
 ):
@@ -94,15 +95,15 @@ def read_json(
                 filepaths_or_buffers.append(tmp_source)
 
         df = libjson.read_json(
-            filepaths_or_buffers,
-            dtype,
-            lines,
-            compression,
-            byte_range,
-            False,
-            keep_quotes,
-            mixed_types_as_string,
-            prune_columns,
+            filepaths_or_buffers=filepaths_or_buffers,
+            dtype=dtype,
+            lines=lines,
+            compression=compression,
+            byte_range=byte_range,
+            keep_quotes=keep_quotes,
+            mixed_types_as_string=mixed_types_as_string,
+            prune_columns=prune_columns,
+            on_bad_lines=on_bad_lines,
         )
     else:
         warnings.warn(
@@ -146,10 +147,9 @@ def read_json(
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
         specified_dtypes = {} if dtype is True else dtype
-        df_dtypes = df._dtypes
         unspecified_dtypes = {
-            name: df_dtypes[name]
-            for name in df._column_names
+            name: dtype
+            for name, dtype in df._dtypes
             if name not in specified_dtypes
         }
         default_dtypes = {}

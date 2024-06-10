@@ -595,8 +595,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 data = data.copy(deep=True)
             name_from_data = data.name
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
-            if isinstance(data, (pd.Series, Series)):
-                index_from_data = as_index(data.index)
+            if isinstance(data, pd.Series):
+                index_from_data = cudf.Index(data.index)
+            elif isinstance(data, Series):
+                index_from_data = data.index
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.Series._from_data for constructing a Series from "
@@ -610,7 +612,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 column = as_column(
                     list(data.values()), nan_as_null=nan_as_null, dtype=dtype
                 )
-                index_from_data = as_index(list(data.keys()))
+                index_from_data = cudf.Index(list(data.keys()))
         else:
             # Using `getattr_static` to check if
             # `data` is on device memory and perform
@@ -647,7 +649,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             name = name_from_data
 
         if index is not None:
-            index = as_index(index)
+            index = cudf.Index(index)
 
         if index_from_data is not None:
             first_index = index_from_data
@@ -2020,11 +2022,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             index = self.index.to_pandas()
         else:
             index = None  # type: ignore[assignment]
-        s = self._column.to_pandas(
-            index=index, nullable=nullable, arrow_type=arrow_type
+        return pd.Series(
+            self._column.to_pandas(nullable=nullable, arrow_type=arrow_type),
+            index=index,
+            name=self.name,
         )
-        s.name = self.name
-        return s
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -4200,6 +4202,78 @@ class DatetimeProperties:
         )
 
     @_cudf_nvtx_annotate
+    def day_name(self, locale=None):
+        """
+        Return the day names. Currently supports English locale only.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> datetime_series = cudf.Series(cudf.date_range('2016-12-31',
+        ...     '2017-01-08', freq='D'))
+        >>> datetime_series
+        0   2016-12-31
+        1   2017-01-01
+        2   2017-01-02
+        3   2017-01-03
+        4   2017-01-04
+        5   2017-01-05
+        6   2017-01-06
+        7   2017-01-07
+        8   2017-01-08
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.day_name()
+        0     Saturday
+        1       Sunday
+        2       Monday
+        3      Tuesday
+        4    Wednesday
+        5     Thursday
+        6       Friday
+        7     Saturday
+        dtype: object
+        """
+        day_names = self.series._column.get_day_names(locale)
+        return Series._from_data(
+            ColumnAccessor({None: day_names}),
+            index=self.series.index,
+            name=self.series.name,
+        )
+
+    @_cudf_nvtx_annotate
+    def month_name(self, locale: str | None = None) -> Series:
+        """
+        Return the month names. Currently supports English locale only.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> datetime_series = cudf.Series(cudf.date_range("2017-12-30", periods=6, freq='W'))
+        >>> datetime_series
+        0   2017-12-30
+        1   2018-01-06
+        2   2018-01-13
+        3   2018-01-20
+        4   2018-01-27
+        5   2018-02-03
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.month_name()
+        0    December
+        1     January
+        2     January
+        3     January
+        4     January
+        5    February
+        dtype: object
+        """
+        month_names = self.series._column.get_month_names(locale)
+        return Series._from_data(
+            ColumnAccessor({None: month_names}),
+            index=self.series.index,
+            name=self.series.name,
+        )
+
+    @_cudf_nvtx_annotate
     def isocalendar(self):
         """
         Returns a DataFrame with the year, week, and day
@@ -5167,7 +5241,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
     if isinstance(a, cudf.Series) and isinstance(b, cudf.Series):
         b = b.reindex(a.index)
-        index = as_index(a.index)
+        index = cudf.Index(a.index)
 
     a_col = as_column(a)
     a_array = cupy.asarray(a_col.data_array_view(mode="read"))

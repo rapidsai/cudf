@@ -18,6 +18,7 @@ cdef extern from "cudf/strings/udf/udf_string.hpp" namespace \
 
 cdef extern from "cudf/strings/udf/udf_apis.hpp"  namespace \
         "cudf::strings::udf" nogil:
+    cdef int get_cuda_build_version() except +
     cdef unique_ptr[device_buffer] to_string_view_array(column_view) except +
     cdef unique_ptr[column] column_from_udf_string_array(
         udf_string* strings, size_type size,
