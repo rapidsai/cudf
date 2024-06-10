@@ -12,7 +12,7 @@ from numba import config as numba_config
 # strings_udf. This is the easiest way to break an otherwise circular import
 # loop of _lib.*->cudautils->_numba->_lib.strings_udf
 @lru_cache
-def _get_cuda_build_version_from_strings_udf():
+def _get_cuda_build_version():
     from cudf._lib import strings_udf
 
     # The version is an integer, parsed as 1000 * major + 10 * minor
@@ -118,7 +118,7 @@ def _setup_numba():
     versions = safe_get_versions()
     if versions != NO_DRIVER:
         driver_version, runtime_version = versions
-        shim_ptx_cuda_version = _get_cuda_build_version_from_strings_udf()
+        shim_ptx_cuda_version = _get_cuda_build_version()
 
         # MVC is required whenever any PTX is newer than the driver
         # This could be the shipped shim PTX file (determined by the CUDA
