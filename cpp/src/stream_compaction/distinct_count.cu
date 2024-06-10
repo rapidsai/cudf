@@ -202,8 +202,6 @@ cudf::size_type distinct_count(column_view const& input,
   // Check for nulls. If the null policy is EXCLUDE and null values were found,
   // we decrement the count.
   auto const has_null = input.has_nulls();
-  // If the null policy is EXCLUDE and null values were found,
-  // we decrement the count.
   if (null_handling == null_policy::EXCLUDE and has_null) { --count; }
 
   // Check for NaNs. There are two cases that can lead to decrementing the
