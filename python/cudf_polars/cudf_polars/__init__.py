@@ -10,4 +10,7 @@ pylibcudf to execute the plans on device.
 
 from __future__ import annotations
 
-__all__: list[str] = []
+from cudf_polars.callback import execute_with_cudf
+from cudf_polars.dsl.translate import translate_ir
+
+__all__: list[str] = ["execute_with_cudf", "translate_ir"]

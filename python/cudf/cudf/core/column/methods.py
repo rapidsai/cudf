@@ -93,8 +93,6 @@ class ColumnMethods(NotIterable):
                 else:
                     return cudf.Series(new_col, name=self._parent.name)
             elif isinstance(self._parent, cudf.BaseIndex):
-                return cudf.core.index.as_index(
-                    new_col, name=self._parent.name
-                )
+                return cudf.Index(new_col, name=self._parent.name)
             else:
                 return self._parent._mimic_inplace(new_col, inplace=False)

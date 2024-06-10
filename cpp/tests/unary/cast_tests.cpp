@@ -665,6 +665,27 @@ TYPED_TEST(FixedPointTests, CastFromDouble)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(FixedPointTests, CastFromDoubleWithNaNAndInf)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<double>;
+
+  auto const NaN  = std::numeric_limits<double>::quiet_NaN();
+  auto const inf  = std::numeric_limits<double>::infinity();
+  auto const null = 0;
+
+  auto const input    = fw_wrapper{1.729, -inf, NaN, 172.9, -inf, NaN, inf, 1.23, inf};
+  auto const expected = fp_wrapper{{1729, null, null, 172900, null, null, null, 1230, null},
+                                   {true, false, false, true, false, false, false, true, false},
+                                   scale_type{-3}};
+  auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(-3));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(FixedPointTests, CastFromDoubleLarge)
 {
   using namespace numeric;
