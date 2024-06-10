@@ -591,7 +591,7 @@ transform_lists_of_structs(column_view const& lhs,
                                        column_null_order,
                                        stream,
                                        rmm::mr::get_current_device_resource());
-      auto const ranks_slices = cudf::detail::slice(
+      auto const ranks_slices = cudf::slice(
         ranks->view(),
         {0, child_lhs.size(), child_lhs.size(), child_lhs.size() + child_rhs.size()},
         stream);

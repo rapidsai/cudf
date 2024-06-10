@@ -55,7 +55,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
 
   if (keys_column->has_nulls()) {
     keys_column = std::make_unique<column>(
-      cudf::detail::slice(
+      cudf::slice(
         keys_column->view(), std::vector<size_type>{0, keys_column->size() - 1}, stream)
         .front(),
       stream,

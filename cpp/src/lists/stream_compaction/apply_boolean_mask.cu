@@ -63,7 +63,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
 
   auto const make_output_offsets = [&] {
     auto boolean_mask_sliced_offsets =
-      cudf::detail::slice(
+      cudf::slice(
         boolean_mask.offsets(), {boolean_mask.offset(), boolean_mask.size() + 1}, stream)
         .front();
     auto const sizes =

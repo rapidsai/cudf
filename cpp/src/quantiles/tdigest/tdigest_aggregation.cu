@@ -1073,7 +1073,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                      std::next(offset_iter),
                      std::back_inserter(unmerged_tdigests),
                      [&](size_type start, size_type end) {
-                       return cudf::detail::slice(tdigests_unsliced, {start, end}, stream);
+                       return cudf::slice(tdigests_unsliced, {start, end}, stream);
                      });
 
                    // merge

@@ -79,7 +79,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
     (lists.child().type() == cudf::data_type{type_id::LIST})
       ? copy_slice(lists_column_view(lists.child()), start_offset, end_offset, stream, mr)
       : std::make_unique<cudf::column>(
-          cudf::detail::slice(lists.child(), {start_offset, end_offset}, stream).front(),
+          cudf::slice(lists.child(), {start_offset, end_offset}, stream).front(),
           stream,
           mr);
 

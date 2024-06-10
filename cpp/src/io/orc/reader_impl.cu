@@ -88,7 +88,7 @@ table_with_metadata reader_impl::make_output_chunk()
     // The range of rows in the decoded table to output.
     auto const out_range =
       _chunk_read_data.output_table_ranges[_chunk_read_data.curr_output_table_range++];
-    auto const out_tview = cudf::detail::slice(
+    auto const out_tview = cudf::slice(
       _chunk_read_data.decoded_table->view(),
       {static_cast<size_type>(out_range.begin), static_cast<size_type>(out_range.end)},
       _stream)[0];

@@ -225,7 +225,7 @@ TYPED_TEST(TypedContainsTest, SlicedLists)
   {
     // First Slice.
     auto sliced_column_1 =
-      cudf::detail::slice(search_space, {1, 8}, cudf::get_default_stream()).front();
+      cudf::slice(search_space, {1, 8}, cudf::get_default_stream()).front();
     auto search_key_one = create_scalar_search_key<T>(1);
     {
       // CONTAINS
@@ -258,7 +258,7 @@ TYPED_TEST(TypedContainsTest, SlicedLists)
   {
     // Second Slice.
     auto sliced_column_2 =
-      cudf::detail::slice(search_space, {3, 10}, cudf::get_default_stream()).front();
+      cudf::slice(search_space, {3, 10}, cudf::get_default_stream()).front();
     auto search_key_one = create_scalar_search_key<T>(1);
     {
       // CONTAINS
