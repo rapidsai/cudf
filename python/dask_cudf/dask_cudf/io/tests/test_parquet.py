@@ -596,3 +596,23 @@ def test_parquet_read_filter_and_project(tmpdir):
     # Check result
     expected = df[(df.a == 5) & (df.c > 20)][columns].reset_index(drop=True)
     dd.assert_eq(got, expected)
+
+
+def test_timezone_column(tmpdir):
+    path = str(tmpdir.join("test.parquet"))
+    pdf = pd.DataFrame(
+        {
+            "time": pd.to_datetime(
+                ["1996-01-02", "1996-12-01"],
+                utc=True,
+            ),
+            "x": [1, 2],
+        }
+    )
+    pdf.to_parquet(path)
+    got = dask_cudf.read_parquet(path)
+    # cudf.read_parquet does not support reading timezone aware types yet
+    assert got["time"].dtype == pd.DatetimeTZDtype("ns", "UTC")
+    got["time"] = got["time"].astype("datetime64[ns]")
+    expected = cudf.read_parquet(path)
+    dd.assert_eq(got, expected)

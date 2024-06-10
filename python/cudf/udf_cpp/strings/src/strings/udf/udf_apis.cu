@@ -101,6 +101,8 @@ void free_udf_string_array(cudf::strings::udf::udf_string* d_strings,
 
 // external APIs
 
+int get_cuda_build_version() { return CUDA_VERSION; }
+
 std::unique_ptr<rmm::device_buffer> to_string_view_array(cudf::column_view const input)
 {
   return detail::to_string_view_array(input, cudf::get_default_stream());
