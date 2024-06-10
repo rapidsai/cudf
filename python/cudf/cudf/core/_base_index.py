@@ -2072,12 +2072,7 @@ class BaseIndex(Serializable):
             pass
         # This is to be consistent with IndexedFrame.dropna to handle nans
         # as nulls by default
-        data_columns = [
-            col.nans_to_nulls()
-            if isinstance(col, cudf.core.column.NumericalColumn)
-            else col
-            for col in self._columns
-        ]
+        data_columns = [col.nans_to_nulls() for col in self._columns]
 
         return self._from_columns_like_self(
             drop_nulls(
