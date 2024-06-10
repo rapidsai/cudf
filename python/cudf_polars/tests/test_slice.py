@@ -17,7 +17,8 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
     "len",
     [0, 2, 12, 11],
 )
-def test_slice(offset, len):
+@pytest.mark.parametrize("slice_pushdown", [False, True])
+def test_slice(offset, len, slice_pushdown):
     ldf = pl.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -31,4 +32,4 @@ def test_slice(offset, len):
         .sort(by=pl.col("a"))
         .slice(offset, len)
     )
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, collect_kwargs={"slice_pushdown": slice_pushdown})
