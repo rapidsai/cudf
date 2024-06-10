@@ -7,13 +7,14 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-def test_filter_expression():
-    ldf = pl.LazyFrame(
+def test_filter():
+    ldf = pl.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
-            "b": [0, 3, 1, 5, 6, 1, 0],
+            "b": [1, 1, 1, 1, 1, 1, 1],
         }
-    )
+    ).lazy()
 
-    query = ldf.select(pl.col("a").filter(pl.col("b") > 2))
+    # group-by is just to avoid the filter being pushed into the scan.
+    query = ldf.group_by(pl.col("a")).agg(pl.col("b").sum()).filter(pl.col("b") < 1)
     assert_gpu_result_equal(query)
