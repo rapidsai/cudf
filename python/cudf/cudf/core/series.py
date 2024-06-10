@@ -1819,9 +1819,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if isinstance(value, cudf.Series):
             if not self.index.equals(value.index):
                 value = value.reindex(self.index)
-            value = {
-                col_name: value._column for col_name in self._column_names
-            }
+            value = {next(self._column_names): value._column}
         return super().fillna(
             value=value, method=method, axis=axis, inplace=inplace, limit=limit
         )

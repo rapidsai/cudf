@@ -755,13 +755,10 @@ class Frame(BinaryOperand, Scannable):
                 f'"{type(value).__name__}"'
             )
 
-        filled_columns = []
-        for col_name, col in self._data.items():
-            if col_name not in value:
-                filled_col = col.copy()
-            else:
-                filled_col = col.fillna(value[col_name], method)
-            filled_columns.append(filled_col)
+        filled_columns = [
+            col.fillna(value[name], method) if name in value else col.copy()
+            for name, col in self._data.items()
+        ]
 
         return self._mimic_inplace(
             self._from_data_like_self(
