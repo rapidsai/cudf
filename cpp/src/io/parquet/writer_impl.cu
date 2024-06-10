@@ -36,7 +36,6 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
-#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -2278,7 +2277,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   }
 
   auto bounce_buffer =
-    cudf::detail::pinned_host_vector<uint8_t>(all_device_write ? 0 : max_write_size);
+    cudf::detail::make_pinned_vector_async<uint8_t>(all_device_write ? 0 : max_write_size, stream);
 
   return std::tuple{std::move(agg_meta),
                     std::move(pages),
