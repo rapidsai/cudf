@@ -7,6 +7,8 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import cupy
 import numpy
+import pyarrow as pa
+from typing_extensions import Self
 
 import cudf
 from cudf._typing import Dtype, NotImplementedType, ScalarLike
@@ -27,8 +29,8 @@ from cudf.utils.utils import NotIterable
 class SingleColumnFrame(Frame, NotIterable):
     """A one-dimensional frame.
 
-    Frames with only a single column share certain logic that is encoded in
-    this class.
+    Frames with only a single column (Index or Series)
+    share certain logic that is encoded in this class.
     """
 
     _SUPPORT_AXIS_LOOKUP = {
@@ -47,7 +49,7 @@ class SingleColumnFrame(Frame, NotIterable):
         if axis not in (None, 0, no_default):
             raise NotImplementedError("axis parameter is not implemented yet")
 
-        if numeric_only and not is_numeric_dtype(self._column):
+        if numeric_only and not is_numeric_dtype(self.dtype):
             raise TypeError(
                 f"Series.{op} does not allow numeric_only={numeric_only} "
                 "with non-numeric dtypes."
@@ -68,7 +70,7 @@ class SingleColumnFrame(Frame, NotIterable):
     @_cudf_nvtx_annotate
     def name(self):
         """Get the name of this object."""
-        return next(iter(self._data.names))
+        return next(iter(self._column_names))
 
     @name.setter  # type: ignore
     @_cudf_nvtx_annotate
@@ -83,7 +85,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def shape(self):
+    def shape(self) -> tuple[int]:
         """Get a tuple representing the dimensionality of the Index."""
         return (len(self),)
 
@@ -95,22 +97,22 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def _num_columns(self):
+    def _num_columns(self) -> int:
         return 1
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def _column(self):
-        return self._data[self.name]
+    def _column(self) -> ColumnBase:
+        return next(iter(self._columns))
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def values(self):  # noqa: D102
+    def values(self) -> cupy.ndarray:  # noqa: D102
         return self._column.values
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def values_host(self):  # noqa: D102
+    def values_host(self) -> numpy.ndarray:  # noqa: D102
         return self._column.values_host
 
     @_cudf_nvtx_annotate
@@ -120,7 +122,7 @@ class SingleColumnFrame(Frame, NotIterable):
         copy: bool = True,
         na_value=None,
     ) -> cupy.ndarray:  # noqa: D102
-        return super().to_cupy(dtype, copy, na_value).flatten()
+        return super().to_cupy(dtype, copy, na_value)
 
     @_cudf_nvtx_annotate
     def to_numpy(
@@ -129,11 +131,11 @@ class SingleColumnFrame(Frame, NotIterable):
         copy: bool = True,
         na_value=None,
     ) -> numpy.ndarray:  # noqa: D102
-        return super().to_numpy(dtype, copy, na_value).flatten()
+        return super().to_numpy(dtype, copy, na_value)
 
     @classmethod
     @_cudf_nvtx_annotate
-    def from_arrow(cls, array):
+    def from_arrow(cls, array) -> Self:
         """Create from PyArrow Array/ChunkedArray.
 
         Parameters
@@ -164,7 +166,7 @@ class SingleColumnFrame(Frame, NotIterable):
         return cls(ColumnBase.from_arrow(array))
 
     @_cudf_nvtx_annotate
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         """
         Convert to a PyArrow Array.
 
@@ -196,7 +198,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_unique(self):
+    def is_unique(self) -> bool:
         """Return boolean if values in the object are unique.
 
         Returns
@@ -207,7 +209,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_monotonic_increasing(self):
+    def is_monotonic_increasing(self) -> bool:
         """Return boolean if values in the object are monotonically increasing.
 
         Returns
@@ -218,7 +220,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_monotonic_decreasing(self):
+    def is_monotonic_decreasing(self) -> bool:
         """Return boolean if values in the object are monotonically decreasing.
 
         Returns
@@ -243,7 +245,9 @@ class SingleColumnFrame(Frame, NotIterable):
             )
 
     @_cudf_nvtx_annotate
-    def factorize(self, sort=False, use_na_sentinel=True):
+    def factorize(
+        self, sort: bool = False, use_na_sentinel: bool = True
+    ) -> tuple[cupy.ndarray, cudf.Index]:
         """Encode the input values as integer labels.
 
         Parameters
@@ -335,7 +339,7 @@ class SingleColumnFrame(Frame, NotIterable):
         return {result_name: (self._column, other, reflect, fill_value)}
 
     @_cudf_nvtx_annotate
-    def nunique(self, dropna: bool = True):
+    def nunique(self, dropna: bool = True) -> int:
         """
         Return count of unique values for the column.
 
