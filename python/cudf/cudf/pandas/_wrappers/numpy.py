@@ -15,6 +15,7 @@ from ..fast_slow_proxy import (
     make_intermediate_proxy_type,
 )
 from .common import (
+    array_interface,
     array_method,
     arrow_array_method,
     cuda_array_interface,
@@ -115,6 +116,7 @@ ndarray = make_final_proxy_type(
         # So that pa.array(wrapped-numpy-array) works
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
+        "__array_interface__": array_interface,
         # ndarrays are unhashable
         "__hash__": None,
         # iter(cupy-array) produces an iterable of zero-dim device
