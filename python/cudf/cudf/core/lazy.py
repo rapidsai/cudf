@@ -3,9 +3,6 @@
 
 from typing import Optional
 
-import dask_cudf.expr._collection
-import dask_cudf.expr._groupby
-
 import cudf
 import cudf.core.groupby.groupby
 from cudf.options import get_option
@@ -35,6 +32,9 @@ The boolean answer. If True, dask_cudf is guaranteed to be available.
 
 try:
     import dask_cudf
+    import dask_cudf.expr._collection
+    import dask_cudf.expr._groupby
+
 except ImportError:
 
     @docutils.doc_apply(_parse_lazy_argument_docstring)
