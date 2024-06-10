@@ -41,6 +41,7 @@ jobs:
         run: |
           issue_url=${{ github.event.issue.html_url }}
           gh issue edit ${issue_url} --add-label "External"
+        continue-on-error: true
 
   Label-PR:
     runs-on: ubuntu-latest
@@ -51,3 +52,4 @@ jobs:
         run: |
             pr_url=${{ github.event.pull_request.html_url }}
             gh issue edit ${pr_url} --add-label "External"
+    continue-on-error: true
