@@ -335,7 +335,7 @@ class SingleColumnFrame(Frame, NotIterable):
         return {result_name: (self._column, other, reflect, fill_value)}
 
     @_cudf_nvtx_annotate
-    def nunique(self, dropna: bool = True):
+    def nunique(self, dropna: bool = True) -> int:
         """
         Return count of unique values for the column.
 
@@ -349,8 +349,6 @@ class SingleColumnFrame(Frame, NotIterable):
         int
             Number of unique values in the column.
         """
-        if self._column.null_count == len(self):
-            return 0
         return self._column.distinct_count(dropna=dropna)
 
     def _get_elements_from_column(self, arg) -> Union[ScalarLike, ColumnBase]:

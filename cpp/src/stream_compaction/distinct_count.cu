@@ -187,13 +187,16 @@ cudf::size_type distinct_count(column_view const& input,
                                nan_policy nan_handling,
                                rmm::cuda_stream_view stream)
 {
-  if (0 == input.size() or input.null_count() == input.size()) { return 0; }
+  if (0 == input.size()) { return 0; }
 
   auto count = detail::distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
 
-  // Check for nulls. If the null policy is EXCLUDE and null values were found,
-  // we decrement the count.
+  // Check for nulls.
   auto const has_null = input.has_nulls();
+  // If the null policy is INCLUDE and all the values were null, return count (1).
+  if (null_handling == null_policy::INCLUDE and has_null and count == 1) { return count; }
+  // If the null policy is EXCLUDE and null values were found,
+  // we decrement the count.
   if (null_handling == null_policy::EXCLUDE and has_null) { --count; }
 
   // Check for NaNs. There are two cases that can lead to decrementing the
