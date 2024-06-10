@@ -61,6 +61,7 @@ else:
             "__repr__": _slow_attr("__repr__"),
         },
     )
+    cudf.DataFrame.register(DataFrame)
 
     Series = make_final_proxy_type(
         "Series",
@@ -73,6 +74,7 @@ else:
             "__repr__": _slow_attr("__repr__"),
         },
     )
+    cudf.Series.register(Series)
 
     DataFrameGroupBy = make_final_proxy_type(
         "DataFrameGroupBy",
@@ -105,7 +107,9 @@ else:
         return arg
 
     def lazy_wrap_dataframe(
-        df: cudf.DataFrame | dask_cudf.DataFrame, *, noop_on_error: bool
+        df: cudf.DataFrame | dask_cudf.DataFrame,
+        *,
+        noop_on_error: bool = False,
     ) -> cudf.DataFrame | dask_cudf.DataFrame:
         """Wrap a datafrane in a lazy proxy.
 
@@ -128,4 +132,30 @@ else:
         except (NotImplementedError, ValueError):
             if noop_on_error:
                 return df
+            raise
+
+    def lazy_wrap_series(
+        ser: cudf.Series | dask_cudf.Series, *, noop_on_error: bool = False
+    ) -> cudf.Series | dask_cudf.Series:
+        """Wrap a Series in a lazy proxy.
+
+        Parameters
+        ----------
+        df
+            The series to wrap.
+        noop_on_error
+            If True, NotImplementedError and ValueError exceptions are
+            ignored and `df` is returned as-is.
+
+        Returns
+        -------
+        The wrapped series or possible `ser` as-is if noop_on_error is True.
+        """
+        try:
+            if not isinstance(ser, dask_cudf.Series):
+                ser = dask_cudf.from_cudf(ser, npartitions=1)
+            return Series._fsproxy_wrap(ser, func=None)
+        except (NotImplementedError, ValueError):
+            if noop_on_error:
+                return ser
             raise

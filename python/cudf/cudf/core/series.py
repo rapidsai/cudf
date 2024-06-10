@@ -7,6 +7,7 @@ import inspect
 import pickle
 import textwrap
 import warnings
+from abc import ABC
 from collections import abc
 from shutil import get_terminal_size
 from typing import TYPE_CHECKING, Any, Literal, MutableMapping
@@ -408,7 +409,7 @@ class _SeriesLocIndexer(_FrameIndexer):
                 return indices
 
 
-class Series(SingleColumnFrame, IndexedFrame, Serializable):
+class Series(SingleColumnFrame, IndexedFrame, Serializable, ABC):
     """
     One-dimensional GPU array (including time series).
 
