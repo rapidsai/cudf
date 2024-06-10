@@ -22,6 +22,7 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
+from cudf._lib.parquet import ParquetReader
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
@@ -3407,3 +3408,29 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema():
 
     # Check results
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
+@pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
+@pytest.mark.parametrize("use_pandas_metadata", [True, False])
+@pytest.mark.parametrize("row_groups", [[[0]], None, [[0, 1]]])
+def test_parquet_chunked_reader(
+    chunk_read_limit, pass_read_limit, use_pandas_metadata, row_groups
+):
+    df = pd.DataFrame(
+        {"a": [1, 2, 3, 4] * 1000000, "b": ["av", "qw", "hi", "xyz"] * 1000000}
+    )
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+    reader = ParquetReader(
+        [buffer],
+        chunk_read_limit=chunk_read_limit,
+        pass_read_limit=pass_read_limit,
+        use_pandas_metadata=use_pandas_metadata,
+        row_groups=row_groups,
+    )
+    expected = cudf.read_parquet(
+        buffer, use_pandas_metadata=use_pandas_metadata, row_groups=row_groups
+    )
+    actual = reader.read()
+    assert_eq(expected, actual)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 
 #pragma once
+
+#include <cudf/detail/utilities/host_uvector.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
@@ -211,6 +213,10 @@ struct is_host_span_supported_container<  //
 template <typename T, typename Alloc>
 struct is_host_span_supported_container<  //
   thrust::host_vector<T, Alloc>> : std::true_type {};
+
+template <typename T>
+struct is_host_span_supported_container<  //
+  cudf::detail::host_uvector<T>> : std::true_type {};
 
 template <typename T, typename Alloc>
 struct is_host_span_supported_container<  //

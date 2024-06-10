@@ -1169,7 +1169,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             result = _concat_range_index(non_empties)
         else:
             data = concat_columns([o._values for o in non_empties])
-            result = as_index(data)
+            result = Index(data)
 
         names = {obj.name for obj in objs}
         if len(names) == 1:
@@ -1437,7 +1437,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def __getitem__(self, index):
         res = self._get_elements_from_column(index)
         if isinstance(res, ColumnBase):
-            res = as_index(res, name=self.name)
+            res = Index(res, name=self.name)
         return res
 
     @property  # type: ignore
@@ -1958,7 +1958,7 @@ class DatetimeIndex(Index):
         >>> datetime_index.microsecond
         Index([0, 1, 2], dtype='int32')
         """  # noqa: E501
-        return as_index(
+        return Index(
             (
                 # Need to manually promote column to int32 because
                 # pandas-matching binop behaviour requires that this
@@ -2209,7 +2209,7 @@ class DatetimeIndex(Index):
             mask=out_column.base_mask,
             offset=out_column.offset,
         )
-        return as_index(out_column, name=self.name)
+        return Index(out_column, name=self.name)
 
     def _is_boolean(self):
         return False
@@ -2522,9 +2522,7 @@ class TimedeltaIndex(Index):
         Number of days for each element.
         """
         # Need to specifically return `int64` to avoid overflow.
-        return as_index(
-            arbitrary=self._values.days, name=self.name, dtype="int64"
-        )
+        return Index(self._values.days, name=self.name, dtype="int64")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2532,9 +2530,7 @@ class TimedeltaIndex(Index):
         """
         Number of seconds (>= 0 and less than 1 day) for each element.
         """
-        return as_index(
-            arbitrary=self._values.seconds, name=self.name, dtype="int32"
-        )
+        return Index(self._values.seconds, name=self.name, dtype="int32")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2542,9 +2538,7 @@ class TimedeltaIndex(Index):
         """
         Number of microseconds (>= 0 and less than 1 second) for each element.
         """
-        return as_index(
-            arbitrary=self._values.microseconds, name=self.name, dtype="int32"
-        )
+        return Index(self._values.microseconds, name=self.name, dtype="int32")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2553,9 +2547,7 @@ class TimedeltaIndex(Index):
         Number of nanoseconds (>= 0 and less than 1 microsecond) for each
         element.
         """
-        return as_index(
-            arbitrary=self._values.nanoseconds, name=self.name, dtype="int32"
-        )
+        return Index(self._values.nanoseconds, name=self.name, dtype="int32")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2693,7 +2685,7 @@ class CategoricalIndex(Index):
         """
         The category codes of this categorical.
         """
-        return as_index(self._values.codes)
+        return Index(self._values.codes)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -3137,7 +3129,7 @@ def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
         elif step is None:
             # First non-empty index had only one element
             if obj.start == start:
-                result = as_index(concat_columns([x._values for x in indexes]))
+                result = Index(concat_columns([x._values for x in indexes]))
                 return result
             step = obj.start - start
 
@@ -3145,7 +3137,7 @@ def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
             next_ is not None and obj.start != next_
         )
         if non_consecutive:
-            result = as_index(concat_columns([x._values for x in indexes]))
+            result = Index(concat_columns([x._values for x in indexes]))
             return result
         if step is not None:
             next_ = obj[-1] + step

@@ -283,6 +283,18 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             vector[string] column_chunks_file_paths,
         ) except +
 
+    cdef cppclass chunked_parquet_reader:
+        chunked_parquet_reader() except +
+        chunked_parquet_reader(
+            size_t chunk_read_limit,
+            const parquet_reader_options& options) except +
+        chunked_parquet_reader(
+            size_t chunk_read_limit,
+            size_t pass_read_limit,
+            const parquet_reader_options& options) except +
+        bool has_next() except +
+        cudf_io_types.table_with_metadata read_chunk() except +
+
     cdef unique_ptr[vector[uint8_t]] merge_row_group_metadata(
         const vector[unique_ptr[vector[uint8_t]]]& metadata_list
     ) except +

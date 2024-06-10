@@ -28,34 +28,39 @@
 namespace cudf {
 
 namespace {
+
+// Asynchronous memory resource that allocates a fixed-size pool of pinned memory and falls back to
+// additional pinned allocations if the pool is exhausted.
 class fixed_pinned_pool_memory_resource {
   using upstream_mr    = rmm::mr::pinned_host_memory_resource;
   using host_pooled_mr = rmm::mr::pool_memory_resource<upstream_mr>;
 
  private:
-  upstream_mr upstream_mr_{};
-  size_t pool_size_{0};
+  upstream_mr _upstream_mr{};
+  size_t _pool_size{0};
   // Raw pointer to avoid a segfault when the pool is destroyed on exit
   host_pooled_mr* pool_{nullptr};
-  void* pool_begin_{nullptr};
-  void* pool_end_{nullptr};
-  cuda::stream_ref stream_{cudf::detail::global_cuda_stream_pool().get_stream().value()};
+  // The beginning and end of the pool memory range; pool is never reallocated so these are constant
+  // and can be used to determine if a pointer is within the pool
+  void* _pool_begin{nullptr};
+  void* _pool_end{nullptr};
+  cuda::stream_ref _stream{cudf::detail::global_cuda_stream_pool().get_stream().value()};
 
  public:
   fixed_pinned_pool_memory_resource(size_t size)
-    : pool_size_{size}, pool_{new host_pooled_mr(upstream_mr_, size, size)}
+    : _pool_size{size}, pool_{new host_pooled_mr(_upstream_mr, size, size)}
   {
-    if (pool_size_ == 0) { return; }
+    if (_pool_size == 0) { return; }
 
     // Allocate full size from the pinned pool to figure out the beginning and end address
-    pool_begin_ = pool_->allocate_async(pool_size_, stream_);
-    pool_end_   = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size_);
-    pool_->deallocate_async(pool_begin_, pool_size_, stream_);
+    _pool_begin = pool_->allocate_async(_pool_size, _stream);
+    _pool_end   = static_cast<void*>(static_cast<uint8_t*>(_pool_begin) + _pool_size);
+    pool_->deallocate_async(_pool_begin, _pool_size, _stream);
   }
 
   void* allocate_async(std::size_t bytes, std::size_t alignment, cuda::stream_ref stream)
   {
-    if (bytes <= pool_size_) {
+    if (bytes <= _pool_size) {
       try {
         return pool_->allocate_async(bytes, alignment, stream);
       } catch (...) {
@@ -63,7 +68,7 @@ class fixed_pinned_pool_memory_resource {
       }
     }
 
-    return upstream_mr_.allocate_async(bytes, alignment, stream);
+    return _upstream_mr.allocate_async(bytes, alignment, stream);
   }
 
   void* allocate_async(std::size_t bytes, cuda::stream_ref stream)
@@ -73,8 +78,8 @@ class fixed_pinned_pool_memory_resource {
 
   void* allocate(std::size_t bytes, std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
   {
-    auto const result = allocate_async(bytes, alignment, stream_);
-    stream_.wait();
+    auto const result = allocate_async(bytes, alignment, _stream);
+    _stream.wait();
     return result;
   }
 
@@ -83,10 +88,10 @@ class fixed_pinned_pool_memory_resource {
                         std::size_t alignment,
                         cuda::stream_ref stream) noexcept
   {
-    if (bytes <= pool_size_ && ptr >= pool_begin_ && ptr <= pool_end_) {
+    if (bytes <= _pool_size && ptr >= _pool_begin && ptr < _pool_end) {
       pool_->deallocate_async(ptr, bytes, alignment, stream);
     } else {
-      upstream_mr_.deallocate_async(ptr, bytes, alignment, stream);
+      _upstream_mr.deallocate_async(ptr, bytes, alignment, stream);
     }
   }
 
@@ -99,13 +104,13 @@ class fixed_pinned_pool_memory_resource {
                   std::size_t bytes,
                   std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT) noexcept
   {
-    deallocate_async(ptr, bytes, alignment, stream_);
-    stream_.wait();
+    deallocate_async(ptr, bytes, alignment, _stream);
+    _stream.wait();
   }
 
   bool operator==(fixed_pinned_pool_memory_resource const& other) const
   {
-    return pool_ == other.pool_ and stream_ == other.stream_;
+    return pool_ == other.pool_ and _stream == other._stream;
   }
 
   bool operator!=(fixed_pinned_pool_memory_resource const& other) const
@@ -113,13 +118,13 @@ class fixed_pinned_pool_memory_resource {
     return !operator==(other);
   }
 
-  [[maybe_unused]] friend void get_property(fixed_pinned_pool_memory_resource const&,
-                                            cuda::mr::device_accessible) noexcept
+  friend void get_property(fixed_pinned_pool_memory_resource const&,
+                           cuda::mr::device_accessible) noexcept
   {
   }
 
-  [[maybe_unused]] friend void get_property(fixed_pinned_pool_memory_resource const&,
-                                            cuda::mr::host_accessible) noexcept
+  friend void get_property(fixed_pinned_pool_memory_resource const&,
+                           cuda::mr::host_accessible) noexcept
   {
   }
 };
@@ -128,8 +133,6 @@ static_assert(cuda::mr::resource_with<fixed_pinned_pool_memory_resource,
                                       cuda::mr::device_accessible,
                                       cuda::mr::host_accessible>,
               "");
-
-}  // namespace
 
 CUDF_EXPORT rmm::host_device_async_resource_ref& make_default_pinned_mr(
   std::optional<size_t> config_size)
@@ -142,14 +145,13 @@ CUDF_EXPORT rmm::host_device_async_resource_ref& make_default_pinned_mr(
 
       if (config_size.has_value()) { return *config_size; }
 
-      size_t free{}, total{};
-      CUDF_CUDA_TRY(cudaMemGetInfo(&free, &total));
+      auto const total = rmm::available_device_memory().second;
       // 0.5% of the total device memory, capped at 100MB
       return std::min(total / 200, size_t{100} * 1024 * 1024);
     }();
 
     // rmm requires the pool size to be a multiple of 256 bytes
-    auto const aligned_size = (size + 255) & ~255;
+    auto const aligned_size = rmm::align_up(size, rmm::RMM_DEFAULT_HOST_ALIGNMENT);
     CUDF_LOG_INFO("Pinned pool size = {}", aligned_size);
 
     // make the pool with max size equal to the initial size
@@ -190,6 +192,8 @@ CUDF_EXPORT rmm::host_device_async_resource_ref& host_mr()
   static rmm::host_device_async_resource_ref mr_ref = make_host_mr(std::nullopt);
   return mr_ref;
 }
+
+}  // namespace
 
 rmm::host_device_async_resource_ref set_pinned_memory_resource(
   rmm::host_device_async_resource_ref mr)
