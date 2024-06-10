@@ -2374,7 +2374,6 @@ TEST_F(JsonReaderTest, MapTypes)
       EXPECT_EQ(col.type().id(), types[i]) << "column[" << i << "].type";
       i++;
     }
-    std::cout << "\n";
   };
 
   // json

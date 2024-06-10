@@ -598,8 +598,7 @@ def test_parquet_read_filter_and_project(tmpdir):
     dd.assert_eq(got, expected)
 
 
-def test_unsupported_timezone(tmpdir):
-    # Write parquet file with "unsupported" utc info
+def test_timezone_column(tmpdir):
     path = str(tmpdir.join("test.parquet"))
     pdf = pd.DataFrame(
         {
@@ -611,14 +610,8 @@ def test_unsupported_timezone(tmpdir):
         }
     )
     pdf.to_parquet(path)
-    # NOTE: We CANNOT do `cudf.DataFrame.from_pandas(pdf)`,
-    # or we will get:
-    #   "cuDF does not yet support timezone-aware datetimes"
-    # However, we can read a timezone-aware datetime from a
-    # Parquet file with cudf, so we should also be able to
-    # read the same file with dask_cudf.
 
-    # Check that we can read the file
+    # Check that `cudf` and `dask_cudf` results match
     got = dask_cudf.read_parquet(path)
     expect = cudf.read_parquet(path)
     dd.assert_eq(got, expect)

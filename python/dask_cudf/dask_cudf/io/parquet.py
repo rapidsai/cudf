@@ -42,14 +42,11 @@ class CudfEngine(ArrowDatasetEngine):
         meta_pd = super()._create_dd_meta(dataset_info, **kwargs)
 
         # Convert to cudf
-        try:
-            meta_cudf = cudf.from_pandas(meta_pd)
-        except NotImplementedError:
-            # Try dropping unsupported timezone information
-            for k, v in meta_pd.dtypes.items():
-                if isinstance(v, pd.DatetimeTZDtype) and v.tz is not None:
-                    meta_pd[k] = meta_pd[k].dt.tz_localize(None)
-            meta_cudf = cudf.from_pandas(meta_pd)
+        # (drop unsupported timezone information)
+        for k, v in meta_pd.dtypes.items():
+            if isinstance(v, pd.DatetimeTZDtype) and v.tz is not None:
+                meta_pd[k] = meta_pd[k].dt.tz_localize(None)
+        meta_cudf = cudf.from_pandas(meta_pd)
 
         # Re-set "object" dtypes to align with pa schema
         kwargs = dataset_info.get("kwargs", {})
