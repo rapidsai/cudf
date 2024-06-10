@@ -6,6 +6,7 @@ import pytest
 
 import polars as pl
 
+from cudf_polars import translate_ir
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
@@ -72,7 +73,26 @@ def test_groupby(df: pl.LazyFrame, maintain_order, keys, exprs):
     if not maintain_order:
         sort_keys = list(q.schema.keys())[: len(keys)]
         q = q.sort(*sort_keys)
-    # from cudf_polars.dsl.translate import translate_ir
-    # ir = translate_ir(q._ldf.visit())
-    # from IPython import embed; embed()
+
     assert_gpu_result_equal(q, check_exact=False)
+
+
+def test_groupby_len(df, keys):
+    q = df.group_by(*keys).agg(pl.len())
+
+    # TODO: polars returns UInt32, libcudf returns Int32
+    assert_gpu_result_equal(q, check_dtypes=False, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("float").is_not_null(),
+        (pl.col("int").max() + pl.col("float").min()).max(),
+    ],
+)
+def test_groupby_unsupported(df, expr):
+    q = df.group_by("key1").agg(expr)
+
+    with pytest.raises(NotImplementedError):
+        _ = translate_ir(q._ldf.visit())
