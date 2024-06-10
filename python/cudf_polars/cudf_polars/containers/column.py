@@ -35,7 +35,7 @@ class Column:
     ):
         self.obj = column
         self.is_scalar = self.obj.size() == 1
-        if self.is_scalar:
+        if self.obj.size() <= 1:
             is_sorted = plc.types.Sorted.YES
         self.is_sorted = is_sorted
         self.order = order
@@ -104,7 +104,7 @@ class Column:
         -------
         Self with metadata set.
         """
-        if self.obj.size() == 1:
+        if self.obj.size() <= 1:
             is_sorted = plc.types.Sorted.YES
         self.is_sorted = is_sorted
         self.order = order
