@@ -417,7 +417,7 @@ TYPED_TEST(TypedSuperimposeTest, BasicStruct)
 
   // Reset STRUCTs' null-mask. Mark first STRUCT row as null.
   auto structs_view = structs_input->mutable_view();
-  cudf::detail::set_null_mask(structs_view.null_mask(), 0, 1, false, cudf::get_default_stream());
+  cudf::set_null_mask(structs_view.null_mask(), 0, 1, false, cudf::get_default_stream());
 
   // At this point, the STRUCT nulls aren't pushed down to members,
   // even though the parent null-mask was modified.
@@ -482,7 +482,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNonNullable)
 
   // Reset STRUCTs' null-mask. Mark first STRUCT row as null.
   auto structs_view = outer_struct_members.back()->mutable_view();
-  cudf::detail::set_null_mask(structs_view.null_mask(), 0, 1, false, cudf::get_default_stream());
+  cudf::set_null_mask(structs_view.null_mask(), 0, 1, false, cudf::get_default_stream());
 
   auto structs_of_structs =
     cudf::test::structs_column_wrapper{std::move(outer_struct_members)}.release();
@@ -519,7 +519,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
   // Reset STRUCTs' null-mask. Mark first STRUCT row as null.
   auto structs_view = outer_struct_members.back()->mutable_view();
   auto num_rows     = structs_view.size();
-  cudf::detail::set_null_mask(structs_view.null_mask(), 0, 1, false, cudf::get_default_stream());
+  cudf::set_null_mask(structs_view.null_mask(), 0, 1, false, cudf::get_default_stream());
 
   auto structs_of_structs = cudf::test::structs_column_wrapper{std::move(outer_struct_members),
                                                                std::vector<bool>(num_rows, true)}
@@ -527,7 +527,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
 
   // Modify STRUCT-of-STRUCT's null-mask. Mark second STRUCT row as null.
   auto structs_of_structs_view = structs_of_structs->mutable_view();
-  cudf::detail::set_null_mask(
+  cudf::set_null_mask(
     structs_of_structs_view.null_mask(), 1, 2, false, cudf::get_default_stream());
 
   auto [output, backing_data] = cudf::structs::detail::push_down_nulls(
@@ -552,7 +552,7 @@ cudf::column_view slice_off_first_and_last_rows(cudf::column_view const& col)
 
 void mark_row_as_null(cudf::mutable_column_view const& col, cudf::size_type row_index)
 {
-  cudf::detail::set_null_mask(
+  cudf::set_null_mask(
     col.null_mask(), row_index, row_index + 1, false, cudf::get_default_stream());
 }
 

@@ -329,9 +329,7 @@ TEST_F(CopyingTest, PurgeNonEmptyNulls)
                        .release();
 
   // Set nullmask, post construction.
-  // TODO: Once set_null_mask's public API exposes a stream parameter, use that
-  // instead of the detail API.
-  cudf::detail::set_null_mask(
+  cudf::set_null_mask(
     input->mutable_view().null_mask(), 2, 3, false, cudf::test::get_default_stream());
   input->set_null_count(1);
 

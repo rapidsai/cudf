@@ -97,7 +97,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
 
   size_type size = thrust::distance(begin, end);
 
-  auto null_mask = detail::create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
+  auto null_mask = cudf::create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
 
   size_type null_count{0};
   if (size > 0) {

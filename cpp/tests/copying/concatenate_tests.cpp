@@ -69,7 +69,7 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
       cudaMemcpyAsync(typed_data, h_data.data(), data.size(), cudaMemcpyDefault, stream.value()));
     CUDF_CUDA_TRY(
       cudaMemcpyAsync(typed_mask, h_mask.data(), mask.size(), cudaMemcpyDefault, stream.value()));
-    _null_count = cudf::detail::null_count(
+    _null_count = cudf::null_count(
       static_cast<cudf::bitmask_type*>(mask.data()), 0, _num_elements, stream);
     stream.synchronize();
   }
@@ -84,8 +84,8 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   rmm::device_buffer data{};
   rmm::device_buffer mask{};
   cudf::size_type _null_count{};
-  rmm::device_buffer all_valid_mask{create_null_mask(num_elements(), cudf::mask_state::ALL_VALID)};
-  rmm::device_buffer all_null_mask{create_null_mask(num_elements(), cudf::mask_state::ALL_NULL)};
+  rmm::device_buffer all_valid_mask{cudf::create_null_mask(num_elements(), cudf::mask_state::ALL_VALID)};
+  rmm::device_buffer all_null_mask{cudf::create_null_mask(num_elements(), cudf::mask_state::ALL_NULL)};
 };
 
 TYPED_TEST_SUITE(TypedColumnTest, cudf::test::Types<int32_t>);

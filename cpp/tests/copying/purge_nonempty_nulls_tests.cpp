@@ -54,7 +54,7 @@ TEST_F(HasNonEmptyNullsTest, TrivialTest)
   EXPECT_FALSE(cudf::has_nonempty_nulls(*input));
 
   // Set nullmask, post construction.
-  cudf::detail::set_null_mask(
+  cudf::set_null_mask(
     input->mutable_view().null_mask(), 2, 3, false, cudf::get_default_stream());
   input->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
@@ -105,7 +105,7 @@ TEST_F(PurgeNonEmptyNullsTest, SingleLevelList)
                        .release();
 
   // Set nullmask, post construction.
-  cudf::detail::set_null_mask(
+  cudf::set_null_mask(
     input->mutable_view().null_mask(), 2, 3, false, cudf::get_default_stream());
   input->set_null_count(1);
 
@@ -187,7 +187,7 @@ TEST_F(PurgeNonEmptyNullsTest, TwoLevelList)
   EXPECT_FALSE(cudf::has_nonempty_nulls(*input));
 
   // Set nullmask, post construction.
-  cudf::detail::set_null_mask(
+  cudf::set_null_mask(
     input->mutable_view().null_mask(), 3, 4, false, cudf::get_default_stream());
   input->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
@@ -243,7 +243,7 @@ TEST_F(PurgeNonEmptyNullsTest, ThreeLevelList)
   EXPECT_FALSE(cudf::has_nonempty_nulls(*input));
 
   // Set nullmask, post construction.
-  cudf::detail::set_null_mask(
+  cudf::set_null_mask(
     input->mutable_view().null_mask(), 3, 4, false, cudf::get_default_stream());
   input->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
@@ -298,7 +298,7 @@ TEST_F(PurgeNonEmptyNullsTest, ListOfStrings)
   EXPECT_FALSE(cudf::has_nonempty_nulls(*input));
 
   // Set nullmask, post construction.
-  cudf::detail::set_null_mask(
+  cudf::set_null_mask(
     input->mutable_view().null_mask(), 2, 3, false, cudf::get_default_stream());
   input->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
@@ -391,7 +391,7 @@ TEST_F(PurgeNonEmptyNullsTest, UnsanitizedListOfUnsanitizedStrings)
   EXPECT_FALSE(cudf::has_nonempty_nulls(*lists));
 
   // Set lists nullmask, post construction.
-  cudf::detail::set_null_mask(
+  cudf::set_null_mask(
     lists->mutable_view().null_mask(), 2, 3, false, cudf::get_default_stream());
   lists->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*lists));
