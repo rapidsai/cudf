@@ -63,26 +63,58 @@ __all__ = [
 def broadcast(
     *columns: NamedColumn, target_length: int | None = None
 ) -> list[NamedColumn]:
-    lengths = {column.obj.size() for column in columns}
-    if len(lengths - {1}) > 1:
-        raise RuntimeError("Mismatching column lengths")
+    """
+    Broadcast a sequence of columns to a common length.
+
+    Parameters
+    ----------
+    columns
+        Columns to broadcast.
+    target_length
+        Optional length to broadcast to. If not provided, uses the
+        non-unit length of existing columns.
+
+    Returns
+    -------
+    List of broadcasted columns all of the same length.
+
+    Raises
+    ------
+    RuntimeError
+        If broadcasting is not possible.
+
+    Notes
+    -----
+    In evaluation of a set of expressions, polars type-puns length-1
+    columns with scalars. When we insert these into a DataFrame
+    object, we need to ensure they are of equal length. This function
+    takes some columns, some of which may be length-1 and ensures that
+    all length-1 columns are broadcast to the length of the others.
+
+    Broadcasting is only possible if the set of lengths of the input
+    columns is a subset of ``{1, n}`` for some (fixed) ``n``. If
+    ``target_length`` is provided and not all columns are length-1
+    (i.e. ``n != 1``), then ``target_length`` must be equal to ``n``.
+    """
+    lengths: set[int] = {column.obj.size() for column in columns}
     if lengths == {1}:
         if target_length is None:
             return list(columns)
         nrows = target_length
-    elif len(lengths) == 1:
-        if target_length is not None:
-            assert target_length in lengths
-        return list(columns)
     else:
-        (nrows,) = lengths - {1}
-        if target_length is not None:
-            assert target_length == nrows
+        try:
+            (nrows,) = lengths.difference([1])
+        except ValueError as e:
+            raise RuntimeError("Mismatching column lengths") from e
+        if target_length is not None and nrows != target_length:
+            raise RuntimeError(
+                f"Cannot broadcast columns of length {nrows=} to {target_length=}"
+            )
     return [
         column
         if column.obj.size() != 1
         else NamedColumn(
-            plc.Column.from_scalar(plc.copying.get_element(column.obj, 0), nrows),
+            plc.Column.from_scalar(column.obj_scalar, nrows),
             column.name,
             is_sorted=plc.types.Sorted.YES,
             order=plc.types.Order.ASCENDING,
@@ -279,12 +311,16 @@ class Select(IR):
     """Input dataframe."""
     expr: list[expr.NamedExpr]
     """List of expressions to evaluate to form the new dataframe."""
+    should_broadcast: bool
+    """Should columns be broadcast?"""
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         # Handle any broadcasting
-        columns = broadcast(*(e.evaluate(df) for e in self.expr))
+        columns = [e.evaluate(df) for e in self.expr]
+        if self.should_broadcast:
+            columns = broadcast(*columns)
         return DataFrame(columns)
 
 
@@ -587,15 +623,24 @@ class HStack(IR):
     """Input dataframe."""
     columns: list[expr.NamedExpr]
     """List of expressions to produce new columns."""
+    should_broadcast: bool
+    """Should columns be broadcast?"""
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         columns = [c.evaluate(df) for c in self.columns]
-        # TODO: a bit of a hack, should inherit the should_broadcast
-        # property of polars' ProjectionOptions on the hstack node.
-        if not any(e.name.startswith("__POLARS_CSER_0x") for e in self.columns):
+        if self.should_broadcast:
             columns = broadcast(*columns, target_length=df.num_rows)
+        else:
+            # Polars ensures this is true, but let's make sure nothing
+            # went wrong. In this case, the parent node is a
+            # guaranteed to be a Select which will take care of making
+            # sure that everything is the same length. The result
+            # table that might have mismatching column lengths will
+            # never be turned into a pylibcudf Table with all columns
+            # by the Select, which is why this is safe.
+            assert all(e.name.startswith("__POLARS_CSER_0x") for e in self.columns)
         return df.with_columns(columns)
 
 
