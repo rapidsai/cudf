@@ -28,7 +28,6 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/null_mask.hpp>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
