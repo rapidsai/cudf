@@ -22,13 +22,14 @@
 #pragma once
 
 #include <cudf/io/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <optional>
 #include <string_view>
 #include <variant>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 /**
  * @addtogroup io_types
@@ -270,4 +271,4 @@ parquet_metadata read_parquet_metadata(source_info const& src_info);
 
 /** @} */  // end of group
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

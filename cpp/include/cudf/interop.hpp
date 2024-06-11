@@ -36,6 +36,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -50,7 +51,7 @@ struct ArrowSchema;
 
 struct ArrowArray;
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup interop_dlpack
  * @{

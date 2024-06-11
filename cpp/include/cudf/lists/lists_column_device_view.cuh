@@ -21,7 +21,7 @@
 
 #include <cuda_runtime.h>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 namespace detail {
 
@@ -118,4 +118,4 @@ class lists_column_device_view : private column_device_view {
 
 }  // namespace detail
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

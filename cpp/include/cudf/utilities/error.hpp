@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/detail/utilities/stacktrace.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <cuda.h>
 #include <cuda_runtime_api.h>
@@ -25,7 +26,7 @@
 #include <string>
 #include <type_traits>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup utility_error
  * @{
@@ -140,7 +141,7 @@ struct data_type_error : public std::invalid_argument, public stacktrace_recorde
 };
 /** @} */
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
 
 #define STRINGIFY_DETAIL(x) #x                   ///< Stringify a macro argument
 #define CUDF_STRINGIFY(x)   STRINGIFY_DETAIL(x)  ///< Stringify a macro argument
@@ -229,7 +230,7 @@ struct data_type_error : public std::invalid_argument, public stacktrace_recorde
 
 /// @endcond
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 // @cond
 inline void throw_cuda_error(cudaError_t error, char const* file, unsigned int line)
@@ -251,7 +252,7 @@ inline void throw_cuda_error(cudaError_t error, char const* file, unsigned int l
 }
 // @endcond
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
 
 /**
  * @brief Error checking macro for CUDA runtime API functions.

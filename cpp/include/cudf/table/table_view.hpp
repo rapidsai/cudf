@@ -32,7 +32,7 @@
  * passed by value.
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @brief Base class for a table of `ColumnView`s
@@ -374,4 +374,4 @@ extern template bool is_relationally_comparable<mutable_table_view>(mutable_tabl
                                                                     mutable_table_view const& rhs);
 // @endcond
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

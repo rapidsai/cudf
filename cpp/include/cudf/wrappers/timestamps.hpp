@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
 #include <cudf/wrappers/durations.hpp>
 
 /**
@@ -23,7 +24,7 @@
  * @brief Concrete type definitions for int32_t and int64_t timestamps in
  * varying resolutions as durations since the UNIX epoch.
  */
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 // TODO: Use chrono::utc_clock when available in libcu++?
 template <class Duration>
@@ -82,4 +83,4 @@ static_assert(sizeof(timestamp_us) == sizeof(typename timestamp_us::rep));
 static_assert(sizeof(timestamp_ns) == sizeof(typename timestamp_ns::rep));
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

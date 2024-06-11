@@ -17,12 +17,14 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf::lists {
+namespace CUDF_EXPORT cudf {
+namespace lists {
 
 /**
  * @addtogroup lists_filtering
@@ -94,4 +96,5 @@ std::unique_ptr<column> distinct(
 
 /** @} */  // end of group
 
-}  // namespace cudf::lists
+}  // namespace lists
+}  // namespace cudf
