@@ -1085,11 +1085,8 @@ class CategoricalColumn(column.ColumnBase):
                     "Cannot set a Categorical with another, "
                     "without identical categories"
                 )
-            # TODO: only required if fill_value has a subset of the
-            # categories:
             fill_value = fill_value._set_categories(
                 self.categories,
-                is_unique=True,
             )
             return fill_value.codes.astype(self.codes.dtype)
 
@@ -1351,11 +1348,13 @@ class CategoricalColumn(column.ColumnBase):
         if not (is_unique or new_cats.is_unique):
             new_cats = cudf.Series(new_cats)._column.unique()
 
+        if cur_cats.equals(new_cats, check_dtypes=True):
+            # TODO: Internal usages don't always need a copy; add a copy keyword
+            # as_ordered shallow copies
+            return self.copy().as_ordered(ordered=ordered)
+
         cur_codes = self.codes
-        max_cat_size = (
-            len(cur_cats) if len(cur_cats) > len(new_cats) else len(new_cats)
-        )
-        out_code_dtype = min_unsigned_type(max_cat_size)
+        out_code_dtype = min_unsigned_type(max(len(cur_cats), len(new_cats)))
 
         cur_order = column.as_column(range(len(cur_codes)))
         old_codes = column.as_column(
