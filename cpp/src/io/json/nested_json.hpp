@@ -45,10 +45,10 @@ struct tree_meta_t {
 };
 
 struct column_tree_csr {
-  //position of nnzs
+  // position of nnzs
   rmm::device_uvector<NodeIndexT> rowidx;
   rmm::device_uvector<NodeIndexT> colidx;
-  //node properties
+  // node properties
   rmm::device_uvector<NodeIndexT> column_ids;
   rmm::device_uvector<NodeT> categories;
   rmm::device_uvector<SymbolOffsetT> range_begin;
@@ -318,11 +318,11 @@ reduce_to_column_tree(tree_meta_t& tree,
  * @return A tuple containing the column tree, identifier for each column and the maximum row index
  * in each column
  */
-std::tuple<column_tree_csr, rmm::device_uvector<size_type>>
-reduce_to_column_tree_csr(tree_meta_t& tree,
-                      device_span<NodeIndexT> col_ids,
-                      device_span<size_type> row_offsets,
-                      rmm::cuda_stream_view stream);
+std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tree_csr(
+  tree_meta_t& tree,
+  device_span<NodeIndexT> col_ids,
+  device_span<size_type> row_offsets,
+  rmm::cuda_stream_view stream);
 
 /**
  * @brief Retrieves the parse_options to be used for type inference and type casting
