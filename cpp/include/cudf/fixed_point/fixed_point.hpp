@@ -30,7 +30,7 @@
 #include <string>
 
 /// `fixed_point` and supporting types
-namespace numeric {
+namespace CUDF_EXPORT numeric {
 
 /**
  * @addtogroup fixed_point_classes
@@ -799,4 +799,4 @@ using decimal64  = fixed_point<int64_t, Radix::BASE_10>;     ///<  64-bit decima
 using decimal128 = fixed_point<__int128_t, Radix::BASE_10>;  ///< 128-bit decimal fixed point
 
 /** @} */  // end of group
-}  // namespace numeric
+}  // namespace CUDF_EXPORT numeric

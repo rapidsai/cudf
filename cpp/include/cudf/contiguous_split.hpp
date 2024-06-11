@@ -18,13 +18,14 @@
 
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup copy_split

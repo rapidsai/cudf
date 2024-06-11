@@ -23,7 +23,7 @@
  * @brief Class definition for cudf::dictionary_column_view
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup dictionary_classes
  * @{
@@ -124,4 +124,4 @@ class dictionary_column_view : private column_view {
 namespace dictionary {  // defined here for doxygen output
 }
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

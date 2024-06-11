@@ -36,6 +36,8 @@
 #define CUDF_KERNEL static
 #endif
 
+#include <cudf/utilities/export.hpp>
+
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -54,7 +56,7 @@ class device_buffer;
 
 }  // namespace rmm
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 // Forward declaration
 class column;
 class column_view;

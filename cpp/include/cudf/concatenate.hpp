@@ -18,6 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -25,7 +26,7 @@
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup copy_concatenate
  * @{

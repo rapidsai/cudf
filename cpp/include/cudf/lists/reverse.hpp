@@ -17,13 +17,15 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <memory>
 
-namespace cudf::lists {
+namespace CUDF_EXPORT cudf {
+namespace lists {
 /**
  * @addtogroup lists_modify
  * @{
@@ -54,4 +56,5 @@ std::unique_ptr<column> reverse(
 
 /** @} */  // end of doxygen group
 
-}  // namespace cudf::lists
+}  // namespace lists
+}  // namespace cudf

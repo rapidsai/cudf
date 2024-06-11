@@ -20,13 +20,14 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup column_search
  * @{

@@ -30,7 +30,7 @@
  * @brief column view class definitions
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @brief A non-owning, immutable view of device data as a column of elements,
@@ -766,4 +766,4 @@ std::size_t shallow_hash(column_view const& input);
  */
 bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs);
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

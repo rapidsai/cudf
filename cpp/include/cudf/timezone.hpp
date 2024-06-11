@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
@@ -22,7 +24,7 @@
 #include <optional>
 #include <string>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 class table;
 
 // Cycle in which the time offsets repeat in Gregorian calendar

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
@@ -28,7 +29,7 @@
  * @brief DateTime column APIs.
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace datetime {
 /**
  * @addtogroup datetime_extract

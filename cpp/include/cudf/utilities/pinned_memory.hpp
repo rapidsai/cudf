@@ -16,11 +16,13 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <rmm/resource_ref.hpp>
 
 #include <optional>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief Set the rmm resource to be used for pinned memory allocations.
@@ -71,4 +73,4 @@ void set_kernel_pinned_copy_threshold(size_t threshold);
  */
 size_t get_kernel_pinned_copy_threshold();
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

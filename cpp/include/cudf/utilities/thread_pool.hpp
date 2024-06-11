@@ -34,7 +34,7 @@
 #include <type_traits>  // std::decay_t, std::enable_if_t, std::is_void_v, std::invoke_result_t
 #include <utility>      // std::move, std::swap
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
@@ -378,4 +378,4 @@ class thread_pool {
 };
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -18,13 +18,14 @@
 
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup aggregation_rolling
  * @{

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <cuda/std/cmath>
@@ -24,7 +25,7 @@
 
 #include <cstring>
 
-namespace numeric {
+namespace CUDF_EXPORT numeric {
 
 /**
  * @addtogroup floating_conversion
@@ -1272,4 +1273,4 @@ CUDF_HOST_DEVICE inline FloatingType convert_integral_to_floating(Rep const& val
 }  // namespace detail
 
 /** @} */  // end of group
-}  // namespace numeric
+}  // namespace CUDF_EXPORT numeric
