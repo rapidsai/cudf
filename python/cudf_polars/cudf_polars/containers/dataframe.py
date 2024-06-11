@@ -32,7 +32,7 @@ class DataFrame:
     """A representation of a dataframe."""
 
     columns: list[NamedColumn]
-    table: plc.Table | None
+    table: plc.Table
 
     def __init__(self, columns: Sequence[NamedColumn]) -> None:
         self.columns = list(columns)
@@ -41,7 +41,7 @@ class DataFrame:
 
     def copy(self) -> Self:
         """Return a shallow copy of self."""
-        return type(self)(self.columns)
+        return type(self)([c.copy() for c in self.columns])
 
     def to_polars(self) -> pl.DataFrame:
         """Convert to a polars DataFrame."""
@@ -70,8 +70,6 @@ class DataFrame:
     @cached_property
     def num_rows(self) -> int:
         """Number of rows."""
-        if self.table is None:
-            raise ValueError("Number of rows of frame with scalars makes no sense")
         return self.table.num_rows()
 
     @classmethod
