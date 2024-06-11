@@ -85,7 +85,7 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta)
   }
 }
 
-size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
+[[nodiscard]] size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
 {
   if (column.is_empty()) { return 0; }
 
