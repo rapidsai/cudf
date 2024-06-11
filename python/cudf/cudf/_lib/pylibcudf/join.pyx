@@ -63,8 +63,10 @@ cpdef tuple inner_join(
         join.
     """
     cdef cpp_join.gather_map_pair_type c_result
+    print("Calling libcudf")
     with nogil:
         c_result = cpp_join.inner_join(left_keys.view(), right_keys.view(), nulls_equal)
+    print("Returned from libcudf")
     return (
         _column_from_gather_map(move(c_result.first)),
         _column_from_gather_map(move(c_result.second)),

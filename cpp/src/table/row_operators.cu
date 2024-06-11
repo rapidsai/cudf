@@ -848,15 +848,21 @@ namespace equality {
 std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const& t,
                                                                rmm::cuda_stream_view stream)
 {
+  fprintf(stderr, "preprocessed_table::create\n");
   check_eq_compatibility(t);
 
+  fprintf(stderr, "preprocessed_table::create: check_eq_compatibility\n");
   auto [null_pushed_table, nullable_data] =
     structs::detail::push_down_nulls(t, stream, rmm::mr::get_current_device_resource());
+  fprintf(stderr, "preprocessed_table::create: push_down_nulls\n");
   auto struct_offset_removed_table = remove_struct_child_offsets(null_pushed_table);
+  fprintf(stderr, "preprocessed_table::create: remove_struct_child_offsets\n");
   auto verticalized_t =
     std::get<0>(decompose_structs(struct_offset_removed_table, decompose_lists_column::YES));
 
+  fprintf(stderr, "preprocessed_table::create: decompose_structs\n");
   auto d_t = table_device_view_owner(table_device_view::create(verticalized_t, stream));
+  fprintf(stderr, "preprocessed_table::create: table_device_view_owner\n");
   return std::shared_ptr<preprocessed_table>(new preprocessed_table(
     std::move(d_t), std::move(nullable_data.new_null_masks), std::move(nullable_data.new_columns)));
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,16 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cstdio>
+#include <cstdlib>
 #include <limits>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -72,6 +76,19 @@ class column_view_base {
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   T const* head() const noexcept
   {
+    char const* prefetch = std::getenv("CUDF_PREFETCH_COLUMN_VIEW");
+    if (prefetch && std::stoi(prefetch) == 1) {
+      if constexpr (std::is_integral_v<T>) {
+        fprintf(stderr, "Prefetching mutable data at %p\n", _data);
+        auto result = cudaMemPrefetchAsync(_data,
+                                           size() * sizeof(T),
+                                           rmm::get_current_cuda_device().value(),
+                                           cudf::get_default_stream().value());
+        // InvalidValue error is raised when non-managed memory is passed to cudaMemPrefetchAsync
+        // We should treat this as a no-op
+        if (result != cudaErrorInvalidValue && result != cudaSuccess) { CUDF_CUDA_TRY(result); }
+      }
+    }
     return static_cast<T const*>(_data);
   }
 
@@ -550,6 +567,19 @@ class mutable_column_view : public detail::column_view_base {
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   T* head() const noexcept
   {
+    char const* prefetch = std::getenv("CUDF_PREFETCH_MUTABLE_COLUMN_VIEW");
+    if (prefetch && std::stoi(prefetch) == 1) {
+      if constexpr (std::is_integral_v<T>) {
+        fprintf(stderr, "Prefetching data at %p\n", _data);
+        auto result = cudaMemPrefetchAsync(_data,
+                                           size() * sizeof(T),
+                                           rmm::get_current_cuda_device().value(),
+                                           cudf::get_default_stream().value());
+        // InvalidValue error is raised when non-managed memory is passed to cudaMemPrefetchAsync
+        // We should treat this as a no-op
+        if (result != cudaErrorInvalidValue && result != cudaSuccess) { CUDF_CUDA_TRY(result); }
+      }
+    }
     return const_cast<T*>(detail::column_view_base::head<T>());
   }
 
