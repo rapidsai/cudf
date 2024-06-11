@@ -259,17 +259,6 @@ def _(
     return ir.HConcat(schema, [translate_ir(visitor, n=n) for n in node.inputs])
 
 
-@_translate_ir.register
-def _(
-    node: pl_ir.ExtContext, visitor: NodeTraverser, schema: dict[str, plc.DataType]
-) -> ir.IR:
-    return ir.ExtContext(
-        schema,
-        translate_ir(visitor, n=node.input),
-        [translate_ir(visitor, n=n) for n in node.contexts],
-    )
-
-
 def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
     """
     Translate a polars-internal IR node to our representation.
