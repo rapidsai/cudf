@@ -41,7 +41,7 @@ def test_convert_integer_false_convert_floating_true():
         .convert_dtypes(convert_integer=False, convert_floating=True)
         .to_pandas(nullable=True)
     )
-    pd.testing.assert_series_equal(result, expected)
+    assert_eq(result, expected)
 
 
 # Now write the same test, but construct a DataFrame
