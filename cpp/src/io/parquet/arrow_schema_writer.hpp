@@ -27,9 +27,6 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/types.hpp>
 
-#include <string>
-#include <vector>
-
 namespace cudf::io::parquet::detail {
 
 using namespace cudf::io::detail;

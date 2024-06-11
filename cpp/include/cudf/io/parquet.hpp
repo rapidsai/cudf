@@ -841,14 +841,6 @@ class parquet_writer_options_base {
   void enable_write_arrow_schema(bool val);
 
   /**
-   * @brief Sets column chunks file path to be set in the raw output metadata.
-   *
-   * @param file_paths Vector of Strings which indicates file path. Must be same size as number of
-   * data sinks in sink info
-   */
-  void set_column_chunks_file_paths(std::vector<std::string> file_paths);
-
-  /**
    * @brief Sets the maximum row group size, in bytes.
    *
    * @param size_bytes Maximum row group size, in bytes to set

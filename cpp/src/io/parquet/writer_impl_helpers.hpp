@@ -58,7 +58,7 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta);
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The data size of the input
  */
-size_t column_size(column_view const& column, rmm::cuda_stream_view stream);
+[[nodiscard]] size_t column_size(column_view const& column, rmm::cuda_stream_view stream);
 
 /**
  * @brief Returns ``true`` if the column is nullable or if the write mode is not

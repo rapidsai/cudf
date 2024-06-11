@@ -397,7 +397,7 @@ struct leaf_schema_fn {
     col_schema.type           = Type::INT32;
     col_schema.converted_type = ConvertedType::DATE;
     col_schema.stats_dtype    = statistics_dtype::dtype_int32;
-    col_schema.logical_type   = LogicalType{DateType{DateUnit::DAYS}};
+    col_schema.logical_type   = LogicalType{LogicalType::DATE};
   }
 
   template <typename T>

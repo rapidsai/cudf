@@ -159,7 +159,7 @@ struct dispatch_to_flatbuf {
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_D>, void> operator()()
   {
     type_type = flatbuf::Type_Date;
-    // Use one of the strings: "UTC", "Etc/UTC" or "+00:00" to indicate a native UTC timestamp
+    // Date type (Set unit type to DAY for arrows's Date32)
     field_offset = flatbuf::CreateDate(fbb, flatbuf::DateUnit_DAY).Union();
   }
 
@@ -209,6 +209,8 @@ struct dispatch_to_flatbuf {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
   {
+    // `duration_D` is written as TimeType as `duration_D` is not a valid arrow type.
+    //  This also allows for easy and faithful roundtripping with cudf.
     type_type    = flatbuf::Type_Time;
     field_offset = flatbuf::CreateTime(fbb, flatbuf::TimeUnit_MILLISECOND).Union();
   }
@@ -244,12 +246,6 @@ struct dispatch_to_flatbuf {
   template <typename T>
   std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
   {
-    if constexpr (not std::is_same_v<T, numeric::decimal128>) {
-      // ``decimal32`` and ``decimal64`` types are not supported by
-      // Arrow without explicit conversion.
-      CUDF_FAIL("Fixed point types smaller than `decimal128` are not supported in arrow schema");
-    }
-
     type_type    = flatbuf::Type_Decimal;
     field_offset = flatbuf::CreateDecimal(fbb,
                                           (col_meta.is_decimal_precision_set())
