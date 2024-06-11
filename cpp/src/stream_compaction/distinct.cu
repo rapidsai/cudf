@@ -89,6 +89,89 @@ rmm::device_uvector<cudf::size_type> dispatch_hash_set(
 }
 }  // namespace
 
+template <typename SetRef>
+void distinct_first_last_none(SetRef set,
+                              rmm::device_uvector<size_type>& output_indices,
+                              size_type num_rows,
+                              duplicate_keep_option keep,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
+{
+  auto reduction_results = rmm::device_uvector<size_type>(num_rows, stream, mr);
+  thrust::uninitialized_fill(rmm::exec_policy(stream),
+                             reduction_results.begin(),
+                             reduction_results.end(),
+                             reduction_init_value(keep));
+
+  static auto constexpr cg_size = SetRef::cg_size;
+
+  thrust::for_each(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(num_rows * cg_size),
+    [set, keep, reduction_results = reduction_results.begin()] __device__(
+      size_type const idx) mutable {
+      size_type cg_idx = idx / cg_size;
+
+      auto [out_ptr, inserted] = [&]() {
+        if constexpr (cg_size == 1) {
+          return set.insert_and_find(idx);
+        } else {
+          auto const tile =
+            cooperative_groups::tiled_partition<cg_size>(cooperative_groups::this_thread_block());
+          return set.insert_and_find(tile, cg_idx);
+        }
+      }();
+
+      auto const tile =
+        cooperative_groups::tiled_partition<cg_size>(cooperative_groups::this_thread_block());
+      if (keep == duplicate_keep_option::KEEP_FIRST and tile.thread_rank() == 0) {
+        // Store the smallest index of all rows that are equal.
+        auto ref =
+          cuda::atomic_ref<size_type, cuda::thread_scope_device>{reduction_results[*out_ptr]};
+        ref.fetch_min(cg_idx, cuda::memory_order_relaxed);
+      }
+      if (keep == duplicate_keep_option::KEEP_LAST and tile.thread_rank() == 0) {
+        // Store the greatest index of all rows that are equal.
+        auto ref =
+          cuda::atomic_ref<size_type, cuda::thread_scope_device>{reduction_results[*out_ptr]};
+        ref.fetch_max(cg_idx, cuda::memory_order_relaxed);
+      }
+      if (keep == duplicate_keep_option::KEEP_NONE and tile.thread_rank() == 0) {
+        // Count the number of rows in each group of rows that are compared equal.
+        auto ref =
+          cuda::atomic_ref<size_type, cuda::thread_scope_device>{reduction_results[*out_ptr]};
+        ref.fetch_add(size_type{1}, cuda::memory_order_relaxed);
+      }
+    });
+
+  auto const map_end = [&] {
+    if (keep == duplicate_keep_option::KEEP_NONE) {
+      // Reduction results with `KEEP_NONE` are either group sizes of equal rows, or `0`.
+      // Thus, we only output index of the rows in the groups having group size of `1`.
+      return thrust::copy_if(rmm::exec_policy(stream),
+                             thrust::make_counting_iterator(0),
+                             thrust::make_counting_iterator(num_rows),
+                             output_indices.begin(),
+                             [reduction_results = reduction_results.begin()] __device__(
+                               auto const idx) { return reduction_results[idx] == size_type{1}; });
+    }
+
+    // Reduction results with `KEEP_FIRST` and `KEEP_LAST` are row indices of the first/last row in
+    // each group of equal rows (which are the desired output indices), or the value given by
+    // `reduction_init_value()`.
+    return thrust::copy_if(rmm::exec_policy(stream),
+                           reduction_results.begin(),
+                           reduction_results.end(),
+                           output_indices.begin(),
+                           [init_value = reduction_init_value(keep)] __device__(auto const idx) {
+                             return idx != init_value;
+                           });
+  }();
+
+  output_indices.resize(thrust::distance(output_indices.begin(), map_end), stream);
+}
+
 rmm::device_uvector<size_type> distinct_indices(table_view const& input,
                                                 duplicate_keep_option keep,
                                                 null_equality nulls_equal,
@@ -127,7 +210,11 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
     // If we don't care about order, just gather indices of distinct keys taken from map.
     if (keep == duplicate_keep_option::KEEP_ANY) {
       set.retrieve_all(output_indices.begin(), stream.value());
+      return output_indices;
     }
+
+    distinct_first_last_none(
+      set.ref(cuco::op::insert_and_find), output_indices, input.num_rows(), keep, stream, mr);
     return output_indices;
   };
 
