@@ -21,6 +21,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/durations.hpp>
@@ -40,7 +41,7 @@
  * These lists should be used for consistency across tests as well as
  * future-proofing against the addition of any new types in the future.
  */
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace test {
 namespace detail {
 template <typename TYPES, std::size_t... Indices>
