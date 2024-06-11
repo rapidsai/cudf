@@ -106,7 +106,7 @@ get_arrow_array(std::vector<std::string> const& data, std::vector<uint8_t> const
 }
 
 std::shared_ptr<arrow::Array> get_arrow_large_string_array(std::vector<std::string> const& data,
-                             std::vector<uint8_t> const& mask = {})
+                                                           std::vector<uint8_t> const& mask = {})
 {
   std::shared_ptr<arrow::LargeStringArray> large_string_array;
   arrow::LargeStringBuilder large_string_builder;
