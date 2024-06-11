@@ -1873,20 +1873,9 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def __invert__(self):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
-
-        def _apply_inverse_column(col: ColumnBase) -> ColumnBase:
-            if col.dtype.kind in "ui":
-                return col.unary_operator("invert")
-            elif col.dtype.kind == "b":
-                return col.unary_operator("not")
-            else:
-                raise TypeError(
-                    f"Operation `~` not supported on {col.dtype.type.__name__}"
-                )
-
         return self._from_data_like_self(
             self._data._from_columns_like_self(
-                (_apply_inverse_column(col) for col in self._data.columns)
+                (~col for col in self._data.columns)
             )
         )
 
