@@ -123,7 +123,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
 
     cdef cppclass parquet_writer_options_builder_base[BuilderT, OptionsT]:
-        parquet_writer_options_builder() except +
+        parquet_writer_options_builder_base() except +
 
         BuilderT& metadata(
             cudf_io_types.table_input_metadata m
@@ -165,12 +165,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             cudf_io_types.dictionary_policy val
         ) except +
         OptionsT build() except +
-
-    # Forward declare the class so that it can be returned by its own methods.
-    cdef cppclass parquet_writer_options_builder(
-            parquet_writer_options_builder_base[parquet_writer_options_builder,
-                                                parquet_writer_options]):
-        pass
 
     cdef cppclass parquet_writer_options_builder(
             parquet_writer_options_builder_base[parquet_writer_options_builder,
