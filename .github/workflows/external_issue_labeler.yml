@@ -23,18 +23,15 @@ on:
   pull_request:
     types:
       - opened
-
+      
 env:
   GITHUB_TOKEN: ${{ github.token }}
-
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
 
 jobs:
   Label-Issue:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     if: github.event_name == 'issues'
     steps:
       - name: add-external-labels
@@ -47,6 +44,8 @@ jobs:
 
   Label-PR:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     if: github.event_name == 'pull_request'
     steps:
       - name: add-external-labels
