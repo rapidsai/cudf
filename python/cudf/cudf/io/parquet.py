@@ -659,6 +659,7 @@ def read_parquet(
     # when lazy is enabled
     metadata_task_size = kwargs.pop("metadata_task_size", 0)
     aggregate_files = kwargs.pop("aggregate_files", None)
+    split_row_groups = kwargs.pop("split_row_groups", False)
 
     # Read the parquet data
     df = None
@@ -686,6 +687,7 @@ def read_parquet(
                         aggregate_files=aggregate_files,
                         lazy=False,
                         filesystem="fsspec",
+                        split_row_groups=split_row_groups,
                         *args,
                         **kwargs,
                     ).repartition(npartitions=1),
