@@ -993,10 +993,7 @@ class Agg(Expr):
             plc.Column.from_scalar(
                 plc.reduce.reduce(column.obj, request, self.dtype),
                 1,
-            ),
-            is_sorted=plc.types.Sorted.YES,
-            order=plc.types.Order.ASCENDING,
-            null_order=plc.types.NullOrder.BEFORE,
+            )
         )
 
     def _count(self, column: Column) -> Column:
@@ -1009,10 +1006,7 @@ class Agg(Expr):
                     ),
                 ),
                 1,
-            ),
-            is_sorted=plc.types.Sorted.YES,
-            order=plc.types.Order.ASCENDING,
-            null_order=plc.types.NullOrder.BEFORE,
+            )
         )
 
     def _min(self, column: Column, *, propagate_nans: bool) -> Column:
@@ -1023,10 +1017,7 @@ class Agg(Expr):
                         pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
                     ),
                     1,
-                ),
-                is_sorted=plc.types.Sorted.YES,
-                order=plc.types.Order.ASCENDING,
-                null_order=plc.types.NullOrder.BEFORE,
+                )
             )
         if column.nan_count > 0:
             column = column.mask_nans()
@@ -1040,31 +1031,18 @@ class Agg(Expr):
                         pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
                     ),
                     1,
-                ),
-                is_sorted=plc.types.Sorted.YES,
-                order=plc.types.Order.ASCENDING,
-                null_order=plc.types.NullOrder.BEFORE,
+                )
             )
         if column.nan_count > 0:
             column = column.mask_nans()
         return self._reduce(column, request=plc.aggregation.max())
 
     def _first(self, column: Column) -> Column:
-        return Column(
-            plc.copying.slice(column.obj, [0, 1])[0],
-            is_sorted=plc.types.Sorted.YES,
-            order=plc.types.Order.ASCENDING,
-            null_order=plc.types.NullOrder.BEFORE,
-        )
+        return Column(plc.copying.slice(column.obj, [0, 1])[0])
 
     def _last(self, column: Column) -> Column:
         n = column.obj.size()
-        return Column(
-            plc.copying.slice(column.obj, [n - 1, n])[0],
-            is_sorted=plc.types.Sorted.YES,
-            order=plc.types.Order.ASCENDING,
-            null_order=plc.types.NullOrder.BEFORE,
-        )
+        return Column(plc.copying.slice(column.obj, [n - 1, n])[0])
 
     def do_evaluate(
         self,
