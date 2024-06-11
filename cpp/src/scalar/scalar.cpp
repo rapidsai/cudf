@@ -216,7 +216,7 @@ template class fixed_point_scalar<numeric::decimal32>;
 template class fixed_point_scalar<numeric::decimal64>;
 template class fixed_point_scalar<numeric::decimal128>;
 
-namespace detail {
+namespace CUDF_HIDDEN detail {
 
 template <typename T>
 fixed_width_scalar<T>::fixed_width_scalar(T value,

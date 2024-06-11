@@ -125,8 +125,14 @@ std::vector<packed_table> contiguous_split(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 namespace detail {
+
+/**
+ * @brief A helper struct containing the state of contiguous_split, whether the caller
+ * is using the single-pass contiguous_split or chunked_pack.
+ *
+ */
 struct contiguous_split_state;
-};
+}  // namespace detail
 
 /**
  * @brief Perform a chunked "pack" operation of the input `table_view` using a user provided

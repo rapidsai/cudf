@@ -16,10 +16,12 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 namespace detail {
 

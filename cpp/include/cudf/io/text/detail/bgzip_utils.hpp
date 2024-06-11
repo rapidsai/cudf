@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <zlib.h>
@@ -26,7 +27,8 @@
 #include <fstream>
 #include <limits>
 
-namespace cudf::io::text::detail::bgzip {
+namespace cudf {
+namespace io::text::detail::bgzip {
 
 struct header {
   int block_size;
@@ -89,6 +91,7 @@ void write_footer(std::ostream& output_stream, host_span<char const> data);
  *                           BGZIP block size subfield
  * @param post_size_subfields Any subfields to be placed after the BGZIP block size subfield
  */
+CUDF_EXPORT
 void write_uncompressed_block(std::ostream& output_stream,
                               host_span<char const> data,
                               host_span<char const> pre_size_subfields  = {},
@@ -104,9 +107,11 @@ void write_uncompressed_block(std::ostream& output_stream,
  *                           BGZIP block size subfield
  * @param post_size_subfields Any subfields to be placed after the BGZIP block size subfield
  */
+CUDF_EXPORT
 void write_compressed_block(std::ostream& output_stream,
                             host_span<char const> data,
                             host_span<char const> pre_size_subfields  = {},
                             host_span<char const> post_size_subfields = {});
 
-}  // namespace cudf::io::text::detail::bgzip
+}  // namespace io::text::detail::bgzip
+}  // namespace cudf

@@ -18,6 +18,7 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -152,6 +153,7 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
  *
  * @returns An empty tdigest column.
  */
+CUDF_EXPORT
 std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr);
 

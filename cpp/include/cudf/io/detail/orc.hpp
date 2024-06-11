@@ -1,4 +1,4 @@
-/*
+  /*
  * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
@@ -29,12 +30,13 @@
 #include <string>
 #include <vector>
 
-namespace cudf::io {
+namespace CUDF_EXPORT cudf {
+namespace io {
 
 // Forward declaration
-class orc_reader_options;
-class orc_writer_options;
-class chunked_orc_writer_options;
+class CUDF_EXPORT orc_reader_options;
+class CUDF_EXPORT orc_writer_options;
+class CUDF_EXPORT chunked_orc_writer_options;
 
 namespace orc::detail {
 
@@ -183,4 +185,5 @@ class writer {
 };
 
 }  // namespace orc::detail
-}  // namespace cudf::io
+}  // namespace io
+}  // namespace CUDF_EXPORT cudf

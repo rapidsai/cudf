@@ -17,13 +17,15 @@
 #pragma once
 
 #include <cudf/io/json.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf::io::json {
+namespace CUDF_EXPORT cudf {
+namespace io::json {
 
 /// Type used to represent the atomic symbol type used within the finite-state machine
 using SymbolT = char;
@@ -138,4 +140,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
 
 }  // namespace detail
 
-}  // namespace cudf::io::json
+}  // namespace io::json
+
+}  // namespace CUDF_EXPORT cudf
+
