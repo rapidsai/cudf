@@ -39,7 +39,7 @@ This code is purely for demonstrative purposes.
 ```
 
 We can check whether an object is a proxy type with `cudf.pandas.is_proxy_object`.
-```
+```python
   from cudf.pandas import is_proxy_object
 
   is_proxy_object(s1) # returns False

@@ -1194,7 +1194,7 @@ def is_proxy_object(obj: Any) -> bool:
         Any python object.
 
     """
-    if type(type(obj)) == _FastSlowProxyMeta:
+    if _FastSlowProxyMeta in type(type(obj)).__mro__:
         return True
     return False
 
