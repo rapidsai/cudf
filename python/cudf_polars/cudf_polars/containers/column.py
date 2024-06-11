@@ -17,12 +17,13 @@ __all__: list[str] = ["Column", "NamedColumn"]
 
 
 class Column:
-    """A column with sortedness metadata."""
+    """An immutable column with sortedness metadata."""
 
     obj: plc.Column
     is_sorted: plc.types.Sorted
     order: plc.types.Order
     null_order: plc.types.NullOrder
+    is_scalar: bool
 
     def __init__(
         self,
@@ -33,9 +34,32 @@ class Column:
         null_order: plc.types.NullOrder = plc.types.NullOrder.BEFORE,
     ):
         self.obj = column
+        self.is_scalar = self.obj.size() == 1
+        if self.obj.size() <= 1:
+            is_sorted = plc.types.Sorted.YES
         self.is_sorted = is_sorted
         self.order = order
         self.null_order = null_order
+
+    @functools.cached_property
+    def obj_scalar(self) -> plc.Scalar:
+        """
+        A copy of the column object as a pylibcudf Scalar.
+
+        Returns
+        -------
+        pylibcudf Scalar object.
+
+        Raises
+        ------
+        ValueError
+            If the column is not length-1.
+        """
+        if not self.is_scalar:
+            raise ValueError(
+                f"Cannot convert a column of length {self.obj.size()} to scalar"
+            )
+        return plc.copying.get_element(self.obj, 0)
 
     def sorted_like(self, like: Column, /) -> Self:
         """
@@ -81,6 +105,8 @@ class Column:
         -------
         Self with metadata set.
         """
+        if self.obj.size() <= 1:
+            is_sorted = plc.types.Sorted.YES
         self.is_sorted = is_sorted
         self.order = order
         self.null_order = null_order
