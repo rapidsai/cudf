@@ -1,5 +1,9 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
+import os
+
+os.environ["LIBCUDF_LARGE_STRINGS_ENABLED"] = "1"
+
 # _setup_numba _must be called before numba.cuda is imported, because
 # it sets the numba config variable responsible for enabling
 # Minor Version Compatibility. Setting it after importing numba.cuda has no effect.
