@@ -44,6 +44,7 @@ def keys(request):
         [pl.col("float") + pl.col("int")],
         [pl.col("float").max() - pl.col("int").min()],
         [pl.col("float").mean(), pl.col("int").std()],
+        [(pl.col("float") - pl.lit(2)).max()],
     ],
     ids=lambda aggs: "-".join(map(str, aggs)),
 )

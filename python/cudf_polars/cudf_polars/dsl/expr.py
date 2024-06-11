@@ -134,14 +134,14 @@ class Expr:
         True if the two expressions are equal, false otherwise.
         """
         if type(self) is not type(other):
-            return False
+            return False  # pragma: no cover; __eq__ trips first
         return self._ctor_arguments(self.children) == other._ctor_arguments(
             other.children
         )
 
     def __eq__(self, other: Any) -> bool:
         """Equality of expressions."""
-        if type(self) != type(other) or hash(self) != hash(other):
+        if type(self) is not type(other) or hash(self) != hash(other):
             return False
         else:
             return self.is_equal(other)
@@ -287,9 +287,9 @@ class NamedExpr:
         """Hash of the expression."""
         return hash((type(self), self.name, self.value))
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         """Repr of the expression."""
-        return f"NamedExpr({self.name}, {self.value}"
+        return f"NamedExpr({self.name}, {self.value})"
 
     def __eq__(self, other: Any) -> bool:
         """Equality of two expressions."""
@@ -921,7 +921,9 @@ class Agg(Expr):
         self.options = options
         self.children = (value,)
         if name not in Agg._SUPPORTED:
-            raise NotImplementedError(f"Unsupported aggregation {name=}")
+            raise NotImplementedError(
+                f"Unsupported aggregation {name=}"
+            )  # pragma: no cover; all valid aggs are supported
         # TODO: nan handling in groupby case
         if name == "min":
             req = plc.aggregation.min()
@@ -947,7 +949,9 @@ class Agg(Expr):
         elif name == "count":
             req = plc.aggregation.count(null_handling=plc.types.NullPolicy.EXCLUDE)
         else:
-            raise NotImplementedError
+            raise NotImplementedError(
+                f"Unreachable, {name=} is incorrectly listed in _SUPPORTED"
+            )  # pragma: no cover
         self.request = req
         op = getattr(self, f"_{name}", None)
         if op is None:
@@ -957,7 +961,9 @@ class Agg(Expr):
         elif name in {"count", "first", "last"}:
             pass
         else:
-            raise AssertionError
+            raise NotImplementedError(
+                f"Unreachable, supported agg {name=} has no implementation"
+            )  # pragma: no cover
         self.op = op
 
     _SUPPORTED: ClassVar[frozenset[str]] = frozenset(
@@ -979,11 +985,15 @@ class Agg(Expr):
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
         if depth >= 1:
-            raise NotImplementedError("Nested aggregations in groupby")
+            raise NotImplementedError(
+                "Nested aggregations in groupby"
+            )  # pragma: no cover; check_agg trips first
         (child,) = self.children
         ((expr, _, _),) = child.collect_agg(depth=depth + 1).requests
         if self.request is None:
-            raise NotImplementedError(f"Aggregation {self.name} in groupby")
+            raise NotImplementedError(
+                f"Aggregation {self.name} in groupby"
+            )  # pragma: no cover; __init__ trips first
         return AggInfo([(expr, self.request, self)])
 
     def _reduce(
@@ -1053,7 +1063,7 @@ class Agg(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         if context is not ExecutionContext.FRAME:
-            raise NotImplementedError(f"Agg in context {context}")
+            raise NotImplementedError(f"Agg in context {context}")  # pragma: no cover
         (child,) = self.children
         return self.op(child.evaluate(df, context=context, mapping=mapping))
 
