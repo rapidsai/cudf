@@ -61,3 +61,19 @@ def test_agg(df, agg):
         with pytest.raises(AssertionError):
             assert_gpu_result_equal(q)
     assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
+
+
+@pytest.mark.parametrize(
+    "propagate_nans",
+    [pytest.param(False, marks=pytest.mark.xfail(reason="Need to mask nans")), True],
+    ids=["mask_nans", "propagate_nans"],
+)
+def test_agg_float_with_nans(propagate_nans):
+    df = pl.LazyFrame({"a": [1, 2, float("nan")], "b": [1.0, float("nan"), 3.0]})
+
+    if propagate_nans:
+        q = df.select(pl.col("a").nan_min(), pl.col("b").nan_max())
+    else:
+        q = df.select(pl.col("a").min(), pl.col("b").max())
+
+    assert_gpu_result_equal(q)
