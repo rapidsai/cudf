@@ -22,7 +22,7 @@ package ai.rapids.cudf;
  */
 public interface RmmDeviceMemoryResource extends AutoCloseable {
   /**
-   * Returns a pointer to the underlying C++ class that implements rmm::mr::device_memory_resource
+   * Returns a pointer to the underlying C++ class that implements rmm::device_async_resource_ref
    */
   long getHandle();
 
