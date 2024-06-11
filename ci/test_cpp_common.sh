@@ -11,7 +11,7 @@ ENV_YAML_DIR="$(mktemp -d)"
 
 rapids-dependency-file-generator \
   --output conda \
-  --file_key test_cpp \
+  --file-key test_cpp \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
 
 rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test
