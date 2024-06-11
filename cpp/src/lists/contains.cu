@@ -18,6 +18,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/lists/contains.hpp>
 #include <cudf/lists/detail/contains.hpp>
 #include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/lists/list_device_view.cuh>
