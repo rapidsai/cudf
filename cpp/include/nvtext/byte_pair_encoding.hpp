@@ -19,11 +19,12 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/resource_ref.hpp>
 
-namespace nvtext {
+namespace CUDF_EXPORT nvtext {
 
 /**
  * @addtogroup nvtext_tokenize

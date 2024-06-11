@@ -25,7 +25,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace nvtext {
+namespace CUDF_EXPORT nvtext {
 namespace detail {
 
 /**
