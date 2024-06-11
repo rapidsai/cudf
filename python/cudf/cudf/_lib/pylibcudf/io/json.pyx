@@ -25,7 +25,7 @@ cpdef void write_json(
     str false_value = "false"
 ):
     """
-    Writes a :py:class:`~cudf._lib.pylibcudf.types.Table` to JSON format.
+    Writes a :py:class:`~cudf._lib.pylibcudf.table.Table` to JSON format.
 
     Parameters
     ----------

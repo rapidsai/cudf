@@ -1,36 +1,26 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import io
-import os
-import pathlib
 
 import pandas as pd
+import pyarrow as pa
 import pytest
+from utils import sink_to_str
 
 import cudf._lib.pylibcudf as plc
 
 
-@pytest.fixture(
-    params=["a.txt", pathlib.Path("a.txt"), io.BytesIO(), io.StringIO()],
-)
-def sink(request):
-    yield request.param
-    # Cleanup after ourselves
-    # since the BytesIO and StringIO objects get cached by pytest
-    if isinstance(request.param, io.IOBase):
-        buf = request.param
-        buf.seek(0)
-        buf.truncate(0)
-
-
+@pytest.mark.parametrize("rows_per_chunk", [8, 100])
 @pytest.mark.parametrize("lines", [True, False])
-def test_write_json_basic(table_data, sink, tmp_path, lines):
+def test_write_json_basic(table_data, source_or_sink, lines, rows_per_chunk):
     plc_table_w_meta, pa_table = table_data
-    if isinstance(sink, str):
-        sink = f"{tmp_path}/{sink}"
-    elif isinstance(sink, os.PathLike):
-        sink = tmp_path.joinpath(sink)
+    sink = source_or_sink
+
+    kwargs = dict()
+    if rows_per_chunk <= plc_table_w_meta.tbl.num_rows():
+        kwargs["rows_per_chunk"] = rows_per_chunk
+
     plc.io.json.write_json(
-        plc.io.SinkInfo([sink]), plc_table_w_meta, lines=lines
+        plc.io.SinkInfo([sink]), plc_table_w_meta, lines=lines, **kwargs
     )
 
     # orient=records (basically what the cudf json writer does,
@@ -42,17 +32,102 @@ def test_write_json_basic(table_data, sink, tmp_path, lines):
 
     # Convert everything to string to make
     # comparisons easier
-
-    if isinstance(sink, (str, os.PathLike)):
-        with open(sink, "r") as f:
-            str_result = f.read()
-    elif isinstance(sink, io.BytesIO):
-        sink.seek(0)
-        str_result = sink.read().decode()
-    else:
-        sink.seek(0)
-        str_result = sink.read()
+    str_result = sink_to_str(sink)
 
     pd_result = exp.to_json(orient="records", lines=lines)
+
+    assert str_result == pd_result
+
+
+@pytest.mark.parametrize("include_nulls", [True, False])
+@pytest.mark.parametrize("na_rep", ["null", "awef", ""])
+def test_write_json_nulls(na_rep, include_nulls):
+    names = ["a", "b"]
+    pa_tbl = pa.Table.from_arrays(
+        [pa.array([1.0, 2.0, None]), pa.array([True, None, False])],
+        names=names,
+    )
+    plc_tbl = plc.interop.from_arrow(pa_tbl)
+    plc_tbl_w_meta = plc.io.types.TableWithMetadata(
+        plc_tbl, column_names=[(name, []) for name in names]
+    )
+
+    sink = io.StringIO()
+
+    plc.io.json.write_json(
+        plc.io.SinkInfo([sink]),
+        plc_tbl_w_meta,
+        na_rep=na_rep,
+        include_nulls=include_nulls,
+    )
+
+    # orient=records (basically what the cudf json writer does,
+    # doesn't preserve colnames when there are zero rows in table)
+    exp = pa_tbl.to_pandas()
+
+    if len(exp) == 0:
+        exp = pd.DataFrame()
+
+    # Convert everything to string to make
+    # comparisons easier
+    str_result = sink_to_str(sink)
+    pd_result = exp.to_json(orient="records")
+
+    if not include_nulls:
+        # No equivalent in pandas, so we just
+        # sanity check by making sure na_rep
+        # doesn't appear in the output
+
+        # don't quote null
+        for name in names:
+            assert f'{{"{name}":{na_rep}}}' not in str_result
+        return
+
+    # pandas doesn't suppport na_rep
+    # let's just manually do str.replace
+    pd_result = pd_result.replace("null", na_rep)
+
+    assert str_result == pd_result
+
+
+@pytest.mark.parametrize("true_value", ["True", "correct"])
+@pytest.mark.parametrize("false_value", ["False", "wrong"])
+def test_write_json_bool_opts(true_value, false_value):
+    names = ["a"]
+    pa_tbl = pa.Table.from_arrays([pa.array([True, None, False])], names=names)
+    plc_tbl = plc.interop.from_arrow(pa_tbl)
+    plc_tbl_w_meta = plc.io.types.TableWithMetadata(
+        plc_tbl, column_names=[(name, []) for name in names]
+    )
+
+    sink = io.StringIO()
+
+    plc.io.json.write_json(
+        plc.io.SinkInfo([sink]),
+        plc_tbl_w_meta,
+        include_nulls=True,
+        na_rep="null",
+        true_value=true_value,
+        false_value=false_value,
+    )
+
+    # orient=records (basically what the cudf json writer does,
+    # doesn't preserve colnames when there are zero rows in table)
+    exp = pa_tbl.to_pandas()
+
+    if len(exp) == 0:
+        exp = pd.DataFrame()
+
+    # Convert everything to string to make
+    # comparisons easier
+    str_result = sink_to_str(sink)
+    pd_result = exp.to_json(orient="records")
+
+    # pandas doesn't suppport na_rep
+    # let's just manually do str.replace
+    if true_value != "true":
+        pd_result = pd_result.replace("true", true_value)
+    if false_value != "false":
+        pd_result = pd_result.replace("false", false_value)
 
     assert str_result == pd_result

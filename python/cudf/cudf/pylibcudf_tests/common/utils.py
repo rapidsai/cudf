@@ -1,5 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+import io
+import os
 from typing import Optional, Union
 
 import pyarrow as pa
@@ -134,6 +136,19 @@ def is_fixed_width(plc_dtype: plc.DataType):
         or is_floating(plc_dtype)
         or is_boolean(plc_dtype)
     )
+
+
+def sink_to_str(sink):
+    if isinstance(sink, (str, os.PathLike)):
+        with open(sink, "r") as f:
+            str_result = f.read()
+    elif isinstance(sink, io.BytesIO):
+        sink.seek(0)
+        str_result = sink.read().decode()
+    else:
+        sink.seek(0)
+        str_result = sink.read()
+    return str_result
 
 
 # TODO: enable uint64, some failing tests

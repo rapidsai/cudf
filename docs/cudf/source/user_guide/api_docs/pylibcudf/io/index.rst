@@ -16,3 +16,4 @@ I/O Functions
     :maxdepth: 1
 
     avro
+    json

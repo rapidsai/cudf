@@ -1,7 +1,9 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 # Tell ruff it's OK that some imports occur after the sys.path.insert
 # ruff: noqa: E402
+import io
 import os
+import pathlib
 import sys
 
 import numpy as np
@@ -35,6 +37,8 @@ def numeric_pa_type(request):
     return request.param
 
 
+# TODO: Consider adding another fixture/adapting this
+# fixture to consider nullability
 @pytest.fixture(scope="session", params=[0, 100])
 def table_data(request):
     """
@@ -117,6 +121,24 @@ def table_data(request):
     return plc.io.TableWithMetadata(
         plc.interop.from_arrow(pa_table), column_names=colnames
     ), pa_table
+
+
+@pytest.fixture(
+    params=["a.txt", pathlib.Path("a.txt"), io.BytesIO(), io.StringIO()],
+)
+def source_or_sink(request, tmp_path):
+    fp_or_buf = request.param
+    if isinstance(fp_or_buf, str):
+        fp_or_buf = f"{tmp_path}/{fp_or_buf}"
+    elif isinstance(fp_or_buf, os.PathLike):
+        fp_or_buf = tmp_path.joinpath(fp_or_buf)
+
+    yield fp_or_buf
+    # Cleanup after ourselves
+    # since the BytesIO and StringIO objects get cached by pytest
+    if isinstance(fp_or_buf, io.IOBase):
+        fp_or_buf.seek(0)
+        fp_or_buf.truncate(0)
 
 
 @pytest.fixture(
