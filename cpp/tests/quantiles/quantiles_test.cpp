@@ -25,6 +25,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <stdexcept>
+
 template <typename T>
 struct QuantilesTest : public cudf::test::BaseFixture {};
 
@@ -104,9 +106,10 @@ TYPED_TEST(QuantilesTest, TestMultiColumnArithmeticInterpolation)
   cudf::test::fixed_width_column_wrapper<T> input_b({});
   auto input = cudf::table_view({input_a});
 
-  EXPECT_THROW(cudf::quantiles(input, {0.0f}, cudf::interpolation::LINEAR), cudf::logic_error);
+  EXPECT_THROW(cudf::quantiles(input, {0.0f}, cudf::interpolation::LINEAR), std::invalid_argument);
 
-  EXPECT_THROW(cudf::quantiles(input, {0.0f}, cudf::interpolation::MIDPOINT), cudf::logic_error);
+  EXPECT_THROW(cudf::quantiles(input, {0.0f}, cudf::interpolation::MIDPOINT),
+               std::invalid_argument);
 }
 
 TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)

@@ -212,7 +212,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return pd.Index(pa_array.to_pandas())
 
     @property
-    def values_host(self) -> "np.ndarray":
+    def values_host(self) -> np.ndarray:
         """
         Return a numpy representation of the Column.
         """
@@ -226,7 +226,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return self.data_array_view(mode="read").copy_to_host()
 
     @property
-    def values(self) -> "cupy.ndarray":
+    def values(self) -> cupy.ndarray:
         """
         Return a CuPy representation of the Column.
         """
@@ -281,7 +281,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         return libcudf.reduce.reduce("any", self, dtype=np.bool_)
 
-    def dropna(self) -> ColumnBase:
+    def dropna(self) -> Self:
         return drop_nulls([self])[0]._with_type_metadata(self.dtype)
 
     def to_arrow(self) -> pa.Array:
@@ -331,10 +331,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 "Type casting from `float16` to `float32` is not "
                 "yet supported in pyarrow, see: "
                 "https://github.com/apache/arrow/issues/20213"
-            )
-        elif pa.types.is_timestamp(array.type) and array.type.tz is not None:
-            raise NotImplementedError(
-                "cuDF does not yet support timezone-aware datetimes"
             )
         elif isinstance(array.type, ArrowIntervalType):
             return cudf.core.column.IntervalColumn.from_arrow(array)
@@ -695,7 +691,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         Returns a copy with null filled.
         """
         return libcudf.replace.replace_nulls(
-            input_col=self, replacement=fill_value, method=method
+            input_col=self.nans_to_nulls(),
+            replacement=fill_value,
+            method=method,
         )._with_type_metadata(self.dtype)
 
     def isnull(self) -> ColumnBase:
@@ -990,9 +988,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return col
         elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
             return col.as_decimal_column(dtype)
-        elif np.issubdtype(cast(Any, dtype), np.datetime64):
+        elif dtype.kind == "M":
             return col.as_datetime_column(dtype)
-        elif np.issubdtype(cast(Any, dtype), np.timedelta64):
+        elif dtype.kind == "m":
             return col.as_timedelta_column(dtype)
         elif dtype.kind == "O":
             if cudf.get_option("mode.pandas_compatible") and was_object:
@@ -1239,6 +1237,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         raise TypeError(
             f"Operation {unaryop} not supported for dtype {self.dtype}."
         )
+
+    def nans_to_nulls(self: Self) -> Self:
+        """Convert NaN to NA."""
+        return self
 
     def normalize_binop_value(
         self, other: ScalarLike
@@ -1802,9 +1804,7 @@ def as_column(
 
         data = as_buffer(arbitrary, exposed=cudf.get_option("copy_on_write"))
         col = build_column(data, dtype=arbitrary.dtype, mask=mask)
-        if (
-            nan_as_null or (mask is None and nan_as_null is None)
-        ) and col.dtype.kind == "f":
+        if nan_as_null or (mask is None and nan_as_null is None):
             col = col.nans_to_nulls()
         if dtype is not None:
             col = col.astype(dtype)
@@ -1842,21 +1842,11 @@ def as_column(
             and arbitrary.freq is not None
         ):
             raise NotImplementedError("freq is not implemented yet")
-        elif (
-            isinstance(arbitrary.dtype, pd.DatetimeTZDtype)
-            or (
-                isinstance(arbitrary.dtype, pd.IntervalDtype)
-                and isinstance(arbitrary.dtype.subtype, pd.DatetimeTZDtype)
-            )
-            or (
-                isinstance(arbitrary.dtype, pd.CategoricalDtype)
-                and isinstance(
-                    arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
-                )
-            )
+        elif isinstance(arbitrary.dtype, pd.IntervalDtype) and isinstance(
+            arbitrary.dtype.subtype, pd.DatetimeTZDtype
         ):
             raise NotImplementedError(
-                "cuDF does not yet support timezone-aware datetimes"
+                "cuDF does not yet support Intervals with timezone-aware datetimes"
             )
         elif _is_pandas_nullable_extension_dtype(arbitrary.dtype):
             if cudf.get_option("mode.pandas_compatible"):
@@ -1872,7 +1862,8 @@ def as_column(
                 length=length,
             )
         elif isinstance(
-            arbitrary.dtype, (pd.CategoricalDtype, pd.IntervalDtype)
+            arbitrary.dtype,
+            (pd.CategoricalDtype, pd.IntervalDtype, pd.DatetimeTZDtype),
         ):
             return as_column(
                 pa.array(arbitrary, from_pandas=True),

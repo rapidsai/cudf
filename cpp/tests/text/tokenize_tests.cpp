@@ -111,17 +111,13 @@ TEST_F(TextTokenizeTest, TokenizeErrorTest)
 
 TEST_F(TextTokenizeTest, CharacterTokenize)
 {
-  std::vector<char const*> h_strings{"the mousé ate the cheese", nullptr, ""};
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  cudf::test::strings_column_wrapper input({"the mousé ate the cheese", ""});
 
   cudf::test::strings_column_wrapper expected{"t", "h", "e", " ", "m", "o", "u", "s",
                                               "é", " ", "a", "t", "e", " ", "t", "h",
                                               "e", " ", "c", "h", "e", "e", "s", "e"};
 
-  auto results = nvtext::character_tokenize(cudf::strings_column_view(strings));
+  auto results = nvtext::character_tokenize(cudf::strings_column_view(input));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -150,8 +146,6 @@ TEST_F(TextTokenizeTest, TokenizeEmptyTest)
   results = nvtext::character_tokenize(view);
   EXPECT_EQ(results->size(), 0);
   results = nvtext::character_tokenize(all_empty);
-  EXPECT_EQ(results->size(), 0);
-  results = nvtext::character_tokenize(all_null);
   EXPECT_EQ(results->size(), 0);
   auto const delimiter = cudf::string_scalar{""};
   results              = nvtext::tokenize_with_vocabulary(view, all_empty, delimiter);

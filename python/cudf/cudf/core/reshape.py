@@ -1210,9 +1210,7 @@ def _get_unique(column, dummy_na):
     else:
         unique = column.unique().sort_values()
     if not dummy_na:
-        if np.issubdtype(unique.dtype, np.floating):
-            unique = unique.nans_to_nulls()
-        unique = unique.dropna()
+        unique = unique.nans_to_nulls().dropna()
     return unique
 
 
