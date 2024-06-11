@@ -17,7 +17,7 @@ def test_concatenate_rows():
 
     expect = pa.array([pair[0] + pair[1] for pair in zip(*test_data)])
 
-    assert_column_eq(res, expect)
+    assert_column_eq(expect, res)
 
 
 @pytest.mark.parametrize(
@@ -43,4 +43,4 @@ def test_concatenate_list_elements(test_data, drop_na, expected):
 
     expect = pa.array(expected)
 
-    assert_column_eq(res, expect)
+    assert_column_eq(expect, res)
