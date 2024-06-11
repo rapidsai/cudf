@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -25,7 +26,8 @@
 
 #include <type_traits>
 
-namespace cudf::test::print {
+namespace CUDF_EXPORT {
+namespace test::print {
 
 constexpr int32_t hex_tag = 0;
 
@@ -137,4 +139,5 @@ void print_array(std::size_t count, rmm::cuda_stream_view stream, Ts... args)
   }
 }
 
-}  // namespace cudf::test::print
+}  // namespace test::print
+}  // namespace CUDF_EXPORT

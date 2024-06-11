@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <ftw.h>
@@ -29,7 +30,7 @@
  * @brief RAII class for creating a temporary directory.
  *
  */
-class temp_directory {
+class CUDF_EXPORT temp_directory {
   std::string _path;
 
  public:
