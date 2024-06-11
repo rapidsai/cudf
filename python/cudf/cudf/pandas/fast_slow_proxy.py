@@ -1185,6 +1185,20 @@ def _replace_closurevars(
     )
 
 
+def is_proxy_object(obj: Any) -> bool:
+    """Determine if an object is proxy object
+
+    Parameters
+    ----------
+    obj : object
+        Any python object.
+
+    """
+    if _FastSlowProxyMeta in type(type(obj)).__mro__:
+        return True
+    return False
+
+
 NUMPY_TYPES: Set[str] = set(np.sctypeDict.values())
 
 
