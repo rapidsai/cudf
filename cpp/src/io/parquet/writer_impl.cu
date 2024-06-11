@@ -464,11 +464,14 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
   {
-    col_schema.type = (write_arrow_schema) ? Type::INT64 : Type::INT32;
-    col_schema.stats_dtype =
-      (write_arrow_schema) ? statistics_dtype::dtype_int64 : statistics_dtype::dtype_int32;
-    // only write as time32 logical type if not writing arrow schema
-    if (not write_arrow_schema) {
+    // If writing arrow schema, no logical type nor converted type is necessary
+    if (write_arrow_schema) {
+      col_schema.type        = Type::INT64;
+      col_schema.stats_dtype = statistics_dtype::dtype_int64;
+    } else {
+      // Write as Time32 logical type otherwise. Parquet TIME_MILLIS annotates INT32
+      col_schema.type           = Type::INT32;
+      col_schema.stats_dtype    = statistics_dtype::dtype_int32;
       col_schema.converted_type = ConvertedType::TIME_MILLIS;
       col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
       col_schema.ts_scale       = 1000;
@@ -478,11 +481,14 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
   {
-    col_schema.type = (write_arrow_schema) ? Type::INT64 : Type::INT32;
-    col_schema.stats_dtype =
-      (write_arrow_schema) ? statistics_dtype::dtype_int64 : statistics_dtype::dtype_int32;
-    // only write as time32 logical type if not writing arrow schema
-    if (not write_arrow_schema) {
+    // If writing arrow schema, no logical type nor converted type is necessary
+    if (write_arrow_schema) {
+      col_schema.type        = Type::INT64;
+      col_schema.stats_dtype = statistics_dtype::dtype_int64;
+    } else {
+      // Write as Time32 logical type otherwise. Parquet TIME_MILLIS annotates INT32
+      col_schema.type           = Type::INT32;
+      col_schema.stats_dtype    = statistics_dtype::dtype_int32;
       col_schema.converted_type = ConvertedType::TIME_MILLIS;
       col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MILLIS}};
     }
@@ -493,7 +499,7 @@ struct leaf_schema_fn {
   {
     col_schema.type        = Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_int64;
-    // only write as time64 logical type if not writing arrow schema
+    // Only write as time64 logical type if not writing arrow schema
     if (not write_arrow_schema) {
       col_schema.converted_type = ConvertedType::TIME_MICROS;
       col_schema.logical_type   = LogicalType{TimeType{timestamp_is_utc, TimeUnit::MICROS}};
@@ -505,7 +511,7 @@ struct leaf_schema_fn {
   {
     col_schema.type        = Type::INT64;
     col_schema.stats_dtype = statistics_dtype::dtype_int64;
-    // only write as time64 logical type if not writing arrow schema
+    // Only write as time64 logical type if not writing arrow schema
     if (not write_arrow_schema) {
       col_schema.logical_type = LogicalType{TimeType{timestamp_is_utc, TimeUnit::NANOS}};
     }
