@@ -129,6 +129,14 @@ class json_reader_options {
   // Whether to recover after an invalid JSON line
   json_recovery_mode_t _recovery_mode = json_recovery_mode_t::FAIL;
 
+  // Validation checks for spark
+  // Allow leading zeros for numeric values.
+  bool _allow_numeric_leading_zeros = true;
+  // Allow unquoted control characters
+  bool allowUnquotedControlChars = true;
+  // Additional values to recognize as null values
+  std::vector<std::string> _na_values;
+
   /**
    * @brief Constructor from source info.
    *
@@ -299,6 +307,20 @@ class json_reader_options {
   json_recovery_mode_t recovery_mode() const { return _recovery_mode; }
 
   /**
+   * @brief Whether leading zeros are allowed in numeric values.
+   *
+   * @return true if leading zeros are allowed in numeric values
+   */
+  [[nodiscard]] bool is_allowed_numeric_leading_zeros() const { return _allow_numeric_leading_zeros; }
+
+  /**
+   * @brief Returns additional values to recognize as null values.
+   *
+   * @return Additional values to recognize as null values
+   */
+  [[nodiscard]] std::vector<std::string> const& get_na_values() const { return _na_values; }
+
+  /**
    * @brief Set data types for columns to be read.
    *
    * @param types Vector of dtypes
@@ -427,6 +449,20 @@ class json_reader_options {
    * @param val An enum value to indicate the JSON reader's behavior on invalid JSON lines.
    */
   void set_recovery_mode(json_recovery_mode_t val) { _recovery_mode = val; }
+
+  /**
+   * @brief Set Whether leading zeros are allowed in numeric values.
+   *
+   * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
+   */
+  void allow_numeric_leading_zeros(bool val) { _allow_numeric_leading_zeros = val; }
+
+  /**
+   * @brief Sets additional values to recognize as null values.
+   *
+   * @param vals Vector of values to be considered to be null
+   */
+  void set_na_values(std::vector<std::string> vals) { _na_values = std::move(vals); }
 };
 
 /**
@@ -635,6 +671,29 @@ class json_reader_options_builder {
   json_reader_options_builder& recovery_mode(json_recovery_mode_t val)
   {
     options._recovery_mode = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set Whether leading zeros are allowed in numeric values.
+   *
+   * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
+   */
+  json_reader_options_builder& numeric_leading_zeros(bool val)
+  {
+    options.allow_numeric_leading_zeros(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets additional values to recognize as null values.
+   *
+   * @param vals Vector of values to be considered to be null
+   * @return this for chaining
+   */
+  json_reader_options_builder& na_values(std::vector<std::string> vals)
+  {
+    options.set_na_values(std::move(vals));
     return *this;
   }
 
