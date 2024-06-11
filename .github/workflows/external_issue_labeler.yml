@@ -38,6 +38,7 @@ jobs:
         # Only run if the issue author is not part of RAPIDS
         if: ${{ ! contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)}}
         run: |
+          echo ${{ github.event.issue.author_association }}
           issue_url=${{ github.event.issue.html_url }}
           gh issue edit ${issue_url} --add-label "External"
         continue-on-error: true
@@ -52,6 +53,7 @@ jobs:
         # Only run if the issue author is not part of RAPIDS
         if: ${{ ! contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)}}
         run: |
+            echo ${{ github.event.pull_request.author_association }}
             pr_url=${{ github.event.pull_request.html_url }}
             gh issue edit ${pr_url} --add-label "External"
         continue-on-error: true
