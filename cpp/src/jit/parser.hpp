@@ -16,12 +16,14 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <map>
 #include <set>
 #include <string>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace jit {
 /**
  * @brief Parse and transform a piece of PTX code that contains the implementation

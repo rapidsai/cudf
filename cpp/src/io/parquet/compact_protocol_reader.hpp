@@ -18,6 +18,8 @@
 
 #include "parquet.hpp"
 
+#include <cudf/utilities/export.hpp>
+
 #include <algorithm>
 #include <cstddef>
 #include <optional>
@@ -25,7 +27,8 @@
 #include <utility>
 #include <vector>
 
-namespace cudf::io::parquet::detail {
+namespace CUDF_EXPORT cudf {
+namespace io::parquet::detail {
 
 /**
  * @brief Class for parsing Parquet's Thrift Compact Protocol encoded metadata
@@ -149,4 +152,5 @@ class CompactProtocolReader {
   friend class parquet_field_struct_blob;
 };
 
-}  // namespace cudf::io::parquet::detail
+}  // namespace io::parquet::detail
+}  // namespace cudf

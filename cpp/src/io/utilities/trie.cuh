@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <optional>
@@ -67,7 +68,7 @@ inline trie_view make_trie_view(optional_trie const& t)
  *
  * @return A host vector of nodes representing the serialized trie
  */
-trie create_serialized_trie(std::vector<std::string> const& keys, rmm::cuda_stream_view stream);
+CUDF_EXPORT trie create_serialized_trie(std::vector<std::string> const& keys, rmm::cuda_stream_view stream);
 
 /*
  * @brief Searches for a string in a serialized trie.
