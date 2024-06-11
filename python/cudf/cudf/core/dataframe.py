@@ -3012,11 +3012,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):  # noqa: D102
-        if isinstance(value, pd.Series):
-            value = cudf.Series.from_pandas(value)
+        if isinstance(value, (pd.Series, pd.DataFrame)):
+            value = cudf.from_pandas(value)
         if isinstance(value, cudf.Series):
             # Align value.index to self.columns
             value = value.reindex(self._column_names)
+        elif isinstance(value, cudf.DataFrame):
+            if not self.index.equals(value.index):
+                # Align value.index to self.index
+                value = value.reindex(self.index)
+            value = dict(value.items())
         elif isinstance(value, abc.Mapping):
             # Align value.indexes to self.index
             value = {
