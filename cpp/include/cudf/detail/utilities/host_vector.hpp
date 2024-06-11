@@ -117,8 +117,12 @@ class rmm_host_allocator {
   inline pointer allocate(size_type cnt)
   {
     if (cnt > this->max_size()) { throw std::bad_alloc(); }  // end if
-    return static_cast<pointer>(
-      mr.allocate_async(cnt * sizeof(value_type), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream));
+    auto const result =
+      mr.allocate_async(cnt * sizeof(value_type), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
+    // synchronize to ensure the memory is allocated before thrust::host_vector initialization
+    // TODO: replace thrust::host_vector with a type that does not require synchronization
+    stream.synchronize();
+    return static_cast<pointer>(result);
   }
 
   /**

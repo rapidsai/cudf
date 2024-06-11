@@ -444,7 +444,7 @@ thrust::host_vector<typename Container::value_type> make_host_vector_sync(
 /**
  * @brief Asynchronously construct a pinned `cudf::detail::host_vector` of the given size
  *
- * @note This function does not synchronize `stream`.
+ * @note This function may not synchronize `stream`.
  *
  * @tparam T The type of the vector data
  * @param size The number of elements in the created vector
