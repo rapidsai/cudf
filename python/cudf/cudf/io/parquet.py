@@ -655,6 +655,11 @@ def read_parquet(
             | set(columns)
         )
 
+    # dask_cudf.read_parquet specific arguments, which we only use
+    # when lazy is enabled
+    metadata_task_size = kwargs.pop("metadata_task_size", 0)
+    aggregate_files = kwargs.pop("aggregate_files", None)
+
     # Read the parquet data
     df = None
     # First we try to read the data lazily
@@ -677,8 +682,8 @@ def read_parquet(
                         storage_options=None,
                         calculate_divisions=False,
                         ignore_metadata_file=False,
-                        metadata_task_size=kwargs.get("metadata_task_size", 0),
-                        aggregate_files=kwargs.get("aggregate_files", None),
+                        metadata_task_size=metadata_task_size,
+                        aggregate_files=aggregate_files,
                         lazy=False,
                         filesystem="fsspec",
                         *args,
