@@ -1877,7 +1877,7 @@ class Frame(BinaryOperand, Scannable):
         def _apply_inverse_column(col: ColumnBase) -> ColumnBase:
             if col.dtype.kind in "ui":
                 return col.unary_operator("invert")
-            elif col.dtype == "b":
+            elif col.dtype.kind == "b":
                 return col.unary_operator("not")
             else:
                 raise TypeError(
