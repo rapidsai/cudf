@@ -20,6 +20,8 @@ from cudf._lib.scalar import as_device_scalar
 from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport numeric_scalar
 from cudf._lib.scalar cimport DeviceScalar
 
+import cudf._lib.pylibcudf as plc
+
 
 @acquire_spill_lock()
 def slice_strings(Column source_strings,
@@ -32,30 +34,18 @@ def slice_strings(Column source_strings,
     performed in steps by skipping `step` number of
     characters in a string.
     """
-    cdef unique_ptr[column] c_result
-    cdef column_view source_view = source_strings.view()
-
     cdef DeviceScalar start_scalar = as_device_scalar(start, np.int32)
     cdef DeviceScalar end_scalar = as_device_scalar(end, np.int32)
     cdef DeviceScalar step_scalar = as_device_scalar(step, np.int32)
 
-    cdef numeric_scalar[size_type]* start_numeric_scalar = \
-        <numeric_scalar[size_type]*>(
-            start_scalar.get_raw_ptr())
-    cdef numeric_scalar[size_type]* end_numeric_scalar = \
-        <numeric_scalar[size_type]*>(end_scalar.get_raw_ptr())
-    cdef numeric_scalar[size_type]* step_numeric_scalar = \
-        <numeric_scalar[size_type]*>(step_scalar.get_raw_ptr())
-
-    with nogil:
-        c_result = move(cpp_slice_strings(
-            source_view,
-            start_numeric_scalar[0],
-            end_numeric_scalar[0],
-            step_numeric_scalar[0]
-        ))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        plc.strings.slice.slice_strings(
+            source_strings.to_pylibcudf(mode="read"),
+            start_scalar.c_value,
+            end_scalar.c_value,
+            step_scalar.c_value
+        )
+    )
 
 
 @acquire_spill_lock()
@@ -67,19 +57,13 @@ def slice_from(Column source_strings,
     at given starts and stops positions. `starts` and `stops`
     here are positions per element in the string-column.
     """
-    cdef unique_ptr[column] c_result
-    cdef column_view source_view = source_strings.view()
-    cdef column_view starts_view = starts.view()
-    cdef column_view stops_view = stops.view()
-
-    with nogil:
-        c_result = move(cpp_slice_strings(
-            source_view,
-            starts_view,
-            stops_view
-        ))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        plc.strings.slice.slice_strings(
+            source_strings.to_pylibcudf(mode="read"),
+            starts.to_pylibcudf(mode="read"),
+            stops.to_pylibcudf(mode="read")
+        )
+    )
 
 
 @acquire_spill_lock()

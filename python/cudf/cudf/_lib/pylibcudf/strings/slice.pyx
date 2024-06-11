@@ -28,7 +28,16 @@ cpdef Column slice_strings(
     cdef numeric_scalar[size_type]* cpp_step
 
     if ColumnOrScalar is Column:
-        pass
+        if step is not None:
+            raise ValueError("Column-wise slice does not support step")
+
+        with nogil:
+            c_result = cpp_slice.slice_strings(
+                input.view(),
+                start.view(),
+                stop.view()
+            )
+
     elif ColumnOrScalar is Scalar:
         if start is None:
             delimiters = Scalar.from_libcudf(
