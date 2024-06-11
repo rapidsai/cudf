@@ -112,8 +112,6 @@ cpdef read_json(object filepaths_or_buffers,
         else:
             raise TypeError("`dtype` must be 'list like' or 'dict'")
 
-    print(processed_dtypes)
-
     table_w_meta = plc.io.json.read_json(
         plc.io.SourceInfo(filepaths_or_buffers),
         processed_dtypes,

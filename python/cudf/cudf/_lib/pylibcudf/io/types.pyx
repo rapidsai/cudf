@@ -15,6 +15,9 @@ import errno
 import io
 import os
 
+from cudf._lib.pylibcudf.libcudf.io.types import \
+    compression_type as CompressionType  # no-cython-lint
+
 
 cdef class TableWithMetadata:
     """A container holding a table and its associated metadata

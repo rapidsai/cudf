@@ -6,6 +6,7 @@ import pyarrow as pa
 import pytest
 
 from cudf._lib import pylibcudf as plc
+from cudf._lib.pylibcudf.io.types import CompressionType
 
 
 def metadata_from_arrow_array(
@@ -80,6 +81,23 @@ def assert_table_and_meta_eq(
     assert plc_table_w_meta.column_names == pa_table.column_names
 
 
+def assert_table_and_metas_eq(
+    exp: plc.io.types.TableWithMetadata, res: plc.io.types.TableWithMetadata
+) -> None:
+    """Verify that two pylibcudf TableWithMetadatas are equal"""
+
+    res_shape = (res.tbl.num_rows(), res.tbl.num_columns())
+    exp_shape = (exp.tbl.num_rows(), exp.tbl.num_columns())
+
+    assert res_shape == exp_shape
+
+    for exp_col, res_col in zip(exp.tbl.columns(), res.tbl.columns):
+        assert_column_eq(exp_col, res_col)
+
+    # Check column name equality
+    assert res.column_names == exp.column_names
+
+
 def cudf_raises(expected_exception: BaseException, *args, **kwargs):
     # A simple wrapper around pytest.raises that defaults to looking for cudf exceptions
     match = kwargs.get("match", None)
@@ -136,8 +154,70 @@ def is_fixed_width(plc_dtype: plc.DataType):
     )
 
 
+# TODO: enable uint64, some failing tests
+NUMERIC_PA_TYPES = [pa.int64(), pa.float64()]  # pa.uint64()]
+STRING_PA_TYPES = [pa.string()]
+BOOL_PA_TYPES = [pa.bool_()]
+LIST_PA_TYPES = [
+    pa.list_(pa.int64()),
+    # Nested case
+    pa.list_(pa.list_(pa.int64())),
+]
+
 # We must explicitly specify this type via a field to ensure we don't include
 # nullability accidentally.
 DEFAULT_STRUCT_TESTING_TYPE = pa.struct(
     [pa.field("v", pa.int64(), nullable=False)]
 )
+
+DEFAULT_PA_STRUCT_TESTING_TYPES = [DEFAULT_STRUCT_TESTING_TYPE] + [
+    # Nested case
+    pa.struct(
+        [
+            pa.field("a", pa.int64(), nullable=False),
+            pa.field(
+                "b_struct",
+                pa.struct([pa.field("b", pa.float64(), nullable=False)]),
+                nullable=False,
+            ),
+        ]
+    ),
+]
+
+DEFAULT_PA_TYPES = (
+    NUMERIC_PA_TYPES
+    + STRING_PA_TYPES
+    + BOOL_PA_TYPES
+    # exclude nested list/struct cases
+    # since not all tests work with them yet
+    + LIST_PA_TYPES[:1]
+    + DEFAULT_PA_STRUCT_TESTING_TYPES[:1]
+)
+
+ALL_PA_TYPES = (
+    DEFAULT_PA_TYPES + LIST_PA_TYPES[1:] + DEFAULT_PA_STRUCT_TESTING_TYPES[1:]
+)
+
+
+# Map pylibcudf compression types to pandas ones
+# Not all compression types map cleanly, read the comments to learn more!
+# If a compression type is unsupported, it maps to False.
+
+COMPRESSION_TYPE_TO_PANDAS = {
+    CompressionType.NONE: "none",
+    # Users of this dict will have to special case
+    # AUTO
+    CompressionType.AUTO: None,
+    CompressionType.GZIP: "gzip",
+    CompressionType.BZIP2: "bz2",
+    CompressionType.ZIP: "zip",
+    CompressionType.XZ: "xz",
+    CompressionType.ZSTD: "zstd",
+    # Unsupported
+    CompressionType.ZLIB: False,
+    CompressionType.LZ4: False,
+    CompressionType.LZO: False,
+    # These only work for parquet
+    CompressionType.SNAPPY: "snappy",
+    CompressionType.BROTLI: "brotli",
+}
