@@ -1,0 +1,55 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Label external issues and PRs
+
+on:
+  issues:
+    types:
+      - opened
+
+  pull_request:
+    types:
+      - opened
+
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  Label-Issue:
+    runs-on: ubuntu-latest
+    # Only run if the issue author is not part of RAPIDS
+    if: ${{ ! contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)}}
+    steps:
+      - name: add-external-labels
+        run: |
+          issue_url=${{ github.event.issue.html_url }}
+          gh issue edit ${issue_url} --add-label "External"
+        continue-on-error: true
+
+  Label-PR:
+    runs-on: ubuntu-latest
+    # Only run if the issue author is not part of RAPIDS
+    if: ${{ ! contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)}}
+    steps:
+      - name: add-external-labels
+        run: |
+            pr_url=${{ github.event.pull_request.html_url }}
+            gh issue edit ${pr_url} --add-label "External"
+    continue-on-error: true
