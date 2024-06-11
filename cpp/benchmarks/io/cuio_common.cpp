@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <rmm/mr/pinned_host_memory_resource.hpp>
-#include <rmm/resource_ref.hpp>
-
 #include <benchmarks/io/cuio_common.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/logger.hpp>
+
+#include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <unistd.h>
 
