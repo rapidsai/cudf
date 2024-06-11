@@ -21,7 +21,7 @@ def test_concatenate_rows():
 
 
 @pytest.mark.parametrize(
-    "test_data, drop_na, expected",
+    "test_data, dropna, expected",
     [
         (
             [[[1, 2], [3, 4], [5]], [[6], None, [7, 8, 9]]],
@@ -35,11 +35,11 @@ def test_concatenate_rows():
         ),
     ],
 )
-def test_concatenate_list_elements(test_data, drop_na, expected):
+def test_concatenate_list_elements(test_data, dropna, expected):
     arr = pa.array(test_data)
     plc_column = plc.interop.from_arrow(arr)
 
-    res = plc.lists.concatenate_list_elements(plc_column, drop_na)
+    res = plc.lists.concatenate_list_elements(plc_column, dropna)
 
     expect = pa.array(expected)
 
