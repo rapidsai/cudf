@@ -5,7 +5,7 @@
 """
 DSL nodes for the polars expression language.
 
-An expression node is a function, `DataFrame -> Column` or `DataFrame -> Scalar`.
+An expression node is a function, `DataFrame -> Column`.
 
 The evaluation context is provided by a LogicalPlan node, and can
 affect the evaluation rule as well as providing the dataframe input.
@@ -26,7 +26,7 @@ from polars.polars import _expr_nodes as pl_expr
 
 import cudf._lib.pylibcudf as plc
 
-from cudf_polars.containers import Column, NamedColumn, Scalar
+from cudf_polars.containers import Column, NamedColumn
 from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
@@ -165,7 +165,7 @@ class Expr:
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
-    ) -> Column:  # TODO: return type is a lie for Literal
+    ) -> Column:
         """
         Evaluate this expression given a dataframe for context.
 
@@ -187,8 +187,7 @@ class Expr:
 
         Returns
         -------
-        Column representing the evaluation of the expression (or maybe
-        a scalar).
+        Column representing the evaluation of the expression.
 
         Raises
         ------
@@ -205,7 +204,7 @@ class Expr:
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
-    ) -> Column:  # TODO: return type is a lie for Literal
+    ) -> Column:
         """
         Evaluate this expression given a dataframe for context.
 
@@ -222,23 +221,13 @@ class Expr:
 
         Notes
         -----
-        Individual subclasses should implement :meth:`do_allocate`,
+        Individual subclasses should implement :meth:`do_evaluate`,
         this method provides logic to handle lookups in the
         substitution mapping.
 
-        The typed return value of :class:`Column` is not true when
-        evaluating :class:`Literal` nodes (which instead produce
-        :class:`Scalar` objects). However, these duck-type to having a
-        pylibcudf container object inside them, and usually they end
-        up appearing in binary expressions which pylibcudf handles
-        appropriately since there are overloads for (column, scalar)
-        pairs. We don't have to handle (scalar, scalar) in binops
-        since the polars optimizer has a constant-folding pass.
-
         Returns
         -------
-        Column representing the evaluation of the expression (or maybe
-        a scalar).
+        Column representing the evaluation of the expression.
 
         Raises
         ------
@@ -319,24 +308,35 @@ class NamedExpr:
         context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
     ) -> NamedColumn:
-        """Evaluate this expression given a dataframe for context."""
+        """
+        Evaluate this expression given a dataframe for context.
+
+        Parameters
+        ----------
+        df
+            DataFrame providing context
+        context
+            Execution context
+        mapping
+            Substitution mapping
+
+        Returns
+        -------
+        NamedColumn attaching a name to an evaluated Column
+
+        See Also
+        --------
+        :meth:`Expr.evaluate` for details, this function just adds the
+        name to a column produced from an expression.
+        """
         obj = self.value.evaluate(df, context=context, mapping=mapping)
-        if isinstance(obj, Scalar):
-            return NamedColumn(
-                plc.Column.from_scalar(obj.obj, 1),
-                self.name,
-                is_sorted=plc.types.Sorted.YES,
-                order=plc.types.Order.ASCENDING,
-                null_order=plc.types.NullOrder.BEFORE,
-            )
-        else:
-            return NamedColumn(
-                obj.obj,
-                self.name,
-                is_sorted=obj.is_sorted,
-                order=obj.order,
-                null_order=obj.null_order,
-            )
+        return NamedColumn(
+            obj.obj,
+            self.name,
+            is_sorted=obj.is_sorted,
+            order=obj.order,
+            null_order=obj.null_order,
+        )
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
@@ -363,7 +363,7 @@ class Literal(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         # datatype of pyarrow scalar is correct by construction.
-        return Scalar(plc.interop.from_arrow(self.value))  # type: ignore
+        return Column(plc.Column.from_scalar(plc.interop.from_arrow(self.value), 1))
 
 
 class Col(Expr):
@@ -402,8 +402,14 @@ class Len(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        # TODO: type is wrong, and dtype
-        return df.num_rows  # type: ignore
+        return Column(
+            plc.Column.from_scalar(
+                plc.interop.from_arrow(
+                    pa.scalar(df.num_rows, type=plc.interop.to_arrow(self.dtype))
+                ),
+                1,
+            )
+        )
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
@@ -664,10 +670,24 @@ class StringFunction(Expr):
             return Column(plc.strings.case.to_upper(column.obj))
         elif self.name == pl_expr.StringFunction.EndsWith:
             column, suffix = columns
-            return Column(plc.strings.find.ends_with(column.obj, suffix.obj))
+            return Column(
+                plc.strings.find.ends_with(
+                    column.obj,
+                    suffix.obj_scalar
+                    if column.obj.size() != suffix.obj.size() and suffix.is_scalar
+                    else suffix.obj,
+                )
+            )
         elif self.name == pl_expr.StringFunction.StartsWith:
-            column, suffix = columns
-            return Column(plc.strings.find.starts_with(column.obj, suffix.obj))
+            column, prefix = columns
+            return Column(
+                plc.strings.find.starts_with(
+                    column.obj,
+                    prefix.obj_scalar
+                    if column.obj.size() != prefix.obj.size() and prefix.is_scalar
+                    else prefix.obj,
+                )
+            )
         else:
             raise NotImplementedError(f"StringFunction {self.name}")
 
@@ -875,9 +895,6 @@ class Agg(Expr):
         self, dtype: plc.DataType, name: str, options: Any, value: Expr
     ) -> None:
         super().__init__(dtype)
-        # TODO: fix polars name
-        if name == "nunique":
-            name = "n_unique"
         self.name = name
         self.options = options
         self.children = (value,)
@@ -1092,8 +1109,15 @@ class BinOp(Expr):
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
         )
+        lop = left.obj
+        rop = right.obj
+        if left.obj.size() != right.obj.size():
+            if left.is_scalar:
+                lop = left.obj_scalar
+            elif right.is_scalar:
+                rop = right.obj_scalar
         return Column(
-            plc.binaryop.binary_operation(left.obj, right.obj, self.op, self.dtype),
+            plc.binaryop.binary_operation(lop, rop, self.op, self.dtype),
         )
 
     def collect_agg(self, *, depth: int) -> AggInfo:

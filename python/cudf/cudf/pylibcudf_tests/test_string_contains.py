@@ -8,15 +8,11 @@ import cudf._lib.pylibcudf as plc
 
 
 @pytest.fixture(scope="module")
-def pa_target_col():
-    return pa.array(
+def target_col():
+    pa_array = pa.array(
         ["AbC", "de", "FGHI", "j", "kLm", "nOPq", None, "RsT", None, "uVw"]
     )
-
-
-@pytest.fixture(scope="module")
-def plc_target_col(pa_target_col):
-    return plc.interop.from_arrow(pa_target_col)
+    return pa_array, plc.interop.from_arrow(pa_array)
 
 
 @pytest.fixture(
@@ -45,9 +41,8 @@ def plc_target_pat(pa_target_scalar):
     return prog
 
 
-def test_contains_re(
-    pa_target_col, plc_target_col, pa_target_scalar, plc_target_pat
-):
+def test_contains_re(target_col, pa_target_scalar, plc_target_pat):
+    pa_target_col, plc_target_col = target_col
     got = plc.strings.contains.contains_re(plc_target_col, plc_target_pat)
     expected = pa.compute.match_substring_regex(
         pa_target_col, pa_target_scalar.as_py()
