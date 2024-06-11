@@ -50,7 +50,7 @@ jobs:
 
     update-sprint:
       # This job sets the PR and its linked issues to the current "Weekly Sprint"
-      uses: jarmak-nv/shared-workflows/.github/workflows/project-get-set-iteration-field.yaml@branch-24.08
+      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-iteration-field.yaml@branch-24.08
       if: github.event.pull_request.state == 'open'
       needs: get-project-id
       with:
