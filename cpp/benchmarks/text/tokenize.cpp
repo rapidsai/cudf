@@ -39,8 +39,10 @@ static void bench_tokenize(nvbench::state& state)
     state.skip("Skip benchmarks greater than size_type limit");
   }
 
-  data_profile const profile = data_profile_builder().distribution(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, row_width);
+  data_profile const profile =
+    data_profile_builder()
+      .distribution(cudf::type_id::STRING, distribution_id::NORMAL, 0, row_width)
+      .no_validity();
   auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
   cudf::strings_column_view input(column->view());
 

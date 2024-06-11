@@ -536,7 +536,7 @@ class NumericalColumn(NumericalBaseColumn):
             return col
 
         if method is not None:
-            return super(NumericalColumn, col).fillna(fill_value, method)
+            return super().fillna(fill_value, method)
 
         if fill_value is None:
             raise ValueError("Must specify either 'fill_value' or 'method'")
@@ -545,7 +545,7 @@ class NumericalColumn(NumericalBaseColumn):
             isinstance(fill_value, cudf.Scalar)
             and fill_value.dtype == col.dtype
         ):
-            return super(NumericalColumn, col).fillna(fill_value, method)
+            return super().fillna(fill_value, method)
 
         if np.isscalar(fill_value):
             # cast safely to the same dtype as self
@@ -572,7 +572,7 @@ class NumericalColumn(NumericalBaseColumn):
             else:
                 fill_value = fill_value.astype(col.dtype)
 
-        return super(NumericalColumn, col).fillna(fill_value, method)
+        return super().fillna(fill_value, method)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         """
@@ -674,18 +674,13 @@ class NumericalColumn(NumericalBaseColumn):
     def to_pandas(
         self,
         *,
-        index: Optional[pd.Index] = None,
         nullable: bool = False,
         arrow_type: bool = False,
-    ) -> pd.Series:
+    ) -> pd.Index:
         if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif arrow_type:
-            return pd.Series(
-                pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
-            )
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif (
             nullable
             and (
@@ -697,11 +692,11 @@ class NumericalColumn(NumericalBaseColumn):
         ):
             arrow_array = self.to_arrow()
             pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)  # type: ignore[attr-defined]
-            return pd.Series(pandas_array, copy=False, index=index)
+            return pd.Index(pandas_array, copy=False)
         elif self.dtype.kind in set("iuf") and not self.has_nulls():
-            return pd.Series(self.values_host, copy=False, index=index)
+            return pd.Index(self.values_host, copy=False)
         else:
-            return super().to_pandas(index=index, nullable=nullable)
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
         col_dtype = self.dtype
