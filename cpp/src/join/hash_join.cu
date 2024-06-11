@@ -40,12 +40,41 @@
 #include <thrust/uninitialized_fill.h>
 
 #include <cstddef>
+#include <cstdio>
 #include <iostream>
 #include <numeric>
+#include <type_traits>
 
 namespace cudf {
 namespace detail {
 namespace {
+
+template <typename T>
+class device_uvector : public rmm::device_uvector<T> {
+ public:
+  using rmm::device_uvector<T>::device_uvector;
+  [[nodiscard]] typename rmm::device_uvector<T>::pointer data() noexcept
+  {
+    char const* prefetch = std::getenv("CUDF_PREFETCH_DEVICE_UVECTOR");
+    auto data            = rmm::device_uvector<T>::data();
+    if (prefetch && std::stoi(prefetch) == 1) {
+      if constexpr (std::is_integral_v<T>) {
+        fprintf(stderr, "Prefetching mutable data in uvector at %p\n", data);
+      }
+      auto result = cudaMemPrefetchAsync(data,
+                                         rmm::device_uvector<T>::size() * sizeof(T),
+                                         rmm::get_current_cuda_device().value(),
+                                         cudf::get_default_stream().value());
+      // InvalidValue error is raised when non-managed memory is passed to cudaMemPrefetchAsync
+      // We should treat this as a no-op
+      if (result != cudaErrorInvalidValue && result != cudaSuccess) { CUDF_CUDA_TRY(result); }
+    }
+    return data;
+  }
+
+  [[nodiscard]] typename rmm::device_uvector<T>::iterator begin() noexcept { return data(); }
+};
+
 /**
  * @brief Calculates the exact size of the join output produced when
  * joining two tables together.
@@ -166,6 +195,7 @@ probe_join_hash_table(
   auto const probe_join_type =
     (join == cudf::detail::join_kind::FULL_JOIN) ? cudf::detail::join_kind::LEFT_JOIN : join;
 
+  fprintf(stderr, "Size calculation\n");
   std::size_t const join_size = output_size ? *output_size
                                             : compute_join_output_size(build_table,
                                                                        probe_table,
@@ -183,8 +213,8 @@ probe_join_hash_table(
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
-  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
-  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
+  auto left_indices  = std::make_unique<device_uvector<size_type>>(join_size, stream, mr);
+  auto right_indices = std::make_unique<device_uvector<size_type>>(join_size, stream, mr);
 
   auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
 
@@ -221,6 +251,7 @@ probe_join_hash_table(
         right_indices->resize(actual_size, stream);
       }
     } else {
+      fprintf(stderr, "Retrieving pairs\n");
       hash_table.pair_retrieve(iter,
                                iter + probe_table_num_rows,
                                out1_zip_begin,
@@ -235,6 +266,7 @@ probe_join_hash_table(
     comparator_helper(device_comparator);
   } else {
     auto const device_comparator = row_comparator.equal_to<false>(probe_nulls, compare_nulls);
+    fprintf(stderr, "Calling comparator helper\n");
     comparator_helper(device_comparator);
   }
 
@@ -382,8 +414,10 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
 
   if (_is_empty) { return; }
 
+  fprintf(stderr, "Bitmask\n");
   auto const row_bitmask =
     cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
+  fprintf(stderr, "Building hash table\n");
   cudf::detail::build_join_hash_table(_build,
                                       _preprocessed_build,
                                       _hash_table,
@@ -529,6 +563,7 @@ hash_join<Hasher>::probe_join_indices(cudf::table_view const& probe_table,
 
   auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe_table, stream);
+  fprintf(stderr, "Detail probe join\n");
   auto join_indices = cudf::detail::probe_join_hash_table(_build,
                                                           probe_table,
                                                           _preprocessed_build,
@@ -575,6 +610,7 @@ hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
                "Mismatch in joining column data types",
                cudf::data_type_error);
 
+  fprintf(stderr, "About to probe\n");
   return probe_join_indices(probe, join, output_size, stream, mr);
 }
 }  // namespace detail

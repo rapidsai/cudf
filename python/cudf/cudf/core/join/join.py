@@ -201,11 +201,13 @@ class Merge:
     def _gather_maps(self, left_cols, right_cols):
         # Produce gather maps for the join, optionally reordering to
         # match pandas-order in compat mode.
+        print("Calling libcudf joiner")
         maps = self._joiner(
             left_cols,
             right_cols,
             how=self.how,
         )
+        print(f"{self.preserve_key_order=}")
         if not self.preserve_key_order:
             return maps
         # We should only get here if we're in a join on which
@@ -228,6 +230,7 @@ class Merge:
         # To reorder maps so that they are in order of the input
         # tables, we gather from iota on both right and left, and then
         # sort the gather maps with those two columns as key.
+        print("Calling libcudf gather")
         key_order = list(
             itertools.chain.from_iterable(
                 libcudf.copying.gather(
@@ -242,6 +245,7 @@ class Merge:
                 for map_, n, null in zip(maps, lengths, nullify)
             )
         )
+        print("Calling libcudf sort")
         return libcudf.sort.sort_by_key(
             list(maps),
             # If how is right, right map is primary sort key.
@@ -281,6 +285,7 @@ class Merge:
         gather_kwargs = {
             "keep_index": self._using_left_index or self._using_right_index,
         }
+        print("Calling lhs gather")
         left_result = (
             self.lhs._gather(
                 GatherMap.from_column_unchecked(
@@ -292,6 +297,7 @@ class Merge:
             else cudf.DataFrame._from_data({})
         )
         del left_rows
+        print("Calling rhs gather")
         right_result = (
             self.rhs._gather(
                 GatherMap.from_column_unchecked(

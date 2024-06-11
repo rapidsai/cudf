@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/polymorphic_allocator.hpp>
@@ -37,18 +38,53 @@ static double constexpr CUCO_DESIRED_LOAD_FACTOR = 0.5;
  * to handle cuco memory allocation/deallocation with the given `stream` and the rmm default memory
  * resource.
  */
-class cuco_allocator
-  : public rmm::mr::stream_allocator_adaptor<rmm::mr::polymorphic_allocator<char>> {
+template <typename T>
+class cuco_allocator_base
+  : public rmm::mr::stream_allocator_adaptor<rmm::mr::polymorphic_allocator<T>> {
   /// Default stream-ordered allocator type
-  using default_allocator = rmm::mr::polymorphic_allocator<char>;
+  using default_allocator = rmm::mr::polymorphic_allocator<T>;
   /// The base allocator adaptor type
   using base_type = rmm::mr::stream_allocator_adaptor<default_allocator>;
 
  public:
+  template <typename U>
+  cuco_allocator_base(cuco_allocator_base<U> const& other) : cuco_allocator_base{other.stream()}
+  {
+  }
+
   /**
    * @brief Constructs the allocator adaptor with the given `stream`
    */
-  cuco_allocator(rmm::cuda_stream_view stream) : base_type{default_allocator{}, stream} {}
+  cuco_allocator_base(rmm::cuda_stream_view stream)
+    : base_type{default_allocator{}, stream}, stream_{stream}
+  {
+  }
+
+  template <typename U>
+  struct rebind {
+    using other = cuco_allocator_base<U>;
+  };
+
+  typename base_type::value_type* allocate(std::size_t num)
+  {
+    auto ptr = base_type::allocate(num);
+
+    char const* prefetch = std::getenv("CUDF_PREFETCH_CUCO_DATA");
+    if (prefetch && std::stoi(prefetch) == 1) {
+      fprintf(stderr, "Prefetching allocated data in cuco_allocator at %p\n", ptr);
+      auto result =
+        cudaMemPrefetchAsync(ptr, num, rmm::get_current_cuda_device().value(), stream_.value());
+      // InvalidValue error is raised when non-managed memory is passed to cudaMemPrefetchAsync
+      // We should treat this as a no-op
+      if (result != cudaErrorInvalidValue && result != cudaSuccess) { CUDF_CUDA_TRY(result); }
+    }
+    return ptr;
+  }
+
+ private:
+  rmm::cuda_stream_view stream_;  ///< Stream on which (de)allocations are performed
 };
+
+using cuco_allocator = cuco_allocator_base<char>;
 
 }  // namespace cudf::detail
