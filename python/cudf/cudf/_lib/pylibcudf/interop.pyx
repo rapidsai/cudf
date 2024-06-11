@@ -63,7 +63,8 @@ LIBCUDF_TO_ARROW_TYPES = {
 }
 
 cdef column_metadata _metadata_to_libcudf(metadata):
-    """Convert a ColumnMetadata object to C++ column_metadata.
+    """
+    Convert a ColumnMetadata object to C++ column_metadata.
 
     Since this class is mutable and cheap, it is easier to create the C++
     object on the fly rather than have it directly backing the storage for
@@ -80,7 +81,8 @@ cdef column_metadata _metadata_to_libcudf(metadata):
 
 @dataclass
 class ColumnMetadata:
-    """Metadata associated with a column.
+    """
+    Metadata associated with a column.
 
     This is the Python representation of :cpp:class:`cudf::column_metadata`.
     """
@@ -90,7 +92,8 @@ class ColumnMetadata:
 
 @singledispatch
 def from_arrow(pyarrow_object, *, DataType data_type=None):
-    """Create a cudf object from a pyarrow object.
+    """
+    Create a cudf object from a pyarrow object.
 
     Parameters
     ----------
@@ -196,7 +199,8 @@ def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
 
 @singledispatch
 def to_arrow(cudf_object, metadata=None):
-    """Convert to a PyArrow object.
+    """
+    Convert to a PyArrow object.
 
     Parameters
     ----------

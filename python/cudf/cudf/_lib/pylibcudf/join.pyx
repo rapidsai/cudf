@@ -42,7 +42,8 @@ cpdef tuple inner_join(
     Table right_keys,
     null_equality nulls_equal
 ):
-    """Perform an inner join between two tables.
+    """
+    Perform an inner join between two tables.
 
     For details, see :cpp:func:`inner_join`.
 
@@ -75,7 +76,8 @@ cpdef tuple left_join(
     Table right_keys,
     null_equality nulls_equal
 ):
-    """Perform a left join between two tables.
+    """
+    Perform a left join between two tables.
 
     For details, see :cpp:func:`left_join`.
 
@@ -109,7 +111,8 @@ cpdef tuple full_join(
     Table right_keys,
     null_equality nulls_equal
 ):
-    """Perform a full join between two tables.
+    """
+    Perform a full join between two tables.
 
     For details, see :cpp:func:`full_join`.
 
@@ -143,7 +146,8 @@ cpdef Column left_semi_join(
     Table right_keys,
     null_equality nulls_equal
 ):
-    """Perform a left semi join between two tables.
+    """
+    Perform a left semi join between two tables.
 
     For details, see :cpp:func:`left_semi_join`.
 
@@ -177,7 +181,8 @@ cpdef Column left_anti_join(
     Table right_keys,
     null_equality nulls_equal
 ):
-    """Perform a left anti join between two tables.
+    """
+    Perform a left anti join between two tables.
 
     For details, see :cpp:func:`left_anti_join`.
 

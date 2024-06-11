@@ -459,7 +459,8 @@ cdef class Column:
     # publicly.  User requests to convert to pylibcudf must assume that the
     # data may be modified afterwards.
     cpdef to_pylibcudf(self, mode: Literal["read", "write"]):
-        """Convert this Column to a pylibcudf.Column.
+        """
+        Convert this Column to a pylibcudf.Column.
 
         This function will generate a pylibcudf Column pointing to the same
         data, mask, and children as this one.
@@ -530,7 +531,8 @@ cdef class Column:
     cdef Column from_unique_ptr(
         unique_ptr[column] c_col, bint data_ptr_exposed=False
     ):
-        """Create a Column from a column
+        """
+        Create a Column from a column
 
         Typically, this is called on the result of a libcudf operation.
         If the data of the libcudf result has been exposed, set
@@ -600,7 +602,8 @@ cdef class Column:
     def from_pylibcudf(
         col, bint data_ptr_exposed=False
     ):
-        """Create a Column from a pylibcudf.Column.
+        """
+        Create a Column from a pylibcudf.Column.
 
         This function will generate a Column pointing to the provided pylibcudf
         Column.  It will directly access the data and mask buffers of the

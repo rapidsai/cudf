@@ -49,7 +49,8 @@ def _gather_map_is_valid(
     check_bounds: bool,
     nullify: bool,
 ) -> bool:
-    """Returns true if gather map is valid.
+    """
+    Returns true if gather map is valid.
 
     A gather map is valid if empty or all indices are within the range
     ``[-nrows, nrows)``, except when ``nullify`` is specified.
@@ -285,7 +286,8 @@ def copy_if_else(object lhs, object rhs, Column boolean_mask):
 @acquire_spill_lock()
 def boolean_mask_scatter(list input_, list target_columns,
                          Column boolean_mask):
-    """Copy the target columns, replacing masked rows with input data.
+    """
+    Copy the target columns, replacing masked rows with input data.
 
     The ``input_`` data can be a list of columns or as a list of scalars.
     A list of input columns will be used to replace corresponding rows in the

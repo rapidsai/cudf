@@ -2,7 +2,8 @@
 
 
 cdef class gpumemoryview:
-    """Minimal representation of a memory buffer.
+    """
+    Minimal representation of a memory buffer.
 
     This class aspires to be a GPU equivalent of :py:class:`memoryview` for any
     objects exposing a `CUDA Array Interface

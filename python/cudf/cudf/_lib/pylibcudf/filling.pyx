@@ -26,7 +26,8 @@ cpdef Column fill(
     Scalar value,
 ):
 
-    """Fill destination column from begin to end with value.
+    """
+    Fill destination column from begin to end with value.
 
     For details, see :cpp:func:`fill`.
 
@@ -66,7 +67,8 @@ cpdef void fill_in_place(
     Scalar value,
 ):
 
-    """Fill destination column in place from begin to end with value.
+    """
+    Fill destination column in place from begin to end with value.
 
     For details, see :cpp:func:`fill_in_place`.
 
@@ -91,7 +93,8 @@ cpdef void fill_in_place(
         )
 
 cpdef Column sequence(size_type size, Scalar init, Scalar step):
-    """Create a sequence column of size ``size`` with initial value ``init`` and step
+    """
+    Create a sequence column of size ``size`` with initial value ``init`` and step
     ``step``.
 
     For details, see :cpp:func:`sequence`.
@@ -127,7 +130,8 @@ cpdef Table repeat(
     Table input_table,
     ColumnOrSize count
 ):
-    """Repeat rows of a Table.
+    """
+    Repeat rows of a Table.
 
     If an integral value is specified for ``count``, every row is repeated ``count``
     times. If ``count`` is a column, the number of repetitions of each row is defined

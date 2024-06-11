@@ -16,7 +16,8 @@ from .types cimport DataType
 # https://github.com/rapidsai/rmm/pull/931 for details.
 @no_gc_clear
 cdef class Scalar:
-    """A scalar value in device memory.
+    """
+    A scalar value in device memory.
 
     This is the Cython representation of :cpp:class:`cudf::scalar`.
     """
@@ -48,7 +49,8 @@ cdef class Scalar:
 
     @staticmethod
     cdef Scalar from_libcudf(unique_ptr[scalar] libcudf_scalar, dtype=None):
-        """Construct a Scalar object from a libcudf scalar.
+        """
+        Construct a Scalar object from a libcudf scalar.
 
         This method is for pylibcudf's functions to use to ingest outputs of
         calling libcudf algorithms, and should generally not be needed by users

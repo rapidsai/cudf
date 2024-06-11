@@ -12,7 +12,8 @@ cpdef Column contains_re(
     Column input,
     RegexProgram prog
 ):
-    """Returns a boolean column identifying rows which match the given
+    """
+    Returns a boolean column identifying rows which match the given
     regex_program object.
 
     For details, see :cpp:func:`cudf::strings::contains_re`.

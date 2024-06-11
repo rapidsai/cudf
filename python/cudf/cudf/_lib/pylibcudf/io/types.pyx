@@ -16,7 +16,8 @@ import os
 
 
 cdef class TableWithMetadata:
-    """A container holding a table and its associated metadata
+    """
+    A container holding a table and its associated metadata
     (e.g. column names)
 
     For details, see :cpp:class:`cudf::io::table_with_metadata`.
@@ -50,7 +51,8 @@ cdef class TableWithMetadata:
         return out
 
 cdef class SourceInfo:
-    """A class containing details on a source to read from.
+    """
+    A class containing details on a source to read from.
 
     For details, see :cpp:class:`cudf::io::source_info`.
 

@@ -28,7 +28,8 @@ from .table cimport Table
 
 
 cpdef Table drop_nulls(Table source_table, list keys, size_type keep_threshold):
-    """Filters out rows from the input table based on the presence of nulls.
+    """
+    Filters out rows from the input table based on the presence of nulls.
 
     Parameters
     ----------
@@ -56,7 +57,8 @@ cpdef Table drop_nulls(Table source_table, list keys, size_type keep_threshold):
 
 
 cpdef Table drop_nans(Table source_table, list keys, size_type keep_threshold):
-    """Filters out rows from the input table based on the presence of NaNs.
+    """
+    Filters out rows from the input table based on the presence of NaNs.
 
     Parameters
     ----------
@@ -84,7 +86,8 @@ cpdef Table drop_nans(Table source_table, list keys, size_type keep_threshold):
 
 
 cpdef Table apply_boolean_mask(Table source_table, Column boolean_mask):
-    """Filters out rows from the input table based on a boolean mask.
+    """
+    Filters out rows from the input table based on a boolean mask.
 
     Parameters
     ----------
@@ -114,7 +117,8 @@ cpdef Table unique(
     duplicate_keep_option keep,
     null_equality nulls_equal,
 ):
-    """Filter duplicate consecutive rows from the input table.
+    """
+    Filter duplicate consecutive rows from the input table.
 
     Parameters
     ----------
@@ -156,7 +160,8 @@ cpdef Table distinct(
     null_equality nulls_equal,
     nan_equality nans_equal,
 ):
-    """Get the distinct rows from the input table.
+    """
+    Get the distinct rows from the input table.
 
     Parameters
     ----------
@@ -194,7 +199,8 @@ cpdef Column distinct_indices(
     null_equality nulls_equal,
     nan_equality nans_equal,
 ):
-    """Get the indices of the distinct rows from the input table.
+    """
+    Get the indices of the distinct rows from the input table.
 
     Parameters
     ----------
@@ -229,7 +235,8 @@ cpdef Table stable_distinct(
     null_equality nulls_equal,
     nan_equality nans_equal,
 ):
-    """Get the distinct rows from the input table, preserving input order.
+    """
+    Get the distinct rows from the input table, preserving input order.
 
     Parameters
     ----------
@@ -266,7 +273,8 @@ cpdef size_type unique_count(
     null_policy null_handling,
     nan_policy nan_handling
 ):
-    """Returns the number of unique consecutive elements in the input column.
+    """
+    Returns the number of unique consecutive elements in the input column.
 
     Parameters
     ----------
@@ -297,7 +305,8 @@ cpdef size_type distinct_count(
     null_policy null_handling,
     nan_policy nan_handling
 ):
-    """Returns the number of distinct elements in the input column.
+    """
+    Returns the number of distinct elements in the input column.
 
     Parameters
     ----------

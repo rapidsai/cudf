@@ -13,7 +13,8 @@ def merge_sorted(
     bool ascending=True,
     str na_position="last",
 ):
-    """Merge multiple lists of lexicographically sorted columns into one list
+    """
+    Merge multiple lists of lexicographically sorted columns into one list
     of sorted columns. `input_columns` is a list of lists of columns to be
     merged.
     """

@@ -40,7 +40,8 @@ cdef table_view table_view_from_columns(columns) except*:
 
 
 cdef table_view table_view_from_table(tbl, ignore_index=False) except*:
-    """Create a cudf::table_view from a Table.
+    """
+    Create a cudf::table_view from a Table.
 
     Parameters
     ----------
@@ -205,7 +206,8 @@ def _index_level_name(index_name, level, column_names):
 cdef columns_from_unique_ptr(
     unique_ptr[table] c_tbl
 ):
-    """Convert a libcudf table into list of columns.
+    """
+    Convert a libcudf table into list of columns.
 
     Parameters
     ----------
@@ -229,7 +231,8 @@ cdef columns_from_unique_ptr(
 
 
 cdef columns_from_pylibcudf_table(tbl):
-    """Convert a pylibcudf table into list of columns.
+    """
+    Convert a pylibcudf table into list of columns.
 
     Parameters
     ----------
@@ -245,7 +248,8 @@ cdef columns_from_pylibcudf_table(tbl):
 
 
 cdef _data_from_columns(columns, column_names, index_names=None):
-    """Convert a list of columns into a dict with an index.
+    """
+    Convert a list of columns into a dict with an index.
 
     This method is intended to provide the bridge between the columns returned
     from calls to libcudf or pylibcudf APIs and the cuDF Python Frame objects, which

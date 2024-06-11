@@ -18,7 +18,8 @@ from .scalar cimport Scalar
 
 
 cpdef Column replace_nulls(Column source_column, ReplacementType replacement):
-    """Replace nulls in source_column.
+    """
+    Replace nulls in source_column.
 
     The values used to replace nulls depends on the type of replacement:
         - If replacement is a Column, the corresponding value from replacement
@@ -89,7 +90,8 @@ cpdef Column find_and_replace_all(
     Column values_to_replace,
     Column replacement_values,
 ):
-    """Replace all occurrences of values_to_replace with replacement_values.
+    """
+    Replace all occurrences of values_to_replace with replacement_values.
 
     For details, see :cpp:func:`find_and_replace_all`.
 
@@ -127,7 +129,8 @@ cpdef Column clamp(
     Scalar lo_replace=None,
     Scalar hi_replace=None,
 ):
-    """Clamp the values in source_column to the range [lo, hi].
+    """
+    Clamp the values in source_column to the range [lo, hi].
 
     For details, see :cpp:func:`clamp`.
 
@@ -178,7 +181,8 @@ cpdef Column clamp(
 
 
 cpdef Column normalize_nans_and_zeros(Column source_column, bool inplace=False):
-    """Normalize NaNs and zeros in source_column.
+    """
+    Normalize NaNs and zeros in source_column.
 
     For details, see :cpp:func:`normalize_nans_and_zeros`.
 

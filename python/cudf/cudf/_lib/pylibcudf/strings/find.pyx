@@ -18,7 +18,8 @@ cpdef Column find(
     size_type start=0,
     size_type stop=-1
 ):
-    """Returns a column of character position values where the target string is
+    """
+    Returns a column of character position values where the target string is
     first found in each string of the provided column.
 
     ``target`` may be a

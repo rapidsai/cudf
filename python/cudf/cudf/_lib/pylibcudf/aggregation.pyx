@@ -64,7 +64,8 @@ from .types cimport DataType
 
 
 cdef class Aggregation:
-    """A type of aggregation to perform.
+    """
+    A type of aggregation to perform.
 
     Aggregations are passed to APIs like
     :py:func:`~cudf._lib.pylibcudf.groupby.GroupBy.aggregate` to indicate what
@@ -151,7 +152,8 @@ cdef class Aggregation:
 
 
 cpdef Aggregation sum():
-    """Create a sum aggregation.
+    """
+    Create a sum aggregation.
 
     For details, see :cpp:func:`make_sum_aggregation`.
 
@@ -164,7 +166,8 @@ cpdef Aggregation sum():
 
 
 cpdef Aggregation product():
-    """Create a product aggregation.
+    """
+    Create a product aggregation.
 
     For details, see :cpp:func:`make_product_aggregation`.
 
@@ -177,7 +180,8 @@ cpdef Aggregation product():
 
 
 cpdef Aggregation min():
-    """Create a min aggregation.
+    """
+    Create a min aggregation.
 
     For details, see :cpp:func:`make_min_aggregation`.
 
@@ -190,7 +194,8 @@ cpdef Aggregation min():
 
 
 cpdef Aggregation max():
-    """Create a max aggregation.
+    """
+    Create a max aggregation.
 
     For details, see :cpp:func:`make_max_aggregation`.
 
@@ -203,7 +208,8 @@ cpdef Aggregation max():
 
 
 cpdef Aggregation count(null_policy null_handling = null_policy.EXCLUDE):
-    """Create a count aggregation.
+    """
+    Create a count aggregation.
 
     For details, see :cpp:func:`make_count_aggregation`.
 
@@ -223,7 +229,8 @@ cpdef Aggregation count(null_policy null_handling = null_policy.EXCLUDE):
 
 
 cpdef Aggregation any():
-    """Create an any aggregation.
+    """
+    Create an any aggregation.
 
     For details, see :cpp:func:`make_any_aggregation`.
 
@@ -236,7 +243,8 @@ cpdef Aggregation any():
 
 
 cpdef Aggregation all():
-    """Create an all aggregation.
+    """
+    Create an all aggregation.
 
     For details, see :cpp:func:`make_all_aggregation`.
 
@@ -249,7 +257,8 @@ cpdef Aggregation all():
 
 
 cpdef Aggregation sum_of_squares():
-    """Create a sum_of_squares aggregation.
+    """
+    Create a sum_of_squares aggregation.
 
     For details, see :cpp:func:`make_sum_of_squares_aggregation`.
 
@@ -264,7 +273,8 @@ cpdef Aggregation sum_of_squares():
 
 
 cpdef Aggregation mean():
-    """Create a mean aggregation.
+    """
+    Create a mean aggregation.
 
     For details, see :cpp:func:`make_mean_aggregation`.
 
@@ -277,7 +287,8 @@ cpdef Aggregation mean():
 
 
 cpdef Aggregation variance(size_type ddof=1):
-    """Create a variance aggregation.
+    """
+    Create a variance aggregation.
 
     For details, see :cpp:func:`make_variance_aggregation`.
 
@@ -295,7 +306,8 @@ cpdef Aggregation variance(size_type ddof=1):
 
 
 cpdef Aggregation std(size_type ddof=1):
-    """Create a std aggregation.
+    """
+    Create a std aggregation.
 
     For details, see :cpp:func:`make_std_aggregation`.
 
@@ -313,7 +325,8 @@ cpdef Aggregation std(size_type ddof=1):
 
 
 cpdef Aggregation median():
-    """Create a median aggregation.
+    """
+    Create a median aggregation.
 
     For details, see :cpp:func:`make_median_aggregation`.
 
@@ -326,7 +339,8 @@ cpdef Aggregation median():
 
 
 cpdef Aggregation quantile(list quantiles, interpolation interp = interpolation.LINEAR):
-    """Create a quantile aggregation.
+    """
+    Create a quantile aggregation.
 
     For details, see :cpp:func:`make_quantile_aggregation`.
 
@@ -349,7 +363,8 @@ cpdef Aggregation quantile(list quantiles, interpolation interp = interpolation.
 
 
 cpdef Aggregation argmax():
-    """Create an argmax aggregation.
+    """
+    Create an argmax aggregation.
 
     For details, see :cpp:func:`make_argmax_aggregation`.
 
@@ -362,7 +377,8 @@ cpdef Aggregation argmax():
 
 
 cpdef Aggregation argmin():
-    """Create an argmin aggregation.
+    """
+    Create an argmin aggregation.
 
     For details, see :cpp:func:`make_argmin_aggregation`.
 
@@ -375,7 +391,8 @@ cpdef Aggregation argmin():
 
 
 cpdef Aggregation nunique(null_policy null_handling = null_policy.EXCLUDE):
-    """Create a nunique aggregation.
+    """
+    Create a nunique aggregation.
 
     For details, see :cpp:func:`make_nunique_aggregation`.
 
@@ -397,7 +414,8 @@ cpdef Aggregation nunique(null_policy null_handling = null_policy.EXCLUDE):
 cpdef Aggregation nth_element(
     size_type n, null_policy null_handling = null_policy.INCLUDE
 ):
-    """Create a nth_element aggregation.
+    """
+    Create a nth_element aggregation.
 
     For details, see :cpp:func:`make_nth_element_aggregation`.
 
@@ -417,7 +435,8 @@ cpdef Aggregation nth_element(
 
 
 cpdef Aggregation collect_list(null_policy null_handling = null_policy.INCLUDE):
-    """Create a collect_list aggregation.
+    """
+    Create a collect_list aggregation.
 
     For details, see :cpp:func:`make_collect_list_aggregation`.
 
@@ -441,7 +460,8 @@ cpdef Aggregation collect_set(
     nulls_equal = null_equality.EQUAL,
     nans_equal = nan_equality.ALL_EQUAL,
 ):
-    """Create a collect_set aggregation.
+    """
+    Create a collect_set aggregation.
 
     For details, see :cpp:func:`make_collect_set_aggregation`.
 
@@ -468,7 +488,8 @@ cpdef Aggregation collect_set(
     )
 
 cpdef Aggregation udf(str operation, DataType output_type):
-    """Create a udf aggregation.
+    """
+    Create a udf aggregation.
 
     For details, see :cpp:func:`make_udf_aggregation`.
 
@@ -496,7 +517,8 @@ cpdef Aggregation udf(str operation, DataType output_type):
 
 
 cpdef Aggregation correlation(correlation_type type, size_type min_periods):
-    """Create a correlation aggregation.
+    """
+    Create a correlation aggregation.
 
     For details, see :cpp:func:`make_correlation_aggregation`.
 
@@ -519,7 +541,8 @@ cpdef Aggregation correlation(correlation_type type, size_type min_periods):
 
 
 cpdef Aggregation covariance(size_type min_periods, size_type ddof):
-    """Create a covariance aggregation.
+    """
+    Create a covariance aggregation.
 
     For details, see :cpp:func:`make_covariance_aggregation`.
 
@@ -548,7 +571,8 @@ cpdef Aggregation rank(
     null_order null_precedence = null_order.AFTER,
     rank_percentage percentage = rank_percentage.NONE,
 ):
-    """Create a rank aggregation.
+    """
+    Create a rank aggregation.
 
     For details, see :cpp:func:`make_rank_aggregation`.
 

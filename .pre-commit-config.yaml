@@ -81,6 +81,33 @@ repos:
             ^python/cudf/cudf/core/dtypes.py|
             ^python/cudf/cudf/tests/pytest.ini
           )
+      - id: cython-docstrings
+        name: cython-docstrings
+        description: 'Enforce multi-line Cython docstrings start on line two'
+        # We want to allow """One line docstring"""
+        # But disallow
+        # """This is the first line
+        #    Here is the second line"""
+        # Since in REPL help, the indentation is wrong.
+        # It should instead be
+        # """
+        # This is the first line
+        # This is the second line
+        # """
+        # So we want a regex that fires for the middle condition.
+        # To do this, we use PCRE regex features, specifically,
+        # conditionals and negative lookahead
+        # The regex reads:
+        # - If a line starts with any whitespace followed by literal """
+        # - Then
+        # - If the next character is not a line ending character
+        # - Then
+        # - If the line does not match either any number of characters
+        # followed by literal """ or a noqa comment, followed by end of line
+        # - Then we have a match
+        entry: '(^\s*""")(?(1)((?!$))(?(2)(?!(.*"""|\s*# noqa.*)$)))'
+        language: pygrep
+        types: [cython]
       - id: no-programmatic-xfail
         name: no-programmatic-xfail
         description: 'Enforce that pytest.xfail is not introduced (see dev docs for details)'

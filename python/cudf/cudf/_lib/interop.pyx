@@ -127,7 +127,8 @@ def _set_col_children_metadata(dtype, col_meta):
 
 @acquire_spill_lock()
 def to_arrow(list source_columns, object column_dtypes):
-    """Convert a list of columns from
+    """
+    Convert a list of columns from
     cudf Frame to a PyArrow Table.
 
     Parameters
@@ -148,7 +149,8 @@ def to_arrow(list source_columns, object column_dtypes):
 
 @acquire_spill_lock()
 def from_arrow(object input_table):
-    """Convert from PyArrow Table to a list of columns.
+    """
+    Convert from PyArrow Table to a list of columns.
 
     Parameters
     ----------

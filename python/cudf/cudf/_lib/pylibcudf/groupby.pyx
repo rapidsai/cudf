@@ -27,7 +27,8 @@ from .utils cimport _as_vector
 
 
 cdef class GroupByRequest:
-    """A request for a groupby aggregation or scan.
+    """
+    A request for a groupby aggregation or scan.
 
     This class is functionally polymorphic and can represent either an
     aggregation or a scan depending on the algorithm it is used with. For
@@ -47,7 +48,8 @@ cdef class GroupByRequest:
         self._aggregations = aggregations
 
     cdef aggregation_request _to_libcudf_agg_request(self) except *:
-        """Convert to a libcudf aggregation_request object.
+        """
+        Convert to a libcudf aggregation_request object.
 
         This method is for internal use only. It creates a new libcudf
         :cpp:class:`cudf::groupby::aggregation_request` object each time it is
@@ -62,7 +64,8 @@ cdef class GroupByRequest:
         return move(c_obj)
 
     cdef scan_request _to_libcudf_scan_request(self) except *:
-        """Convert to a libcudf scan_request object.
+        """
+        Convert to a libcudf scan_request object.
 
         This method is for internal use only. It creates a new libcudf
         :cpp:class:`cudf::groupby::scan_request` object each time it is
@@ -78,7 +81,8 @@ cdef class GroupByRequest:
 
 
 cdef class GroupBy:
-    """Group values by keys and compute various aggregate quantities.
+    """
+    Group values by keys and compute various aggregate quantities.
 
     For details, see :cpp:class:`cudf::groupby::groupby`.
 
@@ -123,7 +127,8 @@ cdef class GroupBy:
         return group_keys, results
 
     cpdef tuple aggregate(self, list requests):
-        """Compute aggregations on columns.
+        """
+        Compute aggregations on columns.
 
         For details, see :cpp:func:`cudf::groupby::groupby::aggregate`.
 
@@ -155,7 +160,8 @@ cdef class GroupBy:
         return GroupBy._parse_outputs(move(c_res))
 
     cpdef tuple scan(self, list requests):
-        """Compute scans on columns.
+        """
+        Compute scans on columns.
 
         For details, see :cpp:func:`cudf::groupby::groupby::scan`.
 
@@ -184,7 +190,8 @@ cdef class GroupBy:
         return GroupBy._parse_outputs(move(c_res))
 
     cpdef tuple shift(self, Table values, list offset, list fill_values):
-        """Compute shifts on columns.
+        """
+        Compute shifts on columns.
 
         For details, see :cpp:func:`cudf::groupby::groupby::shift`.
 
@@ -219,7 +226,8 @@ cdef class GroupBy:
         )
 
     cpdef tuple replace_nulls(self, Table value, list replace_policies):
-        """Replace nulls in columns.
+        """
+        Replace nulls in columns.
 
         For details, see :cpp:func:`cudf::groupby::groupby::replace_nulls`.
 
@@ -249,7 +257,8 @@ cdef class GroupBy:
         )
 
     cpdef tuple get_groups(self, Table values=None):
-        """Get the grouped keys and values labels for each row.
+        """
+        Get the grouped keys and values labels for each row.
 
         For details, see :cpp:func:`cudf::groupby::groupby::get_groups`.
 

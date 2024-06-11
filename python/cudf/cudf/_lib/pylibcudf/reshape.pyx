@@ -16,7 +16,8 @@ from .table cimport Table
 
 
 cpdef Column interleave_columns(Table source_table):
-    """Interleave columns of a table into a single column.
+    """
+    Interleave columns of a table into a single column.
 
     Converts the column major table `input` into a row major column.
 
@@ -43,7 +44,8 @@ cpdef Column interleave_columns(Table source_table):
 
 
 cpdef Table tile(Table source_table, size_type count):
-    """Repeats the rows from input table count times to form a new table.
+    """
+    Repeats the rows from input table count times to form a new table.
 
     Parameters
     ----------

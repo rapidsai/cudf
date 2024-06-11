@@ -18,7 +18,8 @@ cpdef Table merge (
     list column_order,
     list null_precedence,
 ):
-    """Merge a set of sorted tables.
+    """
+    Merge a set of sorted tables.
 
     Parameters
     ----------

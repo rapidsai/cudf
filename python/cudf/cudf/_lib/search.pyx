@@ -11,7 +11,8 @@ from cudf._lib import pylibcudf
 def search_sorted(
     list source, list values, side, ascending=True, na_position="last"
 ):
-    """Find indices where elements should be inserted to maintain order
+    """
+    Find indices where elements should be inserted to maintain order
 
     Parameters
     ----------
@@ -51,7 +52,8 @@ def search_sorted(
 
 @acquire_spill_lock()
 def contains(Column haystack, Column needles):
-    """Check whether column contains multiple values
+    """
+    Check whether column contains multiple values
 
     Parameters
     ----------

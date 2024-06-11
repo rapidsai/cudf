@@ -17,7 +17,8 @@ from cudf._lib.pylibcudf.libcudf.types import sorted as Sorted  # no-cython-lint
 
 
 cdef class DataType:
-    """Indicator for the logical data type of an element in a column.
+    """
+    Indicator for the logical data type of an element in a column.
 
     This is the Cython representation of :cpp:class:`cudf::data_type`.
 
@@ -57,7 +58,8 @@ cdef class DataType:
 
     @staticmethod
     cdef DataType from_libcudf(data_type dt):
-        """Create a DataType from a libcudf data_type.
+        """
+        Create a DataType from a libcudf data_type.
 
         This method is for pylibcudf's functions to use to ingest outputs of
         calling libcudf algorithms, and should generally not be needed by users

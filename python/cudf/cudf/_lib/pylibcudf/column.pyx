@@ -24,7 +24,8 @@ import numpy as np
 
 
 cdef class Column:
-    """A container of nullable device data as a column of elements.
+    """
+    A container of nullable device data as a column of elements.
 
     This class is an implementation of `Arrow columnar data specification
     <https://arrow.apache.org/docs/format/Columnar.html>`__ for data stored on
@@ -67,7 +68,8 @@ cdef class Column:
         self._num_children = len(children)
 
     cdef column_view view(self) nogil:
-        """Generate a libcudf column_view to pass to libcudf algorithms.
+        """
+        Generate a libcudf column_view to pass to libcudf algorithms.
 
         This method is for pylibcudf's functions to use to generate inputs when
         calling libcudf algorithms, and should generally not be needed by users
@@ -104,7 +106,8 @@ cdef class Column:
         )
 
     cdef mutable_column_view mutable_view(self) nogil:
-        """Generate a libcudf mutable_column_view to pass to libcudf algorithms.
+        """
+        Generate a libcudf mutable_column_view to pass to libcudf algorithms.
 
         This method is for pylibcudf's functions to use to generate inputs when
         calling libcudf algorithms, and should generally not be needed by users
@@ -132,7 +135,8 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col):
-        """Create a Column from a libcudf column.
+        """
+        Create a Column from a libcudf column.
 
         This method is for pylibcudf's functions to use to ingest outputs of
         calling libcudf algorithms, and should generally not be needed by users
@@ -177,7 +181,8 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_column_view(const column_view& cv, Column owner):
-        """Create a Column from a libcudf column_view.
+        """
+        Create a Column from a libcudf column_view.
 
         This method accepts shared ownership of the underlying data from the
         owner and relies on the offset from the view.
@@ -209,7 +214,8 @@ cdef class Column:
 
     @staticmethod
     def from_scalar(Scalar slr, size_type size):
-        """Create a Column from a Scalar.
+        """
+        Create a Column from a Scalar.
 
         Parameters
         ----------
@@ -231,7 +237,8 @@ cdef class Column:
 
     @staticmethod
     def from_cuda_array_interface_obj(object obj):
-        """Create a Column from an object with a CUDA array interface.
+        """
+        Create a Column from an object with a CUDA array interface.
 
         Parameters
         ----------
@@ -279,7 +286,8 @@ cdef class Column:
         return self._data_type
 
     cpdef Column child(self, size_type index):
-        """Get a child column of this column.
+        """
+        Get a child column of this column.
 
         Parameters
         ----------
@@ -380,7 +388,8 @@ def _datatype_from_dtype_desc(desc):
 def is_c_contiguous(
     shape: Sequence[int], strides: Sequence[int], itemsize: int
 ) -> bool:
-    """Determine if shape and strides are C-contiguous
+    """
+    Determine if shape and strides are C-contiguous
 
     Parameters
     ----------

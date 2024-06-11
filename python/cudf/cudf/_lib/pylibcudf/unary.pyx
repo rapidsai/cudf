@@ -15,7 +15,8 @@ from .types cimport DataType
 
 
 cpdef Column unary_operation(Column input, unary_operator op):
-    """Perform a unary operation on a column.
+    """
+    Perform a unary operation on a column.
 
     For details, see :cpp:func:`unary_operation`.
 
@@ -40,7 +41,8 @@ cpdef Column unary_operation(Column input, unary_operator op):
 
 
 cpdef Column is_null(Column input):
-    """Check whether elements of a column are null.
+    """
+    Check whether elements of a column are null.
 
     For details, see :cpp:func:`is_null`.
 
@@ -63,7 +65,8 @@ cpdef Column is_null(Column input):
 
 
 cpdef Column is_valid(Column input):
-    """Check whether elements of a column are valid.
+    """
+    Check whether elements of a column are valid.
 
     For details, see :cpp:func:`is_valid`.
 
@@ -86,7 +89,8 @@ cpdef Column is_valid(Column input):
 
 
 cpdef Column cast(Column input, DataType data_type):
-    """Cast a column to a different data type.
+    """
+    Cast a column to a different data type.
 
     For details, see :cpp:func:`cast`.
 
@@ -111,7 +115,8 @@ cpdef Column cast(Column input, DataType data_type):
 
 
 cpdef Column is_nan(Column input):
-    """Check whether elements of a column are nan.
+    """
+    Check whether elements of a column are nan.
 
     For details, see :cpp:func:`is_nan`.
 
@@ -134,7 +139,8 @@ cpdef Column is_nan(Column input):
 
 
 cpdef Column is_not_nan(Column input):
-    """Check whether elements of a column are not nan.
+    """
+    Check whether elements of a column are not nan.
 
     For details, see :cpp:func:`is_not_nan`.
 

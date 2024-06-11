@@ -26,7 +26,8 @@ cpdef Column quantile(
     Column ordered_indices = None,
     bool exact=True
 ):
-    """Computes quantiles with interpolation.
+    """
+    Computes quantiles with interpolation.
 
     Computes the specified quantiles by interpolating values between which they lie,
     using the interpolation strategy specified in interp.
@@ -86,7 +87,8 @@ cpdef Table quantiles(
     list column_order = None,
     list null_precedence = None,
 ):
-    """Computes row quantiles with interpolation.
+    """
+    Computes row quantiles with interpolation.
 
     Computes the specified quantiles by retrieving the row corresponding to the
     specified quantiles. In the event a quantile lies in between rows, the specified

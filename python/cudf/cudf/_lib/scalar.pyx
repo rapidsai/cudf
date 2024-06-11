@@ -62,7 +62,8 @@ def _replace_nested(obj, check, replacement):
 
 
 def gather_metadata(dtypes):
-    """Convert a dict of dtypes to a list of ColumnMetadata objects.
+    """
+    Convert a dict of dtypes to a list of ColumnMetadata objects.
 
     The metadata is constructed recursively so that nested types are
     represented as nested ColumnMetadata objects.

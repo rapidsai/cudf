@@ -21,7 +21,8 @@ cpdef Column round(
     int32_t decimal_places = 0,
     rounding_method round_method = rounding_method.HALF_UP
 ):
-    """Rounds all the values in a column to the specified number of decimal places.
+    """
+    Rounds all the values in a column to the specified number of decimal places.
 
     For details, see :cpp:func:`round`.
 

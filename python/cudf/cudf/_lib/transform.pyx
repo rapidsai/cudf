@@ -176,7 +176,8 @@ def one_hot_encode(Column input_column, Column categories):
 
 @acquire_spill_lock()
 def compute_column(list columns, tuple column_names, expr: str):
-    """Compute a new column by evaluating an expression on a set of columns.
+    """
+    Compute a new column by evaluating an expression on a set of columns.
 
     Parameters
     ----------

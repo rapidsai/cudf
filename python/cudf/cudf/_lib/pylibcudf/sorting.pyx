@@ -15,7 +15,8 @@ from .table cimport Table
 
 
 cpdef Column sorted_order(Table source_table, list column_order, list null_precedence):
-    """Computes the row indices required to sort the table.
+    """
+    Computes the row indices required to sort the table.
 
     Parameters
     ----------
@@ -50,7 +51,8 @@ cpdef Column stable_sorted_order(
     list column_order,
     list null_precedence,
 ):
-    """Computes the row indices required to sort the table,
+    """
+    Computes the row indices required to sort the table,
     preserving order of equal elements.
 
     Parameters
@@ -89,7 +91,8 @@ cpdef Column rank(
     null_order null_precedence,
     bool percentage,
 ):
-    """Computes the rank of each element in the column.
+    """
+    Computes the rank of each element in the column.
 
     Parameters
     ----------
@@ -127,7 +130,8 @@ cpdef Column rank(
 
 
 cpdef bool is_sorted(Table tbl, list column_order, list null_precedence):
-    """Checks if the table is sorted.
+    """
+    Checks if the table is sorted.
 
     Parameters
     ----------
@@ -164,7 +168,8 @@ cpdef Table segmented_sort_by_key(
     list column_order,
     list null_precedence,
 ):
-    """Sorts the table by key, within segments.
+    """
+    Sorts the table by key, within segments.
 
     Parameters
     ----------
@@ -207,7 +212,8 @@ cpdef Table stable_segmented_sort_by_key(
     list column_order,
     list null_precedence,
 ):
-    """Sorts the table by key preserving order of equal elements,
+    """
+    Sorts the table by key preserving order of equal elements,
     within segments.
 
     Parameters
@@ -250,7 +256,8 @@ cpdef Table sort_by_key(
     list column_order,
     list null_precedence,
 ):
-    """Sorts the table by key.
+    """
+    Sorts the table by key.
 
     Parameters
     ----------
@@ -289,7 +296,8 @@ cpdef Table stable_sort_by_key(
     list column_order,
     list null_precedence,
 ):
-    """Sorts the table by key preserving order of equal elements.
+    """
+    Sorts the table by key preserving order of equal elements.
 
     Parameters
     ----------
@@ -323,7 +331,8 @@ cpdef Table stable_sort_by_key(
 
 
 cpdef Table sort(Table source_table, list column_order, list null_precedence):
-    """Sorts the table.
+    """
+    Sorts the table.
 
     Parameters
     ----------
@@ -354,7 +363,8 @@ cpdef Table sort(Table source_table, list column_order, list null_precedence):
 
 
 cpdef Table stable_sort(Table source_table, list column_order, list null_precedence):
-    """Sorts the table preserving order of equal elements.
+    """
+    Sorts the table preserving order of equal elements.
 
     Parameters
     ----------

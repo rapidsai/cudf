@@ -13,7 +13,8 @@ from .column cimport Column
 
 
 cdef class Table:
-    """A list of columns of the same size.
+    """
+    A list of columns of the same size.
 
     Parameters
     ----------
@@ -26,7 +27,8 @@ cdef class Table:
         self._columns = columns
 
     cdef table_view view(self) nogil:
-        """Generate a libcudf table_view to pass to libcudf algorithms.
+        """
+        Generate a libcudf table_view to pass to libcudf algorithms.
 
         This method is for pylibcudf's functions to use to generate inputs when
         calling libcudf algorithms, and should generally not be needed by users
@@ -44,7 +46,8 @@ cdef class Table:
 
     @staticmethod
     cdef Table from_libcudf(unique_ptr[table] libcudf_tbl):
-        """Create a Table from a libcudf table.
+        """
+        Create a Table from a libcudf table.
 
         This method is for pylibcudf's functions to use to ingest outputs of
         calling libcudf algorithms, and should generally not be needed by users
@@ -62,7 +65,8 @@ cdef class Table:
 
     @staticmethod
     cdef Table from_table_view(const table_view& tv, Table owner):
-        """Create a Table from a libcudf table.
+        """
+        Create a Table from a libcudf table.
 
         This method accepts shared ownership of the underlying data from the
         owner and relies on the offset from the view.

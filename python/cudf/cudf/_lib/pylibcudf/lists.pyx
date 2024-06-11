@@ -11,7 +11,8 @@ from .table cimport Table
 
 
 cpdef Table explode_outer(Table input, size_type explode_column_idx):
-    """Explode a column of lists into rows.
+    """
+    Explode a column of lists into rows.
 
     All other columns will be duplicated for each element in the list.
 

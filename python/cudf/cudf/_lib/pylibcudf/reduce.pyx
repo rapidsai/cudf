@@ -23,7 +23,8 @@ from cudf._lib.pylibcudf.libcudf.reduce import \
 
 
 cpdef Scalar reduce(Column col, Aggregation agg, DataType data_type):
-    """Perform a reduction on a column
+    """
+    Perform a reduction on a column
 
     For details, see ``cudf::reduce`` documentation.
 
@@ -55,7 +56,8 @@ cpdef Scalar reduce(Column col, Aggregation agg, DataType data_type):
 
 
 cpdef Column scan(Column col, Aggregation agg, scan_type inclusive):
-    """Perform a scan on a column
+    """
+    Perform a scan on a column
 
     For details, see ``cudf::scan`` documentation.
 
@@ -87,7 +89,8 @@ cpdef Column scan(Column col, Aggregation agg, scan_type inclusive):
 
 
 cpdef tuple minmax(Column col):
-    """Compute the minimum and maximum of a column
+    """
+    Compute the minimum and maximum of a column
 
     For details, see ``cudf::minmax`` documentation.
 

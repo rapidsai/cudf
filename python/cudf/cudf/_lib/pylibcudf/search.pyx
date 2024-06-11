@@ -18,7 +18,8 @@ cpdef Column lower_bound(
     list column_order,
     list null_precedence,
 ):
-    """Find smallest indices in haystack where needles may be inserted to retain order.
+    """
+    Find smallest indices in haystack where needles may be inserted to retain order.
 
     Parameters
     ----------
@@ -57,7 +58,8 @@ cpdef Column upper_bound(
     list column_order,
     list null_precedence,
 ):
-    """Find largest indices in haystack where needles may be inserted to retain order.
+    """
+    Find largest indices in haystack where needles may be inserted to retain order.
 
     Parameters
     ----------
@@ -91,7 +93,8 @@ cpdef Column upper_bound(
 
 
 cpdef Column contains(Column haystack, Column needles):
-    """Check whether needles are present in haystack.
+    """
+    Check whether needles are present in haystack.
 
     Parameters
     ----------

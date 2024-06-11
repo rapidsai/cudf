@@ -23,7 +23,8 @@ cpdef Column binary_operation(
     binary_operator op,
     DataType output_type
 ):
-    """Perform a binary operation between a column and another column or scalar.
+    """
+    Perform a binary operation between a column and another column or scalar.
 
     ``lhs`` and ``rhs`` may be a
     :py:class:`~cudf._lib.pylibcudf.column.Column` or a

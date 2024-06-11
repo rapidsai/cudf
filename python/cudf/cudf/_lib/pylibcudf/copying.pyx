@@ -42,7 +42,8 @@ cpdef Table gather(
     Column gather_map,
     out_of_bounds_policy bounds_policy
 ):
-    """Select rows from source_table according to the provided gather_map.
+    """
+    Select rows from source_table according to the provided gather_map.
 
     For details, see :cpp:func:`gather`.
 
@@ -83,7 +84,8 @@ cpdef Table scatter(
     Column scatter_map,
     Table target_table
 ):
-    """Scatter from source into target_table according to scatter_map.
+    """
+    Scatter from source into target_table according to scatter_map.
 
     If source is a table, it specifies rows to scatter. If source is a list,
     each scalar is scattered into the corresponding column in the ``target_table``.
@@ -143,7 +145,8 @@ cpdef Table scatter(
 
 
 cpdef ColumnOrTable empty_like(ColumnOrTable input):
-    """Create an empty column or table with the same type as ``input``.
+    """
+    Create an empty column or table with the same type as ``input``.
 
     For details, see :cpp:func:`empty_like`.
 
@@ -172,7 +175,8 @@ cpdef ColumnOrTable empty_like(ColumnOrTable input):
 cpdef Column allocate_like(
     Column input_column, mask_allocation_policy policy, size=None
 ):
-    """Allocate a column with the same type as input_column.
+    """
+    Allocate a column with the same type as input_column.
 
     For details, see :cpp:func:`allocate_like`.
 
@@ -214,7 +218,8 @@ cpdef Column copy_range_in_place(
     size_type input_end,
     size_type target_begin,
 ):
-    """Copy a range of elements from input_column to target_column.
+    """
+    Copy a range of elements from input_column to target_column.
 
     The target_column is overwritten in place.
 
@@ -266,7 +271,8 @@ cpdef Column copy_range(
     size_type input_end,
     size_type target_begin,
 ):
-    """Copy a range of elements from input_column to target_column.
+    """
+    Copy a range of elements from input_column to target_column.
 
     For details on the implementation, see :cpp:func:`copy_range`.
 
@@ -311,7 +317,8 @@ cpdef Column copy_range(
 
 
 cpdef Column shift(Column input, size_type offset, Scalar fill_value):
-    """Shift the elements of input by offset.
+    """
+    Shift the elements of input by offset.
 
     For details on the implementation, see :cpp:func:`shift`.
 
@@ -349,7 +356,8 @@ cpdef Column shift(Column input, size_type offset, Scalar fill_value):
 
 
 cpdef list slice(ColumnOrTable input, list indices):
-    """Slice input according to indices.
+    """
+    Slice input according to indices.
 
     For details on the implementation, see :cpp:func:`slice`.
 
@@ -396,7 +404,8 @@ cpdef list slice(ColumnOrTable input, list indices):
 
 
 cpdef list split(ColumnOrTable input, list splits):
-    """Split input into multiple.
+    """
+    Split input into multiple.
 
     For details on the implementation, see :cpp:func:`split`.
 
@@ -440,7 +449,8 @@ cpdef Column copy_if_else(
     RightCopyIfElseOperand rhs,
     Column boolean_mask
 ):
-    """Copy elements from lhs or rhs into a new column according to boolean_mask.
+    """
+    Copy elements from lhs or rhs into a new column according to boolean_mask.
 
     For details on the implementation, see :cpp:func:`copy_if_else`.
 
@@ -506,7 +516,8 @@ cpdef Table boolean_mask_scatter(
     Table target,
     Column boolean_mask
 ):
-    """Scatter rows from input into target according to boolean_mask.
+    """
+    Scatter rows from input into target according to boolean_mask.
 
     If source is a table, it specifies rows to scatter. If source is a list,
     each scalar is scattered into the corresponding column in the ``target_table``.
@@ -564,7 +575,8 @@ cpdef Table boolean_mask_scatter(
 
 
 cpdef Scalar get_element(Column input_column, size_type index):
-    """Get the element at index from input_column.
+    """
+    Get the element at index from input_column.
 
     For details on the implementation, see :cpp:func:`get_element`.
 

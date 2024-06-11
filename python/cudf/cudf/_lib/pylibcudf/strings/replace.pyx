@@ -24,7 +24,8 @@ cpdef Column replace(
     Scalar repl,
     size_type maxrepl = -1
 ):
-    """Replaces target string within each string with the specified replacement string.
+    """
+    Replaces target string within each string with the specified replacement string.
 
     Null string entries will return null output string entries.
 
@@ -72,7 +73,8 @@ cpdef Column replace_multiple(
     Column repl,
     size_type maxrepl = -1
 ):
-    """Replaces target string within each string with the specified replacement string.
+    """
+    Replaces target string within each string with the specified replacement string.
 
     Null string entries will return null output string entries.
 
@@ -116,7 +118,8 @@ cpdef Column replace_slice(
     size_type start = 0,
     size_type stop = -1
 ):
-    """Replaces each string in the column with the provided repl string
+    """
+    Replaces each string in the column with the provided repl string
     within the [start,stop) character position range.
 
     Null string entries will return null output string entries.

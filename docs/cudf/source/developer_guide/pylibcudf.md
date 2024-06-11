@@ -242,3 +242,33 @@ cpdef ColumnOrTable empty_like(ColumnOrTable input)
 
 [Cython supports specializing the contents of fused-type functions based on the argument types](https://cython.readthedocs.io/en/latest/src/userguide/fusedtypes.html#type-checking-specializations), so any type-specific logic may be encoded using the appropriate conditionals.
 See the pylibcudf source for examples of how to implement such functions.
+
+### Docstring conventions
+
+We use
+[numpydoc](https://numpydoc.readthedocs.io/en/latest/format.html)-style
+docstrings. For correct indentation in the REPL, make sure that
+multi-line docstrings start on line two. That is, write:
+
+```cython
+def some_function(...):
+    """
+    Short summary.
+
+    More detail
+    """
+```
+
+Rather than
+
+```cython
+def some_function(...):
+    """Short summary.
+
+    More detail
+    """
+```
+
+Single-line docstrings can start on line one, as long as the closing
+quotes also do. These conventions are enforced as part of a pre-commit
+hook, though it uses regular expressions, so is not perfect.

@@ -12,7 +12,8 @@ from cudf._lib.utils cimport columns_from_table_view, table_view_from_columns
 
 
 def transpose(list source_columns):
-    """Transpose m n-row columns into n m-row columns
+    """
+    Transpose m n-row columns into n m-row columns
     """
     cdef pair[unique_ptr[column], table_view] c_result
     cdef table_view c_input = table_view_from_columns(source_columns)

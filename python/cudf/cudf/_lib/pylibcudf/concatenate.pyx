@@ -15,7 +15,8 @@ from .table cimport Table
 
 
 cpdef concatenate(list objects):
-    """Concatenate columns or tables.
+    """
+    Concatenate columns or tables.
 
     Parameters
     ----------

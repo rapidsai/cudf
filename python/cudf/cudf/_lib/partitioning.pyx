@@ -25,7 +25,8 @@ cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
 @acquire_spill_lock()
 def partition(list source_columns, Column partition_map,
               object num_partitions):
-    """Partition source columns given a partitioning map
+    """
+    Partition source columns given a partitioning map
 
     Parameters
     ----------

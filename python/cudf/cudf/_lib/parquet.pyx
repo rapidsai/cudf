@@ -729,8 +729,10 @@ cdef class ParquetWriter:
         self.close()
 
     def _initialize_chunked_state(self, table, num_partitions=1):
-        """ Prepares all the values required to build the
-        chunked_parquet_writer_options and creates a writer"""
+        """
+        Prepares all the values required to build the
+        chunked_parquet_writer_options and creates a writer.
+        """
         cdef table_view tv
 
         # Set the table_metadata

@@ -20,7 +20,8 @@ cpdef Column rolling_window(
     size_type min_periods,
     Aggregation agg,
 ):
-    """Perform a rolling window operation on a column
+    """
+    Perform a rolling window operation on a column
 
     For details, see ``cudf::rolling_window`` documentation.
 
