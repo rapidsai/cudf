@@ -23,7 +23,7 @@ on:
   pull_request_target:
     types:
       - opened
-      
+
 env:
   GITHUB_TOKEN: ${{ github.token }}
 
