@@ -20,9 +20,9 @@ on:
     types:
       - opened
 
-  pull_request:
+  pull_request_target:
     types:
-      - opened
+      - edited
       
 env:
   GITHUB_TOKEN: ${{ github.token }}
@@ -47,7 +47,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
-    if: github.event_name == 'pull_request'
+      issues: write
+    if: github.event_name == 'pull_request_target'
     steps:
       - name: add-external-labels
         # Only run if the issue author is not part of RAPIDS
