@@ -10980,7 +10980,7 @@ def test_squeeze(axis, data):
     assert_eq(result, expected)
 
 
-@pytest.mark.parametrize("column", [range(1), np.array([1], dtype=np.int8)])
+@pytest.mark.parametrize("column", [range(1, 2), np.array([1], dtype=np.int8)])
 @pytest.mark.parametrize(
     "operation",
     [
@@ -10991,6 +10991,16 @@ def test_squeeze(axis, data):
         lambda df: abs(df),
         lambda df: -df,
         lambda df: ~df,
+        lambda df: df.cumsum(),
+        lambda df: df.replace(1, 2),
+        lambda df: df.replace(10, 20),
+        lambda df: df.clip(0, 10),
+        lambda df: df.rolling(1).mean(),
+        lambda df: df.interpolate(),
+        lambda df: df.shift(),
+        lambda df: df.sort_values(1),
+        lambda df: df.round(),
+        lambda df: df.rank(),
     ],
 )
 def test_op_preserves_column_metadata(column, operation):
