@@ -105,20 +105,6 @@ get_arrow_array(std::vector<std::string> const& data, std::vector<uint8_t> const
   return string_array;
 }
 
-std::shared_ptr<arrow::Array> get_arrow_large_string_array(std::vector<std::string> const& data,
-                                                           std::vector<uint8_t> const& mask = {})
-{
-  std::shared_ptr<arrow::LargeStringArray> large_string_array;
-  arrow::LargeStringBuilder large_string_builder;
-
-  CUDF_EXPECTS(large_string_builder.AppendValues(data, mask.data()).ok(),
-               "Failed to append values to string builder");
-  CUDF_EXPECTS(large_string_builder.Finish(&large_string_array).ok(),
-               "Failed to create arrow string array");
-
-  return large_string_array;
-}
-
 template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::string_view>, std::shared_ptr<arrow::Array>>
 get_arrow_array(std::initializer_list<std::string> elements,

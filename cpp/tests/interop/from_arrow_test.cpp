@@ -65,6 +65,20 @@ std::unique_ptr<cudf::table> get_cudf_table()
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
+std::shared_ptr<arrow::LargeStringArray> get_arrow_large_string_array(
+  std::vector<std::string> const& data, std::vector<uint8_t> const& mask = {})
+{
+  std::shared_ptr<arrow::LargeStringArray> large_string_array;
+  arrow::LargeStringBuilder large_string_builder;
+
+  CUDF_EXPECTS(large_string_builder.AppendValues(data, mask.data()).ok(),
+               "Failed to append values to string builder");
+  CUDF_EXPECTS(large_string_builder.Finish(&large_string_array).ok(),
+               "Failed to create arrow string array");
+
+  return large_string_array;
+}
+
 struct FromArrowTest : public cudf::test::BaseFixture {};
 
 template <typename T>
