@@ -52,10 +52,11 @@ class Column:
 
         Raises
         ------
-        RuntimeError if the column is not length-1.
+        ValueError
+            If the column is not length-1.
         """
         if not self.is_scalar:
-            raise RuntimeError(
+            raise ValueError(
                 f"Cannot convert a column of length {self.obj.size()} to scalar"
             )
         return plc.copying.get_element(self.obj, 0)
