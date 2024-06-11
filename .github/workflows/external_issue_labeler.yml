@@ -28,16 +28,18 @@ env:
   GITHUB_TOKEN: ${{ github.token }}
 
 permissions:
+  contents: read
   issues: write
   pull-requests: write
 
 jobs:
   Label-Issue:
     runs-on: ubuntu-latest
-    # Only run if the issue author is not part of RAPIDS
-    if: ${{ ! contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)}}
+    if: github.event_name == 'issues'
     steps:
       - name: add-external-labels
+        # Only run if the issue author is not part of RAPIDS
+        if: ${{ ! contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)}}
         run: |
           issue_url=${{ github.event.issue.html_url }}
           gh issue edit ${issue_url} --add-label "External"
@@ -45,11 +47,12 @@ jobs:
 
   Label-PR:
     runs-on: ubuntu-latest
-    # Only run if the issue author is not part of RAPIDS
-    if: ${{ ! contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)}}
+    if: github.event_name == 'pull_request'
     steps:
       - name: add-external-labels
+        # Only run if the issue author is not part of RAPIDS
+        if: ${{ ! contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)}}
         run: |
             pr_url=${{ github.event.pull_request.html_url }}
             gh issue edit ${pr_url} --add-label "External"
-    continue-on-error: true
+        continue-on-error: true
