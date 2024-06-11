@@ -18,6 +18,7 @@
 
 #include <cudf/io/avro.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
@@ -45,4 +46,4 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
 }  // namespace avro
 }  // namespace detail
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

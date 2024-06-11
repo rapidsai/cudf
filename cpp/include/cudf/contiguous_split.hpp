@@ -125,7 +125,7 @@ std::vector<packed_table> contiguous_split(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 namespace detail {
-struct contiguous_split_state;
+struct CUDF_HIDDEN contiguous_split_state;
 };
 
 /**

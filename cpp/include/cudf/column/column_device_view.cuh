@@ -1497,6 +1497,7 @@ struct mutable_value_accessor {
  * @return The device pointer to be used for the d_children member of the given column
  */
 template <typename ColumnDeviceView, typename ColumnViewIterator>
+CUDF_HIDDEN
 ColumnDeviceView* child_columns_to_device_array(ColumnViewIterator child_begin,
                                                 ColumnViewIterator child_end,
                                                 void* h_ptr,

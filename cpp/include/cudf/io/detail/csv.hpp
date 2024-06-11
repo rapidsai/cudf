@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/io/csv.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
@@ -61,4 +62,4 @@ void write_csv(data_sink* sink,
 }  // namespace csv
 }  // namespace detail
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -41,6 +41,9 @@
 #include <algorithm>
 
 namespace cudf::io {
+
+
+
 // Returns builder for csv_reader_options
 csv_reader_options_builder csv_reader_options::builder(source_info src)
 {
@@ -478,6 +481,8 @@ chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
 {
 }
 
+chunked_orc_reader::chunked_orc_reader() = default;
+
 // This destructor destroys the internal reader instance.
 // Since the declaration of the internal `reader` object does not exist in the header, this
 // destructor needs to be defined in a separate source file which can access to that object's
@@ -497,6 +502,10 @@ table_with_metadata chunked_orc_reader::read_chunk() const
   CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
   return reader->read_chunk();
 }
+
+orc_chunked_writer::orc_chunked_writer() = default;
+
+orc_chunked_writer::~orc_chunked_writer() = default;
 
 /**
  * @copydoc cudf::io::orc_chunked_writer::orc_chunked_writer
@@ -624,6 +633,8 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
   return writer->close(options.get_column_chunks_file_paths());
 }
 
+chunked_parquet_reader::chunked_parquet_reader() = default;
+
 /**
  * @copydoc cudf::io::chunked_parquet_reader::chunked_parquet_reader
  */
@@ -678,6 +689,8 @@ table_with_metadata chunked_parquet_reader::read_chunk() const
   return reader->read_chunk();
 }
 
+parquet_chunked_writer::parquet_chunked_writer() = default;
+
 /**
  * @copydoc cudf::io::parquet_chunked_writer::parquet_chunked_writer
  */
@@ -691,6 +704,8 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
   writer = std::make_unique<detail_parquet::writer>(
     std::move(sinks), options, io_detail::single_write_mode::NO, stream);
 }
+
+parquet_chunked_writer::~parquet_chunked_writer() = default;
 
 /**
  * @copydoc cudf::io::parquet_chunked_writer::write

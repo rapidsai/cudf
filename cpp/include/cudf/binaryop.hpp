@@ -306,8 +306,12 @@ std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
-namespace compiled {
-namespace detail {
+}  // namespace binops
+
+/** @} */  // end of group
+}  // namespace cudf
+
+namespace cudf::binops::compiled::detail {
 
 /**
  * @brief struct binary operation using `NaN` aware sorting physical element comparators
@@ -327,9 +331,4 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
                                     bool is_rhs_scalar,
                                     binary_operator op,
                                     rmm::cuda_stream_view stream);
-}  // namespace detail
-}  // namespace compiled
-}  // namespace binops
-
-/** @} */  // end of group
-}  // namespace cudf
+}  // namespace cudf::binops::compiled::detail

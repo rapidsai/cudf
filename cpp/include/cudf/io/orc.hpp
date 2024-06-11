@@ -20,6 +20,7 @@
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
@@ -31,7 +32,7 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 /**
  * @addtogroup io_readers
@@ -426,7 +427,7 @@ class chunked_orc_reader {
    *
    * This is added just to satisfy cython.
    */
-  chunked_orc_reader() = default;
+  chunked_orc_reader();
 
   /**
    * @brief Construct the reader from input/output size limits, output row granularity, along with
@@ -1429,7 +1430,12 @@ class orc_chunked_writer {
    * @brief Default constructor, this should never be used.
    *        This is added just to satisfy cython.
    */
-  orc_chunked_writer() = default;
+  orc_chunked_writer();
+
+  /**
+   * @brief virtual destructor, Added so we don't leak detail types.
+   */
+  ~orc_chunked_writer();
 
   /**
    * @brief Constructor with chunked writer options

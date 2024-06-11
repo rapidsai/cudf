@@ -45,14 +45,14 @@ enum class has_nested : bool { YES, NO };
 // forward declaration
 namespace hashing::detail {
 template <typename T>
-class MurmurHash3_x86_32;
+class CUDF_HIDDEN MurmurHash3_x86_32;
 }  // namespace hashing::detail
 namespace detail {
 template <typename T>
-class hash_join;
+class CUDF_HIDDEN hash_join;
 
 template <cudf::has_nested HasNested>
-class distinct_hash_join;
+class CUDF_HIDDEN distinct_hash_join;
 }  // namespace detail
 
 /**
