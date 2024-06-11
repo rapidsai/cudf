@@ -196,7 +196,9 @@ class Expr:
             are returned during translation to the IR, but for now we
             are not perfect.
         """
-        raise NotImplementedError(f"Evaluation of {type(self).__name__}")
+        raise NotImplementedError(
+            f"Evaluation of expression {type(self).__name__}"
+        )  # pragma: no cover
 
     def evaluate(
         self,
@@ -266,7 +268,7 @@ class Expr:
         """
         raise NotImplementedError(
             f"Collecting aggregation info for {type(self).__name__}"
-        )
+        )  # pragma: no cover; check_agg trips first
 
 
 class NamedExpr:

@@ -154,7 +154,7 @@ class IR:
             cannot handle.
         """
         raise NotImplementedError(
-            f"Evaluation of {type(self).__name__}"
+            f"Evaluation of plan {type(self).__name__}"
         )  # pragma: no cover
 
 
