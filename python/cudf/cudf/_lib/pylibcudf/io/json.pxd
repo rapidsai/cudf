@@ -5,6 +5,7 @@ from libcpp.string cimport string
 
 from cudf._lib.pylibcudf.io.types cimport SinkInfo, TableWithMetadata
 from cudf._lib.pylibcudf.libcudf.io.types cimport compression_type
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 
 cpdef void write_json(
@@ -13,7 +14,7 @@ cpdef void write_json(
     str na_rep = *,
     bool include_nulls = *,
     bool lines = *,
-    int rows_per_chunk = *,
+    size_type rows_per_chunk = *,
     str true_value = *,
     str false_value = *
 )

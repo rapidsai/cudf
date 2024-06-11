@@ -20,7 +20,7 @@ cpdef void write_json(
     str na_rep = "",
     bool include_nulls = False,
     bool lines = False,
-    int rows_per_chunk = numeric_limits[size_type].max(),
+    size_type rows_per_chunk = numeric_limits[size_type].max(),
     str true_value = "true",
     str false_value = "false"
 ):
@@ -39,7 +39,7 @@ cpdef void write_json(
         Enables/Disables output of nulls as 'null'.
     lines: bool, default False
         If `True`, write output in the JSON lines format.
-    rows_per_chunk: int, default 2,147,483,647
+    rows_per_chunk: size_type, defaults to length of the input table
         The maximum number of rows to write at a time.
     true_value: str, default "true"
         The string representation for values != 0 in INT8 types.
@@ -57,11 +57,15 @@ cpdef void write_json(
         .na_rep(na_rep_c)
         .include_nulls(include_nulls)
         .lines(lines)
-        .rows_per_chunk(rows_per_chunk)
-        .true_value(true_value_c)
-        .false_value(false_value_c)
         .build()
     )
+
+    if rows_per_chunk != numeric_limits[size_type].max():
+        options.set_rows_per_chunk(rows_per_chunk)
+    if true_value != "true":
+        options.set_true_value(true_value_c)
+    if false_value != "false":
+        options.set_false_value(false_value_c)
 
     with nogil:
         cpp_write_json(options)

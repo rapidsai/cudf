@@ -12,7 +12,7 @@ import cudf._lib.pylibcudf as plc
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 
-from utils import DEFAULT_PA_TYPES, NUMERIC_PA_TYPES
+from utils import ALL_PA_TYPES, DEFAULT_PA_TYPES, NUMERIC_PA_TYPES
 
 
 # This fixture defines the standard set of types that all tests should default to
@@ -21,7 +21,7 @@ from utils import DEFAULT_PA_TYPES, NUMERIC_PA_TYPES
 # across modules. Otherwise it may be defined on a per-module basis.
 @pytest.fixture(
     scope="session",
-    params=[DEFAULT_PA_TYPES],
+    params=DEFAULT_PA_TYPES,
 )
 def pa_type(request):
     return request.param
@@ -29,16 +29,18 @@ def pa_type(request):
 
 @pytest.fixture(
     scope="session",
-    params=[NUMERIC_PA_TYPES],
+    params=NUMERIC_PA_TYPES,
 )
 def numeric_pa_type(request):
     return request.param
 
 
 @pytest.fixture(scope="session", params=[0, 100])
-def plc_table_w_meta(request):
+def table_data(request):
     """
-    The default TableWithMetadata you should be using for testing
+    Returns (TableWithMetadata, pa_table).
+
+    This is the default fixture you should be using for testing
     pylibcudf I/O writers.
 
     Contains one of each category (e.g. int, bool, list, struct)
@@ -51,7 +53,7 @@ def plc_table_w_meta(request):
     # plc.io.TableWithMetadata
     colnames = []
 
-    for typ in DEFAULT_PA_TYPES:
+    for typ in ALL_PA_TYPES:
         rand_vals = np.random.randint(0, nrows, nrows)
         child_colnames = []
 
@@ -114,7 +116,7 @@ def plc_table_w_meta(request):
 
     return plc.io.TableWithMetadata(
         plc.interop.from_arrow(pa_table), column_names=colnames
-    )
+    ), pa_table
 
 
 @pytest.fixture(
