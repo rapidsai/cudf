@@ -44,7 +44,7 @@ cpdef Table explode_outer(Table input, size_type explode_column_idx):
 
 
 cpdef Column concatenate_rows(Table input):
-    """Row-wise concatenating multiple lists columns into a single lists column.
+    """Concatenate multiple lists columns into a single lists column row-wise.
 
     Parameters
     ----------
@@ -65,7 +65,7 @@ cpdef Column concatenate_rows(Table input):
 
 
 cpdef Column concatenate_list_elements(Column input, bool dropna):
-    """Concatenating multiple lists on the same row into a single list.
+    """Concatenate multiple lists on the same row into a single list.
 
     Parameters
     ----------
@@ -78,7 +78,8 @@ cpdef Column concatenate_list_elements(Column input, bool dropna):
         A new Column of concatenated list elements
     dropna : bool
         If true, null list elements will be ignored
-        from concatenation. Otherwise the row will be nulled out.
+        from concatenation. Otherwise any input null values will result in
+        the corresponding output row being set to null.
     """
     cdef concatenate_null_policy null_policy = (
         concatenate_null_policy.IGNORE if dropna
