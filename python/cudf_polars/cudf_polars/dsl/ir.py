@@ -32,7 +32,7 @@ from cudf_polars.containers import DataFrame, NamedColumn
 from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping, Set
+    from collections.abc import MutableMapping
     from typing import Literal
 
     from cudf_polars.typing import Schema
@@ -96,14 +96,14 @@ def broadcast(
     ``target_length`` is provided and not all columns are length-1
     (i.e. ``n != 1``), then ``target_length`` must be equal to ``n``.
     """
-    lengths: Set[int] = {column.obj.size() for column in columns}
+    lengths: set[int] = {column.obj.size() for column in columns}
     if lengths == {1}:
         if target_length is None:
             return list(columns)
         nrows = target_length
     else:
         try:
-            (nrows,) = lengths - {1}
+            (nrows,) = lengths.difference([1])
         except ValueError as e:
             raise RuntimeError("Mismatching column lengths") from e
         if target_length is not None and nrows != target_length:
