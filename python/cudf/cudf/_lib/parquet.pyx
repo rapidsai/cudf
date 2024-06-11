@@ -878,10 +878,15 @@ cdef class ParquetReader:
         return df
 
     def read(self):
-        dfs = []
+        dfs = None
         while self._has_next():
-            dfs.append(self._read_chunk())
-        df = cudf.concat(dfs)
+            if dfs is None:
+                dfs = self._read_chunk()
+            else:
+                dfs = cudf.concat([dfs, self._read_chunk()])
+            #dfs.append(self._read_chunk())
+        #df = cudf.concat(dfs)
+        df = dfs
         df = _process_metadata(df, self.result_meta, self.names, self.row_groups,
                                self.filepaths_or_buffers, self.pa_buffers,
                                self.allow_range_index, self.cpp_use_pandas_metadata)

@@ -908,12 +908,19 @@ def _read_parquet(
                 "cudf engine doesn't support the "
                 f"following positional arguments: {list(args)}"
             )
-        return libparquet.read_parquet(
+        x = libparquet.ParquetReader(
             filepaths_or_buffers,
             columns=columns,
             row_groups=row_groups,
             use_pandas_metadata=use_pandas_metadata,
         )
+        return x.read()
+        # return libparquet.read_parquet(
+        #     filepaths_or_buffers,
+        #     columns=columns,
+        #     row_groups=row_groups,
+        #     use_pandas_metadata=use_pandas_metadata,
+        # )
     else:
         if (
             isinstance(filepaths_or_buffers, list)
