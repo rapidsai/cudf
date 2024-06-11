@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_view.hpp>
+#include <cudf/detail/is_element_valid.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
