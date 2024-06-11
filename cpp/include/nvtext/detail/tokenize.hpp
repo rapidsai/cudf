@@ -23,7 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace nvtext {
+namespace CUDF_EXPORT nvtext {
 namespace detail {
 /**
  * @copydoc nvtext::tokenize(strings_column_view const&,string_scalar
