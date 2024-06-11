@@ -299,7 +299,7 @@ TEST_F(FromArrowTest, ChunkedArray)
       "ccc",
     },
     {0, 1});
-  auto large_string_array_1 = get_arrow_large_string_array<cudf::string_view>(
+  auto large_string_array_1 = get_arrow_large_string_array(
     {
       "",
       "abc",
