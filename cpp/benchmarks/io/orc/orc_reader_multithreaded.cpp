@@ -249,14 +249,16 @@ void BM_orc_multithreaded_read_chunked_list(nvbench::state& state)
   cudf::scoped_range range{label.c_str()};
   BM_orc_multithreaded_read_chunked_common(state, {cudf::type_id::LIST}, label);
 }
+auto const thread_range  = std::vector<nvbench::int64_t>{1, 2, 4, 8};
+nvbench::int64_t constexpr total_data_size = 512 * 1024 * 1024, 1024 * 1024 * 1024;
 
 // mixed data types: fixed width and strings
 NVBENCH_BENCH(BM_orc_multithreaded_read_mixed)
   .set_name("orc_multithreaded_read_decode_mixed")
   .set_min_samples(4)
   .add_int64_axis("cardinality", {1000})
-  .add_int64_axis("total_data_size", {512 * 1024 * 1024, 1024 * 1024 * 1024})
-  .add_int64_axis("num_threads", {1, 2, 4, 8})
+  .add_int64_axis("total_data_size", total_data_size)
+  .add_int64_axis("num_threads", thread_range)
   .add_int64_axis("num_cols", {4})
   .add_int64_axis("run_length", {8});
 
