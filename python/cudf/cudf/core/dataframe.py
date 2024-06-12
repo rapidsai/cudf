@@ -8072,6 +8072,8 @@ def from_pandas(obj, nan_as_null=no_default):
         return cudf.Index.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.CategoricalDtype):
         return cudf.CategoricalDtype.from_pandas(obj)
+    elif isinstance(obj, pd.IntervalDtype):
+        return cudf.IntervalDtype.from_pandas(obj)
     else:
         raise TypeError(
             "from_pandas only accepts Pandas Dataframes, Series, "
