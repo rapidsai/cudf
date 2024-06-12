@@ -18,12 +18,16 @@
 
 #include <cudf_test/debug_utilities.hpp>
 
-#include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/text/data_chunk_source_factories.hpp>
+#include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/strings/convert/convert_floats.hpp>
+#include <cudf/strings/split/split.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -36,21 +40,12 @@
 
 using elapsed_t = std::chrono::duration<double>;
 
-std::unique_ptr<cudf::table> load_chunk(std::string const& input_file,
-                                        std::size_t start,
-                                        std::size_t size)
+std::unique_ptr<cudf::column> load_chunk(std::string const& input_file,
+                                         cudf::io::text::byte_range_info& byte_range)
 {
-  cudf::io::csv_reader_options in_opts =
-    cudf::io::csv_reader_options::builder(cudf::io::source_info{input_file})
-      .header(-1)
-      .delimiter(';')
-      .doublequote(false)
-      .byte_range_offset(start)
-      .byte_range_size(size)
-      .dtypes(std::vector<cudf::data_type>{cudf::data_type{cudf::type_id::STRING},
-                                           cudf::data_type{cudf::type_id::FLOAT32}})
-      .na_filter(false);
-  return cudf::io::read_csv(in_opts).tbl;
+  auto const source = cudf::io::text::make_source_from_file(input_file);
+  cudf::io::text::parse_options options{byte_range, false};
+  return cudf::io::text::multibyte_split(*source, "\n", options);
 }
 
 int main(int argc, char const** argv)
@@ -60,45 +55,51 @@ int main(int argc, char const** argv)
     return 1;
   }
 
-  auto const csv_file = std::string{argv[1]};
-  auto const mr_name  = std::string{argc > 2 ? std::string(argv[2]) : std::string("cuda")};
-  auto resource       = create_memory_resource(mr_name);
+  auto const input_file = std::string{argv[1]};
+  auto const mr_name    = std::string{argc > 2 ? std::string(argv[2]) : std::string("cuda")};
+  auto resource         = create_memory_resource(mr_name);
   rmm::mr::set_current_device_resource(resource.get());
   auto stream = cudf::get_default_stream();
 
-  std::filesystem::path p = csv_file;
+  std::filesystem::path p = input_file;
   auto const file_size    = std::filesystem::file_size(p);
 
   std::vector<std::unique_ptr<cudf::table>> agg_data;
 
-  int constexpr divider      = 25;
-  std::size_t chunk_size     = file_size / divider;
-  std::size_t start_pos      = 0;
-  cudf::size_type total_rows = 0;
-  do {
-    auto const input_table = load_chunk(csv_file, start_pos, chunk_size);
-    auto const read_rows   = input_table->num_rows();
-    if (read_rows == 0) break;
+  // 25 = 46.559s
+  // 10 = 20.455s
+  //  7 = 16.087s
+  //  5 = 11.749s
+  int constexpr divider = 5;
+  auto byte_ranges      = cudf::io::text::create_byte_range_infos_consecutive(file_size, divider);
 
-    auto const cities = input_table->view().column(0);
-    auto const temps  = input_table->view().column(1);
+  for (auto& br : byte_ranges) {
+    auto splits = [&] {
+      auto raw_data_column = load_chunk(input_file, br);
+      auto sv              = cudf::strings_column_view(raw_data_column->view());
+      auto delimiter       = cudf::string_scalar{";"};
+      auto splits          = cudf::strings::split(sv, delimiter, 1);
+      return splits;
+    }();
+
+    auto temps  = cudf::strings::to_floats(cudf::strings_column_view(splits->view().column(1)),
+                                          cudf::data_type{cudf::type_id::FLOAT32});
+    auto cities = std::move(splits->release().front());
 
     std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
     aggregations.emplace_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
     aggregations.emplace_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
     aggregations.emplace_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
     aggregations.emplace_back(cudf::make_count_aggregation<cudf::groupby_aggregation>());
-    auto result = compute_results(cities, temps, std::move(aggregations));
 
+    auto result = compute_results(cities->view(), temps->view(), std::move(aggregations));
     agg_data.emplace_back(cudf::sort_by_key(result->view(), result->view().select({0})));
-    start_pos += chunk_size;
-    if (start_pos + chunk_size > file_size) { chunk_size = file_size - start_pos; }
-    total_rows += read_rows;
-  } while (start_pos < file_size && chunk_size > 0);
+  }
 
   // now aggregate the aggregate results
   auto results = compute_final_aggregates(agg_data);
   std::cout << "number of keys = " << results->num_rows() << std::endl;
   std::cout << "chunks = " << divider << std::endl;
+
   return 0;
 }

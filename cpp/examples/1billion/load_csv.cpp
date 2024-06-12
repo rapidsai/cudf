@@ -67,8 +67,13 @@ int main(int argc, char const** argv)
   auto scv          = cudf::strings_column_view(cities);
   std::cout << "Cities column: " << scv.chars_size(stream) << " bytes\n";
 
+  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
+  aggregations.emplace_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
+  aggregations.emplace_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
+  aggregations.emplace_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
+
   start       = std::chrono::steady_clock::now();
-  auto result = compute_results(csv_table.column(0), csv_table.column(1));
+  auto result = compute_results(cities, temps, std::move(aggregations));
   elapsed     = std::chrono::steady_clock::now() - start;
   std::cout << "Process time: " << elapsed.count() << " seconds\n";
 

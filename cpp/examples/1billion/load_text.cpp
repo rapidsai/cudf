@@ -76,13 +76,17 @@ int main(int argc, char const** argv)
   elapsed    = std::chrono::steady_clock::now() - start;
   std::cout << "float: " << elapsed.count() << " seconds" << std::endl;
   auto cities = std::move(splits->release().front());
-  // cudf::test::print(temps->view());
 
   sv = cudf::strings_column_view(cities->view());
   std::cout << "Cities column: " << sv.chars_size(stream) << " bytes\n";
 
+  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
+  aggregations.emplace_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
+  aggregations.emplace_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
+  aggregations.emplace_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
+
   start       = std::chrono::steady_clock::now();
-  auto result = compute_results(cities->view(), temps->view());
+  auto result = compute_results(cities->view(), temps->view(), std::move(aggregations));
   elapsed     = std::chrono::steady_clock::now() - start;
   std::cout << "Process time: " << elapsed.count() << " seconds\n";
 
