@@ -125,24 +125,22 @@ class hostdevice_vector {
 
   void host_to_device_async(rmm::cuda_stream_view stream)
   {
-    copy_pinned_to_device_async(device_ptr(), host_ptr(), size(), stream);
+    cuda_memcpy_async(device_ptr(), host_ptr(), size(), copy_kind::PINNED_TO_DEVICE, stream);
   }
 
   void host_to_device_sync(rmm::cuda_stream_view stream)
   {
-    host_to_device_async(stream);
-    stream.synchronize();
+    cuda_memcpy(device_ptr(), host_ptr(), size(), copy_kind::PINNED_TO_DEVICE, stream);
   }
 
   void device_to_host_async(rmm::cuda_stream_view stream)
   {
-    copy_device_to_pinned_async(host_ptr(), device_ptr(), size(), stream);
+    cuda_memcpy_async(device_ptr(), host_ptr(), size(), copy_kind::DEVICE_TO_PINNED, stream);
   }
 
   void device_to_host_sync(rmm::cuda_stream_view stream)
   {
-    device_to_host_async(stream);
-    stream.synchronize();
+    cuda_memcpy(device_ptr(), host_ptr(), size(), copy_kind::DEVICE_TO_PINNED, stream);
   }
 
   /**

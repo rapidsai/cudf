@@ -22,20 +22,59 @@ namespace cudf::detail {
 
 namespace impl {
 
-void copy_pinned(void* dst, void const* src, size_t size, rmm::cuda_stream_view stream);
+void copy_pinned_to_device(void* dst, void const* src, size_t size, rmm::cuda_stream_view stream);
+void copy_device_to_pinned(void* dst, void const* src, size_t size, rmm::cuda_stream_view stream);
+
+void copy_pageable_to_device(void* dst, void const* src, size_t size, rmm::cuda_stream_view stream);
+void copy_device_to_pageable(void* dst, void const* src, size_t size, rmm::cuda_stream_view stream);
 
 }  // namespace impl
 
-template <typename T>
-void copy_pinned_to_device_async(T* dst, T const* src, size_t size, rmm::cuda_stream_view stream)
-{
-  impl::copy_pinned(dst, src, size * sizeof(T), stream);
-}
+enum class copy_kind { PINNED_TO_DEVICE, DEVICE_TO_PINNED, PAGEABLE_TO_DEVICE, DEVICE_TO_PAGEABLE };
+
+/**
+ * @brief Asynchronously copies data between the host and device.
+ *
+ * Implementation may use different strategies depending on the size and type of host data.
+ *
+ * @param dst Destination memory address
+ * @param src Source memory address
+ * @param size Number of bytes to copy
+ * @param kind Direction of the copy and type of host memory
+ * @param stream CUDA stream used for the copy
+ */
 
 template <typename T>
-void copy_device_to_pinned_async(T* dst, T const* src, size_t size, rmm::cuda_stream_view stream)
+void cuda_memcpy_async(
+  T* dst, T const* src, size_t size, copy_kind kind, rmm::cuda_stream_view stream)
 {
-  impl::copy_pinned(dst, src, size * sizeof(T), stream);
+  if (kind == copy_kind::PINNED_TO_DEVICE) {
+    impl::copy_pinned_to_device(dst, src, size * sizeof(T), stream);
+  } else if (kind == copy_kind::DEVICE_TO_PINNED) {
+    impl::copy_device_to_pinned(dst, src, size * sizeof(T), stream);
+  } else if (kind == copy_kind::PAGEABLE_TO_DEVICE) {
+    impl::copy_pageable_to_device(dst, src, size * sizeof(T), stream);
+  } else if (kind == copy_kind::DEVICE_TO_PAGEABLE) {
+    impl::copy_device_to_pageable(dst, src, size * sizeof(T), stream);
+  }
+}
+
+/**
+ * @brief Synchronously copies data between the host and device.
+ *
+ * Implementation may use different strategies depending on the size and type of host data.
+ *
+ * @param dst Destination memory address
+ * @param src Source memory address
+ * @param size Number of bytes to copy
+ * @param kind Direction of the copy and type of host memory
+ * @param stream CUDA stream used for the copy
+ */
+template <typename T>
+void cuda_memcpy(T* dst, T const* src, size_t size, copy_kind kind, rmm::cuda_stream_view stream)
+{
+  cuda_memcpy_async(dst, src, size, kind, stream);
+  stream.synchronize();
 }
 
 }  // namespace cudf::detail

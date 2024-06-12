@@ -24,6 +24,8 @@
 
 namespace cudf::detail::impl {
 
+namespace {
+
 void copy_pinned(void* dst, void const* src, std::size_t size, rmm::cuda_stream_view stream)
 {
   if (size == 0) return;
@@ -36,6 +38,47 @@ void copy_pinned(void* dst, void const* src, std::size_t size, rmm::cuda_stream_
   } else {
     CUDF_CUDA_TRY(cudaMemcpyAsync(dst, src, size, cudaMemcpyDefault, stream));
   }
+}
+
+void copy_pageable(void* dst, void const* src, std::size_t size, rmm::cuda_stream_view stream)
+{
+  if (size == 0) return;
+
+  CUDF_CUDA_TRY(cudaMemcpyAsync(dst, src, size, cudaMemcpyDefault, stream));
+}
+
+};  // namespace
+
+void copy_pinned_to_device(void* dst,
+                           void const* src,
+                           std::size_t size,
+                           rmm::cuda_stream_view stream)
+{
+  copy_pinned(dst, src, size, stream);
+}
+
+void copy_device_to_pinned(void* dst,
+                           void const* src,
+                           std::size_t size,
+                           rmm::cuda_stream_view stream)
+{
+  copy_pinned(dst, src, size, stream);
+}
+
+void copy_device_to_pageable(void* dst,
+                             void const* src,
+                             std::size_t size,
+                             rmm::cuda_stream_view stream)
+{
+  copy_pageable(dst, src, size, stream);
+}
+
+void copy_pageable_to_device(void* dst,
+                             void const* src,
+                             std::size_t size,
+                             rmm::cuda_stream_view stream)
+{
+  copy_pageable(dst, src, size, stream);
 }
 
 }  // namespace cudf::detail::impl
