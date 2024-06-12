@@ -14,11 +14,11 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
     [0, 1, 2, -10, -20, -1, -2, 20],
 )
 @pytest.mark.parametrize(
-    "len",
+    "length",
     [0, 2, 12, 11],
 )
 @pytest.mark.parametrize("slice_pushdown", [False, True])
-def test_slice(offset, len, slice_pushdown):
+def test_slice(offset, length, slice_pushdown):
     ldf = pl.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -30,6 +30,6 @@ def test_slice(offset, len, slice_pushdown):
         ldf.group_by(pl.col("a"))
         .agg(pl.col("b").sum())
         .sort(by=pl.col("a"))
-        .slice(offset, len)
+        .slice(offset, length)
     )
     assert_gpu_result_equal(query, collect_kwargs={"slice_pushdown": slice_pushdown})
