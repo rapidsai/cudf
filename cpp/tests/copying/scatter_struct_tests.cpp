@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -209,9 +209,10 @@ TYPED_TEST(TypedStructScatterTest, ScatterStructOfListsTest)
   auto const structs_tgt = structs_col{{lists_col_tgt}}.release();
 
   // Expected data
-  auto const validity_expected = std::vector<bool>{0, 1, 1, 0, 0, 1, 1, 0, 0};
-  auto lists_col_expected      = lists_col{
-         {{1}, {2, 3}, {80}, {70, 75}, {55, 60, 65}, {35, 40, 45, 50}, {5}, {10, 15}, {20, 25, 30}},
+  auto const validity_expected =
+    std::vector<bool>{false, true, true, false, false, true, true, false, false};
+  auto lists_col_expected = lists_col{
+    {{1}, {2, 3}, {80}, {70, 75}, {55, 60, 65}, {35, 40, 45, 50}, {5}, {10, 15}, {20, 25, 30}},
     validity_expected.begin()};
   auto const structs_expected = structs_col{{lists_col_expected}}.release();
 
