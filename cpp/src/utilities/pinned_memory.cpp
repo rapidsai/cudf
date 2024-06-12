@@ -127,7 +127,7 @@ class fixed_pinned_pool_memory_resource {
 static_assert(cuda::mr::resource_with<fixed_pinned_pool_memory_resource,
                                       cuda::mr::device_accessible,
                                       cuda::mr::host_accessible>,
-              "");
+              "Pinned pool mr must be accessible from both host and device");
 
 CUDF_EXPORT rmm::host_device_async_resource_ref& make_default_pinned_mr(
   std::optional<size_t> config_size)

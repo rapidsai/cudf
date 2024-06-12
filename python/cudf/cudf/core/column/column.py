@@ -212,7 +212,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return pd.Index(pa_array.to_pandas())
 
     @property
-    def values_host(self) -> "np.ndarray":
+    def values_host(self) -> np.ndarray:
         """
         Return a numpy representation of the Column.
         """
@@ -226,7 +226,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return self.data_array_view(mode="read").copy_to_host()
 
     @property
-    def values(self) -> "cupy.ndarray":
+    def values(self) -> cupy.ndarray:
         """
         Return a CuPy representation of the Column.
         """
