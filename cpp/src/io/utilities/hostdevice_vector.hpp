@@ -16,11 +16,10 @@
 
 #pragma once
 
-#include "config_utils.hpp"
 #include "hostdevice_span.hpp"
 
-#include <cudf/detail/utilities/rmm_host_vector.hpp>
-#include <cudf/io/memory_resource.hpp>
+#include <cudf/detail/utilities/host_vector.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -53,7 +52,7 @@ class hostdevice_vector {
   }
 
   explicit hostdevice_vector(size_t initial_size, size_t max_size, rmm::cuda_stream_view stream)
-    : h_data({cudf::io::get_host_memory_resource(), stream}), d_data(max_size, stream)
+    : h_data{make_pinned_vector_async<T>(0, stream)}, d_data(max_size, stream)
   {
     CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
 
@@ -173,7 +172,7 @@ class hostdevice_vector {
   }
 
  private:
-  cudf::detail::rmm_host_vector<T> h_data;
+  cudf::detail::host_vector<T> h_data;
   rmm::device_uvector<T> d_data;
 };
 
