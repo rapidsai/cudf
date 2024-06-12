@@ -6,10 +6,10 @@ import copy
 import itertools
 import operator
 import pickle
-import types
 import warnings
 from collections import abc
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -31,7 +31,6 @@ from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import Dtype
 from cudf.api.types import is_bool_dtype, is_dtype_equal, is_scalar
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -47,6 +46,11 @@ from cudf.utils import ioutils
 from cudf.utils.dtypes import find_common_type
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
+
+if TYPE_CHECKING:
+    import types
+
+    from cudf._typing import Dtype
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
