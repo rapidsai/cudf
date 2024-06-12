@@ -16,23 +16,16 @@ def string_col():
     scope="module",
     params=[
         (1, 3, 1),
+        (0, 3, -1),
     ],
 )
 def pa_start_stop_step(request):
-    return (
-        pa.scalar(request.param[0], type=pa.int32()),
-        pa.scalar(request.param[1], type=pa.int32()),
-        pa.scalar(request.param[2], type=pa.int32()),
-    )
+    return tuple(pa.scalar(x, type=pa.int32()) for x in request.param)
 
 
 @pytest.fixture(scope="module")
 def plc_start_stop_step(pa_start_stop_step):
-    return (
-        plc.interop.from_arrow(pa_start_stop_step[0]),
-        plc.interop.from_arrow(pa_start_stop_step[1]),
-        plc.interop.from_arrow(pa_start_stop_step[2]),
-    )
+    return tuple(plc.interop.from_arrow(x) for x in pa_start_stop_step)
 
 
 def test_slice(string_col, pa_start_stop_step, plc_start_stop_step):
@@ -41,9 +34,17 @@ def test_slice(string_col, pa_start_stop_step, plc_start_stop_step):
     pa_start, pa_stop, pa_step = pa_start_stop_step
     plc_start, plc_stop, plc_step = plc_start_stop_step
 
-    expected = pa.compute.utf8_slice_codeunits(
-        string_col, pa_start.as_py(), pa_stop.as_py(), pa_step.as_py()
+    def slice_string(st, start, stop, step):
+        return st[start:stop:step] if st is not None else None
+
+    expected = pa.array(
+        [
+            slice_string(x, pa_start.as_py(), pa_stop.as_py(), pa_step.as_py())
+            for x in string_col.to_pylist()
+        ],
+        type=pa.string(),
     )
+
     got = plc.strings.slice.slice_strings(
         plc_col, start=plc_start, stop=plc_stop, step=plc_step
     )
