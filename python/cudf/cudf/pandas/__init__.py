@@ -36,7 +36,7 @@ def install():
                 UserWarning,
             )
         free_memory, _ = available_device_memory()
-        free_memory = int(float(free_memory) * 0.80)
+        free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
 
         if rmm_mode == "cuda":
             mr = rmm.mr.CudaMemoryResource()
