@@ -21,7 +21,7 @@ from cudf.api.types import is_list_like
 from cudf._lib.utils cimport data_from_unique_ptr
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
-
+from cudf._lib import pylibcudf
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
@@ -71,7 +71,8 @@ from cudf._lib.utils cimport table_view_from_table
 from pyarrow.lib import NativeFile
 
 from cudf.utils.ioutils import _ROW_GROUP_SIZE_BYTES_DEFAULT
-
+from cudf._lib.concat import concat_columns
+from cudf._lib.utils cimport data_from_pylibcudf_table
 
 cdef class BufferArrayFromVector:
     cdef Py_ssize_t length
@@ -883,7 +884,37 @@ cdef class ParquetReader:
             if dfs is None:
                 dfs = self._read_chunk()
             else:
-                dfs = cudf.concat([dfs, self._read_chunk()])
+                dfs = [dfs, self._read_chunk()]
+                concatenated_columns = []
+                column_names = dfs[0]._column_names
+                all_columns = []
+                for i in range(len(column_names)):
+                    cols = [table._data.columns[i] for table in dfs]
+                    all_columns.append(cols)
+                i = 0
+                del dfs
+                while True:
+                    try:
+                        columns = all_columns[0]
+                    except IndexError:
+                        break
+                    if len(columns) == 0:
+                        break
+                    res_col = None
+                    #for table in tables:
+                    #    if res_col is None:
+                    #        res_col = table._data.columns[i]
+                    #    else:
+                    #        res_col = concat_columns([res_col, table._data.columns[i]])
+                    res_col = concat_columns(columns)
+                    del all_columns[0]
+                    concatenated_columns.append(res_col.to_pylibcudf(mode="read"))
+                dfs = cudf.DataFrame._from_data(
+                    *data_from_pylibcudf_table(
+                    pylibcudf.Table(concatenated_columns),
+                    column_names=column_names,
+                    index_names=None
+                ))
             #dfs.append(self._read_chunk())
         #df = cudf.concat(dfs)
         df = dfs
