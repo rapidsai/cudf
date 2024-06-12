@@ -14,6 +14,8 @@
 
 cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
+set(rapids-cmake-url "https://github.com/sleeepyjack/rapids-cmake/archive/refs/heads/bugfix/cccl-span.zip")
+
 include(../rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cpm)
