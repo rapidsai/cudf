@@ -28,18 +28,6 @@
 
 namespace cudf {
 namespace detail {
-template <typename ColumnView>
-table_view_base<ColumnView>::table_view_base(std::vector<ColumnView> const& cols) : _columns{cols}
-{
-  if (num_columns() > 0) {
-    std::for_each(_columns.begin(), _columns.end(), [this](ColumnView col) {
-      CUDF_EXPECTS(col.size() == _columns.front().size(), "Column size mismatch.");
-    });
-    _num_rows = _columns.front().size();
-  } else {
-    _num_rows = 0;
-  }
-}
 
 template <typename ViewType>
 auto concatenate_column_views(std::vector<ViewType> const& views)
@@ -50,12 +38,6 @@ auto concatenate_column_views(std::vector<ViewType> const& views)
     concat_cols.insert(concat_cols.end(), view.begin(), view.end());
   }
   return concat_cols;
-}
-
-template <typename ColumnView>
-ColumnView const& table_view_base<ColumnView>::column(size_type column_index) const
-{
-  return _columns.at(column_index);
 }
 
 // Explicit instantiation for a table of `column_view`s
@@ -172,6 +154,7 @@ bool has_nested_columns(table_view const& table)
   return std::any_of(
     table.begin(), table.end(), [](column_view const& col) { return is_nested(col.type()); });
 }
-
 }  // namespace detail
+
+bool has_nested_columns(table_view const& table) { return detail::has_nested_columns(table); }
 }  // namespace cudf

@@ -32,7 +32,7 @@
  * passed by value.
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @brief Base class for a table of `ColumnView`s
@@ -78,7 +78,17 @@ class table_view_base {
    *
    * @param cols The vector of columns to construct the table from
    */
-  explicit table_view_base(std::vector<ColumnView> const& cols);
+  explicit table_view_base(std::vector<ColumnView> const& cols) : _columns{cols}
+  {
+    if (num_columns() > 0) {
+      std::for_each(_columns.begin(), _columns.end(), [this](ColumnView col) {
+        CUDF_EXPECTS(col.size() == _columns.front().size(), "Column size mismatch.");
+      });
+      _num_rows = _columns.front().size();
+    } else {
+      _num_rows = 0;
+    }
+  }
 
   /**
    * @brief Returns an iterator to the first view in the `table`.
@@ -123,7 +133,10 @@ class table_view_base {
    * @param column_index The index of the desired column
    * @return A reference to the desired column
    */
-  [[nodiscard]] ColumnView const& column(size_type column_index) const;
+  [[nodiscard]] ColumnView const& column(size_type column_index) const
+  {
+    return _columns.at(column_index);
+  }
 
   /**
    * @brief Returns the number of columns
@@ -168,13 +181,19 @@ class table_view_base {
 };
 
 /**
+ * @copydoc bool has_nested_columns(table_view const& table)
+ */
+bool has_nested_columns(table_view const& table);
+
+}  // namespace detail
+
+/**
  * @brief Determine if any nested columns exist in a given table.
  *
  * @param table The input table
  * @return Whether nested columns exist in the input table
  */
 bool has_nested_columns(table_view const& table);
-}  // namespace detail
 
 /**
  * @brief A set of cudf::column_view's of the same size.
@@ -374,4 +393,4 @@ extern template bool is_relationally_comparable<mutable_table_view>(mutable_tabl
                                                                     mutable_table_view const& rhs);
 // @endcond
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
