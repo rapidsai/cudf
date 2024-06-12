@@ -158,7 +158,7 @@ cdef cppclass iobase_data_sink(data_sink):
         this.buf = buf_
 
     void host_write(const void * data, size_t size) with gil:
-        if isinstance(buf, io.StringIO):
+        if isinstance(buf, io.TextIOBase):
             buf.write(PyMemoryView_FromMemory(<char*>data, size, PyBUF_READ)
                       .tobytes().decode())
         else:
@@ -200,25 +200,23 @@ cdef class SinkInfo:
                 )
                 data_sinks.push_back(self.sink_storage.back().get())
             self.c_obj = sink_info(data_sinks)
-        elif isinstance(sinks[0], io.TextIOBase):
+        elif isinstance(sinks[0], io.IOBase):
             data_sinks.reserve(len(sinks))
             for s in sinks:
                 # Files opened in text mode expect writes to be str rather than
                 # bytes, which requires conversion from utf-8. If the underlying
                 # buffer is utf-8, we can bypass this conversion by writing
                 # directly to it.
-                if codecs.lookup(s.encoding).name not in {"utf-8", "ascii"}:
+                if (
+                    isinstance(s, io.TextIOBase) and
+                    codecs.lookup(s.encoding).name not in {
+                        "utf-8",
+                        "ascii",
+                    }
+                ):
                     raise NotImplementedError(f"Unsupported encoding {s.encoding}")
                 self.sink_storage.push_back(
                     unique_ptr[data_sink](new iobase_data_sink(s.buffer))
-                )
-                data_sinks.push_back(self.sink_storage.back().get())
-            self.c_obj = sink_info(data_sinks)
-        elif isinstance(sinks[0], io.IOBase):
-            data_sinks.reserve(len(sinks))
-            for s in sinks:
-                self.sink_storage.push_back(
-                    unique_ptr[data_sink](new iobase_data_sink(s))
                 )
                 data_sinks.push_back(self.sink_storage.back().get())
             self.c_obj = sink_info(data_sinks)
