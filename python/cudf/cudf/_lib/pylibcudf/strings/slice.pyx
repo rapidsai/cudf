@@ -20,8 +20,33 @@ cpdef Column slice_strings(
     Column input,
     ColumnOrScalar start=None,
     ColumnOrScalar stop=None,
-    ColumnOrScalar step=None
+    Scalar step=None
 ):
+    """Perform a slice operation on a strings column.
+
+    ``start`` and ``stop`` may be a
+    :py:class:`~cudf._lib.pylibcudf.column.Column` or a
+    :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`. But ``step`` must be a
+    :py:class:`~cudf._lib.pylibcudf.column.Scalar`.
+
+    For details, see :cpp:func:`cudf::strings::slice_strings`.
+
+    Parameters
+    ----------
+    input : Column
+        Strings column for this operation
+    start : Union[Column, Scalar]
+        The start character position or positions.
+    stop : Union[Column, Scalar]
+        The end character position or positions
+    step : Scalar
+        Distance between input characters retrieved
+
+    Returns
+    -------
+    pylibcudf.Column
+        The result of the slice operation
+    """
     cdef unique_ptr[column] c_result
     cdef numeric_scalar[size_type]* cpp_start
     cdef numeric_scalar[size_type]* cpp_stop
