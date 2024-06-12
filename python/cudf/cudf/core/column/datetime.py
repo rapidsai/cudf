@@ -377,6 +377,16 @@ class DatetimeColumn(column.ColumnBase):
     def round(self, freq: str) -> ColumnBase:
         return libcudf.datetime.round_datetime(self, freq)
 
+    def isocalendar(self) -> dict[str, ColumnBase]:
+        return {
+            field: self.as_string_column("str", format=directive).astype(
+                "uint32"
+            )
+            for field, directive in zip(
+                ["year", "week", "day"], ["%G", "%V", "%u"]
+            )
+        }
+
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
         if isinstance(other, (cudf.Scalar, ColumnBase, cudf.DateOffset)):
             return other
