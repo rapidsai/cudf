@@ -37,10 +37,10 @@ struct StringsReplaceTest : public cudf::test::BaseFixture {
                                        "",
                                        nullptr};
 
-    return cudf::test::strings_column_wrapper(
+    return {
       h_strings.begin(),
       h_strings.end(),
-      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; })};
   }
 
   std::unique_ptr<cudf::column> build_large(cudf::column_view const& first,
@@ -429,7 +429,7 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
      "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá",
      "",
      ""},
-    {1, 1, 1, 1, 0, 1});
+    {true, true, true, true, false, true});
   auto strings_view = cudf::strings_column_view(input);
 
   auto targets      = cudf::test::strings_column_wrapper({"78901", "bananá", "ápple", "78"});
@@ -463,7 +463,7 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
        "Test string for overlap check: bananaavocado PEAR avocadoPEAR banavocado avocado PEAR",
        "",
        ""},
-      {1, 1, 1, 1, 0, 1});
+      {true, true, true, true, false, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 
@@ -491,7 +491,7 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
        "*",
        "",
        ""},
-      {1, 1, 1, 1, 0, 1});
+      {true, true, true, true, false, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 
@@ -527,7 +527,7 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
        "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá",
        "",
        ""},
-      {1, 1, 1, 1, 0, 1});
+      {true, true, true, true, false, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }

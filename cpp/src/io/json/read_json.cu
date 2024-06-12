@@ -85,7 +85,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                                   sources.end(),
                                   prefsum_source_sizes.begin(),
                                   std::plus<int>{},
-                                  [](const std::unique_ptr<datasource>& s) { return s->size(); });
+                                  [](std::unique_ptr<datasource> const& s) { return s->size(); });
     auto upper =
       std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
     size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
