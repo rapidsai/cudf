@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -253,8 +253,9 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithNullInputsHonoursMinPeriods)
                            min_periods,
                            *cudf::make_collect_list_aggregation<cudf::rolling_aggregation>());
 
-    auto expected_result_child_values   = std::vector<int32_t>{0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 5};
-    auto expected_result_child_validity = std::vector<bool>{1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1};
+    auto expected_result_child_values = std::vector<int32_t>{0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 5};
+    auto expected_result_child_validity =
+      std::vector<bool>{true, false, true, false, true, true, true, true, false, true, false, true};
     auto expected_result_child =
       cudf::test::fixed_width_column_wrapper<T, int32_t>(expected_result_child_values.begin(),
                                                          expected_result_child_values.end(),
@@ -325,8 +326,9 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithNullInputsHonoursMinPeriods)
                            min_periods,
                            *cudf::make_collect_list_aggregation<cudf::rolling_aggregation>());
 
-    auto expected_result_child_values   = std::vector<int32_t>{0, 1, 2, 3, 1, 2, 3, 4, 2, 3, 4, 5};
-    auto expected_result_child_validity = std::vector<bool>{1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1};
+    auto expected_result_child_values = std::vector<int32_t>{0, 1, 2, 3, 1, 2, 3, 4, 2, 3, 4, 5};
+    auto expected_result_child_validity =
+      std::vector<bool>{true, false, true, true, false, true, true, false, true, true, false, true};
     auto expected_result_child =
       cudf::test::fixed_width_column_wrapper<T, int32_t>(expected_result_child_values.begin(),
                                                          expected_result_child_values.end(),
@@ -432,7 +434,7 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsOnStrings)
                          *cudf::make_collect_list_aggregation<cudf::rolling_aggregation>());
   auto expected_result_2 = cudf::test::lists_column_wrapper<cudf::string_view>{
     {{}, {"0", "1", "2", "3"}, {"1", "2", "3", "4"}, {"2", "3", "4", "5"}, {}, {}},
-    cudf::detail::make_counting_transform_iterator(0, [num_elements](auto i) {
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return i != 0 && i < 4;
     })}.release();
 
@@ -525,7 +527,7 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsWithDecimal)
       cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 4, 8, 12, 12, 12}.release();
     auto expected_num_rows = expected_offsets->size() - 1;
     auto null_mask_iter    = cudf::detail::make_counting_transform_iterator(
-      cudf::size_type{0}, [expected_num_rows](auto i) { return i > 0 && i < 4; });
+      cudf::size_type{0}, [](auto i) { return i > 0 && i < 4; });
 
     auto [null_mask, null_count] =
       cudf::test::detail::make_null_mask(null_mask_iter, null_mask_iter + expected_num_rows);
@@ -833,8 +835,9 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNulls)
       1, 1, 2, 2, 3, 1, 4, 5, 6};
   auto const group_column =
     cudf::test::fixed_width_column_wrapper<int32_t>{1, 1, 1, 1, 1, 2, 2, 2, 2};
-  auto const input_column = cudf::test::strings_column_wrapper{
-    {"10", "11", "12", "13", "14", "20", "21", "22", "23"}, {1, 0, 1, 1, 1, 1, 0, 1, 1}};
+  auto const input_column =
+    cudf::test::strings_column_wrapper{{"10", "11", "12", "13", "14", "20", "21", "22", "23"},
+                                       {true, false, true, true, true, true, false, true, true}};
   auto const preceding   = 2;
   auto const following   = 1;
   auto const min_periods = 1;
@@ -1148,8 +1151,9 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNullsAndMinPer
       1, 1, 2, 2, 3, 1, 4, 5, 6};
   auto const group_column =
     cudf::test::fixed_width_column_wrapper<int32_t>{1, 1, 1, 1, 1, 2, 2, 2, 2};
-  auto const input_column = cudf::test::strings_column_wrapper{
-    {"10", "11", "12", "13", "14", "20", "21", "22", "23"}, {1, 0, 1, 1, 1, 1, 0, 1, 1}};
+  auto const input_column =
+    cudf::test::strings_column_wrapper{{"10", "11", "12", "13", "14", "20", "21", "22", "23"},
+                                       {true, false, true, true, true, true, false, true, true}};
   auto const preceding   = 2;
   auto const following   = 1;
   auto const min_periods = 4;
@@ -1558,7 +1562,7 @@ TEST_F(CollectSetTest, RollingWindowHonoursMinPeriodsOnStrings)
                         *cudf::make_collect_set_aggregation<cudf::rolling_aggregation>());
   auto expected_result_2 = cudf::test::lists_column_wrapper<cudf::string_view>{
     {{}, {"0", "1", "2"}, {"1", "2", "4"}, {"2", "4"}, {}, {}},
-    cudf::detail::make_counting_transform_iterator(0, [num_elements](auto i) {
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return i != 0 && i < 4;
     })}.release();
 
@@ -1650,7 +1654,7 @@ TEST_F(CollectSetTest, RollingWindowHonoursMinPeriodsWithDecimal)
       cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 3, 7, 10, 10, 10}.release();
     auto expected_num_rows = expected_offsets->size() - 1;
     auto null_mask_iter    = cudf::detail::make_counting_transform_iterator(
-      cudf::size_type{0}, [expected_num_rows](auto i) { return i > 0 && i < 4; });
+      cudf::size_type{0}, [](auto i) { return i > 0 && i < 4; });
 
     auto [null_mask, null_count] =
       cudf::test::detail::make_null_mask(null_mask_iter, null_mask_iter + expected_num_rows);

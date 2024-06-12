@@ -39,17 +39,19 @@
 std::unique_ptr<cudf::table> get_cudf_table()
 {
   std::vector<std::unique_ptr<cudf::column>> columns;
-  columns.emplace_back(
-    cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1}).release());
+  columns.emplace_back(cudf::test::fixed_width_column_wrapper<int32_t>(
+                         {1, 2, 5, 2, 7}, {true, false, true, true, true})
+                         .release());
   columns.emplace_back(cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 3, 4, 5}).release());
-  columns.emplace_back(
-    cudf::test::strings_column_wrapper({"fff", "aaa", "", "fff", "ccc"}, {1, 1, 1, 0, 1})
-      .release());
-  auto col4 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
+  columns.emplace_back(cudf::test::strings_column_wrapper({"fff", "aaa", "", "fff", "ccc"},
+                                                          {true, true, true, false, true})
+                         .release());
+  auto col4 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 2, 7},
+                                                              {true, false, true, true, true});
   columns.emplace_back(std::move(cudf::dictionary::encode(col4)));
-  columns.emplace_back(
-    cudf::test::fixed_width_column_wrapper<bool>({true, false, true, false, true}, {1, 0, 1, 1, 0})
-      .release());
+  columns.emplace_back(cudf::test::fixed_width_column_wrapper<bool>(
+                         {true, false, true, false, true}, {true, false, true, true, false})
+                         .release());
   // columns.emplace_back(cudf::test::lists_column_wrapper<int>({{1, 2}, {3, 4}, {}, {6}, {7, 8,
   // 9}}).release());
   return std::make_unique<cudf::table>(std::move(columns));
@@ -171,15 +173,17 @@ TEST_F(FromArrowTest, StructColumn)
       "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Überwald"}
       .release();
   auto str_col2 =
-    cudf::test::strings_column_wrapper{{"CUDF", "ROCKS", "EVERYWHERE"}, {0, 1, 0}}.release();
+    cudf::test::strings_column_wrapper{{"CUDF", "ROCKS", "EVERYWHERE"}, {false, true, false}}
+      .release();
   int num_rows{str_col->size()};
   auto int_col = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{48, 27, 25}}.release();
   auto int_col2 =
-    cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{12, 24, 47}, {1, 0, 1}}.release();
-  auto bool_col = cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}}.release();
-  auto list_col =
-    cudf::test::lists_column_wrapper<int64_t>({{{1, 2}, {3, 4}, {5}}, {{{6}}}, {{7}, {8, 9}}})
+    cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{12, 24, 47}, {true, false, true}}
       .release();
+  auto bool_col = cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}}.release();
+  auto list_col = cudf::test::lists_column_wrapper<int64_t>(
+                    {{{1, 2}, {3, 4}, {5}}, {{{6}}}, {{7}, {8, 9}}})  // NOLINT
+                    .release();
   vector_of_columns cols2;
   cols2.push_back(std::move(str_col2));
   cols2.push_back(std::move(int_col2));
@@ -261,7 +265,8 @@ TEST_F(FromArrowTest, DictionaryIndicesType)
   auto arrow_table = arrow::Table::Make(schema, {array1, array2, array3});
 
   std::vector<std::unique_ptr<cudf::column>> columns;
-  auto col = cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
+  auto col = cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 5, 2, 7},
+                                                             {true, false, true, true, true});
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));
@@ -299,7 +304,8 @@ TEST_F(FromArrowTest, ChunkedArray)
     std::vector<std::shared_ptr<arrow::Array>>{string_array_1, string_array_2});
   auto dict_chunked_array = std::make_shared<arrow::ChunkedArray>(
     std::vector<std::shared_ptr<arrow::Array>>{dict_array1, dict_array2});
-  auto boolean_array = get_arrow_array<bool>({true, false, true, false, true}, {1, 0, 1, 1, 0});
+  auto boolean_array =
+    get_arrow_array<bool>({true, false, true, false, true}, {true, false, true, true, false});
   auto boolean_chunked_array = std::make_shared<arrow::ChunkedArray>(boolean_array);
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector(
@@ -404,8 +410,9 @@ TEST_F(FromArrowTest, FixedPoint128TableNulls)
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
     auto const data     = std::vector<__int128_t>{1, 2, 3, 4, 5, 6, 0, 0};
     auto const validity = std::vector<int32_t>{1, 1, 1, 1, 1, 1, 0, 0};
-    auto const col =
-      fp_wrapper<__int128_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
+    auto const col      = fp_wrapper<__int128_t>({1, 2, 3, 4, 5, 6, 0, 0},
+                                            {true, true, true, true, true, true, false, false},
+                                            scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     auto const arr = make_decimal128_arrow_array(data, validity, scale);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -154,7 +154,8 @@ TEST_F(ListTest, StableSortLists)
 TEST_F(ListTest, ApplyBooleanMask)
 {
   cudf::test::lists_column_wrapper<int> list_col{{0, 1}, {2, 3, 7, 8}, {4, 5}};
-  cudf::test::lists_column_wrapper<bool> boolean_mask{{0, 1}, {1, 1, 1, 0}, {0, 1}};
+  cudf::test::lists_column_wrapper<bool> boolean_mask{
+    {false, true}, {true, true, true, false}, {false, true}};
   cudf::lists::apply_boolean_mask(list_col, boolean_mask, cudf::test::get_default_stream());
 }
 
