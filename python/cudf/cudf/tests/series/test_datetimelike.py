@@ -72,7 +72,7 @@ def test_localize_ambiguous(request, unit, zone_name):
         dtype=f"datetime64[{unit}]",
     )
     expect = s.to_pandas().dt.tz_localize(
-        zone_name, ambiguous="NaT", nonexistent="NaT"
+        zoneinfo.ZoneInfo(zone_name), ambiguous="NaT", nonexistent="NaT"
     )
     got = s.dt.tz_localize(zone_name)
     assert_eq(expect, got)
@@ -98,7 +98,7 @@ def test_localize_nonexistent(request, unit, zone_name):
         dtype=f"datetime64[{unit}]",
     )
     expect = s.to_pandas().dt.tz_localize(
-        zone_name, ambiguous="NaT", nonexistent="NaT"
+        zoneinfo.ZoneInfo(zone_name), ambiguous="NaT", nonexistent="NaT"
     )
     got = s.dt.tz_localize(zone_name)
     assert_eq(expect, got)
@@ -132,6 +132,9 @@ def test_delocalize_naive():
     "to_tz", ["Europe/London", "America/Chicago", "UTC", None]
 )
 def test_convert(from_tz, to_tz):
+    from_tz = zoneinfo.ZoneInfo(from_tz)
+    if to_tz is not None:
+        to_tz = zoneinfo.ZoneInfo(to_tz)
     ps = pd.Series(pd.date_range("2023-01-01", periods=3, freq="h"))
     gs = cudf.from_pandas(ps)
     ps = ps.dt.tz_localize(from_tz)
@@ -171,6 +174,8 @@ def test_convert_from_naive():
     ],
 )
 def test_convert_edge_cases(data, original_timezone, target_timezone):
+    original_timezone = zoneinfo.ZoneInfo(original_timezone)
+    target_timezone = zoneinfo.ZoneInfo(target_timezone)
     ps = pd.Series(data, dtype="datetime64[s]").dt.tz_localize(
         original_timezone
     )
