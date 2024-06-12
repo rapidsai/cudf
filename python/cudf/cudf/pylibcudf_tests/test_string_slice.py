@@ -8,8 +8,13 @@ import cudf._lib.pylibcudf as plc
 
 
 @pytest.fixture(scope="module")
-def string_col():
-    return pa.array(["AbC"])
+def pa_col():
+    return pa.array(["AbC", "123abc", "", " ", None])
+
+
+@pytest.fixture(scope="module")
+def plc_col(pa_col):
+    return plc.interop.from_arrow(pa_col)
 
 
 @pytest.fixture(
@@ -28,9 +33,27 @@ def plc_start_stop_step(pa_start_stop_step):
     return tuple(plc.interop.from_arrow(x) for x in pa_start_stop_step)
 
 
-def test_slice(string_col, pa_start_stop_step, plc_start_stop_step):
-    plc_col = plc.interop.from_arrow(string_col)
+@pytest.fixture(scope="module")
+def pa_starts_col():
+    return pa.array([0, 1, 3, -1, 100])
 
+
+@pytest.fixture(scope="module")
+def plc_starts_col(pa_starts_col):
+    return plc.interop.from_arrow(pa_starts_col)
+
+
+@pytest.fixture(scope="module")
+def pa_stops_col():
+    return pa.array([1, 3, 4, -1, 100])
+
+
+@pytest.fixture(scope="module")
+def plc_stops_col(pa_stops_col):
+    return plc.interop.from_arrow(pa_stops_col)
+
+
+def test_slice(pa_col, plc_col, pa_start_stop_step, plc_start_stop_step):
     pa_start, pa_stop, pa_step = pa_start_stop_step
     plc_start, plc_stop, plc_step = plc_start_stop_step
 
@@ -40,13 +63,38 @@ def test_slice(string_col, pa_start_stop_step, plc_start_stop_step):
     expected = pa.array(
         [
             slice_string(x, pa_start.as_py(), pa_stop.as_py(), pa_step.as_py())
-            for x in string_col.to_pylist()
+            for x in pa_col.to_pylist()
         ],
         type=pa.string(),
     )
 
     got = plc.strings.slice.slice_strings(
         plc_col, start=plc_start, stop=plc_stop, step=plc_step
+    )
+
+    assert_column_eq(expected, got)
+
+
+def test_slice_column(
+    pa_col, plc_col, pa_starts_col, plc_starts_col, pa_stops_col, plc_stops_col
+):
+    def slice_string(st, start, stop):
+        return st[start:stop] if st is not None else None
+
+    expected = pa.array(
+        [
+            slice_string(x, start, stop)
+            for x, start, stop in zip(
+                pa_col.to_pylist(),
+                pa_starts_col.to_pylist(),
+                pa_stops_col.to_pylist(),
+            )
+        ],
+        type=pa.string(),
+    )
+
+    got = plc.strings.slice.slice_strings(
+        plc_col, plc_starts_col, plc_stops_col
     )
 
     assert_column_eq(expected, got)
