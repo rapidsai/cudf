@@ -69,7 +69,7 @@ TEST_F(StringsFindMultipleTest, ZeroSizeStringsColumn)
 
 TEST_F(StringsFindMultipleTest, ErrorTest)
 {
-  cudf::test::strings_column_wrapper strings({"this string intentionally left blank"}, {0});
+  cudf::test::strings_column_wrapper strings({"this string intentionally left blank"}, {false});
   auto strings_view = cudf::strings_column_view(strings);
 
   auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
