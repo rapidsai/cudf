@@ -12,8 +12,8 @@
 # the License.
 # =============================================================================
 
-set(rapids-cmake-repo PointKernel/rapids-cmake)
-set(rapids-cmake-branch local-test)
+set(rapids-cmake-repo sleeepyjack/rapids-cmake)
+set(rapids-cmake-branch bugfix/cccl-span)
 
 file(READ "${CMAKE_CURRENT_LIST_DIR}/VERSION" _rapids_version)
 if(_rapids_version MATCHES [[^([0-9][0-9])\.([0-9][0-9])\.([0-9][0-9])]])
