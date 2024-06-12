@@ -454,8 +454,8 @@ TEST_F(JsonPathTests, GetJsonObjectFilter)
 TEST_F(JsonPathTests, GetJsonObjectNullInputs)
 {
   {
-    std::string str("{\"a\" : \"b\"}");
-    cudf::test::strings_column_wrapper input({str, str, str, str}, {1, 0, 1, 0});
+    std::string str(R"({"a" : "b"})");
+    cudf::test::strings_column_wrapper input({str, str, str, str}, {true, false, true, false});
 
     std::string json_path("$.a");
     auto result_raw = cudf::get_json_object(cudf::strings_column_view(input), json_path);
@@ -786,7 +786,7 @@ TEST_F(JsonPathTests, StripQuotes)
   // but with string_quotes_from_single_strings false, we expect
   // "b"   (with quotes)
   {
-    std::string str("{\"a\" : \"b\"}");
+    std::string str(R"({"a" : "b"})");
     cudf::test::strings_column_wrapper input({str, str});
 
     cudf::get_json_object_options options;

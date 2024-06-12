@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ struct StringsFindallTests : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFindallTests, FindallTest)
 {
-  bool valids[] = {1, 1, 1, 1, 1, 0, 1, 1};
+  bool valids[] = {true, true, true, true, true, false, true, true};
   cudf::test::strings_column_wrapper input(
     {"3-A", "4-May 5-Day 6-Hay", "12-Dec-2021-Jan", "Feb-March", "4 ABC", "", "", "25-9000-Hal"},
     valids);
@@ -83,7 +83,7 @@ TEST_F(StringsFindallTests, DotAll)
 TEST_F(StringsFindallTests, MediumRegex)
 {
   // This results in 15 regex instructions and falls in the 'medium' range.
-  std::string medium_regex = "(\\w+) (\\w+) (\\d+)";
+  std::string medium_regex = R"((\w+) (\w+) (\d+))";
   auto prog                = cudf::strings::regex_program::create(medium_regex);
 
   cudf::test::strings_column_wrapper input({"first words 1234 and just numbers 9876", "neither"});
