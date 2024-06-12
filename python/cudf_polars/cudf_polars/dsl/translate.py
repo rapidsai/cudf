@@ -10,6 +10,7 @@ from functools import singledispatch
 from typing import Any
 
 import pyarrow as pa
+from typing_extensions import assert_never
 
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
@@ -361,17 +362,20 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
 @_translate_expr.register
 def _(node: pl_expr.Window, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
     # TODO: raise in groupby?
-    if node.partition_by is None:
+    if isinstance(node.options, pl_expr.RollingGroupOptions):
+        # pl.col("a").rolling(...)
         return expr.RollingWindow(
             dtype, node.options, translate_expr(visitor, n=node.function)
         )
-    else:
+    elif isinstance(node.options, pl_expr.WindowMapping):
+        # pl.col("a").over(...)
         return expr.GroupedRollingWindow(
             dtype,
             node.options,
             translate_expr(visitor, n=node.function),
             *(translate_expr(visitor, n=n) for n in node.partition_by),
         )
+    assert_never(node.options)
 
 
 @_translate_expr.register

@@ -413,8 +413,6 @@ class GroupBy(IR):
         if isinstance(agg, (expr.BinOp, expr.Cast)):
             return max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, expr.Agg):
-            if agg.name == "implode":
-                raise NotImplementedError("implode in groupby")
             return 1 + max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, (expr.Len, expr.Col, expr.Literal)):
             return 0
@@ -426,7 +424,9 @@ class GroupBy(IR):
         if self.options.rolling is None and self.maintain_order:
             raise NotImplementedError("Maintaining order in groupby")
         if self.options.rolling:
-            raise NotImplementedError("rolling window/groupby")
+            raise NotImplementedError(
+                "rolling window/groupby"
+            )  # pragma: no cover; rollingwindow constructor has already raised
         if any(GroupBy.check_agg(a.value) > 1 for a in self.agg_requests):
             raise NotImplementedError("Nested aggregations in groupby")
         self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
