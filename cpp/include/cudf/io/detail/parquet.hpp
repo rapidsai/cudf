@@ -160,7 +160,7 @@ class chunked_reader : private reader {
    * destructor needs to be defined in a separate source file which can access to that object's
    * declaration.
    */
-  ~chunked_reader();
+  ~chunked_reader() override;
 
   /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next
