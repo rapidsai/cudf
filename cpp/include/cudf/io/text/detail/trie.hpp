@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <algorithm>
 #include <queue>
@@ -165,7 +166,7 @@ struct trie {
    */
   static trie create(std::string const& pattern,
                      rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+                     rmm::device_async_resource_ref mr)
 
   {
     return create(std::vector<std::string>{pattern}, stream, mr);
@@ -181,7 +182,7 @@ struct trie {
    */
   static trie create(std::vector<std::string> const& patterns,
                      rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+                     rmm::device_async_resource_ref mr)
   {
     std::vector<char> tokens;
     std::vector<uint8_t> transitions;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,12 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace groupby {
@@ -58,16 +58,20 @@ struct sort_groupby_helper {
    * @param include_null_keys Include rows in keys with nulls
    * @param keys_pre_sorted Indicate if the keys are already sorted. Enables
    *                        optimizations to help skip re-sorting keys.
+   * @param null_precedence Indicates the ordering of nulls in each column.
+   *                        Default behavior for each column is
+   *                        `null_order::AFTER`
    */
   sort_groupby_helper(table_view const& keys,
-                      null_policy include_null_keys = null_policy::EXCLUDE,
-                      sorted keys_pre_sorted        = sorted::NO);
+                      null_policy include_null_keys,
+                      sorted keys_pre_sorted,
+                      std::vector<null_order> const& null_precedence);
 
-  ~sort_groupby_helper()                          = default;
-  sort_groupby_helper(sort_groupby_helper const&) = delete;
+  ~sort_groupby_helper()                                     = default;
+  sort_groupby_helper(sort_groupby_helper const&)            = delete;
   sort_groupby_helper& operator=(sort_groupby_helper const&) = delete;
   sort_groupby_helper(sort_groupby_helper&&)                 = default;
-  sort_groupby_helper& operator=(sort_groupby_helper&&) = default;
+  sort_groupby_helper& operator=(sort_groupby_helper&&)      = default;
 
   /**
    * @brief Groups a column of values according to `keys` and sorts within each
@@ -82,10 +86,9 @@ struct sort_groupby_helper {
    * @param values The value column to group and sort
    * @return the sorted and grouped column
    */
-  std::unique_ptr<column> sorted_values(
-    column_view const& values,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::unique_ptr<column> sorted_values(column_view const& values,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::device_async_resource_ref mr);
 
   /**
    * @brief Groups a column of values according to `keys`
@@ -97,28 +100,25 @@ struct sort_groupby_helper {
    * @param values The value column to group
    * @return the grouped column
    */
-  std::unique_ptr<column> grouped_values(
-    column_view const& values,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::unique_ptr<column> grouped_values(column_view const& values,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr);
 
   /**
    * @brief Get a table of sorted unique keys
    *
    * @return a new table in which each row is a unique row in the sorted key table.
    */
-  std::unique_ptr<table> unique_keys(
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::unique_ptr<table> unique_keys(rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr);
 
   /**
    * @brief Get a table of sorted keys
    *
    * @return a new table containing the sorted keys.
    */
-  std::unique_ptr<table> sorted_keys(
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::unique_ptr<table> sorted_keys(rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr);
 
   /**
    * @brief Get the number of groups in `keys`
@@ -218,8 +218,6 @@ struct sort_groupby_helper {
   column_ptr _unsorted_keys_labels;  ///< Group labels for unsorted _keys
   column_ptr _keys_bitmask_column;   ///< Column representing rows with one or more nulls values
   table_view _keys;                  ///< Input keys to sort by
-  table_view _unflattened_keys;      ///< Input keys, unflattened and possibly nested
-  structs::detail::flattened_table _flattened;  ///< Support datastructures for _keys
 
   index_vector_ptr
     _group_offsets;  ///< Indices into sorted _keys indicating starting index of each groups
@@ -228,6 +226,7 @@ struct sort_groupby_helper {
   size_type _num_keys;      ///< Number of effective rows in _keys (adjusted for _include_null_keys)
   sorted _keys_pre_sorted;  ///< Whether _keys are pre-sorted
   null_policy _include_null_keys;  ///< Whether to use rows with nulls in _keys for grouping
+  std::vector<null_order> _null_precedence;  ///< How to sort NULLs
 };
 
 }  // namespace sort

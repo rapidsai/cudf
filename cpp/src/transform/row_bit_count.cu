@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
@@ -26,12 +28,15 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <thrust/fill.h>
-#include <thrust/optional.h>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <cuda/functional>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/optional.h>
+#include <thrust/tabulate.h>
 
 namespace cudf {
 namespace detail {
@@ -246,7 +251,7 @@ struct flatten_functor {
 
     structs_column_view scv(col);
     auto iter = cudf::detail::make_counting_transform_iterator(
-      0, [&scv](auto i) { return scv.get_sliced_child(i); });
+      0, [&scv, &stream](auto i) { return scv.get_sliced_child(i, stream); });
     flatten_hierarchy(iter,
                       iter + scv.num_children(),
                       out,
@@ -352,11 +357,12 @@ __device__ size_type row_size_functor::operator()<string_view>(column_device_vie
     return 0;
   }
 
-  auto const offsets_size  = sizeof(offset_type) * CHAR_BIT;
+  auto const offsets_size =
+    (offsets.type().id() == type_id::INT32 ? sizeof(int32_t) : sizeof(int64_t)) * CHAR_BIT;
   auto const validity_size = col.nullable() ? 1 : 0;
-  auto const chars_size =
-    (offsets.data<offset_type>()[row_end] - offsets.data<offset_type>()[row_start]) * CHAR_BIT;
-  return ((offsets_size + validity_size) * num_rows) + chars_size;
+  auto const d_offsets     = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+  auto const chars_size    = (d_offsets[row_end] - d_offsets[row_start]) * CHAR_BIT;
+  return static_cast<size_type>(((offsets_size + validity_size) * num_rows) + chars_size);
 }
 
 /**
@@ -372,7 +378,7 @@ __device__ size_type row_size_functor::operator()<list_view>(column_device_view 
 {
   auto const num_rows{span.row_end - span.row_start};
 
-  auto const offsets_size  = sizeof(offset_type) * CHAR_BIT;
+  auto const offsets_size  = sizeof(size_type) * CHAR_BIT;
   auto const validity_size = col.nullable() ? 1 : 0;
   return (offsets_size + validity_size) * num_rows;
 }
@@ -396,26 +402,32 @@ __device__ size_type row_size_functor::operator()<struct_view>(column_device_vie
  * @param cols An span of column_device_views representing a column hierarchy
  * @param info An span of column_info structs corresponding the elements in `cols`
  * @param output Output span of size (# rows) where per-row bit sizes are stored
+ * @param segment_length The number of rows in each segment for which the total size is computed
  * @param max_branch_depth Maximum depth of the span stack needed per-thread
  */
-__global__ void compute_row_sizes(device_span<column_device_view const> cols,
-                                  device_span<column_info const> info,
-                                  device_span<size_type> output,
-                                  size_type max_branch_depth)
+CUDF_KERNEL void compute_segment_sizes(device_span<column_device_view const> cols,
+                                       device_span<column_info const> info,
+                                       device_span<size_type> output,
+                                       size_type segment_length,
+                                       size_type max_branch_depth)
 {
   extern __shared__ row_span thread_branch_stacks[];
   int const tid = threadIdx.x + blockIdx.x * blockDim.x;
 
-  auto const num_rows = output.size();
-  if (tid >= num_rows) { return; }
+  auto const num_segments = static_cast<size_type>(output.size());
+  if (tid >= num_segments) { return; }
 
   // my_branch_stack points to the last span prior to branching. a branch occurs only
   // when we are inside of a list contained within a struct column.
   row_span* my_branch_stack = thread_branch_stacks + (threadIdx.x * max_branch_depth);
   size_type branch_depth{0};
 
-  // current row span - always starts at 1 row.
-  row_span cur_span{tid, tid + 1};
+  // current row span - always starts at spanning over `segment_length` rows.
+  auto const num_rows             = cols[0].size();
+  auto const get_default_row_span = [=] {
+    return row_span{tid * segment_length, cuda::std::min((tid + 1) * segment_length, num_rows)};
+  };
+  auto cur_span = get_default_row_span();
 
   // output size
   size_type& size = output[tid];
@@ -442,7 +454,7 @@ __global__ void compute_row_sizes(device_span<column_device_view const> cols,
     if (info[idx].depth == 0) {
       branch_depth      = 0;
       last_branch_depth = 0;
-      cur_span          = row_span{tid, tid + 1};
+      cur_span          = get_default_row_span();
     }
 
     // add the contributing size of this row
@@ -451,10 +463,10 @@ __global__ void compute_row_sizes(device_span<column_device_view const> cols,
     // if this is a list column, update the working span from our offsets
     if (col.type().id() == type_id::LIST && col.size() > 0) {
       column_device_view const& offsets = col.child(lists_column_view::offsets_column_index);
-      auto const base_offset            = offsets.data<offset_type>()[col.offset()];
+      auto const base_offset            = offsets.data<size_type>()[col.offset()];
       cur_span.row_start =
-        offsets.data<offset_type>()[cur_span.row_start + col.offset()] - base_offset;
-      cur_span.row_end = offsets.data<offset_type>()[cur_span.row_end + col.offset()] - base_offset;
+        offsets.data<size_type>()[cur_span.row_start + col.offset()] - base_offset;
+      cur_span.row_end = offsets.data<size_type>()[cur_span.row_end + col.offset()] - base_offset;
     }
 
     last_branch_depth = info[idx].branch_depth_end;
@@ -463,16 +475,17 @@ __global__ void compute_row_sizes(device_span<column_device_view const> cols,
 
 }  // anonymous namespace
 
-/**
- * @copydoc cudf::detail::row_bit_count
- *
- */
-std::unique_ptr<column> row_bit_count(table_view const& t,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
+                                                size_type segment_length,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr)
 {
-  // no rows
+  // If there is no rows, segment_length will not be checked.
   if (t.num_rows() <= 0) { return cudf::make_empty_column(type_id::INT32); }
+
+  CUDF_EXPECTS(segment_length >= 1 && segment_length <= t.num_rows(),
+               "Invalid segment length.",
+               std::invalid_argument);
 
   // flatten the hierarchy and determine some information about it.
   std::vector<cudf::column_view> cols;
@@ -482,17 +495,28 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
   CUDF_EXPECTS(info.size() == cols.size(), "Size/info mismatch");
 
   // create output buffer and view
-  auto output = cudf::make_fixed_width_column(
-    data_type{type_id::INT32}, t.num_rows(), mask_state::UNALLOCATED, stream, mr);
+  auto const num_segments = cudf::util::div_rounding_up_safe(t.num_rows(), segment_length);
+  auto output             = cudf::make_fixed_width_column(
+    data_type{type_id::INT32}, num_segments, mask_state::UNALLOCATED, stream, mr);
   mutable_column_view mcv = output->mutable_view();
 
   // simple case.  if we have no complex types (lists, strings, etc), the per-row size is already
   // trivially computed
   if (h_info.complex_type_count <= 0) {
-    thrust::fill(rmm::exec_policy(stream),
-                 mcv.begin<size_type>(),
-                 mcv.end<size_type>(),
-                 h_info.simple_per_row_size);
+    thrust::tabulate(
+      rmm::exec_policy_nosync(stream),
+      mcv.begin<size_type>(),
+      mcv.end<size_type>(),
+      cuda::proclaim_return_type<size_type>(
+        [segment_length,
+         num_rows     = t.num_rows(),
+         per_row_size = h_info.simple_per_row_size] __device__(size_type const segment_idx) {
+          // Since the number of rows may not divisible by segment_length,
+          // the last segment may be shorter than the others.
+          auto const current_length =
+            cuda::std::min(segment_length, num_rows - segment_length * segment_idx);
+          return per_row_size * current_length;
+        }));
     return output;
   }
 
@@ -500,7 +524,8 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
   auto d_cols = contiguous_copy_column_device_views<column_device_view>(cols, stream);
 
   // move stack info to the gpu
-  rmm::device_uvector<column_info> d_info = cudf::detail::make_device_uvector_async(info, stream);
+  rmm::device_uvector<column_info> d_info =
+    cudf::detail::make_device_uvector_async(info, stream, rmm::mr::get_current_device_resource());
 
   // each thread needs to maintain a stack of row spans of size max_branch_depth. we will use
   // shared memory to do this rather than allocating a potentially gigantic temporary buffer
@@ -520,23 +545,35 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
   // should we be aborting if we reach some extremely small block size, or just if we hit 0?
   CUDF_EXPECTS(block_size > 0, "Encountered a column hierarchy too complex for row_bit_count");
 
-  cudf::detail::grid_1d grid{t.num_rows(), block_size, 1};
-  compute_row_sizes<<<grid.num_blocks, block_size, shared_mem_size, stream.value()>>>(
+  cudf::detail::grid_1d grid{num_segments, block_size, 1};
+  compute_segment_sizes<<<grid.num_blocks, block_size, shared_mem_size, stream.value()>>>(
     {std::get<1>(d_cols), cols.size()},
     {d_info.data(), info.size()},
-    {mcv.data<size_type>(), static_cast<std::size_t>(t.num_rows())},
+    {mcv.data<size_type>(), static_cast<std::size_t>(mcv.size())},
+    segment_length,
     h_info.max_branch_depth);
 
   return output;
 }
 
+std::unique_ptr<column> row_bit_count(table_view const& t,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
+{
+  return segmented_row_bit_count(t, 1, stream, mr);
+}
+
 }  // namespace detail
 
-/**
- * @copydoc cudf::row_bit_count
- *
- */
-std::unique_ptr<column> row_bit_count(table_view const& t, rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
+                                                size_type segment_length,
+                                                rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::segmented_row_bit_count(t, segment_length, cudf::get_default_stream(), mr);
+}
+
+std::unique_ptr<column> row_bit_count(table_view const& t, rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::row_bit_count(t, cudf::get_default_stream(), mr);

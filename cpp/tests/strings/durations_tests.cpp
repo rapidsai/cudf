@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,17 +23,17 @@
 #include <cudf/wrappers/durations.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
+
 #include <vector>
 
-struct StringsDurationsTest : public cudf::test::BaseFixture {
-};
+struct StringsDurationsTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsDurationsTest, FromToDurations)
 {
   using T = cudf::duration_s;
   std::vector<cudf::duration_s> h_durations{
     T{131246625}, T{1563399277}, T{0}, T{1553085296}, T{1582934400}, T{-1545730073}, T{-86399}};
-  std::vector<const char*> h_expected{"1519 days 01:23:45",
+  std::vector<char const*> h_expected{"1519 days 01:23:45",
                                       "18094 days 21:34:37",
                                       nullptr,
                                       "17975 days 12:34:56",
@@ -111,7 +111,8 @@ TEST_F(StringsDurationsTest, ISOFormatDaysOnly)
   auto new_durations1 = cudf::strings::to_durations(cudf::strings_column_view(string_iso),
                                                     cudf::data_type(cudf::type_to_id<T>()),
                                                     "P%DDT%HH%MM%SS");
-  new_durations1      = cudf::strings::to_durations(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations1, durations);
+  new_durations1 = cudf::strings::to_durations(
     cudf::strings_column_view(expected1), cudf::data_type(cudf::type_to_id<T>()), "P%DDT%HH%MM%SS");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*new_durations1, durations);
   auto new_durations2 = cudf::strings::to_durations(
@@ -728,13 +729,11 @@ TEST_F(StringsDurationsTest, ParseEscapeCharacters)
 
 TEST_F(StringsDurationsTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_column(
-    cudf::data_type{cudf::type_id::DURATION_SECONDS}, 0, nullptr, nullptr, 0);
-  auto results = cudf::strings::from_durations(zero_size_column);
+  auto const zero_size_column = cudf::make_empty_column(cudf::type_id::DURATION_SECONDS)->view();
+  auto results                = cudf::strings::from_durations(zero_size_column);
   cudf::test::expect_column_empty(results->view());
 
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
   results = cudf::strings::to_durations(cudf::strings_column_view(zero_size_strings_column),
                                         cudf::data_type{cudf::type_id::DURATION_SECONDS},
                                         "%S");

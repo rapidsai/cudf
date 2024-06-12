@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,10 +30,17 @@
 #include <type_traits>
 
 namespace cudf {
+/**
+ * @addtogroup utility_span
+ * @{
+ * @file
+ * @brief APIs for spans
+ */
 
 /// A constant used to differentiate std::span of static and dynamic extent
 constexpr std::size_t dynamic_extent = std::numeric_limits<std::size_t>::max();
 
+/** @} */  // end of group
 namespace detail {
 
 /**
@@ -185,26 +192,29 @@ class span_base {
 
 }  // namespace detail
 
+/**
+ * @addtogroup utility_span
+ * @{
+ * @file
+ * @brief APIs for spans
+ */
+
 // ===== host_span =================================================================================
 
 template <typename T>
-struct is_host_span_supported_container : std::false_type {
-};
+struct is_host_span_supported_container : std::false_type {};
 
 template <typename T, typename Alloc>
 struct is_host_span_supported_container<  //
-  std::vector<T, Alloc>> : std::true_type {
-};
+  std::vector<T, Alloc>> : std::true_type {};
 
 template <typename T, typename Alloc>
 struct is_host_span_supported_container<  //
-  thrust::host_vector<T, Alloc>> : std::true_type {
-};
+  thrust::host_vector<T, Alloc>> : std::true_type {};
 
 template <typename T, typename Alloc>
 struct is_host_span_supported_container<  //
-  std::basic_string<T, std::char_traits<T>, Alloc>> : std::true_type {
-};
+  std::basic_string<T, std::char_traits<T>, Alloc>> : std::true_type {};
 
 /**
  * @brief C++20 std::span with reduced feature set.
@@ -226,7 +236,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
                      std::is_convertible_v<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
                                              std::declval<C&>().data()))> (*)[],
                                            T (*)[]>>* = nullptr>
-  constexpr host_span(C& in) : base(in.data(), in.size())
+  constexpr host_span(C& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
 
@@ -239,7 +249,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
                      std::is_convertible_v<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
                                              std::declval<C&>().data()))> (*)[],
                                            T (*)[]>>* = nullptr>
-  constexpr host_span(C const& in) : base(in.data(), in.size())
+  constexpr host_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
 
@@ -250,7 +260,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
             std::enable_if_t<(Extent == OtherExtent || Extent == dynamic_extent) &&
                                std::is_convertible_v<OtherT (*)[], T (*)[]>,
                              void>* = nullptr>
-  constexpr host_span(const host_span<OtherT, OtherExtent>& other) noexcept
+  constexpr host_span(host_span<OtherT, OtherExtent> const& other) noexcept
     : base(other.data(), other.size())
   {
   }
@@ -259,23 +269,19 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
 // ===== device_span ===============================================================================
 
 template <typename T>
-struct is_device_span_supported_container : std::false_type {
-};
+struct is_device_span_supported_container : std::false_type {};
 
 template <typename T, typename Alloc>
 struct is_device_span_supported_container<  //
-  thrust::device_vector<T, Alloc>> : std::true_type {
-};
+  thrust::device_vector<T, Alloc>> : std::true_type {};
 
 template <typename T>
 struct is_device_span_supported_container<  //
-  rmm::device_vector<T>> : std::true_type {
-};
+  rmm::device_vector<T>> : std::true_type {};
 
 template <typename T>
 struct is_device_span_supported_container<  //
-  rmm::device_uvector<T>> : std::true_type {
-};
+  rmm::device_uvector<T>> : std::true_type {};
 
 /**
  * @brief Device version of C++20 std::span with reduced feature set.
@@ -321,11 +327,12 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
             std::enable_if_t<(Extent == OtherExtent || Extent == dynamic_extent) &&
                                std::is_convertible_v<OtherT (*)[], T (*)[]>,
                              void>* = nullptr>
-  constexpr device_span(const device_span<OtherT, OtherExtent>& other) noexcept
+  constexpr device_span(device_span<OtherT, OtherExtent> const& other) noexcept
     : base(other.data(), other.size())
   {
   }
 };
+/** @} */  // end of group
 
 namespace detail {
 

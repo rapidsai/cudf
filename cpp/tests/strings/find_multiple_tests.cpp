@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,32 +14,31 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/find_multiple.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
 #include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
-struct StringsFindMultipleTest : public cudf::test::BaseFixture {
-};
+struct StringsFindMultipleTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFindMultipleTest, FindMultiple)
 {
-  std::vector<const char*> h_strings{"Héllo", "thesé", nullptr, "lease", "test strings", ""};
+  std::vector<char const*> h_strings{"Héllo", "thesé", nullptr, "lease", "test strings", ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto strings_view = cudf::strings_column_view(strings);
 
-  std::vector<const char*> h_targets{"é", "a", "e", "i", "o", "u", "es"};
+  std::vector<char const*> h_targets{"é", "a", "e", "i", "o", "u", "es"};
   cudf::test::strings_column_wrapper targets(h_targets.begin(), h_targets.end());
   auto targets_view = cudf::strings_column_view(targets);
 
@@ -58,10 +57,9 @@ TEST_F(StringsFindMultipleTest, FindMultiple)
 
 TEST_F(StringsFindMultipleTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-  std::vector<const char*> h_targets{""};
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+  auto strings_view                   = cudf::strings_column_view(zero_size_strings_column);
+  std::vector<char const*> h_targets{""};
   cudf::test::strings_column_wrapper targets(h_targets.begin(), h_targets.end());
   auto targets_view = cudf::strings_column_view(targets);
 
@@ -74,9 +72,8 @@ TEST_F(StringsFindMultipleTest, ErrorTest)
   cudf::test::strings_column_wrapper strings({"this string intentionally left blank"}, {0});
   auto strings_view = cudf::strings_column_view(strings);
 
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto empty_view = cudf::strings_column_view(zero_size_strings_column);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+  auto empty_view                     = cudf::strings_column_view(zero_size_strings_column);
   // targets must have at least one string
   EXPECT_THROW(cudf::strings::find_multiple(strings_view, empty_view), cudf::logic_error);
 

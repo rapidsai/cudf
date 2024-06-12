@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 
 #include <cudf/groupby.hpp>
 
@@ -40,18 +39,23 @@ auto make_aggregation_request_vector(cudf::column_view const& values, Args&&... 
 template <typename Type>
 void bench_groupby_nunique(nvbench::state& state, nvbench::type_list<Type>)
 {
-  cudf::rmm_pool_raii pool_raii;
-  const auto size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const size        = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
 
   auto const keys = [&] {
-    data_profile profile = data_profile_builder().cardinality(0).no_validity().distribution(
-      cudf::type_to_id<int32_t>(), distribution_id::UNIFORM, 0, 100);
+    data_profile profile =
+      data_profile_builder()
+        .cardinality(cardinality)
+        .no_validity()
+        .distribution(cudf::type_to_id<int32_t>(), distribution_id::UNIFORM, 0, size);
     return create_random_column(cudf::type_to_id<int32_t>(), row_count{size}, profile);
   }();
 
   auto const vals = [&] {
-    data_profile profile = data_profile_builder().cardinality(0).distribution(
-      cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 1000);
+    data_profile profile =
+      data_profile_builder()
+        .cardinality(cardinality)
+        .distribution(cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, size);
     if (const auto null_freq = state.get_float64("null_probability"); null_freq > 0) {
       profile.set_null_probability(null_freq);
     } else {
@@ -73,4 +77,5 @@ void bench_groupby_nunique(nvbench::state& state, nvbench::type_list<Type>)
 NVBENCH_BENCH_TYPES(bench_groupby_nunique, NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, int64_t>))
   .set_name("groupby_nunique")
   .add_int64_power_of_two_axis("num_rows", {12, 16, 20, 24})
+  .add_int64_axis("cardinality", {0})
   .add_float64_axis("null_probability", {0, 0.5});

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,7 @@
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-class StringDateTime : public cudf::benchmark {
-};
+class StringDateTime : public cudf::benchmark {};
 
 enum class direction { to, from };
 
@@ -49,7 +48,8 @@ void BM_convert_datetime(benchmark::State& state, direction dir)
       cudf::strings::from_timestamps(input, "%Y-%m-%d %H:%M:%S");
   }
 
-  auto const bytes = dir == direction::to ? source_string.chars_size() : n_rows * sizeof(TypeParam);
+  auto const bytes = dir == direction::to ? source_string.chars_size(cudf::get_default_stream())
+                                          : n_rows * sizeof(TypeParam);
   state.SetBytesProcessed(state.iterations() * bytes);
 }
 

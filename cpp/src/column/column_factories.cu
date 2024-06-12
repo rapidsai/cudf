@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,11 @@
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/dictionary/dictionary_factories.hpp>
-#include <cudf/lists/lists_column_factories.hpp>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/fill.hpp>
+
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -33,7 +35,7 @@ struct column_from_scalar_dispatch {
   std::unique_ptr<cudf::column> operator()(scalar const& value,
                                            size_type size,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr) const
+                                           rmm::device_async_resource_ref mr) const
   {
     if (size == 0) return make_empty_column(value.type());
     if (!value.is_valid(stream))
@@ -51,13 +53,13 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   scalar const& value,
   size_type size,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
+  rmm::device_async_resource_ref mr) const
 {
   if (size == 0) return make_empty_column(value.type());
 
   // Since we are setting every row to the scalar, the fill() never needs to access
   // any of the children in the strings column which would otherwise cause an exception.
-  column_view sc{value.type(), size, nullptr};
+  column_view sc{value.type(), size, nullptr, nullptr, 0};
   auto& sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
 
   // fill the column with the scalar
@@ -68,7 +70,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
 
 template <>
 std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::dictionary32>(
-  scalar const&, size_type, rmm::cuda_stream_view, rmm::mr::device_memory_resource*) const
+  scalar const&, size_type, rmm::cuda_stream_view, rmm::device_async_resource_ref) const
 {
   CUDF_FAIL("dictionary not supported when creating from scalar");
 }
@@ -78,7 +80,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::list
   scalar const& value,
   size_type size,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
+  rmm::device_async_resource_ref mr) const
 {
   auto lv = static_cast<list_scalar const*>(&value);
   return lists::detail::make_lists_column_from_scalar(*lv, size, stream, mr);
@@ -89,7 +91,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stru
   scalar const& value,
   size_type size,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr) const
+  rmm::device_async_resource_ref mr) const
 {
   if (size == 0) CUDF_FAIL("0-length struct column is unsupported.");
   auto& ss  = static_cast<scalar_type_t<cudf::struct_view> const&>(value);
@@ -113,7 +115,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stru
 std::unique_ptr<column> make_column_from_scalar(scalar const& s,
                                                 size_type size,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::device_async_resource_ref mr)
 {
   return type_dispatcher(s.type(), column_from_scalar_dispatch{}, s, size, stream, mr);
 }

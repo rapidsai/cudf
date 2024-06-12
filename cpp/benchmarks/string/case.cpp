@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,37 +15,65 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/strings/case.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class StringCase : public cudf::benchmark {
-};
+#include <nvbench/nvbench.cuh>
 
-static void BM_case(benchmark::State& state)
+void bench_case(nvbench::state& state)
 {
-  cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
-  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows});
-  cudf::strings_column_view input(column->view());
+  auto const n_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const max_width = static_cast<int32_t>(state.get_int64("row_width"));
+  auto const encoding  = state.get_string("encoding");
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::get_default_stream());
-    cudf::strings::to_lower(input);
+  if (static_cast<std::size_t>(n_rows) * static_cast<std::size_t>(max_width) >=
+      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
+    state.skip("Skip benchmarks greater than size_type limit");
   }
 
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
+  data_profile const profile = data_profile_builder().distribution(
+    cudf::type_id::STRING, distribution_id::NORMAL, 0, max_width);
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
+
+  auto col_view = column->view();
+
+  cudf::column::contents ascii_contents;
+  if (encoding == "ascii") {
+    data_profile ascii_profile = data_profile_builder().no_validity().distribution(
+      cudf::type_id::INT8, distribution_id::UNIFORM, 32, 126);  // nice ASCII range
+    auto input        = cudf::strings_column_view(col_view);
+    auto ascii_column = create_random_column(
+      cudf::type_id::INT8,
+      row_count{static_cast<cudf::size_type>(input.chars_size(cudf::get_default_stream()))},
+      ascii_profile);
+    auto ascii_data = ascii_column->view();
+
+    col_view = cudf::column_view(col_view.type(),
+                                 col_view.size(),
+                                 ascii_data.data<char>(),
+                                 col_view.null_mask(),
+                                 col_view.null_count(),
+                                 0,
+                                 {input.offsets()});
+
+    ascii_contents = ascii_column->release();
+  }
+  auto input = cudf::strings_column_view(col_view);
+
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+
+  state.add_element_count(input.chars_size(cudf::get_default_stream()), "chars_size");
+  state.add_global_memory_reads<nvbench::int8_t>(input.chars_size(cudf::get_default_stream()));
+  state.add_global_memory_writes<nvbench::int8_t>(input.chars_size(cudf::get_default_stream()));
+
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { auto result = cudf::strings::to_lower(input); });
 }
 
-#define SORT_BENCHMARK_DEFINE(name)          \
-  BENCHMARK_DEFINE_F(StringCase, name)       \
-  (::benchmark::State & st) { BM_case(st); } \
-  BENCHMARK_REGISTER_F(StringCase, name)     \
-    ->RangeMultiplier(8)                     \
-    ->Ranges({{1 << 12, 1 << 24}})           \
-    ->UseManualTime()                        \
-    ->Unit(benchmark::kMillisecond);
-
-SORT_BENCHMARK_DEFINE(to_lower)
+NVBENCH_BENCH(bench_case)
+  .set_name("case")
+  .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024, 2048})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152, 16777216})
+  .add_string_axis("encoding", {"ascii", "utf8"});

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "io/utilities/hostdevice_vector.hpp"
 #include "io_uncomp.hpp"
 #include "nvcomp_adapter.hpp"
 #include "unbz2.hpp"  // bz2 uncompress
@@ -21,13 +22,12 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cuda_runtime.h>
 
-#include <cstring>  // memset
-
 #include <zlib.h>  // uncompress
+
+#include <cstring>  // memset
 
 using cudf::host_span;
 
@@ -109,27 +109,27 @@ struct bz2_file_header_s {
 #pragma pack(pop)
 
 struct gz_archive_s {
-  const gz_file_header_s* fhdr;
+  gz_file_header_s const* fhdr;
   uint16_t hcrc16;  // header crc16 if present
   uint16_t xlen;
-  const uint8_t* fxtra;      // xlen bytes (optional)
-  const uint8_t* fname;      // zero-terminated original filename if present
-  const uint8_t* fcomment;   // zero-terminated comment if present
-  const uint8_t* comp_data;  // compressed data
+  uint8_t const* fxtra;      // xlen bytes (optional)
+  uint8_t const* fname;      // zero-terminated original filename if present
+  uint8_t const* fcomment;   // zero-terminated comment if present
+  uint8_t const* comp_data;  // compressed data
   size_t comp_len;           // Compressed data length
   uint32_t crc32;            // CRC32 of uncompressed data
   uint32_t isize;            // Input size modulo 2^32
 };
 
 struct zip_archive_s {
-  const zip_eocd_s* eocd;    // end of central directory
-  const zip64_eocdl* eocdl;  // end of central dir locator (optional)
-  const zip_cdfh_s* cdfh;    // start of central directory file headers
+  zip_eocd_s const* eocd;    // end of central directory
+  zip64_eocdl const* eocdl;  // end of central dir locator (optional)
+  zip_cdfh_s const* cdfh;    // start of central directory file headers
 };
 
-bool ParseGZArchive(gz_archive_s* dst, const uint8_t* raw, size_t len)
+bool ParseGZArchive(gz_archive_s* dst, uint8_t const* raw, size_t len)
 {
-  const gz_file_header_s* fhdr;
+  gz_file_header_s const* fhdr;
 
   if (!dst) return false;
   memset(dst, 0, sizeof(gz_archive_s));
@@ -191,7 +191,7 @@ bool ParseGZArchive(gz_archive_s* dst, const uint8_t* raw, size_t len)
   return (fhdr->comp_mthd == 8 && len > 0);
 }
 
-bool OpenZipArchive(zip_archive_s* dst, const uint8_t* raw, size_t len)
+bool OpenZipArchive(zip_archive_s* dst, uint8_t const* raw, size_t len)
 {
   memset(dst, 0, sizeof(zip_archive_s));
   // Find the end of central directory
@@ -199,16 +199,16 @@ bool OpenZipArchive(zip_archive_s* dst, const uint8_t* raw, size_t len)
     for (ptrdiff_t i = len - sizeof(zip_eocd_s) - 2;
          i + sizeof(zip_eocd_s) + 2 + 0xffff >= len && i >= 0;
          i--) {
-      const auto* eocd = reinterpret_cast<zip_eocd_s const*>(raw + i);
+      auto const* eocd = reinterpret_cast<zip_eocd_s const*>(raw + i);
       if (eocd->sig == 0x0605'4b50 &&
           eocd->disk_id == eocd->start_disk  // multi-file archives not supported
           && eocd->num_entries == eocd->total_entries &&
           eocd->cdir_size >= sizeof(zip_cdfh_s) * eocd->num_entries && eocd->cdir_offset < len &&
-          i + *reinterpret_cast<const uint16_t*>(eocd + 1) <= static_cast<ptrdiff_t>(len)) {
-        const auto* cdfh = reinterpret_cast<const zip_cdfh_s*>(raw + eocd->cdir_offset);
+          i + *reinterpret_cast<uint16_t const*>(eocd + 1) <= static_cast<ptrdiff_t>(len)) {
+        auto const* cdfh = reinterpret_cast<zip_cdfh_s const*>(raw + eocd->cdir_offset);
         dst->eocd        = eocd;
         if (i >= static_cast<ptrdiff_t>(sizeof(zip64_eocdl))) {
-          const auto* eocdl = reinterpret_cast<const zip64_eocdl*>(raw + i - sizeof(zip64_eocdl));
+          auto const* eocdl = reinterpret_cast<zip64_eocdl const*>(raw + i - sizeof(zip64_eocdl));
           if (eocdl->sig == 0x0706'4b50) { dst->eocdl = eocdl; }
         }
         // Start of central directory
@@ -219,7 +219,7 @@ bool OpenZipArchive(zip_archive_s* dst, const uint8_t* raw, size_t len)
   return (dst->eocd && dst->cdfh);
 }
 
-int cpu_inflate(uint8_t* uncomp_data, size_t* destLen, const uint8_t* comp_data, size_t comp_len)
+int cpu_inflate(uint8_t* uncomp_data, size_t* destLen, uint8_t const* comp_data, size_t comp_len)
 {
   int zerr;
   z_stream strm;
@@ -252,7 +252,7 @@ int cpu_inflate(uint8_t* uncomp_data, size_t* destLen, const uint8_t* comp_data,
  * @param[in] comp_data Raw compressed data
  * @param[in] comp_len Compressed data size
  */
-void cpu_inflate_vector(std::vector<uint8_t>& dst, const uint8_t* comp_data, size_t comp_len)
+void cpu_inflate_vector(std::vector<uint8_t>& dst, uint8_t const* comp_data, size_t comp_len)
 {
   z_stream strm{};
   strm.next_in   = const_cast<Bytef*>(reinterpret_cast<Bytef const*>(comp_data));
@@ -283,7 +283,7 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
   CUDF_EXPECTS(not src.empty(), "Decompression: Source size cannot be 0");
 
   auto raw                 = src.data();
-  const uint8_t* comp_data = nullptr;
+  uint8_t const* comp_data = nullptr;
   size_t comp_len          = 0;
   size_t uncomp_len        = 0;
 
@@ -305,8 +305,8 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
       if (OpenZipArchive(&za, raw, src.size())) {
         size_t cdfh_ofs = 0;
         for (int i = 0; i < za.eocd->num_entries; i++) {
-          const zip_cdfh_s* cdfh = reinterpret_cast<const zip_cdfh_s*>(
-            reinterpret_cast<const uint8_t*>(za.cdfh) + cdfh_ofs);
+          zip_cdfh_s const* cdfh = reinterpret_cast<zip_cdfh_s const*>(
+            reinterpret_cast<uint8_t const*>(za.cdfh) + cdfh_ofs);
           int cdfh_len = sizeof(zip_cdfh_s) + cdfh->fname_len + cdfh->extra_len + cdfh->comment_len;
           if (cdfh_ofs + cdfh_len > za.eocd->cdir_size || cdfh->sig != 0x0201'4b50) {
             // Bad cdir
@@ -315,7 +315,7 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
           // For now, only accept with non-zero file sizes and DEFLATE
           if (cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0) {
             size_t lfh_ofs       = cdfh->hdr_ofs;
-            const zip_lfh_s* lfh = reinterpret_cast<const zip_lfh_s*>(raw + lfh_ofs);
+            zip_lfh_s const* lfh = reinterpret_cast<zip_lfh_s const*>(raw + lfh_ofs);
             if (lfh_ofs + sizeof(zip_lfh_s) <= src.size() && lfh->sig == 0x0403'4b50 &&
                 lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src.size()) {
               if (lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0) {
@@ -340,7 +340,7 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
       [[fallthrough]];
     case compression_type::BZIP2:
       if (src.size() > 4) {
-        const bz2_file_header_s* fhdr = reinterpret_cast<const bz2_file_header_s*>(raw);
+        bz2_file_header_s const* fhdr = reinterpret_cast<bz2_file_header_s const*>(raw);
         // Check for BZIP2 file signature "BZh1" to "BZh9"
         if (fhdr->sig[0] == 'B' && fhdr->sig[1] == 'Z' && fhdr->sig[2] == 'h' &&
             fhdr->blksz >= '1' && fhdr->blksz <= '9') {
@@ -452,12 +452,12 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
       if (blen & 2) {
         // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
         if (cur + 2 > end) break;
-        offset = *reinterpret_cast<const uint16_t*>(cur);
+        offset = *reinterpret_cast<uint16_t const*>(cur);
         cur += 2;
         if (blen & 1)  // 4-byte offset
         {
           if (cur + 2 > end) break;
-          offset |= (*reinterpret_cast<const uint16_t*>(cur)) << 16;
+          offset |= (*reinterpret_cast<uint16_t const*>(cur)) << 16;
           cur += 2;
         }
         blen = (blen >> 2) + 1;
@@ -509,20 +509,21 @@ size_t decompress_zstd(host_span<uint8_t const> src,
                        rmm::cuda_stream_view stream)
 {
   // Init device span of spans (source)
-  auto const d_src = cudf::detail::make_device_uvector_async(src, stream);
-  auto hd_srcs     = hostdevice_vector<device_span<uint8_t const>>(1, stream);
-  hd_srcs[0]       = d_src;
-  hd_srcs.host_to_device(stream);
+  auto const d_src =
+    cudf::detail::make_device_uvector_async(src, stream, rmm::mr::get_current_device_resource());
+  auto hd_srcs = cudf::detail::hostdevice_vector<device_span<uint8_t const>>(1, stream);
+  hd_srcs[0]   = d_src;
+  hd_srcs.host_to_device_async(stream);
 
   // Init device span of spans (temporary destination)
   auto d_dst   = rmm::device_uvector<uint8_t>(dst.size(), stream);
-  auto hd_dsts = hostdevice_vector<device_span<uint8_t>>(1, stream);
+  auto hd_dsts = cudf::detail::hostdevice_vector<device_span<uint8_t>>(1, stream);
   hd_dsts[0]   = d_dst;
-  hd_dsts.host_to_device(stream);
+  hd_dsts.host_to_device_async(stream);
 
-  auto hd_stats = hostdevice_vector<compression_result>(1, stream);
+  auto hd_stats = cudf::detail::hostdevice_vector<compression_result>(1, stream);
   hd_stats[0]   = compression_result{0, compression_status::FAILURE};
-  hd_stats.host_to_device(stream);
+  hd_stats.host_to_device_async(stream);
   auto const max_uncomp_page_size = dst.size();
   nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
                              hd_srcs,
@@ -532,12 +533,12 @@ size_t decompress_zstd(host_span<uint8_t const> src,
                              max_uncomp_page_size,
                              stream);
 
-  hd_stats.device_to_host(stream, true);
+  hd_stats.device_to_host_sync(stream);
   CUDF_EXPECTS(hd_stats[0].status == compression_status::SUCCESS, "ZSTD decompression failed");
 
   // Copy temporary output to `dst`
   CUDF_CUDA_TRY(cudaMemcpyAsync(
-    dst.data(), d_dst.data(), hd_stats[0].bytes_written, cudaMemcpyDeviceToHost, stream.value()));
+    dst.data(), d_dst.data(), hd_stats[0].bytes_written, cudaMemcpyDefault, stream.value()));
 
   return hd_stats[0].bytes_written;
 }

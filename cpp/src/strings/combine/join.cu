@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,12 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/combine.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -30,99 +33,157 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/for_each.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/transform_scan.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
 
-std::unique_ptr<column> join_strings(strings_column_view const& strings,
+namespace {
+
+/**
+ * @brief Threshold to decide on using string-per-thread vs the string-gather
+ * approaches.
+ *
+ * If the average byte length of a string in a column exceeds this value then
+ * the string-gather function is used.
+ * Otherwise, a regular string-parallel function is used.
+ *
+ * This value was found using the strings_join benchmark results.
+ */
+constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 32;
+
+struct join_base_fn {
+  column_device_view const d_strings;
+  string_view d_separator;
+  string_scalar_device_view d_narep;
+
+  __device__ thrust::pair<string_view, string_view> process_string(size_type idx) const
+  {
+    string_view d_str{};
+    string_view d_sep = (idx + 1 < d_strings.size()) ? d_separator : d_str;
+    if (d_strings.is_null(idx)) {
+      if (d_narep.is_valid()) {
+        d_str = d_narep.value();
+      } else {
+        // if null and no narep, don't output a separator either
+        d_sep = d_str;
+      }
+    } else {
+      d_str = d_strings.element<string_view>(idx);
+    }
+    return {d_str, d_sep};
+  }
+};
+
+/**
+ * @brief Compute output sizes and write output bytes
+ *
+ * This functor is suitable for make_strings_children
+ */
+struct join_fn : public join_base_fn {
+  size_type* d_sizes{};
+  char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
+
+  join_fn(column_device_view const d_strings,
+          string_view d_separator,
+          string_scalar_device_view d_narep)
+    : join_base_fn{d_strings, d_separator, d_narep}
+  {
+  }
+
+  __device__ void operator()(size_type idx) const
+  {
+    auto const [d_str, d_sep] = process_string(idx);
+
+    char* d_buffer  = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    size_type bytes = 0;
+    if (d_buffer) {
+      d_buffer = detail::copy_string(d_buffer, d_str);
+      d_buffer = detail::copy_string(d_buffer, d_sep);
+    } else {
+      bytes += d_str.size_bytes() + d_sep.size_bytes();
+    }
+    if (!d_chars) { d_sizes[idx] = bytes; }
+  }
+};
+
+struct join_gather_fn : public join_base_fn {
+  join_gather_fn(column_device_view const d_strings,
+                 string_view d_separator,
+                 string_scalar_device_view d_narep)
+    : join_base_fn{d_strings, d_separator, d_narep}
+  {
+  }
+
+  __device__ string_index_pair operator()(size_type idx) const
+  {
+    auto const [d_str, d_sep] = process_string(idx / 2);
+    // every other string is the separator
+    return idx % 2 ? string_index_pair{d_sep.data(), d_sep.size_bytes()}
+                   : string_index_pair{d_str.data(), d_str.size_bytes()};
+  }
+};
+}  // namespace
+
+std::unique_ptr<column> join_strings(strings_column_view const& input,
                                      string_scalar const& separator,
                                      string_scalar const& narep,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
-  auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(type_id::STRING);
+  if (input.is_empty()) { return make_empty_column(type_id::STRING); }
 
   CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be a valid string_scalar");
 
   string_view d_separator(separator.data(), separator.size());
   auto d_narep = get_scalar_device_view(const_cast<string_scalar&>(narep));
 
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_strings      = *strings_column;
+  auto d_strings = column_device_view::create(input.parent(), stream);
 
-  // create an offsets array for building the output memory layout
-  rmm::device_uvector<size_type> output_offsets(strings_count + 1, stream);
-  auto d_output_offsets = output_offsets.data();
-  // using inclusive-scan to compute last entry which is the total size
-  thrust::transform_inclusive_scan(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(strings_count),
-    d_output_offsets + 1,
-    [d_strings, d_separator, d_narep] __device__(size_type idx) {
-      size_type bytes = 0;
-      if (d_strings.is_null(idx)) {
-        if (!d_narep.is_valid()) return 0;  // skip nulls
-        bytes += d_narep.size();
-      } else
-        bytes += d_strings.element<string_view>(idx).size_bytes();
-      if ((idx + 1) < d_strings.size()) bytes += d_separator.size_bytes();
-      return bytes;
-    },
-    thrust::plus<size_type>());
+  auto chars = [&] {
+    // build the strings column and commandeer the chars column
+    if ((input.size() == input.null_count()) ||
+        ((input.chars_size(stream) / (input.size() - input.null_count())) <=
+         AVG_CHAR_BYTES_THRESHOLD)) {
+      return std::get<1>(make_strings_children(
+                           join_fn{*d_strings, d_separator, d_narep}, input.size(), stream, mr))
+        .release();
+    }
+    // dynamically feeds index pairs to build the output
+    auto indices = cudf::detail::make_counting_transform_iterator(
+      0, join_gather_fn{*d_strings, d_separator, d_narep});
+    auto joined_col = make_strings_column(indices, indices + (input.size() * 2), stream, mr);
+    auto chars_data = joined_col->release().data;
+    return std::move(*chars_data);
+  }();
 
-  output_offsets.set_element_to_zero_async(0, stream);
-  // total size is the last entry
-  size_type const bytes = output_offsets.back_element(stream);
+  // API returns a single output row which cannot exceed row limit(max of size_type).
+  CUDF_EXPECTS(chars.size() < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+               "The output exceeds the row size limit",
+               std::overflow_error);
 
-  // build offsets column (only 1 string so 2 offset entries)
-  auto offsets_column =
-    make_numeric_column(data_type{type_id::INT32}, 2, mask_state::UNALLOCATED, stream, mr);
-  auto offsets_view = offsets_column->mutable_view();
-  // set the first entry to 0 and the last entry to bytes
-  int32_t new_offsets[] = {0, static_cast<int32_t>(bytes)};
-  CUDF_CUDA_TRY(cudaMemcpyAsync(offsets_view.data<int32_t>(),
-                                new_offsets,
-                                sizeof(new_offsets),
-                                cudaMemcpyHostToDevice,
-                                stream.value()));
+  // build the offsets: single string output has offsets [0,chars-size]
+  auto offsets_column = [&] {
+    auto offsets = cudf::detail::make_device_uvector_async(
+      std::vector<size_type>({0, static_cast<size_type>(chars.size())}), stream, mr);
+    return std::make_unique<column>(std::move(offsets), rmm::device_buffer{}, 0);
+  }();
 
-  // build null mask
-  // only one entry so it is either all valid or all null
+  // build the null mask: only one output row so it is either all-valid or all-null
   auto const null_count =
-    static_cast<size_type>(strings.null_count() == strings_count && !narep.is_valid(stream));
-  auto null_mask    = null_count
-                        ? cudf::detail::create_null_mask(1, cudf::mask_state::ALL_NULL, stream, mr)
-                        : rmm::device_buffer{0, stream, mr};
-  auto chars_column = create_chars_child_column(bytes, stream, mr);
-  auto d_chars      = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    strings_count,
-    [d_strings, d_separator, d_narep, d_output_offsets, d_chars] __device__(size_type idx) {
-      size_type offset = d_output_offsets[idx];
-      char* d_buffer   = d_chars + offset;
-      if (d_strings.is_null(idx)) {
-        if (!d_narep.is_valid())
-          return;  // do not write to buffer if element is null (including separator)
-        d_buffer = detail::copy_string(d_buffer, d_narep.value());
-      } else {
-        string_view d_str = d_strings.element<string_view>(idx);
-        d_buffer          = detail::copy_string(d_buffer, d_str);
-      }
-      if ((idx + 1) < d_strings.size()) d_buffer = detail::copy_string(d_buffer, d_separator);
-    });
+    static_cast<size_type>(input.null_count() == input.size() && !narep.is_valid(stream));
+  auto null_mask = null_count
+                     ? cudf::detail::create_null_mask(1, cudf::mask_state::ALL_NULL, stream, mr)
+                     : rmm::device_buffer{0, stream, mr};
 
+  // perhaps this return a string_scalar instead of a single-row column
   return make_strings_column(
-    1, std::move(offsets_column), std::move(chars_column), null_count, std::move(null_mask));
+    1, std::move(offsets_column), std::move(chars), null_count, std::move(null_mask));
 }
 
 }  // namespace detail
@@ -132,10 +193,11 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
 std::unique_ptr<column> join_strings(strings_column_view const& strings,
                                      string_scalar const& separator,
                                      string_scalar const& narep,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::join_strings(strings, separator, narep, cudf::get_default_stream(), mr);
+  return detail::join_strings(strings, separator, narep, stream, mr);
 }
 
 }  // namespace strings

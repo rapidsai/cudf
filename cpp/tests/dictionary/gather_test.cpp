@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-#include <cudf/copying.hpp>
-#include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/dictionary/encode.hpp>
-#include <cudf/sorting.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/copying.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/dictionary/encode.hpp>
+#include <cudf/sorting.hpp>
+
 #include <vector>
 
-struct DictionaryGatherTest : public cudf::test::BaseFixture {
-};
+struct DictionaryGatherTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryGatherTest, Gather)
 {
@@ -67,7 +67,6 @@ TEST_F(DictionaryGatherTest, SortStrings)
   auto dictionary = cudf::dictionary::encode(strings);
   cudf::dictionary_column_view view(dictionary->view());
 
-  std::vector<cudf::order> column_order{cudf::order::ASCENDING};
   auto result = cudf::sort(cudf::table_view{{dictionary->view()}},
                            std::vector<cudf::order>{cudf::order::ASCENDING})
                   ->release();
@@ -86,7 +85,6 @@ TEST_F(DictionaryGatherTest, SortFloat)
   auto dictionary = cudf::dictionary::encode(data);
   cudf::dictionary_column_view view(dictionary->view());
 
-  std::vector<cudf::order> column_order{cudf::order::ASCENDING};
   auto result = cudf::sort(cudf::table_view{{dictionary->view()}},
                            std::vector<cudf::order>{cudf::order::ASCENDING})
                   ->release();

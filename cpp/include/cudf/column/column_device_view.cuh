@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/detail/utilities/alignment.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.hpp>
@@ -51,12 +52,12 @@ namespace cudf {
  * If used at compile-time, this indicator can tell the optimizer
  * to include or exclude any null-checking clauses.
  *
+ * @ingroup column_classes
+ *
  */
 struct nullate {
-  struct YES : std::bool_constant<true> {
-  };
-  struct NO : std::bool_constant<false> {
-  };
+  struct YES : std::bool_constant<true> {};
+  struct NO : std::bool_constant<false> {};
   /**
    * @brief `nullate::DYNAMIC` defers the determination of nullability to run time rather than
    * compile time. The calling code is responsible for specifying whether or not nulls are
@@ -129,7 +130,7 @@ class alignas(16) column_device_view_base {
    * or `std::is_same_v<T,void>` are true.
    *
    * @tparam The type to cast to
-   * @return T const* Typed pointer to underlying data
+   * @return Typed pointer to underlying data
    */
   template <typename T = void,
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
@@ -151,7 +152,7 @@ class alignas(16) column_device_view_base {
    * false.
    *
    * @tparam T The type to cast to
-   * @return T const* Typed pointer to underlying data, including the offset
+   * @return Typed pointer to underlying data, including the offset
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   [[nodiscard]] CUDF_HOST_DEVICE T const* data() const noexcept
@@ -277,7 +278,7 @@ class alignas(16) column_device_view_base {
   }
 
   /**
-   * @brief Returns the the specified bitmask word from the `null_mask()`.
+   * @brief Returns the specified bitmask word from the `null_mask()`.
    *
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
@@ -318,16 +319,14 @@ class alignas(16) column_device_view_base {
   }
 
   template <typename C, typename T, typename = void>
-  struct has_element_accessor_impl : std::false_type {
-  };
+  struct has_element_accessor_impl : std::false_type {};
 
   template <typename C, typename T>
   struct has_element_accessor_impl<
     C,
     T,
     void_t<decltype(std::declval<C>().template element<T>(std::declval<size_type>()))>>
-    : std::true_type {
-  };
+    : std::true_type {};
 };
 // @cond
 // Forward declaration
@@ -446,10 +445,11 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   __device__ T element(size_type element_index) const noexcept
   {
     size_type index       = element_index + offset();  // account for this view's _offset
-    const auto* d_offsets = d_children[strings_column_view::offsets_column_index].data<int32_t>();
-    const char* d_strings = d_children[strings_column_view::chars_column_index].data<char>();
-    size_type offset      = d_offsets[index];
-    return string_view{d_strings + offset, d_offsets[index + 1] - offset};
+    char const* d_strings = static_cast<char const*>(_data);
+    auto const offsets    = d_children[strings_column_view::offsets_column_index];
+    auto const itr        = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+    auto const offset     = itr[index];
+    return string_view{d_strings + offset, static_cast<cudf::size_type>(itr[index + 1] - offset)};
   }
 
  private:
@@ -990,7 +990,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * `data<T>()`.
    *
    * @tparam The type to cast to
-   * @return T* Typed pointer to underlying data
+   * @return Typed pointer to underlying data
    */
   template <typename T = void,
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
@@ -1009,7 +1009,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
    * @tparam T The type to cast to
-   * @return T* Typed pointer to underlying data, including the offset
+   * @return Typed pointer to underlying data, including the offset
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   CUDF_HOST_DEVICE T* data() const noexcept
@@ -1078,7 +1078,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * `mutable_column_device_view::has_element_accessor<T>()` is false.
    *
    * @tparam T The desired type
-   * @return T* Pointer to the first element after casting
+   * @return Pointer to the first element after casting
    */
   template <typename T, CUDF_ENABLE_IF(mutable_column_device_view::has_element_accessor<T>())>
   iterator<T> begin()
@@ -1094,7 +1094,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * `mutable_column_device_view::has_element_accessor<T>()` is false.
    *
    * @tparam T The desired type
-   * @return T const* Pointer to one past the last element after casting
+   * @return Pointer to one past the last element after casting
    */
   template <typename T, CUDF_ENABLE_IF(mutable_column_device_view::has_element_accessor<T>())>
   iterator<T> end()
@@ -1106,7 +1106,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @brief Returns the specified child
    *
    * @param child_index The index of the desired child
-   * @return column_view The requested child `column_view`
+   * @return The requested child `column_view`
    */
   [[nodiscard]] __device__ mutable_column_device_view child(size_type child_index) const noexcept
   {
@@ -1173,7 +1173,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * device view of the specified column and it's children.
    *
    * @param source_view The `column_view` to use for this calculation.
-   * @return size_t The size in bytes of the amount of memory needed to hold a
+   * @return The size in bytes of the amount of memory needed to hold a
    * device view of the specified column and it's children
    */
   static std::size_t extent(mutable_column_view source_view);

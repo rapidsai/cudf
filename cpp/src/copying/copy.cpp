@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -66,7 +67,7 @@ struct scalar_empty_like_functor_impl<cudf::list_view> {
     auto ls = static_cast<list_scalar const*>(&input);
 
     // TODO:  add a manual constructor for lists_column_view.
-    column_view offsets{cudf::data_type{cudf::type_id::INT32}, 0, nullptr};
+    column_view offsets{cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0};
     std::vector<column_view> children;
     children.push_back(offsets);
     children.push_back(ls->view());
@@ -119,22 +120,18 @@ std::unique_ptr<column> allocate_like(column_view const& input,
                                       size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(is_fixed_width(input.type()), "Expects only fixed-width type column");
+  CUDF_EXPECTS(
+    is_fixed_width(input.type()), "Expects only fixed-width type column", cudf::data_type_error);
   mask_state allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
-
-  auto op = [&](auto const& child) { return allocate_like(child, size, mask_alloc, stream, mr); };
-  auto begin = thrust::make_transform_iterator(input.child_begin(), op);
-  std::vector<std::unique_ptr<column>> children(begin, begin + input.num_children());
 
   return std::make_unique<column>(input.type(),
                                   size,
                                   rmm::device_buffer(size * size_of(input.type()), stream, mr),
                                   detail::create_null_mask(size, allocate_mask, stream, mr),
-                                  state_null_count(allocate_mask, input.size()),
-                                  std::move(children));
+                                  0);
 }
 
 }  // namespace detail
@@ -180,19 +177,21 @@ std::unique_ptr<table> empty_like(table_view const& input_table)
 
 std::unique_ptr<column> allocate_like(column_view const& input,
                                       mask_allocation_policy mask_alloc,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::allocate_like(input, input.size(), mask_alloc, cudf::get_default_stream(), mr);
+  return detail::allocate_like(input, input.size(), mask_alloc, stream, mr);
 }
 
 std::unique_ptr<column> allocate_like(column_view const& input,
                                       size_type size,
                                       mask_allocation_policy mask_alloc,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::allocate_like(input, size, mask_alloc, cudf::get_default_stream(), mr);
+  return detail::allocate_like(input, size, mask_alloc, stream, mr);
 }
 
 }  // namespace cudf

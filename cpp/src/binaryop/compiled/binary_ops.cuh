@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/unary.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -69,13 +70,17 @@ struct typed_casted_writer {
     if constexpr (mutable_column_device_view::has_element_accessor<Element>() and
                   std::is_constructible_v<Element, FromType>) {
       col.element<Element>(i) = static_cast<Element>(val);
-    } else if constexpr (is_fixed_point<Element>() and
-                         (is_fixed_point<FromType>() or
-                          std::is_constructible_v<Element, FromType>)) {
-      if constexpr (is_fixed_point<FromType>())
-        col.data<Element::rep>()[i] = val.rescaled(numeric::scale_type{col.type().scale()}).value();
-      else
-        col.data<Element::rep>()[i] = Element{val, numeric::scale_type{col.type().scale()}}.value();
+    } else if constexpr (is_fixed_point<Element>()) {
+      auto const scale = numeric::scale_type{col.type().scale()};
+      if constexpr (is_fixed_point<FromType>()) {
+        col.data<Element::rep>()[i] = val.rescaled(scale).value();
+      } else if constexpr (cuda::std::is_constructible_v<Element, FromType>) {
+        col.data<Element::rep>()[i] = Element{val, scale}.value();
+      } else if constexpr (cuda::std::is_floating_point_v<FromType>) {
+        col.data<Element::rep>()[i] = convert_floating_to_fixed<Element>(val, scale).value();
+      }
+    } else if constexpr (cuda::std::is_floating_point_v<Element> and is_fixed_point<FromType>()) {
+      col.data<Element>()[i] = convert_fixed_to_floating<Element>(val);
     }
   }
 };
@@ -104,6 +109,7 @@ struct ops_wrapper {
         type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs, is_rhs_scalar);
       auto result = [&]() {
         if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      std::is_same_v<BinaryOperator, ops::NullNotEquals> or
                       std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
                       std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
                       std::is_same_v<BinaryOperator, ops::NullMax> or
@@ -237,7 +243,7 @@ struct binary_op_double_device_dispatcher {
  * @param f Functor object to call for each element.
  */
 template <typename Functor>
-__global__ void for_each_kernel(cudf::size_type size, Functor f)
+CUDF_KERNEL void for_each_kernel(cudf::size_type size, Functor f)
 {
   int tid    = threadIdx.x;
   int blkid  = blockIdx.x;
@@ -269,7 +275,7 @@ void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
   CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, for_each_kernel<decltype(f)>));
   // 2 elements per thread.
-  const int grid_size = util::div_rounding_up_safe(size, 2 * block_size);
+  int const grid_size = util::div_rounding_up_safe(size, 2 * block_size);
   for_each_kernel<<<grid_size, block_size, 0, stream.value()>>>(size, std::forward<Functor&&>(f));
 }
 

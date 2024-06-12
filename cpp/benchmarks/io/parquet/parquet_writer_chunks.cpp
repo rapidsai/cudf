@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
@@ -27,14 +26,12 @@
 
 #include <nvbench/nvbench.cuh>
 
-// to enable, run cmake with -DBUILD_BENCHMARKS=ON
-
+// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// run on most GPUs, but large enough to allow highest throughput
 constexpr int64_t data_size = 512 << 20;
 
 void PQ_write(nvbench::state& state)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   cudf::size_type const num_cols = state.get_int64("num_cols");
 
   auto const tbl  = create_random_table(cycle_dtypes({cudf::type_id::INT32}, num_cols),
@@ -67,8 +64,6 @@ void PQ_write(nvbench::state& state)
 
 void PQ_write_chunked(nvbench::state& state)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   cudf::size_type const num_cols   = state.get_int64("num_cols");
   cudf::size_type const num_tables = state.get_int64("num_chunks");
 

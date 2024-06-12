@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@
 #include <type_traits>
 
 /**
- * @brief Real Type that has atleast number of bits of integral type in its mantissa.
+ * @brief Real Type that has at least number of bits of integral type in its mantissa.
  *  number of bits of integrals < 23 bits of mantissa in float
  * to allow full range of integer bits to be generated.
  * @tparam T integral type
@@ -44,15 +44,25 @@ using integral_to_realType =
                      T,
                      std::conditional_t<sizeof(T) * 8 <= 23, float, double>>;
 
+// standard deviation such that most samples fall within the given range
+template <typename T>
+constexpr double std_dev_from_range(T lower_bound, T upper_bound)
+{
+  // 99.7% samples are within 3 standard deviations of the mean
+  constexpr double k    = 6.0;
+  auto const range_size = std::abs(static_cast<double>(upper_bound) - lower_bound);
+  return range_size / k;
+}
+
 /**
  * @brief Generates a normal distribution between zero and upper_bound.
  */
 template <typename T>
 auto make_normal_dist(T lower_bound, T upper_bound)
 {
-  using realT    = integral_to_realType<T>;
-  T const mean   = lower_bound + (upper_bound - lower_bound) / 2;
-  T const stddev = (upper_bound - lower_bound) / 6;
+  using realT        = integral_to_realType<T>;
+  realT const mean   = lower_bound / 2. + upper_bound / 2.;
+  realT const stddev = std_dev_from_range(lower_bound, upper_bound);
   return thrust::random::normal_distribution<realT>(mean, stddev);
 }
 
@@ -68,14 +78,6 @@ auto make_uniform_dist(T range_start, T range_end)
   return thrust::uniform_real_distribution<T>(range_start, range_end);
 }
 
-template <typename T>
-double geometric_dist_p(T range_size)
-{
-  constexpr double percentage_in_range = 0.99;
-  double const p                       = 1 - exp(log(1 - percentage_in_range) / range_size);
-  return p ? p : std::numeric_limits<double>::epsilon();
-}
-
 /**
  * @brief Generates a geometric distribution between lower_bound and upper_bound.
  * This distribution is an approximation generated using normal distribution.
@@ -89,10 +91,17 @@ class geometric_distribution : public thrust::random::normal_distribution<integr
   T _lower_bound;
   T _upper_bound;
 
+  super_t make_approx_normal_dist(T lower_bound, T upper_bound) const
+  {
+    auto const abs_range_size = std::abs(static_cast<realType>(upper_bound) - lower_bound);
+    // Generate normal distribution around zero; output will be shifted by lower_bound
+    return make_normal_dist(-abs_range_size, abs_range_size);
+  }
+
  public:
   using result_type = T;
-  __host__ __device__ explicit geometric_distribution(T lower_bound, T upper_bound)
-    : super_t(0, std::labs(upper_bound - lower_bound) / 4.0),
+  explicit geometric_distribution(T lower_bound, T upper_bound)
+    : super_t(make_approx_normal_dist(lower_bound, upper_bound)),
       _lower_bound(lower_bound),
       _upper_bound(upper_bound)
   {
@@ -101,8 +110,11 @@ class geometric_distribution : public thrust::random::normal_distribution<integr
   template <typename UniformRandomNumberGenerator>
   __host__ __device__ result_type operator()(UniformRandomNumberGenerator& urng)
   {
-    return _lower_bound < _upper_bound ? std::abs(super_t::operator()(urng)) + _lower_bound
-                                       : _lower_bound - std::abs(super_t::operator()(urng));
+    // Distribution always biases towards lower_bound
+    realType const result = _lower_bound < _upper_bound
+                              ? std::abs(super_t::operator()(urng)) + _lower_bound
+                              : _lower_bound - std::abs(super_t::operator()(urng));
+    return std::round(result);
   }
 };
 

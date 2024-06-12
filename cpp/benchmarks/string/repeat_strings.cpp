@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ static void BM_repeat_strings_scalar_times(benchmark::State& state)
     cudf::strings::repeat_strings(strings_col, default_repeat_times);
   }
 
-  state.SetBytesProcessed(state.iterations() * strings_col.chars_size());
+  state.SetBytesProcessed(state.iterations() * strings_col.chars_size(cudf::get_default_stream()));
 }
 
 static void BM_repeat_strings_column_times(benchmark::State& state)
@@ -75,44 +75,8 @@ static void BM_repeat_strings_column_times(benchmark::State& state)
     cudf::strings::repeat_strings(strings_col, repeat_times_col);
   }
 
-  state.SetBytesProcessed(state.iterations() *
-                          (strings_col.chars_size() + repeat_times_col.size() * sizeof(int32_t)));
-}
-
-static void BM_compute_output_strings_sizes(benchmark::State& state)
-{
-  auto const n_rows           = static_cast<cudf::size_type>(state.range(0));
-  auto const max_str_length   = static_cast<cudf::size_type>(state.range(1));
-  auto const table            = create_data_table(2, n_rows, max_str_length);
-  auto const strings_col      = cudf::strings_column_view(table->view().column(0));
-  auto const repeat_times_col = table->view().column(1);
-
-  for ([[maybe_unused]] auto _ : state) {
-    [[maybe_unused]] cuda_event_timer raii(state, true, cudf::get_default_stream());
-    cudf::strings::repeat_strings_output_sizes(strings_col, repeat_times_col);
-  }
-
-  state.SetBytesProcessed(state.iterations() *
-                          (strings_col.chars_size() + repeat_times_col.size() * sizeof(int32_t)));
-}
-
-static void BM_repeat_strings_column_times_precomputed_sizes(benchmark::State& state)
-{
-  auto const n_rows           = static_cast<cudf::size_type>(state.range(0));
-  auto const max_str_length   = static_cast<cudf::size_type>(state.range(1));
-  auto const table            = create_data_table(2, n_rows, max_str_length);
-  auto const strings_col      = cudf::strings_column_view(table->view().column(0));
-  auto const repeat_times_col = table->view().column(1);
-  [[maybe_unused]] auto const [sizes, total_bytes] =
-    cudf::strings::repeat_strings_output_sizes(strings_col, repeat_times_col);
-
-  for ([[maybe_unused]] auto _ : state) {
-    [[maybe_unused]] cuda_event_timer raii(state, true, cudf::get_default_stream());
-    cudf::strings::repeat_strings(strings_col, repeat_times_col, *sizes);
-  }
-
-  state.SetBytesProcessed(state.iterations() *
-                          (strings_col.chars_size() + repeat_times_col.size() * sizeof(int32_t)));
+  state.SetBytesProcessed(state.iterations() * (strings_col.chars_size(cudf::get_default_stream()) +
+                                                repeat_times_col.size() * sizeof(int32_t)));
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)
@@ -126,8 +90,7 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   generate_string_bench_args(b, min_rows, max_rows, row_mult, min_strlen, max_strlen, len_mult);
 }
 
-class RepeatStrings : public cudf::benchmark {
-};
+class RepeatStrings : public cudf::benchmark {};
 
 #define REPEAT_STRINGS_SCALAR_TIMES_BENCHMARK_DEFINE(name)          \
   BENCHMARK_DEFINE_F(RepeatStrings, name)                           \
@@ -145,23 +108,5 @@ class RepeatStrings : public cudf::benchmark {
     ->UseManualTime()                                               \
     ->Unit(benchmark::kMillisecond);
 
-#define COMPUTE_OUTPUT_STRINGS_SIZES_BENCHMARK_DEFINE(name)          \
-  BENCHMARK_DEFINE_F(RepeatStrings, name)                            \
-  (::benchmark::State & st) { BM_compute_output_strings_sizes(st); } \
-  BENCHMARK_REGISTER_F(RepeatStrings, name)                          \
-    ->Apply(generate_bench_args)                                     \
-    ->UseManualTime()                                                \
-    ->Unit(benchmark::kMillisecond);
-
-#define REPEAT_STRINGS_COLUMN_TIMES_PRECOMPUTED_SIZES_BENCHMARK_DEFINE(name)          \
-  BENCHMARK_DEFINE_F(RepeatStrings, name)                                             \
-  (::benchmark::State & st) { BM_repeat_strings_column_times_precomputed_sizes(st); } \
-  BENCHMARK_REGISTER_F(RepeatStrings, name)                                           \
-    ->Apply(generate_bench_args)                                                      \
-    ->UseManualTime()                                                                 \
-    ->Unit(benchmark::kMillisecond);
-
 REPEAT_STRINGS_SCALAR_TIMES_BENCHMARK_DEFINE(scalar_times)
 REPEAT_STRINGS_COLUMN_TIMES_BENCHMARK_DEFINE(column_times)
-COMPUTE_OUTPUT_STRINGS_SIZES_BENCHMARK_DEFINE(compute_output_strings_sizes)
-REPEAT_STRINGS_COLUMN_TIMES_PRECOMPUTED_SIZES_BENCHMARK_DEFINE(precomputed_sizes)

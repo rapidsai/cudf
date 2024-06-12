@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <string>
@@ -105,6 +106,9 @@ class csv_reader_options {
   char _quotechar = '"';
   // Whether a quote inside a value is double-quoted
   bool _doublequote = true;
+  // Whether to detect quotes surrounded by spaces e.g. `   "data"   `. This flag has no effect when
+  // _doublequote is true
+  bool _detect_whitespace_around_quotes = false;
   // Names of columns to read as datetime
   std::vector<std::string> _parse_dates_names;
   // Indexes of columns to read as datetime
@@ -138,7 +142,7 @@ class csv_reader_options {
    *
    * @param src source information used to read csv file
    */
-  explicit csv_reader_options(source_info const& src) : _source(src) {}
+  explicit csv_reader_options(source_info src) : _source{std::move(src)} {}
 
   friend csv_reader_options_builder;
 
@@ -156,7 +160,7 @@ class csv_reader_options {
    * @param src Source information to read csv file
    * @return Builder to build reader options
    */
-  static csv_reader_options_builder builder(source_info const& src);
+  static csv_reader_options_builder builder(source_info src);
 
   /**
    * @brief Returns source info.
@@ -208,7 +212,7 @@ class csv_reader_options {
   [[nodiscard]] std::size_t get_byte_range_padding() const
   {
     auto const num_names   = _names.size();
-    auto const num_dtypes  = std::visit([](const auto& dtypes) { return dtypes.size(); }, _dtypes);
+    auto const num_dtypes  = std::visit([](auto const& dtypes) { return dtypes.size(); }, _dtypes);
     auto const num_columns = std::max(num_dtypes, num_names);
 
     auto const max_row_bytes = 16 * 1024;  // 16KB
@@ -373,6 +377,17 @@ class csv_reader_options {
    * @return `true` if a quote inside a value is double-quoted
    */
   [[nodiscard]] bool is_enabled_doublequote() const { return _doublequote; }
+
+  /**
+   * @brief Whether to detect quotes surrounded by spaces e.g. `   "data"   `. This flag has no
+   * effect when _doublequote is true
+   *
+   * @return `true` if detect_whitespace_around_quotes is enabled
+   */
+  [[nodiscard]] bool is_enabled_detect_whitespace_around_quotes() const
+  {
+    return _detect_whitespace_around_quotes;
+  }
 
   /**
    * @brief Returns names of columns to read as datetime.
@@ -567,31 +582,33 @@ class csv_reader_options {
   /**
    * @brief Sets number of rows to skip from start.
    *
-   * @param skip Number of rows to skip
+   * @param skiprows Number of rows to skip
    */
-  void set_skiprows(size_type skip)
+  void set_skiprows(size_type skiprows)
   {
-    if ((skip != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
-      CUDF_FAIL(
-        "skiprows can't be a non zero value if range offset and/or range size has been set");
+    if ((skiprows != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
+      CUDF_FAIL("skiprows must be zero if range offset or range size has been set",
+                std::invalid_argument);
     }
-    _skiprows = skip;
+    _skiprows = skiprows;
   }
 
   /**
    * @brief Sets number of rows to skip from end.
    *
-   * @param skip Number of rows to skip
+   * @param skipfooter Number of rows to skip
    */
-  void set_skipfooter(size_type skip)
+  void set_skipfooter(size_type skipfooter)
   {
-    CUDF_EXPECTS((skip == 0) or (_nrows == -1), "Cannot use both `nrows` and `skipfooter`");
-    if ((skip != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
-      CUDF_FAIL(
-        "skipfooter can't be a non zero value if range offset and/or range size has been set");
+    CUDF_EXPECTS((skipfooter == 0) or (_nrows == -1),
+                 "Cannot use both `nrows` and `skipfooter`",
+                 std::invalid_argument);
+    if ((skipfooter != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
+      CUDF_FAIL("skipfooter must be zero if range offset or range size has been set",
+                std::invalid_argument);
     }
 
-    _skipfooter = skip;
+    _skipfooter = skipfooter;
   }
 
   /**
@@ -665,11 +682,21 @@ class csv_reader_options {
   void enable_skip_blank_lines(bool val) { _skip_blank_lines = val; }
 
   /**
-   * @brief Sets quoting style.
+   * @brief Sets the expected quoting style used in the input CSV data.
    *
-   * @param style Quoting style used
+   * Note: Only the following quoting styles are supported:
+   *   1. MINIMAL: String columns containing special characters like row-delimiters/
+   *               field-delimiter/quotes will be quoted.
+   *   2. NONE: No quoting is done for any columns.
+   *
+   * @param quoting Quoting style used
    */
-  void set_quoting(quote_style style) { _quoting = style; }
+  void set_quoting(quote_style quoting)
+  {
+    CUDF_EXPECTS(quoting == quote_style::MINIMAL || quoting == quote_style::NONE,
+                 "Only MINIMAL and NONE are supported for quoting.");
+    _quoting = quoting;
+  }
 
   /**
    * @brief Sets quoting character.
@@ -684,6 +711,14 @@ class csv_reader_options {
    * @param val Boolean value to enable/disable
    */
   void enable_doublequote(bool val) { _doublequote = val; }
+
+  /**
+   * @brief Sets whether to detect quotes surrounded by spaces e.g. `   "data"   `. This flag has no
+   * effect when _doublequote is true
+   *
+   * @param val Boolean value to enable/disable
+   */
+  void enable_detect_whitespace_around_quotes(bool val) { _detect_whitespace_around_quotes = val; }
 
   /**
    * @brief Sets names of columns to read as datetime.
@@ -823,7 +858,7 @@ class csv_reader_options_builder {
    *
    * @param src The source information used to read csv file
    */
-  csv_reader_options_builder(source_info const& src) : options(src) {}
+  csv_reader_options_builder(source_info src) : options{std::move(src)} {}
 
   /**
    * @brief Sets compression format of the source.
@@ -1114,6 +1149,19 @@ class csv_reader_options_builder {
   }
 
   /**
+   * @brief Sets whether to detect quotes surrounded by spaces e.g. `   "data"   `. This flag has no
+   * effect when _doublequote is true
+   *
+   * @param val Boolean value to enable/disable
+   * @return this for chaining
+   */
+  csv_reader_options_builder& detect_whitespace_around_quotes(bool val)
+  {
+    options._detect_whitespace_around_quotes = val;
+    return *this;
+  }
+
+  /**
    * @brief Sets names of columns to read as datetime.
    *
    * @param col_names Vector of column names to read as datetime
@@ -1295,6 +1343,7 @@ class csv_reader_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata
  *
@@ -1302,7 +1351,8 @@ class csv_reader_options_builder {
  */
 table_with_metadata read_csv(
   csv_reader_options options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 /**
@@ -1332,14 +1382,16 @@ class csv_writer_options {
   size_type _rows_per_chunk = std::numeric_limits<size_type>::max();
   // character to use for separating lines (default "\n")
   std::string _line_terminator = "\n";
-  // character to use for separating lines (default "\n")
+  // character to use for separating column values (default ",")
   char _inter_column_delimiter = ',';
   // string to use for values != 0 in INT8 types (default 'true')
   std::string _true_value = std::string{"true"};
   // string to use for values == 0 in INT8 types (default 'false')
   std::string _false_value = std::string{"false"};
-  // Optional associated metadata
-  table_metadata const* _metadata = nullptr;
+  // Names of all columns; if empty, writer will generate column names
+  std::vector<std::string> _names;
+  // Quote style. Currently only MINIMAL and NONE are supported.
+  quote_style _quoting = quote_style::MINIMAL;
 
   /**
    * @brief Constructor from sink and table.
@@ -1387,11 +1439,11 @@ class csv_writer_options {
   [[nodiscard]] table_view const& get_table() const { return _table; }
 
   /**
-   * @brief Returns optional associated metadata.
+   * @brief Returns names of the columns.
    *
-   * @return Optional associated metadata
+   * @return Names of the columns in the output file
    */
-  [[nodiscard]] table_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] std::vector<std::string> const& get_names() const { return _names; }
 
   /**
    * @brief Returns string to used for null entries.
@@ -1422,9 +1474,9 @@ class csv_writer_options {
   [[nodiscard]] std::string get_line_terminator() const { return _line_terminator; }
 
   /**
-   * @brief Returns character used for separating lines.
+   * @brief Returns character used for separating column values.
    *
-   * @return Character used for separating lines
+   * @return Character used for separating column values.
    */
   [[nodiscard]] char get_inter_column_delimiter() const { return _inter_column_delimiter; }
 
@@ -1442,13 +1494,25 @@ class csv_writer_options {
    */
   [[nodiscard]] std::string get_false_value() const { return _false_value; }
 
+  /**
+   * @brief Returns the quote style for the writer.
+   *
+   * Note: Only MINIMAL and NONE are supported.
+   *   1. MINIMAL: String columns containing special characters like row-delimiters
+   *               field-delimiter/quotes will be quoted.
+   *   2. NONE: No quoting is done for any columns.
+   *
+   * @return quote_style The quote style for the writer
+   */
+  [[nodiscard]] quote_style get_quoting() const { return _quoting; }
+
   // Setter
   /**
-   * @brief Sets optional associated metadata.
+   * @brief Sets optional associated column names.
    *
-   @param metadata Associated metadata
+   @param names Associated column names
    */
-  void set_metadata(table_metadata* metadata) { _metadata = metadata; }
+  void set_names(std::vector<std::string> names) { _names = std::move(names); }
 
   /**
    * @brief Sets string to used for null entries.
@@ -1479,9 +1543,9 @@ class csv_writer_options {
   void set_line_terminator(std::string term) { _line_terminator = term; }
 
   /**
-   * @brief Sets character used for separating lines.
+   * @brief Sets character used for separating column values.
    *
-   * @param delim Character to indicate delimiting
+   * @param delim Character to delimit column values
    */
   void set_inter_column_delimiter(char delim) { _inter_column_delimiter = delim; }
 
@@ -1498,6 +1562,30 @@ class csv_writer_options {
    * @param val String to represent values == 0 in INT8 types
    */
   void set_false_value(std::string val) { _false_value = val; }
+
+  /**
+   * @brief (Re)sets the table being written.
+   *
+   * @param table Table to be written
+   */
+  void set_table(table_view const& table) { _table = table; }
+
+  /**
+   * @brief Sets the quote style for the writer.
+   *
+   * Note: Only the following quote styles are supported:
+   *   1. MINIMAL: String columns containing special characters like row-delimiters/
+   *               field-delimiter/quotes will be quoted.
+   *   2. NONE: No quoting is done for any columns.
+   *
+   * @param quoting The new quote_style for the writer.
+   */
+  void set_quoting(quote_style quoting)
+  {
+    CUDF_EXPECTS(quoting == quote_style::MINIMAL || quoting == quote_style::NONE,
+                 "Only MINIMAL and NONE are supported for quoting.");
+    _quoting = quoting;
+  }
 };
 
 /**
@@ -1526,14 +1614,14 @@ class csv_writer_options_builder {
   }
 
   /**
-   * @brief Sets optional associated metadata.
+   * @brief Sets optional column names.
    *
-   * @param metadata Associated metadata
+   * @param names Column names
    * @return this for chaining
    */
-  csv_writer_options_builder& metadata(table_metadata* metadata)
+  csv_writer_options_builder& names(std::vector<std::string> names)
   {
-    options._metadata = metadata;
+    options._names = names;
     return *this;
   }
 
@@ -1586,9 +1674,9 @@ class csv_writer_options_builder {
   }
 
   /**
-   * @brief Sets character used for separating lines.
+   * @brief Sets character used for separating column values.
    *
-   * @param delim Character to indicate delimiting
+   * @param delim Character to delimit column values
    * @return this for chaining
    */
   csv_writer_options_builder& inter_column_delimiter(char delim)
@@ -1622,6 +1710,20 @@ class csv_writer_options_builder {
   }
 
   /**
+   * @brief Sets the quote style for the writer.
+   *
+   * Only MINIMAL and NONE are supported.
+   *
+   * @param quoting The new quote style for the writer.
+   * @return this for chaining
+   */
+  csv_writer_options_builder& quoting(quote_style quoting)
+  {
+    options.set_quoting(quoting);
+    return *this;
+  }
+
+  /**
    * @brief move `csv_writer_options` member once it's built.
    */
   operator csv_writer_options&&() { return std::move(options); }
@@ -1651,10 +1753,12 @@ class csv_writer_options_builder {
  * @endcode
  *
  * @param options Settings for controlling writing behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  */
 void write_csv(csv_writer_options const& options,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+               rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace io

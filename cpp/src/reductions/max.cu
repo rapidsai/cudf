@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,23 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/reduction_functions.hpp>
+#include "simple.cuh"
+
 #include <cudf/dictionary/dictionary_column_view.hpp>
-#include <reductions/simple.cuh>
+#include <cudf/reduction/detail/reduction_functions.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace reduction {
+namespace detail {
 
 std::unique_ptr<cudf::scalar> max(column_view const& col,
                                   cudf::data_type const output_dtype,
                                   std::optional<std::reference_wrapper<scalar const>> init,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   auto const input_type =
     cudf::is_dictionary(col.type()) ? cudf::dictionary_column_view(col).keys().type() : col.type();
@@ -35,14 +38,11 @@ std::unique_ptr<cudf::scalar> max(column_view const& col,
   auto const dispatch_type = cudf::is_dictionary(col.type())
                                ? cudf::dictionary_column_view(col).indices().type()
                                : col.type();
-  return cudf::type_dispatcher(
-    dispatch_type,
-    simple::detail::same_element_type_dispatcher<cudf::reduction::op::max>{},
-    col,
-    init,
-    stream,
-    mr);
+
+  using reducer = simple::detail::same_element_type_dispatcher<op::max>;
+  return cudf::type_dispatcher(dispatch_type, reducer{}, col, init, stream, mr);
 }
 
+}  // namespace detail
 }  // namespace reduction
 }  // namespace cudf

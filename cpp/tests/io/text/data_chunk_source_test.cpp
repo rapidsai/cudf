@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
@@ -25,22 +26,19 @@
 #include <fstream>
 #include <random>
 
-using namespace cudf::test;
+auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
+  ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
-auto const temp_env = static_cast<TempDirTestEnvironment*>(
-  ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
+struct DataChunkSourceTest : public cudf::test::BaseFixture {};
 
-struct DataChunkSourceTest : public BaseFixture {
-};
-
-std::string chunk_to_host(const cudf::io::text::device_data_chunk& chunk)
+std::string chunk_to_host(cudf::io::text::device_data_chunk const& chunk)
 {
   std::string result(chunk.size(), '\0');
-  cudaMemcpy(result.data(), chunk.data(), chunk.size(), cudaMemcpyDeviceToHost);
+  CUDF_CUDA_TRY(cudaMemcpy(result.data(), chunk.data(), chunk.size(), cudaMemcpyDefault));
   return result;
 }
 
-void test_source(const std::string& content, const cudf::io::text::data_chunk_source& source)
+void test_source(std::string const& content, cudf::io::text::data_chunk_source const& source)
 {
   {
     // full contents
@@ -96,6 +94,35 @@ void test_source(const std::string& content, const cudf::io::text::data_chunk_so
   }
 }
 
+TEST_F(DataChunkSourceTest, DataSourceHost)
+{
+  std::string const content = "host buffer source";
+  auto const datasource =
+    cudf::io::datasource::create(cudf::io::host_buffer{content.data(), content.size()});
+  auto const source = cudf::io::text::make_source(*datasource);
+
+  test_source(content, *source);
+}
+
+TEST_F(DataChunkSourceTest, DataSourceFile)
+{
+  std::string content = "file datasource";
+  // make it big enough to have is_device_read_preferred return true
+  content.reserve(content.size() << 20);
+  for (int i = 0; i < 20; i++) {
+    content += content;
+  }
+  auto const filename = temp_env->get_temp_filepath("file_source");
+  {
+    std::ofstream file{filename};
+    file << content;
+  }
+  auto const datasource = cudf::io::datasource::create(filename);
+  auto const source     = cudf::io::text::make_source(*datasource);
+
+  test_source(content, *source);
+}
+
 TEST_F(DataChunkSourceTest, Device)
 {
   std::string const content = "device buffer source";
@@ -136,7 +163,7 @@ uint64_t virtual_offset(std::size_t block_offset, std::size_t local_offset)
 }
 
 void write_bgzip(std::ostream& output_stream,
-                 cudf::host_span<const char> data,
+                 cudf::host_span<char const> data,
                  std::default_random_engine& rng,
                  compression compress,
                  eof add_eof)

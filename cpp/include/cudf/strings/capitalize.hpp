@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -50,17 +51,19 @@ namespace strings {
  *
  * Any null string entries return corresponding null output column entries.
  *
- * @throw cudf::logic_error if `delimiter.is_valid()` is  `false`.
+ * @throw cudf::logic_error if `delimiter.is_valid()` is `false`.
  *
- * @param input String column.
- * @param delimiters Characters for identifying words to capitalize.
+ * @param input String column
+ * @param delimiters Characters for identifying words to capitalize
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Column of strings capitalized from the input column.
+ * @return Column of strings capitalized from the input column
  */
 std::unique_ptr<column> capitalize(
   strings_column_view const& input,
-  string_scalar const& delimiters     = string_scalar(""),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  string_scalar const& delimiters   = string_scalar("", true, cudf::get_default_stream()),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Modifies first character of each word to upper-case and lower-cases the rest.
@@ -83,15 +86,17 @@ std::unique_ptr<column> capitalize(
  *
  * Any null string entries return corresponding null output column entries.
  *
- * @param input String column.
- * @param sequence_type The character type that is used when identifying words.
+ * @param input String column
+ * @param sequence_type The character type that is used when identifying words
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Column of titled strings.
+ * @return Column of titled strings
  */
 std::unique_ptr<column> title(
   strings_column_view const& input,
   string_character_types sequence_type = string_character_types::ALPHA,
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr    = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Checks if the strings in the input column are title formatted.
@@ -112,13 +117,15 @@ std::unique_ptr<column> title(
  *
  * Any null string entries result in corresponding null output column entries.
  *
- * @param input String column.
+ * @param input String column
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Column of type BOOL8.
+ * @return Column of type BOOL8
  */
 std::unique_ptr<column> is_title(
   strings_column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

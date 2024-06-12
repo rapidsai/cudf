@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,6 @@
 
 #include <cudf/types.hpp>
 
-// Note: The <cuda/std/*> versions are used in order for Jitify to work with our fixed_point type.
-//       Jitify is needed for several algorithms (binaryop, rolling, etc)
-#include <cuda/std/climits>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
@@ -53,7 +50,7 @@ auto to_string(T value) -> std::string
   } else {
     return std::to_string(value);
   }
-  return std::string{};  // won't ever hit here, need to supress warning though
+  return std::string{};  // won't ever hit here, need to suppress warning though
 }
 
 template <typename T>

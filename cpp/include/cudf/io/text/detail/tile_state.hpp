@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,9 @@
 
 #pragma once
 
-#include <cub/block/block_scan.cuh>
+#include <rmm/resource_ref.hpp>
 
+#include <cub/block/block_scan.cuh>
 #include <cuda/atomic>
 
 namespace cudf {
@@ -82,7 +83,7 @@ struct scan_tile_state {
 
   scan_tile_state(cudf::size_type num_tiles,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+                  rmm::device_async_resource_ref mr)
     : tile_status(rmm::device_uvector<cuda::atomic<scan_tile_status, cuda::thread_scope_device>>(
         num_tiles, stream, mr)),
       tile_state_partial(rmm::device_uvector<T>(num_tiles, stream, mr)),

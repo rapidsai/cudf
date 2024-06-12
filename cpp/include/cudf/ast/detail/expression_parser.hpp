@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,14 @@
  */
 #pragma once
 
+#include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/optional.h>
+#include <rmm/resource_ref.hpp>
+
 #include <thrust/scan.h>
 
 #include <functional>
@@ -67,28 +69,10 @@ struct alignas(8) device_data_reference {
 
   bool operator==(device_data_reference const& rhs) const
   {
-    return std::tie(data_index, reference_type, table_source) ==
-           std::tie(rhs.data_index, rhs.reference_type, rhs.table_source);
+    return std::tie(data_index, data_type, reference_type, table_source) ==
+           std::tie(rhs.data_index, rhs.data_type, rhs.reference_type, rhs.table_source);
   }
 };
-
-// Type trait for wrapping nullable types in a thrust::optional. Non-nullable
-// types are returned as is.
-template <typename T, bool has_nulls>
-struct possibly_null_value;
-
-template <typename T>
-struct possibly_null_value<T, true> {
-  using type = thrust::optional<T>;
-};
-
-template <typename T>
-struct possibly_null_value<T, false> {
-  using type = T;
-};
-
-template <typename T, bool has_nulls>
-using possibly_null_value_t = typename possibly_null_value<T, has_nulls>::type;
 
 // Type used for intermediate storage in expression evaluation.
 template <bool has_nulls>
@@ -104,7 +88,7 @@ using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
  */
 struct expression_device_view {
   device_span<detail::device_data_reference const> data_references;
-  device_span<cudf::detail::fixed_width_scalar_device_view_base const> literals;
+  device_span<generic_scalar_device_view const> literals;
   device_span<ast_operator const> operators;
   device_span<cudf::size_type const> operator_source_indices;
   cudf::size_type num_intermediates;
@@ -136,7 +120,7 @@ class expression_parser {
                     std::optional<std::reference_wrapper<cudf::table_view const>> right,
                     bool has_nulls,
                     rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr)
+                    rmm::device_async_resource_ref mr)
     : _left{left},
       _right{right},
       _expression_count{0},
@@ -157,7 +141,7 @@ class expression_parser {
                     cudf::table_view const& table,
                     bool has_nulls,
                     rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr)
+                    rmm::device_async_resource_ref mr)
     : expression_parser(expr, table, {}, has_nulls, stream, mr)
   {
   }
@@ -193,6 +177,13 @@ class expression_parser {
    */
   cudf::size_type visit(operation const& expr);
 
+  /**
+   * @brief Visit a column name reference expression.
+   *
+   * @param expr Column name reference expression.
+   * @return cudf::size_type Index of device data reference for the expression.
+   */
+  cudf::size_type visit(column_name_reference const& expr);
   /**
    * @brief Internal class used to track the utilization of intermediate storage locations.
    *
@@ -251,7 +242,7 @@ class expression_parser {
     data_pointers.push_back(v.data());
   }
 
-  void move_to_device(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  void move_to_device(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
   {
     std::vector<cudf::size_type> sizes;
     std::vector<void const*> data_pointers;
@@ -281,11 +272,10 @@ class expression_parser {
       reinterpret_cast<detail::device_data_reference const*>(device_data_buffer_ptr +
                                                              buffer_offsets[0]),
       _data_references.size());
-    device_expression_data.literals =
-      device_span<cudf::detail::fixed_width_scalar_device_view_base const>(
-        reinterpret_cast<cudf::detail::fixed_width_scalar_device_view_base const*>(
-          device_data_buffer_ptr + buffer_offsets[1]),
-        _literals.size());
+    device_expression_data.literals = device_span<generic_scalar_device_view const>(
+      reinterpret_cast<generic_scalar_device_view const*>(device_data_buffer_ptr +
+                                                          buffer_offsets[1]),
+      _literals.size());
     device_expression_data.operators = device_span<ast_operator const>(
       reinterpret_cast<ast_operator const*>(device_data_buffer_ptr + buffer_offsets[2]),
       _operators.size());
@@ -335,7 +325,7 @@ class expression_parser {
   std::vector<detail::device_data_reference> _data_references;
   std::vector<ast_operator> _operators;
   std::vector<cudf::size_type> _operator_source_indices;
-  std::vector<cudf::detail::fixed_width_scalar_device_view_base> _literals;
+  std::vector<generic_scalar_device_view> _literals;
 };
 
 }  // namespace detail

@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple, TypeVar
+from typing import Dict, Optional, Tuple
+
+from typing_extensions import Self
 
 from cudf._typing import Dtype, DtypeObj, ScalarLike
-from cudf.core.buffer import DeviceBufferLike
+from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase
 
-T = TypeVar("T")
-
 class Column:
-    _data: Optional[DeviceBufferLike]
-    _mask: Optional[DeviceBufferLike]
-    _base_data: Optional[DeviceBufferLike]
-    _base_mask: Optional[DeviceBufferLike]
+    _data: Optional[Buffer]
+    _mask: Optional[Buffer]
+    _base_data: Optional[Buffer]
+    _base_mask: Optional[Buffer]
     _dtype: DtypeObj
     _size: int
     _offset: int
@@ -25,12 +25,12 @@ class Column:
 
     def __init__(
         self,
-        data: Optional[DeviceBufferLike],
+        data: Optional[Buffer],
         size: int,
         dtype: Dtype,
-        mask: Optional[DeviceBufferLike] = None,
-        offset: int = None,
-        null_count: int = None,
+        mask: Optional[Buffer] = None,
+        offset: Optional[int] = None,
+        null_count: Optional[int] = None,
         children: Tuple[ColumnBase, ...] = (),
     ) -> None: ...
     @property
@@ -40,27 +40,23 @@ class Column:
     @property
     def size(self) -> int: ...
     @property
-    def base_data(self) -> Optional[DeviceBufferLike]: ...
+    def base_data(self) -> Optional[Buffer]: ...
     @property
-    def base_data_ptr(self) -> int: ...
-    @property
-    def data(self) -> Optional[DeviceBufferLike]: ...
+    def data(self) -> Optional[Buffer]: ...
     @property
     def data_ptr(self) -> int: ...
-    def set_base_data(self, value: DeviceBufferLike) -> None: ...
+    def set_base_data(self, value: Buffer) -> None: ...
     @property
     def nullable(self) -> bool: ...
     def has_nulls(self, include_nan: bool = False) -> bool: ...
     @property
-    def base_mask(self) -> Optional[DeviceBufferLike]: ...
+    def base_mask(self) -> Optional[Buffer]: ...
     @property
-    def base_mask_ptr(self) -> int: ...
-    @property
-    def mask(self) -> Optional[DeviceBufferLike]: ...
+    def mask(self) -> Optional[Buffer]: ...
     @property
     def mask_ptr(self) -> int: ...
-    def set_base_mask(self, value: Optional[DeviceBufferLike]) -> None: ...
-    def set_mask(self: T, value: Optional[DeviceBufferLike]) -> T: ...
+    def set_base_mask(self, value: Optional[Buffer]) -> None: ...
+    def set_mask(self, value: Optional[Buffer]) -> Self: ...
     @property
     def null_count(self) -> int: ...
     @property
@@ -72,7 +68,8 @@ class Column:
     def set_base_children(self, value: Tuple[ColumnBase, ...]) -> None: ...
     def _mimic_inplace(
         self, other_col: ColumnBase, inplace=False
-    ) -> Optional[ColumnBase]: ...
+    ) -> Optional[Self]: ...
+
     # TODO: The val parameter should be Scalar, not ScalarLike
     @staticmethod
     def from_scalar(val: ScalarLike, size: int) -> ColumnBase: ...

@@ -1,40 +1,16 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-import pandas as pd
+from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.sorting cimport stable_sort_by_key as cpp_stable_sort_by_key
-from cudf._lib.cpp.stream_compaction cimport (
-    apply_boolean_mask as cpp_apply_boolean_mask,
-    distinct_count as cpp_distinct_count,
-    drop_nulls as cpp_drop_nulls,
-    duplicate_keep_option,
-    unique as cpp_unique,
-)
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport (
-    nan_policy,
-    null_equality,
-    null_order,
-    null_policy,
-    order,
-    size_type,
-)
-from cudf._lib.utils cimport (
-    columns_from_unique_ptr,
-    data_from_unique_ptr,
-    table_view_from_columns,
-    table_view_from_table,
-)
+from cudf._lib.utils cimport columns_from_pylibcudf_table
+
+from cudf._lib import pylibcudf
 
 
+@acquire_spill_lock()
 def drop_nulls(list columns, how="any", keys=None, thresh=None):
     """
     Drops null rows from cols depending on key columns.
@@ -52,32 +28,29 @@ def drop_nulls(list columns, how="any", keys=None, thresh=None):
     -------
     columns with null rows dropped
     """
+    if how not in {"any", "all"}:
+        raise ValueError("how must be 'any' or 'all'")
 
-    cdef vector[size_type] cpp_keys = (
-        keys if keys is not None else range(len(columns))
+    keys = list(keys if keys is not None else range(len(columns)))
+
+    # Note: If how == "all" and thresh is specified this prioritizes thresh
+    if thresh is not None:
+        keep_threshold = thresh
+    elif how == "all":
+        keep_threshold = 1
+    else:
+        keep_threshold = len(keys)
+
+    return columns_from_pylibcudf_table(
+        pylibcudf.stream_compaction.drop_nulls(
+            pylibcudf.Table([c.to_pylibcudf(mode="read") for c in columns]),
+            keys,
+            keep_threshold,
+        )
     )
 
-    cdef size_type c_keep_threshold = cpp_keys.size()
-    if thresh is not None:
-        c_keep_threshold = thresh
-    elif how == "all":
-        c_keep_threshold = 1
 
-    cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = table_view_from_columns(columns)
-
-    with nogil:
-        c_result = move(
-            cpp_drop_nulls(
-                source_table_view,
-                cpp_keys,
-                c_keep_threshold
-            )
-        )
-
-    return columns_from_unique_ptr(move(c_result))
-
-
+@acquire_spill_lock()
 def apply_boolean_mask(list columns, Column boolean_mask):
     """
     Drops the rows which correspond to False in boolean_mask.
@@ -91,22 +64,22 @@ def apply_boolean_mask(list columns, Column boolean_mask):
     -------
     columns obtained from applying mask
     """
-
-    cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = table_view_from_columns(columns)
-    cdef column_view boolean_mask_view = boolean_mask.view()
-
-    with nogil:
-        c_result = move(
-            cpp_apply_boolean_mask(
-                source_table_view,
-                boolean_mask_view
-            )
+    return columns_from_pylibcudf_table(
+        pylibcudf.stream_compaction.apply_boolean_mask(
+            pylibcudf.Table([c.to_pylibcudf(mode="read") for c in columns]),
+            boolean_mask.to_pylibcudf(mode="read"),
         )
+    )
 
-    return columns_from_unique_ptr(move(c_result))
+
+_keep_options = {
+    "first": pylibcudf.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+    "last": pylibcudf.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+    False: pylibcudf.stream_compaction.DuplicateKeepOption.KEEP_NONE,
+}
 
 
+@acquire_spill_lock()
 def drop_duplicates(list columns,
                     object keys=None,
                     object keep='first',
@@ -126,71 +99,63 @@ def drop_duplicates(list columns,
     -------
     columns with duplicate dropped
     """
-
-    cdef vector[size_type] cpp_keys = (
-        keys if keys is not None else range(len(columns))
-    )
-    cdef duplicate_keep_option cpp_keep_option
-
-    if keep == 'first':
-        cpp_keep_option = duplicate_keep_option.KEEP_FIRST
-    elif keep == 'last':
-        cpp_keep_option = duplicate_keep_option.KEEP_LAST
-    elif keep is False:
-        cpp_keep_option = duplicate_keep_option.KEEP_NONE
-    else:
+    if (keep_option := _keep_options.get(keep)) is None:
         raise ValueError('keep must be either "first", "last" or False')
 
-    # shifting the index number by number of index columns
-    cdef null_equality cpp_nulls_equal = (
-        null_equality.EQUAL
-        if nulls_are_equal
-        else null_equality.UNEQUAL
-    )
-
-    cdef vector[order] column_order = (
-        vector[order](
-            cpp_keys.size(),
-            order.ASCENDING
-        )
-    )
-    cdef vector[null_order] null_precedence = (
-        vector[null_order](
-            cpp_keys.size(),
-            null_order.BEFORE
+    return columns_from_pylibcudf_table(
+        pylibcudf.stream_compaction.stable_distinct(
+            pylibcudf.Table([c.to_pylibcudf(mode="read") for c in columns]),
+            list(keys if keys is not None else range(len(columns))),
+            keep_option,
+            pylibcudf.types.NullEquality.EQUAL
+            if nulls_are_equal else pylibcudf.types.NullEquality.UNEQUAL,
+            pylibcudf.types.NanEquality.ALL_EQUAL,
         )
     )
 
-    cdef table_view source_table_view = table_view_from_columns(columns)
-    cdef table_view keys_view = source_table_view.select(cpp_keys)
-    cdef unique_ptr[table] sorted_source_table
-    cdef unique_ptr[table] c_result
 
-    with nogil:
-        # cudf::unique keeps unique rows in each consecutive group of
-        # equivalent rows. To match the behavior of pandas.DataFrame.
-        # drop_duplicates, users need to stable sort the input first
-        # and then invoke cudf::unique.
-        sorted_source_table = move(
-            cpp_stable_sort_by_key(
-                source_table_view,
-                keys_view,
-                column_order,
-                null_precedence
-            )
+@acquire_spill_lock()
+def distinct_indices(
+    list columns,
+    object keep="first",
+    bool nulls_equal=True,
+    bool nans_equal=True,
+):
+    """
+    Return indices of the distinct rows in a table.
+
+    Parameters
+    ----------
+    columns : list of columns to check for duplicates
+    keep : treat "first", "last", or (False) none of any duplicate
+        rows as distinct
+    nulls_equal : Should nulls compare equal
+    nans_equal: Should nans compare equal
+
+    Returns
+    -------
+    Column of indices
+
+    See Also
+    --------
+    drop_duplicates
+    """
+    if (keep_option := _keep_options.get(keep)) is None:
+        raise ValueError('keep must be either "first", "last" or False')
+
+    return Column.from_pylibcudf(
+        pylibcudf.stream_compaction.distinct_indices(
+            pylibcudf.Table([c.to_pylibcudf(mode="read") for c in columns]),
+            keep_option,
+            pylibcudf.types.NullEquality.EQUAL
+            if nulls_equal else pylibcudf.types.NullEquality.UNEQUAL,
+            pylibcudf.types.NanEquality.ALL_EQUAL
+            if nans_equal else pylibcudf.types.NanEquality.UNEQUAL,
         )
-        c_result = move(
-            cpp_unique(
-                sorted_source_table.get().view(),
-                cpp_keys,
-                cpp_keep_option,
-                cpp_nulls_equal
-            )
-        )
-
-    return columns_from_unique_ptr(move(c_result))
+    )
 
 
+@acquire_spill_lock()
 def distinct_count(Column source_column, ignore_nulls=True, nan_as_null=False):
     """
     Finds number of unique rows in `source_column`
@@ -207,24 +172,10 @@ def distinct_count(Column source_column, ignore_nulls=True, nan_as_null=False):
     -------
     Count of number of unique rows in `source_column`
     """
-
-    cdef null_policy cpp_null_handling = (
-        null_policy.EXCLUDE
-        if ignore_nulls
-        else null_policy.INCLUDE
+    return pylibcudf.stream_compaction.distinct_count(
+        source_column.to_pylibcudf(mode="read"),
+        pylibcudf.types.NullPolicy.EXCLUDE
+        if ignore_nulls else pylibcudf.types.NullPolicy.INCLUDE,
+        pylibcudf.types.NanPolicy.NAN_IS_NULL
+        if nan_as_null else pylibcudf.types.NanPolicy.NAN_IS_VALID,
     )
-    cdef nan_policy cpp_nan_handling = (
-        nan_policy.NAN_IS_NULL
-        if nan_as_null
-        else nan_policy.NAN_IS_VALID
-    )
-
-    cdef column_view source_column_view = source_column.view()
-    with nogil:
-        count = cpp_distinct_count(
-            source_column_view,
-            cpp_null_handling,
-            cpp_nan_handling
-        )
-
-    return count

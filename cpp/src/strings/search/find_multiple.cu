@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
@@ -34,11 +35,10 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-std::unique_ptr<column> find_multiple(
-  strings_column_view const& input,
-  strings_column_view const& targets,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> find_multiple(strings_column_view const& input,
+                                      strings_column_view const& targets,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
 {
   auto const strings_count = input.size();
   auto const targets_count = targets.size();
@@ -71,8 +71,8 @@ std::unique_ptr<column> find_multiple(
   results->set_null_count(0);
 
   auto offsets = cudf::detail::sequence(strings_count + 1,
-                                        numeric_scalar<offset_type>(0),
-                                        numeric_scalar<offset_type>(targets_count),
+                                        numeric_scalar<size_type>(0, true, stream),
+                                        numeric_scalar<size_type>(targets_count, true, stream),
                                         stream,
                                         mr);
   return make_lists_column(strings_count,
@@ -89,10 +89,11 @@ std::unique_ptr<column> find_multiple(
 // external API
 std::unique_ptr<column> find_multiple(strings_column_view const& input,
                                       strings_column_view const& targets,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::find_multiple(input, targets, cudf::get_default_stream(), mr);
+  return detail::find_multiple(input, targets, stream, mr);
 }
 
 }  // namespace strings

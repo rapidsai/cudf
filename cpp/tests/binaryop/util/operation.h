@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -19,9 +19,10 @@
 
 #pragma once
 
+#include <cudf/utilities/traits.hpp>
+
 #include <cmath>
 #include <cstdint>
-#include <cudf/utilities/traits.hpp>
 #include <type_traits>
 
 namespace cudf {
@@ -143,9 +144,48 @@ struct TrueDiv {
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct FloorDiv {
+  template <typename OutT                                                         = TypeOut,
+            typename LhsT                                                         = TypeLhs,
+            typename RhsT                                                         = TypeRhs,
+            std::enable_if_t<(std::is_integral_v<std::common_type_t<LhsT, RhsT>> and
+                              std::is_signed_v<std::common_type_t<LhsT, RhsT>>)>* = nullptr>
   TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
   {
-    return static_cast<TypeOut>(floor(static_cast<double>(lhs) / static_cast<double>(rhs)));
+    if ((lhs ^ rhs) >= 0) {
+      return lhs / rhs;
+    } else {
+      auto const quotient  = lhs / rhs;
+      auto const remainder = lhs % rhs;
+      return quotient - !!remainder;
+    }
+  }
+
+  template <typename OutT                                                          = TypeOut,
+            typename LhsT                                                          = TypeLhs,
+            typename RhsT                                                          = TypeRhs,
+            std::enable_if_t<(std::is_integral_v<std::common_type_t<LhsT, RhsT>> and
+                              !std::is_signed_v<std::common_type_t<LhsT, RhsT>>)>* = nullptr>
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  {
+    return lhs / rhs;
+  }
+
+  template <typename OutT                                                              = TypeOut,
+            typename LhsT                                                              = TypeLhs,
+            typename RhsT                                                              = TypeRhs,
+            std::enable_if_t<(std::is_same_v<std::common_type_t<LhsT, RhsT>, float>)>* = nullptr>
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  {
+    return static_cast<TypeOut>(std::floor(lhs / rhs));
+  }
+
+  template <typename OutT                                                               = TypeOut,
+            typename LhsT                                                               = TypeLhs,
+            typename RhsT                                                               = TypeRhs,
+            std::enable_if_t<(std::is_same_v<std::common_type_t<LhsT, RhsT>, double>)>* = nullptr>
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  {
+    return static_cast<TypeOut>(std::floor(lhs / rhs));
   }
 };
 
@@ -372,6 +412,14 @@ struct NullEquals {
     using common_t = std::common_type_t<TypeLhs, TypeRhs>;
     if (lhs_valid && rhs_valid) return static_cast<common_t>(x) == static_cast<common_t>(y);
     return false;
+  }
+};
+
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct NullNotEquals {
+  TypeOut operator()(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) const
+  {
+    return !NullEquals<TypeOut, TypeLhs, TypeRhs>()(x, y, lhs_valid, rhs_valid, output_valid);
   }
 };
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@
 #include <cudf/utilities/span.hpp>
 
 #include <cooperative_groups.h>
-
 #include <cub/cub.cuh>
 #include <thrust/iterator/discard_iterator.h>
 
@@ -36,12 +35,15 @@ namespace detail {
 
 namespace cg = cooperative_groups;
 
+#pragma GCC diagnostic ignored "-Wattributes"
+
 template <cudf::size_type block_size, bool has_nulls>
-__launch_bounds__(block_size) __global__
+__attribute__((visibility("hidden"))) __launch_bounds__(block_size) __global__
   void mixed_join(table_device_view left_table,
                   table_device_view right_table,
                   table_device_view probe,
                   table_device_view build,
+                  row_hash const hash_probe,
                   row_equality const equality_probe,
                   join_kind const join_type,
                   cudf::detail::mixed_multimap_type::device_view hash_table_view,
@@ -70,7 +72,6 @@ __launch_bounds__(block_size) __global__
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
-  row_hash hash_probe{nullate::DYNAMIC{has_nulls}, probe};
   auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 

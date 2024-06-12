@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,19 +15,21 @@
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/hashing/detail/hash_functions.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -36,10 +38,76 @@
 #include <iterator>
 
 namespace cudf {
-
+namespace hashing {
 namespace detail {
 
 namespace {
+
+template <int capacity, typename hash_step_callable>
+struct hash_circular_buffer {
+  uint8_t storage[capacity];
+  uint8_t* cur;
+  int available_space{capacity};
+  hash_step_callable hash_step;
+
+  __device__ inline hash_circular_buffer(hash_step_callable hash_step)
+    : cur{storage}, hash_step{hash_step}
+  {
+  }
+
+  __device__ inline void put(uint8_t const* in, int size)
+  {
+    int copy_start = 0;
+    while (size >= available_space) {
+      // The buffer will be filled by this chunk of data. Copy a chunk of the
+      // data to fill the buffer and trigger a hash step.
+      memcpy(cur, in + copy_start, available_space);
+      hash_step(storage);
+      size -= available_space;
+      copy_start += available_space;
+      cur             = storage;
+      available_space = capacity;
+    }
+    // The buffer will not be filled by the remaining data. That is, `size >= 0
+    // && size < capacity`. We copy the remaining data into the buffer but do
+    // not trigger a hash step.
+    memcpy(cur, in + copy_start, size);
+    cur += size;
+    available_space -= size;
+  }
+
+  __device__ inline void pad(int const space_to_leave)
+  {
+    if (space_to_leave > available_space) {
+      memset(cur, 0x00, available_space);
+      hash_step(storage);
+      cur             = storage;
+      available_space = capacity;
+    }
+    memset(cur, 0x00, available_space - space_to_leave);
+    cur += available_space - space_to_leave;
+    available_space = space_to_leave;
+  }
+
+  __device__ inline uint8_t const& operator[](int idx) const { return storage[idx]; }
+};
+
+// Get a uint8_t pointer to a column element and its size as a pair.
+template <typename Element>
+auto __device__ inline get_element_pointer_and_size(Element const& element)
+{
+  if constexpr (is_fixed_width<Element>() && !is_chrono<Element>()) {
+    return thrust::make_pair(reinterpret_cast<uint8_t const*>(&element), sizeof(Element));
+  } else {
+    CUDF_UNREACHABLE("Unsupported type.");
+  }
+}
+
+template <>
+auto __device__ inline get_element_pointer_and_size(string_view const& element)
+{
+  return thrust::make_pair(reinterpret_cast<uint8_t const*>(element.data()), element.size_bytes());
+}
 
 // The MD5 algorithm and its hash/shift constants are officially specified in
 // RFC 1321. For convenience, these values can also be found on Wikipedia:
@@ -85,10 +153,10 @@ struct MD5Hasher {
     }
   }
 
-  MD5Hasher(const MD5Hasher&) = delete;
-  MD5Hasher& operator=(const MD5Hasher&) = delete;
+  MD5Hasher(MD5Hasher const&)            = delete;
+  MD5Hasher& operator=(MD5Hasher const&) = delete;
   MD5Hasher(MD5Hasher&&)                 = delete;
-  MD5Hasher& operator=(MD5Hasher&&) = delete;
+  MD5Hasher& operator=(MD5Hasher&&)      = delete;
 
   template <typename Element>
   void __device__ inline process(Element const& element)
@@ -106,7 +174,7 @@ struct MD5Hasher {
   struct md5_hash_step {
     uint32_t (&hash_values)[4];
 
-    void __device__ inline operator()(const uint8_t (&buffer)[message_chunk_size])
+    void __device__ inline operator()(uint8_t const (&buffer)[message_chunk_size])
     {
       uint32_t A = hash_values[0];
       uint32_t B = hash_values[1];
@@ -215,13 +283,13 @@ inline bool md5_leaf_type_check(data_type dt)
 
 }  // namespace
 
-std::unique_ptr<column> md5_hash(table_view const& input,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> md5(table_view const& input,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr)
 {
   if (input.num_columns() == 0 || input.num_rows() == 0) {
     // Return the MD5 hash of a zero-length input.
-    string_scalar const string_128bit("d41d8cd98f00b204e9orig98ecf8427e");
+    string_scalar const string_128bit("d41d8cd98f00b204e9orig98ecf8427e", true, stream);
     return make_column_from_scalar(string_128bit, input.num_rows(), stream, mr);
   }
 
@@ -240,13 +308,11 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto constexpr digest_size = 32;
   // Result column allocation and creation
   auto begin = thrust::make_constant_iterator(digest_size);
-  auto offsets_column =
+  auto [offsets_column, bytes] =
     cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
 
-  auto chars_column =
-    strings::detail::create_chars_child_column(input.num_rows() * digest_size, stream, mr);
-  auto chars_view = chars_column->mutable_view();
-  auto d_chars    = chars_view.data<char>();
+  rmm::device_uvector<char> chars(bytes, stream, mr);
+  auto d_chars = chars.data();
 
   auto const device_input = table_device_view::create(input, stream);
 
@@ -256,7 +322,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(input.num_rows()),
     [d_chars, device_input = *device_input] __device__(auto row_index) {
-      MD5Hasher hasher(d_chars + (row_index * digest_size));
+      MD5Hasher hasher(d_chars + (static_cast<int64_t>(row_index) * digest_size));
       for (auto const& col : device_input) {
         if (col.is_valid(row_index)) {
           if (col.type().id() == type_id::LIST) {
@@ -277,11 +343,18 @@ std::unique_ptr<column> md5_hash(table_view const& input,
       }
     });
 
-  rmm::device_buffer null_mask{0, stream, mr};
-
-  return make_strings_column(
-    input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, std::move(null_mask));
+  return make_strings_column(input.num_rows(), std::move(offsets_column), chars.release(), 0, {});
 }
 
 }  // namespace detail
+
+std::unique_ptr<column> md5(table_view const& input,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::md5(input, stream, mr);
+}
+
+}  // namespace hashing
 }  // namespace cudf

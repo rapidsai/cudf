@@ -1,6 +1,7 @@
 ---
-substitutions:
-  describe: '`describe`'
+myst:
+  substitutions:
+    describe: '`describe`'
 ---
 
 (basics-groupby)=

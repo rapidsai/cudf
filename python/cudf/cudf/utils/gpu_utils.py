@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 
 def validate_setup():
@@ -70,23 +70,24 @@ def validate_setup():
             cudaDeviceAttr.cudaDevAttrComputeCapabilityMajor, 0
         )
 
-        if major_version < 6:
-            # A GPU with NVIDIA Pascal™ architecture or newer is required.
+        if major_version < 7:
+            # A GPU with NVIDIA Volta™ architecture or newer is required.
             # Reference: https://developer.nvidia.com/cuda-gpus
-            # Hardware Generation	Compute Capability
-            #    Ampere	                8.x
-            #    Turing	                7.5
-            #    Volta	                7.0, 7.2
-            #    Pascal	                6.x
+            # Hardware Generation       Compute Capability
+            #    Hopper                 9.x
+            #    Ampere                 8.x
+            #    Turing                 7.5
+            #    Volta                  7.0, 7.2
+            #    Pascal                 6.x
             #    Maxwell                5.x
-            #    Kepler	                3.x
-            #    Fermi	                2.x
+            #    Kepler                 3.x
+            #    Fermi                  2.x
             device_name = deviceGetName(0)
             minor_version = getDeviceAttribute(
                 cudaDeviceAttr.cudaDevAttrComputeCapabilityMinor, 0
             )
-            warnings.warn(
-                "A GPU with NVIDIA Pascal™ (Compute Capability 6.0) "
+            raise UnsupportedCUDAError(
+                "A GPU with NVIDIA Volta™ (Compute Capability 7.0) "
                 "or newer architecture is required.\n"
                 f"Detected GPU 0: {device_name}\n"
                 f"Detected Compute Capability: {major_version}.{minor_version}"

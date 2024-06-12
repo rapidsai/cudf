@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,25 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/transform.hpp>
-#include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/transform.hpp>
+#include <cudf/types.hpp>
+
 template <typename T>
 struct NaNsToNullTest : public cudf::test::BaseFixture {
   void run_test(cudf::column_view const& input, cudf::column_view const& expected)
   {
-    auto got_mask = cudf::nans_to_nulls(input);
+    auto [null_mask, null_count] = cudf::nans_to_nulls(input);
     cudf::column got(input);
-    got.set_null_mask(std::move(*(got_mask.first)));
+    got.set_null_mask(std::move(*null_mask), null_count);
 
-    EXPECT_EQ(expected.null_count(), got_mask.second);
+    EXPECT_EQ(expected.null_count(), null_count);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got.view());
   }
@@ -43,15 +44,14 @@ struct NaNsToNullTest : public cudf::test::BaseFixture {
     std::vector<bool> expected_mask;
 
     if (mask.size() > 0) {
-      std::transform(
-        input.begin(),
-        input.end(),
-        mask.begin(),
-        std::back_inserter(expected_mask),
-        [](T val, bool validity) { return (std::isnan(val) or validity == false) ? false : true; });
+      std::transform(input.begin(),
+                     input.end(),
+                     mask.begin(),
+                     std::back_inserter(expected_mask),
+                     [](T val, bool validity) { return validity and not std::isnan(val); });
     } else {
       std::transform(input.begin(), input.end(), std::back_inserter(expected_mask), [](T val) {
-        return (std::isnan(val)) ? false : true;
+        return not std::isnan(val);
       });
     }
 
@@ -119,8 +119,7 @@ TYPED_TEST(NaNsToNullTest, EmptyColumn)
   this->run_test(input_column, expected_column->view());
 }
 
-struct NaNsToNullFailTest : public cudf::test::BaseFixture {
-};
+struct NaNsToNullFailTest : public cudf::test::BaseFixture {};
 
 TEST_F(NaNsToNullFailTest, StringType)
 {

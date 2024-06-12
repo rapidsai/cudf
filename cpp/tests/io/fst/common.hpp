@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 #include <string>
 #include <vector>
 
-namespace cudf::test::io::json {
 //------------------------------------------------------------------------------
 // TEST FST SPECIFICATIONS
 //------------------------------------------------------------------------------
@@ -81,5 +80,3 @@ std::array<std::string, NUM_SYMBOL_GROUPS - 1> const pda_sgs{"{", "[", "}", "]",
 
 // The DFA's starting state
 constexpr char start_state = static_cast<char>(dfa_states::TT_OOS);
-
-}  // namespace cudf::test::io::json

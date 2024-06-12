@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,35 +16,46 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/filling.hpp>
+#include <cudf/strings/combine.hpp>
 #include <cudf/strings/contains.hpp>
-#include <cudf/strings/findall.hpp>
+#include <cudf/strings/regex/regex_program.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class StringContains : public cudf::benchmark {
-};
+#include <nvbench/nvbench.cuh>
 
-std::unique_ptr<cudf::column> build_input_column(cudf::size_type n_rows, int32_t hit_rate)
+std::unique_ptr<cudf::column> build_input_column(cudf::size_type n_rows,
+                                                 cudf::size_type row_width,
+                                                 int32_t hit_rate)
 {
   // build input table using the following data
-  auto data      = cudf::test::strings_column_wrapper({
-    "123 abc 4567890 DEFGHI 0987 5W43",  // matches both patterns;
-    "012345 6789 01234 56789 0123 456",  // the rest do not match
-    "abc 4567890 DEFGHI 0987 Wxyz 123",
-    "abcdefghijklmnopqrstuvwxyz 01234",
-    "",
-    "AbcéDEFGHIJKLMNOPQRSTUVWXYZ 01",
-    "9876543210,abcdefghijklmnopqrstU",
-    "9876543210,abcdefghijklmnopqrstU",
-    "123 édf 4567890 DéFG 0987 X5",
-    "1",
-  });
-  auto data_view = cudf::column_view(data);
+  auto raw_data = cudf::test::strings_column_wrapper(
+                    {
+                      "123 abc 4567890 DEFGHI 0987 5W43",  // matches both patterns;
+                      "012345 6789 01234 56789 0123 456",  // the rest do not match
+                      "abc 4567890 DEFGHI 0987 Wxyz 123",
+                      "abcdefghijklmnopqrstuvwxyz 01234",
+                      "",
+                      "AbcéDEFGHIJKLMNOPQRSTUVWXYZ 01",
+                      "9876543210,abcdefghijklmnopqrstU",
+                      "9876543210,abcdefghijklmnopqrstU",
+                      "123 édf 4567890 DéFG 0987 X5",
+                      "1",
+                    })
+                    .release();
+
+  if (row_width / 32 > 1) {
+    std::vector<cudf::column_view> columns;
+    for (int i = 0; i < row_width / 32; ++i) {
+      columns.push_back(raw_data->view());
+    }
+    raw_data = cudf::strings::concatenate(cudf::table_view(columns));
+  }
+  auto data_view = raw_data->view();
 
   // compute number of rows in n_rows that should match
   auto matches = static_cast<int32_t>(n_rows * hit_rate) / 100;
@@ -68,50 +79,39 @@ std::unique_ptr<cudf::column> build_input_column(cudf::size_type n_rows, int32_t
   return std::move(table->release().front());
 }
 
-enum contains_type { contains, count, findall };
-
 // longer pattern lengths demand more working memory per string
-std::string patterns[] = {"^\\d+ [a-z]+", "[A-Z ]+\\d+ +\\d+[A-Z]+\\d+$"};
+std::string patterns[] = {"^\\d+ [a-z]+", "[A-Z ]+\\d+ +\\d+[A-Z]+\\d+$", "5W43"};
 
-static void BM_contains(benchmark::State& state, contains_type ct)
+static void bench_contains(nvbench::state& state)
 {
-  auto const n_rows        = static_cast<cudf::size_type>(state.range(0));
-  auto const pattern_index = static_cast<int32_t>(state.range(1));
-  auto const hit_rate      = static_cast<int32_t>(state.range(2));
+  auto const n_rows        = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const row_width     = static_cast<cudf::size_type>(state.get_int64("row_width"));
+  auto const pattern_index = static_cast<cudf::size_type>(state.get_int64("pattern"));
+  auto const hit_rate      = static_cast<cudf::size_type>(state.get_int64("hit_rate"));
 
-  auto col   = build_input_column(n_rows, hit_rate);
+  if (static_cast<std::size_t>(n_rows) * static_cast<std::size_t>(row_width) >=
+      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
+    state.skip("Skip benchmarks greater than size_type limit");
+  }
+
+  auto col   = build_input_column(n_rows, row_width, hit_rate);
   auto input = cudf::strings_column_view(col->view());
 
   auto pattern = patterns[pattern_index];
+  auto program = cudf::strings::regex_program::create(pattern);
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::get_default_stream());
-    switch (ct) {
-      case contains_type::contains:  // contains_re and matches_re use the same main logic
-        cudf::strings::contains_re(input, pattern);
-        break;
-      case contains_type::count:  // counts occurrences of matches
-        cudf::strings::count_re(input, pattern);
-        break;
-      case contains_type::findall:  // returns occurrences of all matches
-        cudf::strings::findall(input, pattern);
-        break;
-    }
-  }
+  auto chars_size = input.chars_size(cudf::get_default_stream());
+  state.add_element_count(chars_size, "chars_size");
+  state.add_global_memory_reads<nvbench::int8_t>(chars_size);
+  state.add_global_memory_writes<nvbench::int32_t>(input.size());
 
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { cudf::strings::contains_re(input, *program); });
 }
 
-#define STRINGS_BENCHMARK_DEFINE(name, b)                                         \
-  BENCHMARK_DEFINE_F(StringContains, name)                                        \
-  (::benchmark::State & st) { BM_contains(st, contains_type::b); }                \
-  BENCHMARK_REGISTER_F(StringContains, name)                                      \
-    ->ArgsProduct({{4096, 32768, 262144, 2097152, 16777216}, /* row count */      \
-                   {0, 1},                                   /* patterns index */ \
-                   {1, 5, 10, 25, 70, 100}})                 /* hit rate */       \
-    ->UseManualTime()                                                             \
-    ->Unit(benchmark::kMillisecond);
-
-STRINGS_BENCHMARK_DEFINE(contains_re, contains)
-STRINGS_BENCHMARK_DEFINE(count_re, count)
-STRINGS_BENCHMARK_DEFINE(findall_re, findall)
+NVBENCH_BENCH(bench_contains)
+  .set_name("contains")
+  .add_int64_axis("row_width", {32, 64, 128, 256, 512})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152, 16777216})
+  .add_int64_axis("hit_rate", {50, 100})  // percentage
+  .add_int64_axis("pattern", {0, 1, 2});

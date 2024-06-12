@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 from functools import partial
 
@@ -10,7 +10,7 @@ from dask import dataframe as dd
 
 import cudf
 
-import dask_cudf as dgd
+import dask_cudf
 
 param_nrows = [5, 10, 50, 100]
 
@@ -44,8 +44,8 @@ def test_join_inner(left_nrows, right_nrows, left_nkeys, right_nkeys):
     expect = expect.to_pandas()
 
     # dask_cudf
-    left = dgd.from_cudf(left, chunksize=chunksize)
-    right = dgd.from_cudf(right, chunksize=chunksize)
+    left = dask_cudf.from_cudf(left, chunksize=chunksize)
+    right = dask_cudf.from_cudf(right, chunksize=chunksize)
 
     joined = left.set_index("x").join(
         right.set_index("x"), how="inner", lsuffix="l", rsuffix="r"
@@ -66,8 +66,12 @@ def test_join_inner(left_nrows, right_nrows, left_nkeys, right_nkeys):
     def gather(df, grows):
         grows[df["x"].values[0]] = (set(df.al), set(df.ar))
 
-    expect.reset_index().groupby("x").apply(partial(gather, grows=expect_rows))
-    expect.reset_index().groupby("x").apply(partial(gather, grows=got_rows))
+    expect.reset_index().groupby("x")[["x", "al", "ar"]].apply(
+        partial(gather, grows=expect_rows)
+    )
+    expect.reset_index().groupby("x")[["x", "al", "ar"]].apply(
+        partial(gather, grows=got_rows)
+    )
 
     assert got_rows == expect_rows
 
@@ -102,8 +106,8 @@ def test_join_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how):
     expect = expect.to_pandas()
 
     # dask_cudf
-    left = dgd.from_cudf(left, chunksize=chunksize)
-    right = dgd.from_cudf(right, chunksize=chunksize)
+    left = dask_cudf.from_cudf(left, chunksize=chunksize)
+    right = dask_cudf.from_cudf(right, chunksize=chunksize)
 
     joined = left.set_index("x").join(
         right.set_index("x"), how=how, lsuffix="l", rsuffix="r"
@@ -127,9 +131,13 @@ def test_join_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how):
 
         grows[df["x"].values[0]] = (cola, colb)
 
-    expect.reset_index().groupby("x").apply(partial(gather, grows=expect_rows))
+    expect.reset_index().groupby("x")[["x", "al", "ar"]].apply(
+        partial(gather, grows=expect_rows)
+    )
 
-    expect.reset_index().groupby("x").apply(partial(gather, grows=got_rows))
+    expect.reset_index().groupby("x")[["x", "al", "ar"]].apply(
+        partial(gather, grows=got_rows)
+    )
 
     for k in expect_rows:
         np.testing.assert_array_equal(expect_rows[k][0], got_rows[k][0])
@@ -163,7 +171,7 @@ def test_merge_left(
         }
     )
 
-    expect = left.merge(right, on=("x", "y"), how=how)
+    expect = left.merge(right, on=["x", "y"], how=how)
 
     def normalize(df):
         return (
@@ -173,10 +181,10 @@ def test_merge_left(
         )
 
     # dask_cudf
-    left = dgd.from_cudf(left, chunksize=chunksize)
-    right = dgd.from_cudf(right, chunksize=chunksize)
+    left = dask_cudf.from_cudf(left, chunksize=chunksize)
+    right = dask_cudf.from_cudf(right, chunksize=chunksize)
 
-    result = left.merge(right, on=("x", "y"), how=how).compute(
+    result = left.merge(right, on=["x", "y"], how=how).compute(
         scheduler="single-threaded"
     )
 
@@ -216,8 +224,8 @@ def test_merge_1col_left(
     )
 
     # dask_cudf
-    left = dgd.from_cudf(left, chunksize=chunksize)
-    right = dgd.from_cudf(right, chunksize=chunksize)
+    left = dask_cudf.from_cudf(left, chunksize=chunksize)
+    right = dask_cudf.from_cudf(right, chunksize=chunksize)
 
     joined = left.merge(right, on=["x"], how=how)
 
@@ -238,8 +246,8 @@ def test_merge_should_fail():
     df2["a"] = [7, 2, 3, 8, 5, 9] * 2
     df2["c"] = np.random.randint(0, 12, 12)
 
-    left = dgd.from_cudf(df1, 1).groupby("a").b.min().to_frame()
-    right = dgd.from_cudf(df2, 1).groupby("a").c.min().to_frame()
+    left = dask_cudf.from_cudf(df1, 1).groupby("a").b.min().to_frame()
+    right = dask_cudf.from_cudf(df2, 1).groupby("a").c.min().to_frame()
 
     with pytest.raises(KeyError):
         left.merge(right, how="left", on=["nonCol"])
@@ -250,7 +258,7 @@ def test_merge_should_fail():
 
     # Same column names
     df2["b"] = np.random.randint(0, 12, 12)
-    right = dgd.from_cudf(df2, 1).groupby("a").b.min().to_frame()
+    right = dask_cudf.from_cudf(df2, 1).groupby("a").b.min().to_frame()
 
     with pytest.raises(KeyError):
         left.merge(right, how="left", on="NonCol")
@@ -359,3 +367,22 @@ def test_single_partition():
     m2 = dleft.merge(right, how="inner")
     assert len(m2.dask) < len(dleft.dask) * 3
     assert len(m2) == 100
+
+
+def test_issue_12773():
+    # https://github.com/rapidsai/cudf/issues/12773
+    df1 = cudf.DataFrame({"a": ["a", "b"], "b": [1, 2]})
+    df2 = cudf.DataFrame({"a": ["a", "c"], "b": [2, 3]})
+
+    dleft = dd.from_pandas(df1, npartitions=2).set_index("a")
+    dright = dd.from_pandas(df2, npartitions=2).set_index("a")
+
+    expected = df1.set_index("a").merge(
+        df2.set_index("a"), left_index=True, right_index=True, how="left"
+    )
+    result = dleft.merge(dright, left_index=True, right_index=True, how="left")
+    dd.assert_eq(
+        result.compute().to_pandas(),
+        expected.to_pandas(),
+        check_index=False,
+    )

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -150,13 +150,44 @@ def test_struct_setitem(data, item):
     "data",
     [
         {"a": 1, "b": "rapids", "c": [1, 2, 3, 4]},
-        {"a": 1, "b": "rapids", "c": [1, 2, 3, 4], "d": cudf.NA},
         {"a": "Hello"},
-        {"b": [], "c": [1, 2, 3]},
     ],
 )
 def test_struct_scalar_host_construction(data):
     slr = cudf.Scalar(data)
+    assert slr.value == data
+    assert list(slr.device_value.value.values()) == list(data.values())
+
+
+@pytest.mark.parametrize(
+    ("data", "dtype"),
+    [
+        (
+            {"a": 1, "b": "rapids", "c": [1, 2, 3, 4], "d": cudf.NA},
+            cudf.StructDtype(
+                {
+                    "a": np.dtype(np.int64),
+                    "b": np.dtype(np.str_),
+                    "c": cudf.ListDtype(np.dtype(np.int64)),
+                    "d": np.dtype(np.int64),
+                }
+            ),
+        ),
+        (
+            {"b": [], "c": [1, 2, 3]},
+            cudf.StructDtype(
+                {
+                    "b": cudf.ListDtype(np.dtype(np.int64)),
+                    "c": cudf.ListDtype(np.dtype(np.int64)),
+                }
+            ),
+        ),
+    ],
+)
+def test_struct_scalar_host_construction_no_dtype_inference(data, dtype):
+    # cudf cannot infer the dtype of the scalar when it contains only nulls or
+    # is empty.
+    slr = cudf.Scalar(data, dtype=dtype)
     assert slr.value == data
     assert list(slr.device_value.value.values()) == list(data.values())
 
@@ -371,3 +402,49 @@ def test_nested_struct_extract_host_scalars(data, idx, expected):
     series = cudf.Series(data)
 
     assert _nested_na_replace(series[idx]) == _nested_na_replace(expected)
+
+
+def test_struct_memory_usage():
+    s = cudf.Series([{"a": 1, "b": 10}, {"a": 2, "b": 20}, {"a": 3, "b": 30}])
+    df = s.struct.explode()
+
+    assert_eq(s.memory_usage(), df.memory_usage().sum())
+
+
+def test_struct_with_null_memory_usage():
+    df = cudf.DataFrame(
+        {
+            "a": cudf.Series([1, 2, -1, -1, 3], dtype="int64"),
+            "b": cudf.Series([10, 20, -1, -1, 30], dtype="int64"),
+        }
+    )
+    s = df.to_struct()
+    assert s.memory_usage() == 80
+
+    s[2:4] = None
+    assert s.memory_usage() == 272
+
+
+@pytest.mark.parametrize(
+    "indices",
+    [slice(0, 3), slice(1, 4), slice(None, None, 2), slice(1, None, 2)],
+    ids=[":3", "1:4", "0::2", "1::2"],
+)
+@pytest.mark.parametrize(
+    "values",
+    [[None, {}, {}, None], [{}, {}, {}, {}]],
+    ids=["nulls", "no_nulls"],
+)
+def test_struct_empty_children_slice(indices, values):
+    s = cudf.Series(values)
+    actual = s.iloc[indices]
+    expect = cudf.Series(values[indices], index=range(len(values))[indices])
+    assert_eq(actual, expect)
+
+
+def test_struct_iterate_error():
+    s = cudf.Series(
+        [{"f2": {"a": "sf21"}, "f1": "a"}, {"f1": "sf12", "f2": None}]
+    )
+    with pytest.raises(TypeError):
+        iter(s.struct)

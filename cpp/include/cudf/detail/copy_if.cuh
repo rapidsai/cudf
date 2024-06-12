@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/table/table.hpp>
@@ -38,11 +37,12 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-
-#include <thrust/copy.h>
-#include <thrust/iterator/counting_iterator.h>
+#include <rmm/resource_ref.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/atomic>
+#include <thrust/copy.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 
@@ -51,10 +51,10 @@ namespace detail {
 
 // Compute the count of elements that pass the mask within each block
 template <typename Filter, int block_size>
-__global__ void compute_block_counts(cudf::size_type* __restrict__ block_counts,
-                                     cudf::size_type size,
-                                     cudf::size_type per_thread,
-                                     Filter filter)
+CUDF_KERNEL void compute_block_counts(cudf::size_type* __restrict__ block_counts,
+                                      cudf::size_type size,
+                                      cudf::size_type per_thread,
+                                      Filter filter)
 {
   int tid   = threadIdx.x + per_thread * block_size * blockIdx.x;
   int count = 0;
@@ -95,7 +95,7 @@ __device__ cudf::size_type block_scan_mask(bool mask_true, cudf::size_type& bloc
 //
 // Note: `filter` is not run on indices larger than the input column size
 template <typename T, typename Filter, int block_size, bool has_validity>
-__launch_bounds__(block_size) __global__
+__launch_bounds__(block_size) CUDF_KERNEL
   void scatter_kernel(cudf::mutable_column_device_view output_view,
                       cudf::size_type* output_null_count,
                       cudf::column_device_view input_view,
@@ -126,7 +126,7 @@ __launch_bounds__(block_size) __global__
 
     cudf::size_type tmp_block_sum = 0;
     // get output location using a scan of the mask result
-    const cudf::size_type local_index = block_scan_mask<block_size>(mask_true, tmp_block_sum);
+    cudf::size_type const local_index = block_scan_mask<block_size>(mask_true, tmp_block_sum);
     block_sum += tmp_block_sum;
 
     if (has_validity) {
@@ -141,7 +141,7 @@ __launch_bounds__(block_size) __global__
       // scatter validity mask to shared memory
       if (has_validity and input_view.is_valid(tid)) {
         // determine aligned offset for this warp's output
-        const cudf::size_type aligned_offset      = block_offset % cudf::detail::warp_size;
+        cudf::size_type const aligned_offset      = block_offset % cudf::detail::warp_size;
         temp_valids[local_index + aligned_offset] = true;
       }
     }
@@ -161,10 +161,10 @@ __launch_bounds__(block_size) __global__
 
       constexpr int num_warps = block_size / cudf::detail::warp_size;
       // account for partial blocks with non-warp-aligned offsets
-      const int last_index = tmp_block_sum + (block_offset % cudf::detail::warp_size) - 1;
-      const int last_warp  = min(num_warps, last_index / cudf::detail::warp_size);
-      const int wid        = threadIdx.x / cudf::detail::warp_size;
-      const int lane       = threadIdx.x % cudf::detail::warp_size;
+      int const last_index = tmp_block_sum + (block_offset % cudf::detail::warp_size) - 1;
+      int const last_warp  = min(num_warps, last_index / cudf::detail::warp_size);
+      int const wid        = threadIdx.x / cudf::detail::warp_size;
+      int const lane       = threadIdx.x % cudf::detail::warp_size;
 
       cudf::size_type tmp_warp_valid_counts{0};
 
@@ -181,7 +181,9 @@ __launch_bounds__(block_size) __global__
           if (wid > 0 && wid < last_warp)
             output_valid[valid_index] = valid_warp;
           else {
-            atomicOr(&output_valid[valid_index], valid_warp);
+            cuda::atomic_ref<cudf::bitmask_type, cuda::thread_scope_device> ref{
+              output_valid[valid_index]};
+            ref.fetch_or(valid_warp, cuda::std::memory_order_relaxed);
           }
         }
 
@@ -190,7 +192,9 @@ __launch_bounds__(block_size) __global__
           uint32_t valid_warp = __ballot_sync(0xffff'ffffu, temp_valids[block_size + threadIdx.x]);
           if (lane == 0 && valid_warp != 0) {
             tmp_warp_valid_counts += __popc(valid_warp);
-            atomicOr(&output_valid[valid_index + num_warps], valid_warp);
+            cuda::atomic_ref<cudf::bitmask_type, cuda::thread_scope_device> ref{
+              output_valid[valid_index + num_warps]};
+            ref.fetch_or(valid_warp, cuda::std::memory_order_relaxed);
           }
         }
       }
@@ -206,7 +210,8 @@ __launch_bounds__(block_size) __global__
     cudf::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_counts);
 
   if (threadIdx.x == 0) {  // one thread computes and adds to null count
-    atomicAdd(output_null_count, block_sum - block_valid_count);
+    cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*output_null_count};
+    ref.fetch_add(block_sum - block_valid_count, cuda::std::memory_order_relaxed);
   }
 }
 
@@ -229,14 +234,13 @@ struct DeviceType<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
 template <typename Filter, int block_size>
 struct scatter_gather_functor {
   template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(
-    cudf::column_view const& input,
-    cudf::size_type const& output_size,
-    cudf::size_type const* block_offsets,
-    Filter filter,
-    cudf::size_type per_thread,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
+                                           cudf::size_type const& output_size,
+                                           cudf::size_type const* block_offsets,
+                                           Filter filter,
+                                           cudf::size_type per_thread,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
   {
     auto output_column = cudf::detail::allocate_like(
       input, output_size, cudf::mask_allocation_policy::RETAIN, stream, mr);
@@ -277,14 +281,13 @@ struct scatter_gather_functor {
 
   template <typename T,
             std::enable_if_t<!cudf::is_fixed_width<T>() and !cudf::is_fixed_point<T>()>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(
-    cudf::column_view const& input,
-    cudf::size_type const& output_size,
-    cudf::size_type const*,
-    Filter filter,
-    cudf::size_type,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
+                                           cudf::size_type const& output_size,
+                                           cudf::size_type const*,
+                                           Filter filter,
+                                           cudf::size_type,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
   {
     rmm::device_uvector<cudf::size_type> indices(output_size, stream);
 
@@ -320,11 +323,10 @@ struct scatter_gather_functor {
  * @return unique_ptr<table> The table generated from filtered `input`.
  */
 template <typename Filter>
-std::unique_ptr<table> copy_if(
-  table_view const& input,
-  Filter filter,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<table> copy_if(table_view const& input,
+                               Filter filter,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 

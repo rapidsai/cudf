@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,9 +25,6 @@
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 
-namespace cudf {
-namespace test {
-
 namespace {
 
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::FIRST_ERROR};
@@ -39,7 +36,7 @@ using validity_col  = std::initializer_list<bool>;
 
 auto groupby_collect_set(cudf::column_view const& keys,
                          cudf::column_view const& values,
-                         std::unique_ptr<groupby_aggregation>&& agg)
+                         std::unique_ptr<cudf::groupby_aggregation>&& agg)
 {
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
@@ -78,19 +75,19 @@ struct CollectSetTest : public cudf::test::BaseFixture {
 
   static auto collect_set_null_unequal()
   {
-    return cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(null_policy::INCLUDE,
-                                                                         null_equality::UNEQUAL);
+    return cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
+      cudf::null_policy::INCLUDE, cudf::null_equality::UNEQUAL);
   }
 
   static auto collect_set_null_exclude()
   {
-    return cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(null_policy::EXCLUDE);
+    return cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
+      cudf::null_policy::EXCLUDE);
   }
 };
 
 template <typename V>
-struct CollectSetTypedTest : public cudf::test::BaseFixture {
-};
+struct CollectSetTypedTest : public cudf::test::BaseFixture {};
 
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
@@ -245,38 +242,38 @@ TEST_F(CollectSetTest, FloatsWithNaN)
 
   // null equal with nan unequal
   {
-    vals_expected = {{{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN, 0.0f},
-                      validity_col{true, true, true, true, true, true, true, false}}};
-    auto const [out_keys, out_lists] =
-      groupby_collect_set(keys,
-                          vals,
-                          cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
-                            null_policy::INCLUDE, null_equality::EQUAL, nan_equality::UNEQUAL));
+    vals_expected                    = {{{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN, 0.0f},
+                                         validity_col{true, true, true, true, true, true, true, false}}};
+    auto const [out_keys, out_lists] = groupby_collect_set(
+      keys,
+      vals,
+      cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
+        cudf::null_policy::INCLUDE, cudf::null_equality::EQUAL, cudf::nan_equality::UNEQUAL));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(keys_expected, *out_keys, verbosity);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(vals_expected, *out_lists, verbosity);
   }
 
   // null unequal with nan unequal
   {
-    vals_expected = {{{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN, 0.0f, 0.0f},
-                      validity_col{true, true, true, true, true, true, true, false, false}}};
-    auto const [out_keys, out_lists] =
-      groupby_collect_set(keys,
-                          vals,
-                          cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
-                            null_policy::INCLUDE, null_equality::UNEQUAL, nan_equality::UNEQUAL));
+    vals_expected                    = {{{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN, 0.0f, 0.0f},
+                                         validity_col{true, true, true, true, true, true, true, false, false}}};
+    auto const [out_keys, out_lists] = groupby_collect_set(
+      keys,
+      vals,
+      cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
+        cudf::null_policy::INCLUDE, cudf::null_equality::UNEQUAL, cudf::nan_equality::UNEQUAL));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(keys_expected, *out_keys, verbosity);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(vals_expected, *out_lists, verbosity);
   }
 
   // null exclude with nan unequal
   {
-    vals_expected = {{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN}};
-    auto const [out_keys, out_lists] =
-      groupby_collect_set(keys,
-                          vals,
-                          cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
-                            null_policy::EXCLUDE, null_equality::EQUAL, nan_equality::UNEQUAL));
+    vals_expected                    = {{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN}};
+    auto const [out_keys, out_lists] = groupby_collect_set(
+      keys,
+      vals,
+      cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
+        cudf::null_policy::EXCLUDE, cudf::null_equality::EQUAL, cudf::nan_equality::UNEQUAL));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(keys_expected, *out_keys, verbosity);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(vals_expected, *out_lists, verbosity);
   }
@@ -285,24 +282,24 @@ TEST_F(CollectSetTest, FloatsWithNaN)
   {
     vals_expected = {
       {{-2.3e-5f, 1.0f, 2.3e5f, NAN, 0.0f}, validity_col{true, true, true, true, false}}};
-    auto const [out_keys, out_lists] =
-      groupby_collect_set(keys,
-                          vals,
-                          cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
-                            null_policy::INCLUDE, null_equality::EQUAL, nan_equality::ALL_EQUAL));
+    auto const [out_keys, out_lists] = groupby_collect_set(
+      keys,
+      vals,
+      cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
+        cudf::null_policy::INCLUDE, cudf::null_equality::EQUAL, cudf::nan_equality::ALL_EQUAL));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(keys_expected, *out_keys, verbosity);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(vals_expected, *out_lists, verbosity);
   }
 
   // null unequal with nan equal
   {
-    vals_expected = {{{-2.3e-5f, 1.0f, 2.3e5f, -NAN, 0.0f, 0.0f},
-                      validity_col{true, true, true, true, false, false}}};
-    auto const [out_keys, out_lists] =
-      groupby_collect_set(keys,
-                          vals,
-                          cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
-                            null_policy::INCLUDE, null_equality::UNEQUAL, nan_equality::ALL_EQUAL));
+    vals_expected                    = {{{-2.3e-5f, 1.0f, 2.3e5f, -NAN, 0.0f, 0.0f},
+                                         validity_col{true, true, true, true, false, false}}};
+    auto const [out_keys, out_lists] = groupby_collect_set(
+      keys,
+      vals,
+      cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
+        cudf::null_policy::INCLUDE, cudf::null_equality::UNEQUAL, cudf::nan_equality::ALL_EQUAL));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(keys_expected, *out_keys, verbosity);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(vals_expected, *out_lists, verbosity);
   }
@@ -400,6 +397,3 @@ TYPED_TEST(CollectSetTypedTest, CollectWithNulls)
     }
   }
 }
-
-}  // namespace test
-}  // namespace cudf

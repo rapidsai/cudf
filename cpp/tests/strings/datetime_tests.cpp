@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,12 +29,11 @@
 
 #include <vector>
 
-struct StringsDatetimeTest : public cudf::test::BaseFixture {
-};
+struct StringsDatetimeTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsDatetimeTest, ToTimestamp)
 {
-  std::vector<const char*> h_strings{"1974-02-28T01:23:45Z",
+  std::vector<char const*> h_strings{"1974-02-28T01:23:45Z",
                                      "2019-07-17T21:34:37Z",
                                      nullptr,
                                      "",
@@ -242,6 +241,40 @@ TEST_F(StringsDatetimeTest, ToTimestampYear)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
 }
 
+TEST_F(StringsDatetimeTest, ToTimestampWeeks)
+{
+  cudf::test::strings_column_wrapper input{
+    "2012-01/3", "2012-04/4", "2023-01/1", "2012-52/5", "2020-44/2", "1960-20/0", "1986-04/6"};
+
+  auto format  = std::string("%Y-%W/%w");
+  auto results = cudf::strings::to_timestamps(
+    cudf::strings_column_view(input), cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}, format);
+  auto expected = cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    15343, 15365, 19359, 15702, 18569, -3511, 5875};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results          = cudf::strings::is_timestamp(cudf::strings_column_view(input), format);
+  auto is_expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
+
+  cudf::test::strings_column_wrapper input_iso{
+    "2012-01/3", "2012-04/4", "2023-01/1", "2012-52/5", "2020-44/2", "1960-20/7", "1986-04/6"};
+
+  format  = std::string("%Y-%U/%u");
+  results = cudf::strings::to_timestamps(
+    cudf::strings_column_view(input_iso), cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}, format);
+  expected = cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    15342, 15364, 19358, 15701, 18568, -3512, 5874};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = cudf::strings::is_timestamp(cudf::strings_column_view(input_iso), format);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
+
+  is_expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 0, 1});
+  results     = cudf::strings::is_timestamp(cudf::strings_column_view(input), format);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
+}
+
 TEST_F(StringsDatetimeTest, ToTimestampSingleDigits)
 {
   cudf::test::strings_column_wrapper strings{"1974-2-28 01:23:45.987000123",
@@ -297,7 +330,7 @@ TEST_F(StringsDatetimeTest, FromTimestamp)
 {
   std::vector<cudf::timestamp_s::rep> h_timestamps{
     131246625, 1563399277, 0, 1553085296, 1582934400, -1545730073, -86399};
-  std::vector<const char*> h_expected{"1974-02-28T01:23:45Z",
+  std::vector<char const*> h_expected{"1974-02-28T01:23:45Z",
                                       "2019-07-17T21:34:37Z",
                                       nullptr,
                                       "2019-03-20T12:34:56Z",
@@ -572,13 +605,11 @@ TEST_F(StringsDatetimeTest, FromTimestampAllSpecifiers)
 
 TEST_F(StringsDatetimeTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_column(
-    cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS}, 0, nullptr, nullptr, 0);
-  auto results = cudf::strings::from_timestamps(zero_size_column);
+  auto const zero_size_column = cudf::make_empty_column(cudf::type_id::TIMESTAMP_SECONDS)->view();
+  auto results                = cudf::strings::from_timestamps(zero_size_column);
   cudf::test::expect_column_empty(results->view());
 
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
   results = cudf::strings::to_timestamps(cudf::strings_column_view(zero_size_strings_column),
                                          cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS},
                                          "%Y");

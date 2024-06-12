@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import warnings
 
@@ -37,8 +37,8 @@ _docstring_register_accessor = """
 _dataframe_example = """
     In your library code:
 
-        >>> import cudf as gd
-        >>> @gd.api.extensions.register_dataframe_accessor("point")
+        >>> import cudf
+        >>> @cudf.api.extensions.register_dataframe_accessor("point")
         ... class PointsAccessor:
         ...     def __init__(self, obj):
         ...         self._validate(obj)
@@ -57,7 +57,7 @@ _dataframe_example = """
 
     Then in user code:
 
-        >>> df = gd.DataFrame({'x': [1,2,3,4,5,6], 'y':[7,6,5,4,3,2]})
+        >>> df = cudf.DataFrame({'x': [1,2,3,4,5,6], 'y':[7,6,5,4,3,2]})
         >>> df.point.bounding_box
         (1, 2, 6, 7)
 
@@ -66,8 +66,8 @@ _dataframe_example = """
 _index_example = """
     In your library code:
 
-        >>> import cudf as gd
-        >>> @gd.api.extensions.register_index_accessor("odd")
+        >>> import cudf
+        >>> @cudf.api.extensions.register_index_accessor("odd")
         ... class OddRowAccessor:
         ...     def __init__(self, obj):
         ...         self._obj = obj
@@ -76,7 +76,7 @@ _index_example = """
 
     Then in user code:
 
-        >>> gs = gd.Index(list(range(0, 50)))
+        >>> gs = cudf.Index(list(range(0, 50)))
         >>> gs.odd[1]
         1
         >>> gs.odd[2]
@@ -89,8 +89,8 @@ _index_example = """
 _series_example = """
     In your library code:
 
-        >>> import cudf as gd
-        >>> @gd.api.extensions.register_series_accessor("odd")
+        >>> import cudf
+        >>> @cudf.api.extensions.register_series_accessor("odd")
         ... class OddRowAccessor:
         ...     def __init__(self, obj):
         ...         self._obj = obj
@@ -99,7 +99,7 @@ _series_example = """
 
     Then in user code:
 
-        >>> gs = gd.Series(list(range(0, 50)))
+        >>> gs = cudf.Series(list(range(0, 50)))
         >>> gs.odd[1]
         1
         >>> gs.odd[2]
@@ -132,7 +132,7 @@ doc_register_series_accessor = docfmt_partial(
 def _register_accessor(name, cls):
     def decorator(accessor):
         if hasattr(cls, name):
-            msg = f"Attribute {name} will be overidden in {cls.__name__}"
+            msg = f"Attribute {name} will be overridden in {cls.__name__}"
             warnings.warn(msg)
         cached_accessor = CachedAccessor(name, accessor)
         cls._accessors.add(name)

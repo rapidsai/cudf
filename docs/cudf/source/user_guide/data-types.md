@@ -9,18 +9,18 @@ All data types in cuDF are [nullable](missing-data).
 
 <div class="special-table">
 
-| Kind of data         | Data type(s)                                                                                      |
-|----------------------|---------------------------------------------------------------------------------------------------|
-| Signed integer       | `'int8'`, `'int16'`, `'int32'`, `'int64'`                                                         |
-| Unsigned integer     | `'uint32'`, `'uint64'`                                                                            |
-| Floating-point       | `'float32'`, `'float64'`                                                                          |
-| Datetime             | `'datetime64[s]'`, `'datetime64[ms]'`, `'datetime64['us']`, `'datetime64[ns]'`                    |
-| Timedelta (duration) | `'timedelta[s]'`, `'timedelta[ms]'`, `'timedelta['us']`, `'timedelta[ns]'`                        |
-| Category             | {py:func}`cudf.CategoricalDtype`                                                                  |
-| String               | `'object'` or `'string'`                                                                          |
-| Decimal              | {py:func}`cudf.Decimal32Dtype`, {py:func}`cudf.Decimal64Dtype`, {py:func}`cudf.Decimal128Dtype`   |
-| List                 | {py:func}`cudf.ListDtype`                                                                         |
-| Struct               | {py:func}`cudf.StructDtype`                                                                       |
+| Kind of data         | Data type(s)                                                                                                                             |
+|----------------------|------------------------------------------------------------------------------------------------------------------------------------------|
+| Signed integer       | `'int8'`, `'int16'`, `'int32'`, `'int64'`                                                                                                |
+| Unsigned integer     | `'uint32'`, `'uint64'`                                                                                                                   |
+| Floating-point       | `'float32'`, `'float64'`                                                                                                                 |
+| Datetime             | `'datetime64[s]'`, `'datetime64[ms]'`, `'datetime64['us']`, `'datetime64[ns]'`                                                           |
+| Timedelta (duration) | `'timedelta[s]'`, `'timedelta[ms]'`, `'timedelta['us']`, `'timedelta[ns]'`                                                               |
+| Category             | {py:class}`~cudf.core.dtypes.CategoricalDtype`                                                                                           |
+| String               | `'object'` or `'string'`                                                                                                                 |
+| Decimal              | {py:class}`~cudf.core.dtypes.Decimal32Dtype`, {py:class}`~cudf.core.dtypes.Decimal64Dtype`, {py:class}`~cudf.core.dtypes.Decimal128Dtype`|
+| List                 | {py:class}`~cudf.core.dtypes.ListDtype`                                                                                                  |
+| Struct               | {py:class}`~cudf.core.dtypes.StructDtype`                                                                                                |
 
 </div>
 
@@ -46,7 +46,7 @@ dtype: float32
 The data type associated with string data in cuDF is `"np.object"`.
 
 ```python
->>> import cudf 
+>>> import cudf
 >>> s = cudf.Series(["abc", "def", "ghi"])
 >>> s.dtype
 dtype("object")
@@ -60,9 +60,11 @@ cuDF does not support storing arbitrary Python objects.
 ## Decimal data types
 
 We provide special data types for working with decimal data, namely
-`Decimal32Dtype`, `Decimal64Dtype`, and `Decimal128Dtype`.  Use these
-data types when you need to store values with greater precision than
-allowed by floating-point representation.
+{py:class}`~cudf.core.dtypes.Decimal32Dtype`,
+{py:class}`~cudf.core.dtypes.Decimal64Dtype`, and
+{py:class}`~cudf.core.dtypes.Decimal128Dtype`.  Use these data types when you
+need to store values with greater precision than allowed by floating-point
+representation.
 
 Decimal data types in cuDF are based on fixed-point representation.  A
 decimal data type is composed of a _precision_ and a _scale_.  The
@@ -110,10 +112,11 @@ type:
 
 ## Nested data types (`List` and `Struct`)
 
-`ListDtype` and `StructDtype` are special data types in cuDF for
-working with list-like and dictionary-like data. These are referred to
-as "nested" data types, because they enable you to store a list of
-lists, or a struct of lists, or a struct of list of lists, etc.,
+{py:class}`~cudf.core.dtypes.ListDtype` and
+{py:class}`~cudf.core.dtypes.StructDtype` are special data types in cuDF for
+working with list-like and dictionary-like data. These are referred to as
+"nested" data types, because they enable you to store a list of lists, or a
+struct of lists, or a struct of list of lists, etc.,
 
 You can create lists and struct Series from existing Pandas Series of
 lists and dictionaries respectively:
@@ -133,7 +136,7 @@ dtype: struct
 StructDtype({'a': dtype('int64'), 'b': dtype('int64')})
 ```
 
-Or by reading them from disk, using a [file format that supports nested data](io).
+Or by reading them from disk, using a [file format that supports nested data](/user_guide/io/index.md).
 
 ```python
 >>> pdf = pd.DataFrame({"a": [[1, 2], [3, 4, 5], [6, 7, 8]]})

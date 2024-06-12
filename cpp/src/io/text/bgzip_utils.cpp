@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <zlib.h>
-
 #include <cudf/io/text/detail/bgzip_utils.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
+
+#include <zlib.h>
 
 #include <algorithm>
 #include <array>
@@ -120,7 +120,7 @@ void write_header(std::ostream& output_stream,
     4,    // xfl: irrelevant
     3     // OS: irrelevant
   }};
-  output_stream.write(reinterpret_cast<const char*>(header_data.data()), header_data.size());
+  output_stream.write(reinterpret_cast<char const*>(header_data.data()), header_data.size());
   auto const extra_size = pre_size_subfield.size() + extra_blocklen_field_header.size() +
                           sizeof(uint16_t) + post_size_subfield.size();
   auto const block_size =

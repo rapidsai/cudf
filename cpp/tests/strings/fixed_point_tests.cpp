@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,12 +25,10 @@
 
 #include <limits>
 
-struct StringsConvertTest : public cudf::test::BaseFixture {
-};
+struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-class StringsFixedPointConvertTest : public StringsConvertTest {
-};
+class StringsFixedPointConvertTest : public StringsConvertTest {};
 
 TYPED_TEST_SUITE(StringsFixedPointConvertTest, cudf::test::FixedPointTypes);
 
@@ -326,7 +324,8 @@ TEST_F(StringsConvertTest, DISABLED_FixedPointStringConversionOperator)
 {
   auto const max = cuda::std::numeric_limits<__int128_t>::max();
 
-  auto const x = numeric::decimal128{max, numeric::scale_type{-10}};
+  // Must use scaled_integer, else shift (multiply) is undefined behavior (integer overflow)
+  auto const x = numeric::decimal128(numeric::scaled_integer{max, numeric::scale_type{-10}});
   EXPECT_EQ(static_cast<std::string>(x), "17014118346046923173168730371.5884105727");
 
   auto const y = numeric::decimal128{max, numeric::scale_type{10}};

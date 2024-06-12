@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuda/functional>
 #include <thrust/distance.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
@@ -57,26 +59,29 @@ namespace detail {
  * @return New strings column.
  */
 template <typename SourceIterator, typename MapIterator>
-std::unique_ptr<column> scatter(
-  SourceIterator begin,
-  SourceIterator end,
-  MapIterator scatter_map,
-  strings_column_view const& target,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> scatter(SourceIterator begin,
+                                SourceIterator end,
+                                MapIterator scatter_map,
+                                strings_column_view const& target,
+                                rmm::cuda_stream_view stream,
+                                rmm::device_async_resource_ref mr)
 {
   if (target.is_empty()) return make_empty_column(type_id::STRING);
 
   // create vector of string_view's to scatter into
-  rmm::device_uvector<string_view> target_vector = create_string_vector_from_column(target, stream);
+  rmm::device_uvector<string_view> target_vector =
+    create_string_vector_from_column(target, stream, rmm::mr::get_current_device_resource());
 
   // this ensures empty strings are not mapped to nulls in the make_strings_column function
   auto const size = thrust::distance(begin, end);
   auto itr        = thrust::make_transform_iterator(
-    begin, [] __device__(string_view const sv) { return sv.empty() ? string_view{} : sv; });
+    begin, cuda::proclaim_return_type<string_view>([] __device__(string_view const sv) {
+      return sv.empty() ? string_view{} : sv;
+    }));
 
   // do the scatter
-  thrust::scatter(rmm::exec_policy(stream), itr, itr + size, scatter_map, target_vector.begin());
+  thrust::scatter(
+    rmm::exec_policy_nosync(stream), itr, itr + size, scatter_map, target_vector.begin());
 
   // build the output column
   auto sv_span = cudf::device_span<string_view const>(target_vector);

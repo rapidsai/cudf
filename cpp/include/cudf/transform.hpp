@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -54,7 +55,7 @@ std::unique_ptr<column> transform(
   std::string const& unary_udf,
   data_type output_type,
   bool is_ptx,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
@@ -69,7 +70,7 @@ std::unique_ptr<column> transform(
  */
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
   column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Compute a new column by evaluating an expression tree on a table.
@@ -82,12 +83,12 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  * @param table The table used for expression evaluation
  * @param expr The root of the expression tree
  * @param mr Device memory resource
- * @return std::unique_ptr<column> Output column
+ * @return Output column
  */
 std::unique_ptr<column> compute_column(
   table_view const& table,
   ast::expression const& expr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a bitmask from a column of boolean elements.
@@ -106,7 +107,7 @@ std::unique_ptr<column> compute_column(
  */
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Encode the rows of the given table as integers
@@ -134,7 +135,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
  */
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   cudf::table_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Encodes `input` by generating a new column for each value in `categories` indicating the
@@ -166,7 +167,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
 std::pair<std::unique_ptr<column>, table_view> one_hot_encode(
   column_view const& input,
   column_view const& categories,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a boolean column from given bitmask.
@@ -193,7 +194,7 @@ std::unique_ptr<column> mask_to_bools(
   bitmask_type const* bitmask,
   size_type begin_bit,
   size_type end_bit,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns an approximate cumulative size in bits of all columns in the `table_view` for
@@ -221,8 +222,30 @@ std::unique_ptr<column> mask_to_bools(
  * @return A 32-bit integer column containing the per-row bit counts
  */
 std::unique_ptr<column> row_bit_count(
+  table_view const& t, rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns an approximate cumulative size in bits of all columns in the `table_view` for
+ * each segment of rows.
+ *
+ * This is similar to counting bit size per row for the input table in `cudf::row_bit_count`,
+ * except that row sizes are accumulated by segments.
+ *
+ * Currently, only fixed-length segments are supported. In case the input table has number of rows
+ * not divisible by `segment_length`, its last segment is considered as shorter than the others.
+ *
+ * @throw std::invalid_argument if the input `segment_length` is non-positive or larger than the
+ * number of rows in the input table.
+ *
+ * @param t The table view to perform the computation on
+ * @param segment_length The number of rows in each segment for which the total size is computed
+ * @param mr Device memory resource used to allocate the returned columns' device memory
+ * @return A 32-bit integer column containing the bit counts for each segment of rows
+ */
+std::unique_ptr<column> segmented_row_bit_count(
   table_view const& t,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  size_type segment_length,
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

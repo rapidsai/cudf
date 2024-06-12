@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -182,6 +182,8 @@ struct is_supported_operation_functor {
       case binary_operator::LESS_EQUAL: return bool_op<ops::LessEqual, TypeLhs, TypeRhs>(out);
       case binary_operator::GREATER_EQUAL: return bool_op<ops::GreaterEqual, TypeLhs, TypeRhs>(out);
       case binary_operator::NULL_EQUALS: return bool_op<ops::NullEquals, TypeLhs, TypeRhs>(out);
+      case binary_operator::NULL_NOT_EQUALS:
+        return bool_op<ops::NullNotEquals, TypeLhs, TypeRhs>(out);
       case binary_operator::NULL_LOGICAL_AND:
         return bool_op<ops::NullLogicalAnd, TypeLhs, TypeRhs>(out);
       case binary_operator::NULL_LOGICAL_OR:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,30 +22,31 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
+
 #include <memory>
 #include <string>
 #include <vector>
 
-#include <rmm/cuda_stream_view.hpp>
-
-namespace cudf {
-namespace io {
+namespace cudf::io {
 
 // Forward declaration
 class orc_reader_options;
 class orc_writer_options;
 class chunked_orc_writer_options;
 
-namespace detail {
-namespace orc {
+namespace orc::detail {
+
+// Forward declaration of the internal reader class
+class reader_impl;
 
 /**
  * @brief Class to read ORC dataset data into columns.
  */
 class reader {
  private:
-  class impl;
-  std::unique_ptr<impl> _impl;
+  std::unique_ptr<reader_impl> _impl;
 
  public:
   /**
@@ -59,7 +60,7 @@ class reader {
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                   orc_reader_options const& options,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  rmm::device_async_resource_ref mr);
 
   /**
    * @brief Destructor explicitly declared to avoid inlining in header
@@ -69,13 +70,63 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
-   * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(orc_reader_options const& options,
-                           rmm::cuda_stream_view stream = cudf::get_default_stream());
+  table_with_metadata read();
+};
+
+/**
+ * @brief The reader class that supports iterative reading from an array of data sources.
+ */
+class chunked_reader {
+ private:
+  std::unique_ptr<reader_impl> _impl;
+
+ public:
+  /**
+   * @copydoc cudf::io::chunked_orc_reader::chunked_orc_reader(std::size_t, std::size_t, size_type,
+   * orc_reader_options const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
+   *
+   * @param sources Input `datasource` objects to read the dataset from
+   */
+  explicit chunked_reader(std::size_t chunk_read_limit,
+                          std::size_t pass_read_limit,
+                          size_type output_row_granularity,
+                          std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                          orc_reader_options const& options,
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr);
+  /**
+   * @copydoc cudf::io::chunked_orc_reader::chunked_orc_reader(std::size_t, std::size_t,
+   * orc_reader_options const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
+   *
+   * @param sources Input `datasource` objects to read the dataset from
+   */
+  explicit chunked_reader(std::size_t chunk_read_limit,
+                          std::size_t pass_read_limit,
+                          std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                          orc_reader_options const& options,
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr);
+
+  /**
+   * @brief Destructor explicitly-declared to avoid inlined in header.
+   *
+   * Since the declaration of the internal `_impl` object does not exist in this header, this
+   * destructor needs to be defined in a separate source file which can access to that object's
+   * declaration.
+   */
+  ~chunked_reader();
+
+  /**
+   * @copydoc cudf::io::chunked_orc_reader::has_next
+   */
+  [[nodiscard]] bool has_next() const;
+
+  /**
+   * @copydoc cudf::io::chunked_orc_reader::read_chunk
+   */
+  [[nodiscard]] table_with_metadata read_chunk() const;
 };
 
 /**
@@ -94,13 +145,11 @@ class writer {
    * @param options Settings for controlling writing behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   orc_writer_options const& options,
-                  SingleWriteMode mode,
-                  rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  cudf::io::detail::single_write_mode mode,
+                  rmm::cuda_stream_view stream);
 
   /**
    * @brief Constructor with chunked writer options.
@@ -109,13 +158,11 @@ class writer {
    * @param options Settings for controlling writing behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   chunked_orc_writer_options const& options,
-                  SingleWriteMode mode,
-                  rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  cudf::io::detail::single_write_mode mode,
+                  rmm::cuda_stream_view stream);
 
   /**
    * @brief Destructor explicitly declared to avoid inlining in header
@@ -134,7 +181,6 @@ class writer {
    */
   void close();
 };
-}  // namespace orc
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+
+}  // namespace orc::detail
+}  // namespace cudf::io

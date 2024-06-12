@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <rolling/detail/rolling_jit.hpp>
-#include <rolling/jit/operation.hpp>
+#include "rolling/detail/rolling_jit.hpp"
+#include "rolling/jit/operation.hpp"
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -41,15 +41,15 @@ template <typename InType,
           class agg_op,
           typename PrecedingWindowType,
           typename FollowingWindowType>
-__global__ void gpu_rolling_new(cudf::size_type nrows,
-                                InType const* const __restrict__ in_col,
-                                cudf::bitmask_type const* const __restrict__ in_col_valid,
-                                OutType* __restrict__ out_col,
-                                cudf::bitmask_type* __restrict__ out_col_valid,
-                                cudf::size_type* __restrict__ output_valid_count,
-                                PrecedingWindowType preceding_window_begin,
-                                FollowingWindowType following_window_begin,
-                                cudf::size_type min_periods)
+CUDF_KERNEL void gpu_rolling_new(cudf::size_type nrows,
+                                 InType const* const __restrict__ in_col,
+                                 cudf::bitmask_type const* const __restrict__ in_col_valid,
+                                 OutType* __restrict__ out_col,
+                                 cudf::bitmask_type* __restrict__ out_col_valid,
+                                 cudf::size_type* __restrict__ output_valid_count,
+                                 PrecedingWindowType preceding_window_begin,
+                                 FollowingWindowType following_window_begin,
+                                 cudf::size_type min_periods)
 {
   cudf::thread_index_type i            = blockIdx.x * blockDim.x + threadIdx.x;
   cudf::thread_index_type const stride = blockDim.x * gridDim.x;
@@ -58,10 +58,6 @@ __global__ void gpu_rolling_new(cudf::size_type nrows,
 
   auto active_threads = __ballot_sync(0xffff'ffffu, i < nrows);
   while (i < nrows) {
-    // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
-    // for CUDA 10.0 and below (fixed in CUDA 10.1)
-    volatile cudf::size_type count = 0;
-
     int64_t const preceding_window = get_window(preceding_window_begin, i);
     int64_t const following_window = get_window(following_window_begin, i);
 
@@ -77,14 +73,14 @@ __global__ void gpu_rolling_new(cudf::size_type nrows,
     // TODO: We should explore using shared memory to avoid redundant loads.
     //       This might require separating the kernel into a special version
     //       for dynamic and static sizes.
-    count       = end_index - start_index;
-    OutType val = agg_op::template operate<OutType, InType>(in_col, start_index, count);
+    cudf::size_type count = end_index - start_index;
+    OutType val           = agg_op::template operate<OutType, InType>(in_col, start_index, count);
 
     // check if we have enough input samples
     bool const output_is_valid = (count >= min_periods);
 
     // set the mask
-    const unsigned int result_mask = __ballot_sync(active_threads, output_is_valid);
+    unsigned int const result_mask = __ballot_sync(active_threads, output_is_valid);
 
     // store the output value, one per thread
     if (output_is_valid) { out_col[i] = val; }

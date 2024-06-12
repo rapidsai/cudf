@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Alexander Ocsa <cristhian@blazingdb.com>
@@ -17,31 +17,28 @@
  * limitations under the License.
  */
 
-#include <cudf/replace.hpp>
-
-#include <tests/groupby/groupby_test_util.hpp>
-
-#include <cudf/dictionary/detail/replace.hpp>
-#include <cudf/dictionary/encode.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/error.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/dictionary/encode.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/replace.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
 using namespace cudf::test::iterators;
 
-struct ReplaceErrorTest : public cudf::test::BaseFixture {
-};
+struct ReplaceErrorTest : public cudf::test::BaseFixture {};
 
 // Error: old-values and new-values size mismatch
 TEST_F(ReplaceErrorTest, SizeMismatch)
@@ -50,8 +47,7 @@ TEST_F(ReplaceErrorTest, SizeMismatch)
                                                                {0, 0, 1, 1, 1, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> values_to_replace_column{{10, 11, 12, 13}};
 
-  ASSERT_THROW(cudf::replace_nulls(input_column, values_to_replace_column, mr()),
-               cudf::logic_error);
+  ASSERT_THROW(cudf::replace_nulls(input_column, values_to_replace_column), cudf::logic_error);
 }
 
 // Error: column type mismatch
@@ -62,8 +58,7 @@ TEST_F(ReplaceErrorTest, TypeMismatch)
   cudf::test::fixed_width_column_wrapper<float> values_to_replace_column{
     {10, 11, 12, 13, 14, 15, 16, 17}};
 
-  EXPECT_THROW(cudf::replace_nulls(input_column, values_to_replace_column, mr()),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input_column, values_to_replace_column), cudf::data_type_error);
 }
 
 // Error: column type mismatch
@@ -73,11 +68,10 @@ TEST_F(ReplaceErrorTest, TypeMismatchScalar)
                                                                {0, 0, 1, 1, 1, 1, 1, 1}};
   cudf::numeric_scalar<float> replacement(1);
 
-  EXPECT_THROW(cudf::replace_nulls(input_column, replacement, mr()), cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input_column, replacement), cudf::data_type_error);
 }
 
-struct ReplaceNullsStringsTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNullsStringsTest : public cudf::test::BaseFixture {};
 
 TEST_F(ReplaceNullsStringsTest, SimpleReplace)
 {
@@ -93,7 +87,7 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplace)
     replacement.begin(), replacement.end(), replacement_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
@@ -112,7 +106,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceWithNulls)
     replacement.begin(), replacement.end(), replacement_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
@@ -130,7 +124,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceWithAllNulls)
   cudf::test::strings_column_wrapper expected_w{input.begin(), input.end(), input_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
@@ -148,7 +142,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceWithAllEmpty)
   cudf::test::strings_column_wrapper expected_w{input.begin(), input.end(), replacement_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
@@ -166,7 +160,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceNone)
   cudf::test::strings_column_wrapper expected_w{input.begin(), input.end()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected_w);
 }
@@ -175,8 +169,7 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
 {
   std::vector<std::string> input{"", "", "", "", "", "", "", ""};
   std::vector<cudf::valid_type> input_v{0, 0, 0, 0, 0, 0, 0, 0};
-  std::unique_ptr<cudf::scalar> repl =
-    cudf::make_string_scalar("rep", cudf::get_default_stream(), mr());
+  std::unique_ptr<cudf::scalar> repl = cudf::make_string_scalar("rep");
   repl->set_valid_async(true, cudf::get_default_stream());
   std::vector<std::string> expected{"rep", "rep", "rep", "rep", "rep", "rep", "rep", "rep"};
 
@@ -184,13 +177,12 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
   cudf::test::strings_column_wrapper expected_w{expected.begin(), expected.end()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, *repl, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, *repl));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
 
-struct ReplaceNullsPolicyStringTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNullsPolicyStringTest : public cudf::test::BaseFixture {};
 
 TEST_F(ReplaceNullsPolicyStringTest, PrecedingFill)
 {
@@ -245,8 +237,7 @@ TEST_F(ReplaceNullsPolicyStringTest, FollowingFillTrailingNulls)
 }
 
 template <typename T>
-struct ReplaceNullsTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNullsTest : public cudf::test::BaseFixture {};
 
 using test_types = cudf::test::NumericTypes;
 
@@ -377,8 +368,7 @@ TYPED_TEST(ReplaceNullsTest, LargeScaleScalar)
 }
 
 template <typename T>
-struct ReplaceNullsPolicyTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNullsPolicyTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ReplaceNullsPolicyTest, test_types);
 
@@ -490,8 +480,7 @@ TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillLargeArray)
 }
 
 template <typename T>
-struct ReplaceNullsFixedPointTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNullsFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ReplaceNullsFixedPointTest, cudf::test::FixedPointTypes);
 
@@ -577,8 +566,7 @@ TYPED_TEST(ReplaceNullsFixedPointTest, ReplacementHasNulls)
 }
 
 template <typename T>
-struct ReplaceNullsPolicyFixedPointTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNullsPolicyFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ReplaceNullsPolicyFixedPointTest, cudf::test::FixedPointTypes);
 
@@ -634,8 +622,7 @@ TYPED_TEST(ReplaceNullsPolicyFixedPointTest, FollowingFillTrailingNulls)
     std::move(col), std::move(expect_col), cudf::replace_policy::FOLLOWING);
 }
 
-struct ReplaceDictionaryTest : public cudf::test::BaseFixture {
-};
+struct ReplaceDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(ReplaceDictionaryTest, ReplaceNulls)
 {
@@ -672,40 +659,36 @@ TEST_F(ReplaceDictionaryTest, ReplaceNullsError)
   cudf::test::fixed_width_column_wrapper<int64_t> replacement_w({1, 2, 3, 4});
   auto replacement = cudf::dictionary::encode(replacement_w);
 
-  EXPECT_THROW(cudf::replace_nulls(input->view(), replacement->view()), cudf::logic_error);
-  EXPECT_THROW(cudf::replace_nulls(input->view(), cudf::string_scalar("x")), cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input->view(), replacement->view()), cudf::data_type_error);
+  EXPECT_THROW(cudf::replace_nulls(input->view(), cudf::string_scalar("x")), cudf::data_type_error);
 
   cudf::test::fixed_width_column_wrapper<int64_t> input_one_w({1}, {0});
   auto input_one  = cudf::dictionary::encode(input_one_w);
   auto dict_input = cudf::dictionary_column_view(input_one->view());
   auto dict_repl  = cudf::dictionary_column_view(replacement->view());
-  EXPECT_THROW(cudf::dictionary::detail::replace_nulls(dict_input, dict_repl), cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input->view(), replacement->view()), cudf::data_type_error);
 }
 
 TEST_F(ReplaceDictionaryTest, ReplaceNullsEmpty)
 {
   cudf::test::fixed_width_column_wrapper<int64_t> input_empty_w({});
   auto input_empty = cudf::dictionary::encode(input_empty_w);
-  auto dict_input  = cudf::dictionary_column_view(input_empty->view());
-  auto result      = cudf::dictionary::detail::replace_nulls(dict_input, dict_input);
+  auto result      = cudf::replace_nulls(input_empty->view(), input_empty->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), input_empty->view());
 }
 
 TEST_F(ReplaceDictionaryTest, ReplaceNullsNoNulls)
 {
   cudf::test::fixed_width_column_wrapper<int8_t> input_w({1, 1, 1});
-  auto input      = cudf::dictionary::encode(input_w);
-  auto dict_input = cudf::dictionary_column_view(input->view());
-  auto result     = cudf::dictionary::detail::replace_nulls(dict_input, dict_input);
+  auto input  = cudf::dictionary::encode(input_w);
+  auto result = cudf::replace_nulls(input->view(), input->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), input->view());
 
-  result =
-    cudf::dictionary::detail::replace_nulls(dict_input, cudf::numeric_scalar<int64_t>(0, false));
+  result = cudf::replace_nulls(input->view(), cudf::numeric_scalar<int8_t>(0, false));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), input->view());
 }
 
-struct ReplaceNullsPolicyDictionaryTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNullsPolicyDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(ReplaceNullsPolicyDictionaryTest, PrecedingFill)
 {

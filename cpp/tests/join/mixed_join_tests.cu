@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/type_lists.hpp>
 
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
@@ -54,8 +54,8 @@ constexpr cudf::size_type JoinNoneValue =
   std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
 
 // Common column references.
-const auto col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
-const auto col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+auto const col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+auto const col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
 
 // Common expressions.
 auto left_zero_eq_right_zero =
@@ -218,7 +218,9 @@ struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
     auto const actual_counts_view =
       cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                         actual_counts->size(),
-                        actual_counts->data());
+                        actual_counts->data(),
+                        nullptr,
+                        0);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts_cw, actual_counts_view);
 
     auto result = this->join(
@@ -655,10 +657,6 @@ struct MixedJoinSingleReturnTest : public MixedJoinTest<T> {
                      std::vector<cudf::size_type> expected_outputs,
                      cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
   {
-    auto [result_size, actual_counts] = this->join_size(
-      left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
-    EXPECT_TRUE(result_size == expected_outputs.size());
-
     auto result = this->join(
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
     std::vector<cudf::size_type> resulting_indices;
@@ -749,19 +747,6 @@ struct MixedJoinSingleReturnTest : public MixedJoinTest<T> {
                                 cudf::table_view right_conditional,
                                 cudf::ast::operation predicate,
                                 cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) = 0;
-
-  /**
-   * This method must be implemented by subclasses for specific types of joins.
-   * It should be a simply forwarding of arguments to the appropriate cudf
-   * mixed join size computation API.
-   */
-  virtual std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
-    cudf::table_view left_equality,
-    cudf::table_view right_equality,
-    cudf::table_view left_conditional,
-    cudf::table_view right_conditional,
-    cudf::ast::operation predicate,
-    cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) = 0;
 };
 
 /**
@@ -777,18 +762,6 @@ struct MixedLeftSemiJoinTest : public MixedJoinSingleReturnTest<T> {
                         cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
     return cudf::mixed_left_semi_join(
-      left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
-  }
-
-  std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
-    cudf::table_view left_equality,
-    cudf::table_view right_equality,
-    cudf::table_view left_conditional,
-    cudf::table_view right_conditional,
-    cudf::ast::operation predicate,
-    cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
-  {
-    return cudf::mixed_left_semi_join_size(
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
   }
 };
@@ -870,18 +843,6 @@ struct MixedLeftAntiJoinTest : public MixedJoinSingleReturnTest<T> {
                         cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
     return cudf::mixed_left_anti_join(
-      left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
-  }
-
-  std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
-    cudf::table_view left_equality,
-    cudf::table_view right_equality,
-    cudf::table_view left_conditional,
-    cudf::table_view right_conditional,
-    cudf::ast::operation predicate,
-    cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
-  {
-    return cudf::mixed_left_anti_join_size(
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
   }
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,9 @@
 
 #pragma once
 
-#include <text/subword/detail/data_normalizer.hpp>
+#include "text/subword/detail/data_normalizer.hpp"
+
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -49,9 +51,6 @@ class wordpiece_tokenizer {
    * @brief Creates a full tokenizer that cleans the text and splits it into tokens.
    *
    * @param vocab_table The preprocessed hashed vocabulary data.
-   * @param max_rows_final_tensor Maximum number of rows in tensor_token-ids expected by tokenizer.
-   *        Used to allocate temporary working memory on the GPU.
-   *        If the output contains a larger number of rows, behavior is undefined.
    * @param max_sequence_length Limit the number of token-ids per row in the output
    * @param stride Each row in tensor-token-ids will replicate `max_sequence_length - stride`
    *        token-ids from the previous row, unless it is the first string.
@@ -66,7 +65,6 @@ class wordpiece_tokenizer {
    *        specified in the `vocab_file`.
    */
   wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
-                      uint32_t max_rows_final_tensor,
                       uint32_t max_sequence_length,
                       uint32_t stride,
                       bool do_truncate,
@@ -78,17 +76,11 @@ class wordpiece_tokenizer {
    *
    * This class is simply a wrapper around the basic and word piece tokenizers.
    *
-   * @param d_strings A vector of strings which MUST be encoded in the utf8 format.
-   * @param d_offsets A vector of byte offsets to the beginning of individual strings in
-   *        the `d_strings` parameter.
-   * @param num_strings The number of strings in `d_strings`.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param input Strings to tokenize
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Pointer to token-ids and token-id offsets
    */
-  uvector_pair tokenize(char const* d_strings,
-                        uint32_t const* d_offsets,
-                        uint32_t num_strings,
-                        rmm::cuda_stream_view stream);
+  uvector_pair tokenize(cudf::strings_column_view const& input, rmm::cuda_stream_view stream);
 
  private:
   /**

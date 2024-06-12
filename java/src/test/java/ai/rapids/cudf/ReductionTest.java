@@ -18,6 +18,7 @@
 package ai.rapids.cudf;
 
 import com.google.common.collect.Lists;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -430,6 +431,7 @@ class ReductionTest extends CudfTestBase {
     }
   }
 
+  @Tag("noSanitizer")
   @ParameterizedTest
   @MethodSource("createBooleanParams")
   void testBoolean(ReductionAggregation op, Boolean[] values,
@@ -441,6 +443,7 @@ class ReductionTest extends CudfTestBase {
     }
   }
 
+  @Tag("noSanitizer")
   @ParameterizedTest
   @MethodSource("createByteParams")
   void testByte(ReductionAggregation op, Byte[] values,
@@ -452,6 +455,7 @@ class ReductionTest extends CudfTestBase {
     }
   }
 
+  @Tag("noSanitizer")
   @ParameterizedTest
   @MethodSource("createShortParams")
   void testShort(ReductionAggregation op, Short[] values,
@@ -474,6 +478,7 @@ class ReductionTest extends CudfTestBase {
     }
   }
 
+  @Tag("noSanitizer")
   @ParameterizedTest
   @MethodSource("createLongParams")
   void testLong(ReductionAggregation op, Long[] values,
@@ -496,6 +501,7 @@ class ReductionTest extends CudfTestBase {
     }
   }
 
+  @Tag("noSanitizer")
   @ParameterizedTest
   @MethodSource("createDoubleParams")
   void testDouble(ReductionAggregation op, Double[] values,
@@ -507,6 +513,7 @@ class ReductionTest extends CudfTestBase {
     }
   }
 
+  @Tag("noSanitizer")
   @ParameterizedTest
   @MethodSource("createTimestampDaysParams")
   void testTimestampDays(ReductionAggregation op, Integer[] values,
@@ -518,6 +525,7 @@ class ReductionTest extends CudfTestBase {
     }
   }
 
+  @Tag("noSanitizer")
   @ParameterizedTest
   @MethodSource("createTimestampSecondsParams")
   void testTimestampSeconds(ReductionAggregation op, Long[] values,
@@ -529,6 +537,7 @@ class ReductionTest extends CudfTestBase {
     }
   }
 
+  @Tag("noSanitizer")
   @ParameterizedTest
   @MethodSource("createTimestampMilliSecondsParams")
   void testTimestampMilliseconds(ReductionAggregation op, Long[] values,
@@ -540,6 +549,7 @@ class ReductionTest extends CudfTestBase {
     }
   }
 
+  @Tag("noSanitizer")
   @ParameterizedTest
   @MethodSource("createTimestampMicroSecondsParams")
   void testTimestampMicroseconds(ReductionAggregation op, Long[] values,
@@ -551,6 +561,7 @@ class ReductionTest extends CudfTestBase {
     }
   }
 
+  @Tag("noSanitizer")
   @ParameterizedTest
   @MethodSource("createTimestampNanoSecondsParams")
   void testTimestampNanoseconds(ReductionAggregation op, Long[] values,

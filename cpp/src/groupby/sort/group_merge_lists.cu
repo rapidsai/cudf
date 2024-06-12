@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/gather.h>
 
@@ -30,7 +31,7 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
                                           cudf::device_span<size_type const> group_offsets,
                                           size_type num_groups,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+                                          rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(values.type().id() == type_id::LIST,
                "Input to `group_merge_lists` must be a lists column.");
@@ -38,7 +39,7 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
                "Input to `group_merge_lists` must be a non-nullable lists column.");
 
   auto offsets_column = make_numeric_column(
-    data_type(type_to_id<offset_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type(type_to_id<size_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, mr);
 
   // Generate offsets of the output lists column by gathering from the provided group offsets and
   // the input list offsets.
@@ -54,7 +55,7 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
                  group_offsets.begin(),
                  group_offsets.end(),
                  lists_column_view(values).offsets_begin(),
-                 offsets_column->mutable_view().template begin<offset_type>());
+                 offsets_column->mutable_view().template begin<size_type>());
 
   // The child column of the output lists column is just copied from the input column.
   auto child_column =

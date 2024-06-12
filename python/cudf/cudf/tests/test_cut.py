@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 """
 Test related to Cut
@@ -23,7 +23,7 @@ from cudf.testing._utils import assert_eq
 )  # if ordered is False we need labels
 @pytest.mark.parametrize("precision", [1, 2, 3])
 def test_cut_basic(x, bins, right, include_lowest, ordered, precision):
-    # will test optional labels, retbins and duplicates seperately
+    # will test optional labels, retbins and duplicates separately
     # they need more specific parameters to work
     pcat = pd.cut(
         x=x,
@@ -60,7 +60,6 @@ def test_cut_basic(x, bins, right, include_lowest, ordered, precision):
 def test_cut_labels(
     x, bins, right, include_lowest, ordered, precision, labels
 ):
-
     pcat = pd.cut(
         x=x,
         bins=bins,
@@ -98,7 +97,6 @@ def test_cut_labels(
 def test_cut_labels_non_unique(
     x, bins, right, include_lowest, ordered, precision, labels
 ):
-
     pcat = pd.cut(
         x=x,
         bins=bins,
@@ -138,7 +136,6 @@ def test_cut_labels_non_unique(
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("precision", [3])
 def test_cut_right(x, bins, right, precision):
-
     pcat = pd.cut(
         x=x,
         bins=bins,
@@ -177,7 +174,6 @@ def test_cut_right(x, bins, right, precision):
 def test_cut_drop_duplicates(
     x, bins, right, precision, duplicates, ordered, include_lowest
 ):
-
     pcat = pd.cut(
         x=x,
         bins=bins,
@@ -264,7 +260,6 @@ def test_cut_drop_duplicates_raises(
 @pytest.mark.parametrize("precision", [1, 2, 3])
 @pytest.mark.parametrize("duplicates", ["drop", "raise"])
 def test_cut_intervalindex_bin(x, bins, right, precision, duplicates):
-
     pcat = pd.cut(
         x=x,
         bins=bins,
@@ -294,7 +289,6 @@ def test_cut_intervalindex_bin(x, bins, right, precision, duplicates):
 @pytest.mark.parametrize("ordered", [True])
 @pytest.mark.parametrize("precision", [3])
 def test_cut_series(x, bins, right, include_lowest, ordered, precision):
-
     pcat = pd.cut(
         x=x,
         bins=bins,

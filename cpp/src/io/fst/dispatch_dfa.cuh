@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ struct DeviceFSMPolicy {
  * @return
  */
 template <typename TileState>
-__global__ void initialization_pass_kernel(TileState items_state, uint32_t num_tiles)
+CUDF_KERNEL void initialization_pass_kernel(TileState items_state, uint32_t num_tiles)
 {
   items_state.InitializeStatus(num_tiles);
 }
@@ -302,7 +302,7 @@ struct DispatchFSM : DeviceFSMPolicy {
   }
 
   //------------------------------------------------------------------------------
-  // POLICY INVOKATION
+  // POLICY INVOCATION
   //------------------------------------------------------------------------------
   template <typename ActivePolicyT>
   CUB_RUNTIME_FUNCTION __forceinline__ cudaError_t Invoke()

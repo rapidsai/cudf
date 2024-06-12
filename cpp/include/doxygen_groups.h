@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 // Add a new group by first specifying in the hierarchy below.
 
 /**
+ * @defgroup default_stream Default Stream
  * @defgroup cudf_classes Classes
  * @{
  *   @defgroup column_classes Column
@@ -66,6 +67,7 @@
  *     @}
  *     @defgroup copy_split Splitting
  *     @{
+ *        @file cudf/contiguous_split.hpp
  *        @file cudf/copying.hpp
  *     @}
  *     @defgroup copy_shift Shifting
@@ -123,12 +125,13 @@
  *   @defgroup strings_contains Searching
  *   @defgroup strings_convert Converting
  *   @defgroup strings_copy Copying
- *   @defgroup strings_substring Substring
+ *   @defgroup strings_slice Slicing
  *   @defgroup strings_find Finding
  *   @defgroup strings_modify Modifying
  *   @defgroup strings_replace Replacing
  *   @defgroup strings_split Splitting
- *   @defgroup strings_json JSON
+ *   @defgroup strings_extract Extracting
+ *   @defgroup strings_regex Regex
  * @}
  * @defgroup dictionary_apis Dictionary
  * @{
@@ -138,13 +141,20 @@
  * @}
  * @defgroup io_apis IO
  * @{
- *   @defgroup io_datasources Datasources
+ *   @defgroup io_types IO Types
  *   @defgroup io_readers Readers
  *   @defgroup io_writers Writers
+ *   @defgroup io_datasources Data Sources
+ *   @defgroup io_datasinks Data Sinks
+ * @}
+ * @defgroup json_apis JSON
+ * @{
+ *   @defgroup json_object JSON Path
  * @}
  * @defgroup lists_apis Lists
  * @{
  *   @defgroup lists_combine Combining
+ *   @defgroup lists_modify Modifying
  *   @defgroup lists_extract Extracting
  *   @defgroup lists_filling Filling
  *   @defgroup lists_contains Searching
@@ -162,6 +172,8 @@
  *   @defgroup nvtext_edit_distance Edit Distance
  *   @defgroup nvtext_tokenize Tokenizing
  *   @defgroup nvtext_replace Replacing
+ *   @defgroup nvtext_minhash MinHashing
+ *   @defgroup nvtext_jaccard Jaccard Index
  * @}
  * @defgroup utility_apis Utilities
  * @{
@@ -169,9 +181,12 @@
  *   @defgroup utility_dispatcher Type Dispatcher
  *   @defgroup utility_bitmask Bitmask
  *   @defgroup utility_error Exception
+ *   @defgroup utility_span Exception
  * @}
  * @defgroup labeling_apis Labeling
  * @{
  *   @defgroup label_bins Bin Labeling
  * @}
+ * @defgroup expressions Expression Evaluation
+ * @defgroup tdigest tdigest APIs
  */

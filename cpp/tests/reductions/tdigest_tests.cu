@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,15 @@
  * limitations under the License.
  */
 
-#include <cudf/reduction.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/tdigest_utilities.cuh>
 #include <cudf_test/type_lists.hpp>
 
-namespace cudf {
-namespace test {
+#include <cudf/reduction.hpp>
 
 template <typename T>
-struct ReductionTDigestAllTypes : public cudf::test::BaseFixture {
-};
+struct ReductionTDigestAllTypes : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(ReductionTDigestAllTypes, cudf::test::NumericTypes);
 
 struct reduce_op {
@@ -68,25 +64,27 @@ struct reduce_merge_op {
 TYPED_TEST(ReductionTDigestAllTypes, Simple)
 {
   using T = TypeParam;
-  tdigest_simple_aggregation<T>(reduce_op{});
+  cudf::test::tdigest_simple_aggregation<T>(reduce_op{});
 }
 
 TYPED_TEST(ReductionTDigestAllTypes, SimpleWithNulls)
 {
   using T = TypeParam;
-  tdigest_simple_with_nulls_aggregation<T>(reduce_op{});
+  cudf::test::tdigest_simple_with_nulls_aggregation<T>(reduce_op{});
 }
 
 TYPED_TEST(ReductionTDigestAllTypes, AllNull)
 {
   using T = TypeParam;
-  tdigest_simple_all_nulls_aggregation<T>(reduce_op{});
+  cudf::test::tdigest_simple_all_nulls_aggregation<T>(reduce_op{});
 }
 
-struct ReductionTDigestMerge : public cudf::test::BaseFixture {
-};
+struct ReductionTDigestMerge : public cudf::test::BaseFixture {};
 
-TEST_F(ReductionTDigestMerge, Simple) { tdigest_merge_simple(reduce_op{}, reduce_merge_op{}); }
+TEST_F(ReductionTDigestMerge, Simple)
+{
+  cudf::test::tdigest_merge_simple(reduce_op{}, reduce_merge_op{});
+}
 
 // tests an issue with the cluster generating code with a small number of centroids that have large
 // weights
@@ -96,12 +94,12 @@ TEST_F(ReductionTDigestMerge, FewHeavyCentroids)
   cudf::test::fixed_width_column_wrapper<double> c0c{1.0, 2.0};
   cudf::test::fixed_width_column_wrapper<double> c0w{100.0, 50.0};
   cudf::test::structs_column_wrapper c0s({c0c, c0w});
-  cudf::test::fixed_width_column_wrapper<offset_type> c0_offsets{0, 2};
-  auto c0l = cudf::make_lists_column(
-    1, c0_offsets.release(), c0s.release(), cudf::UNKNOWN_NULL_COUNT, rmm::device_buffer{});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> c0_offsets{0, 2};
+  auto c0l =
+    cudf::make_lists_column(1, c0_offsets.release(), c0s.release(), 0, rmm::device_buffer{});
   cudf::test::fixed_width_column_wrapper<double> c0min{1.0};
   cudf::test::fixed_width_column_wrapper<double> c0max{2.0};
-  std::vector<std::unique_ptr<column>> c0_children;
+  std::vector<std::unique_ptr<cudf::column>> c0_children;
   c0_children.push_back(std::move(c0l));
   c0_children.push_back(c0min.release());
   c0_children.push_back(c0max.release());
@@ -113,19 +111,19 @@ TEST_F(ReductionTDigestMerge, FewHeavyCentroids)
   cudf::test::fixed_width_column_wrapper<double> c1c{3.0, 4.0};
   cudf::test::fixed_width_column_wrapper<double> c1w{200.0, 50.0};
   cudf::test::structs_column_wrapper c1s({c1c, c1w});
-  cudf::test::fixed_width_column_wrapper<offset_type> c1_offsets{0, 2};
-  auto c1l = cudf::make_lists_column(
-    1, c1_offsets.release(), c1s.release(), cudf::UNKNOWN_NULL_COUNT, rmm::device_buffer{});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> c1_offsets{0, 2};
+  auto c1l =
+    cudf::make_lists_column(1, c1_offsets.release(), c1s.release(), 0, rmm::device_buffer{});
   cudf::test::fixed_width_column_wrapper<double> c1min{3.0};
   cudf::test::fixed_width_column_wrapper<double> c1max{4.0};
-  std::vector<std::unique_ptr<column>> c1_children;
+  std::vector<std::unique_ptr<cudf::column>> c1_children;
   c1_children.push_back(std::move(c1l));
   c1_children.push_back(c1min.release());
   c1_children.push_back(c1max.release());
   // tdigest struct
   auto c1 = cudf::make_structs_column(1, std::move(c1_children), 0, {});
 
-  std::vector<column_view> views;
+  std::vector<cudf::column_view> views;
   views.push_back(*c0);
   views.push_back(*c1);
   auto values = cudf::concatenate(views);
@@ -149,12 +147,11 @@ TEST_F(ReductionTDigestMerge, FewHeavyCentroids)
   cudf::test::fixed_width_column_wrapper<double> ec{1.0, 2.0, 3.0, 4.0};
   cudf::test::fixed_width_column_wrapper<double> ew{100.0, 50.0, 200.0, 50.0};
   cudf::test::structs_column_wrapper es({ec, ew});
-  cudf::test::fixed_width_column_wrapper<offset_type> e_offsets{0, 4};
-  auto el = cudf::make_lists_column(
-    1, e_offsets.release(), es.release(), cudf::UNKNOWN_NULL_COUNT, rmm::device_buffer{});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets{0, 4};
+  auto el = cudf::make_lists_column(1, e_offsets.release(), es.release(), 0, rmm::device_buffer{});
   cudf::test::fixed_width_column_wrapper<double> emin{1.0};
   cudf::test::fixed_width_column_wrapper<double> emax{4.0};
-  std::vector<std::unique_ptr<column>> e_children;
+  std::vector<std::unique_ptr<cudf::column>> e_children;
   e_children.push_back(std::move(el));
   e_children.push_back(emin.release());
   e_children.push_back(emax.release());
@@ -163,6 +160,3 @@ TEST_F(ReductionTDigestMerge, FewHeavyCentroids)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
-
-}  // namespace test
-}  // namespace cudf

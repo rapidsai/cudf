@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -19,16 +19,14 @@
 
 #pragma once
 
-#include <cudf/detail/iterator.cuh>
-#include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/random.hpp>
+
+#include <cudf/detail/iterator.cuh>
+
 #include <string>
 #include <type_traits>
-
-namespace cudf {
-namespace test {
-namespace binop {
 
 struct BinaryOperationTest : public cudf::test::BaseFixture {
   BinaryOperationTest() {}
@@ -52,7 +50,7 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
   }
 
   template <typename T>
-  static auto make_random_wrapped_column(size_type size)
+  static auto make_random_wrapped_column(cudf::size_type size)
   {
     cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max);
     auto data_iter     = make_data_iter(rand_gen);
@@ -77,7 +75,3 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
     return cudf::scalar_type_t<T>(str.substr(0, size));
   }
 };
-
-}  // namespace binop
-}  // namespace test
-}  // namespace cudf

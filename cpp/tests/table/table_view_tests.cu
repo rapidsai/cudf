@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,8 +36,7 @@
 
 // Compares two tables row by row, if table1 row is less than table2, then corresponding row value
 // in `output` would be `true`/1 else `false`/0.
-struct TableViewTest : public cudf::test::BaseFixture {
-};
+struct TableViewTest : public cudf::test::BaseFixture {};
 void row_comparison(cudf::table_view input1,
                     cudf::table_view input2,
                     cudf::mutable_column_view output,
@@ -47,7 +46,8 @@ void row_comparison(cudf::table_view input1,
 
   auto device_table_1 = cudf::table_device_view::create(input1, stream);
   auto device_table_2 = cudf::table_device_view::create(input2, stream);
-  auto d_column_order = cudf::detail::make_device_uvector_sync(column_order);
+  auto d_column_order = cudf::detail::make_device_uvector_sync(
+    column_order, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   auto comparator = cudf::row_lexicographic_comparator(
     cudf::nullate::NO{}, *device_table_1, *device_table_2, d_column_order.data());

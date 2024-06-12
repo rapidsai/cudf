@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/replace.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/testing_main.hpp>
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/replace.hpp>
 
 // This is the main test fixture
-struct ReplaceTest : public cudf::test::BaseFixture {
-};
+struct ReplaceTest : public cudf::test::BaseFixture {};
 
 template <typename T>
 void normalize_nans_and_zeros_test_internal(

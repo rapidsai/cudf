@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -117,7 +117,9 @@ class aggregation {
     COVARIANCE,      ///< covariance between two sets of elements
     CORRELATION,     ///< correlation between two sets of elements
     TDIGEST,         ///< create a tdigest from a set of input values
-    MERGE_TDIGEST    ///< create a tdigest by merging multiple tdigests together
+    MERGE_TDIGEST,   ///< create a tdigest by merging multiple tdigests together
+    HISTOGRAM,       ///< compute frequency of each element
+    MERGE_HISTOGRAM  ///< merge partial values of HISTOGRAM aggregation,
   };
 
   aggregation() = delete;
@@ -290,6 +292,11 @@ std::unique_ptr<Base> make_any_aggregation();
 /// @return A ALL aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_all_aggregation();
+
+/// Factory to create a HISTOGRAM aggregation
+/// @return A HISTOGRAM aggregation object
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_histogram_aggregation();
 
 /// Factory to create a SUM_OF_SQUARES aggregation
 /// @return A SUM_OF_SQUARES aggregation object
@@ -648,6 +655,17 @@ std::unique_ptr<Base> make_merge_sets_aggregation(
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_m2_aggregation();
+
+/**
+ * @brief Factory to create a MERGE_HISTOGRAM aggregation
+ *
+ * Merges the results of `HISTOGRAM` aggregations on independent sets into a new `HISTOGRAM` value
+ * equivalent to if a single `HISTOGRAM` aggregation was done across all of the sets at once.
+ *
+ * @return A MERGE_HISTOGRAM aggregation object
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_merge_histogram_aggregation();
 
 /**
  * @brief Factory to create a COVARIANCE aggregation

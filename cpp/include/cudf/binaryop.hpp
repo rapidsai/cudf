@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/scalar/scalar.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -41,8 +42,14 @@ enum class binary_operator : int32_t {
   MUL,          ///< operator *
   DIV,          ///< operator / using common type of lhs and rhs
   TRUE_DIV,     ///< operator / after promoting type to floating point
-  FLOOR_DIV,    ///< operator / after promoting to 64 bit floating point and then
-                ///< flooring the result
+  FLOOR_DIV,    ///< operator //
+                ///< integer division rounding towards negative
+                ///< infinity if both arguments are integral;
+                ///< floor division for floating types (using C++ type
+                ///< promotion for mixed integral/floating arguments)
+                ///< If different promotion semantics are required, it
+                ///< is the responsibility of the caller to promote
+                ///< manually before calling in to this function.
   MOD,          ///< operator %
   PMOD,         ///< positive modulo operator
                 ///< If remainder is negative, this returns (remainder + divisor) % divisor
@@ -70,6 +77,8 @@ enum class binary_operator : int32_t {
   GREATER_EQUAL,         ///< operator >=
   NULL_EQUALS,           ///< Returns true when both operands are null; false when one is null; the
                          ///< result of equality when both are non-null
+  NULL_NOT_EQUALS,       ///< Returns false when both operands are null; true when one is null; the
+                         ///< result of inequality when both are non-null
   NULL_MAX,              ///< Returns max of operands when both are non-null; returns the non-null
                          ///< operand when one is null; or invalid when both are null
   NULL_MIN,              ///< Returns min of operands when both are non-null; returns the non-null
@@ -96,19 +105,22 @@ enum class binary_operator : int32_t {
  * @param rhs         The right operand column
  * @param op          The binary operator
  * @param output_type The desired data type of the output column
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
  * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
  * operations.
+ * @throw cudf::data_type_error if the operation is not supported for the types of @p lhs and @p rhs
  */
 std::unique_ptr<column> binary_operation(
   scalar const& lhs,
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a binary operation between a column and a scalar.
@@ -124,19 +136,22 @@ std::unique_ptr<column> binary_operation(
  * @param rhs         The right operand scalar
  * @param op          The binary operator
  * @param output_type The desired data type of the output column
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
  * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
  * operations.
+ * @throw cudf::data_type_error if the operation is not supported for the types of @p lhs and @p rhs
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
   scalar const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a binary operation between two columns.
@@ -150,6 +165,7 @@ std::unique_ptr<column> binary_operation(
  * @param rhs         The right operand column
  * @param op          The binary operator
  * @param output_type The desired data type of the output column
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
@@ -157,13 +173,15 @@ std::unique_ptr<column> binary_operation(
  * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
  * operations.
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
+ * @throw cudf::data_type_error if the operation is not supported for the types of @p lhs and @p rhs
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a binary operation between two columns using a
@@ -180,6 +198,7 @@ std::unique_ptr<column> binary_operation(
  * @param output_type The desired data type of the output column. It is assumed
  *                    that output_type is compatible with the output data type
  *                    of the function in the PTX code
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
@@ -192,7 +211,8 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   std::string const& ptx,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Computes the `scale` for a `fixed_point` number based on given binary operator `op`
@@ -232,8 +252,8 @@ namespace binops {
 std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
   column_view const& col,
   scalar const& s,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 namespace compiled {
 namespace detail {
@@ -255,7 +275,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
                                     bool is_lhs_scalar,
                                     bool is_rhs_scalar,
                                     binary_operator op,
-                                    rmm::cuda_stream_view stream = cudf::get_default_stream());
+                                    rmm::cuda_stream_view stream);
 }  // namespace detail
 }  // namespace compiled
 }  // namespace binops

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include <cuda_runtime.h>
-
 #include <cudf/strings/string_view.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/dictionary.hpp>
+
+#include <cuda_runtime.h>
 
 namespace cudf {
 
@@ -147,6 +147,29 @@ struct is_unsigned_impl {
  * @return false `type` is signed numeric
  */
 bool is_unsigned(data_type type) { return cudf::type_dispatcher(type, is_unsigned_impl{}); }
+
+struct is_integral_impl {
+  template <typename T>
+  constexpr bool operator()()
+  {
+    return is_integral<T>();
+  }
+};
+
+bool is_integral(data_type type) { return cudf::type_dispatcher(type, is_integral_impl{}); }
+
+struct is_integral_not_bool_impl {
+  template <typename T>
+  constexpr bool operator()()
+  {
+    return is_integral_not_bool<T>();
+  }
+};
+
+bool is_integral_not_bool(data_type type)
+{
+  return cudf::type_dispatcher(type, is_integral_not_bool_impl{});
+}
 
 struct is_floating_point_impl {
   template <typename T>

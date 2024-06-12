@@ -1,21 +1,21 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+import decimal
 import functools
-import hashlib
 import os
 import traceback
-from functools import partial
+import warnings
 from typing import FrozenSet, Set, Union
 
 import numpy as np
-from nvtx import annotate
+import pandas as pd
 
 import rmm
 
 import cudf
 import cudf.api.types
 from cudf.core import column
-from cudf.core.buffer import as_device_buffer_like
+from cudf.core.buffer import as_buffer
 
 # The size of the mask in bytes
 mask_dtype = cudf.api.types.dtype(np.int32)
@@ -117,8 +117,6 @@ _EQUALITY_OPS = {
     "__ge__",
 }
 
-_NVTX_COLORS = ["green", "blue", "purple", "rapids"]
-
 # The test root is set by pytest to support situations where tests are run from
 # a source tree on a built version of cudf.
 NO_EXTERNAL_ONLY_APIS = os.getenv("NO_EXTERNAL_ONLY_APIS")
@@ -190,39 +188,6 @@ def initfunc(f):
     return wrapper
 
 
-@initfunc
-def set_allocator(
-    allocator="default",
-    pool=False,
-    initial_pool_size=None,
-    enable_logging=False,
-):
-    """
-    Set the GPU memory allocator. This function should be run only once,
-    before any cudf objects are created.
-
-    allocator : {"default", "managed"}
-        "default": use default allocator.
-        "managed": use managed memory allocator.
-    pool : bool
-        Enable memory pool.
-    initial_pool_size : int
-        Memory pool size in bytes. If ``None`` (default), 1/2 of total
-        GPU memory is used. If ``pool=False``, this argument is ignored.
-    enable_logging : bool, optional
-        Enable logging (default ``False``).
-        Enabling this option will introduce performance overhead.
-    """
-    use_managed_memory = allocator == "managed"
-
-    rmm.reinitialize(
-        pool_allocator=pool,
-        managed_memory=use_managed_memory,
-        initial_pool_size=initial_pool_size,
-        logging=enable_logging,
-    )
-
-
 def clear_cache():
     """Clear all internal caches"""
     cudf.Scalar._clear_instance_cache()
@@ -268,6 +233,12 @@ class GetAttrGetItemMixin:
 
 class NotIterable:
     def __iter__(self):
+        """
+        Iteration is unsupported.
+
+        See :ref:`iteration <pandas-comparison/iteration>` for more
+        information.
+        """
         raise TypeError(
             f"{self.__class__.__name__} object is not iterable. "
             f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
@@ -283,97 +254,151 @@ def pa_mask_buffer_to_mask(mask_buf, size):
     if mask_buf.size < mask_size:
         dbuf = rmm.DeviceBuffer(size=mask_size)
         dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
-        return as_device_buffer_like(dbuf)
-    return as_device_buffer_like(mask_buf)
+        return as_buffer(dbuf)
+    return as_buffer(mask_buf)
 
 
 def _isnat(val):
     """Wraps np.isnat to return False instead of error on invalid inputs."""
-    if not isinstance(val, (np.datetime64, np.timedelta64, str)):
+    if val is pd.NaT:
+        return True
+    elif not isinstance(val, (np.datetime64, np.timedelta64, str)):
         return False
     else:
-        return val in {"NaT", "NAT"} or np.isnat(val)
+        try:
+            return val in {"NaT", "NAT"} or np.isnat(val)
+        except TypeError:
+            return False
 
 
-def _fillna_natwise(col):
-    # If the value we are filling is np.datetime64("NAT")
-    # we set the same mask as current column.
-    # However where there are "<NA>" in the
-    # columns, their corresponding locations
-    nat = cudf._lib.scalar._create_proxy_nat_scalar(col.dtype)
-    result = cudf._lib.replace.replace_nulls(col, nat)
-    return column.build_column(
-        data=result.base_data,
-        dtype=result.dtype,
-        size=result.size,
-        offset=result.offset,
-        children=result.base_children,
-    )
+def search_range(x: int, ri: range, *, side: str) -> int:
+    """
 
-
-def search_range(start, stop, x, step=1, side="left"):
-    """Find the position to insert a value in a range, so that the resulting
-    sequence remains sorted.
-
-    When ``side`` is set to 'left', the insertion point ``i`` will hold the
-    following invariant:
-    `all(x < n for x in range_left) and all(x >= n for x in range_right)`
-    where ``range_left`` and ``range_right`` refers to the range to the left
-    and right of position ``i``, respectively.
-
-    When ``side`` is set to 'right', ``i`` will hold the following invariant:
-    `all(x <= n for x in range_left) and all(x > n for x in range_right)`
+    Find insertion point in a range to maintain sorted order
 
     Parameters
     ----------
-    start : int
-        Start value of the series
-    stop : int
-        Stop value of the range
-    x : int
-        The value to insert
-    step : int, default 1
-        Step value of the series, assumed positive
-    side : {'left', 'right'}, default 'left'
-        See description for usage.
+    x
+        Integer to insert
+    ri
+        Range to insert into
+    side
+        Tie-breaking decision for the case that `x` is a member of the
+        range. If `"left"` then the insertion point is before the
+        entry, otherwise it is after.
 
     Returns
     -------
     int
-        Insertion position of n.
+        The insertion point
+
+    See Also
+    --------
+    numpy.searchsorted
+
+    Notes
+    -----
+    Let ``p`` be the return value, then if ``side="left"`` the
+    following invariants are maintained::
+
+        all(x < n for n in ri[:p])
+        all(x >= n for n in ri[p:])
+
+    Conversely, if ``side="right"`` then we have::
+
+        all(x <= n for n in ri[:p])
+        all(x > n for n in ri[p:])
 
     Examples
     --------
     For series: 1 4 7
-    >>> search_range(start=1, stop=10, x=4, step=3, side="left")
+    >>> search_range(4, range(1, 10, 3), side="left")
     1
-    >>> search_range(start=1, stop=10, x=4, step=3, side="right")
+    >>> search_range(4, range(1, 10, 3), side="right")
     2
     """
-    z = 1 if side == "left" else 0
-    i = (x - start - z) // step + 1
+    assert side in {"left", "right"}
+    if flip := (ri.step < 0):
+        ri = ri[::-1]
+        shift = int(side == "right")
+    else:
+        shift = int(side == "left")
 
-    length = (stop - start) // step
-    return max(min(length, i), 0)
-
-
-def _get_color_for_nvtx(name):
-    m = hashlib.sha256()
-    m.update(name.encode())
-    hash_value = int(m.hexdigest(), 16)
-    idx = hash_value % len(_NVTX_COLORS)
-    return _NVTX_COLORS[idx]
+    offset = (x - ri.start - shift) // ri.step + 1
+    if flip:
+        offset = len(ri) - offset
+    return max(min(len(ri), offset), 0)
 
 
-def _cudf_nvtx_annotate(func, domain="cudf_python"):
-    """Decorator for applying nvtx annotations to methods in cudf."""
-    return annotate(
-        message=func.__qualname__,
-        color=_get_color_for_nvtx(func.__qualname__),
-        domain=domain,
-    )(func)
+def is_na_like(obj):
+    """
+    Check if `obj` is a cudf NA value,
+    i.e., None, cudf.NA or cudf.NaT
+    """
+    return obj is None or obj is cudf.NA or obj is cudf.NaT
 
 
-_dask_cudf_nvtx_annotate = partial(
-    _cudf_nvtx_annotate, domain="dask_cudf_python"
-)
+def _warn_no_dask_cudf(fn):
+    @functools.wraps(fn)
+    def wrapper(self):
+        # try import
+        try:
+            # Import dask_cudf (if available) in case
+            # this is being called within Dask Dataframe
+            import dask_cudf  # noqa: F401
+
+        except ImportError:
+            warnings.warn(
+                f"Using dask to tokenize a {type(self)} object, "
+                "but `dask_cudf` is not installed. Please install "
+                "`dask_cudf` for proper dispatching."
+            )
+        return fn(self)
+
+    return wrapper
+
+
+def _is_same_name(left_name, right_name):
+    # Internal utility to compare if two names are same.
+    with warnings.catch_warnings():
+        # numpy throws warnings while comparing
+        # NaT values with non-NaT values.
+        warnings.simplefilter("ignore")
+        try:
+            same = (left_name is right_name) or (left_name == right_name)
+            if not same:
+                if isinstance(left_name, decimal.Decimal) and isinstance(
+                    right_name, decimal.Decimal
+                ):
+                    return left_name.is_nan() and right_name.is_nan()
+                if isinstance(left_name, float) and isinstance(
+                    right_name, float
+                ):
+                    return np.isnan(left_name) and np.isnan(right_name)
+                if isinstance(left_name, np.datetime64) and isinstance(
+                    right_name, np.datetime64
+                ):
+                    return np.isnan(left_name) and np.isnan(right_name)
+            return same
+        except TypeError:
+            return False
+
+
+def _all_bools_with_nulls(lhs, rhs, bool_fill_value):
+    # Internal utility to construct a boolean column
+    # by combining nulls from `lhs` & `rhs`.
+    if lhs.has_nulls() and rhs.has_nulls():
+        result_mask = lhs._get_mask_as_column() & rhs._get_mask_as_column()
+    elif lhs.has_nulls():
+        result_mask = lhs._get_mask_as_column()
+    elif rhs.has_nulls():
+        result_mask = rhs._get_mask_as_column()
+    else:
+        result_mask = None
+
+    result_col = column.as_column(
+        bool_fill_value, dtype=cudf.dtype(np.bool_), length=len(lhs)
+    )
+    if result_mask is not None:
+        result_col = result_col.set_mask(result_mask.as_mask())
+    return result_col

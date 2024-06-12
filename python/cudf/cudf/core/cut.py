@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from collections import abc
 
@@ -279,12 +279,8 @@ def cut(
     if labels is not None:
         if labels is not ordered and len(set(labels)) != len(labels):
             # when we have duplicate labels and ordered is False, we
-            # should allow duplicate categories. The categories are
-            # returned in order
-            new_data = [interval_labels[i][0] for i in index_labels.values]
-            return cudf.CategoricalIndex(
-                new_data, categories=sorted(set(labels)), ordered=False
-            )
+            # should allow duplicate categories.
+            return interval_labels[index_labels]
 
     col = build_categorical_column(
         categories=interval_labels,
@@ -296,7 +292,7 @@ def cut(
     )
 
     # we return a categorical index, as we don't have a Categorical method
-    categorical_index = cudf.core.index.as_index(col)
+    categorical_index = cudf.Index(col)
 
     if isinstance(orig_x, (pd.Series, cudf.Series)):
         # if we have a series input we return a series output

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
@@ -38,8 +39,7 @@ constexpr int32_t NOT_USE{-1};  // mark for elements that we don't care
 }  // namespace
 
 template <typename T>
-struct InterleaveColumnsTest : public cudf::test::BaseFixture {
-};
+struct InterleaveColumnsTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(InterleaveColumnsTest, cudf::test::FixedWidthTypes);
 
@@ -186,12 +186,11 @@ TYPED_TEST(InterleaveColumnsTest, MismatchedDtypes)
   }
 }
 
-struct InterleaveStringsColumnsTest : public cudf::test::BaseFixture {
-};
+struct InterleaveStringsColumnsTest : public cudf::test::BaseFixture {};
 
 TEST_F(InterleaveStringsColumnsTest, ZeroSizedColumns)
 {
-  cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const col0 = cudf::make_empty_column(cudf::type_id::STRING)->view();
 
   auto results = cudf::interleave_columns(cudf::table_view{{col0}});
   cudf::test::expect_column_empty(results->view());
@@ -356,8 +355,7 @@ TEST_F(InterleaveStringsColumnsTest, MultiColumnStringMixNullableMix)
 }
 
 template <typename T>
-struct FixedPointTestAllReps : public cudf::test::BaseFixture {
-};
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
@@ -383,8 +381,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointInterleave)
   }
 }
 
-struct ListsColumnsInterleaveTest : public cudf::test::BaseFixture {
-};
+struct ListsColumnsInterleaveTest : public cudf::test::BaseFixture {};
 
 TEST_F(ListsColumnsInterleaveTest, InvalidInput)
 {
@@ -404,8 +401,7 @@ TEST_F(ListsColumnsInterleaveTest, InvalidInput)
 }
 
 template <typename T>
-struct ListsColumnsInterleaveTypedTest : public cudf::test::BaseFixture {
-};
+struct ListsColumnsInterleaveTypedTest : public cudf::test::BaseFixture {};
 
 using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                         cudf::test::FloatingPointTypes,
@@ -1038,8 +1034,7 @@ TEST_F(ListsColumnsInterleaveTest, SlicedStringsColumnsInputWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
 
-struct StructsColumnsInterleaveTest : public cudf::test::BaseFixture {
-};
+struct StructsColumnsInterleaveTest : public cudf::test::BaseFixture {};
 
 TEST_F(StructsColumnsInterleaveTest, InvalidInput)
 {
@@ -1094,8 +1089,7 @@ TEST_F(StructsColumnsInterleaveTest, InterleaveEmptyColumns)
 }
 
 template <typename T>
-struct StructsColumnsInterleaveTypedTest : public cudf::test::BaseFixture {
-};
+struct StructsColumnsInterleaveTypedTest : public cudf::test::BaseFixture {};
 
 using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                         cudf::test::FloatingPointTypes,

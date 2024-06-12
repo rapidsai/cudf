@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,9 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <stdexcept>
 
 namespace cudf {
 namespace detail {
@@ -37,11 +40,10 @@ namespace {
 
 struct get_element_functor {
   template <typename T, std::enable_if_t<is_fixed_width<T>() && !is_fixed_point<T>()>* p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const& input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     size_type index,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
   {
     auto s = make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
 
@@ -61,11 +63,10 @@ struct get_element_functor {
   }
 
   template <typename T, std::enable_if_t<std::is_same_v<T, string_view>>* p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const& input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     size_type index,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
   {
     auto device_col = column_device_view::create(input, stream);
 
@@ -86,11 +87,10 @@ struct get_element_functor {
   }
 
   template <typename T, std::enable_if_t<std::is_same_v<T, dictionary32>>* p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const& input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     size_type index,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
   {
     auto dict_view    = dictionary_column_view(input);
     auto indices_iter = detail::indexalator_factory::make_input_iterator(dict_view.indices());
@@ -122,11 +122,10 @@ struct get_element_functor {
   }
 
   template <typename T, std::enable_if_t<std::is_same_v<T, list_view>>* p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const& input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     size_type index,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
   {
     bool valid               = is_element_valid_sync(input, index, stream);
     auto const child_col_idx = lists_column_view::child_column_index;
@@ -147,11 +146,10 @@ struct get_element_functor {
   }
 
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const& input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     size_type index,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
   {
     using Type = typename T::rep;
 
@@ -178,15 +176,14 @@ struct get_element_functor {
   }
 
   template <typename T, std::enable_if_t<std::is_same_v<T, struct_view>>* p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const& input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     size_type index,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
   {
     bool valid = is_element_valid_sync(input, index, stream);
     auto row_contents =
-      std::make_unique<column>(slice(input, index, index + 1), stream, mr)->release();
+      std::make_unique<column>(slice(input, index, index + 1, stream), stream, mr)->release();
     auto scalar_contents = table(std::move(row_contents.children));
     return std::make_unique<struct_scalar>(std::move(scalar_contents), valid, stream, mr);
   }
@@ -197,9 +194,9 @@ struct get_element_functor {
 std::unique_ptr<scalar> get_element(column_view const& input,
                                     size_type index,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(index >= 0 and index < input.size(), "Index out of bounds");
+  CUDF_EXPECTS(index >= 0 and index < input.size(), "Index out of bounds", std::out_of_range);
   return type_dispatcher(input.type(), get_element_functor{}, input, index, stream, mr);
 }
 
@@ -207,10 +204,11 @@ std::unique_ptr<scalar> get_element(column_view const& input,
 
 std::unique_ptr<scalar> get_element(column_view const& input,
                                     size_type index,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::get_element(input, index, cudf::get_default_stream(), mr);
+  return detail::get_element(input, index, stream, mr);
 }
 
 }  // namespace cudf

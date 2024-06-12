@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -48,6 +49,45 @@ public class RmmTest {
   public void teardown() {
     if (Rmm.isInitialized()) {
       Rmm.shutdown();
+    }
+  }
+
+  @Test
+  public void testCreateAdaptors() {
+    final long poolSize = 32 * 1024 * 1024; // 32 MiB
+    try (RmmCudaMemoryResource r = new RmmCudaMemoryResource()) {
+      assert(r.getHandle() != 0);
+    }
+    try (RmmCudaAsyncMemoryResource r = new RmmCudaAsyncMemoryResource(poolSize, poolSize)) {
+      assert(r.getHandle() != 0);
+    }
+    try (RmmManagedMemoryResource r = new RmmManagedMemoryResource()) {
+      assert(r.getHandle() != 0);
+    }
+    try (RmmArenaMemoryResource<RmmCudaMemoryResource> r =
+             new RmmArenaMemoryResource<>(new RmmCudaMemoryResource(), poolSize, false)) {
+      assert(r.getHandle() != 0);
+    }
+    try (RmmPoolMemoryResource<RmmCudaMemoryResource> r =
+             new RmmPoolMemoryResource<>(new RmmCudaMemoryResource(), poolSize, poolSize)) {
+      assert(r.getHandle() != 0);
+    }
+    try (RmmLimitingResourceAdaptor<RmmCudaMemoryResource> r =
+             new RmmLimitingResourceAdaptor<>(new RmmCudaMemoryResource(), poolSize, 64)) {
+      assert(r.getHandle() != 0);
+    }
+    try (RmmLoggingResourceAdaptor<RmmCudaMemoryResource> r =
+             new RmmLoggingResourceAdaptor<>(new RmmCudaMemoryResource(), Rmm.logToStderr(), true)) {
+      assert(r.getHandle() != 0);
+    }
+    try (RmmTrackingResourceAdaptor<RmmCudaMemoryResource> r =
+             new RmmTrackingResourceAdaptor<>(new RmmCudaMemoryResource(), 64)) {
+      assert(r.getHandle() != 0);
+      assert(r.getTotalBytesAllocated() == 0);
+      assert(r.getMaxTotalBytesAllocated() == 0);
+      assert(r.getScopedMaxTotalBytesAllocated() == 0);
+      r.resetScopedMaxTotalBytesAllocated(1024);
+      assert(r.getScopedMaxTotalBytesAllocated() == 1024);
     }
   }
 
@@ -115,7 +155,7 @@ public class RmmTest {
     try(DeviceMemoryBuffer ignored3 = Rmm.alloc(1024)) {
       Rmm.resetScopedMaximumBytesAllocated(1024);
       try (DeviceMemoryBuffer ignored4 = Rmm.alloc(20480)) {
-        assertEquals(20480, Rmm.getScopedMaximumBytesAllocated());
+        assertEquals(21504, Rmm.getScopedMaximumBytesAllocated());
         assertEquals(21504, Rmm.getMaximumTotalBytesAllocated());
       }
     }
@@ -148,6 +188,7 @@ public class RmmTest {
     }
   }
 
+  @Tag("noSanitizer")
   @ParameterizedTest
   @ValueSource(ints = {
       RmmAllocationMode.CUDA_DEFAULT,
@@ -157,6 +198,8 @@ public class RmmTest {
     AtomicInteger invokedCount = new AtomicInteger();
     AtomicLong amountRequested = new AtomicLong();
     AtomicInteger timesRetried = new AtomicInteger();
+    AtomicLong totalAllocated = new AtomicLong();
+    AtomicLong totalDeallocated = new AtomicLong();
 
     RmmEventHandler handler = new BaseRmmEventHandler() {
       @Override
@@ -166,6 +209,16 @@ public class RmmTest {
         amountRequested.set(sizeRequested);
         return count != 3;
       }
+
+      @Override
+      public void onAllocated(long sizeAllocated) {
+        totalAllocated.addAndGet(sizeAllocated);
+      }
+
+      @Override
+      public void onDeallocated(long sizeDeallocated) {
+        totalDeallocated.addAndGet(sizeDeallocated);
+      }
     };
 
     Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024);
@@ -174,6 +227,10 @@ public class RmmTest {
     addr.close();
     assertTrue(addr.address != 0);
     assertEquals(0, invokedCount.get());
+
+    // by default, we don't get callbacks on allocated or deallocated
+    assertEquals(0, totalAllocated.get());
+    assertEquals(0, totalDeallocated.get());
 
     // Try to allocate too much
     long requested = TOO_MUCH_MEMORY;
@@ -192,8 +249,17 @@ public class RmmTest {
     requested = 8192;
     addr = Rmm.alloc(requested);
     addr.close();
+
+    // test the debug event handler
+    Rmm.clearEventHandler();
+    Rmm.setEventHandler(handler, /*enableDebug*/ true);
+    addr = Rmm.alloc(1024);
+    addr.close();
+    assertEquals(1024, totalAllocated.get());
+    assertEquals(1024, totalDeallocated.get());
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testSetEventHandlerTwice() {
     Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, Rmm.logToStderr(), 0L);
@@ -215,6 +281,7 @@ public class RmmTest {
     assertThrows(RmmException.class, () -> Rmm.setEventHandler(otherHandler));
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testClearEventHandler() {
     Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, Rmm.logToStderr(), 0L);
@@ -241,6 +308,7 @@ public class RmmTest {
     }
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testAllocOnlyThresholds() {
     final AtomicInteger allocInvocations = new AtomicInteger(0);
@@ -304,6 +372,7 @@ public class RmmTest {
     assertEquals(0, deallocInvocations.get());
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testThresholds() {
     final AtomicInteger allocInvocations = new AtomicInteger(0);
@@ -388,6 +457,7 @@ public class RmmTest {
     assertEquals(2, deallocInvocations.get());
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testExceptionHandling() {
     Rmm.initialize(RmmAllocationMode.POOL, Rmm.logToStderr(), 1024 * 1024L);
@@ -448,6 +518,7 @@ public class RmmTest {
     }
   }
 
+  @Tag("noSanitizer")
   @ParameterizedTest
   @ValueSource(ints = {
       RmmAllocationMode.CUDA_DEFAULT,
@@ -460,6 +531,7 @@ public class RmmTest {
     Cuda.autoSetDevice();
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testPoolSize() {
     Rmm.initialize(RmmAllocationMode.POOL, Rmm.logToStderr(), 1024);
@@ -472,6 +544,7 @@ public class RmmTest {
     }
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testCudaAsyncMemoryResourceSize() {
     try {
@@ -490,6 +563,7 @@ public class RmmTest {
     }
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testCudaAsyncIsIncompatibleWithManaged() {
     assertThrows(IllegalArgumentException.class,

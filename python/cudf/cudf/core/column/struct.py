@@ -1,13 +1,14 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from __future__ import annotations
+
+from functools import cached_property
 
 import pandas as pd
 import pyarrow as pa
 
 import cudf
 from cudf._typing import Dtype
-from cudf.api.types import is_struct_dtype
-from cudf.core.column import ColumnBase, build_struct_column
+from cudf.core.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
 from cudf.core.missing import NA
@@ -26,10 +27,10 @@ class StructColumn(ColumnBase):
 
     @property
     def base_size(self):
-        if not self.base_children:
-            return 0
-        else:
+        if self.base_children:
             return len(self.base_children[0])
+        else:
+            return self.size + self.offset
 
     def to_arrow(self):
         children = [
@@ -55,15 +56,29 @@ class StructColumn(ColumnBase):
             pa_type, len(self), buffers, children=children
         )
 
-    def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
+    def to_pandas(
+        self,
+        *,
+        nullable: bool = False,
+        arrow_type: bool = False,
+    ) -> pd.Index:
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
+        if arrow_type or nullable:
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        else:
+            return pd.Index(self.to_arrow().tolist(), dtype="object")
 
-        pd_series = pd.Series(self.to_arrow().tolist(), dtype="object")
+    @cached_property
+    def memory_usage(self):
+        n = 0
+        if self.nullable:
+            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
 
-        if index is not None:
-            pd_series.index = index
-        return pd_series
+        for child in self.children:
+            n += child.memory_usage
+
+        return n
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
@@ -82,7 +97,9 @@ class StructColumn(ColumnBase):
         super().__setitem__(key, value)
 
     def copy(self, deep=True):
-        result = super().copy(deep=deep)
+        # Since struct columns are immutable, both deep and
+        # shallow copies share the underlying device data and mask.
+        result = super().copy(deep=False)
         if deep:
             result = result._rename_fields(self.dtype.fields.keys())
         return result
@@ -119,8 +136,9 @@ class StructColumn(ColumnBase):
         if isinstance(dtype, IntervalDtype):
             return IntervalColumn.from_struct_column(self, closed=dtype.closed)
         elif isinstance(dtype, StructDtype):
-            return build_struct_column(
-                names=dtype.fields.keys(),
+            return StructColumn(
+                data=None,
+                dtype=dtype,
                 children=tuple(
                     self.base_children[i]._with_type_metadata(dtype.fields[f])
                     for i, f in enumerate(dtype.fields.keys())
@@ -142,7 +160,7 @@ class StructMethods(ColumnMethods):
     _column: StructColumn
 
     def __init__(self, parent=None):
-        if not is_struct_dtype(parent.dtype):
+        if not isinstance(parent.dtype, StructDtype):
             raise AttributeError(
                 "Can only use .struct accessor with a 'struct' dtype"
             )

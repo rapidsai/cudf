@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -11,9 +11,9 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 # =============================================================================
-cmake_minimum_required(VERSION 3.23.1 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
-include(../../fetch_rapids.cmake)
+include(../../rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
@@ -21,8 +21,8 @@ include(rapids-export)
 include(rapids-find)
 
 project(
-  CUDA_KAFKA
-  VERSION 22.12.00
+  CUDF_KAFKA
+  VERSION "${RAPIDS_VERSION}"
   LANGUAGES CXX
 )
 
@@ -64,7 +64,7 @@ add_library(cudf_kafka SHARED src/kafka_consumer.cpp src/kafka_callback.cpp)
 # ##################################################################################################
 # * include paths ---------------------------------------------------------------------------------
 target_include_directories(
-  cudf_kafka PUBLIC "$<BUILD_INTERFACE:${CUDA_KAFKA_SOURCE_DIR}/include>"
+  cudf_kafka PUBLIC "$<BUILD_INTERFACE:${CUDF_KAFKA_SOURCE_DIR}/include>"
                     "$<INSTALL_INTERFACE:include>"
 )
 
@@ -85,6 +85,8 @@ set_target_properties(
              CXX_STANDARD_REQUIRED ON
 )
 
+add_library(cudf_kafka::cudf_kafka ALIAS cudf_kafka)
+
 # ##################################################################################################
 # * cudf_kafka Install ----------------------------------------------------------------------------
 rapids_cmake_install_lib_dir(lib_dir)
@@ -94,7 +96,7 @@ install(
   EXPORT cudf_kafka-exports
 )
 
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include DESTINATION include)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 rapids_export(
   INSTALL cudf_kafka

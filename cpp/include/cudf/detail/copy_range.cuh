@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,9 +27,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cub/cub.cuh>
-
 #include <cuda_runtime.h>
 
 #include <memory>
@@ -40,12 +40,12 @@ template <cudf::size_type block_size,
           typename SourceValidityIterator,
           typename T,
           bool has_validity>
-__global__ void copy_range_kernel(SourceValueIterator source_value_begin,
-                                  SourceValidityIterator source_validity_begin,
-                                  cudf::mutable_column_device_view target,
-                                  cudf::size_type target_begin,
-                                  cudf::size_type target_end,
-                                  cudf::size_type* __restrict__ const null_count)
+CUDF_KERNEL void copy_range_kernel(SourceValueIterator source_value_begin,
+                                   SourceValidityIterator source_validity_begin,
+                                   cudf::mutable_column_device_view target,
+                                   cudf::size_type target_begin,
+                                   cudf::size_type target_end,
+                                   cudf::size_type* __restrict__ const null_count)
 {
   using cudf::detail::warp_size;
 
@@ -54,17 +54,17 @@ __global__ void copy_range_kernel(SourceValueIterator source_value_begin,
                 "copy_range_kernel assumes bitmask element size in bits == warp size");
 
   constexpr cudf::size_type leader_lane{0};
-  const int lane_id = threadIdx.x % warp_size;
+  int const lane_id = threadIdx.x % warp_size;
 
-  const cudf::size_type tid = threadIdx.x + blockIdx.x * blockDim.x;
-  const int warp_id         = tid / warp_size;
+  cudf::size_type const tid = threadIdx.x + blockIdx.x * blockDim.x;
+  int const warp_id         = tid / warp_size;
 
-  const cudf::size_type offset         = target.offset();
-  const cudf::size_type begin_mask_idx = cudf::word_index(offset + target_begin);
-  const cudf::size_type end_mask_idx   = cudf::word_index(offset + target_end);
+  cudf::size_type const offset         = target.offset();
+  cudf::size_type const begin_mask_idx = cudf::word_index(offset + target_begin);
+  cudf::size_type const end_mask_idx   = cudf::word_index(offset + target_end);
 
   cudf::size_type mask_idx             = begin_mask_idx + warp_id;
-  const cudf::size_type masks_per_grid = gridDim.x * blockDim.x / warp_size;
+  cudf::size_type const masks_per_grid = gridDim.x * blockDim.x / warp_size;
 
   cudf::size_type target_offset = begin_mask_idx * warp_size - (offset + target_begin);
   cudf::size_type source_idx    = tid + target_offset;
@@ -79,10 +79,10 @@ __global__ void copy_range_kernel(SourceValueIterator source_value_begin,
     if (in_range) target.element<T>(index) = *(source_value_begin + source_idx);
 
     if (has_validity) {  // update bitmask
-      const bool valid      = in_range && *(source_validity_begin + source_idx);
-      const int active_mask = __ballot_sync(0xFFFF'FFFFu, in_range);
-      const int valid_mask  = __ballot_sync(0xFFFF'FFFFu, valid);
-      const int warp_mask   = active_mask & valid_mask;
+      bool const valid      = in_range && *(source_validity_begin + source_idx);
+      int const active_mask = __ballot_sync(0xFFFF'FFFFu, in_range);
+      int const valid_mask  = __ballot_sync(0xFFFF'FFFFu, valid);
+      int const warp_mask   = active_mask & valid_mask;
 
       cudf::bitmask_type old_mask = target.get_mask_word(mask_idx);
       if (lane_id == leader_lane) {
@@ -135,7 +135,7 @@ void copy_range(SourceValueIterator source_value_begin,
                 mutable_column_view& target,
                 size_type target_begin,
                 size_type target_end,
-                rmm::cuda_stream_view stream = cudf::get_default_stream())
+                rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS((target_begin <= target_end) && (target_begin >= 0) &&
                  (target_begin < target.size()) && (target_end <= target.size()),
@@ -154,11 +154,6 @@ void copy_range(SourceValueIterator source_value_begin,
   auto grid = cudf::detail::grid_1d{num_items, block_size, 1};
 
   if (target.nullable()) {
-    // TODO: if null_count is UNKNOWN_NULL_COUNT, no need to update null
-    // count (if null_count is UNKNOWN_NULL_COUNT, invoking null_count()
-    // will scan the entire bitmask array, and this can be surprising
-    // in performance if the copy range is small and the column size is
-    // large).
     rmm::device_scalar<size_type> null_count(target.null_count(), stream);
 
     auto kernel =
@@ -196,21 +191,20 @@ void copy_range_in_place(column_view const& source,
                          size_type source_begin,
                          size_type source_end,
                          size_type target_begin,
-                         rmm::cuda_stream_view stream = cudf::get_default_stream());
+                         rmm::cuda_stream_view stream);
 
 /**
  * @copydoc cudf::copy_range
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return std::unique_ptr<column> The result target column
  */
-std::unique_ptr<column> copy_range(
-  column_view const& source,
-  column_view const& target,
-  size_type source_begin,
-  size_type source_end,
-  size_type target_begin,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> copy_range(column_view const& source,
+                                   column_view const& target,
+                                   size_type source_begin,
+                                   size_type source_end,
+                                   size_type target_begin,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace cudf

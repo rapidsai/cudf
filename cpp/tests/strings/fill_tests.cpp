@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,59 +17,50 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/detail/fill.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-
-#include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
-struct StringsFillTest : public cudf::test::BaseFixture {
-};
+struct StringsFillTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFillTest, Fill)
 {
-  std::vector<const char*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::strings_column_view view(strings);
-  {
-    auto results = cudf::strings::detail::fill(view, 1, 5, cudf::string_scalar("zz"));
+  std::vector<char const*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
+  cudf::test::strings_column_wrapper input(
+    h_strings.begin(), h_strings.end(), cudf::test::iterators::nulls_from_nullptrs(h_strings));
 
-    std::vector<const char*> h_expected{"eee", "zz", "zz", "zz", "zz", "bbb", "ééé"};
+  {
+    auto results = cudf::fill(input, 1, 5, cudf::string_scalar("zz"));
+
+    std::vector<char const*> h_expected{"eee", "zz", "zz", "zz", "zz", "bbb", "ééé"};
     cudf::test::strings_column_wrapper expected(
-      h_expected.begin(),
-      h_expected.end(),
-      thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+      h_expected.begin(), h_expected.end(), cudf::test::iterators::nulls_from_nullptrs(h_expected));
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
   {
-    auto results = cudf::strings::detail::fill(view, 2, 4, cudf::string_scalar("", false));
+    auto results = cudf::fill(input, 2, 4, cudf::string_scalar("", false));
 
-    std::vector<const char*> h_expected{"eee", "bb", nullptr, nullptr, "aa", "bbb", "ééé"};
+    std::vector<char const*> h_expected{"eee", "bb", nullptr, nullptr, "aa", "bbb", "ééé"};
     cudf::test::strings_column_wrapper expected(
-      h_expected.begin(),
-      h_expected.end(),
-      thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+      h_expected.begin(), h_expected.end(), cudf::test::iterators::nulls_from_nullptrs(h_expected));
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
   {
-    auto results = cudf::strings::detail::fill(view, 5, 5, cudf::string_scalar("zz"));
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, view.parent());
+    auto results = cudf::fill(input, 5, 5, cudf::string_scalar("zz"));
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, input);
   }
   {
-    auto results = cudf::strings::detail::fill(view, 0, 7, cudf::string_scalar(""));
+    auto results = cudf::fill(input, 0, 7, cudf::string_scalar(""));
     cudf::test::strings_column_wrapper expected({"", "", "", "", "", "", ""},
                                                 {1, 1, 1, 1, 1, 1, 1});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
   {
-    auto results = cudf::strings::detail::fill(view, 0, 7, cudf::string_scalar("", false));
+    auto results = cudf::fill(input, 0, 7, cudf::string_scalar("", false));
     cudf::test::strings_column_wrapper expected({"", "", "", "", "", "", ""},
                                                 {0, 0, 0, 0, 0, 0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
@@ -78,22 +69,17 @@ TEST_F(StringsFillTest, Fill)
 
 TEST_F(StringsFillTest, ZeroSizeStringsColumns)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto results = cudf::strings::detail::fill(
-    cudf::strings_column_view(zero_size_strings_column), 0, 1, cudf::string_scalar(""));
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+  auto results = cudf::fill(zero_size_strings_column, 0, 0, cudf::string_scalar(""));
   cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsFillTest, FillRangeError)
 {
-  std::vector<const char*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::strings_column_view view(strings);
+  std::vector<char const*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
+  cudf::test::strings_column_wrapper input(
+    h_strings.begin(), h_strings.end(), cudf::test::iterators::nulls_from_nullptrs(h_strings));
 
-  EXPECT_THROW(cudf::strings::detail::fill(view, 5, 1, cudf::string_scalar("")), cudf::logic_error);
-  EXPECT_THROW(cudf::strings::detail::fill(view, 5, 9, cudf::string_scalar("")), cudf::logic_error);
+  EXPECT_THROW(cudf::fill(input, 5, 1, cudf::string_scalar("")), cudf::logic_error);
+  EXPECT_THROW(cudf::fill(input, 5, 9, cudf::string_scalar("")), cudf::logic_error);
 }

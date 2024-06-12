@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,23 @@
  * limitations under the License.
  */
 
-#include <join/join_common_utils.cuh>
+#include "join/join_common_utils.cuh"
 
-#include <cudf/detail/join.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/structs/utilities.hpp>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuco/static_set.cuh>
+#include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
-
-#include <cuco/static_map.cuh>
 
 #include <type_traits>
 
@@ -40,75 +41,65 @@ namespace {
 using cudf::experimental::row::lhs_index_type;
 using cudf::experimental::row::rhs_index_type;
 
-using static_map = cuco::static_map<lhs_index_type,
-                                    size_type,
-                                    cuda::thread_scope_device,
-                                    rmm::mr::stream_allocator_adaptor<default_allocator<char>>>;
-
 /**
- * @brief Check if the given type `T` is a strong index type (i.e., `lhs_index_type` or
- * `rhs_index_type`).
- *
- * @return A boolean value indicating if `T` is a strong index type
+ * @brief An hasher adapter wrapping both haystack hasher and needles hasher
  */
-template <typename T>
-constexpr auto is_strong_index_type()
-{
-  return std::is_same_v<T, lhs_index_type> || std::is_same_v<T, rhs_index_type>;
-}
-
-/**
- * @brief An adapter functor to support strong index types for row hasher that must be operating on
- * `cudf::size_type`.
- */
-template <typename Hasher>
-struct strong_index_hasher_adapter {
-  strong_index_hasher_adapter(Hasher const& hasher) : _hasher{hasher} {}
-
-  template <typename T, CUDF_ENABLE_IF(is_strong_index_type<T>())>
-  __device__ constexpr auto operator()(T const idx) const noexcept
+template <typename HaystackHasher, typename NeedleHasher>
+struct hasher_adapter {
+  hasher_adapter(HaystackHasher const& haystack_hasher, NeedleHasher const& needle_hasher)
+    : _haystack_hasher{haystack_hasher}, _needle_hasher{needle_hasher}
   {
-    return _hasher(static_cast<size_type>(idx));
+  }
+
+  __device__ constexpr auto operator()(lhs_index_type idx) const noexcept
+  {
+    return _haystack_hasher(static_cast<size_type>(idx));
+  }
+
+  __device__ constexpr auto operator()(rhs_index_type idx) const noexcept
+  {
+    return _needle_hasher(static_cast<size_type>(idx));
   }
 
  private:
-  Hasher const _hasher;
+  HaystackHasher const _haystack_hasher;
+  NeedleHasher const _needle_hasher;
 };
 
 /**
- * @brief An adapter functor to support strong index type for table row comparator that must be
- * operating on `cudf::size_type`.
+ * @brief An comparator adapter wrapping both self comparator and two table comparator
  */
-template <typename Comparator>
-struct strong_index_comparator_adapter {
-  strong_index_comparator_adapter(Comparator const& comparator) : _comparator{comparator} {}
+template <typename SelfEqual, typename TwoTableEqual>
+struct comparator_adapter {
+  comparator_adapter(SelfEqual const& self_equal, TwoTableEqual const& two_table_equal)
+    : _self_equal{self_equal}, _two_table_equal{two_table_equal}
+  {
+  }
 
-  template <typename T,
-            typename U,
-            CUDF_ENABLE_IF(is_strong_index_type<T>() && is_strong_index_type<U>())>
-  __device__ constexpr auto operator()(T const lhs_index, U const rhs_index) const noexcept
+  __device__ constexpr auto operator()(lhs_index_type lhs_index,
+                                       lhs_index_type rhs_index) const noexcept
   {
     auto const lhs = static_cast<size_type>(lhs_index);
     auto const rhs = static_cast<size_type>(rhs_index);
 
-    if constexpr (std::is_same_v<T, U> || std::is_same_v<T, lhs_index_type>) {
-      return _comparator(lhs, rhs);
-    } else {
-      // Here we have T == rhs_index_type.
-      // This is when the indices are provided in wrong order for two table comparator, so we need
-      // to switch them back to the right order before calling the underlying comparator.
-      return _comparator(rhs, lhs);
-    }
+    return _self_equal(lhs, rhs);
+  }
+
+  __device__ constexpr auto operator()(lhs_index_type lhs_index,
+                                       rhs_index_type rhs_index) const noexcept
+  {
+    return _two_table_equal(lhs_index, rhs_index);
   }
 
  private:
-  Comparator const _comparator;
+  SelfEqual const _self_equal;
+  TwoTableEqual const _two_table_equal;
 };
 
 /**
  * @brief Build a row bitmask for the input table.
  *
- * The output bitmask will have invalid bits corresponding to the the input rows having nulls (at
+ * The output bitmask will have invalid bits corresponding to the input rows having nulls (at
  * any nested level) and vice versa.
  *
  * @param input The input table
@@ -125,7 +116,10 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
   // If there are more than one nullable column, we compute `bitmask_and` of their null masks.
   // Otherwise, we have only one nullable column and can use its null mask directly.
   if (nullable_columns.size() > 1) {
-    auto row_bitmask = cudf::detail::bitmask_and(table_view{nullable_columns}, stream).first;
+    auto row_bitmask =
+      cudf::detail::bitmask_and(
+        table_view{nullable_columns}, stream, rmm::mr::get_current_device_resource())
+        .first;
     auto const row_bitmask_ptr = static_cast<bitmask_type const*>(row_bitmask.data());
     return std::pair(std::move(row_bitmask), row_bitmask_ptr);
   }
@@ -134,239 +128,58 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
 }
 
 /**
- * @brief Invoke an `operator()` template with a row equality comparator based on the specified
- * `compare_nans` parameter.
+ * @brief Invokes the given `func` with desired comparators based on the specified `compare_nans`
+ * parameter
  *
- * @param compare_nans The flag to specify whether NaNs should be compared equal or not
+ * @tparam HasNested Flag indicating whether there are nested columns in haystack or needles
+ * @tparam Hasher Type of device hash function
+ * @tparam Func Type of the helper function doing `contains` check
+ *
+ * @param compare_nulls Control whether nulls should be compared as equal or not
+ * @param compare_nans Control whether floating-point NaNs values should be compared as equal or not
+ * @param haystack_has_nulls Flag indicating whether haystack has nulls or not
+ * @param has_any_nulls Flag indicating whether there are nested nulls is either haystack or needles
+ * @param self_equal Self table comparator
+ * @param two_table_equal Two table comparator
+ * @param d_hasher Device hash functor
  * @param func The input functor to invoke
  */
-template <typename Func>
-void dispatch_nan_comparator(nan_equality compare_nans, Func&& func)
+template <bool HasNested, typename Hasher, typename Func>
+void dispatch_nan_comparator(
+  null_equality compare_nulls,
+  nan_equality compare_nans,
+  bool haystack_has_nulls,
+  bool has_any_nulls,
+  cudf::experimental::row::equality::self_comparator self_equal,
+  cudf::experimental::row::equality::two_table_comparator two_table_equal,
+  Hasher const& d_hasher,
+  Func&& func)
 {
+  // Distinguish probing scheme CG sizes between nested and flat types for better performance
+  auto const probing_scheme = [&]() {
+    if constexpr (HasNested) {
+      return cuco::linear_probing<4, Hasher>{d_hasher};
+    } else {
+      return cuco::linear_probing<1, Hasher>{d_hasher};
+    }
+  }();
+
   if (compare_nans == nan_equality::ALL_EQUAL) {
     using nan_equal_comparator =
       cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
-    func(nan_equal_comparator{});
+    auto const d_self_equal = self_equal.equal_to<HasNested>(
+      nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, nan_equal_comparator{});
+    auto const d_two_table_equal = two_table_equal.equal_to<HasNested>(
+      nullate::DYNAMIC{has_any_nulls}, compare_nulls, nan_equal_comparator{});
+    func(d_self_equal, d_two_table_equal, probing_scheme);
   } else {
     using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
-    func(nan_unequal_comparator{});
+    auto const d_self_equal      = self_equal.equal_to<HasNested>(
+      nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, nan_unequal_comparator{});
+    auto const d_two_table_equal = two_table_equal.equal_to<HasNested>(
+      nullate::DYNAMIC{has_any_nulls}, compare_nulls, nan_unequal_comparator{});
+    func(d_self_equal, d_two_table_equal, probing_scheme);
   }
-}
-
-/**
- * @brief Check if rows in the given `needles` table exist in the `haystack` table.
- *
- * This function is designed specifically to work with input tables having lists column(s) at
- * arbitrarily nested levels.
- *
- * @param haystack The table containing the search space
- * @param needles A table of rows whose existence to check in the search space
- * @param compare_nulls Control whether nulls should be compared as equal or not
- * @param compare_nans Control whether floating-point NaNs values should be compared as equal or not
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned vector
- * @return A vector of bools indicating if each row in `needles` has matching rows in `haystack`
- */
-rmm::device_uvector<bool> contains_with_lists_or_nans(table_view const& haystack,
-                                                      table_view const& needles,
-                                                      null_equality compare_nulls,
-                                                      nan_equality compare_nans,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
-{
-  auto map =
-    static_map(compute_hash_table_size(haystack.num_rows()),
-               cuco::sentinel::empty_key{lhs_index_type{std::numeric_limits<size_type>::max()}},
-               cuco::sentinel::empty_value{detail::JoinNoneValue},
-               detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-               stream.value());
-
-  auto const haystack_has_nulls = has_nested_nulls(haystack);
-  auto const needles_has_nulls  = has_nested_nulls(needles);
-  auto const has_any_nulls      = haystack_has_nulls || needles_has_nulls;
-
-  // Insert row indices of the haystack table as map keys.
-  {
-    auto const haystack_it = cudf::detail::make_counting_transform_iterator(
-      size_type{0},
-      [] __device__(auto const idx) { return cuco::make_pair(lhs_index_type{idx}, 0); });
-
-    auto const hasher = cudf::experimental::row::hash::row_hasher(haystack, stream);
-    auto const d_hasher =
-      strong_index_hasher_adapter{hasher.device_hasher(nullate::DYNAMIC{has_any_nulls})};
-
-    auto const comparator = cudf::experimental::row::equality::self_comparator(haystack, stream);
-
-    // If the haystack table has nulls but they are compared unequal, don't insert them.
-    // Otherwise, it was known to cause performance issue:
-    // - https://github.com/rapidsai/cudf/pull/6943
-    // - https://github.com/rapidsai/cudf/pull/8277
-    if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
-      auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);
-      auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
-
-      // Insert only rows that do not have any null at any level.
-      auto const insert_map = [&](auto const value_comp) {
-        auto const d_eqcomp = strong_index_comparator_adapter{
-          comparator.equal_to(nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
-        map.insert_if(haystack_it,
-                      haystack_it + haystack.num_rows(),
-                      thrust::counting_iterator<size_type>(0),  // stencil
-                      row_is_valid{row_bitmask_ptr},
-                      d_hasher,
-                      d_eqcomp,
-                      stream.value());
-      };
-
-      dispatch_nan_comparator(compare_nans, insert_map);
-
-    } else {  // haystack_doesn't_have_nulls || compare_nulls == null_equality::EQUAL
-      auto const insert_map = [&](auto const value_comp) {
-        auto const d_eqcomp = strong_index_comparator_adapter{
-          comparator.equal_to(nullate::DYNAMIC{haystack_has_nulls}, compare_nulls, value_comp)};
-        map.insert(
-          haystack_it, haystack_it + haystack.num_rows(), d_hasher, d_eqcomp, stream.value());
-      };
-
-      dispatch_nan_comparator(compare_nans, insert_map);
-    }
-  }
-
-  // The output vector.
-  auto contained = rmm::device_uvector<bool>(needles.num_rows(), stream, mr);
-
-  // Check existence for each row of the needles table in the haystack table.
-  {
-    auto const needles_it = cudf::detail::make_counting_transform_iterator(
-      size_type{0}, [] __device__(auto const idx) { return rhs_index_type{idx}; });
-
-    auto const hasher = cudf::experimental::row::hash::row_hasher(needles, stream);
-    auto const d_hasher =
-      strong_index_hasher_adapter{hasher.device_hasher(nullate::DYNAMIC{has_any_nulls})};
-
-    auto const comparator =
-      cudf::experimental::row::equality::two_table_comparator(haystack, needles, stream);
-
-    auto const check_contains = [&](auto const value_comp) {
-      auto const d_eqcomp =
-        comparator.equal_to(nullate::DYNAMIC{has_any_nulls}, compare_nulls, value_comp);
-      map.contains(needles_it,
-                   needles_it + needles.num_rows(),
-                   contained.begin(),
-                   d_hasher,
-                   d_eqcomp,
-                   stream.value());
-    };
-
-    dispatch_nan_comparator(compare_nans, check_contains);
-  }
-
-  return contained;
-}
-
-/**
- * @brief Check if rows in the given `needles` table exist in the `haystack` table.
- *
- * This function is designed specifically to work with input tables having only columns of simple
- * types, or structs columns of simple types.
- *
- * @param haystack The table containing the search space
- * @param needles A table of rows whose existence to check in the search space
- * @param compare_nulls Control whether nulls should be compared as equal or not
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned vector
- * @return A vector of bools indicating if each row in `needles` has matching rows in `haystack`
- */
-rmm::device_uvector<bool> contains_without_lists_or_nans(table_view const& haystack,
-                                                         table_view const& needles,
-                                                         null_equality compare_nulls,
-                                                         rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr)
-{
-  auto map =
-    static_map(compute_hash_table_size(haystack.num_rows()),
-               cuco::sentinel::empty_key{lhs_index_type{std::numeric_limits<size_type>::max()}},
-               cuco::sentinel::empty_value{detail::JoinNoneValue},
-               detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-               stream.value());
-
-  auto const haystack_has_nulls = has_nested_nulls(haystack);
-  auto const needles_has_nulls  = has_nested_nulls(needles);
-  auto const has_any_nulls      = haystack_has_nulls || needles_has_nulls;
-
-  // Flatten the input tables.
-  auto const flatten_nullability = has_any_nulls
-                                     ? structs::detail::column_nullability::FORCE
-                                     : structs::detail::column_nullability::MATCH_INCOMING;
-  auto const haystack_flattened_tables =
-    structs::detail::flatten_nested_columns(haystack, {}, {}, flatten_nullability);
-  auto const needles_flattened_tables =
-    structs::detail::flatten_nested_columns(needles, {}, {}, flatten_nullability);
-  auto const haystack_flattened = haystack_flattened_tables.flattened_columns();
-  auto const needles_flattened  = needles_flattened_tables.flattened_columns();
-  auto const haystack_tdv_ptr   = table_device_view::create(haystack_flattened, stream);
-  auto const needles_tdv_ptr    = table_device_view::create(needles_flattened, stream);
-
-  // Insert row indices of the haystack table as map keys.
-  {
-    auto const haystack_it = cudf::detail::make_counting_transform_iterator(
-      size_type{0},
-      [] __device__(auto const idx) { return cuco::make_pair(lhs_index_type{idx}, 0); });
-
-    auto const d_hasher = strong_index_hasher_adapter{
-      row_hash{cudf::nullate::DYNAMIC{has_any_nulls}, *haystack_tdv_ptr}};
-    auto const d_eqcomp =
-      strong_index_comparator_adapter{row_equality{cudf::nullate::DYNAMIC{haystack_has_nulls},
-                                                   *haystack_tdv_ptr,
-                                                   *haystack_tdv_ptr,
-                                                   compare_nulls}};
-
-    // If the haystack table has nulls but they are compared unequal, don't insert them.
-    // Otherwise, it was known to cause performance issue:
-    // - https://github.com/rapidsai/cudf/pull/6943
-    // - https://github.com/rapidsai/cudf/pull/8277
-    if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
-      auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);
-      auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
-
-      // Insert only rows that do not have any null at any level.
-      map.insert_if(haystack_it,
-                    haystack_it + haystack.num_rows(),
-                    thrust::counting_iterator<size_type>(0),  // stencil
-                    row_is_valid{row_bitmask_ptr},
-                    d_hasher,
-                    d_eqcomp,
-                    stream.value());
-
-    } else {  // haystack_doesn't_have_nulls || compare_nulls == null_equality::EQUAL
-      map.insert(
-        haystack_it, haystack_it + haystack.num_rows(), d_hasher, d_eqcomp, stream.value());
-    }
-  }
-
-  // The output vector.
-  auto contained = rmm::device_uvector<bool>(needles.num_rows(), stream, mr);
-
-  // Check existence for each row of the needles table in the haystack table.
-  {
-    auto const needles_it = cudf::detail::make_counting_transform_iterator(
-      size_type{0}, [] __device__(auto const idx) { return rhs_index_type{idx}; });
-
-    auto const d_hasher = strong_index_hasher_adapter{
-      row_hash{cudf::nullate::DYNAMIC{has_any_nulls}, *needles_tdv_ptr}};
-
-    auto const d_eqcomp = strong_index_comparator_adapter{row_equality{
-      cudf::nullate::DYNAMIC{has_any_nulls}, *haystack_tdv_ptr, *needles_tdv_ptr, compare_nulls}};
-
-    map.contains(needles_it,
-                 needles_it + needles.num_rows(),
-                 contained.begin(),
-                 d_hasher,
-                 d_eqcomp,
-                 stream.value());
-  }
-
-  return contained;
 }
 
 }  // namespace
@@ -376,33 +189,107 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                    null_equality compare_nulls,
                                    nan_equality compare_nans,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
-  // Checking for only one table is enough, because both tables will be checked to have the same
-  // shape later during row comparisons.
-  auto const has_lists = std::any_of(haystack.begin(), haystack.end(), [](auto const& col) {
-    return cudf::structs::detail::is_or_has_nested_lists(col);
-  });
+  CUDF_EXPECTS(cudf::have_same_types(haystack, needles), "Column types mismatch");
 
-  if (has_lists || compare_nans == nan_equality::UNEQUAL) {
-    // We must call a separate code path that uses the new experimental row hasher and row
-    // comparator if:
-    //  - The input has lists column, or
-    //  - Floating-point NaNs are compared as unequal.
-    // Inputs with these conditions are supported only by this code path.
-    return contains_with_lists_or_nans(haystack, needles, compare_nulls, compare_nans, stream, mr);
+  auto const haystack_has_nulls = has_nested_nulls(haystack);
+  auto const needles_has_nulls  = has_nested_nulls(needles);
+  auto const has_any_nulls      = haystack_has_nulls || needles_has_nulls;
+
+  auto const preprocessed_needles =
+    cudf::experimental::row::equality::preprocessed_table::create(needles, stream);
+  auto const preprocessed_haystack =
+    cudf::experimental::row::equality::preprocessed_table::create(haystack, stream);
+
+  auto const haystack_hasher   = cudf::experimental::row::hash::row_hasher(preprocessed_haystack);
+  auto const d_haystack_hasher = haystack_hasher.device_hasher(nullate::DYNAMIC{has_any_nulls});
+  auto const needle_hasher     = cudf::experimental::row::hash::row_hasher(preprocessed_needles);
+  auto const d_needle_hasher   = needle_hasher.device_hasher(nullate::DYNAMIC{has_any_nulls});
+  auto const d_hasher          = hasher_adapter{d_haystack_hasher, d_needle_hasher};
+
+  auto const self_equal = cudf::experimental::row::equality::self_comparator(preprocessed_haystack);
+  auto const two_table_equal = cudf::experimental::row::equality::two_table_comparator(
+    preprocessed_haystack, preprocessed_needles);
+
+  // The output vector.
+  auto contained = rmm::device_uvector<bool>(needles.num_rows(), stream, mr);
+
+  auto const haystack_iter = cudf::detail::make_counting_transform_iterator(
+    size_type{0}, cuda::proclaim_return_type<lhs_index_type>([] __device__(auto idx) {
+      return lhs_index_type{idx};
+    }));
+  auto const needles_iter = cudf::detail::make_counting_transform_iterator(
+    size_type{0}, cuda::proclaim_return_type<rhs_index_type>([] __device__(auto idx) {
+      return rhs_index_type{idx};
+    }));
+
+  auto const helper_func =
+    [&](auto const& d_self_equal, auto const& d_two_table_equal, auto const& probing_scheme) {
+      auto const d_equal = comparator_adapter{d_self_equal, d_two_table_equal};
+
+      auto set = cuco::static_set{cuco::extent{compute_hash_table_size(haystack.num_rows())},
+                                  cuco::empty_key{lhs_index_type{-1}},
+                                  d_equal,
+                                  probing_scheme,
+                                  {},
+                                  {},
+                                  cudf::detail::cuco_allocator{stream},
+                                  stream.value()};
+
+      if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
+        auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);
+        auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
+
+        // If the haystack table has nulls but they are compared unequal, don't insert them.
+        // Otherwise, it was known to cause performance issue:
+        // - https://github.com/rapidsai/cudf/pull/6943
+        // - https://github.com/rapidsai/cudf/pull/8277
+        set.insert_if_async(haystack_iter,
+                            haystack_iter + haystack.num_rows(),
+                            thrust::counting_iterator<size_type>(0),  // stencil
+                            row_is_valid{row_bitmask_ptr},
+                            stream.value());
+      } else {
+        set.insert_async(haystack_iter, haystack_iter + haystack.num_rows(), stream.value());
+      }
+
+      if (needles_has_nulls && compare_nulls == null_equality::UNEQUAL) {
+        auto const bitmask_buffer_and_ptr = build_row_bitmask(needles, stream);
+        auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
+        set.contains_if_async(needles_iter,
+                              needles_iter + needles.num_rows(),
+                              thrust::counting_iterator<size_type>(0),  // stencil
+                              row_is_valid{row_bitmask_ptr},
+                              contained.begin(),
+                              stream.value());
+      } else {
+        set.contains_async(
+          needles_iter, needles_iter + needles.num_rows(), contained.begin(), stream.value());
+      }
+    };
+
+  if (cudf::detail::has_nested_columns(haystack)) {
+    dispatch_nan_comparator<true>(compare_nulls,
+                                  compare_nans,
+                                  haystack_has_nulls,
+                                  has_any_nulls,
+                                  self_equal,
+                                  two_table_equal,
+                                  d_hasher,
+                                  helper_func);
+  } else {
+    dispatch_nan_comparator<false>(compare_nulls,
+                                   compare_nans,
+                                   haystack_has_nulls,
+                                   has_any_nulls,
+                                   self_equal,
+                                   two_table_equal,
+                                   d_hasher,
+                                   helper_func);
   }
 
-  // If the input tables don't have lists column and NaNs are compared equal, we rely on the classic
-  // code path that flattens the input tables for row comparisons. This way is known to have
-  // better performance.
-  return contains_without_lists_or_nans(haystack, needles, compare_nulls, stream, mr);
-
-  // Note: We have to keep separate code paths because unifying them will cause performance
-  // regression for the input having no nested lists.
-  //
-  // TODO: We should unify these code paths in the future when performance regression is no longer
-  // happening.
+  return contained;
 }
 
 }  // namespace cudf::detail

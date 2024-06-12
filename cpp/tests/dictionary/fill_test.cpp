@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-#include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/dictionary/encode.hpp>
-#include <cudf/filling.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/dictionary/encode.hpp>
+#include <cudf/filling.hpp>
+#include <cudf/scalar/scalar.hpp>
+
 #include <vector>
 
-struct DictionaryFillTest : public cudf::test::BaseFixture {
-};
+struct DictionaryFillTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryFillTest, StringsColumn)
 {

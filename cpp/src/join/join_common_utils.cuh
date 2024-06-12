@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,12 +20,13 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cub/cub.cuh>
-
 #include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
@@ -76,7 +77,7 @@ class row_is_valid {
  public:
   row_is_valid(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
 
-  __device__ __inline__ bool operator()(const size_type& i) const noexcept
+  __device__ __inline__ bool operator()(size_type const& i) const noexcept
   {
     return cudf::bit_is_set(_row_bitmask, i);
   }
@@ -101,27 +102,31 @@ class row_is_valid {
  *
  * @tparam Comparator The row comparator type to perform row equality comparison from row indices.
  */
-template <typename Comparator = row_equality>
+template <typename DeviceComparator>
 class pair_equality {
  public:
-  pair_equality(table_device_view lhs,
-                table_device_view rhs,
-                nullate::DYNAMIC has_nulls,
-                null_equality nulls_are_equal = null_equality::EQUAL)
-    : _check_row_equality{has_nulls, lhs, rhs, nulls_are_equal}
+  pair_equality(DeviceComparator check_row_equality)
+    : _check_row_equality{std::move(check_row_equality)}
   {
   }
 
-  pair_equality(Comparator const d_eqcomp) : _check_row_equality{std::move(d_eqcomp)} {}
-
+  // The parameters are build/probe rather than left/right because the operator
+  // is called by cuco's kernels with parameters in this order (note that this
+  // is an implementation detail that we should eventually stop relying on by
+  // defining operators with suitable heterogeneous typing). Rather than
+  // converting to left/right semantics, we can operate directly on build/probe
   template <typename LhsPair, typename RhsPair>
   __device__ __forceinline__ bool operator()(LhsPair const& lhs, RhsPair const& rhs) const noexcept
   {
-    return lhs.first == rhs.first and _check_row_equality(rhs.second, lhs.second);
+    using experimental::row::lhs_index_type;
+    using experimental::row::rhs_index_type;
+
+    return lhs.first == rhs.first and
+           _check_row_equality(lhs_index_type{rhs.second}, rhs_index_type{lhs.second});
   }
 
  private:
-  Comparator _check_row_equality;
+  DeviceComparator _check_row_equality;
 };
 
 /**
@@ -140,10 +145,9 @@ class pair_equality {
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-get_trivial_left_join_indices(
-  table_view const& left,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+get_trivial_left_join_indices(table_view const& left,
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr);
 
 /**
  * @brief Builds the hash table based on the given `build_table`.
@@ -151,31 +155,37 @@ get_trivial_left_join_indices(
  * @tparam MultimapType The type of the hash table
  *
  * @param build Table of columns used to build join hash.
+ * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table for
+ *                           build
  * @param hash_table Build hash table.
+ * @param has_nulls Flag to denote if build or probe tables have nested nulls
  * @param nulls_equal Flag to denote nulls are equal or not.
  * @param bitmask Bitmask to denote whether a row is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  */
 template <typename MultimapType>
-void build_join_hash_table(cudf::table_view const& build,
-                           MultimapType& hash_table,
-                           null_equality const nulls_equal,
-                           [[maybe_unused]] bitmask_type const* bitmask,
-                           rmm::cuda_stream_view stream)
+void build_join_hash_table(
+  cudf::table_view const& build,
+  std::shared_ptr<experimental::row::equality::preprocessed_table> const& preprocessed_build,
+  MultimapType& hash_table,
+  bool has_nulls,
+  null_equality nulls_equal,
+  [[maybe_unused]] bitmask_type const* bitmask,
+  rmm::cuda_stream_view stream)
 {
-  auto build_table_ptr = cudf::table_device_view::create(build, stream);
+  CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty");
+  CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows");
 
-  CUDF_EXPECTS(0 != build_table_ptr->num_columns(), "Selected build dataset is empty");
-  CUDF_EXPECTS(0 != build_table_ptr->num_rows(), "Build side table has no rows");
+  auto const row_hash   = experimental::row::hash::row_hasher{preprocessed_build};
+  auto const hash_build = row_hash.device_hasher(nullate::DYNAMIC{has_nulls});
 
-  row_hash hash_build{nullate::DYNAMIC{cudf::has_nulls(build)}, *build_table_ptr};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_build, empty_key_sentinel};
 
-  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
+  auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
-  size_type const build_table_num_rows{build_table_ptr->num_rows()};
+  size_type const build_table_num_rows{build.num_rows()};
   if (nulls_equal == cudf::null_equality::EQUAL or (not nullable(build))) {
     hash_table.insert(iter, iter + build_table_num_rows, stream.value());
   } else {
@@ -236,7 +246,7 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
                                  size_type left_table_row_count,
                                  size_type right_table_row_count,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr);
+                                 rmm::device_async_resource_ref mr);
 
 /**
  * @brief Device functor to determine if an index is contained in a range.
@@ -244,9 +254,9 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
 template <typename T>
 struct valid_range {
   T start, stop;
-  __host__ __device__ valid_range(const T begin, const T end) : start(begin), stop(end) {}
+  __host__ __device__ valid_range(T const begin, T const end) : start(begin), stop(end) {}
 
-  __host__ __device__ __forceinline__ bool operator()(const T index)
+  __host__ __device__ __forceinline__ bool operator()(T const index)
   {
     return ((index >= start) && (index < stop));
   }
@@ -263,25 +273,34 @@ struct valid_range {
  * @param[out] joined_shared_l Pointer to the shared memory cache for left indices
  * @param[out] joined_shared_r Pointer to the shared memory cache for right indices
  */
-__inline__ __device__ void add_pair_to_cache(const size_type first,
-                                             const size_type second,
+__inline__ __device__ void add_pair_to_cache(size_type const first,
+                                             size_type const second,
                                              size_type* current_idx_shared,
-                                             const int warp_id,
+                                             int const warp_id,
                                              size_type* joined_shared_l,
                                              size_type* joined_shared_r)
 {
   size_type my_current_idx{atomicAdd(current_idx_shared + warp_id, size_type(1))};
-
   // its guaranteed to fit into the shared cache
   joined_shared_l[my_current_idx] = first;
   joined_shared_r[my_current_idx] = second;
 }
 
+__inline__ __device__ void add_left_to_cache(size_type const first,
+                                             size_type* current_idx_shared,
+                                             int const warp_id,
+                                             size_type* joined_shared_l)
+{
+  size_type my_current_idx{atomicAdd(current_idx_shared + warp_id, size_type(1))};
+
+  joined_shared_l[my_current_idx] = first;
+}
+
 template <int num_warps, cudf::size_type output_cache_size>
-__device__ void flush_output_cache(const unsigned int activemask,
-                                   const cudf::size_type max_size,
-                                   const int warp_id,
-                                   const int lane_id,
+__device__ void flush_output_cache(unsigned int const activemask,
+                                   cudf::size_type const max_size,
+                                   int const warp_id,
+                                   int const lane_id,
                                    cudf::size_type* current_idx,
                                    cudf::size_type current_idx_shared[num_warps],
                                    size_type join_shared_l[num_warps][output_cache_size],
@@ -290,7 +309,7 @@ __device__ void flush_output_cache(const unsigned int activemask,
                                    size_type* join_output_r)
 {
   // count how many active threads participating here which could be less than warp_size
-  int num_threads               = __popc(activemask);
+  int const num_threads         = __popc(activemask);
   cudf::size_type output_offset = 0;
 
   if (0 == lane_id) { output_offset = atomicAdd(current_idx, current_idx_shared[warp_id]); }
@@ -308,6 +327,32 @@ __device__ void flush_output_cache(const unsigned int activemask,
     if (thread_offset < max_size) {
       join_output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
       join_output_r[thread_offset] = join_shared_r[warp_id][shared_out_idx];
+    }
+  }
+}
+
+template <int num_warps, cudf::size_type output_cache_size>
+__device__ void flush_output_cache(unsigned int const activemask,
+                                   cudf::size_type const max_size,
+                                   int const warp_id,
+                                   int const lane_id,
+                                   cudf::size_type* current_idx,
+                                   cudf::size_type current_idx_shared[num_warps],
+                                   size_type join_shared_l[num_warps][output_cache_size],
+                                   size_type* join_output_l)
+{
+  int const num_threads         = __popc(activemask);
+  cudf::size_type output_offset = 0;
+
+  if (0 == lane_id) { output_offset = atomicAdd(current_idx, current_idx_shared[warp_id]); }
+
+  output_offset = cub::ShuffleIndex<detail::warp_size>(output_offset, 0, activemask);
+
+  for (int shared_out_idx = lane_id; shared_out_idx < current_idx_shared[warp_id];
+       shared_out_idx += num_threads) {
+    cudf::size_type thread_offset = output_offset + shared_out_idx;
+    if (thread_offset < max_size) {
+      join_output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
     }
   }
 }

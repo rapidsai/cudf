@@ -1,9 +1,9 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 """Define an interface for columns that can perform numerical operations."""
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Optional, cast
 
 import numpy as np
 
@@ -40,16 +40,16 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         "cummax",
     }
 
-    def _can_return_nan(self, skipna: bool = None) -> bool:
+    def _can_return_nan(self, skipna: Optional[bool] = None) -> bool:
         return not skipna and self.has_nulls()
 
-    def kurtosis(self, skipna: bool = None) -> float:
+    def kurtosis(self, skipna: Optional[bool] = None) -> float:
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-        self = self.nans_to_nulls().dropna()  # type: ignore
+        self = self.nans_to_nulls().dropna()
 
         if len(self) < 4:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
@@ -68,13 +68,13 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
 
-    def skew(self, skipna: bool = None) -> ScalarLike:
+    def skew(self, skipna: Optional[bool] = None) -> ScalarLike:
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-        self = self.nans_to_nulls().dropna()  # type: ignore
+        self = self.nans_to_nulls().dropna()
 
         if len(self) < 3:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
@@ -112,9 +112,25 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 ),
             )
         else:
-            result = self._numeric_quantile(q, interpolation, exact)
+            # get sorted indices and exclude nulls
+            indices = libcudf.sort.order_by(
+                [self], [True], "first", stable=True
+            ).slice(self.null_count, len(self))
+            result = libcudf.quantiles.quantile(
+                self, q, interpolation, indices, exact
+            )
         if return_scalar:
             scalar_result = result.element_indexing(0)
+            if interpolation in {"lower", "higher", "nearest"}:
+                try:
+                    new_scalar = self.dtype.type(scalar_result)
+                    scalar_result = (
+                        new_scalar
+                        if new_scalar == scalar_result
+                        else scalar_result
+                    )
+                except (TypeError, ValueError):
+                    pass
             return (
                 cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
                 if scalar_result is NA
@@ -122,26 +138,39 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             )
         return result
 
-    def mean(self, skipna: bool = None, min_count: int = 0, dtype=np.float64):
+    def mean(
+        self,
+        skipna: Optional[bool] = None,
+        min_count: int = 0,
+        dtype=np.float64,
+    ):
         return self._reduce(
             "mean", skipna=skipna, min_count=min_count, dtype=dtype
         )
 
     def var(
-        self, skipna: bool = None, min_count: int = 0, dtype=np.float64, ddof=1
+        self,
+        skipna: Optional[bool] = None,
+        min_count: int = 0,
+        dtype=np.float64,
+        ddof=1,
     ):
         return self._reduce(
             "var", skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
         )
 
     def std(
-        self, skipna: bool = None, min_count: int = 0, dtype=np.float64, ddof=1
+        self,
+        skipna: Optional[bool] = None,
+        min_count: int = 0,
+        dtype=np.float64,
+        ddof=1,
     ):
         return self._reduce(
             "std", skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
         )
 
-    def median(self, skipna: bool = None) -> NumericalBaseColumn:
+    def median(self, skipna: Optional[bool] = None) -> NumericalBaseColumn:
         skipna = True if skipna is None else skipna
 
         if self._can_return_nan(skipna=skipna):
@@ -153,21 +182,6 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             interpolation="linear",
             exact=True,
             return_scalar=True,
-        )
-
-    def _numeric_quantile(
-        self, q: np.ndarray, interpolation: str, exact: bool
-    ) -> NumericalBaseColumn:
-        # get sorted indices and exclude nulls
-        sorted_indices = self.as_frame()._get_sorted_inds(
-            ascending=True, na_position="first"
-        )
-        sorted_indices = sorted_indices.slice(
-            self.null_count, len(sorted_indices)
-        )
-
-        return libcudf.quantiles.quantile(
-            self, q, interpolation, sorted_indices, exact
         )
 
     def cov(self, other: NumericalBaseColumn) -> float:
@@ -196,6 +210,8 @@ class NumericalBaseColumn(ColumnBase, Scannable):
     def round(
         self, decimals: int = 0, how: str = "half_even"
     ) -> NumericalBaseColumn:
+        if not cudf.api.types.is_integer(decimals):
+            raise TypeError("Values in decimals must be integers")
         """Round the values in the Column to the given number of decimals."""
         return libcudf.round.round(self, decimal_places=decimals, how=how)
 

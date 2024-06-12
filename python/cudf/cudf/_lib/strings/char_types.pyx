@@ -1,21 +1,25 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+from cudf.core.buffer import acquire_spill_lock
+
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
-from cudf._lib.cpp.strings.char_types cimport (
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from cudf._lib.pylibcudf.libcudf.strings.char_types cimport (
     all_characters_of_type as cpp_all_characters_of_type,
     filter_characters_of_type as cpp_filter_characters_of_type,
-    string_character_types as string_character_types,
+    string_character_types,
 )
 from cudf._lib.scalar cimport DeviceScalar
 
 
+@acquire_spill_lock()
 def filter_alphanum(Column source_strings, object py_repl, bool keep=True):
     """
     Returns a Column of strings keeping only alphanumeric character types.
@@ -42,6 +46,7 @@ def filter_alphanum(Column source_strings, object py_repl, bool keep=True):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def is_decimal(Column source_strings):
     """
     Returns a Column of boolean values with True for `source_strings`
@@ -61,10 +66,11 @@ def is_decimal(Column source_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def is_alnum(Column source_strings):
     """
     Returns a Column of boolean values with True for `source_strings`
-    that contain only alpha-numeric characters.
+    that contain only alphanumeric characters.
 
     Equivalent to: is_alpha() or is_digit() or is_numeric() or is_decimal()
     """
@@ -81,6 +87,7 @@ def is_alnum(Column source_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def is_alpha(Column source_strings):
     """
     Returns a Column of boolean values with True for `source_strings`
@@ -99,6 +106,7 @@ def is_alpha(Column source_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def is_digit(Column source_strings):
     """
     Returns a Column of boolean values with True for `source_strings`
@@ -117,6 +125,7 @@ def is_digit(Column source_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def is_numeric(Column source_strings):
     """
     Returns a Column of boolean values with True for `source_strings`
@@ -136,6 +145,7 @@ def is_numeric(Column source_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def is_upper(Column source_strings):
     """
     Returns a Column of boolean values with True for `source_strings`
@@ -154,6 +164,7 @@ def is_upper(Column source_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def is_lower(Column source_strings):
     """
     Returns a Column of boolean values with True for `source_strings`
@@ -172,6 +183,7 @@ def is_lower(Column source_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def is_space(Column source_strings):
     """
     Returns a Column of boolean values with True for `source_strings`

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@
 #include "in_reg_array.cuh"
 
 #include <cub/cub.cuh>
-
 #include <thrust/execution_policy.h>
 #include <thrust/sequence.h>
 
@@ -83,16 +82,21 @@ class DFASimulationCallbackWrapper {
     if (!write) out_count = 0;
   }
 
-  template <typename CharIndexT, typename StateIndexT, typename SymbolIndexT>
+  template <typename CharIndexT, typename StateIndexT, typename SymbolIndexT, typename SymbolT>
   __host__ __device__ __forceinline__ void ReadSymbol(CharIndexT const character_index,
                                                       StateIndexT const old_state,
                                                       StateIndexT const new_state,
-                                                      SymbolIndexT const symbol_id)
+                                                      SymbolIndexT const symbol_id,
+                                                      SymbolT const read_symbol)
   {
-    uint32_t const count = transducer_table(old_state, symbol_id);
+    uint32_t const count = transducer_table(old_state, symbol_id, read_symbol);
     if (write) {
+#if defined(__CUDA_ARCH__)
+#pragma unroll 1
+#endif
       for (uint32_t out_char = 0; out_char < count; out_char++) {
-        out_it[out_count + out_char]     = transducer_table(old_state, symbol_id, out_char);
+        out_it[out_count + out_char] =
+          transducer_table(old_state, symbol_id, out_char, read_symbol);
         out_idx_it[out_count + out_char] = offset + character_index;
       }
     }
@@ -127,9 +131,10 @@ class StateVectorTransitionOp {
   {
   }
 
-  template <typename CharIndexT, typename SymbolIndexT>
+  template <typename CharIndexT, typename SymbolIndexT, typename SymbolT>
   __host__ __device__ __forceinline__ void ReadSymbol(CharIndexT const& character_index,
-                                                      SymbolIndexT const read_symbol_id) const
+                                                      SymbolIndexT const& read_symbol_id,
+                                                      SymbolT const& read_symbol) const
   {
     for (int32_t i = 0; i < NUM_INSTANCES; ++i) {
       state_vector[i] = transition_table(state_vector[i], read_symbol_id);
@@ -154,15 +159,16 @@ struct StateTransitionOp {
   {
   }
 
-  template <typename CharIndexT, typename SymbolIndexT>
+  template <typename CharIndexT, typename SymbolIndexT, typename SymbolT>
   __host__ __device__ __forceinline__ void ReadSymbol(CharIndexT const& character_index,
-                                                      SymbolIndexT const& read_symbol_id)
+                                                      SymbolIndexT const& read_symbol_id,
+                                                      SymbolT const& read_symbol)
   {
     // Remember what state we were in before we made the transition
     StateIndexT previous_state = state;
 
     state = transition_table(state, read_symbol_id);
-    callback_op.ReadSymbol(character_index, previous_state, state, read_symbol_id);
+    callback_op.ReadSymbol(character_index, previous_state, state, read_symbol_id, read_symbol);
   }
 };
 
@@ -200,8 +206,7 @@ struct AgentDFA {
     };
   };
 
-  struct TempStorage : cub::Uninitialized<_TempStorage> {
-  };
+  struct TempStorage : cub::Uninitialized<_TempStorage> {};
 
   //------------------------------------------------------------------------------
   // MEMBER VARIABLES
@@ -231,7 +236,7 @@ struct AgentDFA {
     for (int32_t i = 0; i < NUM_SYMBOLS; ++i) {
       if (IS_FULL_BLOCK || threadIdx.x * SYMBOLS_PER_THREAD + i < max_num_chars) {
         auto matched_id = symbol_matcher(chars[i]);
-        callback_op.ReadSymbol(i, matched_id);
+        callback_op.ReadSymbol(i, matched_id, chars[i]);
       }
     }
   }
@@ -254,7 +259,8 @@ struct AgentDFA {
   //---------------------------------------------------------------------
   // LOADING FULL BLOCK OF CHARACTERS, NON-ALIASED
   //---------------------------------------------------------------------
-  __device__ __forceinline__ void LoadBlock(CharT const* d_chars,
+  template <typename CharInItT>
+  __device__ __forceinline__ void LoadBlock(CharInItT d_chars,
                                             OffsetT const block_offset,
                                             OffsetT const num_total_symbols,
                                             cub::Int2Type<true> /*IS_FULL_BLOCK*/,
@@ -262,7 +268,7 @@ struct AgentDFA {
   {
     CharT thread_chars[SYMBOLS_PER_THREAD];
 
-    CharT const* d_block_symbols = d_chars + block_offset;
+    CharInItT d_block_symbols = d_chars + block_offset;
     cub::LoadDirectStriped<BLOCK_THREADS>(threadIdx.x, d_block_symbols, thread_chars);
 
 #pragma unroll
@@ -274,7 +280,8 @@ struct AgentDFA {
   //---------------------------------------------------------------------
   // LOADING PARTIAL BLOCK OF CHARACTERS, NON-ALIASED
   //---------------------------------------------------------------------
-  __device__ __forceinline__ void LoadBlock(CharT const* d_chars,
+  template <typename CharInItT>
+  __device__ __forceinline__ void LoadBlock(CharInItT d_chars,
                                             OffsetT const block_offset,
                                             OffsetT const num_total_symbols,
                                             cub::Int2Type<false> /*IS_FULL_BLOCK*/,
@@ -287,7 +294,7 @@ struct AgentDFA {
     // Last unit to be loaded is IDIV_CEIL(#SYM, SYMBOLS_PER_UNIT)
     OffsetT num_total_chars = num_total_symbols - block_offset;
 
-    CharT const* d_block_symbols = d_chars + block_offset;
+    CharInItT d_block_symbols = d_chars + block_offset;
     cub::LoadDirectStriped<BLOCK_THREADS>(
       threadIdx.x, d_block_symbols, thread_chars, num_total_chars);
 
@@ -354,7 +361,7 @@ struct AgentDFA {
                                             OffsetT const num_total_symbols)
   {
     // Check if pointer is aligned to four bytes
-    if (((uintptr_t)(const void*)(d_chars + block_offset) % 4) == 0) {
+    if (((uintptr_t)(void const*)(d_chars + block_offset) % 4) == 0) {
       if (block_offset + SYMBOLS_PER_UINT_BLOCK < num_total_symbols) {
         LoadBlock(
           d_chars, block_offset, num_total_symbols, cub::Int2Type<true>(), cub::Int2Type<4>());
@@ -373,11 +380,26 @@ struct AgentDFA {
     }
   }
 
+  template <typename CharInItT>
+  __device__ __forceinline__ void LoadBlock(CharInItT d_chars,
+                                            OffsetT const block_offset,
+                                            OffsetT const num_total_symbols)
+  {
+    // Check if we are loading a full tile of data
+    if (block_offset + SYMBOLS_PER_UINT_BLOCK < num_total_symbols) {
+      LoadBlock(
+        d_chars, block_offset, num_total_symbols, cub::Int2Type<true>(), cub::Int2Type<1>());
+    } else {
+      LoadBlock(
+        d_chars, block_offset, num_total_symbols, cub::Int2Type<false>(), cub::Int2Type<1>());
+    }
+  }
+
   template <int32_t NUM_STATES, typename SymbolMatcherT, typename TransitionTableT>
   __device__ __forceinline__ void GetThreadStateTransitionVector(
     SymbolMatcherT const& symbol_matcher,
     TransitionTableT const& transition_table,
-    CharT const* d_chars,
+    SymbolItT d_chars,
     OffsetT const block_offset,
     OffsetT const num_total_symbols,
     std::array<StateIndexT, NUM_STATES>& state_vector)
@@ -417,7 +439,7 @@ struct AgentDFA {
   __device__ __forceinline__ void GetThreadStateTransitions(
     SymbolMatcherT const& symbol_matcher,
     TransitionTableT const& transition_table,
-    CharT const* d_chars,
+    SymbolItT d_chars,
     OffsetT const block_offset,
     OffsetT const num_total_symbols,
     StateIndexT& state,
@@ -470,7 +492,7 @@ template <bool IS_TRANS_VECTOR_PASS,
           typename TransducedOutItT,
           typename TransducedIndexOutItT,
           typename TransducedCountOutItT>
-__launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
+__launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
   void SimulateDFAKernel(DfaT dfa,
                          SymbolItT d_chars,
                          OffsetT const num_chars,

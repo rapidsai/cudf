@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/ast/detail/expression_parser.hpp>
+#include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -52,7 +53,31 @@ cudf::size_type operation::accept(detail::expression_parser& visitor) const
 {
   return visitor.visit(*this);
 }
+cudf::size_type column_name_reference::accept(detail::expression_parser& visitor) const
+{
+  return visitor.visit(*this);
+}
 
+auto literal::accept(detail::expression_transformer& visitor) const
+  -> decltype(visitor.visit(*this))
+{
+  return visitor.visit(*this);
+}
+auto column_reference::accept(detail::expression_transformer& visitor) const
+  -> decltype(visitor.visit(*this))
+{
+  return visitor.visit(*this);
+}
+auto operation::accept(detail::expression_transformer& visitor) const
+  -> decltype(visitor.visit(*this))
+{
+  return visitor.visit(*this);
+}
+auto column_name_reference::accept(detail::expression_transformer& visitor) const
+  -> decltype(visitor.visit(*this))
+{
+  return visitor.visit(*this);
+}
 }  // namespace ast
 
 }  // namespace cudf

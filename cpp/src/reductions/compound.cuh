@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,13 @@
 
 #pragma once
 
-#include <cudf/detail/reduction.cuh>
 #include <cudf/dictionary/detail/iterator.cuh>
+#include <cudf/reduction/detail/reduction.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -46,9 +48,9 @@ namespace detail {
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> compound_reduction(column_view const& col,
                                            data_type const output_dtype,
-                                           cudf::size_type ddof,
+                                           size_type ddof,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   auto const valid_count = col.size() - col.null_count();
 
@@ -99,9 +101,9 @@ struct result_type_dispatcher {
   template <typename ResultType, std::enable_if_t<is_supported_v<ResultType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
-                                     cudf::size_type ddof,
+                                     size_type ddof,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return compound_reduction<ElementType, ResultType, Op>(col, output_dtype, ddof, stream, mr);
   }
@@ -109,9 +111,9 @@ struct result_type_dispatcher {
   template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
-                                     cudf::size_type ddof,
+                                     size_type ddof,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     CUDF_FAIL("Unsupported output data type");
   }
@@ -132,9 +134,9 @@ struct element_type_dispatcher {
   template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
-                                     cudf::size_type ddof,
+                                     size_type ddof,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return cudf::type_dispatcher(
       output_dtype, result_type_dispatcher<ElementType, Op>(), col, output_dtype, ddof, stream, mr);
@@ -143,9 +145,9 @@ struct element_type_dispatcher {
   template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
-                                     cudf::size_type ddof,
+                                     size_type ddof,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     CUDF_FAIL(
       "Reduction operators other than `min` and `max`"

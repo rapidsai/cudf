@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +27,6 @@ namespace cudf {
  * @brief A non-owning, immutable view of device data that represents
  * a list of elements of arbitrary type (including further nested lists).
  */
-class list_view {
-};
+class list_view {};
 
 }  // namespace cudf

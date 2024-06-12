@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 
 import pandas as pd
@@ -52,7 +52,15 @@ def test_to_pandas_simple(simple_data):
     Test that a ColumnAccessor converts to a correct pd.Index
     """
     ca = ColumnAccessor(simple_data)
-    assert_eq(ca.to_pandas_index(), pd.DataFrame(simple_data).columns)
+    # We cannot return RangeIndex, while pandas returns RangeIndex.
+    # Pandas compares `inferred_type` which is `empty` for
+    # Index([], dtype='object'), and `integer` for RangeIndex()
+    # to ignore this `inferred_type` comparison, we pass exact=False.
+    assert_eq(
+        ca.to_pandas_index(),
+        pd.DataFrame(simple_data).columns,
+        exact=False,
+    )
 
 
 def test_to_pandas_multiindex(mi_data):
@@ -285,3 +293,17 @@ def test_replace_level_values_MultiColumn():
 
     got = ca.rename_levels(mapper={"a": "f"}, level=0)
     check_ca_equal(expect, got)
+
+
+def test_clear_nrows_empty_before():
+    ca = ColumnAccessor({})
+    assert ca.nrows == 0
+    ca.insert("new", [1])
+    assert ca.nrows == 1
+
+
+def test_clear_nrows_empty_after():
+    ca = ColumnAccessor({"new": [1]})
+    assert ca.nrows == 1
+    del ca["new"]
+    assert ca.nrows == 0

@@ -1,12 +1,11 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-import numpy as np
 from numba.np import numpy_support
 
 import cudf
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 from cudf.core._internals.expressions import parse_expression
-from cudf.core.buffer import as_device_buffer_like
+from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.utils import cudautils
 
 from cython.operator cimport dereference
@@ -18,53 +17,59 @@ from libcpp.utility cimport move
 
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
-cimport cudf._lib.cpp.transform as libcudf_transform
+cimport cudf._lib.pylibcudf.libcudf.transform as libcudf_transform
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.expressions cimport expression
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type, type_id
 from cudf._lib.expressions cimport Expression
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.expressions cimport expression
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.types cimport (
+    bitmask_type,
+    data_type,
+    size_type,
+    type_id,
+)
 from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.utils cimport (
     columns_from_unique_ptr,
     data_from_table_view,
-    data_from_unique_ptr,
     table_view_from_columns,
-    table_view_from_table,
 )
 
 
+@acquire_spill_lock()
 def bools_to_mask(Column col):
     """
     Given an int8 (boolean) column, compress the data from booleans to bits and
-    return a DeviceBufferLike
+    return a Buffer
     """
     cdef column_view col_view = col.view()
     cdef pair[unique_ptr[device_buffer], size_type] cpp_out
     cdef unique_ptr[device_buffer] up_db
-    cdef size_type null_count
 
     with nogil:
         cpp_out = move(libcudf_transform.bools_to_mask(col_view))
         up_db = move(cpp_out.first)
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = as_device_buffer_like(rmm_db)
+    buf = as_buffer(rmm_db)
     return buf
 
 
+@acquire_spill_lock()
 def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     """
     Given a mask buffer, returns a boolean column representng bit 0 -> False
     and 1 -> True within range of [begin_bit, end_bit),
     """
-    if not isinstance(mask_buffer, cudf.core.buffer.DeviceBufferLike):
+    if not isinstance(mask_buffer, cudf.core.buffer.Buffer):
         raise TypeError("mask_buffer is not an instance of "
-                        "cudf.core.buffer.DeviceBufferLike")
-    cdef bitmask_type* bit_mask = <bitmask_type*><uintptr_t>(mask_buffer.ptr)
+                        "cudf.core.buffer.Buffer")
+    cdef bitmask_type* bit_mask = <bitmask_type*><uintptr_t>(
+        mask_buffer.get_ptr(mode="read")
+    )
 
     cdef unique_ptr[column] result
     with nogil:
@@ -75,6 +80,7 @@ def mask_to_bools(object mask_buffer, size_type begin_bit, size_type end_bit):
     return Column.from_unique_ptr(move(result))
 
 
+@acquire_spill_lock()
 def nans_to_nulls(Column input):
     cdef column_view c_input = input.view()
     cdef pair[unique_ptr[device_buffer], size_type] c_output
@@ -87,11 +93,10 @@ def nans_to_nulls(Column input):
     if c_output.second == 0:
         return None
 
-    buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
-    buffer = as_device_buffer_like(buffer)
-    return buffer
+    return as_buffer(DeviceBuffer.c_from_unique_ptr(move(c_buffer)))
 
 
+@acquire_spill_lock()
 def transform(Column input, op):
     cdef column_view c_input = input.view()
     cdef string c_str
@@ -136,8 +141,10 @@ def table_encode(list source_columns):
     with nogil:
         c_result = move(libcudf_transform.encode(c_input))
 
-    return columns_from_unique_ptr(
-        move(c_result.first)), Column.from_unique_ptr(move(c_result.second))
+    return (
+        columns_from_unique_ptr(move(c_result.first)),
+        Column.from_unique_ptr(move(c_result.second))
+    )
 
 
 def one_hot_encode(Column input_column, Column categories):
@@ -150,20 +157,24 @@ def one_hot_encode(Column input_column, Column categories):
             libcudf_transform.one_hot_encode(c_view_input, c_view_categories)
         )
 
-    owner = Column.from_unique_ptr(move(c_result.first))
+    # Notice, the data pointer of `owner` has been exposed
+    # through `c_result.second` at this point.
+    owner = Column.from_unique_ptr(
+        move(c_result.first), data_ptr_exposed=True
+    )
 
     pylist_categories = categories.to_arrow().to_pylist()
     encodings, _ = data_from_table_view(
         move(c_result.second),
         owner=owner,
         column_names=[
-            x if x is not None else 'null' for x in pylist_categories
+            x if x is not None else '<NA>' for x in pylist_categories
         ]
     )
-
     return encodings
 
 
+@acquire_spill_lock()
 def compute_column(list columns, tuple column_names, expr: str):
     """Compute a new column by evaluating an expression on a set of columns.
 

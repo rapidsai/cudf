@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/type_lists.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -55,8 +55,8 @@ constexpr cudf::size_type JoinNoneValue =
   std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
 
 // Common column references.
-const auto col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
-const auto col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+auto const col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+auto const col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
 
 // Common expressions.
 auto left_zero_eq_right_zero =
@@ -138,13 +138,13 @@ struct index_pair {
     : first(first), second(second){};
 };
 
-__device__ inline bool operator<(const index_pair& lhs, const index_pair& rhs)
+__device__ inline bool operator<(index_pair const& lhs, index_pair const& rhs)
 {
   if (lhs.first > rhs.first) return false;
   return (lhs.first < rhs.first) || (lhs.second < rhs.second);
 }
 
-__device__ inline bool operator==(const index_pair& lhs, const index_pair& rhs)
+__device__ inline bool operator==(index_pair const& lhs, index_pair const& rhs)
 {
   return lhs.first == rhs.first && lhs.second == rhs.second;
 }

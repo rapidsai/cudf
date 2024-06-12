@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,9 @@
 
 #include "avro.hpp"
 #include "avro_gpu.hpp"
-
-#include <io/comp/gpuinflate.hpp>
-#include <io/utilities/column_buffer.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
+#include "io/comp/gpuinflate.hpp"
+#include "io/utilities/column_buffer.hpp"
+#include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -34,6 +33,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/equal.h>
 #include <thrust/functional.h>
@@ -66,15 +66,42 @@ namespace {
  */
 type_id to_type_id(avro::schema_entry const* col)
 {
-  switch (col->kind) {
+  avro::type_kind_e kind;
+
+  // N.B. The switch statement seems a bit ridiculous for a single type, but the
+  //      plan is to incrementally add more types to it as support is added for
+  //      them in the future.
+  switch (col->logical_kind) {
+    case avro::logicaltype_date: kind = static_cast<avro::type_kind_e>(col->logical_kind); break;
+    case avro::logicaltype_not_set: [[fallthrough]];
+    default: kind = col->kind; break;
+  }
+
+  switch (kind) {
     case avro::type_boolean: return type_id::BOOL8;
     case avro::type_int: return type_id::INT32;
     case avro::type_long: return type_id::INT64;
     case avro::type_float: return type_id::FLOAT32;
     case avro::type_double: return type_id::FLOAT64;
-    case avro::type_bytes:
+    case avro::type_bytes: [[fallthrough]];
     case avro::type_string: return type_id::STRING;
+    case avro::type_date: return type_id::TIMESTAMP_DAYS;
+    case avro::type_timestamp_millis: return type_id::TIMESTAMP_MILLISECONDS;
+    case avro::type_timestamp_micros: return type_id::TIMESTAMP_MICROSECONDS;
+    case avro::type_local_timestamp_millis: return type_id::TIMESTAMP_MILLISECONDS;
+    case avro::type_local_timestamp_micros: return type_id::TIMESTAMP_MICROSECONDS;
     case avro::type_enum: return (!col->symbols.empty()) ? type_id::STRING : type_id::INT32;
+    // The avro time-millis and time-micros types are closest to Arrow's
+    // TIME32 and TIME64.  They're single-day units, i.e. they won't exceed
+    // 23:59:59.9999 (or .999999 for micros).  There's no equivalent cudf
+    // type for this; type_id::DURATION_MILLISECONDS/MICROSECONDS are close,
+    // but they're not semantically the same.
+    case avro::type_time_millis: [[fallthrough]];
+    case avro::type_time_micros: [[fallthrough]];
+    // There's no cudf equivalent for the avro duration type, which is a fixed
+    // 12 byte value which stores three little-endian unsigned 32-bit integers
+    // representing months, days, and milliseconds, respectively.
+    case avro::type_duration: [[fallthrough]];
     default: return type_id::EMPTY;
   }
 }
@@ -95,7 +122,7 @@ class metadata : public file_metadata {
    * @param[in,out] row_start Starting row of the selection
    * @param[in,out] row_count Total number of rows selected
    */
-  void init_and_select_rows(int& row_start, int& row_count)
+  void init_and_select_rows(size_type& row_start, size_type& row_count)
   {
     auto const buffer = source->host_read(0, source->size());
     avro::container pod(buffer->data(), buffer->size());
@@ -141,6 +168,7 @@ class metadata : public file_metadata {
             break;
           }
         }
+
         if (!column_in_array) {
           auto col_type = to_type_id(&schema[columns[i].schema_data_idx]);
           CUDF_EXPECTS(col_type != type_id::EMPTY, "Unsupported data type");
@@ -162,9 +190,12 @@ rmm::device_buffer decompress_data(datasource& source,
                                    rmm::cuda_stream_view stream)
 {
   if (meta.codec == "deflate") {
-    auto inflate_in = hostdevice_vector<device_span<uint8_t const>>(meta.block_list.size(), stream);
-    auto inflate_out   = hostdevice_vector<device_span<uint8_t>>(meta.block_list.size(), stream);
-    auto inflate_stats = hostdevice_vector<compression_result>(meta.block_list.size(), stream);
+    auto inflate_in =
+      cudf::detail::hostdevice_vector<device_span<uint8_t const>>(meta.block_list.size(), stream);
+    auto inflate_out =
+      cudf::detail::hostdevice_vector<device_span<uint8_t>>(meta.block_list.size(), stream);
+    auto inflate_stats =
+      cudf::detail::hostdevice_vector<compression_result>(meta.block_list.size(), stream);
     thrust::fill(rmm::exec_policy(stream),
                  inflate_stats.d_begin(),
                  inflate_stats.d_end(),
@@ -182,7 +213,7 @@ rmm::device_buffer decompress_data(datasource& source,
       auto const src_pos = meta.block_list[i].offset - base_offset;
 
       inflate_in[i]  = {static_cast<uint8_t const*>(comp_block_data.data()) + src_pos,
-                       meta.block_list[i].size};
+                        meta.block_list[i].size};
       inflate_out[i] = {static_cast<uint8_t*>(decomp_block_data.data()) + dst_pos, initial_blk_len};
 
       // Update blocks offsets & sizes to refer to uncompressed data
@@ -190,12 +221,12 @@ rmm::device_buffer decompress_data(datasource& source,
       meta.block_list[i].size   = static_cast<uint32_t>(inflate_out[i].size());
       dst_pos += meta.block_list[i].size;
     }
-    inflate_in.host_to_device(stream);
+    inflate_in.host_to_device_async(stream);
 
     for (int loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
-      inflate_out.host_to_device(stream);
+      inflate_out.host_to_device_async(stream);
       gpuinflate(inflate_in, inflate_out, inflate_stats, gzip_header_included::NO, stream);
-      inflate_stats.device_to_host(stream, true);
+      inflate_stats.device_to_host_sync(stream);
 
       // Check if larger output is required, as it's not known ahead of time
       if (loop_cnt == 0) {
@@ -239,7 +270,7 @@ rmm::device_buffer decompress_data(datasource& source,
     // file header. meta.block_list[i].offset refers to offset of block i in the file, including
     // file header.
     // Find ptrs to each compressed block in comp_block_data by removing header offset.
-    hostdevice_vector<void const*> compressed_data_ptrs(num_blocks, stream);
+    cudf::detail::hostdevice_vector<void const*> compressed_data_ptrs(num_blocks, stream);
     std::transform(meta.block_list.begin(),
                    meta.block_list.end(),
                    compressed_data_ptrs.host_ptr(),
@@ -247,16 +278,16 @@ rmm::device_buffer decompress_data(datasource& source,
                      return static_cast<std::byte const*>(comp_block_data.data()) +
                             (block.offset - meta.block_list[0].offset);
                    });
-    compressed_data_ptrs.host_to_device(stream);
+    compressed_data_ptrs.host_to_device_async(stream);
 
-    hostdevice_vector<size_t> compressed_data_sizes(num_blocks, stream);
+    cudf::detail::hostdevice_vector<size_t> compressed_data_sizes(num_blocks, stream);
     std::transform(meta.block_list.begin(),
                    meta.block_list.end(),
                    compressed_data_sizes.host_ptr(),
                    [](auto const& block) { return block.size; });
-    compressed_data_sizes.host_to_device(stream);
+    compressed_data_sizes.host_to_device_async(stream);
 
-    hostdevice_vector<size_t> uncompressed_data_sizes(num_blocks, stream);
+    cudf::detail::hostdevice_vector<size_t> uncompressed_data_sizes(num_blocks, stream);
     nvcompStatus_t status =
       nvcompBatchedSnappyGetDecompressSizeAsync(compressed_data_ptrs.device_ptr(),
                                                 compressed_data_sizes.device_ptr(),
@@ -265,7 +296,7 @@ rmm::device_buffer decompress_data(datasource& source,
                                                 stream.value());
     CUDF_EXPECTS(status == nvcompStatus_t::nvcompSuccess,
                  "Unable to get uncompressed sizes for snappy compressed blocks");
-    uncompressed_data_sizes.device_to_host(stream, true);
+    uncompressed_data_sizes.device_to_host_sync(stream);
 
     size_t const uncompressed_data_size =
       std::reduce(uncompressed_data_sizes.begin(), uncompressed_data_sizes.end());
@@ -281,13 +312,13 @@ rmm::device_buffer decompress_data(datasource& source,
     rmm::device_buffer scratch(temp_size, stream);
     rmm::device_buffer decomp_block_data(uncompressed_data_size, stream);
     rmm::device_uvector<void*> uncompressed_data_ptrs(num_blocks, stream);
-    hostdevice_vector<size_t> uncompressed_data_offsets(num_blocks, stream);
+    cudf::detail::hostdevice_vector<size_t> uncompressed_data_offsets(num_blocks, stream);
 
     std::exclusive_scan(uncompressed_data_sizes.begin(),
                         uncompressed_data_sizes.end(),
                         uncompressed_data_offsets.begin(),
                         0);
-    uncompressed_data_offsets.host_to_device(stream);
+    uncompressed_data_offsets.host_to_device_async(stream);
 
     thrust::tabulate(rmm::exec_policy(stream),
                      uncompressed_data_ptrs.begin(),
@@ -343,7 +374,7 @@ std::vector<column_buffer> decode_data(metadata& meta,
                                        std::vector<std::pair<int, std::string>> const& selection,
                                        std::vector<data_type> const& column_types,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   auto out_buffers = std::vector<column_buffer>();
 
@@ -354,13 +385,15 @@ std::vector<column_buffer> decode_data(metadata& meta,
   }
 
   // Build gpu schema
-  auto schema_desc = hostdevice_vector<gpu::schemadesc_s>(meta.schema.size(), stream);
+  auto schema_desc = cudf::detail::hostdevice_vector<gpu::schemadesc_s>(meta.schema.size(), stream);
 
   uint32_t min_row_data_size = 0;
   int skip_field_cnt         = 0;
 
   for (size_t i = 0; i < meta.schema.size(); i++) {
-    type_kind_e kind = meta.schema[i].kind;
+    type_kind_e kind                = meta.schema[i].kind;
+    logicaltype_kind_e logical_kind = meta.schema[i].logical_kind;
+
     if (skip_field_cnt != 0) {
       // Exclude union and array members from min_row_data_size
       skip_field_cnt += meta.schema[i].num_children - 1;
@@ -382,7 +415,8 @@ std::vector<column_buffer> decode_data(metadata& meta,
       }
     }
     if (kind == type_enum && !meta.schema[i].symbols.size()) { kind = type_int; }
-    schema_desc[i].kind = kind;
+    schema_desc[i].kind         = kind;
+    schema_desc[i].logical_kind = logical_kind;
     schema_desc[i].count =
       (kind == type_enum) ? 0 : static_cast<uint32_t>(meta.schema[i].num_children);
     schema_desc[i].dataptr = nullptr;
@@ -413,17 +447,16 @@ std::vector<column_buffer> decode_data(metadata& meta,
     }
   }
 
-  auto block_list = cudf::detail::make_device_uvector_async(meta.block_list, stream);
+  auto block_list = cudf::detail::make_device_uvector_async(
+    meta.block_list, stream, rmm::mr::get_current_device_resource());
 
-  schema_desc.host_to_device(stream);
+  schema_desc.host_to_device_async(stream);
 
   gpu::DecodeAvroColumnData(block_list,
                             schema_desc.device_ptr(),
                             global_dictionary,
                             static_cast<uint8_t const*>(block_data.data()),
                             static_cast<uint32_t>(schema_desc.size()),
-                            meta.num_rows,
-                            meta.skip_rows,
                             min_row_data_size,
                             stream);
 
@@ -433,11 +466,11 @@ std::vector<column_buffer> decode_data(metadata& meta,
       CUDF_CUDA_TRY(cudaMemcpyAsync(out_buffers[i].null_mask(),
                                     valid_alias[i],
                                     out_buffers[i].null_mask_size(),
-                                    cudaMemcpyHostToDevice,
+                                    cudaMemcpyDefault,
                                     stream.value()));
     }
   }
-  schema_desc.device_to_host(stream, true);
+  schema_desc.device_to_host_sync(stream);
 
   for (size_t i = 0; i < out_buffers.size(); i++) {
     auto const col_idx          = selection[i].first;
@@ -451,11 +484,10 @@ std::vector<column_buffer> decode_data(metadata& meta,
 table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
                               avro_reader_options const& options,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   auto skip_rows = options.get_skip_rows();
   auto num_rows  = options.get_num_rows();
-  num_rows       = (num_rows != 0) ? num_rows : -1;
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata metadata_out;
 
@@ -467,7 +499,7 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
 
   // Select only columns required by the options
   auto selected_columns = meta.select_columns(options.get_columns());
-  if (selected_columns.size() != 0) {
+  if (not selected_columns.empty()) {
     // Get a list of column data types
     std::vector<data_type> column_types;
     for (auto const& col : selected_columns) {
@@ -478,17 +510,17 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
       column_types.emplace_back(col_type);
     }
 
-    if (meta.total_data_size > 0) {
+    if (meta.num_rows > 0) {
       rmm::device_buffer block_data;
-      if (source->is_device_read_preferred(meta.total_data_size)) {
-        block_data      = rmm::device_buffer{meta.total_data_size, stream};
+      if (source->is_device_read_preferred(meta.selected_data_size)) {
+        block_data      = rmm::device_buffer{meta.selected_data_size, stream};
         auto read_bytes = source->device_read(meta.block_list[0].offset,
-                                              meta.total_data_size,
+                                              meta.selected_data_size,
                                               static_cast<uint8_t*>(block_data.data()),
                                               stream);
         block_data.resize(read_bytes, stream);
       } else {
-        auto const buffer = source->host_read(meta.block_list[0].offset, meta.total_data_size);
+        auto const buffer = source->host_read(meta.block_list[0].offset, meta.selected_data_size);
         block_data        = rmm::device_buffer{buffer->data(), buffer->size(), stream};
       }
 
@@ -543,8 +575,10 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
           }
         }
 
-        d_global_dict      = cudf::detail::make_device_uvector_async(h_global_dict, stream);
-        d_global_dict_data = cudf::detail::make_device_uvector_async(h_global_dict_data, stream);
+        d_global_dict = cudf::detail::make_device_uvector_async(
+          h_global_dict, stream, rmm::mr::get_current_device_resource());
+        d_global_dict_data = cudf::detail::make_device_uvector_async(
+          h_global_dict_data, stream, rmm::mr::get_current_device_resource());
 
         stream.synchronize();
       }
@@ -560,7 +594,7 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
                                      mr);
 
       for (size_t i = 0; i < column_types.size(); ++i) {
-        out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream, mr));
+        out_columns.emplace_back(make_column(out_buffers[i], nullptr, std::nullopt, stream));
       }
     } else {
       // Create empty columns
@@ -570,11 +604,13 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
     }
   }
 
-  // Return column names (must match order of returned columns)
-  metadata_out.column_names.resize(selected_columns.size());
-  for (size_t i = 0; i < selected_columns.size(); i++) {
-    metadata_out.column_names[i] = selected_columns[i].second;
-  }
+  // Return column names
+  metadata_out.schema_info.reserve(selected_columns.size());
+  std::transform(selected_columns.cbegin(),
+                 selected_columns.cend(),
+                 std::back_inserter(metadata_out.schema_info),
+                 [](auto const& c) { return column_name_info{c.second}; });
+
   // Return user metadata
   metadata_out.user_data          = meta.user_data;
   metadata_out.per_file_user_data = {{meta.user_data.begin(), meta.user_data.end()}};

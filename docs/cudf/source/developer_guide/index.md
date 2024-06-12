@@ -9,7 +9,7 @@ cuDF is a GPU-accelerated, [Pandas-like](https://pandas.pydata.org/) DataFrame l
 Under the hood, all of cuDF's functionality relies on the CUDA-accelerated `libcudf` C++ library.
 Thus, cuDF's internals are designed to efficiently and robustly map pandas APIs to `libcudf` functions.
 For more information about the `libcudf` library, a good starting point is the
-[developer guide](https://github.com/rapidsai/cudf/blob/main/cpp/docs/DEVELOPER_GUIDE.md).
+[developer guide](https://docs.rapids.ai/api/libcudf/stable/developer_guide).
 
 This document assumes familiarity with the
 [overall contributing guide](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md).
@@ -23,6 +23,9 @@ Additionally, it includes longer sections on more specific topics like testing a
 library_design
 contributing_guide
 documentation
+testing
 benchmarking
 options
+pylibcudf
+cudf_pandas
 ```

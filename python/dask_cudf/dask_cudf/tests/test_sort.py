@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -10,10 +10,21 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
+from dask_cudf.tests.utils import xfail_dask_expr
 
 
 @pytest.mark.parametrize("ascending", [True, False])
-@pytest.mark.parametrize("by", ["a", "b", "c", "d", ["a", "b"], ["c", "d"]])
+@pytest.mark.parametrize(
+    "by",
+    [
+        "a",
+        "b",
+        "c",
+        "d",
+        ["a", "b"],
+        ["c", "d"],
+    ],
+)
 @pytest.mark.parametrize("nelem", [10, 500])
 @pytest.mark.parametrize("nparts", [1, 10])
 def test_sort_values(nelem, nparts, by, ascending):
@@ -56,6 +67,7 @@ def test_sort_repartition():
     dd.assert_eq(len(new_ddf), len(ddf))
 
 
+@xfail_dask_expr("missing null support", lt_version="2024.5.1")
 @pytest.mark.parametrize("na_position", ["first", "last"])
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
@@ -104,3 +116,20 @@ def test_sort_values_custom_function(by, nparts):
         )
     expect = df.sort_values(by=by)
     dd.assert_eq(got, expect, check_index=False)
+
+
+@pytest.mark.parametrize("by", ["a", "b", ["a", "b"], ["b", "a"]])
+def test_sort_values_empty_string(by):
+    df = cudf.DataFrame({"a": [3, 2, 1, 4], "b": [""] * 4})
+    ddf = dd.from_pandas(df, npartitions=2)
+    got = ddf.sort_values(by)
+    if "a" in by:
+        expect = df.sort_values(by)
+        assert dd.assert_eq(got, expect, check_index=False)
+
+
+def test_disk_shuffle():
+    df = cudf.DataFrame({"a": [1, 2, 3] * 20, "b": [4, 5, 6, 7] * 15})
+    ddf = dd.from_pandas(df, npartitions=4)
+    got = dd.DataFrame.shuffle(ddf, "a", shuffle_method="disk")
+    dd.assert_eq(got, df)

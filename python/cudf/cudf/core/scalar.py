@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import decimal
 import operator
@@ -8,9 +8,9 @@ import numpy as np
 import pyarrow as pa
 
 import cudf
-from cudf.api.types import is_scalar
+from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
 from cudf.core.dtypes import ListDtype, StructDtype
-from cudf.core.missing import NA
+from cudf.core.missing import NA, NaT
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
@@ -114,7 +114,6 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def __init__(self, value, dtype=None):
-
         self._host_value = None
         self._host_dtype = None
         self._device_value = None
@@ -224,6 +223,9 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
 
         if dtype is None:
             if not valid:
+                if value is NaT:
+                    value = value.to_numpy()
+
                 if isinstance(value, (np.datetime64, np.timedelta64)):
                     unit, _ = np.datetime_data(value)
                     if unit == "generic":
@@ -243,7 +245,11 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
             dtype = cudf.dtype(dtype)
 
         if not valid:
-            value = NA
+            value = (
+                NaT
+                if is_datetime64_dtype(dtype) or is_timedelta64_dtype(dtype)
+                else NA
+            )
 
         return value, dtype
 
@@ -353,14 +359,17 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
 
     def _dispatch_scalar_binop(self, other, op):
         if isinstance(other, Scalar):
-            other = other.value
-        try:
-            func = getattr(operator, op)
-        except AttributeError:
-            func = getattr(self.value, op)
+            rhs = other.value
         else:
-            return func(self.value, other)
-        return func(other)
+            rhs = other
+        lhs = self.value
+        reflect, op = self._check_reflected_op(op)
+        if reflect:
+            lhs, rhs = rhs, lhs
+        try:
+            return getattr(operator, op)(lhs, rhs)
+        except AttributeError:
+            return getattr(lhs, op)(rhs)
 
     def _unaop_result_type_or_error(self, op):
         if op == "__neg__" and self.dtype == "bool":
@@ -392,4 +401,6 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
         return getattr(self.value, op)()
 
     def astype(self, dtype):
+        if self.dtype == dtype:
+            return self
         return Scalar(self.value, dtype)

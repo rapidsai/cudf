@@ -1,20 +1,33 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import re
+from itertools import chain
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf import melt as cudf_melt
-from cudf.core._compat import PANDAS_GE_120
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,
 )
+
+pytest_xfail = pytest.mark.xfail
+pytestmark = pytest.mark.spilling
+
+# If spilling is enabled globally, we skip many test permutations
+# to reduce running time.
+if get_global_manager() is not None:
+    ALL_TYPES = ["float32"]  # noqa: F811
+    DATETIME_TYPES = ["datetime64[ms]"]  # noqa: F811
+    NUMERIC_TYPES = ["float32"]  # noqa: F811
+    # To save time, we skip tests marked "pytest.mark.xfail"
+    pytest_xfail = pytest.mark.skipif
 
 
 @pytest.mark.parametrize("num_id_vars", [0, 1, 2])
@@ -57,32 +70,54 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
 
     gdf = cudf.from_pandas(pdf)
 
-    got = cudf_melt(frame=gdf, id_vars=id_vars, value_vars=value_vars)
+    got = cudf.melt(frame=gdf, id_vars=id_vars, value_vars=value_vars)
     got_from_melt_method = gdf.melt(id_vars=id_vars, value_vars=value_vars)
 
     expect = pd.melt(frame=pdf, id_vars=id_vars, value_vars=value_vars)
-    # pandas' melt makes the 'variable' column of 'object' type (string)
-    # cuDF's melt makes it Categorical because it doesn't support strings
-    expect["variable"] = expect["variable"].astype("category")
 
     assert_eq(expect, got)
 
     assert_eq(expect, got_from_melt_method)
 
 
+def test_melt_many_columns():
+    mydict = {"id": ["foobar"]}
+    for i in range(1, 1942):
+        mydict[f"d_{i}"] = i
+
+    df = pd.DataFrame(mydict)
+    grid_df = pd.melt(df, id_vars=["id"], var_name="d", value_name="sales")
+
+    df_d = cudf.DataFrame(mydict)
+    grid_df_d = cudf.melt(
+        df_d, id_vars=["id"], var_name="d", value_name="sales"
+    )
+    grid_df_d["d"] = grid_df_d["d"]
+
+    assert_eq(grid_df, grid_df_d)
+
+
+def test_melt_str_scalar_id_var():
+    data = {"index": [1, 2], "id": [1, 2], "d0": [10, 20], "d1": [30, 40]}
+    result = cudf.melt(
+        cudf.DataFrame(data),
+        id_vars="index",
+        var_name="column",
+        value_name="value",
+    )
+    expected = pd.melt(
+        pd.DataFrame(data),
+        id_vars="index",
+        var_name="column",
+        value_name="value",
+    )
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize("num_rows", [1, 2, 1000])
 @pytest.mark.parametrize(
-    "dtype",
-    list(NUMERIC_TYPES + DATETIME_TYPES)
-    + [
-        pytest.param(
-            "str",
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_120, reason="pandas bug"
-            ),
-        )
-    ],
+    "dtype", list(chain(NUMERIC_TYPES, DATETIME_TYPES, ["str"]))
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_df_stack(nulls, num_cols, num_rows, dtype):
@@ -130,6 +165,124 @@ def test_df_stack_reset_index():
     assert_eq(expected, actual)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Need pandas-2.1.0+ to match `stack` api",
+)
+@pytest.mark.parametrize(
+    "columns",
+    [
+        pd.MultiIndex.from_tuples(
+            [("A", "cat"), ("A", "dog"), ("B", "cat"), ("B", "dog")],
+            names=["letter", "animal"],
+        ),
+        pd.MultiIndex.from_tuples(
+            [("A", "cat"), ("B", "bird"), ("A", "dog"), ("B", "dog")],
+            names=["letter", "animal"],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "level",
+    [
+        -1,
+        0,
+        1,
+        "letter",
+        "animal",
+        [0, 1],
+        [1, 0],
+        ["letter", "animal"],
+        ["animal", "letter"],
+    ],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        pd.RangeIndex(2, name="range"),
+        pd.Index([9, 8], name="myindex"),
+        pd.MultiIndex.from_arrays(
+            [
+                ["A", "B"],
+                [101, 102],
+            ],
+            names=["first", "second"],
+        ),
+    ],
+)
+@pytest.mark.parametrize("dropna", [True, False])
+def test_df_stack_multiindex_column_axis(columns, index, level, dropna):
+    if isinstance(level, list) and len(level) > 1 and not dropna:
+        pytest.skip(
+            "Stacking multiple levels with dropna==False is unsupported."
+        )
+
+    pdf = pd.DataFrame(
+        data=[[1, 2, 3, 4], [2, 4, 6, 8]], columns=columns, index=index
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    with pytest.warns(FutureWarning):
+        got = gdf.stack(level=level, dropna=dropna, future_stack=False)
+    with pytest.warns(FutureWarning):
+        expect = pdf.stack(level=level, dropna=dropna, future_stack=False)
+
+    assert_eq(expect, got, check_dtype=False)
+
+    got = gdf.stack(level=level, future_stack=True)
+    expect = pdf.stack(level=level, future_stack=True)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+def test_df_stack_mixed_dtypes():
+    pdf = pd.DataFrame(
+        {
+            "A": pd.Series([1, 2, 3], dtype="f4"),
+            "B": pd.Series([4, 5, 6], dtype="f8"),
+        }
+    )
+
+    gdf = cudf.from_pandas(pdf)
+
+    got = gdf.stack()
+    expect = pdf.stack()
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Need pandas-2.1.0+ to match `stack` api",
+)
+@pytest.mark.parametrize("level", [["animal", "hair_length"], [1, 2]])
+def test_df_stack_multiindex_column_axis_pd_example(level):
+    columns = pd.MultiIndex.from_tuples(
+        [
+            ("A", "cat", "long"),
+            ("B", "cat", "long"),
+            ("A", "dog", "short"),
+            ("B", "dog", "short"),
+        ],
+        names=["exp", "animal", "hair_length"],
+    )
+
+    df = pd.DataFrame(np.random.randn(4, 4), columns=columns)
+
+    with pytest.warns(FutureWarning):
+        expect = df.stack(level=level, future_stack=False)
+    gdf = cudf.from_pandas(df)
+    with pytest.warns(FutureWarning):
+        got = gdf.stack(level=level, future_stack=False)
+
+    assert_eq(expect, got)
+
+    expect = df.stack(level=level, future_stack=True)
+    got = gdf.stack(level=level, future_stack=True)
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("num_rows", [1, 2, 10, 1000])
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize(
@@ -137,7 +290,6 @@ def test_df_stack_reset_index():
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_interleave_columns(nulls, num_cols, num_rows, dtype):
-
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
         pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
@@ -174,7 +326,6 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
 @pytest.mark.parametrize("dtype", ALL_TYPES)
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_tile(nulls, num_cols, num_rows, dtype, count):
-
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
         pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
@@ -376,8 +527,8 @@ def test_pivot_simple(index, column, data):
     pdf = pd.DataFrame({"index": index, "column": column, "data": data})
     gdf = cudf.from_pandas(pdf)
 
-    expect = pdf.pivot("index", "column")
-    got = gdf.pivot("index", "column")
+    expect = pdf.pivot(columns="column", index="index")
+    got = gdf.pivot(columns="column", index="index")
 
     check_index_and_columns = expect.shape != (0, 0)
     assert_eq(
@@ -441,7 +592,7 @@ def test_pivot_values(values):
         0,
         pytest.param(
             1,
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Categorical column indexes not supported"
             ),
         ),
@@ -449,7 +600,7 @@ def test_pivot_values(values):
         "foo",
         pytest.param(
             "bar",
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Categorical column indexes not supported"
             ),
         ),
@@ -457,24 +608,24 @@ def test_pivot_values(values):
         [],
         pytest.param(
             [0, 1],
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Categorical column indexes not supported"
             ),
         ),
         ["foo"],
         pytest.param(
             ["foo", "bar"],
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Categorical column indexes not supported"
             ),
         ),
         pytest.param(
             [0, 1, 2],
-            marks=pytest.mark.xfail(reason="Pandas behaviour unclear"),
+            marks=pytest_xfail(reason="Pandas behaviour unclear"),
         ),
         pytest.param(
             ["foo", "bar", "baz"],
-            marks=pytest.mark.xfail(reason="Pandas behaviour unclear"),
+            marks=pytest_xfail(reason="Pandas behaviour unclear"),
         ),
     ],
 )
@@ -506,7 +657,7 @@ def test_unstack_multiindex(level):
         pd.Index(range(0, 5), name="row_index"),
         pytest.param(
             pd.CategoricalIndex(["d", "e", "f", "g", "h"]),
-            marks=pytest.mark.xfail(
+            marks=pytest_xfail(
                 reason="Categorical column indexes not supported"
             ),
         ),
@@ -587,6 +738,42 @@ def test_pivot_table_simple(data, aggfunc, fill_value):
     cdf = cudf.DataFrame(data)
     actual = cudf.pivot_table(
         cdf,
+        values=["D", "E"],
+        index=["A", "B"],
+        columns=["C"],
+        aggfunc=aggfunc,
+        fill_value=fill_value,
+    )
+    assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "A": ["one", "one", "two", "three"] * 6,
+            "B": ["A", "B", "C"] * 8,
+            "C": ["foo", "foo", "foo", "bar", "bar", "bar"] * 4,
+            "D": np.random.randn(24),
+            "E": np.random.randn(24),
+        }
+    ],
+)
+@pytest.mark.parametrize(
+    "aggfunc", ["mean", "count", {"D": "sum", "E": "count"}]
+)
+@pytest.mark.parametrize("fill_value", [0])
+def test_dataframe_pivot_table_simple(data, aggfunc, fill_value):
+    pdf = pd.DataFrame(data)
+    expected = pdf.pivot_table(
+        values=["D", "E"],
+        index=["A", "B"],
+        columns=["C"],
+        aggfunc=aggfunc,
+        fill_value=fill_value,
+    )
+    cdf = cudf.DataFrame(data)
+    actual = cdf.pivot_table(
         values=["D", "E"],
         index=["A", "B"],
         columns=["C"],

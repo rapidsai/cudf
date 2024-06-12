@@ -1,15 +1,12 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import pandas as pd
 from packaging import version
 
+PANDAS_CURRENT_SUPPORTED_VERSION = version.parse("2.2.2")
 PANDAS_VERSION = version.parse(pd.__version__)
-PANDAS_GE_100 = PANDAS_VERSION >= version.parse("1.0")
-PANDAS_GE_110 = PANDAS_VERSION >= version.parse("1.1")
-PANDAS_GE_120 = PANDAS_VERSION >= version.parse("1.2")
-PANDAS_LE_122 = PANDAS_VERSION <= version.parse("1.2.2")
-PANDAS_GE_130 = PANDAS_VERSION >= version.parse("1.3.0")
-PANDAS_GE_133 = PANDAS_VERSION >= version.parse("1.3.3")
-PANDAS_GE_134 = PANDAS_VERSION >= version.parse("1.3.4")
-PANDAS_LT_140 = PANDAS_VERSION < version.parse("1.4.0")
-PANDAS_GE_150 = PANDAS_VERSION >= version.parse("1.5.0")
+
+
+PANDAS_GE_210 = PANDAS_VERSION >= version.parse("2.1.0")
+PANDAS_GE_220 = PANDAS_VERSION >= version.parse("2.2.0")
+PANDAS_LT_300 = PANDAS_VERSION < version.parse("3.0.0")

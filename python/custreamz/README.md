@@ -1,4 +1,4 @@
-# <div align="left"><img src="../../img/rapids_logo.png" width="90px"/>&nbsp;custreamz - GPU Accelerated Streaming</div>
+# custreamz - GPU Accelerated Streaming
 
 Built as an extension to [python streamz](https://github.com/python-streamz/streamz), cuStreamz provides GPU accelerated abstractions for streaming data. CuStreamz can be used along side python streamz or as a standalone library for ingesting streaming data to cudf dataframes.
 
@@ -14,8 +14,8 @@ from custreamz import kafka
 
 # Full list of configurations can be found at: https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
 kafka_configs = {
-	"metadata.broker.list": "localhost:9092",
-	"group.id": "custreamz-client",
+    "metadata.broker.list": "localhost:9092",
+    "group.id": "custreamz-client",
 }
 
 # Create a reusable Kafka Consumer client; "datasource"
@@ -41,16 +41,16 @@ A more detailed example of [parsing haproxy logs](https://github.com/rapidsai-co
 
 ## Quick Start
 
-Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/), choosing a tag based on the NVIDIA CUDA version you’re running. This provides a ready to run Docker container with cuStreamz already installed.
+Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapidsai/), choosing a tag based on the NVIDIA CUDA version you're running. This provides a ready to run Docker container with cuStreamz already installed.
 
 ## Installation
 
 
 ### CUDA/GPU requirements
 
-* CUDA 10.0+
-* NVIDIA driver 410.48+
-* Pascal architecture or better (Compute Capability >=6.0)
+* CUDA 11.0+
+* NVIDIA driver 450.80.02+
+* Volta architecture or better (Compute Capability >=7.0)
 
 ### Conda
 
@@ -66,4 +66,4 @@ Nightly:
 conda install -c rapidsai-nightly cudf_kafka custreamz
 ```
 
-See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info. 
+See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info.

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -28,6 +28,23 @@ import org.slf4j.LoggerFactory;
  * subclassing beyond what is included in CUDF is not recommended and not supported.
  */
 abstract public class MemoryBuffer implements AutoCloseable {
+  /**
+   * Interface to handle events for this MemoryBuffer. Only invoked during
+   * close, hence `onClosed` is the only event.
+   */
+  public interface EventHandler {
+    /**
+     * `onClosed` is invoked with the updated `refCount` during `close`.
+     * The last invocation of `onClosed` will be with `refCount=0`.
+     *
+     * @note the callback is invoked with this `MemoryBuffer`'s lock held.
+     *
+     * @param refCount - the updated ref count for this MemoryBuffer at the time
+     *                 of invocation
+     */
+    void onClosed(int refCount);
+  }
+
   private static final Logger log = LoggerFactory.getLogger(MemoryBuffer.class);
   protected final long address;
   protected final long length;
@@ -35,6 +52,8 @@ abstract public class MemoryBuffer implements AutoCloseable {
   protected int refCount = 0;
   protected final MemoryBufferCleaner cleaner;
   protected final long id;
+
+  private EventHandler eventHandler;
 
   public static abstract class MemoryBufferCleaner extends MemoryCleaner.Cleaner{}
 
@@ -194,18 +213,45 @@ abstract public class MemoryBuffer implements AutoCloseable {
   public abstract MemoryBuffer slice(long offset, long len);
 
   /**
+   * Set an event handler for this buffer. This method can be invoked with null
+   * to unset the handler.
+   *
+   * @param newHandler - the EventHandler to use from this point forward
+   * @return the prior event handler, or null if not set.
+   */
+  public synchronized EventHandler setEventHandler(EventHandler newHandler) {
+    EventHandler prev = this.eventHandler;
+    this.eventHandler = newHandler;
+    return prev;
+  }
+
+  /**
+   * Returns the current event handler for this buffer or null if no handler
+   * is associated or this buffer is closed.
+   */
+  public synchronized EventHandler getEventHandler() {
+    return this.eventHandler;
+  }
+
+  /**
    * Close this buffer and free memory
    */
   public synchronized void close() {
     if (cleaner != null) {
       refCount--;
       cleaner.delRef();
-      if (refCount == 0) {
-        cleaner.clean(false);
-        closed = true;
-      } else if (refCount < 0) {
-        cleaner.logRefCountDebug("double free " + this);
-        throw new IllegalStateException("Close called too many times " + this);
+      try {
+        if (refCount == 0) {
+          cleaner.clean(false);
+          closed = true;
+        } else if (refCount < 0) {
+          cleaner.logRefCountDebug("double free " + this);
+          throw new IllegalStateException("Close called too many times " + this);
+        }
+      } finally {
+        if (eventHandler != null) {
+          eventHandler.onClosed(refCount);
+        }
       }
     }
   }
@@ -232,8 +278,10 @@ abstract public class MemoryBuffer implements AutoCloseable {
     cleaner.addRef();
   }
 
-  // visible for testing
-  synchronized int getRefCount() {
+  /**
+   * Get the current reference count for this buffer.
+   */
+  public synchronized int getRefCount() {
     return refCount;
   }
 }

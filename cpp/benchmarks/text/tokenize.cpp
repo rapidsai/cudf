@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/string/string_bench_args.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -28,74 +26,62 @@
 #include <nvtext/ngrams_tokenize.hpp>
 #include <nvtext/tokenize.hpp>
 
-class TextTokenize : public cudf::benchmark {
-};
+#include <nvbench/nvbench.cuh>
 
-enum class tokenize_type { single, multi, count, count_multi, ngrams, characters };
-
-static void BM_tokenize(benchmark::State& state, tokenize_type tt)
+static void bench_tokenize(nvbench::state& state)
 {
-  auto const n_rows          = static_cast<cudf::size_type>(state.range(0));
-  auto const max_str_length  = static_cast<cudf::size_type>(state.range(1));
-  data_profile const profile = data_profile_builder().distribution(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
-  cudf::strings_column_view input(column->view());
-  cudf::test::strings_column_wrapper delimiters({" ", "+", "-"});
+  auto const num_rows      = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const row_width     = static_cast<cudf::size_type>(state.get_int64("row_width"));
+  auto const tokenize_type = state.get_string("type");
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::get_default_stream());
-    switch (tt) {
-      case tokenize_type::single:
-        // single whitespace delimiter
-        nvtext::tokenize(input);
-        break;
-      case tokenize_type::multi:
-        nvtext::tokenize(input, cudf::strings_column_view(delimiters));
-        break;
-      case tokenize_type::count:
-        // single whitespace delimiter
-        nvtext::count_tokens(input);
-        break;
-      case tokenize_type::count_multi:
-        nvtext::count_tokens(input, cudf::strings_column_view(delimiters));
-        break;
-      case tokenize_type::ngrams:
-        // default is bigrams
-        nvtext::ngrams_tokenize(input);
-        break;
-      case tokenize_type::characters:
-        // every character becomes a string
-        nvtext::character_tokenize(input);
-        break;
-    }
+  if (static_cast<std::size_t>(num_rows) * static_cast<std::size_t>(row_width) >=
+      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
+    state.skip("Skip benchmarks greater than size_type limit");
   }
 
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
+  data_profile const profile =
+    data_profile_builder()
+      .distribution(cudf::type_id::STRING, distribution_id::NORMAL, 0, row_width)
+      .no_validity();
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
+  cudf::strings_column_view input(column->view());
+
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+
+  auto chars_size = input.chars_size(cudf::get_default_stream());
+  state.add_global_memory_reads<nvbench::int8_t>(chars_size);
+  state.add_global_memory_writes<nvbench::int8_t>(chars_size);
+
+  if (tokenize_type == "whitespace") {
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { auto result = nvtext::tokenize(input); });
+  } else if (tokenize_type == "multi") {
+    cudf::test::strings_column_wrapper delimiters({" ", "+", "-"});
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      auto result = nvtext::tokenize(input, cudf::strings_column_view(delimiters));
+    });
+  } else if (tokenize_type == "count") {
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { auto result = nvtext::count_tokens(input); });
+  } else if (tokenize_type == "count_multi") {
+    cudf::test::strings_column_wrapper delimiters({" ", "+", "-"});
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      auto result = nvtext::count_tokens(input, cudf::strings_column_view(delimiters));
+    });
+  } else if (tokenize_type == "ngrams") {
+    auto const delimiter = cudf::string_scalar("");
+    auto const separator = cudf::string_scalar("_");
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      auto result = nvtext::ngrams_tokenize(input, 2, delimiter, separator);
+    });
+  } else if (tokenize_type == "characters") {
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { auto result = nvtext::character_tokenize(input); });
+  }
 }
 
-static void generate_bench_args(benchmark::internal::Benchmark* b)
-{
-  int const min_rows   = 1 << 12;
-  int const max_rows   = 1 << 24;
-  int const row_mult   = 8;
-  int const min_rowlen = 1 << 5;
-  int const max_rowlen = 1 << 13;
-  int const len_mult   = 4;
-  generate_string_bench_args(b, min_rows, max_rows, row_mult, min_rowlen, max_rowlen, len_mult);
-}
-
-#define NVTEXT_BENCHMARK_DEFINE(name)                                 \
-  BENCHMARK_DEFINE_F(TextTokenize, name)                              \
-  (::benchmark::State & st) { BM_tokenize(st, tokenize_type::name); } \
-  BENCHMARK_REGISTER_F(TextTokenize, name)                            \
-    ->Apply(generate_bench_args)                                      \
-    ->UseManualTime()                                                 \
-    ->Unit(benchmark::kMillisecond);
-
-NVTEXT_BENCHMARK_DEFINE(single)
-NVTEXT_BENCHMARK_DEFINE(multi)
-NVTEXT_BENCHMARK_DEFINE(count)
-NVTEXT_BENCHMARK_DEFINE(count_multi)
-NVTEXT_BENCHMARK_DEFINE(ngrams)
-NVTEXT_BENCHMARK_DEFINE(characters)
+NVBENCH_BENCH(bench_tokenize)
+  .set_name("tokenize")
+  .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024})
+  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216})
+  .add_string_axis("type", {"whitespace", "multi", "count", "count_multi", "ngrams", "characters"});

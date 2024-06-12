@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,16 +15,16 @@
  *
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/copy.hpp>
-#include <cudf/lists/contains.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
+#include <cudf/lists/contains.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 
 namespace {
 template <typename T, std::enable_if_t<cudf::is_numeric<T>(), void>* = nullptr>
@@ -107,12 +107,10 @@ using cudf::test::iterators::nulls_at;
 using ContainsTestTypes = cudf::test::
   Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes, cudf::test::ChronoTypes>;
 
-struct ContainsTest : public cudf::test::BaseFixture {
-};
+struct ContainsTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedContainsTest : public ContainsTest {
-};
+struct TypedContainsTest : public ContainsTest {};
 
 TYPED_TEST_SUITE(TypedContainsTest, ContainsTestTypes);
 
@@ -209,7 +207,6 @@ TYPED_TEST(TypedContainsTest, ScalarKeyWithNullLists)
 TYPED_TEST(TypedContainsTest, SlicedLists)
 {
   // Test sliced List columns.
-  using namespace cudf;
   using T = TypeParam;
 
   auto search_space = cudf::test::lists_column_wrapper<T, int32_t>{{{0, 1, 2, 1},
@@ -227,8 +224,9 @@ TYPED_TEST(TypedContainsTest, SlicedLists)
 
   {
     // First Slice.
-    auto sliced_column_1 = cudf::detail::slice(search_space, {1, 8}).front();
-    auto search_key_one  = create_scalar_search_key<T>(1);
+    auto sliced_column_1 =
+      cudf::detail::slice(search_space, {1, 8}, cudf::get_default_stream()).front();
+    auto search_key_one = create_scalar_search_key<T>(1);
     {
       // CONTAINS
       auto result          = cudf::lists::contains(sliced_column_1, *search_key_one);
@@ -259,8 +257,9 @@ TYPED_TEST(TypedContainsTest, SlicedLists)
 
   {
     // Second Slice.
-    auto sliced_column_2 = cudf::detail::slice(search_space, {3, 10}).front();
-    auto search_key_one  = create_scalar_search_key<T>(1);
+    auto sliced_column_2 =
+      cudf::detail::slice(search_space, {3, 10}, cudf::get_default_stream()).front();
+    auto search_key_one = create_scalar_search_key<T>(1);
     {
       // CONTAINS
       auto result          = cudf::lists::contains(sliced_column_2, *search_key_one);
@@ -333,12 +332,13 @@ TYPED_TEST(TypedContainsTest, ScalarKeysWithNullsInLists)
     {X, 1, 2, X, 4, 5, X, 7, 8, X, X, 1, 2, X, 1}, nulls_at({0, 3, 6, 9, 10, 13})};
   auto input_null_mask_iter = null_at(4);
 
-  auto search_space = cudf::make_lists_column(
-    8,
-    indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
-    numerals.release(),
-    1,
-    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
+  auto search_space = cudf::make_lists_column(8,
+                                              indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
+                                              numerals.release(),
+                                              null_count,
+                                              std::move(null_mask));
 
   // Search space: [ [x], [1,2], [x,4,5,x], [], x, [7,8,x], [x], [1,2,x,1] ]
   auto search_key_one = create_scalar_search_key<T>(1);
@@ -375,12 +375,14 @@ TEST_F(ContainsTest, BoolScalarWithNullsInLists)
   auto numerals = cudf::test::fixed_width_column_wrapper<T>{
     {X, 1, 1, X, 1, 1, X, 1, 1, X, X, 1, 1, X, 1}, nulls_at({0, 3, 6, 9, 10, 13})};
   auto input_null_mask_iter = null_at(4);
-  auto search_space         = cudf::make_lists_column(
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
+  auto search_space = cudf::make_lists_column(
     8,
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
     numerals.release(),
-    1,
-    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
+    null_count,
+    std::move(null_mask));
 
   // Search space: [ [x], [1,1], [x,1,1,x], [], x, [1,1,x], [x], [1,1,x,1] ]
   auto search_key_one = create_scalar_search_key<T>(1);
@@ -418,12 +420,13 @@ TEST_F(ContainsTest, StringScalarWithNullsInLists)
     {"X", "1", "2", "X", "4", "5", "X", "7", "8", "X", "X", "1", "2", "X", "1"},
     nulls_at({0, 3, 6, 9, 10, 13})};
   auto input_null_mask_iter = null_at(4);
-  auto search_space         = cudf::make_lists_column(
-    8,
-    indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
-    strings.release(),
-    1,
-    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
+  auto search_space = cudf::make_lists_column(8,
+                                              indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
+                                              strings.release(),
+                                              null_count,
+                                              std::move(null_mask));
 
   // Search space: [ [x], [1,2], [x,4,5,x], [], x, [7,8,x], [x], [1,2,x,1] ]
   auto search_key_one = create_scalar_search_key<T>("1");
@@ -501,10 +504,11 @@ TEST_F(ContainsTest, ScalarTypeRelatedExceptions)
       {{1, 2, 3},
        {4, 5, 6}}}.release();
     auto skey = create_scalar_search_key<int32_t>(10);
-    EXPECT_THROW(cudf::lists::contains(list_of_lists->view(), *skey), cudf::logic_error);
+    EXPECT_THROW(cudf::lists::contains(list_of_lists->view(), *skey), cudf::data_type_error);
     EXPECT_THROW(cudf::lists::index_of(list_of_lists->view(), *skey, FIND_FIRST),
-                 cudf::logic_error);
-    EXPECT_THROW(cudf::lists::index_of(list_of_lists->view(), *skey, FIND_LAST), cudf::logic_error);
+                 cudf::data_type_error);
+    EXPECT_THROW(cudf::lists::index_of(list_of_lists->view(), *skey, FIND_LAST),
+                 cudf::data_type_error);
   }
   {
     // Search key must match list elements in type.
@@ -515,15 +519,16 @@ TEST_F(ContainsTest, ScalarTypeRelatedExceptions)
       }
         .release();
     auto skey = create_scalar_search_key<std::string>("Hello, World!");
-    EXPECT_THROW(cudf::lists::contains(list_of_ints->view(), *skey), cudf::logic_error);
-    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), *skey, FIND_FIRST), cudf::logic_error);
-    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), *skey, FIND_LAST), cudf::logic_error);
+    EXPECT_THROW(cudf::lists::contains(list_of_ints->view(), *skey), cudf::data_type_error);
+    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), *skey, FIND_FIRST),
+                 cudf::data_type_error);
+    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), *skey, FIND_LAST),
+                 cudf::data_type_error);
   }
 }
 
 template <typename T>
-struct TypedVectorContainsTest : public ContainsTest {
-};
+struct TypedVectorContainsTest : public ContainsTest {};
 
 using VectorTestTypes =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
@@ -653,13 +658,14 @@ TYPED_TEST(TypedVectorContainsTest, VectorWithNullsInLists)
     {X, 1, 2, X, 4, 5, X, 7, 8, X, X, 1, 2, X, 1}, nulls_at({0, 3, 6, 9, 10, 13})};
 
   auto input_null_mask_iter = null_at(4);
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
+  auto search_space = cudf::make_lists_column(8,
+                                              indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
+                                              numerals.release(),
+                                              null_count,
+                                              std::move(null_mask));
 
-  auto search_space = cudf::make_lists_column(
-    8,
-    indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
-    numerals.release(),
-    1,
-    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
   // Search space: [ [x], [1,2], [x,4,5,x], [], x, [7,8,x], [x], [1,2,x,1] ]
 
   auto search_keys = cudf::test::fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 1, 2, 3, 1, 1};
@@ -691,13 +697,14 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInListsAndInSearc
     {X, 1, 2, X, 4, 5, X, 7, 8, X, X, 1, 2, X, 1}, nulls_at({0, 3, 6, 9, 10, 13})};
 
   auto input_null_mask_iter = null_at(4);
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
+  auto search_space = cudf::make_lists_column(8,
+                                              indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
+                                              numerals.release(),
+                                              null_count,
+                                              std::move(null_mask));
 
-  auto search_space = cudf::make_lists_column(
-    8,
-    indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
-    numerals.release(),
-    1,
-    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
   // Search space: [ [x], [1,2], [x,4,5,x], [], x, [7,8,x], [x], [1,2,x,1] ]
 
   auto search_keys =
@@ -730,13 +737,13 @@ TEST_F(ContainsTest, BoolKeyVectorWithNullsInListsAndInSearchKeys)
     {X, 0, 1, X, 1, 1, X, 1, 1, X, X, 0, 1, X, 1}, nulls_at({0, 3, 6, 9, 10, 13})};
 
   auto input_null_mask_iter = null_at(4);
-
-  auto search_space = cudf::make_lists_column(
-    8,
-    indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
-    numerals.release(),
-    1,
-    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
+  auto search_space = cudf::make_lists_column(8,
+                                              indices_col{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
+                                              numerals.release(),
+                                              null_count,
+                                              std::move(null_mask));
 
   auto search_keys =
     cudf::test::fixed_width_column_wrapper<T, int32_t>{{0, 1, 0, X, 0, 0, 1, 1}, null_at(3)};
@@ -768,12 +775,14 @@ TEST_F(ContainsTest, StringKeyVectorWithNullsInListsAndInSearchKeys)
     {"X", "1", "2", "X", "4", "5", "X", "7", "8", "X", "X", "1", "2", "X", "1"},
     nulls_at({0, 3, 6, 9, 10, 13})};
   auto input_null_mask_iter = null_at(4);
-  auto search_space         = cudf::make_lists_column(
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
+  auto search_space = cudf::make_lists_column(
     8,
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 3, 7, 7, 7, 10, 11, 15}.release(),
     strings.release(),
-    1,
-    cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8));
+    null_count,
+    std::move(null_mask));
 
   auto search_keys =
     cudf::test::strings_column_wrapper{{"1", "2", "3", "X", "2", "3", "1", "1"}, null_at(3)};
@@ -811,9 +820,11 @@ TEST_F(ContainsTest, VectorTypeRelatedExceptions)
       {{1, 2, 3},
        {4, 5, 6}}}.release();
     auto skey = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2};
-    EXPECT_THROW(cudf::lists::contains(list_of_lists->view(), skey), cudf::logic_error);
-    EXPECT_THROW(cudf::lists::index_of(list_of_lists->view(), skey, FIND_FIRST), cudf::logic_error);
-    EXPECT_THROW(cudf::lists::index_of(list_of_lists->view(), skey, FIND_LAST), cudf::logic_error);
+    EXPECT_THROW(cudf::lists::contains(list_of_lists->view(), skey), cudf::data_type_error);
+    EXPECT_THROW(cudf::lists::index_of(list_of_lists->view(), skey, FIND_FIRST),
+                 cudf::data_type_error);
+    EXPECT_THROW(cudf::lists::index_of(list_of_lists->view(), skey, FIND_LAST),
+                 cudf::data_type_error);
   }
   {
     // Search key must match list elements in type.
@@ -824,9 +835,11 @@ TEST_F(ContainsTest, VectorTypeRelatedExceptions)
       }
         .release();
     auto skey = cudf::test::strings_column_wrapper{"Hello", "World"};
-    EXPECT_THROW(cudf::lists::contains(list_of_ints->view(), skey), cudf::logic_error);
-    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), skey, FIND_FIRST), cudf::logic_error);
-    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), skey, FIND_LAST), cudf::logic_error);
+    EXPECT_THROW(cudf::lists::contains(list_of_ints->view(), skey), cudf::data_type_error);
+    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), skey, FIND_FIRST),
+                 cudf::data_type_error);
+    EXPECT_THROW(cudf::lists::index_of(list_of_ints->view(), skey, FIND_LAST),
+                 cudf::data_type_error);
   }
   {
     // Search key column size must match lists column size.
@@ -840,20 +853,19 @@ TEST_F(ContainsTest, VectorTypeRelatedExceptions)
 }
 
 template <typename T>
-struct TypedContainsNaNsTest : public ContainsTest {
-};
+struct TypedContainsNaNsTest : public ContainsTest {};
 
 TYPED_TEST_SUITE(TypedContainsNaNsTest, cudf::test::FloatingPointTypes);
 
 namespace {
 template <typename T>
-T get_nan(const char* nan_contents)
+T get_nan(char const* nan_contents)
 {
   return std::nan(nan_contents);
 }
 
 template <>
-float get_nan<float>(const char* nan_contents)
+float get_nan<float>(char const* nan_contents)
 {
   return std::nanf(nan_contents);
 }
@@ -988,8 +1000,7 @@ TYPED_TEST(TypedContainsNaNsTest, ListWithNaNsContainsVector)
 }
 
 template <typename T>
-struct TypedContainsDecimalsTest : public ContainsTest {
-};
+struct TypedContainsDecimalsTest : public ContainsTest {};
 
 TYPED_TEST_SUITE(TypedContainsDecimalsTest, cudf::test::FixedPointTypes);
 
@@ -1070,8 +1081,7 @@ TYPED_TEST(TypedContainsDecimalsTest, VectorKey)
 }
 
 template <typename T>
-struct TypedStructContainsTest : public ContainsTest {
-};
+struct TypedStructContainsTest : public ContainsTest {};
 TYPED_TEST_SUITE(TypedStructContainsTest, ContainsTestTypes);
 
 TYPED_TEST(TypedStructContainsTest, EmptyInputTest)
@@ -1193,12 +1203,10 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyWithNullLists)
     // clang-format on
     auto child               = cudf::test::structs_column_wrapper{{data1, data2}};
     auto const validity_iter = nulls_at({3, 10});
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(validity_iter, validity_iter + 11);
     return cudf::make_lists_column(
-      11,
-      offsets.release(),
-      child.release(),
-      2,
-      cudf::test::detail::make_null_mask(validity_iter, validity_iter + 11));
+      11, offsets.release(), child.release(), null_count, std::move(null_mask));
   }();
 
   auto const key = [] {
@@ -1507,12 +1515,10 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsHavingNulls)
     // clang-format on
     auto child = cudf::test::structs_column_wrapper{{data1, data2}, nulls_at({1, 10, 15, 24})};
     auto const validity_iter = nulls_at({3, 10});
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(validity_iter, validity_iter + 11);
     return cudf::make_lists_column(
-      11,
-      offsets.release(),
-      child.release(),
-      2,
-      cudf::test::detail::make_null_mask(validity_iter, validity_iter + 11));
+      11, offsets.release(), child.release(), null_count, std::move(null_mask));
   }();
 
   auto const keys_original = [] {
@@ -1545,8 +1551,7 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsHavingNulls)
 }
 
 template <typename T>
-struct TypedListContainsTest : public ContainsTest {
-};
+struct TypedListContainsTest : public ContainsTest {};
 TYPED_TEST_SUITE(TypedListContainsTest, ContainsTestTypes);
 
 TYPED_TEST(TypedListContainsTest, ScalarKeyLists)

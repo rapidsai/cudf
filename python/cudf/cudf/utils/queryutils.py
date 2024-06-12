@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import ast
 import datetime
@@ -8,8 +8,10 @@ import numpy as np
 from numba import cuda
 
 import cudf
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import column_empty
 from cudf.utils import applyutils
+from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
@@ -112,7 +114,7 @@ def _check_error(tree):
         raise QuerySyntaxError("too many expressions")
 
 
-_cache = {}  # type: Dict[Any, Any]
+_cache: Dict[Any, Any] = {}
 
 
 def query_compile(expr):
@@ -136,7 +138,8 @@ def query_compile(expr):
         key "args" is a sequence of name of the arguments.
     """
 
-    funcid = f"queryexpr_{np.uintp(hash(expr)):x}"
+    # hash returns in the semi-open interval [-2**63, 2**63)
+    funcid = f"queryexpr_{(hash(expr) + 2**63):x}"
     # Load cache
     compiled = _cache.get(funcid)
     # Cache not found
@@ -191,6 +194,7 @@ def _wrap_query_expr(name, fn, args):
     return kernel
 
 
+@acquire_spill_lock()
 def query_execute(df, expr, callenv):
     """Compile & execute the query expression
 
@@ -220,7 +224,7 @@ def query_execute(df, expr, callenv):
             "or bool dtypes."
         )
 
-    colarrays = [col.data_array_view for col in colarrays]
+    colarrays = [col.data_array_view(mode="read") for col in colarrays]
 
     kernel = compiled["kernel"]
     # process env args
@@ -245,6 +249,7 @@ def query_execute(df, expr, callenv):
     out = column_empty(nrows, dtype=np.bool_)
     # run kernel
     args = [out] + colarrays + envargs
-    kernel.forall(nrows)(*args)
+    with _CUDFNumbaConfig():
+        kernel.forall(nrows)(*args)
     out_mask = applyutils.make_aggregate_nullmask(df, columns=columns)
     return out.set_mask(out_mask).fillna(False)

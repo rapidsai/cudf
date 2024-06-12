@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -179,7 +179,7 @@ template <typename T>
 rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                            T const beta,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<T> output(input.size(), stream);
   rmm::device_uvector<pair_type<T>> pairs(input.size(), stream);
@@ -258,7 +258,7 @@ template <typename T>
 rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                                              T const beta,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<T> output(input.size(), stream);
   rmm::device_uvector<pair_type<T>> pairs(input.size(), stream);
@@ -324,7 +324,7 @@ template <typename T>
 std::unique_ptr<column> ewma(scan_aggregation const& agg,
                              column_view const& input,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   auto ewma_agg = (dynamic_cast<ewma_aggregation const*>(&agg));
   if (ewma_agg == NULL) { CUDF_FAIL("Expected an EWMA aggregation."); }
@@ -344,8 +344,11 @@ std::unique_ptr<column> ewma(scan_aggregation const& agg,
       return compute_ewma_noadjust(input, beta, stream, mr).release();
     }
   }();
-  return std::make_unique<column>(
-    cudf::data_type(cudf::type_to_id<T>()), input.size(), std::move(result));
+  return std::make_unique<column>(cudf::data_type(cudf::type_to_id<T>()),
+                                  input.size(),
+                                  std::move(result),
+                                  rmm::device_buffer{},
+                                  0);
 }
 
 struct ewma_functor {
@@ -354,7 +357,7 @@ struct ewma_functor {
     scan_aggregation const& agg,
     column_view const& input,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+    rmm::device_async_resource_ref mr)
   {
     CUDF_FAIL("Unsupported type for EWMA.");
   }
@@ -364,16 +367,16 @@ struct ewma_functor {
     scan_aggregation const& agg,
     column_view const& input,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+    rmm::device_async_resource_ref mr)
   {
     return ewma<T>(agg, input, stream, mr);
   }
 };
 
 std::unique_ptr<column> exponentially_weighted_moving_average(column_view const& input,
-                                                            scan_aggregation const& agg,
-                                                            rmm::cuda_stream_view stream,
-                                                            rmm::mr::device_memory_resource* mr)
+                                                              scan_aggregation const& agg,
+                                                              rmm::cuda_stream_view stream,
+                                                              rmm::device_async_resource_ref mr)
 {
   return type_dispatcher(input.type(), ewma_functor{}, agg, input, stream, mr);
 }

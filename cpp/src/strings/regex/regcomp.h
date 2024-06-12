@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,11 +97,11 @@ struct reinst {
  */
 class reprog {
  public:
-  reprog(const reprog&) = default;
-  reprog(reprog&&)      = default;
-  ~reprog()             = default;
-  reprog& operator=(const reprog&) = default;
-  reprog& operator=(reprog&&) = default;
+  reprog(reprog const&)            = default;
+  reprog(reprog&&)                 = default;
+  ~reprog()                        = default;
+  reprog& operator=(reprog const&) = default;
+  reprog& operator=(reprog&&)      = default;
 
   /**
    * @brief Parses the given regex pattern and produces an instance
@@ -128,10 +128,10 @@ class reprog {
   [[nodiscard]] reinst const* insts_data() const;
 
   [[nodiscard]] int32_t classes_count() const;
-  [[nodiscard]] reclass& class_at(int32_t id);
+  [[nodiscard]] reclass const& class_at(int32_t id) const;
   [[nodiscard]] reclass const* classes_data() const;
 
-  [[nodiscard]] const int32_t* starts_data() const;
+  [[nodiscard]] int32_t const* starts_data() const;
   [[nodiscard]] int32_t starts_count() const;
 
   void set_start_inst(int32_t id);

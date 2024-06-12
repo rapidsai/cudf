@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -50,7 +50,6 @@ class SubwordTokenizer:
     """
 
     def __init__(self, hash_file: str, do_lower_case: bool = True):
-
         self.do_lower_case = do_lower_case
         self.vocab_file = cpp_hashed_vocabulary(hash_file)
 
@@ -107,7 +106,7 @@ class SubwordTokenizer:
             The value of this argument defines the number of
             overlapping tokens.
             The information about the overlapping tokens is
-            present in the metadata outputed.
+            present in the metadata outputted.
 
         return_tensors : str, {"cp", "pt", "tf"} defaults to "cp"
             "cp" : Return cupy cp.ndarray objects
@@ -216,7 +215,6 @@ class SubwordTokenizer:
             stride=stride,
             do_lower=self.do_lower_case,
             do_truncate=truncation,
-            max_rows_tensor=max_num_rows,
         )
 
         tokenizer_output = {
@@ -247,7 +245,7 @@ def _bert_add_special_tokens(token_o):
     max_length = token_o["input_ids"].shape[1]
     seq_end_col = max_length - (token_o["input_ids"][:, ::-1] != 0).argmax(1)
     # clipping to take overflow into account
-    seq_end_col = cp.clip(seq_end_col + 1, a_max=max_length - 1)
+    seq_end_col = cp.clip(seq_end_col + 1, a_min=None, a_max=max_length - 1)
 
     _bert_add_special_tokens_input_ids(token_o["input_ids"], seq_end_col)
     _bert_add_special_tokens_attention_mask(
@@ -294,4 +292,6 @@ def _bert_add_special_tokens_metadata(metadata, max_length):
     # metadata seq starts from plus 1
     metadata[:, 1] = metadata[:, 1] + 1
     # clip done to take overflow into account
-    metadata[:, 2] = cp.clip(metadata[:, 2] + 1, a_max=max_length - 2)
+    metadata[:, 2] = cp.clip(
+        metadata[:, 2] + 1, a_min=None, a_max=max_length - 2
+    )

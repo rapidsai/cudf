@@ -1,10 +1,12 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+import itertools
 import warnings
 from contextlib import ExitStack
 from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
 
 import numpy as np
+import pandas as pd
 from pyarrow import dataset as pa_ds, parquet as pq
 
 from dask import dataframe as dd
@@ -20,34 +22,40 @@ except ImportError:
 import cudf
 from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
-from cudf.io.parquet import _default_open_file_options
+from cudf.io.parquet import (
+    _apply_post_filters,
+    _default_open_file_options,
+    _normalize_filters,
+)
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
-from cudf.utils.ioutils import _is_local_filesystem, _open_remote_files
+from cudf.utils.ioutils import (
+    _ROW_GROUP_SIZE_BYTES_DEFAULT,
+    _is_local_filesystem,
+    _open_remote_files,
+)
 
 
 class CudfEngine(ArrowDatasetEngine):
-    @staticmethod
-    def read_metadata(*args, **kwargs):
-        meta, stats, parts, index = ArrowDatasetEngine.read_metadata(
-            *args, **kwargs
-        )
-        new_meta = cudf.from_pandas(meta)
-        if parts:
-            # Re-set "object" dtypes align with pa schema
-            set_object_dtypes_from_pa_schema(
-                new_meta,
-                parts[0].get("common_kwargs", {}).get("schema", None),
-            )
+    @classmethod
+    def _create_dd_meta(cls, dataset_info, **kwargs):
+        # Start with pandas-version of meta
+        meta_pd = super()._create_dd_meta(dataset_info, **kwargs)
 
-        # If `strings_to_categorical==True`, convert objects to int32
-        strings_to_cats = kwargs.get("strings_to_categorical", False)
-        for col in new_meta._data.names:
-            if (
-                isinstance(new_meta._data[col], cudf.core.column.StringColumn)
-                and strings_to_cats
-            ):
-                new_meta._data[col] = new_meta._data[col].astype("int32")
-        return (new_meta, stats, parts, index)
+        # Convert to cudf
+        # (drop unsupported timezone information)
+        for k, v in meta_pd.dtypes.items():
+            if isinstance(v, pd.DatetimeTZDtype) and v.tz is not None:
+                meta_pd[k] = meta_pd[k].dt.tz_localize(None)
+        meta_cudf = cudf.from_pandas(meta_pd)
+
+        # Re-set "object" dtypes to align with pa schema
+        kwargs = dataset_info.get("kwargs", {})
+        set_object_dtypes_from_pa_schema(
+            meta_cudf,
+            kwargs.get("schema", None),
+        )
+
+        return meta_cudf
 
     @classmethod
     def multi_support(cls):
@@ -62,20 +70,34 @@ class CudfEngine(ArrowDatasetEngine):
         fs,
         columns=None,
         row_groups=None,
-        strings_to_categorical=None,
+        filters=None,
         partitions=None,
         partitioning=None,
         partition_keys=None,
         open_file_options=None,
+        dataset_kwargs=None,
         **kwargs,
     ):
-
         # Simplify row_groups if all None
         if row_groups == [None for path in paths]:
             row_groups = None
 
-        with ExitStack() as stack:
+        # Make sure we read in the columns needed for row-wise
+        # filtering after IO. This means that one or more columns
+        # will be dropped almost immediately after IO. However,
+        # we do NEED these columns for accurate filtering.
+        filters = _normalize_filters(filters)
+        projected_columns = None
+        if columns and filters:
+            projected_columns = [c for c in columns if c is not None]
+            columns = sorted(
+                set(v[0] for v in itertools.chain.from_iterable(filters))
+                | set(projected_columns)
+            )
 
+        dataset_kwargs = dataset_kwargs or {}
+        dataset_kwargs["partitioning"] = partitioning or "hive"
+        with ExitStack() as stack:
             # Non-local filesystem handling
             paths_or_fobs = paths
             if not _is_local_filesystem(fs):
@@ -89,27 +111,56 @@ class CudfEngine(ArrowDatasetEngine):
                 )
 
             # Use cudf to read in data
-            df = cudf.read_parquet(
-                paths_or_fobs,
-                engine="cudf",
-                columns=columns,
-                row_groups=row_groups if row_groups else None,
-                strings_to_categorical=strings_to_categorical,
-                **kwargs,
-            )
+            try:
+                df = cudf.read_parquet(
+                    paths_or_fobs,
+                    engine="cudf",
+                    columns=columns,
+                    row_groups=row_groups if row_groups else None,
+                    dataset_kwargs=dataset_kwargs,
+                    categorical_partitions=False,
+                    **kwargs,
+                )
+            except RuntimeError as err:
+                # TODO: Remove try/except after null-schema issue is resolved
+                # (See: https://github.com/rapidsai/cudf/issues/12702)
+                if len(paths_or_fobs) > 1:
+                    df = cudf.concat(
+                        [
+                            cudf.read_parquet(
+                                pof,
+                                engine="cudf",
+                                columns=columns,
+                                row_groups=row_groups[i]
+                                if row_groups
+                                else None,
+                                dataset_kwargs=dataset_kwargs,
+                                categorical_partitions=False,
+                                **kwargs,
+                            )
+                            for i, pof in enumerate(paths_or_fobs)
+                        ]
+                    )
+                else:
+                    raise err
+
+        # Apply filters (if any are defined)
+        df = _apply_post_filters(df, filters)
+
+        if projected_columns:
+            # Elements of `projected_columns` may now be in the index.
+            # We must filter these names from our projection
+            projected_columns = [
+                col for col in projected_columns if col in df._column_names
+            ]
+            df = df[projected_columns]
 
         if partitions and partition_keys is None:
-
             # Use `HivePartitioning` by default
-            partitioning = partitioning or {"obj": pa_ds.HivePartitioning}
             ds = pa_ds.dataset(
                 paths,
                 filesystem=fs,
-                format="parquet",
-                partitioning=partitioning["obj"].discover(
-                    *partitioning.get("args", []),
-                    **partitioning.get("kwargs", {}),
-                ),
+                **dataset_kwargs,
             )
             frag = next(ds.get_fragments())
             if frag:
@@ -126,20 +177,23 @@ class CudfEngine(ArrowDatasetEngine):
                 raise ValueError("Must pass partition sets")
 
             for i, (name, index2) in enumerate(partition_keys):
-
-                # Build the column from `codes` directly
-                # (since the category is often a larger dtype)
-                codes = as_column(
-                    partitions[i].keys.index(index2),
-                    length=len(df),
-                )
-                df[name] = build_categorical_column(
-                    categories=partitions[i].keys,
-                    codes=codes,
-                    size=codes.size,
-                    offset=codes.offset,
-                    ordered=False,
-                )
+                if len(partitions[i].keys):
+                    # Build a categorical column from `codes` directly
+                    # (since the category is often a larger dtype)
+                    codes = as_column(
+                        partitions[i].keys.get_loc(index2),
+                        length=len(df),
+                    )
+                    df[name] = build_categorical_column(
+                        categories=partitions[i].keys,
+                        codes=codes,
+                        size=codes.size,
+                        offset=codes.offset,
+                        ordered=False,
+                    )
+                elif name not in df.columns:
+                    # Add non-categorical partition column
+                    df[name] = as_column(index2, length=len(df))
 
         return df
 
@@ -152,16 +206,21 @@ class CudfEngine(ArrowDatasetEngine):
         index,
         categories=(),
         partitions=(),
+        filters=None,
         partitioning=None,
         schema=None,
         open_file_options=None,
         **kwargs,
     ):
-
         if columns is not None:
             columns = [c for c in columns]
         if isinstance(index, list):
             columns += index
+
+        dataset_kwargs = kwargs.get("dataset", {})
+        partitioning = partitioning or dataset_kwargs.get("partitioning", None)
+        if isinstance(partitioning, dict):
+            partitioning = pa_ds.partitioning(**partitioning)
 
         # Check if we are actually selecting any columns
         read_columns = columns
@@ -174,7 +233,6 @@ class CudfEngine(ArrowDatasetEngine):
             pieces = [pieces]
 
         # Extract supported kwargs from `kwargs`
-        strings_to_cats = kwargs.get("strings_to_categorical", False)
         read_kwargs = kwargs.get("read", {})
         read_kwargs.update(open_file_options or {})
         check_file_size = read_kwargs.pop("check_file_size", None)
@@ -183,7 +241,6 @@ class CudfEngine(ArrowDatasetEngine):
         # inform the user that the `read_parquet` partition
         # size is too large for the available memory
         try:
-
             # Assume multi-piece read
             paths = []
             rgs = []
@@ -191,7 +248,6 @@ class CudfEngine(ArrowDatasetEngine):
             dfs = []
 
             for i, piece in enumerate(pieces):
-
                 (path, row_group, partition_keys) = piece
                 row_group = None if row_group == [None] else row_group
 
@@ -219,14 +275,16 @@ class CudfEngine(ArrowDatasetEngine):
                             fs,
                             columns=read_columns,
                             row_groups=rgs if rgs else None,
-                            strings_to_categorical=strings_to_cats,
+                            filters=filters,
                             partitions=partitions,
                             partitioning=partitioning,
                             partition_keys=last_partition_keys,
+                            dataset_kwargs=dataset_kwargs,
                             **read_kwargs,
                         )
                     )
-                    paths = rgs = []
+                    paths = []
+                    rgs = []
                     last_partition_keys = None
                 paths.append(path)
                 rgs.append(
@@ -243,10 +301,11 @@ class CudfEngine(ArrowDatasetEngine):
                     fs,
                     columns=read_columns,
                     row_groups=rgs if rgs else None,
-                    strings_to_categorical=strings_to_cats,
+                    filters=filters,
                     partitions=partitions,
                     partitioning=partitioning,
                     partition_keys=last_partition_keys,
+                    dataset_kwargs=dataset_kwargs,
                     **read_kwargs,
                 )
             )
@@ -286,30 +345,52 @@ class CudfEngine(ArrowDatasetEngine):
         **kwargs,
     ):
         preserve_index = False
-        if set(index_cols).issubset(set(df.columns)):
-            df.index = df[index_cols].copy(deep=False)
-            df.drop(columns=index_cols, inplace=True)
+        if len(index_cols) and set(index_cols).issubset(set(df.columns)):
+            df.set_index(index_cols, drop=True, inplace=True)
             preserve_index = True
         if partition_on:
             md = write_to_dataset(
-                df,
-                path,
+                df=df,
+                root_path=path,
+                compression=compression,
                 filename=filename,
                 partition_cols=partition_on,
                 fs=fs,
                 preserve_index=preserve_index,
                 return_metadata=return_metadata,
-                **kwargs,
+                statistics=kwargs.get("statistics", "ROWGROUP"),
+                int96_timestamps=kwargs.get("int96_timestamps", False),
+                row_group_size_bytes=kwargs.get(
+                    "row_group_size_bytes", _ROW_GROUP_SIZE_BYTES_DEFAULT
+                ),
+                row_group_size_rows=kwargs.get("row_group_size_rows", None),
+                max_page_size_bytes=kwargs.get("max_page_size_bytes", None),
+                max_page_size_rows=kwargs.get("max_page_size_rows", None),
+                storage_options=kwargs.get("storage_options", None),
             )
         else:
             with fs.open(fs.sep.join([path, filename]), mode="wb") as out_file:
                 if not isinstance(out_file, IOBase):
                     out_file = BufferedWriter(out_file)
                 md = df.to_parquet(
-                    out_file,
-                    compression=compression,
+                    path=out_file,
+                    engine=kwargs.get("engine", "cudf"),
+                    index=kwargs.get("index", None),
+                    partition_cols=kwargs.get("partition_cols", None),
+                    partition_file_name=kwargs.get(
+                        "partition_file_name", None
+                    ),
+                    partition_offsets=kwargs.get("partition_offsets", None),
+                    statistics=kwargs.get("statistics", "ROWGROUP"),
+                    int96_timestamps=kwargs.get("int96_timestamps", False),
+                    row_group_size_bytes=kwargs.get(
+                        "row_group_size_bytes", _ROW_GROUP_SIZE_BYTES_DEFAULT
+                    ),
+                    row_group_size_rows=kwargs.get(
+                        "row_group_size_rows", None
+                    ),
+                    storage_options=kwargs.get("storage_options", None),
                     metadata_file_path=filename if return_metadata else None,
-                    **kwargs,
                 )
         # Return the schema needed to write the metadata
         if return_metadata:
@@ -383,13 +464,14 @@ def set_object_dtypes_from_pa_schema(df, schema):
 
 
 def read_parquet(path, columns=None, **kwargs):
-    """Read parquet files into a Dask DataFrame
+    """
+    Read parquet files into a :class:`.DataFrame`.
 
-    Calls ``dask.dataframe.read_parquet`` with ``engine=CudfEngine``
-    to coordinate the execution of ``cudf.read_parquet``, and to
-    ultimately create a ``dask_cudf.DataFrame`` collection.
+    Calls :func:`dask.dataframe.read_parquet` with ``engine=CudfEngine``
+    to coordinate the execution of :func:`cudf.read_parquet`, and to
+    ultimately create a :class:`.DataFrame` collection.
 
-    See the ``dask.dataframe.read_parquet`` documentation for
+    See the :func:`dask.dataframe.read_parquet` documentation for
     all available options.
 
     Examples
@@ -414,6 +496,7 @@ def read_parquet(path, columns=None, **kwargs):
     See Also
     --------
     cudf.read_parquet
+    dask.dataframe.read_parquet
     """
     if isinstance(columns, str):
         columns = [columns]

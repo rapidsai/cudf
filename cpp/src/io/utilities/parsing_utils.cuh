@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,9 @@
 
 #pragma once
 
-#include <io/csv/datetime.cuh>
-#include <io/utilities/trie.cuh>
+#include "column_type_histogram.hpp"
+#include "io/csv/datetime.cuh"
+#include "io/utilities/trie.cuh"
 
 #include <cudf/io/types.hpp>
 #include <cudf/lists/list_view.hpp>
@@ -26,8 +27,6 @@
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
-
-#include "column_type_histogram.hpp"
 
 #include <rmm/device_uvector.hpp>
 
@@ -64,6 +63,7 @@ struct parse_options_view {
   char thousands;
   char comment;
   bool keepquotes;
+  bool detect_whitespace_around_quotes;
   bool doublequote;
   bool dayfirst;
   bool skipblanklines;
@@ -81,6 +81,7 @@ struct parse_options {
   char thousands;
   char comment;
   bool keepquotes;
+  bool detect_whitespace_around_quotes;
   bool doublequote;
   bool dayfirst;
   bool skipblanklines;
@@ -106,6 +107,7 @@ struct parse_options {
             thousands,
             comment,
             keepquotes,
+            detect_whitespace_around_quotes,
             doublequote,
             dayfirst,
             skipblanklines,
@@ -117,8 +119,31 @@ struct parse_options {
 };
 
 /**
- * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
- * for integral types. Handles hexadecimal digits, both uppercase and lowercase.
+ * @brief Returns the escaped characters for a given character.
+ *
+ * @param escaped_char The character to escape.
+ * @return The escaped characters for a given character.
+ */
+__device__ __forceinline__ thrust::pair<char, char> get_escaped_char(char escaped_char)
+{
+  switch (escaped_char) {
+    case '"': return {'\\', '"'};
+    case '\\': return {'\\', '\\'};
+    case '/': return {'\\', '/'};
+    case '\b': return {'\\', 'b'};
+    case '\f': return {'\\', 'f'};
+    case '\n': return {'\\', 'n'};
+    case '\r': return {'\\', 'r'};
+    case '\t': return {'\\', 't'};
+    // case 'u': return UNICODE_SEQ;
+    default: return {'\0', escaped_char};
+  }
+}
+
+/**
+ * @brief Returns the numeric value of an ASCII/UTF-8 character.
+ * Handles hexadecimal digits, both uppercase and lowercase
+ * for integral types and only decimal digits for floating point types.
  * If the character is not a valid numeric digit then `0` is returned and
  * valid_flag is set to false.
  *
@@ -127,31 +152,14 @@ struct parse_options {
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T>)>
+template <typename T, bool as_hex = false>
 constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-
-  *valid_flag = false;
-  return 0;
-}
-
-/**
- * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
- * for non-integral types. Handles only decimal digits. If the character is not
- * a valid numeric digit then `0` is returned and valid_flag is set to false.
- *
- * @param c ASCII or UTF-8 character
- * @param valid_flag Set to false if input is not valid. Unchanged otherwise.
- *
- * @return uint8_t Numeric value of the character, or `0`
- */
-template <typename T, CUDF_ENABLE_IF(!std::is_integral_v<T>)>
-constexpr uint8_t decode_digit(char c, bool* valid_flag)
-{
-  if (c >= '0' && c <= '9') return c - '0';
+  if constexpr (as_hex and std::is_integral_v<T>) {
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  }
 
   *valid_flag = false;
   return 0;
@@ -194,13 +202,13 @@ constexpr bool is_infinity(char const* begin, char const* end)
  * @return The parsed and converted value
  */
 template <typename T, int base = 10>
-constexpr T parse_numeric(char const* begin,
-                          char const* end,
-                          parse_options_view const& opts,
-                          T error_result = std::numeric_limits<T>::quiet_NaN())
+__host__ __device__ std::optional<T> parse_numeric(char const* begin,
+                                                   char const* end,
+                                                   parse_options_view const& opts)
 {
   T value{};
   bool all_digits_valid = true;
+  constexpr bool as_hex = (base == 16);
 
   // Handle negative values if necessary
   int32_t sign = (*begin == '-') ? -1 : 1;
@@ -223,7 +231,7 @@ constexpr T parse_numeric(char const* begin,
     } else if (base == 10 && (*begin == 'e' || *begin == 'E')) {
       break;
     } else if (*begin != opts.thousands && *begin != '+') {
-      value = (value * base) + decode_digit<T>(*begin, &all_digits_valid);
+      value = (value * base) + decode_digit<T, as_hex>(*begin, &all_digits_valid);
     }
     ++begin;
   }
@@ -237,7 +245,7 @@ constexpr T parse_numeric(char const* begin,
         break;
       } else if (*begin != opts.thousands && *begin != '+') {
         divisor /= base;
-        value += decode_digit<T>(*begin, &all_digits_valid) * divisor;
+        value += decode_digit<T, as_hex>(*begin, &all_digits_valid) * divisor;
       }
       ++begin;
     }
@@ -248,12 +256,12 @@ constexpr T parse_numeric(char const* begin,
       if (*begin == '-' || *begin == '+') { ++begin; }
       int32_t exponent = 0;
       while (begin < end) {
-        exponent = (exponent * 10) + decode_digit<T>(*(begin++), &all_digits_valid);
+        exponent = (exponent * 10) + decode_digit<T, as_hex>(*(begin++), &all_digits_valid);
       }
       if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }
     }
   }
-  if (!all_digits_valid) { return error_result; }
+  if (!all_digits_valid) { return std::optional<T>{}; }
 
   return value * sign;
 }
@@ -304,9 +312,9 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
       }
     }
 
-    if (escape_char == true) {
+    if (escape_char) {
       // If a escape character is encountered, escape next character in next loop.
-      if (escape_next == false and *current == '\\') {
+      if (not escape_next and *current == '\\') {
         escape_next = true;
       } else {
         escape_next = false;
@@ -407,85 +415,9 @@ __device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* 
 }  // namespace gpu
 
 /**
- * @brief Searches the input character array for each of characters in a set.
- * Sums up the number of occurrences. If the 'positions' parameter is not void*,
- * positions of all occurrences are stored in the output device array.
- *
- * @param[in] d_data Input character array in device memory
- * @param[in] keys Vector containing the keys to count in the buffer
- * @param[in] result_offset Offset to add to the output positions
- * @param[out] positions Array containing the output positions
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- *
- * @return cudf::size_type total number of occurrences
- */
-template <class T>
-cudf::size_type find_all_from_set(device_span<char const> data,
-                                  std::vector<char> const& keys,
-                                  uint64_t result_offset,
-                                  T* positions,
-                                  rmm::cuda_stream_view stream);
-
-/**
- * @brief Searches the input character array for each of characters in a set.
- * Sums up the number of occurrences. If the 'positions' parameter is not void*,
- * positions of all occurrences are stored in the output device array.
- *
- * Does not load the entire file into the GPU memory at any time, so it can
- * be used to parse large files. Output array needs to be preallocated.
- *
- * @param[in] h_data Pointer to the input character array
- * @param[in] h_size Number of bytes in the input array
- * @param[in] keys Vector containing the keys to count in the buffer
- * @param[in] result_offset Offset to add to the output positions
- * @param[out] positions Array containing the output positions
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- *
- * @return cudf::size_type total number of occurrences
- */
-template <class T>
-cudf::size_type find_all_from_set(host_span<char const> data,
-                                  std::vector<char> const& keys,
-                                  uint64_t result_offset,
-                                  T* positions,
-                                  rmm::cuda_stream_view stream);
-
-/**
- * @brief Searches the input character array for each of characters in a set
- * and sums up the number of occurrences.
- *
- * @param d_data Input data buffer in device memory
- * @param keys Vector containing the keys to count in the buffer
- * @param stream CUDA stream used for device memory operations and kernel launches
- *
- * @return cudf::size_type total number of occurrences
- */
-cudf::size_type count_all_from_set(device_span<char const> data,
-                                   std::vector<char> const& keys,
-                                   rmm::cuda_stream_view stream);
-
-/**
- * @brief Searches the input character array for each of characters in a set
- * and sums up the number of occurrences.
- *
- * Does not load the entire buffer into the GPU memory at any time, so it can
- * be used with buffers of any size.
- *
- * @param h_data Pointer to the data in host memory
- * @param h_size Size of the input data, in bytes
- * @param keys Vector containing the keys to count in the buffer
- * @param stream CUDA stream used for device memory operations and kernel launches
- *
- * @return cudf::size_type total number of occurrences
- */
-cudf::size_type count_all_from_set(host_span<char const> data,
-                                   std::vector<char> const& keys,
-                                   rmm::cuda_stream_view stream);
-
-/**
  * @brief Checks whether the given character is a whitespace character.
  *
- * @param[in] ch The character to check
+ * @param ch The character to check
  *
  * @return True if the input is whitespace, False otherwise
  */
@@ -503,9 +435,9 @@ __inline__ __device__ It skip_character(It const& it, char ch)
 /**
  * @brief Adjusts the range to ignore starting/trailing whitespace and quotation characters.
  *
- * @param[in] begin Pointer to the first character in the parsing range
- * @param[in] end pointer to the first character after the parsing range
- * @param[in] quotechar The character used to denote quotes; '\0' if none
+ * @param begin Pointer to the first character in the parsing range
+ * @param end Pointer to the first character after the parsing range
+ * @param quotechar The character used to denote quotes; '\0' if none
  *
  * @return Trimmed range
  */
@@ -524,62 +456,47 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
 }
 
 /**
- * @brief Decodes a numeric value base on templated cudf type T with specified
- * base.
+ * @brief Adjusts the range to ignore starting/trailing whitespace characters.
  *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param opts The global parsing behavior options
+ * @param begin Pointer to the first character in the parsing range
+ * @param end Pointer to the first character after the parsing range
  *
- * @return The parsed numeric value
+ * @return Trimmed range
  */
-template <typename T, int base>
-__inline__ __device__ T decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts)
+__inline__ __device__ std::pair<char const*, char const*> trim_whitespaces(char const* begin,
+                                                                           char const* end)
 {
-  return cudf::io::parse_numeric<T, base>(begin, end, opts);
+  auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
+
+  auto const trim_begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
+  auto const trim_end   = thrust::find_if(thrust::seq,
+                                        thrust::make_reverse_iterator(end),
+                                        thrust::make_reverse_iterator(trim_begin),
+                                        not_whitespace);
+
+  return {trim_begin, trim_end.base()};
 }
 
 /**
- * @brief Decodes a numeric value base on templated cudf type T
+ * @brief Adjusts the range to ignore starting/trailing quotation characters.
  *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param opts The global parsing behavior options
+ * @param begin Pointer to the first character in the parsing range
+ * @param end Pointer to the first character after the parsing range
+ * @param quotechar The character used to denote quotes. Provide '\0' if no quotes should be
+ * trimmed.
  *
- * @return The parsed numeric value
+ * @return Trimmed range
  */
-template <typename T, CUDF_ENABLE_IF(!cudf::is_timestamp<T>() and !cudf::is_duration<T>())>
-__inline__ __device__ T decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts)
+__inline__ __device__ std::pair<char const*, char const*> trim_quotes(char const* begin,
+                                                                      char const* end,
+                                                                      char quotechar)
 {
-  return cudf::io::parse_numeric<T>(begin, end, opts);
-}
-
-template <typename T, CUDF_ENABLE_IF(cudf::is_timestamp<T>())>
-__inline__ __device__ T decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts)
-{
-  // If this is a string value, remove quotes
-  if ((thrust::distance(begin, end) >= 2 && *begin == '\"' && *thrust::prev(end) == '\"')) {
+  if ((thrust::distance(begin, end) >= 2 && *begin == quotechar &&
+       *thrust::prev(end) == quotechar)) {
     thrust::advance(begin, 1);
     thrust::advance(end, -1);
   }
-  return to_timestamp<T>(begin, end, opts.dayfirst);
-}
-
-template <typename T, CUDF_ENABLE_IF(cudf::is_duration<T>())>
-__inline__ __device__ T decode_value(char const* begin, char const* end, parse_options_view const&)
-{
-  // If this is a string value, remove quotes
-  if ((thrust::distance(begin, end) >= 2 && *begin == '\"' && *thrust::prev(end) == '\"')) {
-    thrust::advance(begin, 1);
-    thrust::advance(end, -1);
-  }
-  return to_duration<T>(begin, end);
+  return {begin, end};
 }
 
 struct ConvertFunctor {
@@ -601,15 +518,17 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex = false)
   {
-    static_cast<T*>(out_buffer)[row] = [as_hex, &opts, begin, end]() -> T {
+    auto const value = [as_hex, &opts, begin, end]() -> std::optional<T> {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
       if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return 1; }
       if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return 0; }
-      return as_hex ? decode_value<T, 16>(begin, end, opts) : decode_value<T>(begin, end, opts);
+      return as_hex ? cudf::io::parse_numeric<T, 16>(begin, end, opts)
+                    : cudf::io::parse_numeric<T>(begin, end, opts);
     }();
+    if (value.has_value()) { static_cast<T*>(out_buffer)[row] = *value; }
 
-    return true;
+    return value.has_value();
   }
 
   /**
@@ -626,6 +545,7 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
+    // TODO decide what's invalid input and update parsing functions
     static_cast<device_storage_type_t<T>*>(out_buffer)[row] =
       [&opts, output_type, begin, end]() -> device_storage_type_t<T> {
       return strings::detail::parse_decimal<device_storage_type_t<T>>(
@@ -647,15 +567,20 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
-    static_cast<T*>(out_buffer)[row] = [&opts, begin, end]() {
+    auto const value = [&opts, begin, end]() -> std::optional<T> {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
-      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return true; }
-      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return false; }
-      return decode_value<T>(begin, end, opts);
+      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {
+        return static_cast<T>(true);
+      }
+      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) {
+        return static_cast<T>(false);
+      }
+      return cudf::io::parse_numeric<T>(begin, end, opts);
     }();
+    if (value.has_value()) { static_cast<T*>(out_buffer)[row] = *value; }
 
-    return true;
+    return value.has_value();
   }
 
   /**
@@ -671,10 +596,20 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
-    T const value                    = decode_value<T>(begin, end, opts);
-    static_cast<T*>(out_buffer)[row] = value;
+    auto const value = [&opts, begin, end]() -> std::optional<T> {
+      // Check for user-specified true/false values
+      auto const field_len = static_cast<size_t>(end - begin);
+      if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {
+        return static_cast<T>(true);
+      }
+      if (serialized_trie_contains(opts.trie_false, {begin, field_len})) {
+        return static_cast<T>(false);
+      }
+      return cudf::io::parse_numeric<T>(begin, end, opts);
+    }();
+    if (value.has_value()) { static_cast<T*>(out_buffer)[row] = *value; }
 
-    return !std::isnan(value);
+    return value.has_value() and !std::isnan(*value);
   }
 
   /**
@@ -691,12 +626,15 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
-    if constexpr (cudf::is_timestamp<T>() or cudf::is_duration<T>()) {
-      static_cast<T*>(out_buffer)[row] = decode_value<T>(begin, end, opts);
-      return true;
+    // TODO decide what's invalid input and update parsing functions
+    if constexpr (cudf::is_timestamp<T>()) {
+      static_cast<T*>(out_buffer)[row] = to_timestamp<T>(begin, end, opts.dayfirst);
+    } else if constexpr (cudf::is_duration<T>()) {
+      static_cast<T*>(out_buffer)[row] = to_duration<T>(begin, end);
     } else {
       return false;
     }
+    return true;
   }
 };
 

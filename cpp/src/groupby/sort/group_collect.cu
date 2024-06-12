@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,12 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy_if.cuh>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -50,7 +51,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   column_view const& offsets,
   size_type num_groups,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto values_device_view = column_device_view::create(values, stream);
 
@@ -80,8 +81,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
                               not_null_pred);
     });
 
-  auto null_purged_offsets = strings::detail::make_offsets_child_column(
-    null_purged_sizes.cbegin(), null_purged_sizes.cend(), stream, mr);
+  auto null_purged_offsets = std::get<0>(cudf::detail::make_offsets_child_column(
+    null_purged_sizes.cbegin(), null_purged_sizes.cend(), stream, mr));
 
   return std::pair(std::move(null_purged_values), std::move(null_purged_offsets));
 }
@@ -91,17 +92,17 @@ std::unique_ptr<column> group_collect(column_view const& values,
                                       size_type num_groups,
                                       null_policy null_handling,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   auto [child_column,
         offsets_column] = [null_handling, num_groups, &values, &group_offsets, stream, mr] {
     auto offsets_column = make_numeric_column(
-      data_type(type_to_id<offset_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, mr);
+      data_type(type_to_id<size_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, mr);
 
     thrust::copy(rmm::exec_policy(stream),
                  group_offsets.begin(),
                  group_offsets.end(),
-                 offsets_column->mutable_view().template begin<offset_type>());
+                 offsets_column->mutable_view().template begin<size_type>());
 
     // If column of grouped values contains null elements, and null_policy == EXCLUDE,
     // those elements must be filtered out, and offsets recomputed.

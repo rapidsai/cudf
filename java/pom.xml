@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+  Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>22.12.0-SNAPSHOT</version>
+    <version>24.08.0-SNAPSHOT</version>
 
     <name>cudfjni</name>
     <description>
@@ -166,7 +166,7 @@
         <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
         <CUDF_USE_PER_THREAD_DEFAULT_STREAM>OFF</CUDF_USE_PER_THREAD_DEFAULT_STREAM>
         <USE_GDS>OFF</USE_GDS>
-        <GPU_ARCHS>ALL</GPU_ARCHS>
+        <GPU_ARCHS>RAPIDS</GPU_ARCHS>
         <CUDF_JNI_LIBCUDF_STATIC>OFF</CUDF_JNI_LIBCUDF_STATIC>
         <native.build.path>${project.build.directory}/cmake-build</native.build.path>
         <slf4j.version>1.7.30</slf4j.version>
@@ -192,6 +192,7 @@
                         <configuration>
                             <excludes>
                                 <exclude>**/CudaFatalTest.java</exclude>
+                                <exclude>**/ColumnViewNonEmptyNullsTest.java</exclude>
                             </excludes>
                         </configuration>
                         <executions>
@@ -202,14 +203,21 @@
                                 </goals>
                             </execution>
                             <execution>
+                                <id>non-empty-null-test</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <argLine>-da:ai.rapids.cudf.AssertEmptyNulls</argLine>
+                                    <test>*/ColumnViewNonEmptyNullsTest.java</test>
+                                </configuration>
+                            </execution>
+                            <execution>
                                 <id>fatal-cuda-test</id>
                                 <goals>
                                     <goal>test</goal>
                                 </goals>
                                 <configuration>
-                                    <includes>
-                                        <include>**/CudaFatalTest.java</include>
-                                    </includes>
                                     <reuseForks>false</reuseForks>
                                     <test>*/CudaFatalTest.java</test>
                                 </configuration>
@@ -233,6 +241,7 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
                             <excludes>
+                                <exclude>**/ColumnViewNonEmptyNullsTest.java</exclude>
                                 <exclude>**/CuFileTest.java</exclude>
                                 <exclude>**/CudaFatalTest.java</exclude>
                             </excludes>
@@ -250,11 +259,18 @@
                                     <goal>test</goal>
                                 </goals>
                                 <configuration>
-                                    <includes>
-                                        <include>**/CudaFatalTest.java</include>
-                                    </includes>
                                     <reuseForks>false</reuseForks>
                                     <test>*/CudaFatalTest.java</test>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>non-empty-null-test</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <argLine>-da:ai.rapids.cudf.AssertEmptyNulls</argLine>
+                                    <test>*/ColumnViewNonEmptyNullsTest.java</test>
                                 </configuration>
                             </execution>
                         </executions>
@@ -456,6 +472,7 @@
                                     <arg value="-DCUDF_CPP_BUILD_DIR=${CUDF_CPP_BUILD_DIR}"/>
                                     <arg value="-DGPU_ARCHS=${GPU_ARCHS}"/>
                                     <arg value="-DCUDF_JNI_LIBCUDF_STATIC=${CUDF_JNI_LIBCUDF_STATIC}"/>
+                                    <arg value="-DCUDF_JNI_ENABLE_PROFILING=${CUDF_JNI_ENABLE_PROFILING}"/>
                                     <arg value="-DBUILD_SHARED_LIBS=ON"/>
                                 </exec>
                                 <exec dir="${native.build.path}"

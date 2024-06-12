@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,10 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -45,6 +47,7 @@ enum class replace_policy : bool { PRECEDING, FOLLOWING };
  *
  * @param[in] input A column whose null values will be replaced
  * @param[in] replacement A cudf::column whose values will replace null values in input
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns A copy of `input` with the null values replaced with corresponding values from
@@ -53,7 +56,8 @@ enum class replace_policy : bool { PRECEDING, FOLLOWING };
 std::unique_ptr<column> replace_nulls(
   column_view const& input,
   column_view const& replacement,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Replaces all null values in a column with a scalar.
@@ -63,6 +67,7 @@ std::unique_ptr<column> replace_nulls(
  *
  * @param[in] input A column whose null values will be replaced
  * @param[in] replacement Scalar used to replace null values in `input`
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns Copy of `input` with null values replaced by `replacement`
@@ -70,7 +75,8 @@ std::unique_ptr<column> replace_nulls(
 std::unique_ptr<column> replace_nulls(
   column_view const& input,
   scalar const& replacement,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Replaces all null values in a column with the first non-null value that precedes/follows.
@@ -80,6 +86,7 @@ std::unique_ptr<column> replace_nulls(
  *
  * @param[in] input A column whose null values will be replaced
  * @param[in] replace_policy Specify the position of replacement values relative to null values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns Copy of `input` with null values replaced based on `replace_policy`
@@ -87,7 +94,8 @@ std::unique_ptr<column> replace_nulls(
 std::unique_ptr<column> replace_nulls(
   column_view const& input,
   replace_policy const& replace_policy,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Replaces all NaN values in a column with corresponding values from another column
@@ -106,6 +114,7 @@ std::unique_ptr<column> replace_nulls(
  *
  * @param input A column whose NaN values will be replaced
  * @param replacement A cudf::column whose values will replace NaN values in input
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A copy of `input` with the NaN values replaced with corresponding values from
  * `replacement`.
@@ -113,7 +122,8 @@ std::unique_ptr<column> replace_nulls(
 std::unique_ptr<column> replace_nans(
   column_view const& input,
   column_view const& replacement,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Replaces all NaN values in a column with a scalar
@@ -132,13 +142,15 @@ std::unique_ptr<column> replace_nans(
  *
  * @param input A column whose NaN values will be replaced
  * @param replacement A cudf::scalar whose value will replace NaN values in input
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A copy of `input` with the NaN values replaced by `replacement`
  */
 std::unique_ptr<column> replace_nans(
   column_view const& input,
   scalar const& replacement,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Return a copy of `input_col` replacing any `values_to_replace[i]`
@@ -147,6 +159,7 @@ std::unique_ptr<column> replace_nans(
  * @param input_col The column to find and replace values in
  * @param values_to_replace The values to replace
  * @param replacement_values The values to replace with
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns Copy of `input_col` with specified values replaced
@@ -155,7 +168,8 @@ std::unique_ptr<column> find_and_replace_all(
   column_view const& input_col,
   column_view const& values_to_replace,
   column_view const& replacement_values,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Replaces values less than `lo` in `input` with `lo_replace`,
@@ -198,6 +212,7 @@ std::unique_ptr<column> find_and_replace_all(
  * @param[in] hi Maximum clamp value. All elements greater than `hi` will be replaced by
  * `hi_replace`. Ignored if null.
  * @param[in] hi_replace All elements greater than `hi` will be replaced by `hi_replace`
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate device memory of the returned column
  *
  * @return Returns a clamped column as per `lo` and `hi` boundaries
@@ -208,7 +223,8 @@ std::unique_ptr<column> clamp(
   scalar const& lo_replace,
   scalar const& hi,
   scalar const& hi_replace,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Replaces values less than `lo` in `input` with `lo`,
@@ -244,6 +260,7 @@ std::unique_ptr<column> clamp(
  * if null.
  * @param[in] hi Maximum clamp value. All elements greater than `hi` will be replaced by `hi`
  * Ignored if null.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate device memory of the returned column
  *
  * @return Returns a clamped column as per `lo` and `hi` boundaries
@@ -252,7 +269,8 @@ std::unique_ptr<column> clamp(
   column_view const& input,
   scalar const& lo,
   scalar const& hi,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Copies from a column of floating-point elements and replaces `-NaN` and `-0.0` with `+NaN`
@@ -264,13 +282,15 @@ std::unique_ptr<column> clamp(
  *
  * @throws cudf::logic_error if column does not have floating point data type.
  * @param[in] input column_view of floating-point elements to copy and normalize
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr device_memory_resource allocator for allocating output data
  *
  * @returns new column with the modified data
  */
 std::unique_ptr<column> normalize_nans_and_zeros(
   column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Modifies a column of floating-point elements to replace all `-NaN` and `-0.0` with `+NaN`
@@ -282,8 +302,10 @@ std::unique_ptr<column> normalize_nans_and_zeros(
  *
  * @throws cudf::logic_error if column does not have floating point data type.
  * @param[in, out] in_out of floating-point elements to normalize
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
-void normalize_nans_and_zeros(mutable_column_view& in_out);
+void normalize_nans_and_zeros(mutable_column_view& in_out,
+                              rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /** @} */  // end of group
 }  // namespace cudf

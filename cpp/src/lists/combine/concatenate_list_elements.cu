@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,9 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -28,7 +30,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuda/functional>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
@@ -49,15 +53,14 @@ namespace {
 std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
                                                       bool build_null_mask,
                                                       rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
+                                                      rmm::device_async_resource_ref mr)
 {
   auto const num_rows = input.size();
 
-  static_assert(std::is_same_v<offset_type, int32_t> && std::is_same_v<size_type, int32_t>);
   auto out_offsets = make_numeric_column(
-    data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
 
-  auto const d_out_offsets  = out_offsets->mutable_view().template begin<offset_type>();
+  auto const d_out_offsets  = out_offsets->mutable_view().template begin<size_type>();
   auto const d_row_offsets  = lists_column_view(input).offsets_begin();
   auto const d_list_offsets = lists_column_view(lists_column_view(input).child()).offsets_begin();
 
@@ -117,17 +120,12 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
 std::pair<std::unique_ptr<column>, rmm::device_uvector<int8_t>>
 generate_list_offsets_and_validities(column_view const& input,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   auto const num_rows = input.size();
 
-  static_assert(std::is_same_v<offset_type, int32_t> && std::is_same_v<size_type, int32_t>);
-  auto out_offsets = make_numeric_column(
-    data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
-
   auto const lists_of_lists_dv_ptr = column_device_view::create(input, stream);
   auto const lists_dv_ptr   = column_device_view::create(lists_column_view(input).child(), stream);
-  auto const d_out_offsets  = out_offsets->mutable_view().template begin<offset_type>();
   auto const d_row_offsets  = lists_column_view(input).offsets_begin();
   auto const d_list_offsets = lists_column_view(lists_column_view(input).child()).offsets_begin();
 
@@ -135,23 +133,20 @@ generate_list_offsets_and_validities(column_view const& input,
   auto validities = rmm::device_uvector<int8_t>(num_rows, stream);
 
   // Compute output list sizes and validities.
-  auto const iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::transform(
-    rmm::exec_policy(stream),
-    iter,
-    iter + num_rows,
-    d_out_offsets,
-    [lists_of_lists_dv = *lists_of_lists_dv_ptr,
-     lists_dv          = *lists_dv_ptr,
-     d_row_offsets,
-     d_list_offsets,
-     d_validities = validities.begin(),
-     iter] __device__(auto const idx) {
+  auto sizes_itr = cudf::detail::make_counting_transform_iterator(
+    0,
+    cuda::proclaim_return_type<size_type>([lists_of_lists_dv = *lists_of_lists_dv_ptr,
+                                           lists_dv          = *lists_dv_ptr,
+                                           d_row_offsets,
+                                           d_list_offsets,
+                                           d_validities =
+                                             validities.begin()] __device__(auto const idx) {
       if (d_row_offsets[idx] == d_row_offsets[idx + 1]) {  // This is a null/empty row.
         d_validities[idx] = static_cast<int8_t>(lists_of_lists_dv.is_valid(idx));
         return size_type{0};
       }
       // The output row will not be null only if all lists on the input row are not null.
+      auto const iter = thrust::make_counting_iterator<size_type>(0);
       auto const is_valid =
         thrust::all_of(thrust::seq,
                        iter + d_row_offsets[idx],
@@ -162,11 +157,10 @@ generate_list_offsets_and_validities(column_view const& input,
 
       // Compute size of the output list as sum of sizes of all lists in the current input row.
       return d_list_offsets[d_row_offsets[idx + 1]] - d_list_offsets[d_row_offsets[idx]];
-    });
-
+    }));
   // Compute offsets from sizes.
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_out_offsets, d_out_offsets + num_rows + 1, d_out_offsets);
+  auto out_offsets = std::get<0>(
+    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + num_rows, stream, mr));
 
   return {std::move(out_offsets), std::move(validities)};
 }
@@ -181,7 +175,7 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
                                             size_type num_rows,
                                             size_type num_output_entries,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   auto const child_col      = lists_column_view(input).child();
   auto const entry_col      = lists_column_view(child_col).child();
@@ -198,7 +192,7 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
      d_list_offsets,
      d_indices = gather_map.begin(),
      d_out_list_offsets =
-       output_list_offsets.template begin<offset_type>()] __device__(size_type const idx) {
+       output_list_offsets.template begin<size_type>()] __device__(size_type const idx) {
       // The output row has been identified as a null/empty list during list size computation.
       if (d_out_list_offsets[idx + 1] == d_out_list_offsets[idx]) { return; }
 
@@ -220,7 +214,7 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
 
 std::unique_ptr<column> concatenate_lists_nullifying_rows(column_view const& input,
                                                           rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr)
+                                                          rmm::device_async_resource_ref mr)
 {
   // Generate offsets and validities of the output lists column.
   auto [list_offsets, list_validities] = generate_list_offsets_and_validities(input, stream, mr);
@@ -254,24 +248,20 @@ std::unique_ptr<column> concatenate_lists_nullifying_rows(column_view const& inp
 std::unique_ptr<column> concatenate_list_elements(column_view const& input,
                                                   concatenate_null_policy null_policy,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::device_async_resource_ref mr)
 {
-  auto type = input.type();  // Column that is lists of lists.
-  CUDF_EXPECTS(type.id() == type_id::LIST, "Input column must be a lists column.");
+  CUDF_EXPECTS(input.type().id() == type_id::LIST,
+               "Input column must be a lists column.",
+               std::invalid_argument);
 
-  auto col = lists_column_view(input).child();  // Rows, which are lists.
-  type     = col.type();
-  CUDF_EXPECTS(type.id() == type_id::LIST, "Rows of the input column must be lists.");
-
-  col  = lists_column_view(col).child();  // The last level entries what we need to check.
-  type = col.type();
-  CUDF_EXPECTS(type.id() == type_id::LIST || !cudf::is_nested(type),
-               "Entry of the input lists column must be of list or non-nested types.");
+  auto const child = lists_column_view(input).child();
+  CUDF_EXPECTS(child.type().id() == type_id::LIST,
+               "Child of the input lists column must also be a lists column.",
+               std::invalid_argument);
 
   if (input.size() == 0) { return cudf::empty_like(input); }
 
-  bool has_null_list = lists_column_view(input).child().has_nulls();
-
+  bool const has_null_list = child.has_nulls();
   return (null_policy == concatenate_null_policy::IGNORE || !has_null_list)
            ? concatenate_lists_ignore_null(input, has_null_list, stream, mr)
            : concatenate_lists_nullifying_rows(input, stream, mr);
@@ -284,10 +274,11 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
  */
 std::unique_ptr<column> concatenate_list_elements(column_view const& input,
                                                   concatenate_null_policy null_policy,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_list_elements(input, null_policy, cudf::get_default_stream(), mr);
+  return detail::concatenate_list_elements(input, null_policy, stream, mr);
 }
 
 }  // namespace lists

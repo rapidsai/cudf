@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,21 @@
  * limitations under the License.
  */
 
+#include "detail/arrow_allocator.hpp"
+
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -37,8 +43,6 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 
-#include "detail/arrow_allocator.hpp"
-
 namespace cudf {
 namespace detail {
 namespace {
@@ -47,18 +51,18 @@ namespace {
  * @brief Create arrow data buffer from given cudf column
  */
 template <typename T>
-std::shared_ptr<arrow::Buffer> fetch_data_buffer(column_view input_view,
+std::shared_ptr<arrow::Buffer> fetch_data_buffer(device_span<T const> input,
                                                  arrow::MemoryPool* ar_mr,
                                                  rmm::cuda_stream_view stream)
 {
-  const int64_t data_size_in_bytes = sizeof(T) * input_view.size();
+  int64_t const data_size_in_bytes = sizeof(T) * input.size();
 
   auto data_buffer = allocate_arrow_buffer(data_size_in_bytes, ar_mr);
 
   CUDF_CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
-                                input_view.data<T>(),
+                                input.data(),
                                 data_size_in_bytes,
-                                cudaMemcpyDeviceToHost,
+                                cudaMemcpyDefault,
                                 stream.value()));
 
   return std::move(data_buffer);
@@ -71,15 +75,18 @@ std::shared_ptr<arrow::Buffer> fetch_mask_buffer(column_view input_view,
                                                  arrow::MemoryPool* ar_mr,
                                                  rmm::cuda_stream_view stream)
 {
-  const int64_t mask_size_in_bytes = cudf::bitmask_allocation_size_bytes(input_view.size());
+  int64_t const mask_size_in_bytes = cudf::bitmask_allocation_size_bytes(input_view.size());
 
   if (input_view.has_nulls()) {
     auto mask_buffer = allocate_arrow_bitmap(static_cast<int64_t>(input_view.size()), ar_mr);
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       mask_buffer->mutable_data(),
-      (input_view.offset() > 0) ? cudf::copy_bitmask(input_view).data() : input_view.null_mask(),
+      (input_view.offset() > 0)
+        ? cudf::detail::copy_bitmask(input_view, stream, rmm::mr::get_current_device_resource())
+            .data()
+        : input_view.null_mask(),
       mask_size_in_bytes,
-      cudaMemcpyDeviceToHost,
+      cudaMemcpyDefault,
       stream.value()));
 
     // Resets all padded bits to 0
@@ -131,13 +138,73 @@ struct dispatch_to_arrow {
                                            arrow::MemoryPool* ar_mr,
                                            rmm::cuda_stream_view stream)
   {
-    return to_arrow_array(id,
-                          static_cast<int64_t>(input_view.size()),
-                          fetch_data_buffer<T>(input_view, ar_mr, stream),
-                          fetch_mask_buffer(input_view, ar_mr, stream),
-                          static_cast<int64_t>(input_view.null_count()));
+    return to_arrow_array(
+      id,
+      static_cast<int64_t>(input_view.size()),
+      fetch_data_buffer<T>(
+        device_span<T const>(input_view.data<T>(), input_view.size()), ar_mr, stream),
+      fetch_mask_buffer(input_view, ar_mr, stream),
+      static_cast<int64_t>(input_view.null_count()));
   }
 };
+
+// Convert decimal types from libcudf to arrow where those types are not
+// directly supported by Arrow. These types must be fit into 128 bits, the
+// smallest decimal resolution supported by Arrow.
+template <typename DeviceType>
+std::shared_ptr<arrow::Array> unsupported_decimals_to_arrow(column_view input,
+                                                            int32_t precision,
+                                                            arrow::MemoryPool* ar_mr,
+                                                            rmm::cuda_stream_view stream)
+{
+  constexpr size_type BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(DeviceType);
+
+  rmm::device_uvector<DeviceType> buf(input.size() * BIT_WIDTH_RATIO, stream);
+
+  auto count = thrust::make_counting_iterator(0);
+
+  thrust::for_each(
+    rmm::exec_policy(cudf::get_default_stream()),
+    count,
+    count + input.size(),
+    [in = input.begin<DeviceType>(), out = buf.data(), BIT_WIDTH_RATIO] __device__(auto in_idx) {
+      auto const out_idx = in_idx * BIT_WIDTH_RATIO;
+      // The lowest order bits are the value, the remainder
+      // simply matches the sign bit to satisfy the two's
+      // complement integer representation of negative numbers.
+      out[out_idx] = in[in_idx];
+#pragma unroll BIT_WIDTH_RATIO - 1
+      for (auto i = 1; i < BIT_WIDTH_RATIO; ++i) {
+        out[out_idx + i] = in[in_idx] < 0 ? -1 : 0;
+      }
+    });
+
+  auto const buf_size_in_bytes = buf.size() * sizeof(DeviceType);
+  auto data_buffer             = allocate_arrow_buffer(buf_size_in_bytes, ar_mr);
+
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    data_buffer->mutable_data(), buf.data(), buf_size_in_bytes, cudaMemcpyDefault, stream.value()));
+
+  auto type    = arrow::decimal(precision, -input.type().scale());
+  auto mask    = fetch_mask_buffer(input, ar_mr, stream);
+  auto buffers = std::vector<std::shared_ptr<arrow::Buffer>>{mask, std::move(data_buffer)};
+  auto data    = std::make_shared<arrow::ArrayData>(type, input.size(), buffers);
+
+  return std::make_shared<arrow::Decimal128Array>(data);
+}
+
+template <>
+std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal32>(
+  column_view input,
+  cudf::type_id,
+  column_metadata const&,
+  arrow::MemoryPool* ar_mr,
+  rmm::cuda_stream_view stream)
+{
+  using DeviceType = int32_t;
+  return unsupported_decimals_to_arrow<DeviceType>(
+    input, cudf::detail::max_precision<DeviceType>(), ar_mr, stream);
+}
 
 template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
@@ -147,37 +214,9 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
   arrow::MemoryPool* ar_mr,
   rmm::cuda_stream_view stream)
 {
-  using DeviceType                = int64_t;
-  size_type const BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
-
-  rmm::device_uvector<DeviceType> buf(input.size() * BIT_WIDTH_RATIO, stream);
-
-  auto count = thrust::make_counting_iterator(0);
-
-  thrust::for_each(rmm::exec_policy(cudf::get_default_stream()),
-                   count,
-                   count + input.size(),
-                   [in = input.begin<DeviceType>(), out = buf.data()] __device__(auto in_idx) {
-                     auto const out_idx = in_idx * 2;
-                     out[out_idx]       = in[in_idx];
-                     out[out_idx + 1]   = in[in_idx] < 0 ? -1 : 0;
-                   });
-
-  auto const buf_size_in_bytes = buf.size() * sizeof(DeviceType);
-  auto data_buffer             = allocate_arrow_buffer(buf_size_in_bytes, ar_mr);
-
-  CUDF_CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
-                                buf.data(),
-                                buf_size_in_bytes,
-                                cudaMemcpyDeviceToHost,
-                                stream.value()));
-
-  auto type    = arrow::decimal(18, -input.type().scale());
-  auto mask    = fetch_mask_buffer(input, ar_mr, stream);
-  auto buffers = std::vector<std::shared_ptr<arrow::Buffer>>{mask, std::move(data_buffer)};
-  auto data    = std::make_shared<arrow::ArrayData>(type, input.size(), buffers);
-
-  return std::make_shared<arrow::Decimal128Array>(data);
+  using DeviceType = int64_t;
+  return unsupported_decimals_to_arrow<DeviceType>(
+    input, cudf::detail::max_precision<DeviceType>(), ar_mr, stream);
 }
 
 template <>
@@ -188,7 +227,8 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal128>
   arrow::MemoryPool* ar_mr,
   rmm::cuda_stream_view stream)
 {
-  using DeviceType = __int128_t;
+  using DeviceType         = __int128_t;
+  auto const max_precision = cudf::detail::max_precision<DeviceType>();
 
   rmm::device_uvector<DeviceType> buf(input.size(), stream);
 
@@ -200,13 +240,10 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal128>
   auto const buf_size_in_bytes = buf.size() * sizeof(DeviceType);
   auto data_buffer             = allocate_arrow_buffer(buf_size_in_bytes, ar_mr);
 
-  CUDF_CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
-                                buf.data(),
-                                buf_size_in_bytes,
-                                cudaMemcpyDeviceToHost,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    data_buffer->mutable_data(), buf.data(), buf_size_in_bytes, cudaMemcpyDefault, stream.value()));
 
-  auto type    = arrow::decimal(18, -input.type().scale());
+  auto type    = arrow::decimal(max_precision, -input.type().scale());
   auto mask    = fetch_mask_buffer(input, ar_mr, stream);
   auto buffers = std::vector<std::shared_ptr<arrow::Buffer>>{mask, std::move(data_buffer)};
   auto data    = std::make_shared<arrow::ArrayData>(type, input.size(), buffers);
@@ -221,14 +258,14 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<bool>(column_view in
                                                                   arrow::MemoryPool* ar_mr,
                                                                   rmm::cuda_stream_view stream)
 {
-  auto bitmask = bools_to_mask(input, stream);
+  auto bitmask = bools_to_mask(input, stream, rmm::mr::get_current_device_resource());
 
   auto data_buffer = allocate_arrow_buffer(static_cast<int64_t>(bitmask.first->size()), ar_mr);
 
   CUDF_CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
                                 bitmask.first->data(),
                                 bitmask.first->size(),
-                                cudaMemcpyDeviceToHost,
+                                cudaMemcpyDefault,
                                 stream.value()));
   return to_arrow_array(id,
                         static_cast<int64_t>(input.size()),
@@ -247,7 +284,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
 {
   std::unique_ptr<column> tmp_column =
     ((input.offset() != 0) or
-     ((input.num_children() == 2) and (input.child(0).size() - 1 != input.size())))
+     ((input.num_children() == 1) and (input.child(0).size() - 1 != input.size())))
       ? std::make_unique<cudf::column>(input, stream)
       : nullptr;
 
@@ -262,8 +299,13 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
     return std::make_shared<arrow::StringArray>(
       0, std::move(tmp_offset_buffer), std::move(tmp_data_buffer));
   }
-  auto offset_buffer = child_arrays[0]->data()->buffers[1];
-  auto data_buffer   = child_arrays[1]->data()->buffers[1];
+  auto offset_buffer = child_arrays[strings_column_view::offsets_column_index]->data()->buffers[1];
+  auto const sview   = strings_column_view{input_view};
+  auto data_buffer   = fetch_data_buffer<char>(
+    device_span<char const>{sview.chars_begin(stream),
+                              static_cast<std::size_t>(sview.chars_size(stream))},
+    ar_mr,
+    stream);
   return std::make_shared<arrow::StringArray>(static_cast<int64_t>(input_view.size()),
                                               offset_buffer,
                                               data_buffer,
@@ -349,10 +391,10 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::dictionary32>(
 {
   // Arrow dictionary requires indices to be signed integer
   std::unique_ptr<column> dict_indices =
-    cast(cudf::dictionary_column_view(input).get_indices_annotated(),
-         cudf::data_type{type_id::INT32},
-         stream,
-         rmm::mr::get_current_device_resource());
+    detail::cast(cudf::dictionary_column_view(input).get_indices_annotated(),
+                 cudf::data_type{type_id::INT32},
+                 stream,
+                 rmm::mr::get_current_device_resource());
   auto indices = dispatch_to_arrow{}.operator()<int32_t>(
     dict_indices->view(), dict_indices->type().id(), {}, ar_mr, stream);
   auto dict_keys = cudf::dictionary_column_view(input).keys();
@@ -409,14 +451,37 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
 
   return result;
 }
+
+std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
+                                        column_metadata const& metadata,
+                                        rmm::cuda_stream_view stream,
+                                        arrow::MemoryPool* ar_mr)
+{
+  auto const column = cudf::make_column_from_scalar(input, 1, stream);
+  cudf::table_view const tv{{column->view()}};
+  auto const arrow_table  = cudf::to_arrow(tv, {metadata}, stream);
+  auto const ac           = arrow_table->column(0);
+  auto const maybe_scalar = ac->GetScalar(0);
+  if (!maybe_scalar.ok()) { CUDF_FAIL("Failed to produce a scalar"); }
+  return maybe_scalar.ValueOrDie();
+}
 }  // namespace detail
 
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        std::vector<column_metadata> const& metadata,
+                                       rmm::cuda_stream_view stream,
                                        arrow::MemoryPool* ar_mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_arrow(input, metadata, cudf::get_default_stream(), ar_mr);
+  return detail::to_arrow(input, metadata, stream, ar_mr);
 }
 
+std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
+                                        column_metadata const& metadata,
+                                        rmm::cuda_stream_view stream,
+                                        arrow::MemoryPool* ar_mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::to_arrow(input, metadata, stream, ar_mr);
+}
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,17 +23,16 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-struct IsElementValidTest : public cudf::test::BaseFixture {
-};
+struct IsElementValidTest : public cudf::test::BaseFixture {};
 
 TEST_F(IsElementValidTest, IsElementValidBasic)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 1, 1, 1, 1}, {1, 0, 0, 0, 1});
-  EXPECT_TRUE(cudf::detail::is_element_valid_sync(col, 0));
-  EXPECT_FALSE(cudf::detail::is_element_valid_sync(col, 1));
-  EXPECT_FALSE(cudf::detail::is_element_valid_sync(col, 2));
-  EXPECT_FALSE(cudf::detail::is_element_valid_sync(col, 3));
-  EXPECT_TRUE(cudf::detail::is_element_valid_sync(col, 4));
+  EXPECT_TRUE(cudf::detail::is_element_valid_sync(col, 0, cudf::get_default_stream()));
+  EXPECT_FALSE(cudf::detail::is_element_valid_sync(col, 1, cudf::get_default_stream()));
+  EXPECT_FALSE(cudf::detail::is_element_valid_sync(col, 2, cudf::get_default_stream()));
+  EXPECT_FALSE(cudf::detail::is_element_valid_sync(col, 3, cudf::get_default_stream()));
+  EXPECT_TRUE(cudf::detail::is_element_valid_sync(col, 4, cudf::get_default_stream()));
 }
 
 TEST_F(IsElementValidTest, IsElementValidLarge)
@@ -46,7 +45,7 @@ TEST_F(IsElementValidTest, IsElementValidLarge)
   cudf::test::fixed_width_column_wrapper<int32_t> col(val, val + num_rows, valid);
 
   for (int i = 0; i < num_rows; i++) {
-    EXPECT_EQ(cudf::detail::is_element_valid_sync(col, i), filter(i));
+    EXPECT_EQ(cudf::detail::is_element_valid_sync(col, i, cudf::get_default_stream()), filter(i));
   }
 }
 
@@ -55,16 +54,16 @@ TEST_F(IsElementValidTest, IsElementValidOffset)
   cudf::test::fixed_width_column_wrapper<int32_t> col({1, 1, 1, 1, 1}, {1, 0, 0, 0, 1});
   {
     auto offset_col = cudf::slice(col, {1, 5}).front();
-    EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 0));
-    EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 1));
-    EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 2));
-    EXPECT_TRUE(cudf::detail::is_element_valid_sync(offset_col, 3));
+    EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 0, cudf::get_default_stream()));
+    EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 1, cudf::get_default_stream()));
+    EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 2, cudf::get_default_stream()));
+    EXPECT_TRUE(cudf::detail::is_element_valid_sync(offset_col, 3, cudf::get_default_stream()));
   }
   {
     auto offset_col = cudf::slice(col, {2, 5}).front();
-    EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 0));
-    EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 1));
-    EXPECT_TRUE(cudf::detail::is_element_valid_sync(offset_col, 2));
+    EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 0, cudf::get_default_stream()));
+    EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 1, cudf::get_default_stream()));
+    EXPECT_TRUE(cudf::detail::is_element_valid_sync(offset_col, 2, cudf::get_default_stream()));
   }
 }
 
@@ -80,6 +79,7 @@ TEST_F(IsElementValidTest, IsElementValidOffsetLarge)
   auto offset_col = cudf::slice(col, {offset, num_rows}).front();
 
   for (int i = 0; i < offset_col.size(); i++) {
-    EXPECT_EQ(cudf::detail::is_element_valid_sync(offset_col, i), filter(i + offset));
+    EXPECT_EQ(cudf::detail::is_element_valid_sync(offset_col, i, cudf::get_default_stream()),
+              filter(i + offset));
   }
 }

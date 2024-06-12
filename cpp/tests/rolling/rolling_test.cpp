@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/random.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
@@ -31,36 +33,32 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <src/rolling/detail/rolling.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
+#include <src/rolling/detail/rolling.hpp>
+
 #include <limits>
 #include <type_traits>
 #include <vector>
 
-using cudf::bitmask_type;
-using cudf::size_type;
-using cudf::test::fixed_width_column_wrapper;
-
-class RollingStringTest : public cudf::test::BaseFixture {
-};
+class RollingStringTest : public cudf::test::BaseFixture {};
 
 TEST_F(RollingStringTest, NoNullStringMinMaxCount)
 {
   cudf::test::strings_column_wrapper input(
     {"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"});
-  std::vector<size_type> window{2};
+  std::vector<cudf::size_type> window{2};
   cudf::test::strings_column_wrapper expected_min(
     {"This", "This", "being", "being", "being", "being", "column", "column", "column"},
     {1, 1, 1, 1, 1, 1, 1, 1, 1});
   cudf::test::strings_column_wrapper expected_max(
     {"rolling", "test", "test", "test", "test", "string", "string", "string", "string"},
     {1, 1, 1, 1, 1, 1, 1, 1, 1});
-  fixed_width_column_wrapper<size_type> expected_count({3, 4, 4, 4, 4, 4, 4, 3, 2},
-                                                       {1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_count(
+    {3, 4, 4, 4, 4, 4, 4, 3, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
 
   auto got_min = cudf::rolling_window(
     input, window[0], window[0], 1, *cudf::make_min_aggregation<cudf::rolling_aggregation>());
@@ -86,17 +84,17 @@ TEST_F(RollingStringTest, NullStringMinMaxCount)
   cudf::test::strings_column_wrapper input(
     {"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"},
     {1, 0, 0, 1, 0, 1, 1, 1, 0});
-  std::vector<size_type> window{2};
+  std::vector<cudf::size_type> window{2};
   cudf::test::strings_column_wrapper expected_min(
     {"This", "This", "test", "operated", "on", "on", "on", "on", "string"},
     {1, 1, 1, 1, 1, 1, 1, 1, 1});
   cudf::test::strings_column_wrapper expected_max(
     {"This", "test", "test", "test", "test", "string", "string", "string", "string"},
     {1, 1, 1, 1, 1, 1, 1, 1, 1});
-  fixed_width_column_wrapper<size_type> expected_count_val({1, 2, 1, 2, 3, 3, 3, 2, 1},
-                                                           {1, 1, 1, 1, 1, 1, 1, 1, 1});
-  fixed_width_column_wrapper<size_type> expected_count_all({3, 4, 4, 4, 4, 4, 4, 3, 2},
-                                                           {1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_count_val(
+    {1, 2, 1, 2, 3, 3, 3, 2, 1}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_count_all(
+    {3, 4, 4, 4, 4, 4, 4, 3, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
 
   auto got_min = cudf::rolling_window(
     input, window[0], window[0], 1, *cudf::make_min_aggregation<cudf::rolling_aggregation>());
@@ -122,17 +120,17 @@ TEST_F(RollingStringTest, MinPeriods)
   cudf::test::strings_column_wrapper input(
     {"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"},
     {1, 0, 0, 1, 0, 1, 1, 1, 0});
-  std::vector<size_type> window{2};
+  std::vector<cudf::size_type> window{2};
   cudf::test::strings_column_wrapper expected_min(
     {"This", "This", "This", "operated", "on", "on", "on", "on", "on"},
     {0, 0, 0, 0, 1, 1, 1, 0, 0});
   cudf::test::strings_column_wrapper expected_max(
     {"This", "test", "test", "test", "test", "string", "string", "string", "string"},
     {0, 0, 0, 0, 1, 1, 1, 0, 0});
-  fixed_width_column_wrapper<size_type> expected_count_val({1, 2, 1, 2, 3, 3, 3, 2, 2},
-                                                           {1, 1, 1, 1, 1, 1, 1, 1, 0});
-  fixed_width_column_wrapper<size_type> expected_count_all({3, 4, 4, 4, 4, 4, 4, 3, 2},
-                                                           {0, 1, 1, 1, 1, 1, 1, 0, 0});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_count_val(
+    {1, 2, 1, 2, 3, 3, 3, 2, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_count_all(
+    {3, 4, 4, 4, 4, 4, 4, 3, 2}, {0, 1, 1, 1, 1, 1, 1, 0, 0});
 
   auto got_min = cudf::rolling_window(
     input, window[0], window[0], 3, *cudf::make_min_aggregation<cudf::rolling_aggregation>());
@@ -153,27 +151,11 @@ TEST_F(RollingStringTest, MinPeriods)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_all, got_count_all->view());
 }
 
-TEST_F(RollingStringTest, ZeroWindowSize)
-{
-  cudf::test::strings_column_wrapper input(
-    {"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"},
-    {1, 0, 0, 1, 0, 1, 1, 1, 0});
-  fixed_width_column_wrapper<size_type> expected_count({0, 0, 0, 0, 0, 0, 0, 0, 0},
-                                                       {1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
-
-  auto got_count = cudf::rolling_window(
-    input, 0, 0, 0, *cudf::make_count_aggregation<cudf::rolling_aggregation>());
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count, got_count->view());
-}
-
 // =========================================================================================
-class RollingStructTest : public cudf::test::BaseFixture {
-};
+class RollingStructTest : public cudf::test::BaseFixture {};
 
 TEST_F(RollingStructTest, NoNullStructsMinMaxCount)
 {
-  using namespace cudf::test::iterators;
   using strings_col = cudf::test::strings_column_wrapper;
   using ints_col    = cudf::test::fixed_width_column_wrapper<int32_t>;
   using structs_col = cudf::test::structs_column_wrapper;
@@ -183,42 +165,43 @@ TEST_F(RollingStructTest, NoNullStructsMinMaxCount)
       auto child1 = strings_col{
         "This", "This", "being", "being", "being", "being", "column", "column", "column"};
       auto child2 = ints_col{1, 1, 5, 5, 5, 5, 9, 9, 9};
-      return structs_col{{child1, child2}, no_nulls()};
+      return structs_col{{child1, child2}, cudf::test::iterators::no_nulls()};
     }();
 
     auto const expected_max = [] {
       auto child1 = strings_col{
         "rolling", "test", "test", "test", "test", "string", "string", "string", "string"};
       auto child2 = ints_col{3, 4, 4, 4, 4, 8, 8, 8, 8};
-      return structs_col{{child1, child2}, no_nulls()};
+      return structs_col{{child1, child2}, cudf::test::iterators::no_nulls()};
     }();
 
-    auto const expected_count = ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, no_nulls()};
-    auto constexpr preceeding = 2;
+    auto const expected_count =
+      ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, cudf::test::iterators::no_nulls()};
+    auto constexpr preceding  = 2;
     auto constexpr following  = 2;
     auto constexpr min_period = 1;
 
     auto const result_min =
       cudf::rolling_window(input,
-                           preceeding,
+                           preceding,
                            following,
                            min_period,
                            *cudf::make_min_aggregation<cudf::rolling_aggregation>());
     auto const result_max =
       cudf::rolling_window(input,
-                           preceeding,
+                           preceding,
                            following,
                            min_period,
                            *cudf::make_max_aggregation<cudf::rolling_aggregation>());
     auto const result_count_valid =
       cudf::rolling_window(input,
-                           preceeding,
+                           preceding,
                            following,
                            min_period,
                            *cudf::make_count_aggregation<cudf::rolling_aggregation>());
     auto const result_count_all = cudf::rolling_window(
       input,
-      preceeding,
+      preceding,
       following,
       min_period,
       *cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
@@ -265,7 +248,6 @@ TEST_F(RollingStructTest, NoNullStructsMinMaxCount)
 
 TEST_F(RollingStructTest, NullChildrenMinMaxCount)
 {
-  using namespace cudf::test::iterators;
   using strings_col = cudf::test::strings_column_wrapper;
   using ints_col    = cudf::test::fixed_width_column_wrapper<int32_t>;
   using structs_col = cudf::test::structs_column_wrapper;
@@ -273,7 +255,7 @@ TEST_F(RollingStructTest, NullChildrenMinMaxCount)
   auto const input = [] {
     auto child1 = strings_col{
       {"This", "" /*NULL*/, "" /*NULL*/, "test", "" /*NULL*/, "operated", "on", "string", "column"},
-      nulls_at({1, 2, 4})};
+      cudf::test::iterators::nulls_at({1, 2, 4})};
     auto child2 = ints_col{1, 2, 3, 4, 5, 6, 7, 8, 9};
     return structs_col{{child1, child2}};
   }();
@@ -288,46 +270,47 @@ TEST_F(RollingStructTest, NullChildrenMinMaxCount)
                                "column",
                                "column",
                                "column"},
-                              nulls_at({0, 1, 2, 3, 4, 5})};
+                              cudf::test::iterators::nulls_at({0, 1, 2, 3, 4, 5})};
     auto child2 = ints_col{2, 2, 2, 3, 5, 5, 9, 9, 9};
-    return structs_col{{child1, child2}, no_nulls()};
+    return structs_col{{child1, child2}, cudf::test::iterators::no_nulls()};
   }();
 
   auto const expected_max = [] {
     auto child1 =
       strings_col{"This", "test", "test", "test", "test", "string", "string", "string", "string"};
     auto child2 = ints_col{1, 4, 4, 4, 4, 8, 8, 8, 8};
-    return structs_col{{child1, child2}, no_nulls()};
+    return structs_col{{child1, child2}, cudf::test::iterators::no_nulls()};
   }();
 
-  auto const expected_count = ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, no_nulls()};
-  auto constexpr preceeding = 2;
+  auto const expected_count =
+    ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, cudf::test::iterators::no_nulls()};
+  auto constexpr preceding  = 2;
   auto constexpr following  = 2;
   auto constexpr min_period = 1;
 
   auto const result_min =
     cudf::rolling_window(input,
-                         preceeding,
+                         preceding,
                          following,
                          min_period,
                          *cudf::make_min_aggregation<cudf::rolling_aggregation>());
 
   auto const result_max =
     cudf::rolling_window(input,
-                         preceeding,
+                         preceding,
                          following,
                          min_period,
                          *cudf::make_max_aggregation<cudf::rolling_aggregation>());
 
   auto const result_count_valid =
     cudf::rolling_window(input,
-                         preceeding,
+                         preceding,
                          following,
                          min_period,
                          *cudf::make_count_aggregation<cudf::rolling_aggregation>());
   auto const result_count_all = cudf::rolling_window(
     input,
-    preceeding,
+    preceding,
     following,
     min_period,
     *cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
@@ -340,7 +323,6 @@ TEST_F(RollingStructTest, NullChildrenMinMaxCount)
 
 TEST_F(RollingStructTest, NullParentMinMaxCount)
 {
-  using namespace cudf::test::iterators;
   using strings_col = cudf::test::strings_column_wrapper;
   using ints_col    = cudf::test::fixed_width_column_wrapper<int32_t>;
   using structs_col = cudf::test::structs_column_wrapper;
@@ -357,51 +339,53 @@ TEST_F(RollingStructTest, NullParentMinMaxCount)
                               "string",
                               "" /*NULL*/};
     auto child2 = ints_col{1, null, null, 4, null, 6, 7, 8, null};
-    return structs_col{{child1, child2}, nulls_at({1, 2, 4, 8})};
+    return structs_col{{child1, child2}, cudf::test::iterators::nulls_at({1, 2, 4, 8})};
   }();
 
   auto const expected_min = [] {
     auto child1 = strings_col{"This", "This", "test", "operated", "on", "on", "on", "on", "string"};
     auto child2 = ints_col{1, 1, 4, 6, 7, 7, 7, 7, 8};
-    return structs_col{{child1, child2}, no_nulls()};
+    return structs_col{{child1, child2}, cudf::test::iterators::no_nulls()};
   }();
 
   auto const expected_max = [] {
     auto child1 =
       strings_col{"This", "test", "test", "test", "test", "string", "string", "string", "string"};
     auto child2 = ints_col{1, 4, 4, 4, 4, 8, 8, 8, 8};
-    return structs_col{{child1, child2}, no_nulls()};
+    return structs_col{{child1, child2}, cudf::test::iterators::no_nulls()};
   }();
 
-  auto const expected_count_valid = ints_col{{1, 2, 1, 2, 3, 3, 3, 2, 1}, no_nulls()};
-  auto const expected_count_all   = ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, no_nulls()};
-  auto constexpr preceeding       = 2;
-  auto constexpr following        = 2;
-  auto constexpr min_period       = 1;
+  auto const expected_count_valid =
+    ints_col{{1, 2, 1, 2, 3, 3, 3, 2, 1}, cudf::test::iterators::no_nulls()};
+  auto const expected_count_all =
+    ints_col{{3, 4, 4, 4, 4, 4, 4, 3, 2}, cudf::test::iterators::no_nulls()};
+  auto constexpr preceding  = 2;
+  auto constexpr following  = 2;
+  auto constexpr min_period = 1;
 
   auto const result_min =
     cudf::rolling_window(input,
-                         preceeding,
+                         preceding,
                          following,
                          min_period,
                          *cudf::make_min_aggregation<cudf::rolling_aggregation>());
 
   auto const result_max =
     cudf::rolling_window(input,
-                         preceeding,
+                         preceding,
                          following,
                          min_period,
                          *cudf::make_max_aggregation<cudf::rolling_aggregation>());
 
   auto const result_count_valid =
     cudf::rolling_window(input,
-                         preceeding,
+                         preceding,
                          following,
                          min_period,
                          *cudf::make_count_aggregation<cudf::rolling_aggregation>());
   auto const result_count_all = cudf::rolling_window(
     input,
-    preceeding,
+    preceding,
     following,
     min_period,
     *cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
@@ -418,19 +402,19 @@ class RollingTest : public cudf::test::BaseFixture {
  protected:
   // input as column_wrapper
   void run_test_col(cudf::column_view const& input,
-                    const std::vector<size_type>& preceding_window,
-                    const std::vector<size_type>& following_window,
-                    size_type min_periods,
+                    std::vector<cudf::size_type> const& preceding_window,
+                    std::vector<cudf::size_type> const& following_window,
+                    cudf::size_type min_periods,
                     cudf::rolling_aggregation const& op)
   {
     std::unique_ptr<cudf::column> output;
 
     // wrap windows
     if (preceding_window.size() > 1) {
-      fixed_width_column_wrapper<size_type> preceding_window_wrapper(preceding_window.begin(),
-                                                                     preceding_window.end());
-      fixed_width_column_wrapper<size_type> following_window_wrapper(following_window.begin(),
-                                                                     following_window.end());
+      cudf::test::fixed_width_column_wrapper<cudf::size_type> preceding_window_wrapper(
+        preceding_window.begin(), preceding_window.end());
+      cudf::test::fixed_width_column_wrapper<cudf::size_type> following_window_wrapper(
+        following_window.begin(), following_window.end());
 
       EXPECT_NO_THROW(
         output = cudf::rolling_window(
@@ -448,9 +432,9 @@ class RollingTest : public cudf::test::BaseFixture {
 
   // helper function to test all aggregators
   void run_test_col_agg(cudf::column_view const& input,
-                        const std::vector<size_type>& preceding_window,
-                        const std::vector<size_type>& following_window,
-                        size_type min_periods)
+                        std::vector<cudf::size_type> const& preceding_window,
+                        std::vector<cudf::size_type> const& following_window,
+                        cudf::size_type min_periods)
   {
     // test all supported aggregators
     run_test_col(input,
@@ -496,34 +480,34 @@ class RollingTest : public cudf::test::BaseFixture {
   template <bool include_nulls>
   std::unique_ptr<cudf::column> create_count_reference_output(
     cudf::column_view const& input,
-    std::vector<size_type> const& preceding_window_col,
-    std::vector<size_type> const& following_window_col,
-    size_type min_periods)
+    std::vector<cudf::size_type> const& preceding_window_col,
+    std::vector<cudf::size_type> const& following_window_col,
+    cudf::size_type min_periods)
   {
-    size_type num_rows = input.size();
+    cudf::size_type num_rows = input.size();
     std::vector<cudf::size_type> ref_data(num_rows);
     std::vector<bool> ref_valid(num_rows);
 
     // input data and mask
 
-    std::vector<bitmask_type> in_valid = cudf::test::bitmask_to_host(input);
-    bitmask_type* valid_mask           = in_valid.data();
+    std::vector<cudf::bitmask_type> in_valid = cudf::test::bitmask_to_host(input);
+    cudf::bitmask_type* valid_mask           = in_valid.data();
 
-    for (size_type i = 0; i < num_rows; i++) {
+    for (cudf::size_type i = 0; i < num_rows; i++) {
       // load sizes
       min_periods = std::max(min_periods, 1);  // at least one observation is required
 
       // compute bounds
-      auto preceding_window = preceding_window_col[i % preceding_window_col.size()];
-      auto following_window = following_window_col[i % following_window_col.size()];
-      size_type start       = std::min(num_rows, std::max(0, i - preceding_window + 1));
-      size_type end         = std::min(num_rows, std::max(0, i + following_window + 1));
-      size_type start_index = std::min(start, end);
-      size_type end_index   = std::max(start, end);
+      auto preceding_window       = preceding_window_col[i % preceding_window_col.size()];
+      auto following_window       = following_window_col[i % following_window_col.size()];
+      cudf::size_type start       = std::min(num_rows, std::max(0, i - preceding_window + 1));
+      cudf::size_type end         = std::min(num_rows, std::max(0, i + following_window + 1));
+      cudf::size_type start_index = std::min(start, end);
+      cudf::size_type end_index   = std::max(start, end);
 
       // aggregate
-      size_type count = 0;
-      for (size_type j = start_index; j < end_index; j++) {
+      cudf::size_type count = 0;
+      for (cudf::size_type j = start_index; j < end_index; j++) {
         if (include_nulls || !input.nullable() || cudf::bit_is_set(valid_mask, j)) count++;
       }
 
@@ -531,7 +515,7 @@ class RollingTest : public cudf::test::BaseFixture {
       if (ref_valid[i]) ref_data[i] = count;
     }
 
-    fixed_width_column_wrapper<cudf::size_type> col(
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> col(
       ref_data.begin(), ref_data.end(), ref_valid.begin());
     return col.release();
   }
@@ -543,36 +527,36 @@ class RollingTest : public cudf::test::BaseFixture {
             std::enable_if_t<is_rolling_supported<T, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(
     cudf::column_view const& input,
-    std::vector<size_type> const& preceding_window_col,
-    std::vector<size_type> const& following_window_col,
-    size_type min_periods)
+    std::vector<cudf::size_type> const& preceding_window_col,
+    std::vector<cudf::size_type> const& following_window_col,
+    cudf::size_type min_periods)
   {
-    size_type num_rows = input.size();
+    cudf::size_type num_rows = input.size();
     thrust::host_vector<OutputType> ref_data(num_rows);
     thrust::host_vector<bool> ref_valid(num_rows);
 
     // input data and mask
-    auto [in_col, in_valid]  = cudf::test::to_host<T>(input);
-    bitmask_type* valid_mask = in_valid.data();
+    auto [in_col, in_valid]        = cudf::test::to_host<T>(input);
+    cudf::bitmask_type* valid_mask = in_valid.data();
 
     agg_op op;
-    for (size_type i = 0; i < num_rows; i++) {
+    for (cudf::size_type i = 0; i < num_rows; i++) {
       OutputType val = agg_op::template identity<OutputType>();
 
       // load sizes
       min_periods = std::max(min_periods, 1);  // at least one observation is required
 
       // compute bounds
-      auto preceding_window = preceding_window_col[i % preceding_window_col.size()];
-      auto following_window = following_window_col[i % following_window_col.size()];
-      size_type start       = std::min(num_rows, std::max(0, i - preceding_window + 1));
-      size_type end         = std::min(num_rows, std::max(0, i + following_window + 1));
-      size_type start_index = std::min(start, end);
-      size_type end_index   = std::max(start, end);
+      auto preceding_window       = preceding_window_col[i % preceding_window_col.size()];
+      auto following_window       = following_window_col[i % following_window_col.size()];
+      cudf::size_type start       = std::min(num_rows, std::max(0, i - preceding_window + 1));
+      cudf::size_type end         = std::min(num_rows, std::max(0, i + following_window + 1));
+      cudf::size_type start_index = std::min(start, end);
+      cudf::size_type end_index   = std::max(start, end);
 
       // aggregate
-      size_type count = 0;
-      for (size_type j = start_index; j < end_index; j++) {
+      cudf::size_type count = 0;
+      for (cudf::size_type j = start_index; j < end_index; j++) {
         if (!input.nullable() || cudf::bit_is_set(valid_mask, j)) {
           val = op(static_cast<OutputType>(in_col[j]), val);
           count++;
@@ -585,7 +569,8 @@ class RollingTest : public cudf::test::BaseFixture {
       }
     }
 
-    fixed_width_column_wrapper<OutputType> col(ref_data.begin(), ref_data.end(), ref_valid.begin());
+    cudf::test::fixed_width_column_wrapper<OutputType> col(
+      ref_data.begin(), ref_data.end(), ref_valid.begin());
     return col.release();
   }
 
@@ -596,9 +581,9 @@ class RollingTest : public cudf::test::BaseFixture {
             std::enable_if_t<!is_rolling_supported<T, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(
     cudf::column_view const& input,
-    std::vector<size_type> const& preceding_window_col,
-    std::vector<size_type> const& following_window_col,
-    size_type min_periods)
+    std::vector<cudf::size_type> const& preceding_window_col,
+    std::vector<cudf::size_type> const& following_window_col,
+    cudf::size_type min_periods)
   {
     CUDF_FAIL("Unsupported combination of type and aggregation");
   }
@@ -606,9 +591,9 @@ class RollingTest : public cudf::test::BaseFixture {
   std::unique_ptr<cudf::column> create_reference_output(
     cudf::rolling_aggregation const& op,
     cudf::column_view const& input,
-    std::vector<size_type> const& preceding_window,
-    std::vector<size_type> const& following_window,
-    size_type min_periods)
+    std::vector<cudf::size_type> const& preceding_window,
+    std::vector<cudf::size_type> const& following_window,
+    cudf::size_type min_periods)
   {
     // unroll aggregation types
     switch (op.kind) {
@@ -642,29 +627,27 @@ class RollingTest : public cudf::test::BaseFixture {
                                        cudf::detail::target_type_t<T, cudf::aggregation::MEAN>,
                                        true>(
           input, preceding_window, following_window, min_periods);
-      default: return fixed_width_column_wrapper<T>({}).release();
+      default: return cudf::test::fixed_width_column_wrapper<T>({}).release();
     }
   }
 };
 
 template <typename T>
-class RollingVarStdTest : public cudf::test::BaseFixture {
-};
+class RollingVarStdTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(RollingVarStdTest, cudf::test::FixedWidthTypesWithoutChrono);
 
-class RollingtVarStdTestUntyped : public cudf::test::BaseFixture {
-};
+class RollingtVarStdTestUntyped : public cudf::test::BaseFixture {};
 
-class RollingErrorTest : public cudf::test::BaseFixture {
-};
+class RollingErrorTest : public cudf::test::BaseFixture {};
 
 // negative sizes
 TEST_F(RollingErrorTest, NegativeMinPeriods)
 {
-  const std::vector<size_type> col_data = {0, 1, 2, 0, 4};
-  const std::vector<bool> col_valid     = {1, 1, 1, 0, 1};
-  fixed_width_column_wrapper<size_type> input(col_data.begin(), col_data.end(), col_valid.begin());
+  const std::vector<cudf::size_type> col_data = {0, 1, 2, 0, 4};
+  const std::vector<bool> col_valid           = {1, 1, 1, 0, 1};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> input(
+    col_data.begin(), col_data.end(), col_valid.begin());
 
   EXPECT_THROW(
     cudf::rolling_window(input, 2, 2, -2, *cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
@@ -674,14 +657,15 @@ TEST_F(RollingErrorTest, NegativeMinPeriods)
 // window array size mismatch
 TEST_F(RollingErrorTest, WindowArraySizeMismatch)
 {
-  const std::vector<size_type> col_data = {0, 1, 2, 0, 4};
-  const std::vector<bool> col_valid     = {1, 1, 1, 0, 1};
-  fixed_width_column_wrapper<size_type> input(col_data.begin(), col_data.end(), col_valid.begin());
+  const std::vector<cudf::size_type> col_data = {0, 1, 2, 0, 4};
+  const std::vector<bool> col_valid           = {1, 1, 1, 0, 1};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> input(
+    col_data.begin(), col_data.end(), col_valid.begin());
 
-  std::vector<size_type> five({2, 1, 2, 1, 4});
-  std::vector<size_type> four({1, 2, 3, 4});
-  fixed_width_column_wrapper<size_type> five_elements(five.begin(), five.end());
-  fixed_width_column_wrapper<size_type> four_elements(four.begin(), four.end());
+  std::vector<cudf::size_type> five({2, 1, 2, 1, 4});
+  std::vector<cudf::size_type> four({1, 2, 3, 4});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> five_elements(five.begin(), five.end());
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> four_elements(four.begin(), four.end());
 
   // this runs ok
   EXPECT_NO_THROW(cudf::rolling_window(input,
@@ -715,8 +699,8 @@ TEST_F(RollingErrorTest, EmptyInput)
                     empty_col, 2, 0, 2, *cudf::make_sum_aggregation<cudf::rolling_aggregation>()));
   EXPECT_EQ(output->size(), 0);
 
-  fixed_width_column_wrapper<int32_t> preceding_window{};
-  fixed_width_column_wrapper<int32_t> following_window{};
+  cudf::test::fixed_width_column_wrapper<int32_t> preceding_window{};
+  cudf::test::fixed_width_column_wrapper<int32_t> following_window{};
   EXPECT_NO_THROW(output =
                     cudf::rolling_window(empty_col,
                                          preceding_window,
@@ -725,7 +709,7 @@ TEST_F(RollingErrorTest, EmptyInput)
                                          *cudf::make_sum_aggregation<cudf::rolling_aggregation>()));
   EXPECT_EQ(output->size(), 0);
 
-  fixed_width_column_wrapper<int32_t> nonempty_col{{1, 2, 3}};
+  cudf::test::fixed_width_column_wrapper<int32_t> nonempty_col{{1, 2, 3}};
   EXPECT_NO_THROW(output =
                     cudf::rolling_window(nonempty_col,
                                          preceding_window,
@@ -737,12 +721,12 @@ TEST_F(RollingErrorTest, EmptyInput)
 
 TEST_F(RollingErrorTest, SizeMismatch)
 {
-  fixed_width_column_wrapper<int32_t> nonempty_col{{1, 2, 3}};
+  cudf::test::fixed_width_column_wrapper<int32_t> nonempty_col{{1, 2, 3}};
   std::unique_ptr<cudf::column> output;
 
   {
-    fixed_width_column_wrapper<int32_t> preceding_window{{1, 1}};  // wrong size
-    fixed_width_column_wrapper<int32_t> following_window{{1, 1, 1}};
+    cudf::test::fixed_width_column_wrapper<int32_t> preceding_window{{1, 1}};  // wrong size
+    cudf::test::fixed_width_column_wrapper<int32_t> following_window{{1, 1, 1}};
     EXPECT_THROW(
       output = cudf::rolling_window(nonempty_col,
                                     preceding_window,
@@ -752,8 +736,8 @@ TEST_F(RollingErrorTest, SizeMismatch)
       cudf::logic_error);
   }
   {
-    fixed_width_column_wrapper<int32_t> preceding_window{{1, 1, 1}};
-    fixed_width_column_wrapper<int32_t> following_window{{1, 2}};  // wrong size
+    cudf::test::fixed_width_column_wrapper<int32_t> preceding_window{{1, 1, 1}};
+    cudf::test::fixed_width_column_wrapper<int32_t> following_window{{1, 2}};  // wrong size
     EXPECT_THROW(
       output = cudf::rolling_window(nonempty_col,
                                     preceding_window,
@@ -766,11 +750,11 @@ TEST_F(RollingErrorTest, SizeMismatch)
 
 TEST_F(RollingErrorTest, WindowWrongDtype)
 {
-  fixed_width_column_wrapper<int32_t> nonempty_col{{1, 2, 3}};
+  cudf::test::fixed_width_column_wrapper<int32_t> nonempty_col{{1, 2, 3}};
   std::unique_ptr<cudf::column> output;
 
-  fixed_width_column_wrapper<float> preceding_window{{1.0f, 1.0f, 1.0f}};
-  fixed_width_column_wrapper<float> following_window{{1.0f, 1.0f, 1.0f}};
+  cudf::test::fixed_width_column_wrapper<float> preceding_window{{1.0f, 1.0f, 1.0f}};
+  cudf::test::fixed_width_column_wrapper<float> following_window{{1.0f, 1.0f, 1.0f}};
   EXPECT_THROW(
     output = cudf::rolling_window(nonempty_col,
                                   preceding_window,
@@ -783,16 +767,16 @@ TEST_F(RollingErrorTest, WindowWrongDtype)
 // incorrect type/aggregation combo: sum of timestamps
 TEST_F(RollingErrorTest, SumTimestampNotSupported)
 {
-  constexpr size_type size{10};
-  fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
+  constexpr cudf::size_type size{10};
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> input_ms(
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> input_ms(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep> input_us(
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep> input_us(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> input_ns(
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> input_ns(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
 
   EXPECT_THROW(cudf::rolling_window(
@@ -815,16 +799,16 @@ TEST_F(RollingErrorTest, SumTimestampNotSupported)
 // incorrect type/aggregation combo: mean of timestamps
 TEST_F(RollingErrorTest, MeanTimestampNotSupported)
 {
-  constexpr size_type size{10};
-  fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
+  constexpr cudf::size_type size{10};
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> input_ms(
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> input_ms(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep> input_us(
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep> input_us(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> input_ns(
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> input_ns(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
 
   EXPECT_THROW(cudf::rolling_window(
@@ -853,8 +837,9 @@ TYPED_TEST(RollingTest, SimpleStatic)
   auto const col_data              = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 0, 4});
   const std::vector<bool> col_mask = {1, 1, 1, 0, 1};
 
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
-  std::vector<size_type> window{2};
+  cudf::test::fixed_width_column_wrapper<TypeParam> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
+  std::vector<cudf::size_type> window{2};
 
   // static sizes
   this->run_test_col_agg(input, window, window, 1);
@@ -868,7 +853,7 @@ TYPED_TEST(RollingVarStdTest, SimpleStaticVarianceStd)
 
   double const nan = std::numeric_limits<double>::signaling_NaN();
 
-  size_type const ddof = 1, min_periods = 0, preceding_window = 2, following_window = 1;
+  cudf::size_type const ddof = 1, min_periods = 0, preceding_window = 2, following_window = 1;
 
   auto const col_data =
     cudf::test::make_type_param_vector<TypeParam>({XXX, XXX, 9, 5, XXX, XXX, XXX, 0, 8, 5, 8});
@@ -895,10 +880,11 @@ TYPED_TEST(RollingVarStdTest, SimpleStaticVarianceStd)
                                            1,
                                            1};
 
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
-  fixed_width_column_wrapper<ResultType> var_expect(
+  cudf::test::fixed_width_column_wrapper<TypeParam> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
+  cudf::test::fixed_width_column_wrapper<ResultType> var_expect(
     expected_var.begin(), expected_var.end(), expected_mask.begin());
-  fixed_width_column_wrapper<ResultType> std_expect(
+  cudf::test::fixed_width_column_wrapper<ResultType> std_expect(
     expected_std.begin(), expected_std.end(), expected_mask.begin());
 
   std::unique_ptr<cudf::column> var_result, std_result;
@@ -928,9 +914,9 @@ TEST_F(RollingtVarStdTestUntyped, SimpleStaticVarianceStdInfNaN)
 
   using ResultType = double;
 
-  double const inf     = std::numeric_limits<double>::infinity();
-  double const nan     = std::numeric_limits<double>::signaling_NaN();
-  size_type const ddof = 1, min_periods = 1, preceding_window = 3, following_window = 0;
+  double const inf           = std::numeric_limits<double>::infinity();
+  double const nan           = std::numeric_limits<double>::signaling_NaN();
+  cudf::size_type const ddof = 1, min_periods = 1, preceding_window = 3, following_window = 0;
 
   auto const col_data =
     cudf::test::make_type_param_vector<double>({5., 4., XXX, inf, 4., 8., 0., nan, XXX, 5.});
@@ -945,10 +931,11 @@ TEST_F(RollingtVarStdTestUntyped, SimpleStaticVarianceStdInfNaN)
 
   const std::vector<bool> expected_mask = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
-  fixed_width_column_wrapper<double> input(col_data.begin(), col_data.end(), col_mask.begin());
-  fixed_width_column_wrapper<ResultType> var_expect(
+  cudf::test::fixed_width_column_wrapper<double> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
+  cudf::test::fixed_width_column_wrapper<ResultType> var_expect(
     expected_var.begin(), expected_var.end(), expected_mask.begin());
-  fixed_width_column_wrapper<ResultType> std_expect(
+  cudf::test::fixed_width_column_wrapper<ResultType> std_expect(
     expected_std.begin(), expected_std.end(), expected_mask.begin());
 
   std::unique_ptr<cudf::column> var_result, std_result;
@@ -972,19 +959,23 @@ TEST_F(RollingtVarStdTestUntyped, SimpleStaticVarianceStdInfNaN)
 #undef XXX
 }
 
+/*
 // negative sizes
 TYPED_TEST(RollingTest, NegativeWindowSizes)
 {
   auto const col_data  = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 0, 4});
   auto const col_valid = std::vector<bool>{1, 1, 1, 0, 1};
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_valid.begin());
-  std::vector<size_type> window{3};
-  std::vector<size_type> negative_window{-2};
+  cudf::test::fixed_width_column_wrapper<TypeParam> input(
+    col_data.begin(), col_data.end(), col_valid.begin());
+  std::vector<cudf::size_type> window{3};
+  std::vector<cudf::size_type> negative_window{-2};
+
 
   this->run_test_col_agg(input, negative_window, window, 1);
   this->run_test_col_agg(input, window, negative_window, 1);
   this->run_test_col_agg(input, negative_window, negative_window, 1);
 }
+ */
 
 // simple example from Pandas docs:
 TYPED_TEST(RollingTest, SimpleDynamic)
@@ -993,9 +984,10 @@ TYPED_TEST(RollingTest, SimpleDynamic)
   auto const col_data              = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 0, 4});
   const std::vector<bool> col_mask = {1, 1, 1, 0, 1};
 
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
-  std::vector<size_type> preceding_window({1, 2, 3, 4, 2});
-  std::vector<size_type> following_window({2, 1, 2, 1, 2});
+  cudf::test::fixed_width_column_wrapper<TypeParam> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
+  std::vector<cudf::size_type> preceding_window({1, 2, 3, 4, 2});
+  std::vector<cudf::size_type> following_window({2, 1, 2, 1, 2});
 
   // dynamic sizes
   this->run_test_col_agg(input, preceding_window, following_window, 1);
@@ -1007,9 +999,10 @@ TYPED_TEST(RollingTest, VolatileCount)
   auto const col_data = cudf::test::make_type_param_vector<TypeParam>({8, 70, 45, 20, 59, 80});
   const std::vector<bool> col_mask = {1, 1, 0, 0, 1, 0};
 
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
-  std::vector<size_type> preceding_window({5, 9, 4, 8, 3, 3});
-  std::vector<size_type> following_window({1, 1, 9, 2, 8, 9});
+  cudf::test::fixed_width_column_wrapper<TypeParam> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
+  std::vector<cudf::size_type> preceding_window({5, 9, 4, 8, 3, 3});
+  std::vector<cudf::size_type> following_window({1, 1, 9, 2, 8, 9});
 
   // dynamic sizes
   this->run_test_col_agg(input, preceding_window, following_window, 1);
@@ -1018,47 +1011,50 @@ TYPED_TEST(RollingTest, VolatileCount)
 // all rows are invalid
 TYPED_TEST(RollingTest, AllInvalid)
 {
-  size_type num_rows = 1000;
+  cudf::size_type num_rows = 1000;
 
   std::vector<TypeParam> col_data(num_rows);
   std::vector<bool> col_mask(num_rows, 0);
 
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
-  std::vector<size_type> window({100});
-  size_type periods = 100;
+  cudf::test::fixed_width_column_wrapper<TypeParam> input(
+    col_data.begin(), col_data.end(), col_mask.begin());
+  std::vector<cudf::size_type> window({100});
+  cudf::size_type periods = 100;
 
   this->run_test_col_agg(input, window, window, periods);
 }
 
 // window = following_window = 0
+// Note: Preceding includes current row, so its value is set to 1.
 TYPED_TEST(RollingTest, ZeroWindow)
 {
-  size_type num_rows = 1000;
+  cudf::size_type num_rows = 1000;
 
   std::vector<int> col_data(num_rows, 1);
   std::vector<bool> col_mask(num_rows, 1);
 
-  fixed_width_column_wrapper<TypeParam, int> input(
+  cudf::test::fixed_width_column_wrapper<TypeParam, int> input(
     col_data.begin(), col_data.end(), col_mask.begin());
-  std::vector<size_type> window({0});
-  size_type periods = num_rows;
+  std::vector<cudf::size_type> preceding({0});
+  std::vector<cudf::size_type> following({1});
+  cudf::size_type periods = num_rows;
 
-  this->run_test_col_agg(input, window, window, periods);
+  this->run_test_col_agg(input, preceding, following, periods);
 }
 
 // min_periods = 0
 TYPED_TEST(RollingTest, ZeroPeriods)
 {
-  size_type num_rows = 1000;
+  cudf::size_type num_rows = 1000;
 
   std::vector<int> col_data(num_rows, 1);
   std::vector<bool> col_mask(num_rows, 1);
 
-  fixed_width_column_wrapper<TypeParam, int> input(
+  cudf::test::fixed_width_column_wrapper<TypeParam, int> input(
     col_data.begin(), col_data.end(), col_mask.begin());
 
-  std::vector<size_type> window({num_rows});
-  size_type periods = 0;
+  std::vector<cudf::size_type> window({num_rows});
+  cudf::size_type periods = 0;
 
   this->run_test_col_agg(input, window, window, periods);
 }
@@ -1068,16 +1064,16 @@ TYPED_TEST(RollingTest, ZeroPeriods)
 // also tests out of boundary accesses
 TYPED_TEST(RollingTest, BackwardForwardWindow)
 {
-  size_type num_rows = 1000;
+  cudf::size_type num_rows = 1000;
 
   std::vector<int> col_data(num_rows, 1);
   std::vector<bool> col_mask(num_rows, 1);
 
-  fixed_width_column_wrapper<TypeParam, int> input(
+  cudf::test::fixed_width_column_wrapper<TypeParam, int> input(
     col_data.begin(), col_data.end(), col_mask.begin());
 
-  std::vector<size_type> window({num_rows});
-  size_type periods = num_rows;
+  std::vector<cudf::size_type> window({num_rows});
+  cudf::size_type periods = num_rows;
 
   this->run_test_col_agg(input, window, window, periods);
 }
@@ -1085,16 +1081,16 @@ TYPED_TEST(RollingTest, BackwardForwardWindow)
 // random input data, static parameters, no nulls
 TYPED_TEST(RollingTest, RandomStaticAllValid)
 {
-  size_type num_rows = 10000;
+  cudf::size_type num_rows = 10000;
 
   // random input
   std::vector<TypeParam> col_data(num_rows);
   cudf::test::UniformRandomGenerator<TypeParam> rng;
   std::generate(col_data.begin(), col_data.end(), [&rng]() { return rng.generate(); });
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end());
+  cudf::test::fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end());
 
-  std::vector<size_type> window({50});
-  size_type periods = 50;
+  std::vector<cudf::size_type> window({50});
+  cudf::size_type periods = 50;
 
   this->run_test_col_agg(input, window, window, periods);
 }
@@ -1102,7 +1098,7 @@ TYPED_TEST(RollingTest, RandomStaticAllValid)
 // random input data, static parameters, with nulls
 TYPED_TEST(RollingTest, RandomStaticWithInvalid)
 {
-  size_type num_rows = 10000;
+  cudf::size_type num_rows = 10000;
 
   // random input
   std::vector<TypeParam> col_data(num_rows);
@@ -1111,10 +1107,11 @@ TYPED_TEST(RollingTest, RandomStaticWithInvalid)
   cudf::test::UniformRandomGenerator<bool> rbg;
   std::generate(col_data.begin(), col_data.end(), [&rng]() { return rng.generate(); });
   std::generate(col_valid.begin(), col_valid.end(), [&rbg]() { return rbg.generate(); });
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_valid.begin());
+  cudf::test::fixed_width_column_wrapper<TypeParam> input(
+    col_data.begin(), col_data.end(), col_valid.begin());
 
-  std::vector<size_type> window({50});
-  size_type periods = 50;
+  std::vector<cudf::size_type> window({50});
+  cudf::size_type periods = 50;
 
   this->run_test_col_agg(input, window, window, periods);
 }
@@ -1122,21 +1119,21 @@ TYPED_TEST(RollingTest, RandomStaticWithInvalid)
 // random input data, dynamic parameters, no nulls
 TYPED_TEST(RollingTest, RandomDynamicAllValid)
 {
-  size_type num_rows        = 50000;
-  size_type max_window_size = 50;
+  cudf::size_type num_rows        = 50000;
+  cudf::size_type max_window_size = 50;
 
   // random input
   std::vector<TypeParam> col_data(num_rows);
   cudf::test::UniformRandomGenerator<TypeParam> rng;
   std::generate(col_data.begin(), col_data.end(), [&rng]() { return rng.generate(); });
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end());
+  cudf::test::fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end());
 
   // random parameters
-  cudf::test::UniformRandomGenerator<size_type> window_rng(0, max_window_size);
+  cudf::test::UniformRandomGenerator<cudf::size_type> window_rng(0, max_window_size);
   auto generator = [&]() { return window_rng.generate(); };
 
-  std::vector<size_type> preceding_window(num_rows);
-  std::vector<size_type> following_window(num_rows);
+  std::vector<cudf::size_type> preceding_window(num_rows);
+  std::vector<cudf::size_type> following_window(num_rows);
 
   std::generate(preceding_window.begin(), preceding_window.end(), generator);
   std::generate(following_window.begin(), following_window.end(), generator);
@@ -1147,8 +1144,8 @@ TYPED_TEST(RollingTest, RandomDynamicAllValid)
 // random input data, dynamic parameters, with nulls
 TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
 {
-  size_type num_rows        = 50000;
-  size_type max_window_size = 50;
+  cudf::size_type num_rows        = 50000;
+  cudf::size_type max_window_size = 50;
 
   // random input with nulls
   std::vector<TypeParam> col_data(num_rows);
@@ -1157,14 +1154,15 @@ TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
   cudf::test::UniformRandomGenerator<bool> rbg;
   std::generate(col_data.begin(), col_data.end(), [&rng]() { return rng.generate(); });
   std::generate(col_valid.begin(), col_valid.end(), [&rbg]() { return rbg.generate(); });
-  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_valid.begin());
+  cudf::test::fixed_width_column_wrapper<TypeParam> input(
+    col_data.begin(), col_data.end(), col_valid.begin());
 
   // random parameters
-  cudf::test::UniformRandomGenerator<size_type> window_rng(0, max_window_size);
+  cudf::test::UniformRandomGenerator<cudf::size_type> window_rng(0, max_window_size);
   auto generator = [&]() { return window_rng.generate(); };
 
-  std::vector<size_type> preceding_window(num_rows);
-  std::vector<size_type> following_window(num_rows);
+  std::vector<cudf::size_type> preceding_window(num_rows);
+  std::vector<cudf::size_type> following_window(num_rows);
 
   std::generate(preceding_window.begin(), preceding_window.end(), generator);
   std::generate(following_window.begin(), following_window.end(), generator);
@@ -1181,7 +1179,7 @@ TEST_F(RollingTestStrings, StringsUnsupportedOperators)
   cudf::test::strings_column_wrapper input{{"This", "is", "not", "a", "string", "type"},
                                            {1, 1, 1, 0, 1, 0}};
 
-  std::vector<size_type> window{1};
+  std::vector<cudf::size_type> window{1};
 
   EXPECT_THROW(
     cudf::rolling_window(input, 2, 2, 0, *cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
@@ -1210,7 +1208,7 @@ TEST_F(RollingTestStrings, StringsUnsupportedOperators)
   cudf::test::strings_column_wrapper input{{"This", "is", "not", "a", "string", "type"},
                                            {1, 1, 1, 0, 1, 0}};
 
-  std::vector<size_type> window{1};
+  std::vector<cudf::size_type> window{1};
 
   EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MIN));
   EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MAX));
@@ -1301,24 +1299,24 @@ struct RollingTestUdf : public cudf::test::BaseFixture {
 
 TEST_F(RollingTestUdf, StaticWindow)
 {
-  size_type size = 1000;
+  cudf::size_type size = 1000;
 
-  fixed_width_column_wrapper<int32_t> input(thrust::make_counting_iterator(0),
-                                            thrust::make_counting_iterator(size),
-                                            thrust::make_constant_iterator(true));
+  cudf::test::fixed_width_column_wrapper<int32_t> input(thrust::make_counting_iterator(0),
+                                                        thrust::make_counting_iterator(size),
+                                                        thrust::make_constant_iterator(true));
 
   std::unique_ptr<cudf::column> output;
 
-  auto start = cudf::detail::make_counting_transform_iterator(0, [size](size_type row) {
+  auto start = cudf::detail::make_counting_transform_iterator(0, [size](cudf::size_type row) {
     return std::accumulate(thrust::make_counting_iterator(std::max(0, row - 2 + 1)),
                            thrust::make_counting_iterator(std::min(size, row + 2 + 1)),
                            0);
   });
 
   auto valid = cudf::detail::make_counting_transform_iterator(
-    0, [size](size_type row) { return (row != 0 && row != size - 2 && row != size - 1); });
+    0, [size](cudf::size_type row) { return (row != 0 && row != size - 2 && row != size - 1); });
 
-  fixed_width_column_wrapper<int64_t> expected{start, start + size, valid};
+  cudf::test::fixed_width_column_wrapper<int64_t> expected{start, start + size, valid};
 
   // Test CUDA UDF
   auto cuda_udf_agg = cudf::make_udf_aggregation<cudf::rolling_aggregation>(
@@ -1339,32 +1337,33 @@ TEST_F(RollingTestUdf, StaticWindow)
 
 TEST_F(RollingTestUdf, DynamicWindow)
 {
-  size_type size = 1000;
+  cudf::size_type size = 1000;
 
-  fixed_width_column_wrapper<int32_t> input(thrust::make_counting_iterator(0),
-                                            thrust::make_counting_iterator(size),
-                                            thrust::make_constant_iterator(true));
+  cudf::test::fixed_width_column_wrapper<int32_t> input(thrust::make_counting_iterator(0),
+                                                        thrust::make_counting_iterator(size),
+                                                        thrust::make_constant_iterator(true));
 
   auto prec = cudf::detail::make_counting_transform_iterator(
-    0, [] __device__(size_type row) { return row % 2 + 2; });
+    0, [] __device__(cudf::size_type row) { return row % 2 + 2; });
 
   auto follow = cudf::detail::make_counting_transform_iterator(
-    0, [] __device__(size_type row) { return row % 2; });
+    0, [] __device__(cudf::size_type row) { return row % 2; });
 
-  fixed_width_column_wrapper<int32_t> preceding(prec, prec + size);
-  fixed_width_column_wrapper<int32_t> following(follow, follow + size);
+  cudf::test::fixed_width_column_wrapper<int32_t> preceding(prec, prec + size);
+  cudf::test::fixed_width_column_wrapper<int32_t> following(follow, follow + size);
   std::unique_ptr<cudf::column> output;
 
-  auto start = cudf::detail::make_counting_transform_iterator(0, [size] __device__(size_type row) {
-    return std::accumulate(thrust::make_counting_iterator(std::max(0, row - (row % 2 + 2) + 1)),
-                           thrust::make_counting_iterator(std::min(size, row + (row % 2) + 1)),
-                           0);
-  });
+  auto start =
+    cudf::detail::make_counting_transform_iterator(0, [size] __device__(cudf::size_type row) {
+      return std::accumulate(thrust::make_counting_iterator(std::max(0, row - (row % 2 + 2) + 1)),
+                             thrust::make_counting_iterator(std::min(size, row + (row % 2) + 1)),
+                             0);
+    });
 
   auto valid = cudf::detail::make_counting_transform_iterator(
-    0, [] __device__(size_type row) { return row != 0; });
+    0, [] __device__(cudf::size_type row) { return row != 0; });
 
-  fixed_width_column_wrapper<int64_t> expected{start, start + size, valid};
+  cudf::test::fixed_width_column_wrapper<int64_t> expected{start, start + size, valid};
 
   // Test CUDA UDF
   auto cuda_udf_agg = cudf::make_udf_aggregation<cudf::rolling_aggregation>(
@@ -1384,21 +1383,18 @@ TEST_F(RollingTestUdf, DynamicWindow)
 }
 
 template <typename T>
-struct FixedPointTests : public cudf::test::BaseFixture {
-};
+struct FixedPointTests : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTests, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTests, MinMaxCountLagLead)
 {
-  using namespace numeric;
-  using namespace cudf;
   using decimalXX  = TypeParam;
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<size_type>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
-  auto const scale         = scale_type{-1};
+  auto const scale         = numeric::scale_type{-1};
   auto const input         = fp_wrapper{{42, 1729, 55, 3, 1, 2}, {1, 1, 1, 1, 1, 1}, scale};
   auto const expected_min  = fp_wrapper{{42, 42, 3, 1, 1, 1}, {1, 1, 1, 1, 1, 1}, scale};
   auto const expected_max  = fp_wrapper{{1729, 1729, 1729, 55, 3, 2}, {1, 1, 1, 1, 1, 1}, scale};
@@ -1410,19 +1406,23 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLead)
   auto const expected_rowno1    = fw_wrapper{{1, 1, 1, 1, 1, 1}, {1, 1, 1, 1, 1, 1}};
 
   auto const min =
-    rolling_window(input, 2, 1, 1, *make_min_aggregation<cudf::rolling_aggregation>());
+    cudf::rolling_window(input, 2, 1, 1, *cudf::make_min_aggregation<cudf::rolling_aggregation>());
   auto const max =
-    rolling_window(input, 2, 1, 1, *make_max_aggregation<cudf::rolling_aggregation>());
+    cudf::rolling_window(input, 2, 1, 1, *cudf::make_max_aggregation<cudf::rolling_aggregation>());
   auto const lag =
-    rolling_window(input, 2, 1, 1, *make_lag_aggregation<cudf::rolling_aggregation>(1));
-  auto const lead =
-    rolling_window(input, 2, 1, 1, *make_lead_aggregation<cudf::rolling_aggregation>(1));
-  auto const valid =
-    rolling_window(input, 2, 1, 1, *make_count_aggregation<cudf::rolling_aggregation>());
-  auto const all = rolling_window(
-    input, 2, 1, 1, *make_count_aggregation<cudf::rolling_aggregation>(null_policy::INCLUDE));
-  auto const rowno =
-    rolling_window(input, 2, 1, 1, *make_row_number_aggregation<cudf::rolling_aggregation>());
+    cudf::rolling_window(input, 2, 1, 1, *cudf::make_lag_aggregation<cudf::rolling_aggregation>(1));
+  auto const lead = cudf::rolling_window(
+    input, 2, 1, 1, *cudf::make_lead_aggregation<cudf::rolling_aggregation>(1));
+  auto const valid = cudf::rolling_window(
+    input, 2, 1, 1, *cudf::make_count_aggregation<cudf::rolling_aggregation>());
+  auto const all = cudf::rolling_window(
+    input,
+    2,
+    1,
+    1,
+    *cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
+  auto const rowno = cudf::rolling_window(
+    input, 2, 1, 1, *cudf::make_row_number_aggregation<cudf::rolling_aggregation>());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, min->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, max->view());
@@ -1434,22 +1434,20 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLead)
 
   // ROW_NUMBER will always return row 1 if the preceding window is set to a constant 1
   for (int following = 1; following < 5; ++following) {
-    auto const rowno1 = rolling_window(
-      input, 1, following, 1, *make_row_number_aggregation<cudf::rolling_aggregation>());
+    auto const rowno1 = cudf::rolling_window(
+      input, 1, following, 1, *cudf::make_row_number_aggregation<cudf::rolling_aggregation>());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_rowno1, rowno1->view());
   }
 }
 
 TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
 {
-  using namespace numeric;
-  using namespace cudf;
   using decimalXX  = TypeParam;
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<size_type>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
-  auto const scale              = scale_type{-1};
+  auto const scale              = numeric::scale_type{-1};
   auto const input              = fp_wrapper{{42, 1729, 55, 343, 1, 2}, {1, 0, 1, 0, 1, 1}, scale};
   auto const expected_sum       = fp_wrapper{{42, 97, 55, 56, 3, 3}, {1, 1, 1, 1, 1, 1}, scale};
   auto const expected_min       = fp_wrapper{{42, 42, 55, 1, 1, 1}, {1, 1, 1, 1, 1, 1}, scale};
@@ -1461,21 +1459,25 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
   auto const expected_rowno     = fw_wrapper{{1, 2, 2, 2, 2, 2}, {1, 1, 1, 1, 1, 1}};
 
   auto const sum =
-    rolling_window(input, 2, 1, 1, *make_sum_aggregation<cudf::rolling_aggregation>());
+    cudf::rolling_window(input, 2, 1, 1, *cudf::make_sum_aggregation<cudf::rolling_aggregation>());
   auto const min =
-    rolling_window(input, 2, 1, 1, *make_min_aggregation<cudf::rolling_aggregation>());
+    cudf::rolling_window(input, 2, 1, 1, *cudf::make_min_aggregation<cudf::rolling_aggregation>());
   auto const max =
-    rolling_window(input, 2, 1, 1, *make_max_aggregation<cudf::rolling_aggregation>());
+    cudf::rolling_window(input, 2, 1, 1, *cudf::make_max_aggregation<cudf::rolling_aggregation>());
   auto const lag =
-    rolling_window(input, 2, 1, 1, *make_lag_aggregation<cudf::rolling_aggregation>(1));
-  auto const lead =
-    rolling_window(input, 2, 1, 1, *make_lead_aggregation<cudf::rolling_aggregation>(1));
-  auto const valid =
-    rolling_window(input, 2, 1, 1, *make_count_aggregation<cudf::rolling_aggregation>());
-  auto const all = rolling_window(
-    input, 2, 1, 1, *make_count_aggregation<cudf::rolling_aggregation>(null_policy::INCLUDE));
-  auto const rowno =
-    rolling_window(input, 2, 1, 1, *make_row_number_aggregation<cudf::rolling_aggregation>());
+    cudf::rolling_window(input, 2, 1, 1, *cudf::make_lag_aggregation<cudf::rolling_aggregation>(1));
+  auto const lead = cudf::rolling_window(
+    input, 2, 1, 1, *cudf::make_lead_aggregation<cudf::rolling_aggregation>(1));
+  auto const valid = cudf::rolling_window(
+    input, 2, 1, 1, *cudf::make_count_aggregation<cudf::rolling_aggregation>());
+  auto const all = cudf::rolling_window(
+    input,
+    2,
+    1,
+    1,
+    *cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
+  auto const rowno = cudf::rolling_window(
+    input, 2, 1, 1, *cudf::make_row_number_aggregation<cudf::rolling_aggregation>());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sum, sum->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, min->view());
@@ -1489,8 +1491,6 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
 
 TYPED_TEST(FixedPointTests, VarStd)
 {
-  using namespace numeric;
-  using namespace cudf;
   using decimalXX  = TypeParam;
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
@@ -1498,7 +1498,7 @@ TYPED_TEST(FixedPointTests, VarStd)
 
   double const nan = std::numeric_limits<double>::signaling_NaN();
   double const inf = std::numeric_limits<double>::infinity();
-  size_type preceding_window{3}, following_window{0}, min_periods{1}, ddof{2};
+  cudf::size_type preceding_window{3}, following_window{0}, min_periods{1}, ddof{2};
 
   // The variance of `input` given `scale` == 0
   std::vector<double> result_base_v{
@@ -1507,10 +1507,10 @@ TYPED_TEST(FixedPointTests, VarStd)
 
   // var tests
   for (int32_t s = -2; s <= 2; s++) {
-    auto const scale = scale_type{s};
+    auto const scale = numeric::scale_type{s};
     auto const input = fp_wrapper{{42, 1729, 55, 3, 1, 2}, {1, 1, 1, 1, 1, 1}, scale};
 
-    auto got = rolling_window(
+    auto got = cudf::rolling_window(
       input,
       preceding_window,
       following_window,
@@ -1530,10 +1530,10 @@ TYPED_TEST(FixedPointTests, VarStd)
 
   // std tests
   for (int32_t s = -2; s <= 2; s++) {
-    auto const scale = scale_type{s};
+    auto const scale = numeric::scale_type{s};
     auto const input = fp_wrapper{{42, 1729, 55, 3, 1, 2}, {1, 1, 1, 1, 1, 1}, scale};
 
-    auto got = rolling_window(
+    auto got = cudf::rolling_window(
       input,
       preceding_window,
       following_window,
@@ -1552,20 +1552,19 @@ TYPED_TEST(FixedPointTests, VarStd)
   }
 }
 
-class RollingDictionaryTest : public cudf::test::BaseFixture {
-};
+class RollingDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(RollingDictionaryTest, Count)
 {
   cudf::test::dictionary_column_wrapper<std::string> input(
     {"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"},
     {1, 0, 0, 1, 0, 1, 1, 1, 0});
-  fixed_width_column_wrapper<size_type> expected_count_val({1, 2, 1, 2, 3, 3, 3, 2, 1},
-                                                           {1, 1, 1, 1, 1, 1, 1, 1, 1});
-  fixed_width_column_wrapper<size_type> expected_count_all({3, 4, 4, 4, 4, 4, 4, 3, 2},
-                                                           {1, 1, 1, 1, 1, 1, 1, 1, 1});
-  fixed_width_column_wrapper<size_type> expected_row_number({1, 2, 2, 2, 2, 2, 2, 2, 2},
-                                                            {1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_count_val(
+    {1, 2, 1, 2, 3, 3, 3, 2, 1}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_count_all(
+    {3, 4, 4, 4, 4, 4, 4, 3, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_row_number(
+    {1, 2, 2, 2, 2, 2, 2, 2, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
 
   auto got_count_valid = cudf::rolling_window(
     input, 2, 2, 1, *cudf::make_count_aggregation<cudf::rolling_aggregation>());

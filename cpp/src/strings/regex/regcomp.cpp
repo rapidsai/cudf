@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <strings/regex/regcomp.h>
+#include "strings/regex/regcomp.h"
 
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/utilities/error.hpp>
@@ -39,7 +39,7 @@ namespace {
 enum OperatorType : int32_t {
   START        = 0200,  // Start, used for marker on stack
   LBRA_NC      = 0203,  // non-capturing group
-  CAT          = 0205,  // Concatentation, implicit operator
+  CAT          = 0205,  // Concatenation, implicit operator
   STAR         = 0206,  // Closure, *
   STAR_LAZY    = 0207,
   PLUS         = 0210,  // a+ == aa*
@@ -60,10 +60,10 @@ static reclass cclass_S(NCCLASS_S);  // \S
 static reclass cclass_D(NCCLASS_D);  // \D
 
 // Tables for analyzing quantifiers
-const std::array<int, 5> valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL}};
-const std::array<char, 5> quantifiers{{'*', '?', '+', '{', '|'}};
+std::array<int, 5> const valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL}};
+std::array<char, 5> const quantifiers{{'*', '?', '+', '{', '|'}};
 // Valid regex characters that can be escaped and used as literals
-const std::array<char, 33> escapable_chars{
+std::array<char, 33> const escapable_chars{
   {'.', '-', '+',  '*', '\\', '?', '^', '$', '|', '{', '}', '(', ')', '[', ']', '<', '>',
    '"', '~', '\'', '`', '_',  '@', '=', ';', ':', '!', '#', '%', '&', ',', '/', ' '}};
 
@@ -86,7 +86,7 @@ std::vector<char32_t> string_to_char32_vector(std::string_view pattern)
   });
   std::vector<char32_t> result(count + 1);
   char32_t* output_ptr  = result.data();
-  const char* input_ptr = pattern.data();
+  char const* input_ptr = pattern.data();
   for (size_type idx = 0; idx < size; ++idx) {
     char_utf8 output_character = 0;
     size_type ch_width         = to_char_utf8(input_ptr, output_character);
@@ -123,7 +123,7 @@ int32_t reprog::add_class(reclass const& cls)
 
 reinst& reprog::inst_at(int32_t id) { return _insts[id]; }
 
-reclass& reprog::class_at(int32_t id) { return _classes[id]; }
+reclass const& reprog::class_at(int32_t id) const { return _classes[id]; }
 
 void reprog::set_start_inst(int32_t id) { _startinst_id = id; }
 
@@ -502,8 +502,14 @@ class regex_parser {
         }
         case 'b': return BOW;
         case 'B': return NBOW;
-        case 'A': return BOL;
-        case 'Z': return EOL;
+        case 'A': {
+          _chr = chr;
+          return BOL;
+        }
+        case 'Z': {
+          _chr = chr;
+          return EOL;
+        }
         default: {
           // let valid escapable chars fall through as literal CHAR
           if (chr &&
@@ -533,11 +539,11 @@ class regex_parser {
                                                          : static_cast<int32_t>(LBRA);
       case ')': return RBRA;
       case '^': {
-        _chr = chr;
+        _chr = is_multiline(_flags) ? chr : '\n';
         return BOL;
       }
       case '$': {
-        _chr = chr;
+        _chr = is_multiline(_flags) ? chr : '\n';
         return EOL;
       }
       case '[': return build_cclass();
@@ -754,7 +760,7 @@ class regex_parser {
   }
 
  public:
-  regex_parser(const char32_t* pattern,
+  regex_parser(char32_t const* pattern,
                regex_flags const flags,
                capture_groups const capture,
                reprog& prog)
@@ -954,14 +960,14 @@ class regex_compiler {
     } else if (token == CHAR) {
       _prog.inst_at(inst_id).u1.c = yy;
     } else if (token == BOL || token == EOL) {
-      _prog.inst_at(inst_id).u1.c = is_multiline(_flags) ? yy : '\n';
+      _prog.inst_at(inst_id).u1.c = yy;
     }
     push_and(inst_id, inst_id);
     _last_was_and = true;
   }
 
  public:
-  regex_compiler(const char32_t* pattern,
+  regex_compiler(char32_t const* pattern,
                  regex_flags const flags,
                  capture_groups const capture,
                  reprog& prog)
@@ -1087,7 +1093,7 @@ void reprog::build_start_ids()
   while (!ids.empty()) {
     int id = ids.top();
     ids.pop();
-    const reinst& inst = _insts[id];
+    reinst const& inst = _insts[id];
     if (inst.type == OR) {
       if (inst.u2.left_id != id)  // prevents infinite while-loop here
         ids.push(inst.u2.left_id);
@@ -1168,7 +1174,7 @@ void reprog::print(regex_flags const flags)
   printf("Flags = 0x%08x\n", static_cast<uint32_t>(flags));
   printf("Instructions:\n");
   for (std::size_t i = 0; i < _insts.size(); i++) {
-    const reinst& inst = _insts[i];
+    reinst const& inst = _insts[i];
     printf("%3zu: ", i);
     switch (inst.type) {
       default: printf("Unknown instruction: %d, next=%d", inst.type, inst.u2.next_id); break;
@@ -1232,7 +1238,7 @@ void reprog::print(regex_flags const flags)
   int count = static_cast<int>(_classes.size());
   printf("\nClasses %d\n", count);
   for (int i = 0; i < count; i++) {
-    const reclass& cls = _classes[i];
+    reclass const& cls = _classes[i];
     auto const size    = static_cast<int>(cls.literals.size());
     printf("%2d: ", i);
     for (int j = 0; j < size; ++j) {

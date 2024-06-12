@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-#include <cudf/types.hpp>
+#include "rolling/jit/operation-udf.hpp"
 
-#include <rolling/jit/operation-udf.hpp>
+#include <cudf/types.hpp>
 
 #pragma once
 
 struct rolling_udf_ptx {
   template <typename OutType, typename InType>
-  static OutType operate(const InType* in_col, cudf::size_type start, cudf::size_type count)
+  static OutType operate(InType const* in_col, cudf::size_type start, cudf::size_type count)
   {
     OutType ret;
     rolling_udf(&ret, 0, 0, 0, 0, &in_col[start], count, sizeof(InType));
@@ -32,7 +32,7 @@ struct rolling_udf_ptx {
 
 struct rolling_udf_cuda {
   template <typename OutType, typename InType>
-  static OutType operate(const InType* in_col, cudf::size_type start, cudf::size_type count)
+  static OutType operate(InType const* in_col, cudf::size_type start, cudf::size_type count)
   {
     OutType ret;
     rolling_udf(&ret, in_col, start, count);

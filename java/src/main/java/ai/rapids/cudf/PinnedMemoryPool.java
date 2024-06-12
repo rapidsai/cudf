@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,92 +22,30 @@ package ai.rapids.cudf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Comparator;
-import java.util.Iterator;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
- * This provides a pool of pinned memory similar to what RMM does for device memory.
+ * This is the JNI interface to a rmm::pool_memory_resource<rmm::pinned_host_memory_resource>.
  */
 public final class PinnedMemoryPool implements AutoCloseable {
   private static final Logger log = LoggerFactory.getLogger(PinnedMemoryPool.class);
-  private static final long ALIGNMENT = 8;
 
   // These static fields should only ever be accessed when class-synchronized.
   // Do NOT use singleton_ directly!  Use the getSingleton accessor instead.
   private static volatile PinnedMemoryPool singleton_ = null;
   private static Future<PinnedMemoryPool> initFuture = null;
-
-  private final long pinnedPoolBase;
-  private final SortedSet<MemorySection> freeHeap = new TreeSet<>(new SortedByAddress());
-  private int numAllocatedSections = 0;
-  private long availableBytes;
-
-  private static class SortedBySize implements Comparator<MemorySection> {
-    @Override
-    public int compare(MemorySection s0, MemorySection s1) {
-      return Long.compare(s0.size, s1.size);
-    }
-  }
-
-  private static class SortedByAddress implements Comparator<MemorySection> {
-    @Override
-    public int compare(MemorySection s0, MemorySection s1) {
-      return Long.compare(s0.baseAddress, s1.baseAddress);
-    }
-  }
-
-  private static class MemorySection {
-    private long baseAddress;
-    private long size;
-
-    MemorySection(long baseAddress, long size) {
-      this.baseAddress = baseAddress;
-      this.size = size;
-    }
-
-    boolean canCombine(MemorySection other) {
-      boolean ret = (other.baseAddress + other.size) == baseAddress ||
-          (baseAddress + size) == other.baseAddress;
-      log.trace("CAN {} COMBINE WITH {} ? {}", this, other, ret);
-      return ret;
-    }
-
-    void combineWith(MemorySection other) {
-      assert canCombine(other);
-      log.trace("COMBINING {} AND {}", this, other);
-      this.baseAddress = Math.min(baseAddress, other.baseAddress);
-      this.size = other.size + this.size;
-      log.trace("COMBINED TO {}\n", this);
-    }
-
-    MemorySection splitOff(long newSize) {
-      assert this.size > newSize;
-      MemorySection ret = new MemorySection(baseAddress, newSize);
-      this.baseAddress += newSize;
-      this.size -= newSize;
-      return ret;
-    }
-
-    @Override
-    public String toString() {
-      return "PINNED: " + size + " bytes (0x" + Long.toHexString(baseAddress)
-          + " to 0x" + Long.toHexString(baseAddress + size) + ")";
-    }
-  }
+  private long poolHandle;
+  private long poolSize;
 
   private static final class PinnedHostBufferCleaner extends MemoryBuffer.MemoryBufferCleaner {
-    private MemorySection section;
+    private long address;
     private final long origLength;
 
-    PinnedHostBufferCleaner(MemorySection section, long length) {
-      this.section = section;
+    PinnedHostBufferCleaner(long address, long length) {
+      this.address = address;
       origLength = length;
     }
 
@@ -115,15 +53,15 @@ public final class PinnedMemoryPool implements AutoCloseable {
     protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       long origAddress = 0;
-      if (section != null) {
-        origAddress = section.baseAddress;
+      if (address != -1) {
+        origAddress = address;
         try {
-          PinnedMemoryPool.freeInternal(section);
+          PinnedMemoryPool.freeInternal(address, origLength);
         } finally {
           // Always mark the resource as freed even if an exception is thrown.
           // We cannot know how far it progressed before the exception, and
           // therefore it is unsafe to retry.
-          section = null;
+          address = -1;
         }
         neededCleanup = true;
       }
@@ -136,7 +74,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
 
     @Override
     public boolean isClean() {
-      return section == null;
+      return address == -1;
     }
   }
 
@@ -160,17 +98,18 @@ public final class PinnedMemoryPool implements AutoCloseable {
     return singleton_;
   }
 
-  private static void freeInternal(MemorySection section) {
-    Objects.requireNonNull(getSingleton()).free(section);
+  private static void freeInternal(long address, long origLength) {
+    Objects.requireNonNull(getSingleton()).free(address, origLength);
   }
 
   /**
    * Initialize the pool.
    *
    * @param poolSize size of the pool to initialize.
+   * @note when using this method, the pinned pool will be shared with cuIO
    */
   public static synchronized void initialize(long poolSize) {
-    initialize(poolSize, -1);
+    initialize(poolSize, -1, true);
   }
 
   /**
@@ -178,8 +117,20 @@ public final class PinnedMemoryPool implements AutoCloseable {
    *
    * @param poolSize size of the pool to initialize.
    * @param gpuId    gpu id to set to get memory pool from, -1 means to use default
+   * @note when using this method, the pinned pool will be shared with cuIO
    */
   public static synchronized void initialize(long poolSize, int gpuId) {
+    initialize(poolSize, gpuId, true);
+  }
+
+  /**
+   * Initialize the pool.
+   *
+   * @param poolSize size of the pool to initialize.
+   * @param gpuId    gpu id to set to get memory pool from, -1 means to use default
+   * @param setCuioHostMemoryResource true if this pinned pool should be used by cuIO for host memory
+   */
+  public static synchronized void initialize(long poolSize, int gpuId, boolean setCuioHostMemoryResource) {
     if (isInitialized()) {
       throw new IllegalStateException("Can only initialize the pool once.");
     }
@@ -188,7 +139,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
       t.setDaemon(true);
       return t;
     });
-    initFuture = initService.submit(() -> new PinnedMemoryPool(poolSize, gpuId));
+    initFuture = initService.submit(() -> new PinnedMemoryPool(poolSize, gpuId, setCuioHostMemoryResource));
     initService.shutdown();
   }
 
@@ -200,12 +151,14 @@ public final class PinnedMemoryPool implements AutoCloseable {
   }
 
   /**
-   * Shut down the pool of memory. If there are outstanding allocations this may fail.
+   * Shut down the RMM pool_memory_resource, nulling out our reference. Any allocation
+   * or free that is in flight will fail after this.
    */
   public static synchronized void shutdown() {
     PinnedMemoryPool pool = getSingleton();
     if (pool != null) {
       pool.close();
+      pool = null;
     }
     initFuture = null;
     singleton_ = null;
@@ -233,98 +186,86 @@ public final class PinnedMemoryPool implements AutoCloseable {
    * @param bytes size in bytes to allocate
    * @return newly created buffer
    */
-  public static HostMemoryBuffer allocate(long bytes) {
+  public static HostMemoryBuffer allocate(long bytes, HostMemoryAllocator hostMemoryAllocator) {
     HostMemoryBuffer result = tryAllocate(bytes);
     if (result == null) {
-      result = HostMemoryBuffer.allocate(bytes, false);
+      result = hostMemoryAllocator.allocate(bytes, false);
     }
     return result;
   }
 
   /**
-   * Get the number of bytes free in the pinned memory pool.
+   * Factory method to create a host buffer but preferably pointing to pinned memory.
+   * It is not guaranteed that the returned buffer will be pointer to pinned memory.
    *
-   * @return amount of free memory in bytes or 0 if the pool is not initialized
+   * @param bytes size in bytes to allocate
+   * @return newly created buffer
    */
-  public static long getAvailableBytes() {
+  public static HostMemoryBuffer allocate(long bytes) {
+    return allocate(bytes, DefaultHostMemoryAllocator.get());
+  }
+
+  /**
+   * Get the number of bytes that the pinned memory pool was allocated with.
+   */
+  public static long getTotalPoolSizeBytes() {
     PinnedMemoryPool pool = getSingleton();
     if (pool != null) {
-      return pool.getAvailableBytesInternal();
+      return pool.poolSize;
     }
     return 0;
   }
 
-  private PinnedMemoryPool(long poolSize, int gpuId) {
+  private PinnedMemoryPool(long poolSize, int gpuId, boolean setCuioHostMemoryResource) {
     if (gpuId > -1) {
       // set the gpu device to use
       Cuda.setDevice(gpuId);
       Cuda.freeZero();
     }
-    this.pinnedPoolBase = Cuda.hostAllocPinned(poolSize);
-    freeHeap.add(new MemorySection(pinnedPoolBase, poolSize));
-    this.availableBytes = poolSize;
+    this.poolHandle = Rmm.newPinnedPoolMemoryResource(poolSize, poolSize);
+    if (setCuioHostMemoryResource) {
+      Rmm.setCuioPinnedPoolMemoryResource(this.poolHandle);
+    }
+    this.poolSize = poolSize;
   }
 
   @Override
   public void close() {
-    assert numAllocatedSections == 0;
-    Cuda.freePinned(pinnedPoolBase);
+    Rmm.releasePinnedPoolMemoryResource(this.poolHandle);
+    this.poolHandle = -1;
   }
 
+  /**
+   * This makes an attempt to allocate pinned memory, and if the pinned memory allocation fails
+   * it will return null, instead of throw.
+   */
   private synchronized HostMemoryBuffer tryAllocateInternal(long bytes) {
-    if (freeHeap.isEmpty()) {
-      log.debug("No free pinned memory left");
+    long allocated = Rmm.allocFromPinnedPool(this.poolHandle, bytes);
+    if (allocated == -1) {
       return null;
-    }
-    // Align the allocation
-    long alignedBytes = ((bytes + ALIGNMENT - 1) / ALIGNMENT) * ALIGNMENT;
-    Optional<MemorySection> firstFit = freeHeap.stream()
-        .filter(section -> section.size >= alignedBytes)
-        .findFirst();
-    if (!firstFit.isPresent()) {
-      if (log.isDebugEnabled()) {
-        MemorySection largest = freeHeap.stream()
-            .max(new SortedBySize())
-            .orElse(new MemorySection(0, 0));
-        log.debug("Insufficient pinned memory. {} needed, {} found", alignedBytes, largest.size);
-      }
-      return null;
-    }
-    MemorySection first = firstFit.get();
-    log.debug("Allocating {}/{} bytes pinned from {} FREE COUNT {} OUTSTANDING COUNT {}",
-        bytes, alignedBytes, first, freeHeap.size(), numAllocatedSections);
-    freeHeap.remove(first);
-    MemorySection allocated;
-    if (first.size == alignedBytes) {
-      allocated = first;
     } else {
-      allocated = first.splitOff(alignedBytes);
-      freeHeap.add(first);
+      return new HostMemoryBuffer(allocated, bytes,
+              new PinnedHostBufferCleaner(allocated, bytes));
     }
-    numAllocatedSections++;
-    availableBytes -= allocated.size;
-    log.debug("Allocated {} free {} outstanding {}", allocated, freeHeap, numAllocatedSections);
-    return new HostMemoryBuffer(allocated.baseAddress, bytes,
-        new PinnedHostBufferCleaner(allocated, bytes));
   }
 
-  private synchronized void free(MemorySection section) {
-    log.debug("Freeing {} with {} outstanding {}", section, freeHeap, numAllocatedSections);
-    availableBytes += section.size;
-    Iterator<MemorySection> it = freeHeap.iterator();
-    while(it.hasNext()) {
-      MemorySection current = it.next();
-      if (section.canCombine(current)) {
-        it.remove();
-        section.combineWith(current);
-      }
-    }
-    freeHeap.add(section);
-    numAllocatedSections--;
-    log.debug("After freeing {} outstanding {}", freeHeap, numAllocatedSections);
+  private synchronized void free(long address, long size) {
+    Rmm.freeFromPinnedPool(this.poolHandle, address, size);
   }
 
-  private synchronized long getAvailableBytesInternal() {
-    return this.availableBytes;
+  /**
+   * Sets the size of the cuDF default pinned pool.
+   *
+   * @note This has to be called before cuDF functions are executed.
+   *
+   * @param size initial and maximum size for the cuDF default pinned pool.
+   *        Pass size=0 to disable the default pool.
+   *
+   * @return true if we were able to setup the default resource, false if there was
+   *         a resource already set.
+   */
+  public static synchronized boolean configureDefaultCudfPinnedPoolSize(long size) {
+    return Rmm.configureDefaultCudfPinnedPoolSize(size);
   }
+
 }

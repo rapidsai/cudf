@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -53,19 +54,21 @@ namespace strings {
  *
  * Any null row results in a null entry for that row in the output column.
  *
- * @param strings Strings instance for this operation.
- * @param types The character types to check in each string.
+ * @param input Strings instance for this operation
+ * @param types The character types to check in each string
  * @param verify_types Only verify against these character types.
  *                     Default `ALL_TYPES` means return `true`
  *                     iff all characters match `types`.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column of boolean results for each string.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column of boolean results for each string
  */
 std::unique_ptr<column> all_characters_of_type(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   string_character_types types,
   string_character_types verify_types = string_character_types::ALL_TYPES,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr   = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Filter specific character types from a column of strings.
@@ -96,21 +99,23 @@ std::unique_ptr<column> all_characters_of_type(
  * @throw cudf::logic_error if neither or both `types_to_remove` and
  *        `types_to_keep` are set to `ALL_TYPES`.
  *
- * @param strings Strings instance for this operation.
+ * @param input Strings instance for this operation
  * @param types_to_remove The character types to check in each string.
  *        Use `ALL_TYPES` here to specify `types_to_keep` instead.
- * @param replacement The replacement character to use when removing characters.
+ * @param replacement The replacement character to use when removing characters
  * @param types_to_keep Default `ALL_TYPES` means all characters of
  *        `types_to_remove` will be filtered.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column of boolean results for each string.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return New column of boolean results for each string
  */
 std::unique_ptr<column> filter_characters_of_type(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   string_character_types types_to_remove,
   string_scalar const& replacement     = string_scalar(""),
   string_character_types types_to_keep = string_character_types::ALL_TYPES,
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr    = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

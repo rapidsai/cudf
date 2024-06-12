@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,13 +24,12 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-class Groupby : public cudf::benchmark {
-};
+class Groupby : public cudf::benchmark {};
 
 void BM_group_shift(benchmark::State& state)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
-  const int num_groups = 100;
+  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
+  int const num_groups = 100;
 
   data_profile const profile =
     data_profile_builder().cardinality(0).null_probability(0.01).distribution(

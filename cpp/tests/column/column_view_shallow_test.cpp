@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_view.hpp>
-#include <cudf/null_mask.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/traits.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/column/column_view.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -75,8 +75,7 @@ std::unique_ptr<cudf::column> example_column()
 }
 
 template <typename T>
-struct ColumnViewShallowTests : public cudf::test::BaseFixture {
-};
+struct ColumnViewShallowTests : public cudf::test::BaseFixture {};
 
 using AllTypes = cudf::test::Concat<cudf::test::AllTypes, cudf::test::CompoundTypes>;
 TYPED_TEST_SUITE(ColumnViewShallowTests, AllTypes);
@@ -160,7 +159,7 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash_update_data)
   }
   // add null_mask + new column_view = diff hash.
   {
-    col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_VALID));
+    col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_VALID), 0);
     auto col_view_new = cudf::column_view{*col};
     EXPECT_NE(shallow_hash(col_view), shallow_hash(col_view_new));
     [[maybe_unused]] auto const nulls = col_view_new.null_count();
@@ -175,11 +174,8 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash_update_data)
     auto col_view_new = cudf::column_view{*col};
     EXPECT_EQ(shallow_hash(col_view), shallow_hash(col_view_new));
   }
-  // set_null_count + new column_view = same hash. set_null_count(UNKNOWN_NULL_COUNT)
+  // set_null_count + new column_view = same hash.
   {
-    col->set_null_count(cudf::UNKNOWN_NULL_COUNT);
-    auto col_view_new = cudf::column_view{*col};
-    EXPECT_EQ(shallow_hash(col_view), shallow_hash(col_view_new));
     col->set_null_count(col->size());
     auto col_view_new2 = cudf::column_view{*col};
     EXPECT_EQ(shallow_hash(col_view), shallow_hash(col_view_new2));
@@ -265,7 +261,8 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash_mutable)
   {
     if constexpr (cudf::is_nested<TypeParam>()) {
       col->child(0).set_null_mask(
-        cudf::create_null_mask(col->child(0).size(), cudf::mask_state::ALL_NULL));
+        cudf::create_null_mask(col->child(0).size(), cudf::mask_state::ALL_NULL),
+        col->child(0).size());
       auto col_child_updated = cudf::mutable_column_view{*col};
       EXPECT_NE(shallow_hash(col_view), shallow_hash(col_child_updated));
     }
@@ -329,7 +326,7 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_update_data)
   }
   // add null_mask + new column_view = diff hash.
   {
-    col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_VALID));
+    col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_VALID), 0);
     auto col_view_new = cudf::column_view{*col};
     EXPECT_FALSE(is_shallow_equivalent(col_view, col_view_new));
     [[maybe_unused]] auto const nulls = col_view_new.null_count();
@@ -344,11 +341,8 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_update_data)
     auto col_view_new = cudf::column_view{*col};
     EXPECT_TRUE(is_shallow_equivalent(col_view, col_view_new));
   }
-  // set_null_count + new column_view = same hash. set_null_count(UNKNOWN_NULL_COUNT)
+  // set_null_count + new column_view = same hash.
   {
-    col->set_null_count(cudf::UNKNOWN_NULL_COUNT);
-    auto col_view_new = cudf::column_view{*col};
-    EXPECT_TRUE(is_shallow_equivalent(col_view, col_view_new));
     col->set_null_count(col->size());
     auto col_view_new2 = cudf::column_view{*col};
     EXPECT_TRUE(is_shallow_equivalent(col_view, col_view_new2));
@@ -434,7 +428,7 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_mutable)
   {
     if constexpr (cudf::is_nested<TypeParam>()) {
       col->child(0).set_null_mask(
-        cudf::create_null_mask(col->child(0).size(), cudf::mask_state::ALL_NULL));
+        cudf::create_null_mask(col->child(0).size(), cudf::mask_state::ALL_NULL), col->size());
       auto col_child_updated = cudf::mutable_column_view{*col};
       EXPECT_FALSE(is_shallow_equivalent(col_view, col_child_updated));
     }

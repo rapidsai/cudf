@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,12 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sequence.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/lists/detail/extract.hpp>
 #include <cudf/lists/detail/gather.cuh>
 #include <cudf/lists/extract.hpp>
@@ -27,6 +29,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/fill.h>
@@ -99,8 +102,10 @@ std::unique_ptr<cudf::column> make_index_child(size_type index,
  */
 std::unique_ptr<cudf::column> make_index_offsets(size_type num_lists, rmm::cuda_stream_view stream)
 {
-  return cudf::detail::sequence(
-    num_lists + 1, cudf::scalar_type_t<size_type>(0, true, stream), stream);
+  return cudf::detail::sequence(num_lists + 1,
+                                cudf::scalar_type_t<size_type>(0, true, stream),
+                                stream,
+                                rmm::mr::get_current_device_resource());
 }
 
 }  // namespace
@@ -114,7 +119,7 @@ template <typename index_t>
 std::unique_ptr<column> extract_list_element_impl(lists_column_view lists_column,
                                                   index_t const& index,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::device_async_resource_ref mr)
 {
   auto const num_lists = lists_column.size();
   if (num_lists == 0) { return empty_like(lists_column.child()); }
@@ -133,10 +138,34 @@ std::unique_ptr<column> extract_list_element_impl(lists_column_view lists_column
                                                     {},
                                                     stream);
 
-  auto extracted_lists = segmented_gather(
-    lists_column, index_lists_column->view(), out_of_bounds_policy::NULLIFY, stream, mr);
+  // We want the output of `segmented_gather` to be a lists column in which each list has exactly
+  // one element, even for the null lists.
+  // Thus, the input into `segmented_gather` should not be nullable.
+  auto const lists_column_removed_null_mask = lists_column_view{
+    column_view{data_type{type_id::LIST},
+                lists_column.size(),
+                nullptr,  // data
+                nullptr,  // null_mask
+                0,        // null_count
+                lists_column.offset(),
+                std::vector<column_view>{lists_column.child_begin(), lists_column.child_end()}}};
 
-  return std::move(extracted_lists->release().children[lists_column_view::child_column_index]);
+  auto extracted_lists = segmented_gather(lists_column_removed_null_mask,
+                                          index_lists_column->view(),
+                                          out_of_bounds_policy::NULLIFY,
+                                          stream,
+                                          mr);
+
+  auto output =
+    std::move(extracted_lists->release().children[lists_column_view::child_column_index]);
+  if (!lists_column.has_nulls()) { return output; }
+
+  // The input lists column may have non-empty nulls if it is nullable, although this is rare.
+  // In such cases, the extracted elements corresponding to these non-empty nulls may not be null.
+  // Thus, we need to superimpose nulls from the input column into the output to make sure each
+  // input null list always results in a null output row.
+  return cudf::structs::detail::superimpose_nulls(
+    lists_column.null_mask(), lists_column.null_count(), std::move(output), stream, mr);
 }
 
 /**
@@ -146,7 +175,7 @@ std::unique_ptr<column> extract_list_element_impl(lists_column_view lists_column
 std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              size_type const index,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   return detail::extract_list_element_impl(lists_column, index, stream, mr);
 }
@@ -154,7 +183,7 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
 std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              column_view const& indices,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   return detail::extract_list_element_impl(lists_column, indices, stream, mr);
 }
@@ -164,29 +193,31 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
 /**
  * @copydoc cudf::lists::extract_list_element(lists_column_view const&,
  *                                            size_type,
- *                                            rmm::mr::device_memory_resource*)
+ *                                            rmm::device_async_resource_ref)
  */
 std::unique_ptr<column> extract_list_element(lists_column_view const& lists_column,
                                              size_type index,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_list_element(lists_column, index, cudf::get_default_stream(), mr);
+  return detail::extract_list_element(lists_column, index, stream, mr);
 }
 
 /**
  * @copydoc cudf::lists::extract_list_element(lists_column_view const&,
  *                                            column_view const&,
- *                                            rmm::mr::device_memory_resource*)
+ *                                            rmm::device_async_resource_ref)
  */
 std::unique_ptr<column> extract_list_element(lists_column_view const& lists_column,
                                              column_view const& indices,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(indices.size() == lists_column.size(),
                "Index column must have as many elements as lists column.");
-  return detail::extract_list_element(lists_column, indices, cudf::get_default_stream(), mr);
+  return detail::extract_list_element(lists_column, indices, stream, mr);
 }
 
 }  // namespace lists

@@ -1,5 +1,6 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
+import itertools
 import pickle
 
 import msgpack
@@ -8,7 +9,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150
 from cudf.testing import _utils as utils
 from cudf.testing._utils import assert_eq
 
@@ -16,6 +16,8 @@ from cudf.testing._utils import assert_eq
 @pytest.mark.parametrize(
     "df",
     [
+        lambda: cudf.Index([1, 2, 3]),
+        lambda: cudf.Index([1.0, 2.0, 3.0]),
         lambda: cudf.Series([1, 2, 3]),
         lambda: cudf.Series([1, 2, 3], index=[4, 5, 6]),
         lambda: cudf.Series([1, None, 3]),
@@ -53,49 +55,68 @@ from cudf.testing._utils import assert_eq
             {"x": ["a", "bb", "ccc"], "y": [1.0, None, 3.0]},
             index=[1, None, 3],
         ),
-        pd._testing.makeBoolIndex,
-        pd._testing.makeCategoricalIndex,
-        lambda: pd._testing.makeCustomDataframe(3, 4),
-        lambda: pd._testing.makeCustomIndex(2, 5),
-        pd._testing.makeDataFrame,
-        pd._testing.makeDateIndex,
-        pd._testing.makeFloatIndex,
-        pd._testing.makeFloatSeries,
-        pd._testing.makeIntIndex,
-        pd._testing.makeIntervalIndex,
-        pd._testing.makeMissingDataframe,
-        pd._testing.makeMixedDataFrame,
-        pd._testing.makeMultiIndex,
-        lambda: pd._testing.makeNumericIndex(dtype=np.float64),
-        pd._testing.makeObjectSeries,
-        pytest.param(
-            pd._testing.makePeriodFrame,
-            marks=pytest.mark.xfail(
-                reason="Periods not supported in cudf", raises=RuntimeError
+        lambda: pd.Index([True, False] * 5),
+        lambda: pd.CategoricalIndex(["a", "b", "a", "b"], ["a", "b", "c"]),
+        lambda: (
+            cudf.DataFrame(
+                {
+                    "a": [1, 2, 3],
+                    "b": ["c", "e", "g"],
+                    "d": [True, False, True],
+                },
+                index=cudf.MultiIndex.from_tuples(
+                    [("i1", "i2"), ("i3", "i4"), ("i5", "i6")],
+                    names=["foo", "bar"],
+                ),
+            )
+        ),
+        lambda: cudf.Index(
+            cudf.date_range(start="2011-01-01", end="2012-01-01", periods=13)
+        ),
+        lambda: cudf.Index([1.2, 3.4, 5.6]),
+        lambda: cudf.Series([1.2, 3.4, 5.6]),
+        lambda: pd.IntervalIndex.from_breaks(range(10)),
+        lambda: cudf.MultiIndex.from_tuples(
+            [("i1", "i2"), ("i3", "i4"), ("i5", "i6")], names=["foo", "bar"]
+        ),
+        lambda: cudf.RangeIndex(10),
+        lambda: cudf.DataFrame(
+            {"a": list(range(13)), "b": [float(x) for x in range(13)]},
+            index=cudf.Index(
+                cudf.date_range(
+                    start="2011-01-01", end="2012-01-01", periods=13
+                )
             ),
         ),
-        pytest.param(
-            pd._testing.makePeriodIndex,
-            marks=pytest.mark.xfail(
-                reason="Periods not supported in cudf", raises=RuntimeError
+        lambda: cudf.Series(
+            list(range(13)),
+            index=cudf.Index(
+                cudf.date_range(
+                    start="2011-01-01", end="2012-01-01", periods=13
+                )
             ),
         ),
-        pytest.param(
-            pd._testing.makePeriodSeries,
-            marks=pytest.mark.xfail(
-                reason="Periods not supported in cudf", raises=RuntimeError
-            ),
+        lambda: cudf.TimedeltaIndex(
+            [1132223, 2023232, 342234324, 4234324],
+            dtype="timedelta64[ns]",
+            name="foo",
         ),
-        pd._testing.makeRangeIndex,
-        pd._testing.makeStringSeries,
-        pd._testing.makeTimeDataFrame,
-        pd._testing.makeTimeSeries,
-        pd._testing.makeTimedeltaIndex,
-        pd._testing.makeUIntIndex,
-        pd._testing.makeUnicodeIndex
-        if not PANDAS_GE_150
-        else pd._testing.makeStringIndex,
+        lambda: cudf.Index(
+            [
+                "y7ssMP1PWJ",
+                "rZDLbzIQsX",
+                "NrPwYMsxNw",
+                "4zja1Vw9Rq",
+                "Y9TNDhjXgR",
+                "Ryjt7up2hT",
+                "dxYKtRGHkb",
+                "nMCWj5yhMu",
+                "Rt7S362FNX",
+                "OGbssOJLUI",
+            ]
+        ),
     ],
+    ids=itertools.count(),
 )
 @pytest.mark.parametrize("to_host", [True, False])
 def test_serialize(df, to_host):
@@ -174,8 +195,8 @@ def test_serialize_range_index():
 
 
 def test_serialize_generic_index():
-    index = cudf.core.index.GenericIndex(cudf.Series(np.arange(10)))
-    outindex = cudf.core.index.GenericIndex.deserialize(*index.serialize())
+    index = cudf.core.index.Index(cudf.Series(np.arange(10)))
+    outindex = cudf.core.index.Index.deserialize(*index.serialize())
     assert_eq(index, outindex)
 
 
@@ -282,7 +303,9 @@ def test_serialize_string():
     "frames",
     [
         (cudf.Series([], dtype="str"), pd.Series([], dtype="str")),
+        (cudf.DataFrame(), pd.DataFrame()),
         (cudf.DataFrame([]), pd.DataFrame([])),
+        (cudf.DataFrame({}), pd.DataFrame({})),
         (cudf.DataFrame([1]).head(0), pd.DataFrame([1]).head(0)),
         (cudf.DataFrame({"a": []}), pd.DataFrame({"a": []})),
         (
@@ -328,6 +351,17 @@ def test_serialize_seriesgroupby():
     assert_eq(recreated.sum(), gb.sum())
 
 
+def test_serialize_seriesresampler():
+    index = cudf.date_range(start="2001-01-01", periods=10, freq="1min")
+    sr = cudf.Series(range(10), index=index)
+    re_sampler = sr.resample("3min")
+    actual = re_sampler.sum()
+    recreated = re_sampler.__class__.deserialize(*re_sampler.serialize())
+    expected = recreated.sum()
+
+    assert_eq(actual, expected)
+
+
 def test_serialize_string_check_buffer_sizes():
     df = cudf.DataFrame({"a": ["a", "b", "cd", None]})
     expect = df.memory_usage(deep=True).loc["a"]
@@ -336,11 +370,12 @@ def test_serialize_string_check_buffer_sizes():
     assert expect == got
 
 
-def test_deserialize_cudf_0_16(datadir):
-    fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_0.16.pkl"
+def test_deserialize_cudf_23_12(datadir):
+    fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_23.12.pkl"
 
     expected = cudf.DataFrame({"a": ["hi", "hello", "world", None]})
-    actual = pickle.load(open(fname, "rb"))
+    with open(fname, "rb") as f:
+        actual = pickle.load(f)
 
     assert_eq(expected, actual)
 
@@ -364,3 +399,19 @@ def test_serialize_sliced_string():
 
     recreated = cudf.Series.deserialize(*sliced.serialize())
     assert_eq(recreated.to_pandas(nullable=True), pd_series)
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [
+        cudf.RangeIndex(2),
+        cudf.Index([1, 2], dtype="int8"),
+        cudf.MultiIndex(
+            levels=[["a", "b"], [1, 2]], codes=[[0, 1], [0, 1]], names=["a", 0]
+        ),
+    ],
+)
+def test_serialize_column_types_preserved(columns):
+    expected = cudf.DataFrame([[10, 11]], columns=columns)
+    result = cudf.DataFrame.deserialize(*expected.serialize())
+    assert_eq(result, expected)

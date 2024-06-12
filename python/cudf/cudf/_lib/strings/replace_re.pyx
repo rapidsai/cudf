@@ -1,22 +1,28 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+from cudf.core.buffer import acquire_spill_lock
+
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
-from cudf._lib.cpp.strings.replace_re cimport (
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from cudf._lib.pylibcudf.libcudf.strings.regex_flags cimport regex_flags
+from cudf._lib.pylibcudf.libcudf.strings.regex_program cimport regex_program
+from cudf._lib.pylibcudf.libcudf.strings.replace_re cimport (
     replace_re as cpp_replace_re,
     replace_with_backrefs as cpp_replace_with_backrefs,
 )
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 
+@acquire_spill_lock()
 def replace_re(Column source_strings,
                object pattern,
                object py_repl,
@@ -36,11 +42,14 @@ def replace_re(Column source_strings,
     cdef string pattern_string = <string>str(pattern).encode()
     cdef const string_scalar* scalar_repl = \
         <const string_scalar*>(repl.get_raw_ptr())
+    cdef regex_flags c_flags = regex_flags.DEFAULT
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(pattern_string, c_flags))
         c_result = move(cpp_replace_re(
             source_view,
-            pattern_string,
+            dereference(c_prog),
             scalar_repl[0],
             n
         ))
@@ -48,6 +57,7 @@ def replace_re(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def replace_with_backrefs(
         Column source_strings,
         object pattern,
@@ -62,17 +72,21 @@ def replace_with_backrefs(
 
     cdef string pattern_string = <string>str(pattern).encode()
     cdef string repl_string = <string>str(repl).encode()
+    cdef regex_flags c_flags = regex_flags.DEFAULT
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(pattern_string, c_flags))
         c_result = move(cpp_replace_with_backrefs(
             source_view,
-            pattern_string,
+            dereference(c_prog),
             repl_string
         ))
 
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def replace_multi_re(Column source_strings,
                      object patterns,
                      Column repl_strings):

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 package ai.rapids.cudf;
 
+import java.nio.ByteBuffer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -80,35 +81,27 @@ class PinnedMemoryPoolTest extends CudfTestBase {
   void testFragmentationAndExhaustion() {
     final long poolSize = 15 * 1024L;
     PinnedMemoryPool.initialize(poolSize);
-    assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
+    assertEquals(poolSize, PinnedMemoryPool.getTotalPoolSizeBytes());
     HostMemoryBuffer[] buffers = new HostMemoryBuffer[5];
     try {
       buffers[0] = PinnedMemoryPool.tryAllocate(1024);
       assertNotNull(buffers[0]);
-      assertEquals(14*1024L, PinnedMemoryPool.getAvailableBytes());
       buffers[1] = PinnedMemoryPool.tryAllocate(2048);
       assertNotNull(buffers[1]);
-      assertEquals(12*1024L, PinnedMemoryPool.getAvailableBytes());
       buffers[2] = PinnedMemoryPool.tryAllocate(4096);
       assertNotNull(buffers[2]);
-      assertEquals(8*1024L, PinnedMemoryPool.getAvailableBytes());
       buffers[1].close();
-      assertEquals(10*1024L, PinnedMemoryPool.getAvailableBytes());
       buffers[1] = null;
       buffers[1] = PinnedMemoryPool.tryAllocate(8192);
       assertNotNull(buffers[1]);
-      assertEquals(2*1024L, PinnedMemoryPool.getAvailableBytes());
       buffers[3] = PinnedMemoryPool.tryAllocate(2048);
       assertNotNull(buffers[3]);
-      assertEquals(0L, PinnedMemoryPool.getAvailableBytes());
       buffers[4] = PinnedMemoryPool.tryAllocate(64);
       assertNull(buffers[4]);
       buffers[0].close();
-      assertEquals(1024L, PinnedMemoryPool.getAvailableBytes());
       buffers[0] = null;
       buffers[4] = PinnedMemoryPool.tryAllocate(64);
       assertNotNull(buffers[4]);
-      assertEquals(1024L - 64, PinnedMemoryPool.getAvailableBytes());
     } finally {
       for (HostMemoryBuffer buffer : buffers) {
         if (buffer != null) {
@@ -116,19 +109,55 @@ class PinnedMemoryPoolTest extends CudfTestBase {
         }
       }
     }
-    assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
+  }
+
+  @Test
+  void testTouchPinnedMemory() {
+    final long poolSize = 15 * 1024L;
+    PinnedMemoryPool.initialize(poolSize);
+    int bufLength = 256;
+    try(HostMemoryBuffer hmb = PinnedMemoryPool.allocate(bufLength);
+        HostMemoryBuffer hmb2 = PinnedMemoryPool.allocate(bufLength)) {
+      ByteBuffer bb = hmb.asByteBuffer(0, bufLength);
+      for (int i = 0; i < bufLength; i++) {
+        bb.put(i, (byte)i);
+      }
+      hmb2.copyFromHostBuffer(0, hmb, 0, bufLength);
+      ByteBuffer bb2 = hmb2.asByteBuffer(0, bufLength);
+      for (int i = 0; i < bufLength; i++) {
+        assertEquals(bb.get(i), bb2.get(i));
+      }
+    }
   }
 
   @Test
   void testZeroSizedAllocation() {
     final long poolSize = 4 * 1024L;
     PinnedMemoryPool.initialize(poolSize);
-    assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
+    assertEquals(poolSize, PinnedMemoryPool.getTotalPoolSizeBytes());
     try (HostMemoryBuffer buffer = PinnedMemoryPool.tryAllocate(0)) {
       assertNotNull(buffer);
       assertEquals(0, buffer.getLength());
-      assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
     }
-    assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
+  }
+
+  // This test simulates cuIO using our fallback pinned pool wrapper
+  // we should be able to either go to the pool, in this case 15KB in size
+  // or we should be falling back to pinned cudaMallocHost/cudaFreeHost.
+  @Test
+  void testFallbackPinnedPool() {
+    final long poolSize = 15 * 1024L;
+    PinnedMemoryPool.initialize(poolSize);
+    assertEquals(poolSize, PinnedMemoryPool.getTotalPoolSizeBytes());
+
+    long ptr = Rmm.allocFromFallbackPinnedPool(1347);  // this doesn't fallback
+    long ptr2 = Rmm.allocFromFallbackPinnedPool(15 * 1024L);  // this does
+    Rmm.freeFromFallbackPinnedPool(ptr, 1347); // free from pool
+    Rmm.freeFromFallbackPinnedPool(ptr2, 15*1024); // free from fallback
+
+    ptr = Rmm.allocFromFallbackPinnedPool(15*1024L); // this doesn't fallback
+    ptr2 = Rmm.allocFromFallbackPinnedPool(15*1024L); // this does
+    Rmm.freeFromFallbackPinnedPool(ptr, 15*1024L); // free from pool
+    Rmm.freeFromFallbackPinnedPool(ptr2, 15*1024L); // free from fallback
   }
 }

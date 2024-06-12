@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,11 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/transpose.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/transpose.hpp>
 
 #include <algorithm>
 #include <limits>
@@ -146,20 +148,17 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
   auto result      = transpose(input_view);
   auto result_view = std::get<1>(result);
 
-  CUDF_EXPECTS(result_view.num_columns() == expected_view.num_columns(),
-               "Expected same number of columns");
+  ASSERT_EQ(result_view.num_columns(), expected_view.num_columns());
   for (cudf::size_type i = 0; i < result_view.num_columns(); ++i) {
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_view.column(i), expected_view.column(i));
-    CUDF_EXPECTS(result_view.column(i).null_count() == expected_nulls[i],
-                 "Expected correct null count");
+    EXPECT_EQ(result_view.column(i).null_count(), expected_nulls[i]);
   }
 }
 
 }  // namespace
 
 template <typename T>
-class TransposeTest : public cudf::test::BaseFixture {
-};
+class TransposeTest : public cudf::test::BaseFixture {};
 
 // Using std::string here instead of cudf::test::StringTypes allows us to
 // use std::vector<T> utilities in this file just like the fixed-width types.
@@ -191,8 +190,7 @@ TYPED_TEST(TransposeTest, EmptyTable) { run_test<TypeParam>(0, 0, false); }
 
 TYPED_TEST(TransposeTest, EmptyColumns) { run_test<TypeParam>(10, 0, false); }
 
-class TransposeTestError : public cudf::test::BaseFixture {
-};
+class TransposeTestError : public cudf::test::BaseFixture {};
 
 TEST_F(TransposeTestError, MismatchedColumns)
 {

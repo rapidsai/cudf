@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -35,7 +36,7 @@
 #include <thrust/iterator/discard_iterator.h>
 
 namespace cudf::detail {
-
+namespace {
 /**
  * @brief Functor to get definition level value for a nested struct column until the leaf level or
  * the first list level.
@@ -46,6 +47,7 @@ struct def_level_fn {
   uint8_t const* d_nullability;
   uint8_t sub_level_start;
   uint8_t curr_def_level;
+  bool always_nullable;
 
   __device__ uint32_t operator()(size_type i)
   {
@@ -55,7 +57,7 @@ struct def_level_fn {
     auto col           = *parent_col;
     do {
       // If col not nullable then it does not contribute to def levels
-      if (d_nullability[l]) {
+      if (always_nullable or d_nullability[l]) {
         if (not col.nullable() or bit_is_set(col.null_mask(), i)) {
           ++def;
         } else {  // We have found the shallowest level at which this row is null
@@ -72,10 +74,11 @@ struct def_level_fn {
   }
 };
 
-dremel_data get_dremel_data(column_view h_col,
-                            std::vector<uint8_t> nullability,
-                            bool output_as_byte_array,
-                            rmm::cuda_stream_view stream)
+dremel_data get_encoding(column_view h_col,
+                         std::vector<uint8_t> nullability,
+                         bool output_as_byte_array,
+                         bool always_nullable,
+                         rmm::cuda_stream_view stream)
 {
   auto get_list_level = [](column_view col) {
     while (col.type().id() == type_id::STRUCT) {
@@ -125,8 +128,10 @@ dremel_data get_dremel_data(column_view h_col,
   }
   std::unique_ptr<column> empty_list_offset_col;
   if (has_empty_list_offsets) {
-    empty_list_offset_col = make_fixed_width_column(data_type(type_id::INT32), 1);
-    cudaMemsetAsync(empty_list_offset_col->mutable_view().head(), 0, sizeof(size_type), stream);
+    empty_list_offset_col = make_fixed_width_column(
+      data_type(type_to_id<size_type>()), 1, mask_state::UNALLOCATED, stream);
+    CUDF_CUDA_TRY(cudaMemsetAsync(
+      empty_list_offset_col->mutable_view().head(), 0, sizeof(size_type), stream.value()));
     std::function<column_view(column_view const&)> normalize_col = [&](column_view const& col) {
       auto children = [&]() -> std::vector<column_view> {
         if (col.type().id() == type_id::LIST) {
@@ -144,7 +149,7 @@ dremel_data get_dremel_data(column_view h_col,
                          col.size(),
                          col.head(),
                          col.null_mask(),
-                         UNKNOWN_NULL_COUNT,
+                         col.null_count(),
                          col.offset(),
                          std::move(children));
     };
@@ -172,14 +177,14 @@ dremel_data get_dremel_data(column_view h_col,
     uint32_t def = 0;
     start_at_sub_level.push_back(curr_nesting_level_idx);
     while (col.type().id() == type_id::STRUCT) {
-      def += (nullability[curr_nesting_level_idx]) ? 1 : 0;
+      def += (always_nullable or nullability[curr_nesting_level_idx]) ? 1 : 0;
       col = col.child(0);
       ++curr_nesting_level_idx;
     }
     // At the end of all those structs is either a list column or the leaf. List column contributes
     // at least one def level. Leaf contributes 1 level only if it is nullable.
-    def +=
-      (col.type().id() == type_id::LIST ? 1 : 0) + (nullability[curr_nesting_level_idx] ? 1 : 0);
+    def += (col.type().id() == type_id::LIST ? 1 : 0) +
+           (always_nullable or nullability[curr_nesting_level_idx] ? 1 : 0);
     def_at_level.push_back(def);
     ++curr_nesting_level_idx;
   };
@@ -208,7 +213,7 @@ dremel_data get_dremel_data(column_view h_col,
     }
   }
 
-  auto [device_view_owners, d_nesting_levels] =
+  [[maybe_unused]] auto [device_view_owners, d_nesting_levels] =
     contiguous_copy_column_device_views<column_device_view>(nesting_levels, stream);
 
   auto max_def_level = def_at_level.back();
@@ -263,7 +268,8 @@ dremel_data get_dremel_data(column_view h_col,
     max_vals_size += column_ends[l] - column_offsets[l];
   }
 
-  auto d_nullability = cudf::detail::make_device_uvector_async(nullability, stream);
+  auto d_nullability = cudf::detail::make_device_uvector_async(
+    nullability, stream, rmm::mr::get_current_device_resource());
 
   rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream);
   rmm::device_uvector<uint8_t> def_level(max_vals_size, stream);
@@ -296,7 +302,8 @@ dremel_data get_dremel_data(column_view h_col,
                                       def_level_fn{d_nesting_levels + level,
                                                    d_nullability.data(),
                                                    start_at_sub_level[level],
-                                                   def_at_level[level]});
+                                                   def_at_level[level],
+                                                   always_nullable});
 
     // `nesting_levels.size()` == no of list levels + leaf. Max repetition level = no of list levels
     auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size() - 1);
@@ -305,7 +312,8 @@ dremel_data get_dremel_data(column_view h_col,
                                       def_level_fn{d_nesting_levels + level + 1,
                                                    d_nullability.data(),
                                                    start_at_sub_level[level + 1],
-                                                   def_at_level[level + 1]});
+                                                   def_at_level[level + 1],
+                                                   always_nullable});
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
@@ -332,8 +340,10 @@ dremel_data get_dremel_data(column_view h_col,
     // Scan to get distance by which each offset value is shifted due to the insertion of empties
     auto scan_it = cudf::detail::make_counting_transform_iterator(
       column_offsets[level],
-      [off = lcv.offsets().data<size_type>(), size = lcv.offsets().size()] __device__(
-        auto i) -> int { return (i + 1 < size) && (off[i] == off[i + 1]); });
+      cuda::proclaim_return_type<int>([off  = lcv.offsets().data<size_type>(),
+                                       size = lcv.offsets().size()] __device__(auto i) -> int {
+        return (i + 1 < size) && (off[i] == off[i + 1]);
+      }));
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
       rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
@@ -369,10 +379,11 @@ dremel_data get_dremel_data(column_view h_col,
     auto [empties, empties_idx, empties_size] =
       get_empties(nesting_levels[level], column_offsets[level], column_ends[level]);
 
-    auto offset_transformer = [new_child_offsets = new_offsets.data(),
-                               child_start       = column_offsets[level + 1]] __device__(auto x) {
-      return new_child_offsets[x - child_start];  // (x - child's offset)
-    };
+    auto offset_transformer = cuda::proclaim_return_type<size_type>(
+      [new_child_offsets = new_offsets.data(),
+       child_start       = column_offsets[level + 1]] __device__(auto x) {
+        return new_child_offsets[x - child_start];  // (x - child's offset)
+      });
 
     // We will be reading from old rep_levels and writing again to rep_levels. Swap the current
     // rep values into temp_rep_vals so it can become the input and rep_levels can again be output.
@@ -388,7 +399,8 @@ dremel_data get_dremel_data(column_view h_col,
                                       def_level_fn{d_nesting_levels + level,
                                                    d_nullability.data(),
                                                    start_at_sub_level[level],
-                                                   def_at_level[level]});
+                                                   def_at_level[level],
+                                                   always_nullable});
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
@@ -416,8 +428,10 @@ dremel_data get_dremel_data(column_view h_col,
     // level value fof an empty list
     auto scan_it = cudf::detail::make_counting_transform_iterator(
       column_offsets[level],
-      [off = lcv.offsets().data<size_type>(), size = lcv.offsets().size()] __device__(
-        auto i) -> int { return (i + 1 < size) && (off[i] == off[i + 1]); });
+      cuda::proclaim_return_type<int>([off  = lcv.offsets().data<size_type>(),
+                                       size = lcv.offsets().size()] __device__(auto i) -> int {
+        return (i + 1 < size) && (off[i] == off[i + 1]);
+      }));
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
     thrust::exclusive_scan(
       rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
@@ -457,6 +471,23 @@ dremel_data get_dremel_data(column_view h_col,
                      std::move(def_level),
                      leaf_data_size,
                      max_def_level};
+}
+}  // namespace
+
+dremel_data get_dremel_data(column_view h_col,
+                            std::vector<uint8_t> nullability,
+                            bool output_as_byte_array,
+                            rmm::cuda_stream_view stream)
+{
+  return get_encoding(h_col, nullability, output_as_byte_array, false, stream);
+}
+
+dremel_data get_comparator_data(column_view h_col,
+                                std::vector<uint8_t> nullability,
+                                bool output_as_byte_array,
+                                rmm::cuda_stream_view stream)
+{
+  return get_encoding(h_col, nullability, output_as_byte_array, true, stream);
 }
 
 }  // namespace cudf::detail

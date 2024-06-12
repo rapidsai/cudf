@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import ai.rapids.cudf.DType;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 
 /** A literal value in an AST expression. */
 public final class Literal extends AstExpression {
@@ -198,6 +199,25 @@ public final class Literal extends AstExpression {
       return ofNull(type);
     }
     return ofDurationFromLong(type, value.longValue());
+  }
+
+  /** Construct a string literal with the specified value or null. */
+  public static Literal ofString(String value) {
+    if (value == null) {
+      return ofNull(DType.STRING);
+    }
+    return ofUTF8String(value.getBytes(StandardCharsets.UTF_8));
+  }
+
+  /** Construct a string literal directly with byte array to skip transcoding. */
+  public static Literal ofUTF8String(byte[] stringBytes) {
+    if (stringBytes == null) {
+      return ofNull(DType.STRING);
+    }
+    byte[] serializedValue = new byte[stringBytes.length + Integer.BYTES];
+    ByteBuffer.wrap(serializedValue).order(ByteOrder.nativeOrder()).putInt(stringBytes.length);
+    System.arraycopy(stringBytes, 0, serializedValue, Integer.BYTES, stringBytes.length);
+    return new Literal(DType.STRING, serializedValue);
   }
 
   Literal(DType type, byte[] serializedValue) {

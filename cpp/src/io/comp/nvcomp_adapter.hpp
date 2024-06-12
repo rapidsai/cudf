@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include "gpuinflate.hpp"
+#include "io/utilities/config_utils.hpp"
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -27,17 +28,68 @@
 
 namespace cudf::io::nvcomp {
 
-enum class compression_type { SNAPPY, ZSTD, DEFLATE };
+enum class compression_type { SNAPPY, ZSTD, DEFLATE, LZ4 };
 
 /**
- * @brief Whether the given compression type is enabled through nvCOMP.
+ * @brief Set of parameters that impact whether the use nvCOMP features is enabled.
+ */
+struct feature_status_parameters {
+  int lib_major_version;
+  int lib_minor_version;
+  int lib_patch_version;
+  bool are_all_integrations_enabled;
+  bool are_stable_integrations_enabled;
+  int compute_capability_major;
+
+  feature_status_parameters();
+  feature_status_parameters(
+    int major, int minor, int patch, bool all_enabled, bool stable_enabled, int cc_major)
+    : lib_major_version{major},
+      lib_minor_version{minor},
+      lib_patch_version{patch},
+      are_all_integrations_enabled{all_enabled},
+      are_stable_integrations_enabled{stable_enabled},
+      compute_capability_major{cc_major}
+  {
+  }
+};
+
+/**
+ * @brief Equality operator overload. Required to use `feature_status_parameters` as a map key.
+ */
+inline bool operator==(feature_status_parameters const& lhs, feature_status_parameters const& rhs)
+{
+  return lhs.lib_major_version == rhs.lib_major_version and
+         lhs.lib_minor_version == rhs.lib_minor_version and
+         lhs.lib_patch_version == rhs.lib_patch_version and
+         lhs.are_all_integrations_enabled == rhs.are_all_integrations_enabled and
+         lhs.are_stable_integrations_enabled == rhs.are_stable_integrations_enabled and
+         lhs.compute_capability_major == rhs.compute_capability_major;
+}
+
+/**
+ * @brief If a compression type is disabled through nvCOMP, returns the reason as a string.
  *
- * Result depends on nvCOMP version and environment variables.
+ * Result cab depend on nvCOMP version and environment variables.
  *
  * @param compression Compression type
- * @returns true if nvCOMP use is enabled; false otherwise
+ * @param params Optional parameters to query status with different configurations
+ * @returns Reason for the feature disablement, `std::nullopt` if the feature is enabled
  */
-[[nodiscard]] bool is_compression_enabled(compression_type compression);
+[[nodiscard]] std::optional<std::string> is_compression_disabled(
+  compression_type compression, feature_status_parameters params = feature_status_parameters());
+
+/**
+ * @brief If a decompression type is disabled through nvCOMP, returns the reason as a string.
+ *
+ * Result can depend on nvCOMP version and environment variables.
+ *
+ * @param compression Compression type
+ * @param params Optional parameters to query status with different configurations
+ * @returns Reason for the feature disablement, `std::nullopt` if the feature is enabled
+ */
+[[nodiscard]] std::optional<std::string> is_decompression_disabled(
+  compression_type compression, feature_status_parameters params = feature_status_parameters());
 
 /**
  * @brief Device batch decompression of given type.
@@ -46,8 +98,8 @@ enum class compression_type { SNAPPY, ZSTD, DEFLATE };
  * @param[in] inputs List of input buffers
  * @param[out] outputs List of output buffers
  * @param[out] results List of output status structures
- * @param[in] max_uncomp_chunk_size maximum size of uncompressed chunk
- * @param[in] max_total_uncomp_size maximum total size of uncompressed data
+ * @param[in] max_uncomp_chunk_size Maximum size of any single uncompressed chunk
+ * @param[in] max_total_uncomp_size Maximum total size of uncompressed data
  * @param[in] stream CUDA stream to use
  */
 void batched_decompress(compression_type compression,
@@ -57,6 +109,24 @@ void batched_decompress(compression_type compression,
                         size_t max_uncomp_chunk_size,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream);
+
+/**
+ * @brief Return the amount of temporary space required in bytes for a given decompression
+ * operation.
+ *
+ * The size returned reflects the size of the scratch buffer to be passed to
+ * `batched_decompress_async`
+ *
+ * @param[in] compression Compression type
+ * @param[in] num_chunks The number of decompression chunks to be processed
+ * @param[in] max_uncomp_chunk_size Maximum size of any single uncompressed chunk
+ * @param[in] max_total_uncomp_size Maximum total size of uncompressed data
+ * @returns The total required size in bytes
+ */
+size_t batched_decompress_temp_size(compression_type compression,
+                                    size_t num_chunks,
+                                    size_t max_uncomp_chunk_size,
+                                    size_t max_total_uncomp_size);
 
 /**
  * @brief Gets the maximum size any chunk could compress to in the batch.

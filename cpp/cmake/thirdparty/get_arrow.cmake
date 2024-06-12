@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -20,42 +20,109 @@
 
 # cmake-lint: disable=R0912,R0913,R0915
 
+include_guard(GLOBAL)
+
+# Generate a FindArrow module for the case where we need to search for arrow within a pip install
+# pyarrow.
+function(find_libarrow_in_python_wheel PYARROW_VERSION)
+  string(REPLACE "." ";" PYARROW_VER_COMPONENTS "${PYARROW_VERSION}")
+  list(GET PYARROW_VER_COMPONENTS 0 PYARROW_MAJOR_VER)
+  list(GET PYARROW_VER_COMPONENTS 1 PYARROW_MINOR_VER)
+
+  # Ensure that the major and minor versions are two digits long
+  string(LENGTH ${PYARROW_MAJOR_VER} PYARROW_MAJOR_LENGTH)
+  string(LENGTH ${PYARROW_MINOR_VER} PYARROW_MINOR_LENGTH)
+  if(${PYARROW_MAJOR_LENGTH} EQUAL 1)
+    set(PYARROW_MAJOR_VER "0${PYARROW_MAJOR_VER}")
+  endif()
+  if(${PYARROW_MINOR_LENGTH} EQUAL 1)
+    set(PYARROW_MINOR_VER "0${PYARROW_MINOR_VER}")
+  endif()
+
+  set(PYARROW_LIB "libarrow.so.${PYARROW_MAJOR_VER}${PYARROW_MINOR_VER}")
+
+  string(
+    APPEND
+    initial_code_block
+    [=[
+find_package(Python 3.9 REQUIRED COMPONENTS Interpreter)
+execute_process(
+    COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_library_dirs()[0])"
+    OUTPUT_VARIABLE CUDF_PYARROW_WHEEL_DIR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    COMMAND_ERROR_IS_FATAL ANY
+)
+list(APPEND CMAKE_PREFIX_PATH "${CUDF_PYARROW_WHEEL_DIR}")
+]=]
+  )
+  string(
+    APPEND
+    final_code_block
+    [=[
+list(POP_BACK CMAKE_PREFIX_PATH)
+]=]
+  )
+  rapids_find_generate_module(
+    Arrow NO_CONFIG
+    VERSION "${PYARROW_VERSION}"
+    LIBRARY_NAMES "${PYARROW_LIB}"
+    BUILD_EXPORT_SET cudf-exports
+    INSTALL_EXPORT_SET cudf-exports
+    HEADER_NAMES arrow/python/arrow_to_pandas.h INITIAL_CODE_BLOCK initial_code_block
+                 FINAL_CODE_BLOCK final_code_block
+  )
+
+  find_package(Arrow ${PYARROW_VERSION} MODULE REQUIRED GLOBAL)
+  add_library(arrow_shared ALIAS Arrow::Arrow)
+
+  rapids_export_package(BUILD Arrow cudf-exports)
+  rapids_export_package(INSTALL Arrow cudf-exports)
+endfunction()
+
 # This function finds arrow and sets any additional necessary environment variables.
 function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENABLE_PYTHON
-         ENABLE_PARQUET
+         ENABLE_PARQUET PYARROW_LIBARROW
 )
+
+  if(PYARROW_LIBARROW)
+    # Generate a FindArrow.cmake to find pyarrow's libarrow.so
+    find_libarrow_in_python_wheel(${VERSION})
+    set(ARROW_FOUND
+        TRUE
+        PARENT_SCOPE
+    )
+    set(ARROW_LIBRARIES
+        arrow_shared
+        PARENT_SCOPE
+    )
+    return()
+  endif()
 
   if(BUILD_STATIC)
     if(TARGET arrow_static)
-      list(APPEND ARROW_LIBRARIES arrow_static)
       set(ARROW_FOUND
           TRUE
           PARENT_SCOPE
       )
       set(ARROW_LIBRARIES
-          ${ARROW_LIBRARIES}
+          arrow_static
           PARENT_SCOPE
       )
       return()
     endif()
   else()
     if(TARGET arrow_shared)
-      list(APPEND ARROW_LIBRARIES arrow_shared)
       set(ARROW_FOUND
           TRUE
           PARENT_SCOPE
       )
       set(ARROW_LIBRARIES
-          ${ARROW_LIBRARIES}
+          arrow_shared
           PARENT_SCOPE
       )
       return()
     endif()
   endif()
-
-  set(ARROW_BUILD_SHARED ON)
-  set(ARROW_BUILD_STATIC OFF)
-  set(CPMAddOrFindPackage CPMFindPackage)
 
   if(NOT ARROW_ARMV8_ARCH)
     set(ARROW_ARMV8_ARCH "armv8-a")
@@ -69,8 +136,18 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     set(ARROW_BUILD_STATIC ON)
     set(ARROW_BUILD_SHARED OFF)
     # Turn off CPM using `find_package` so we always download and make sure we get proper static
-    # library
-    set(CPM_DOWNLOAD_ALL TRUE)
+    # library.
+    set(CPM_DOWNLOAD_Arrow TRUE)
+    # By default ARROW will try to search for a static version of OpenSSL which is a bad idea given
+    # that shared linking is advised for critical components like SSL. If a static build is
+    # requested, we honor ARROW's default of static linking, but users may consider setting
+    # ARROW_OPENSSL_USE_SHARED even in static builds.
+  else()
+    set(ARROW_BUILD_SHARED ON)
+    set(ARROW_BUILD_STATIC OFF)
+    # By default ARROW will try to search for a static version of OpenSSL which is a bad idea given
+    # that shared linking is advised for critical components like SSL
+    set(ARROW_OPENSSL_USE_SHARED ON)
   endif()
 
   set(ARROW_PYTHON_OPTIONS "")
@@ -91,12 +168,14 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
 
   rapids_cpm_find(
     Arrow ${VERSION}
-    GLOBAL_TARGETS arrow_shared parquet_shared arrow_dataset_shared
+    GLOBAL_TARGETS arrow_shared parquet_shared arrow_acero_shared arrow_dataset_shared arrow_static
+                   parquet_static arrow_acero_static arrow_dataset_static
     CPM_ARGS
     GIT_REPOSITORY https://github.com/apache/arrow.git
     GIT_TAG apache-arrow-${VERSION}
     GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
     OPTIONS "CMAKE_VERBOSE_MAKEFILE ON"
+            "ARROW_ACERO ON"
             "ARROW_IPC ON"
             "ARROW_DATASET ON"
             "ARROW_WITH_BACKTRACE ON"
@@ -107,6 +186,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
             # e.g. needed by blazingsql-io
             ${ARROW_PARQUET_OPTIONS}
             "ARROW_PARQUET ${ENABLE_PARQUET}"
+            "ARROW_FILESYSTEM ON"
             ${ARROW_PYTHON_OPTIONS}
             # Arrow modifies CMake's GLOBAL RULE_LAUNCH_COMPILE unless this is off
             "ARROW_USE_CCACHE OFF"
@@ -125,61 +205,66 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
             "xsimd_SOURCE AUTO"
   )
 
-  set(ARROW_FOUND TRUE)
-  set(ARROW_LIBRARIES "")
+  set(ARROW_FOUND
+      TRUE
+      PARENT_SCOPE
+  )
 
-  # Arrow_ADDED: set if CPM downloaded Arrow from Github Arrow_DIR:   set if CPM found Arrow on the
-  # system/conda/etc.
-  if(Arrow_ADDED OR Arrow_DIR)
-    if(BUILD_STATIC)
-      list(APPEND ARROW_LIBRARIES arrow_static)
-    else()
-      list(APPEND ARROW_LIBRARIES arrow_shared)
-    endif()
-
-    if(Arrow_DIR)
-      find_package(Arrow REQUIRED QUIET)
-      if(ENABLE_PARQUET)
-        if(NOT Parquet_DIR)
-          # Set this to enable `find_package(Parquet)`
-          set(Parquet_DIR "${Arrow_DIR}")
-        endif()
-        # Set this to enable `find_package(ArrowDataset)`
-        set(ArrowDataset_DIR "${Arrow_DIR}")
-        find_package(ArrowDataset REQUIRED QUIET)
-      endif()
-    elseif(Arrow_ADDED)
-      # Copy these files so we can avoid adding paths in Arrow_BINARY_DIR to
-      # target_include_directories. That defeats ccache.
-      file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/util/config.h"
-           DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/util"
-      )
-      if(ENABLE_PARQUET)
-        file(INSTALL "${Arrow_BINARY_DIR}/src/parquet/parquet_version.h"
-             DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/parquet"
-        )
-      endif()
-      #
-      # This shouldn't be necessary!
-      #
-      # Arrow populates INTERFACE_INCLUDE_DIRECTORIES for the `arrow_static` and `arrow_shared`
-      # targets in FindArrow, so for static source-builds, we have to do it after-the-fact.
-      #
-      # This only works because we know exactly which components we're using. Don't forget to update
-      # this list if we add more!
-      #
-      foreach(ARROW_LIBRARY ${ARROW_LIBRARIES})
-        target_include_directories(
-          ${ARROW_LIBRARY}
-          INTERFACE "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src>"
-                    "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src/generated>"
-                    "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/hadoop/include>"
-                    "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/flatbuffers/include>"
-        )
-      endforeach()
-    endif()
+  if(BUILD_STATIC)
+    set(ARROW_LIBRARIES arrow_static)
   else()
-    set(ARROW_FOUND FALSE)
+    set(ARROW_LIBRARIES arrow_shared)
+  endif()
+
+  # Arrow_DIR:   set if CPM found Arrow on the system/conda/etc.
+  if(Arrow_DIR)
+    # This extra find_package is necessary because rapids_cpm_find does not propagate all the
+    # variables from find_package that we might need. This is especially problematic when
+    # rapids_cpm_find builds from source.
+    find_package(Arrow REQUIRED QUIET)
+    if(ENABLE_PARQUET)
+      # Setting Parquet_DIR is conditional because parquet may be installed independently of arrow.
+      if(NOT Parquet_DIR)
+        # Set this to enable `find_package(Parquet)`
+        set(Parquet_DIR "${Arrow_DIR}")
+      endif()
+      # Set this to enable `find_package(ArrowDataset)`. This will call find_package(ArrowAcero) for
+      # us
+      set(ArrowDataset_DIR "${Arrow_DIR}")
+      find_package(ArrowDataset REQUIRED QUIET)
+    endif()
+    # Arrow_ADDED: set if CPM downloaded Arrow from Github
+  elseif(Arrow_ADDED)
+    # Copy these files so we can avoid adding paths in Arrow_BINARY_DIR to
+    # target_include_directories. That defeats ccache.
+    file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/util/config.h"
+         DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/util"
+    )
+    if(ENABLE_PARQUET)
+      file(INSTALL "${Arrow_BINARY_DIR}/src/parquet/parquet_version.h"
+           DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/parquet"
+      )
+    endif()
+    # Arrow populates INTERFACE_INCLUDE_DIRECTORIES for the `arrow_static` and `arrow_shared`
+    # targets in FindArrow, so for static source-builds, we have to do it after-the-fact.
+    #
+    # This only works because we know exactly which components we're using. Don't forget to update
+    # this list if we add more!
+    #
+    foreach(ARROW_LIBRARY ${ARROW_LIBRARIES})
+      target_include_directories(
+        ${ARROW_LIBRARY}
+        INTERFACE "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src>"
+                  "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src/generated>"
+                  "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/hadoop/include>"
+                  "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/flatbuffers/include>"
+      )
+    endforeach()
+  else()
+    set(ARROW_FOUND
+        FALSE
+        PARENT_SCOPE
+    )
     message(FATAL_ERROR "CUDF: Arrow library not found or downloaded.")
   endif()
 
@@ -218,14 +303,27 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
         APPEND
         arrow_code_string
         "
-          if(NOT TARGET xsimd)
-            add_library(xsimd INTERFACE IMPORTED)
-            target_include_directories(xsimd INTERFACE \"${Arrow_BINARY_DIR}/xsimd_ep/src/xsimd_ep-install/include\")
+          if(NOT TARGET arrow::xsimd)
+            add_library(arrow::xsimd INTERFACE IMPORTED)
+            target_include_directories(arrow::xsimd INTERFACE \"${Arrow_BINARY_DIR}/xsimd_ep/src/xsimd_ep-install/include\")
           endif()
         "
       )
     endif()
-
+    rapids_cmake_install_lib_dir(lib_dir)
+    if(TARGET arrow_static)
+      get_target_property(interface_libs arrow_static INTERFACE_LINK_LIBRARIES)
+      # The `arrow_static` library is leaking a dependency on the object libraries it was built with
+      # we need to remove this from the interface, since keeping them around would cause duplicate
+      # symbols and CMake export errors
+      if(interface_libs MATCHES "arrow_array" AND interface_libs MATCHES "arrow_compute")
+        string(REPLACE "BUILD_INTERFACE:" "BUILD_LOCAL_INTERFACE:" interface_libs
+                       "${interface_libs}"
+        )
+        set_target_properties(arrow_static PROPERTIES INTERFACE_LINK_LIBRARIES "${interface_libs}")
+        get_target_property(interface_libs arrow_static INTERFACE_LINK_LIBRARIES)
+      endif()
+    endif()
     rapids_export(
       BUILD Arrow
       VERSION ${VERSION}
@@ -236,6 +334,26 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     )
 
     if(ENABLE_PARQUET)
+
+      set(arrow_acero_code_string
+          [=[
+              if (TARGET cudf::arrow_acero_shared AND (NOT TARGET arrow_acero_shared))
+                  add_library(arrow_acero_shared ALIAS cudf::arrow_acero_shared)
+              endif()
+              if (TARGET cudf::arrow_acero_static AND (NOT TARGET arrow_acero_static))
+                  add_library(arrow_acero_static ALIAS cudf::arrow_acero_static)
+              endif()
+            ]=]
+      )
+
+      rapids_export(
+        BUILD ArrowAcero
+        VERSION ${VERSION}
+        EXPORT_SET arrow_acero_targets
+        GLOBAL_TARGETS arrow_acero_shared arrow_acero_static
+        NAMESPACE cudf::
+        FINAL_CODE_BLOCK arrow_acero_code_string
+      )
 
       set(arrow_dataset_code_string
           [=[
@@ -288,31 +406,36 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
   endif()
 
   include("${rapids-cmake-dir}/export/find_package_root.cmake")
-  rapids_export_find_package_root(BUILD Arrow [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
-  if(ENABLE_PARQUET)
-    rapids_export_find_package_root(BUILD Parquet [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
-    rapids_export_find_package_root(BUILD ArrowDataset [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
-  endif()
-
-  set(ARROW_FOUND
-      "${ARROW_FOUND}"
-      PARENT_SCOPE
+  rapids_export_find_package_root(
+    BUILD Arrow [=[${CMAKE_CURRENT_LIST_DIR}]=] EXPORT_SET cudf-exports
   )
+  rapids_export_find_package_root(
+    BUILD Parquet [=[${CMAKE_CURRENT_LIST_DIR}]=]
+    EXPORT_SET cudf-exports
+    CONDITION ENABLE_PARQUET
+  )
+  rapids_export_find_package_root(
+    BUILD ArrowDataset [=[${CMAKE_CURRENT_LIST_DIR}]=]
+    EXPORT_SET cudf-exports
+    CONDITION ENABLE_PARQUET
+  )
+
   set(ARROW_LIBRARIES
       "${ARROW_LIBRARIES}"
       PARENT_SCOPE
   )
-
 endfunction()
 
 if(NOT DEFINED CUDF_VERSION_Arrow)
   set(CUDF_VERSION_Arrow
-      9.0.0
+      # This version must be kept in sync with the libarrow version pinned for builds in
+      # dependencies.yaml.
+      16.1.0
       CACHE STRING "The version of Arrow to find (or build)"
   )
 endif()
 
 find_and_configure_arrow(
   ${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC} ${CUDF_ENABLE_ARROW_S3} ${CUDF_ENABLE_ARROW_ORC}
-  ${CUDF_ENABLE_ARROW_PYTHON} ${CUDF_ENABLE_ARROW_PARQUET}
+  ${CUDF_ENABLE_ARROW_PYTHON} ${CUDF_ENABLE_ARROW_PARQUET} ${USE_LIBARROW_FROM_PYARROW}
 )

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -6,19 +6,22 @@ from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+from cudf.core.buffer import acquire_spill_lock
+
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
-from cudf._lib.cpp.strings.translate cimport (
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from cudf._lib.pylibcudf.libcudf.strings.translate cimport (
     filter_characters as cpp_filter_characters,
-    filter_type as filter_type,
+    filter_type,
     translate as cpp_translate,
 )
-from cudf._lib.cpp.types cimport char_utf8
+from cudf._lib.pylibcudf.libcudf.types cimport char_utf8
 from cudf._lib.scalar cimport DeviceScalar
 
 
+@acquire_spill_lock()
 def translate(Column source_strings,
               object mapping_table):
     """
@@ -51,6 +54,7 @@ def translate(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def filter_characters(Column source_strings,
                       object mapping_table,
                       bool keep,

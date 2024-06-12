@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <groupby/common/utils.hpp>
-#include <groupby/sort/functors.hpp>
-#include <groupby/sort/group_reductions.hpp>
-#include <groupby/sort/group_scan.hpp>
+#include "groupby/common/utils.hpp"
+#include "groupby/sort/functors.hpp"
+#include "groupby/sort/group_reductions.hpp"
+#include "groupby/sort/group_scan.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_view.hpp>
@@ -35,6 +35,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -69,7 +70,7 @@ struct scan_result_functor final : store_result_functor {
     if (grouped_values)
       return grouped_values->view();
     else
-      return (grouped_values = helper.grouped_values(values, stream))->view();
+      return (grouped_values = helper.grouped_values(values, stream, mr))->view();
   };
 };
 
@@ -82,6 +83,18 @@ void scan_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
     values,
     agg,
     detail::sum_scan(
+      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
+}
+
+template <>
+void scan_result_functor::operator()<aggregation::PRODUCT>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) return;
+
+  cache.add_result(
+    values,
+    agg,
+    detail::product_scan(
       get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
 }
 
@@ -126,17 +139,19 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
                "Unsupported list type in grouped rank scan.");
   auto const& rank_agg         = dynamic_cast<cudf::detail::rank_aggregation const&>(agg);
   auto const& group_labels     = helper.group_labels(stream);
-  auto const group_labels_view = column_view(cudf::device_span<const size_type>(group_labels));
+  auto const group_labels_view = column_view(cudf::device_span<size_type const>(group_labels));
   auto const gather_map        = [&]() {
     if (is_presorted()) {  // assumes both keys and values are sorted, Spark does this.
-      return cudf::detail::sequence(
-        group_labels.size(), *cudf::make_fixed_width_scalar(size_type{0}, stream), stream);
+      return cudf::detail::sequence(group_labels.size(),
+                                    *cudf::make_fixed_width_scalar(size_type{0}, stream),
+                                    stream,
+                                    rmm::mr::get_current_device_resource());
     } else {
       auto sort_order = (rank_agg._method == rank_method::FIRST ? cudf::detail::stable_sorted_order
                                                                        : cudf::detail::sorted_order);
       return sort_order(table_view({group_labels_view, get_grouped_values()}),
-                        {order::ASCENDING, rank_agg._column_order},
-                        {null_order::AFTER, rank_agg._null_precedence},
+                               {order::ASCENDING, rank_agg._column_order},
+                               {null_order::AFTER, rank_agg._null_precedence},
                         stream,
                         rmm::mr::get_current_device_resource());
     }
@@ -182,7 +197,8 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
     cudf::detail::scatter(table_view{{*result}}, *gather_map, table_view{{*result}}, stream, mr)
       ->release()[0]);
   if (rank_agg._null_handling == null_policy::EXCLUDE) {
-    result->set_null_mask(cudf::detail::copy_bitmask(get_grouped_values(), stream, mr));
+    auto const values = get_grouped_values();
+    result->set_null_mask(cudf::detail::copy_bitmask(values, stream, mr), values.null_count());
   }
   cache.add_result(values, agg, std::move(result));
 }
@@ -192,7 +208,7 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort_scan(
   host_span<scan_request const> requests,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   // We're going to start by creating a cache of results so that aggs that
   // depend on other aggs will not have to be recalculated. e.g. mean depends on

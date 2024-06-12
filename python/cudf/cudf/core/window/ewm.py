@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 from typing import Union
 
@@ -98,7 +98,6 @@ class ExponentialMovingWindow(_RollingBase):
         axis: int = 0,
         times: Union[str, np.ndarray, None] = None,
     ):
-
         if (min_periods, ignore_na, axis, times) != (0, False, 0, None):
             raise NotImplementedError(
                 "The parameters `min_periods`, `ignore_na`, "
@@ -138,6 +137,16 @@ class ExponentialMovingWindow(_RollingBase):
         # passing them in.
         to_libcudf_column = sr._column.astype("float64").nans_to_nulls()
 
-        return scan(
-            agg_name, to_libcudf_column, True, com=self.com, adjust=self.adjust
+        return self.obj._from_data_like_self(
+            self.obj._data._from_columns_like_self(
+                [
+                    scan(
+                        agg_name,
+                        to_libcudf_column,
+                        True,
+                        com=self.com,
+                        adjust=self.adjust,
+                    )
+                ]
+            )
         )

@@ -1,14 +1,13 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 import math
-from typing import Any, Dict
 
 import numpy as np
 from numba import cuda
 from numba.np import numpy_support
-from numba.types import Record
 
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.masked_typing import MaskedType
+from cudf.core.udf.strings_typing import string_view
 from cudf.core.udf.templates import (
     masked_input_initializer_template,
     row_initializer_template,
@@ -16,8 +15,10 @@ from cudf.core.udf.templates import (
     unmasked_input_initializer_template,
 )
 from cudf.core.udf.utils import (
+    Row,
     _all_dtypes_from_frame,
     _construct_signature,
+    _get_extensionty_size,
     _get_kernel,
     _get_udf_return_type,
     _mask_get,
@@ -25,20 +26,15 @@ from cudf.core.udf.utils import (
     _supported_dtypes_from_frame,
 )
 
-itemsizes: Dict[Any, int] = {}
-
 
 def _get_frame_row_type(dtype):
     """
-    Get the numba `Record` type corresponding to a frame.
-    Models each column and its mask as a MaskedType and
-    models the row as a dictionary like data structure
-    containing these MaskedTypes.
-    Large parts of this function are copied with comments
-    from the Numba internals and slightly modified to
-    account for validity bools to be present in the final
-    struct.
-    See numba.np.numpy_support.from_struct_dtype for details.
+    Get the Numba type of a row in a frame. Models each column and its mask as
+    a MaskedType and models the row as a dictionary like data structure
+    containing these MaskedTypes. Large parts of this function are copied with
+    comments from the Numba internals and slightly modified to account for
+    validity bools to be present in the final struct. See
+    numba.np.numpy_support.from_struct_dtype for details.
     """
 
     # Create the numpy structured type corresponding to the numpy dtype.
@@ -47,8 +43,12 @@ def _get_frame_row_type(dtype):
     offset = 0
 
     sizes = [
-        itemsizes.get(val[0], val[0].itemsize) for val in dtype.fields.values()
+        _get_extensionty_size(string_view)
+        if val[0] == np.dtype("O")
+        else val[0].itemsize
+        for val in dtype.fields.values()
     ]
+
     for i, (name, info) in enumerate(dtype.fields.items()):
         # *info* consists of the element dtype, its offset from the beginning
         # of the record, and an optional "title" containing metadata.
@@ -56,7 +56,13 @@ def _get_frame_row_type(dtype):
         # instead, we compute the correct offset based on the masked type.
         elemdtype = info[0]
         title = info[2] if len(info) == 3 else None
-        ty = numpy_support.from_dtype(elemdtype)
+
+        ty = (
+            # columns of dtype string start life as string_view
+            string_view
+            if elemdtype == np.dtype("O")
+            else numpy_support.from_dtype(elemdtype)
+        )
         infos = {
             "type": MaskedType(ty),
             "offset": offset,
@@ -65,7 +71,11 @@ def _get_frame_row_type(dtype):
         fields.append((name, infos))
 
         # increment offset by itemsize plus one byte for validity
-        itemsize = itemsizes.get(elemdtype, elemdtype.itemsize)
+        itemsize = (
+            _get_extensionty_size(string_view)
+            if elemdtype == np.dtype("O")
+            else elemdtype.itemsize
+        )
         offset += itemsize + 1
 
         # Align the next member of the struct to be a multiple of the
@@ -76,7 +86,7 @@ def _get_frame_row_type(dtype):
 
     # Numba requires that structures are aligned for the CUDA target
     _is_aligned_struct = True
-    return Record(fields, offset, _is_aligned_struct)
+    return Row(fields, offset, _is_aligned_struct)
 
 
 def _row_kernel_string_from_template(frame, row_type, args):

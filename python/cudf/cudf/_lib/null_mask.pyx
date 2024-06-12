@@ -1,16 +1,18 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from enum import Enum
+
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+
+from cudf.core.buffer import acquire_spill_lock, as_buffer
 
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
 
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
-
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.null_mask cimport (
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.null_mask cimport (
     bitmask_allocation_size_bytes as cpp_bitmask_allocation_size_bytes,
     bitmask_and as cpp_bitmask_and,
     bitmask_or as cpp_bitmask_or,
@@ -18,11 +20,9 @@ from cudf._lib.cpp.null_mask cimport (
     create_null_mask as cpp_create_null_mask,
     underlying_type_t_mask_state,
 )
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport mask_state, size_type
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.types cimport mask_state, size_type
 from cudf._lib.utils cimport table_view_from_columns
-
-from cudf.core.buffer import as_device_buffer_like
 
 
 class MaskState(Enum):
@@ -35,6 +35,7 @@ class MaskState(Enum):
     ALL_NULL = <underlying_type_t_mask_state> mask_state.ALL_NULL
 
 
+@acquire_spill_lock()
 def copy_bitmask(Column col):
     """
     Copies column's validity mask buffer into a new buffer, shifting by the
@@ -49,10 +50,10 @@ def copy_bitmask(Column col):
 
     with nogil:
         db = move(cpp_copy_bitmask(col_view))
-        up_db = make_unique[device_buffer](move(db))
+        up_db = move(make_unique[device_buffer](move(db)))
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = as_device_buffer_like(rmm_db)
+    buf = as_buffer(rmm_db)
     return buf
 
 
@@ -95,32 +96,34 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
 
     with nogil:
         db = move(cpp_create_null_mask(size, c_mask_state))
-        up_db = make_unique[device_buffer](move(db))
+        up_db = move(make_unique[device_buffer](move(db)))
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = as_device_buffer_like(rmm_db)
+    buf = as_buffer(rmm_db)
     return buf
 
 
+@acquire_spill_lock()
 def bitmask_and(columns: list):
     cdef table_view c_view = table_view_from_columns(columns)
     cdef pair[device_buffer, size_type] c_result
     cdef unique_ptr[device_buffer] up_db
     with nogil:
         c_result = move(cpp_bitmask_and(c_view))
-        up_db = make_unique[device_buffer](move(c_result.first))
+        up_db = move(make_unique[device_buffer](move(c_result.first)))
     dbuf = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = as_device_buffer_like(dbuf)
+    buf = as_buffer(dbuf)
     return buf, c_result.second
 
 
+@acquire_spill_lock()
 def bitmask_or(columns: list):
     cdef table_view c_view = table_view_from_columns(columns)
     cdef pair[device_buffer, size_type] c_result
     cdef unique_ptr[device_buffer] up_db
     with nogil:
         c_result = move(cpp_bitmask_or(c_view))
-        up_db = make_unique[device_buffer](move(c_result.first))
+        up_db = move(make_unique[device_buffer](move(c_result.first)))
     dbuf = DeviceBuffer.c_from_unique_ptr(move(up_db))
-    buf = as_device_buffer_like(dbuf)
+    buf = as_buffer(dbuf)
     return buf, c_result.second

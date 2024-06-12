@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from itertools import chain, combinations_with_replacement, product
 
@@ -55,12 +55,18 @@ def test_rank_all_arguments(
     assert_eq(gdf["col1"].rank(**kwargs), pdf["col1"].rank(**kwargs))
     assert_eq(gdf["col2"].rank(**kwargs), pdf["col2"].rank(**kwargs))
     if numeric_only:
-        expect = pdf["str"].rank(**kwargs)
-        got = gdf["str"].rank(**kwargs)
-        assert expect.empty == got.empty
-        expected = pdf.select_dtypes(include=np.number)
-    else:
-        expected = pdf.copy(deep=True)
+        assert_exceptions_equal(
+            lfunc=pdf["str"].rank,
+            rfunc=gdf["str"].rank,
+            lfunc_args_and_kwargs=(
+                [],
+                kwargs,
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                kwargs,
+            ),
+        )
 
     actual = gdf.rank(**kwargs)
     expected = pdf.rank(**kwargs)
@@ -127,6 +133,7 @@ sort_group_args = [
 sort_dtype_args = [np.int32, np.int64, np.float32, np.float64]
 
 
+@pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
 @pytest.mark.parametrize(
     "elem,dtype",
     list(
@@ -138,13 +145,12 @@ sort_dtype_args = [np.int32, np.int64, np.float32, np.float64]
 )
 def test_series_rank_combinations(elem, dtype):
     np.random.seed(0)
+    aa = np.fromiter(chain.from_iterable(elem), np.float64).astype(dtype)
     gdf = DataFrame()
-    gdf["a"] = aa = np.fromiter(chain.from_iterable(elem), np.float64).astype(
-        dtype
-    )
-    ranked_gs = gdf["a"].rank(method="first")
     df = pd.DataFrame()
+    gdf["a"] = aa
     df["a"] = aa
+    ranked_gs = gdf["a"].rank(method="first")
     ranked_ps = df["a"].rank(method="first")
     # Check
-    assert_eq(ranked_ps, ranked_gs.to_pandas())
+    assert_eq(ranked_ps, ranked_gs)

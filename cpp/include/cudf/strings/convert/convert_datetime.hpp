@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <string>
 #include <vector>
@@ -51,6 +52,10 @@ namespace strings {
  * | \%z | UTC offset with format ±HHMM Example +0500 |
  * | \%j | Day of the year: 001-366 |
  * | \%p | Only 'AM', 'PM' or 'am', 'pm' are recognized |
+ * | \%W | Week of the year with Monday as the first day of the week: 00-53 |
+ * | \%w | Day of week: 0-6 = Sunday-Saturday |
+ * | \%U | Week of the year with Sunday as the first day of the week: 00-53 |
+ * | \%u | Day of week: 1-7 = Monday-Sunday |
  *
  * Other specifiers are not currently supported.
  *
@@ -68,19 +73,24 @@ namespace strings {
  * Although leap second is not supported for "%S", no checking is performed on the value.
  * The cudf::strings::is_timestamp can be used to verify the valid range of values.
  *
+ * If "%W"/"%w" (or "%U/%u") and "%m"/"%d" are both specified, the "%W"/%U and "%w"/%u values
+ * take precedent when computing the date part of the timestamp result.
+ *
  * @throw cudf::logic_error if timestamp_type is not a timestamp type.
  *
- * @param strings Strings instance for this operation.
- * @param timestamp_type The timestamp type used for creating the output column.
- * @param format String specifying the timestamp format in strings.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New datetime column.
+ * @param input Strings instance for this operation
+ * @param timestamp_type The timestamp type used for creating the output column
+ * @param format String specifying the timestamp format in strings
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New datetime column
  */
 std::unique_ptr<column> to_timestamps(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   data_type timestamp_type,
   std::string_view format,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Verifies the given strings column can be parsed to timestamps using the provided format
@@ -102,6 +112,10 @@ std::unique_ptr<column> to_timestamps(
  * | \%z | UTC offset with format ±HHMM Example +0500 |
  * | \%j | Day of the year: 001-366 |
  * | \%p | Only 'AM', 'PM' or 'am', 'pm' are recognized |
+ * | \%W | Week of the year with Monday as the first day of the week: 00-53 |
+ * | \%w | Day of week: 0-6 = Sunday-Saturday |
+ * | \%U | Week of the year with Sunday as the first day of the week: 00-53 |
+ * | \%u | Day of week: 1-7 = Monday-Sunday |
  *
  * Other specifiers are not currently supported.
  * The "%f" supports a precision value to read the numeric digits. Specify the
@@ -113,15 +127,17 @@ std::unique_ptr<column> to_timestamps(
  * This will return a column of type BOOL8 where a `true` row indicates the corresponding
  * input string can be parsed correctly with the given format.
  *
- * @param strings Strings instance for this operation.
- * @param format String specifying the timestamp format in strings.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New BOOL8 column.
+ * @param input Strings instance for this operation
+ * @param format String specifying the timestamp format in strings
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New BOOL8 column
  */
 std::unique_ptr<column> is_timestamp(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   std::string_view format,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new strings column converting a timestamp column into
@@ -220,20 +236,22 @@ std::unique_ptr<column> is_timestamp(
  * @throw cudf::logic_error if the `format` string is empty
  * @throw cudf::logic_error if `names.size()` is an invalid size. Must be 0 or 40 strings.
  *
- * @param timestamps Timestamp values to convert.
+ * @param timestamps Timestamp values to convert
  * @param format The string specifying output format.
  *        Default format is "%Y-%m-%dT%H:%M:%SZ".
  * @param names The string names to use for weekdays ("%a", "%A") and months ("%b", "%B")
  *        Default is an empty `strings_column_view`.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column with formatted timestamps.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column with formatted timestamps
  */
 std::unique_ptr<column> from_timestamps(
   column_view const& timestamps,
-  std::string_view format             = "%Y-%m-%dT%H:%M:%SZ",
-  strings_column_view const& names    = strings_column_view(column_view{
-    data_type{type_id::STRING}, 0, nullptr}),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::string_view format           = "%Y-%m-%dT%H:%M:%SZ",
+  strings_column_view const& names  = strings_column_view(column_view{
+    data_type{type_id::STRING}, 0, nullptr, nullptr, 0}),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

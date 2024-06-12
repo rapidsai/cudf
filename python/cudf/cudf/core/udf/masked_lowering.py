@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import operator
 
@@ -18,7 +18,11 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
-from cudf.core.udf.masked_typing import MaskedType, NAType
+from cudf.core.udf.masked_typing import (
+    MaskedType,
+    NAType,
+    _supported_masked_types,
+)
 
 
 @cuda_lowering_registry.lower_constant(NAType)
@@ -239,6 +243,7 @@ for binary_op in arith_ops + bitwise_ops + comparison_ops:
 # register all lowering at init
 for unary_op in unary_ops:
     register_unary_op(unary_op)
+register_unary_op(abs)
 
 
 @cuda_lower(operator.is_, MaskedType, NAType)
@@ -372,10 +377,6 @@ def cast_masked_to_masked(context, builder, fromty, toty, val):
 
 
 # Masked constructor for use in a kernel for testing
-@lower_builtin(api.Masked, types.Boolean, types.boolean)
-@lower_builtin(api.Masked, types.Number, types.boolean)
-@lower_builtin(api.Masked, types.NPDatetime, types.boolean)
-@lower_builtin(api.Masked, types.NPTimedelta, types.boolean)
 def masked_constructor(context, builder, sig, args):
     ty = sig.return_type
     value, valid = args
@@ -383,6 +384,10 @@ def masked_constructor(context, builder, sig, args):
     masked.value = value
     masked.valid = valid
     return masked._getvalue()
+
+
+for ty in _supported_masked_types:
+    lower_builtin(api.Masked, ty, types.boolean)(masked_constructor)
 
 
 # Allows us to make an instance of MaskedType a global variable

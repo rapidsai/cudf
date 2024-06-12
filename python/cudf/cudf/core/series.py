@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -6,47 +6,53 @@ import functools
 import inspect
 import pickle
 import textwrap
+import warnings
 from collections import abc
 from shutil import get_terminal_size
-from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    Literal,
+    MutableMapping,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 import cupy
 import numpy as np
 import pandas as pd
-from pandas._config import get_option
-from pandas.core.dtypes.common import is_float
+from typing_extensions import Self, assert_never
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import _is_null_host_scalar
 from cudf._typing import (
     ColumnLike,
     DataFrameOrSeries,
     NotImplementedType,
     ScalarLike,
 )
+from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
-    is_decimal_dtype,
     is_dict_like,
     is_integer,
     is_integer_dtype,
-    is_list_dtype,
     is_scalar,
-    is_struct_dtype,
 )
+from cudf.core import indexing_utils
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
     IntervalColumn,
     TimeDeltaColumn,
-    arange,
     as_column,
-    column,
-    full,
 )
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
@@ -57,7 +63,7 @@ from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
-from cudf.core.index import BaseIndex, RangeIndex, as_index
+from cudf.core.index import BaseIndex, DatetimeIndex, RangeIndex, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -68,16 +74,16 @@ from cudf.core.indexed_frame import (
 from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.core.udf.scalar_function import _get_scalar_kernel
+from cudf.errors import MixedTypeError
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
     find_common_type,
     is_mixed_with_object_dtype,
-    min_scalar_type,
     to_cudf_compatible_scalar,
 )
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
 
 def _format_percentile_names(percentiles):
@@ -178,55 +184,91 @@ class _SeriesIlocIndexer(_FrameIndexer):
     For integer-location based selection.
     """
 
+    _frame: cudf.Series
+
     @_cudf_nvtx_annotate
     def __getitem__(self, arg):
-        if isinstance(arg, tuple):
-            arg = list(arg)
-        data = self._frame._get_elements_from_column(arg)
-
-        if (
-            isinstance(data, (dict, list))
-            or _is_scalar_or_zero_d_array(data)
-            or _is_null_host_scalar(data)
-        ):
-            return data
-        return self._frame._from_data(
-            {self._frame.name: data},
-            index=cudf.Index(self._frame.index[arg]),
+        indexing_spec = indexing_utils.parse_row_iloc_indexer(
+            indexing_utils.destructure_series_iloc_indexer(arg, self._frame),
+            len(self._frame),
         )
+        return self._frame._getitem_preprocessed(indexing_spec)
 
     @_cudf_nvtx_annotate
     def __setitem__(self, key, value):
-        from cudf.core.column import column
-
         if isinstance(key, tuple):
             key = list(key)
 
         # coerce value into a scalar or column
         if is_scalar(value):
             value = to_cudf_compatible_scalar(value)
+            if (
+                self._frame.dtype.kind not in "mM"
+                and cudf.utils.utils._isnat(value)
+                and not (
+                    self._frame.dtype == "object" and isinstance(value, str)
+                )
+            ):
+                raise MixedTypeError(
+                    f"Cannot assign {value=} to non-datetime/non-timedelta "
+                    "columns"
+                )
+            elif (
+                not (
+                    self._frame.dtype.kind == "f"
+                    or (
+                        isinstance(self._frame.dtype, cudf.CategoricalDtype)
+                        and self._frame.dtype.categories.dtype.kind == "f"
+                    )
+                )
+                and isinstance(value, (np.float32, np.float64))
+                and np.isnan(value)
+            ):
+                raise MixedTypeError(
+                    f"Cannot assign {value=} to "
+                    f"non-float dtype={self._frame.dtype}"
+                )
+            elif (
+                self._frame.dtype.kind == "b"
+                and not is_bool_dtype(value)
+                and value not in {None, cudf.NA}
+            ):
+                raise MixedTypeError(
+                    f"Cannot assign {value=} to "
+                    f"bool dtype={self._frame.dtype}"
+                )
         elif not (
             isinstance(value, (list, dict))
             and isinstance(
-                self._frame._column.dtype, (cudf.ListDtype, cudf.StructDtype)
+                self._frame.dtype, (cudf.ListDtype, cudf.StructDtype)
             )
         ):
-            value = column.as_column(value)
+            value = as_column(value)
 
         if (
-            not isinstance(
-                self._frame._column.dtype,
-                (cudf.core.dtypes.DecimalDtype, cudf.CategoricalDtype),
-            )
+            (self._frame.dtype.kind in "uifb" or self._frame.dtype == "object")
             and hasattr(value, "dtype")
-            and _is_non_decimal_numeric_dtype(value.dtype)
+            and value.dtype.kind in "uifb"
         ):
             # normalize types if necessary:
-            if not is_integer(key):
-                to_dtype = np.result_type(
-                    value.dtype, self._frame._column.dtype
+            # In contrast to Column.__setitem__ (which downcasts the value to
+            # the dtype of the column) here we upcast the series to the
+            # larger data type mimicking pandas
+            to_dtype = np.result_type(value.dtype, self._frame.dtype)
+            value = value.astype(to_dtype)
+            if to_dtype != self._frame.dtype:
+                # Do not remove until pandas-3.0 support is added.
+                assert (
+                    PANDAS_LT_300
+                ), "Need to drop after pandas-3.0 support is added."
+                warnings.warn(
+                    f"Setting an item of incompatible dtype is deprecated "
+                    "and will raise in a future error of pandas. "
+                    f"Value '{value}' has dtype incompatible with "
+                    f"{self._frame.dtype}, "
+                    "please explicitly cast to a compatible dtype first.",
+                    FutureWarning,
                 )
-                value = value.astype(to_dtype)
                 self._frame._column._mimic_inplace(
                     self._frame._column.astype(to_dtype), inplace=True
                 )
@@ -247,10 +289,14 @@ class _SeriesLocIndexer(_FrameIndexer):
         if isinstance(self._frame.index, cudf.MultiIndex) and not isinstance(
             arg, cudf.MultiIndex
         ):
-            result = self._frame.index._get_row_major(self._frame, arg)
+            if is_scalar(arg):
+                row_arg = (arg,)
+            else:
+                row_arg = arg
+            result = self._frame.index._get_row_major(self._frame, row_arg)
             if (
                 isinstance(arg, tuple)
-                and len(arg) == self._frame._index.nlevels
+                and len(arg) == self._frame.index.nlevels
                 and not any(isinstance(x, slice) for x in arg)
             ):
                 result = result.iloc[0]
@@ -272,7 +318,28 @@ class _SeriesLocIndexer(_FrameIndexer):
                 and not isinstance(self._frame.index, cudf.MultiIndex)
                 and is_scalar(value)
             ):
-                _append_new_row_inplace(self._frame.index._values, key)
+                idx = self._frame.index
+                if isinstance(idx, cudf.RangeIndex):
+                    if isinstance(key, int) and (key == idx[-1] + idx.step):
+                        idx_copy = cudf.RangeIndex(
+                            start=idx.start,
+                            stop=idx.stop + idx.step,
+                            step=idx.step,
+                            name=idx.name,
+                        )
+                    else:
+                        idx_copy = idx._as_int_index()
+                        _append_new_row_inplace(idx_copy._column, key)
+                else:
+                    # TODO: Modifying index in place is bad because
+                    # our index are immutable, but columns are not (which
+                    # means our index are mutable with internal APIs).
+                    # Get rid of the deep copy once columns too are
+                    # immutable.
+                    idx_copy = idx.copy(deep=True)
+                    _append_new_row_inplace(idx_copy._column, key)
+
+                self._frame._index = idx_copy
                 _append_new_row_inplace(self._frame._column, value)
                 return
             else:
@@ -283,24 +350,49 @@ class _SeriesLocIndexer(_FrameIndexer):
         self._frame.iloc[key] = value
 
     def _loc_to_iloc(self, arg):
+        if isinstance(arg, tuple) and arg and isinstance(arg[0], slice):
+            if len(arg) > 1:
+                raise IndexError("Too many Indexers")
+            arg = arg[0]
         if _is_scalar_or_zero_d_array(arg):
-            if not _is_non_decimal_numeric_dtype(self._frame.index.dtype):
+            index_dtype = self._frame.index.dtype
+            warn_msg = (
+                "Series.__getitem__ treating keys as positions is deprecated. "
+                "In a future version, integer keys will always be treated "
+                "as labels (consistent with DataFrame behavior). To access "
+                "a value by position, use `ser.iloc[pos]`"
+            )
+            if not _is_non_decimal_numeric_dtype(index_dtype) and not (
+                isinstance(index_dtype, cudf.CategoricalDtype)
+                and is_integer_dtype(index_dtype.categories.dtype)
+            ):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
                 if isinstance(arg, cudf.Scalar) and is_integer_dtype(
                     arg.dtype
                 ):
-                    found_index = arg.value
-                    return found_index
+                    # Do not remove until pandas 3.0 support is added.
+                    assert (
+                        PANDAS_LT_300
+                    ), "Need to drop after pandas-3.0 support is added."
+                    warnings.warn(warn_msg, FutureWarning)
+                    return arg.value
                 elif is_integer(arg):
-                    found_index = arg
-                    return found_index
+                    # Do not remove until pandas 3.0 support is added.
+                    assert (
+                        PANDAS_LT_300
+                    ), "Need to drop after pandas-3.0 support is added."
+                    warnings.warn(warn_msg, FutureWarning)
+                    return arg
             try:
-                found_index = self._frame.index._values.find_first_value(
-                    arg, closest=False
-                )
-                return found_index
+                indices = self._frame.index._indices_of(arg)
+                if (n := len(indices)) == 0:
+                    raise KeyError("Label scalar is out of bounds")
+                elif n == 1:
+                    return indices.element_indexing(0)
+                else:
+                    return indices
             except (TypeError, KeyError, IndexError, ValueError):
-                raise KeyError("label scalar is out of bound")
+                raise KeyError("Label scalar is out of bounds")
 
         elif isinstance(arg, slice):
             return _get_label_range_or_mask(
@@ -335,7 +427,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     as null/NaN).
 
     Operations between Series (`+`, `-`, `/`, `*`, `**`) align
-    values based on their associated index values-– they need
+    values based on their associated index values, they need
     not be the same length. The result index will be the
     sorted union of the two indexes.
 
@@ -349,7 +441,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     index : array-like or Index (1d)
         Values must be hashable and have the same length
         as data. Non-unique index values are allowed. Will
-        default to RangeIndex (0, 1, 2, …, n) if not provided.
+        default to RangeIndex (0, 1, 2, ..., n) if not provided.
         If both a dict and index sequence are used, the index will
         override the keys found in the dict.
 
@@ -359,6 +451,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     name : str, optional
         The name to give to the Series.
+
+    copy : bool, default False
+        Copy input data. Only affects Series or 1d ndarray input.
 
     nan_as_null : bool, Default True
         If ``None``/``True``, converts ``np.nan`` values to
@@ -475,7 +570,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         4      14
         dtype: int64
         """
-        col = column.as_column(data).set_mask(mask)
+        col = as_column(data).set_mask(mask)
         return cls(data=col)
 
     @_cudf_nvtx_annotate
@@ -485,66 +580,94 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         index=None,
         dtype=None,
         name=None,
-        nan_as_null=True,
+        copy=False,
+        nan_as_null=no_default,
     ):
-        if isinstance(data, pd.Series):
-            if name is None:
-                name = data.name
-            if isinstance(data.index, pd.MultiIndex):
-                index = cudf.from_pandas(data.index)
-            else:
-                index = as_index(data.index)
-        elif isinstance(data, pd.Index):
-            if name is None:
-                name = data.name
-            data = data.values
-        elif isinstance(data, BaseIndex):
-            if name is None:
-                name = data.name
-            data = data._values
-            if dtype is not None:
-                data = data.astype(dtype)
+        if nan_as_null is no_default:
+            nan_as_null = not cudf.get_option("mode.pandas_compatible")
+        index_from_data = None
+        name_from_data = None
+        if data is None:
+            data = {}
+
+        if isinstance(data, (pd.Series, pd.Index, BaseIndex, Series)):
+            if copy:
+                data = data.copy(deep=True)
+            name_from_data = data.name
+            column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+            if isinstance(data, pd.Series):
+                index_from_data = cudf.Index(data.index)
+            elif isinstance(data, Series):
+                index_from_data = data.index
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.Series._from_data for constructing a Series from "
                 "ColumnAccessor"
             )
-
-        if isinstance(data, Series):
-            index = data._index if index is None else index
-            if name is None:
-                name = data.name
-            data = data._column
-            if dtype is not None:
-                data = data.astype(dtype)
-
-        if isinstance(data, dict):
-            index = data.keys()
-            data = column.as_column(
-                list(data.values()), nan_as_null=nan_as_null, dtype=dtype
-            )
-
-        if data is None:
-            if index is not None:
-                data = column.column_empty(
-                    row_count=len(index), dtype=None, masked=True
-                )
+        elif isinstance(data, dict):
+            if not data:
+                column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+                index_from_data = RangeIndex(0)
             else:
-                data = {}
-
-        if not isinstance(data, ColumnBase):
-            data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+                column = as_column(
+                    list(data.values()), nan_as_null=nan_as_null, dtype=dtype
+                )
+                index_from_data = cudf.Index(list(data.keys()))
         else:
-            if dtype is not None:
-                data = data.astype(dtype)
+            # Using `getattr_static` to check if
+            # `data` is on device memory and perform
+            # a deep copy later. This is different
+            # from `hasattr` because, it doesn't
+            # invoke the property we are looking
+            # for and the latter actually invokes
+            # the property, which in this case could
+            # be expensive or mark a buffer as
+            # unspillable.
+            has_cai = (
+                type(
+                    inspect.getattr_static(
+                        data, "__cuda_array_interface__", None
+                    )
+                )
+                is property
+            )
+            column = as_column(
+                data,
+                nan_as_null=nan_as_null,
+                dtype=dtype,
+                length=len(index) if index is not None else None,
+            )
+            if copy and has_cai:
+                column = column.copy(deep=True)
 
-        if index is not None and not isinstance(index, BaseIndex):
-            index = as_index(index)
+        assert isinstance(column, ColumnBase)
 
-        assert isinstance(data, ColumnBase)
+        if dtype is not None:
+            column = column.astype(dtype)
 
-        super().__init__({name: data})
-        self._index = RangeIndex(len(data)) if index is None else index
+        if name_from_data is not None and name is None:
+            name = name_from_data
+
+        if index is not None:
+            index = cudf.Index(index)
+
+        if index_from_data is not None:
+            first_index = index_from_data
+            second_index = index
+        elif index is None:
+            first_index = RangeIndex(len(column))
+            second_index = None
+        else:
+            first_index = index
+            second_index = None
+
+        super().__init__({name: column}, index=first_index)
+        if second_index is not None:
+            # TODO: This there a better way to do this?
+            reindexed = self.reindex(index=second_index, copy=False)
+            self._data = reindexed._data
+            self._index = second_index
+        self._check_data_index_length_match()
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -552,20 +675,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         cls,
         data: MutableMapping,
         index: Optional[BaseIndex] = None,
-        name: Any = None,
+        name: Any = no_default,
     ) -> Series:
         out = super()._from_data(data=data, index=index)
-        if name is not None:
+        if name is not no_default:
             out.name = name
         return out
 
     @_cudf_nvtx_annotate
     def __contains__(self, item):
-        return item in self._index
+        return item in self.index
 
     @classmethod
     @_cudf_nvtx_annotate
-    def from_pandas(cls, s, nan_as_null=None):
+    def from_pandas(cls, s: pd.Series, nan_as_null=no_default):
         """
         Convert from a Pandas Series.
 
@@ -603,7 +726,25 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3     NaN
         dtype: float64
         """
-        return cls(s, nan_as_null=nan_as_null)
+        if nan_as_null is no_default:
+            nan_as_null = (
+                False if cudf.get_option("mode.pandas_compatible") else None
+            )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            result = cls(s, nan_as_null=nan_as_null)
+        return result
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def is_unique(self):
+        """Return boolean if values in the object are unique.
+
+        Returns
+        -------
+        bool
+        """
+        return self._column.is_unique
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -647,29 +788,53 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "Can only use .dt accessor with datetimelike values"
             )
 
-    @property  # type:ignore
+    @property  # type: ignore
     @_cudf_nvtx_annotate
-    def axes(self):
+    def hasnans(self):
         """
-        Return a list representing the axes of the Series.
+        Return True if there are any NaNs or nulls.
 
-        Series.axes returns a list containing the row index.
+        Returns
+        -------
+        out : bool
+            If Series has at least one NaN or null value, return True,
+            if not return False.
 
         Examples
         --------
         >>> import cudf
-        >>> csf1 = cudf.Series([1, 2, 3, 4])
-        >>> csf1.axes
-        [RangeIndex(start=0, stop=4, step=1)]
+        >>> import numpy as np
+        >>> series = cudf.Series([1, 2, np.nan, 3, 4], nan_as_null=False)
+        >>> series
+        0    1.0
+        1    2.0
+        2    NaN
+        3    3.0
+        4    4.0
+        dtype: float64
+        >>> series.hasnans
+        True
 
+        `hasnans` returns `True` for the presence of any `NA` values:
+
+        >>> series = cudf.Series([1, 2, 3, None, 4])
+        >>> series
+        0       1
+        1       2
+        2       3
+        3    <NA>
+        4       4
+        dtype: int64
+        >>> series.hasnans
+        True
         """
-        return [self.index]
+        return self._column.has_nulls(include_nan=True)
 
     @_cudf_nvtx_annotate
     def serialize(self):
         header, frames = super().serialize()
 
-        header["index"], index_frames = self._index.serialize()
+        header["index"], index_frames = self.index.serialize()
         header["index_frame_count"] = len(index_frames)
         # For backwards compatibility with older versions of cuDF, index
         # columns are placed before data columns.
@@ -687,21 +852,21 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         idx_typ = pickle.loads(header["index"]["type-serialized"])
         index = idx_typ.deserialize(header["index"], frames[:index_nframes])
-        obj._index = index
+        obj.index = index
 
         return obj
 
-    def _get_columns_by_label(self, labels, downcast=False):
+    def _get_columns_by_label(self, labels, *, downcast=False) -> Self:
         """Return the column specified by `labels`
 
         For cudf.Series, either the column, or an empty series is returned.
         Parameter `downcast` does not have effects.
         """
-        new_data = super()._get_columns_by_label(labels, downcast)
+        ca = self._data.select_by_label(labels)
 
         return (
-            self.__class__._from_data(data=new_data, index=self.index)
-            if len(new_data) > 0
+            self.__class__._from_data(data=ca, index=self.index)
+            if len(ca) > 0
             else self.__class__(dtype=self.dtype, name=self.name)
         )
 
@@ -725,81 +890,53 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             labels, axis, index, columns, level, inplace, errors
         )
 
+    def tolist(self):  # noqa: D102
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via the `tolist()` method. Consider using "
+            "`.to_arrow().to_pylist()` to construct a Python list."
+        )
+
+    to_list = tolist
+
     @_cudf_nvtx_annotate
-    def append(self, to_append, ignore_index=False, verify_integrity=False):
-        """Append values from another ``Series`` or array-like object.
-        If ``ignore_index=True``, the index is reset.
+    def to_dict(self, into: type[dict] = dict) -> dict:
+        """
+        Convert Series to {label -> value} dict or dict-like object.
 
         Parameters
         ----------
-        to_append : Series or list/tuple of Series
-            Series to append with self.
-        ignore_index : boolean, default False.
-            If True, do not use the index.
-        verify_integrity : bool, default False
-            This Parameter is currently not supported.
+        into : class, default dict
+            The collections.abc.Mapping subclass to use as the return
+            object. Can be the actual class or an empty
+            instance of the mapping type you want.  If you want a
+            collections.defaultdict, you must pass it initialized.
 
         Returns
         -------
-        Series
-            A new concatenated series
-
-        See Also
-        --------
-        cudf.concat : General function to concatenate DataFrame or
-            Series objects.
+        collections.abc.Mapping
+            Key-value representation of Series.
 
         Examples
         --------
         >>> import cudf
-        >>> s1 = cudf.Series([1, 2, 3])
-        >>> s2 = cudf.Series([4, 5, 6])
-        >>> s1
-        0    1
-        1    2
-        2    3
-        dtype: int64
-        >>> s2
-        0    4
-        1    5
-        2    6
-        dtype: int64
-        >>> s1.append(s2)
-        0    1
-        1    2
-        2    3
-        0    4
-        1    5
-        2    6
-        dtype: int64
-
-        >>> s3 = cudf.Series([4, 5, 6], index=[3, 4, 5])
-        >>> s3
-        3    4
-        4    5
-        5    6
-        dtype: int64
-        >>> s1.append(s3)
+        >>> s = cudf.Series([1, 2, 3, 4])
+        >>> s
         0    1
         1    2
         2    3
         3    4
-        4    5
-        5    6
         dtype: int64
-
-        With `ignore_index` set to True:
-
-        >>> s1.append(s2, ignore_index=True)
-        0    1
-        1    2
-        2    3
-        3    4
-        4    5
-        5    6
-        dtype: int64
+        >>> s.to_dict()
+        {0: 1, 1: 2, 2: 3, 3: 4}
+        >>> from collections import OrderedDict, defaultdict
+        >>> s.to_dict(OrderedDict)
+        OrderedDict([(0, 1), (1, 2), (2, 3), (3, 4)])
+        >>> dd = defaultdict(list)
+        >>> s.to_dict(dd)
+        defaultdict(<class 'list'>, {0: 1, 1: 2, 2: 3, 3: 4})
         """
-        return super()._append(to_append, ignore_index, verify_integrity)
+        return self.to_pandas().to_dict(into=into)
 
     @_cudf_nvtx_annotate
     def reindex(self, *args, **kwargs):
@@ -815,7 +952,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         copy : boolean, default True
         level: Not Supported
         fill_value : Value to use for missing values.
-            Defaults to ``NA``, but can be any “compatible” value.
+            Defaults to ``NA``, but can be any "compatible" value.
         limit: Not Supported
         tolerance: Not Supported
 
@@ -860,7 +997,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                     "'index' passed as both positional and keyword argument"
                 )
         else:
-            index = kwargs.get("index", self._index)
+            index = kwargs.get("index", self.index)
 
         name = self.name or 0
         series = self._reindex(
@@ -937,7 +1074,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 """,
         )
     )
-    def reset_index(self, level=None, drop=False, name=None, inplace=False):
+    def reset_index(
+        self, level=None, drop=False, name=no_default, inplace=False
+    ):
         if not drop and inplace:
             raise TypeError(
                 "Cannot reset_index inplace on a Series "
@@ -945,7 +1084,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
         data, index = self._reset_index(level=level, drop=drop)
         if not drop:
-            if name is None:
+            if name is no_default:
                 name = 0 if self.name is None else self.name
             data[name] = data.pop(self.name)
             return cudf.core.dataframe.DataFrame._from_data(data, index)
@@ -1003,7 +1142,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def memory_usage(self, index=True, deep=False):
         return self._column.memory_usage + (
-            self._index.memory_usage() if index else 0
+            self.index.memory_usage() if index else 0
         )
 
     @_cudf_nvtx_annotate
@@ -1014,7 +1153,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         try:
             # Apply a Series method if one exists.
             if cudf_func := getattr(Series, func.__name__, None):
-                return cudf_func(*args, **kwargs)
+                result = cudf_func(*args, **kwargs)
+                if func.__name__ == "unique":
+                    # NumPy expects a sorted result for `unique`, which is not
+                    # guaranteed by cudf.Series.unique.
+                    result = result.sort_values()
+                return result
 
             # Assume that cupy subpackages match numpy and search the
             # corresponding cupy submodule based on the func's __module__.
@@ -1116,22 +1260,25 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         4     <NA>
         dtype: int64
 
-        Notes
-        -----
-        Please note map currently only supports fixed-width numeric
-        type functions.
+        .. pandas-compat::
+            **Series.map**
+
+            Please note map currently only supports fixed-width numeric
+            type functions.
         """
         if isinstance(arg, dict):
             if hasattr(arg, "__missing__"):
                 raise NotImplementedError(
                     "default values in dicts are currently not supported."
                 )
-            lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
+            lhs = cudf.DataFrame(
+                {"x": self, "orig_order": as_column(range(len(self)))}
+            )
             rhs = cudf.DataFrame(
                 {
                     "x": arg.keys(),
                     "s": arg.values(),
-                    "bool": full(len(arg), True, dtype=self.dtype),
+                    "bool": as_column(True, length=len(arg), dtype=self.dtype),
                 }
             )
             res = lhs.merge(rhs, on="x", how="left").sort_values(
@@ -1146,12 +1293,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                     "Reindexing only valid with"
                     " uniquely valued Index objects"
                 )
-            lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
+            lhs = cudf.DataFrame(
+                {"x": self, "orig_order": as_column(range(len(self)))}
+            )
             rhs = cudf.DataFrame(
                 {
                     "x": arg.keys(),
                     "s": arg,
-                    "bool": full(len(arg), True, dtype=self.dtype),
+                    "bool": as_column(True, length=len(arg), dtype=self.dtype),
                 }
             )
             res = lhs.merge(rhs, on="x", how="left").sort_values(
@@ -1163,6 +1312,41 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         else:
             result = self.apply(arg)
         return result
+
+    def _getitem_preprocessed(
+        self,
+        spec: indexing_utils.IndexingSpec,
+    ) -> Union[Self, ScalarLike]:
+        """Get subset of entries given structured data
+
+        Parameters
+        ----------
+        spec
+            Indexing specification
+
+        Returns
+        -------
+        Subsetted Series or else scalar (if a scalar entry is
+        requested)
+
+        Notes
+        -----
+        This function performs no bounds-checking or massaging of the
+        inputs.
+        """
+        if isinstance(spec, indexing_utils.MapIndexer):
+            return self._gather(spec.key, keep_index=True)
+        elif isinstance(spec, indexing_utils.MaskIndexer):
+            return self._apply_boolean_mask(spec.key, keep_index=True)
+        elif isinstance(spec, indexing_utils.SliceIndexer):
+            return self._slice(spec.key)
+        elif isinstance(spec, indexing_utils.ScalarIndexer):
+            return self._gather(
+                spec.key, keep_index=False
+            )._column.element_indexing(0)
+        elif isinstance(spec, indexing_utils.EmptyIndexer):
+            return self._empty_like(keep_index=True)
+        assert_never(spec)
 
     @_cudf_nvtx_annotate
     def __getitem__(self, arg):
@@ -1186,42 +1370,46 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         _, height = get_terminal_size()
         max_rows = (
             height
-            if get_option("display.max_rows") == 0
-            else get_option("display.max_rows")
+            if pd.get_option("display.max_rows") == 0
+            else pd.get_option("display.max_rows")
         )
         if max_rows not in (0, None) and len(self) > max_rows:
             top = self.head(int(max_rows / 2 + 1))
             bottom = self.tail(int(max_rows / 2 + 1))
-            preprocess = cudf.concat([top, bottom])
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self.copy()
         preprocess.index = preprocess.index._clean_nulls_from_index()
         if (
             preprocess.nullable
             and not isinstance(
-                preprocess._column, cudf.core.column.CategoricalColumn
+                preprocess.dtype,
+                (
+                    cudf.CategoricalDtype,
+                    cudf.ListDtype,
+                    cudf.StructDtype,
+                    cudf.core.dtypes.DecimalDtype,
+                ),
             )
-            and not is_list_dtype(preprocess.dtype)
-            and not is_struct_dtype(preprocess.dtype)
-            and not is_decimal_dtype(preprocess.dtype)
-            and not is_struct_dtype(preprocess.dtype)
-        ) or isinstance(
-            preprocess._column,
-            cudf.core.column.timedelta.TimeDeltaColumn,
-        ):
+        ) or preprocess.dtype.kind == "m":
+            fill_value = (
+                str(cudf.NaT)
+                if preprocess.dtype.kind in "mM"
+                else str(cudf.NA)
+            )
             output = repr(
-                preprocess.astype("O").fillna(cudf._NA_REP).to_pandas()
+                preprocess.astype("str").fillna(fill_value).to_pandas()
             )
-        elif isinstance(
-            preprocess._column, cudf.core.column.CategoricalColumn
-        ):
+        elif isinstance(preprocess.dtype, cudf.CategoricalDtype):
             min_rows = (
                 height
-                if get_option("display.min_rows") == 0
-                else get_option("display.min_rows")
+                if pd.get_option("display.min_rows") == 0
+                else pd.get_option("display.min_rows")
             )
-            show_dimensions = get_option("display.show_dimensions")
-            if preprocess._column.categories.dtype.kind == "f":
+            show_dimensions = pd.get_option("display.show_dimensions")
+            if preprocess.dtype.categories.dtype.kind == "f":
                 pd_series = (
                     preprocess.astype("str")
                     .to_pandas()
@@ -1242,19 +1430,19 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 min_rows=min_rows,
                 max_rows=max_rows,
                 length=show_dimensions,
-                na_rep=cudf._NA_REP,
+                na_rep=str(cudf.NA),
             )
         else:
             output = repr(preprocess.to_pandas())
 
         lines = output.split("\n")
-        if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
+        if isinstance(preprocess.dtype, cudf.CategoricalDtype):
             category_memory = lines[-1]
-            if preprocess._column.categories.dtype.kind == "f":
+            if preprocess.dtype.categories.dtype.kind == "f":
                 category_memory = category_memory.replace("'", "").split(": ")
                 category_memory = (
                     category_memory[0].replace(
-                        "object", preprocess._column.categories.dtype.name
+                        "object", preprocess.dtype.categories.dtype.name
                     )
                     + ": "
                     + category_memory[1]
@@ -1290,14 +1478,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         fill_value: Any = None,
         reflect: bool = False,
         can_reindex: bool = False,
-        *args,
-        **kwargs,
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
             NotImplementedType,
         ],
         Optional[BaseIndex],
+        bool,
     ]:
         # Specialize binops to align indices.
         if isinstance(other, Series):
@@ -1313,8 +1500,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         else:
             lhs = self
 
+        try:
+            can_use_self_column_name = cudf.utils.utils._is_same_name(
+                self.name, other.name
+            )
+        except AttributeError:
+            can_use_self_column_name = False
+
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
-        return operands, lhs._index
+        return operands, lhs.index, can_use_self_column_name
 
     @copy_docstring(CategoricalAccessor)  # type: ignore
     @property
@@ -1354,9 +1548,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             if isinstance(objs[0].index, cudf.MultiIndex):
                 index = cudf.MultiIndex._concat([o.index for o in objs])
             else:
-                index = cudf.core.index.GenericIndex._concat(
-                    [o.index for o in objs]
-                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", FutureWarning)
+                    index = cudf.core.index.Index._concat(
+                        [o.index for o in objs]
+                    )
 
         names = {obj.name for obj in objs}
         if len(names) == 1:
@@ -1405,14 +1601,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         col = concat_columns([o._column for o in objs])
 
-        # Reassign precision for decimal cols & type schema for struct cols
-        if isinstance(
-            col,
-            (
-                cudf.core.column.DecimalBaseColumn,
-                cudf.core.column.StructColumn,
-            ),
-        ):
+        if len(objs):
             col = col._with_type_metadata(objs[0].dtype)
 
         return cls(data=col, index=index, name=name)
@@ -1421,7 +1610,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def valid_count(self):
         """Number of non-null values"""
-        return self._column.valid_count
+        return len(self) - self._column.null_count
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -1588,30 +1777,30 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         to be sorted.
 
         >>> s.drop_duplicates()
-        3    beetle
-        1       cow
-        5     hippo
         0      lama
+        1       cow
+        3    beetle
+        5     hippo
         Name: animal, dtype: object
 
         The value 'last' for parameter `keep` keeps the last occurrence
         for each set of duplicated entries.
 
         >>> s.drop_duplicates(keep='last')
-        3    beetle
         1       cow
-        5     hippo
+        3    beetle
         4      lama
+        5     hippo
         Name: animal, dtype: object
 
         The value `False` for parameter `keep` discards all sets
-        of duplicated entries. Setting the value of ‘inplace’ to
+        of duplicated entries. Setting the value of 'inplace' to
         `True` performs the operation inplace and returns `None`.
 
         >>> s.drop_duplicates(keep=False, inplace=True)
         >>> s
-        3    beetle
         1       cow
+        3    beetle
         5     hippo
         Name: animal, dtype: object
         """
@@ -1730,28 +1919,34 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "Inclusive has to be either string of 'both', "
                 "'left', 'right', or 'neither'."
             )
-        return self._from_data({self.name: lmask & rmask}, self._index)
+        return self._from_data({self.name: lmask & rmask}, self.index)
 
     @_cudf_nvtx_annotate
-    def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
+    def all(self, axis=0, bool_only=None, skipna=True, **kwargs):
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
             )
-        return super().all(axis, skipna, level, **kwargs)
+        return super().all(axis, skipna, **kwargs)
 
     @_cudf_nvtx_annotate
-    def any(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
+    def any(self, axis=0, bool_only=None, skipna=True, **kwargs):
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
             )
-        return super().any(axis, skipna, level, **kwargs)
+        return super().any(axis, skipna, **kwargs)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, index=True, nullable=False, **kwargs):
+    def to_pandas(
+        self,
+        *,
+        index: bool = True,
+        nullable: bool = False,
+        arrow_type: bool = False,
+    ) -> pd.Series:
         """
-        Convert to a Pandas Series.
+        Convert to a pandas Series.
 
         Parameters
         ----------
@@ -1762,13 +1957,22 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             a default index.
         nullable : Boolean, Default False
             If ``nullable`` is ``True``, the resulting series will be
-            having a corresponding nullable Pandas dtype. If ``nullable``
-            is ``False``, the resulting series will either convert null
-            values to ``np.nan`` or ``None`` depending on the dtype.
+            having a corresponding nullable Pandas dtype.
+            If there is no corresponding nullable Pandas dtype present,
+            the resulting dtype will be a regular pandas dtype.
+            If ``nullable`` is ``False``, the resulting series will
+            either convert null values to ``np.nan`` or ``None``
+            depending on the dtype.
+        arrow_type : bool, Default False
+            Return the Series with a ``pandas.ArrowDtype``
 
         Returns
         -------
-        out : Pandas Series
+        out : pandas Series
+
+        Notes
+        -----
+        nullable and arrow_type cannot both be set to ``True``
 
         Examples
         --------
@@ -1783,8 +1987,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> type(pds)
         <class 'pandas.core.series.Series'>
 
-        ``nullable`` parameter can be used to control
-        whether dtype can be Pandas Nullable or not:
+        ``nullable=True`` converts the result to pandas nullable types:
 
         >>> ser = cudf.Series([10, 20, None, 30])
         >>> ser
@@ -1805,12 +2008,25 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2     NaN
         3    30.0
         dtype: float64
+
+        ``arrow_type=True`` converts the result to ``pandas.ArrowDtype``:
+
+        >>> ser.to_pandas(arrow_type=True)
+        0      10
+        1      20
+        2    <NA>
+        3      30
+        dtype: int64[pyarrow]
         """
         if index is True:
             index = self.index.to_pandas()
-        s = self._column.to_pandas(index=index, nullable=nullable)
-        s.name = self.name
-        return s
+        else:
+            index = None  # type: ignore[assignment]
+        return pd.Series(
+            self._column.to_pandas(nullable=nullable, arrow_type=arrow_type),
+            index=index,
+            name=self.name,
+        )
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -1831,8 +2047,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2    3
         3    4
         dtype: int64
-        >>> series.data
-        <cudf.core.buffer.Buffer ...>
         >>> np.array(series.data.memoryview())
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
@@ -1846,7 +2060,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return cudf.Series(self._column.nullmask)
 
     @_cudf_nvtx_annotate
-    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+    def astype(
+        self,
+        dtype,
+        copy: bool = False,
+        errors: Literal["raise", "ignore"] = "raise",
+    ):
         if is_dict_like(dtype):
             if len(dtype) > 1 or self.name not in dtype:
                 raise KeyError(
@@ -1855,7 +2074,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 )
         else:
             dtype = {self.name: dtype}
-        return super().astype(dtype, copy, errors, **kwargs)
+        return super().astype(dtype, copy, errors)
 
     @_cudf_nvtx_annotate
     def sort_index(self, axis=0, *args, **kwargs):
@@ -1881,7 +2100,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Sort ascending vs. descending. Specify list for multiple sort
             orders. If this is a list of bools, must match the length of the
             by.
-        na_position : {‘first’, ‘last’}, default ‘last’
+        na_position : {'first', 'last'}, default 'last'
             'first' puts nulls at the beginning, 'last' puts nulls at the end
         ignore_index : bool, default False
             If True, index will not be sorted.
@@ -1889,12 +2108,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Returns
         -------
         Series : Series with sorted values.
-
-        Notes
-        -----
-        Difference from pandas:
-          * Support axis='index' only.
-          * Not supporting: inplace, kind
 
         Examples
         --------
@@ -1907,6 +2120,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    4
         1    5
         dtype: int64
+
+        .. pandas-compat::
+            **Series.sort_values**
+
+            * Support axis='index' only.
+            * The inplace and kind argument is currently unsupported
         """
         return super().sort_values(
             by=self.name,
@@ -2081,8 +2300,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return obj
 
     @_cudf_nvtx_annotate
-    def replace(self, to_replace=None, value=None, *args, **kwargs):
-        if is_dict_like(to_replace) and value is not None:
+    def replace(self, to_replace=None, value=no_default, *args, **kwargs):
+        if is_dict_like(to_replace) and value not in {None, no_default}:
             raise ValueError(
                 "Series.replace cannot use dict-like to_replace and non-None "
                 "value"
@@ -2144,18 +2363,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         If ``other`` contains NaNs the corresponding values are not updated
         in the original Series.
 
-        >>> s = cudf.Series([1, 2, 3])
+        >>> s = cudf.Series([1.0, 2.0, 3.0])
         >>> s
-        0    1
-        1    2
-        2    3
-        dtype: int64
-        >>> s.update(cudf.Series([4, np.nan, 6], nan_as_null=False))
+        0    1.0
+        1    2.0
+        2    3.0
+        dtype: float64
+        >>> s.update(cudf.Series([4.0, np.nan, 6.0], nan_as_null=False))
         >>> s
-        0    4
-        1    2
-        2    6
-        dtype: int64
+        0    4.0
+        1    2.0
+        2    6.0
+        dtype: float64
 
         ``other`` can also be a non-Series object type
         that is coercible into a Series
@@ -2195,49 +2414,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         self.mask(mask, other, inplace=True)
 
-    @_cudf_nvtx_annotate
-    def _label_encoding(self, cats, dtype=None, na_sentinel=-1):
-        # Private implementation of deprecated public label_encoding method
-        def _return_sentinel_series():
-            return Series(
-                cudf.core.column.full(
-                    size=len(self), fill_value=na_sentinel, dtype=dtype
-                ),
-                index=self.index,
-                name=None,
-            )
-
-        if dtype is None:
-            dtype = min_scalar_type(max(len(cats), na_sentinel), 8)
-
-        cats = column.as_column(cats)
-        if is_mixed_with_object_dtype(self, cats):
-            return _return_sentinel_series()
-
-        try:
-            # Where there is a type-cast failure, we have
-            # to catch the exception and return encoded labels
-            # with na_sentinel values as there would be no corresponding
-            # encoded values of cats in self.
-            cats = cats.astype(self.dtype)
-        except ValueError:
-            return _return_sentinel_series()
-
-        order = column.arange(len(self))
-        codes = column.arange(len(cats), dtype=dtype)
-
-        value = cudf.DataFrame({"value": cats, "code": codes})
-        codes = cudf.DataFrame(
-            {"value": self._data.columns[0].copy(deep=False), "order": order}
-        )
-
-        codes = codes.merge(value, on="value", how="left")
-        codes = codes.sort_values("order")["code"].fillna(na_sentinel)
-
-        codes.name = None
-        codes.index = self._index
-        return codes
-
     # UDF related
     @_cudf_nvtx_annotate
     def apply(self, func, convert_dtype=True, args=(), **kwargs):
@@ -2252,11 +2428,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         For more information, see the `cuDF guide to user defined functions
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
-        Support for use of string data within UDFs is provided through the
-        `strings_udf <https://anaconda.org/rapidsai-nightly/strings_udf>`__
-        RAPIDS library. Supported operations on strings include the subset of
-        functions and string methods that expect an input string but do not
-        return a string. Refer to caveats in the UDF guide referenced above.
+        Some string functions and methods are supported. Refer to the guide
+        to UDFs for details.
 
         Parameters
         ----------
@@ -2373,7 +2546,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> sr.apply(f)  # doctest: +SKIP
 
         For a complete list of supported functions and methods that may be
-        used to manipulate string data, see the the UDF guide,
+        used to manipulate string data, see the UDF guide,
         <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>
 
         """
@@ -2388,7 +2561,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     # Stats
     #
     @_cudf_nvtx_annotate
-    def count(self, level=None, **kwargs):
+    def count(self):
         """
         Return number of non-NA/null observations in the Series
 
@@ -2397,21 +2570,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         int
             Number of non-null values in the Series.
 
-        Notes
-        -----
-        Parameters currently not supported is `level`.
-
         Examples
         --------
         >>> import cudf
         >>> ser = cudf.Series([1, 5, 2, 4, 3])
         >>> ser.count()
         5
+
+        .. pandas-compat::
+            **Series.count**
+
+            Parameters currently not supported is `level`.
         """
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
         return self.valid_count
 
     @_cudf_nvtx_annotate
@@ -2481,7 +2651,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if len(val_counts) > 0:
             val_counts = val_counts[val_counts == val_counts.iloc[0]]
 
-        return Series(val_counts.index.sort_values(), name=self.name)
+        return Series._from_data(
+            {self.name: val_counts.index.sort_values()}, name=self.name
+        )
 
     @_cudf_nvtx_annotate
     def round(self, decimals=0, how="half_even"):
@@ -2508,10 +2680,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Covariance between Series and other normalized by N-1
             (unbiased estimator).
 
-        Notes
-        -----
-        `min_periods` parameter is not yet supported.
-
         Examples
         --------
         >>> import cudf
@@ -2519,6 +2687,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> ser2 = cudf.Series([0.12, 0.26, 0.51])
         >>> ser1.cov(ser2)
         -0.015750000000000004
+
+        .. pandas-compat::
+            **Series.cov**
+
+            `min_periods` parameter is not yet supported.
         """
 
         if min_periods is not None:
@@ -2549,6 +2722,86 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return self
 
     T = property(transpose, doc=transpose.__doc__)
+
+    @_cudf_nvtx_annotate
+    def duplicated(self, keep="first"):
+        """
+        Indicate duplicate Series values.
+
+        Duplicated values are indicated as ``True`` values in the resulting
+        Series. Either all duplicates, all except the first or all except the
+        last occurrence of duplicates can be indicated.
+
+        Parameters
+        ----------
+        keep : {'first', 'last', False}, default 'first'
+            Method to handle dropping duplicates:
+
+            - ``'first'`` : Mark duplicates as ``True`` except for the first
+              occurrence.
+            - ``'last'`` : Mark duplicates as ``True`` except for the last
+              occurrence.
+            - ``False`` : Mark all duplicates as ``True``.
+
+        Returns
+        -------
+        Series[bool]
+            Series indicating whether each value has occurred in the
+            preceding values.
+
+        See Also
+        --------
+        Index.duplicated : Equivalent method on cudf.Index.
+        DataFrame.duplicated : Equivalent method on cudf.DataFrame.
+        Series.drop_duplicates : Remove duplicate values from Series.
+
+        Examples
+        --------
+        By default, for each set of duplicated values, the first occurrence is
+        set on False and all others on True:
+
+        >>> import cudf
+        >>> animals = cudf.Series(['lama', 'cow', 'lama', 'beetle', 'lama'])
+        >>> animals.duplicated()
+        0    False
+        1    False
+        2     True
+        3    False
+        4     True
+        dtype: bool
+
+        which is equivalent to
+
+        >>> animals.duplicated(keep='first')
+        0    False
+        1    False
+        2     True
+        3    False
+        4     True
+        dtype: bool
+
+        By using 'last', the last occurrence of each set of duplicated values
+        is set on False and all others on True:
+
+        >>> animals.duplicated(keep='last')
+        0     True
+        1    False
+        2     True
+        3    False
+        4    False
+        dtype: bool
+
+        By setting keep on ``False``, all duplicates are True:
+
+        >>> animals.duplicated(keep=False)
+        0     True
+        1    False
+        2     True
+        3    False
+        4     True
+        dtype: bool
+        """
+        return super().duplicated(keep=keep)
 
     @_cudf_nvtx_annotate
     def corr(self, other, method="pearson", min_periods=None):
@@ -2722,13 +2975,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         6       c
         dtype: object
         >>> series.unique()
-        0    <NA>
-        1       a
-        2       b
+        0       a
+        1       b
+        2    <NA>
         3       c
         dtype: object
         """
         res = self._column.unique()
+        if cudf.get_option("mode.pandas_compatible"):
+            return res.values
         return Series(res, name=self.name)
 
     @_cudf_nvtx_annotate
@@ -2763,7 +3018,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             only works with numeric data.
 
         dropna : bool, default True
-            Don’t include counts of NaN and None.
+            Don't include counts of NaN and None.
 
         Returns
         -------
@@ -2794,7 +3049,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3.0    3
         2.0    2
         1.0    1
-        dtype: int32
+        Name: count, dtype: int64
 
         The order of the counts can be changed by passing ``ascending=True``:
 
@@ -2802,7 +3057,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         1.0    1
         2.0    2
         3.0    3
-        dtype: int32
+        Name: count, dtype: int64
 
         With ``normalize`` set to True, returns the relative frequency
         by dividing all values by the sum of values.
@@ -2811,7 +3066,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3.0    0.500000
         2.0    0.333333
         1.0    0.166667
-        dtype: float32
+        Name: proportion, dtype: float64
 
         To include ``NA`` value counts, pass ``dropna=False``:
 
@@ -2831,24 +3086,24 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2.0     2
         <NA>    2
         1.0     1
-        dtype: int32
+        Name: count, dtype: int64
 
         >>> s = cudf.Series([3, 1, 2, 3, 4, np.nan])
         >>> s.value_counts(bins=3)
         (2.0, 3.0]      2
         (0.996, 2.0]    2
         (3.0, 4.0]      1
-        dtype: int32
+        Name: count, dtype: int64
         """
         if bins is not None:
             series_bins = cudf.cut(self, bins, include_lowest=True)
-
+        result_name = "proportion" if normalize else "count"
         if dropna and self.null_count == len(self):
             return Series(
                 [],
-                dtype=np.int32,
-                name=self.name,
-                index=cudf.Index([], dtype=self.dtype),
+                dtype=np.int64,
+                name=result_name,
+                index=cudf.Index([], dtype=self.dtype, name=self.name),
             )
 
         if bins is not None:
@@ -2856,8 +3111,19 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             res = res[res.index.notna()]
         else:
             res = self.groupby(self, dropna=dropna).count(dropna=dropna)
+            if isinstance(self.dtype, cudf.CategoricalDtype) and len(
+                res
+            ) != len(self.dtype.categories):
+                # For categorical dtypes: When there exists
+                # categories in dtypes and they are missing in the
+                # column, `value_counts` will have to return
+                # their occurrences as 0.
+                # TODO: Remove this workaround once `observed`
+                # parameter support is added to `groupby`
+                res = res.reindex(self.dtype.categories).fillna(0)
+                res.index = res.index.astype(self.dtype)
 
-        res.index.name = None
+        res.index.name = self.name
 
         if sort:
             res = res.sort_values(ascending=ascending)
@@ -2872,7 +3138,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 res.index._column, res.index.categories.dtype
             )
             res.index = int_index
-
+        res.name = result_name
         return res
 
     @_cudf_nvtx_annotate
@@ -2886,11 +3152,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ----------
         q : float or array-like, default 0.5 (50% quantile)
             0 <= q <= 1, the quantile(s) to compute
-        interpolation : {’linear’, ‘lower’, ‘higher’, ‘midpoint’, ‘nearest’}
+        interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
             This optional parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j:
-        columns : list of str
-            List of column names to include.
+
+                * linear: `i + (j - i) * fraction`, where `fraction` is the
+                  fractional part of the index surrounded by `i` and `j`.
+                * lower: `i`.
+                * higher: `j`.
+                * nearest: `i` or `j` whichever is nearest.
+                * midpoint: (`i` + `j`) / 2.
         exact : boolean
             Whether to use approximate or exact quantile algorithm.
         quant_index : boolean
@@ -2955,7 +3226,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         percentiles=None,
         include=None,
         exclude=None,
-        datetime_is_numeric=False,
     ):
         """{docstring}"""
 
@@ -2992,7 +3262,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             data=data.values(),
             index=data.keys(),
             dtype=dtype,
-            nan_as_null=False,
             name=self.name,
         )
 
@@ -3097,7 +3366,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
         """
         if not is_integer(periods):
-            if not (is_float(periods) and periods.is_integer()):
+            if not (isinstance(periods, float) and periods.is_integer()):
                 raise ValueError("periods must be an integer")
             periods = int(periods)
 
@@ -3123,10 +3392,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         axis=0,
         level=None,
         as_index=True,
-        sort=False,
+        sort=no_default,
         group_keys=False,
         squeeze=False,
-        observed=False,
+        observed=True,
         dropna=True,
     ):
         return super().groupby(
@@ -3159,12 +3428,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         -------
         Series
 
-        Notes
-        -----
-        Difference from pandas:
-          - Supports scalar values only for changing name attribute
-          - Not supporting : inplace, level
-
         Examples
         --------
         >>> import cudf
@@ -3183,6 +3446,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Name: numeric_series, dtype: int64
         >>> renamed_series.name
         'numeric_series'
+
+        .. pandas-compat::
+            **Series.rename**
+
+            - Supports scalar values only for changing name attribute
+            - The ``inplace`` and ``level`` is not supported
         """
         out_data = self._data.copy(deep=copy)
         return Series._from_data(out_data, self.index, name=index)
@@ -3241,7 +3510,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         c    3
         dtype: int64
         >>> sr.keys()
-        StringIndex(['a' 'b' 'c'], dtype='object')
+        Index(['a', 'b', 'c'], dtype='object')
         """
         return self.index
 
@@ -3284,7 +3553,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def pct_change(
-        self, periods=1, fill_method="ffill", limit=None, freq=None
+        self, periods=1, fill_method=no_default, limit=no_default, freq=None
     ):
         """
         Calculates the percent change between sequential elements
@@ -3296,9 +3565,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Periods to shift for forming percent change.
         fill_method : str, default 'ffill'
             How to handle NAs before computing percent changes.
+
+            .. deprecated:: 24.04
+                All options of `fill_method` are deprecated
+                except `fill_method=None`.
         limit : int, optional
             The number of consecutive NAs to fill before stopping.
             Not yet implemented.
+
+            .. deprecated:: 24.04
+                `limit` is deprecated.
         freq : str, optional
             Increment to use from time series API.
             Not yet implemented.
@@ -3307,17 +3583,44 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         -------
         Series
         """
-        if limit is not None:
+        if limit is not no_default:
             raise NotImplementedError("limit parameter not supported yet.")
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
-        elif fill_method not in {"ffill", "pad", "bfill", "backfill"}:
+        elif fill_method not in {
+            no_default,
+            None,
+            "ffill",
+            "pad",
+            "bfill",
+            "backfill",
+        }:
             raise ValueError(
-                "fill_method must be one of 'ffill', 'pad', "
+                "fill_method must be one of None, 'ffill', 'pad', "
                 "'bfill', or 'backfill'."
             )
+        if fill_method not in (no_default, None) or limit is not no_default:
+            # Do not remove until pandas 3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
+            warnings.warn(
+                "The 'fill_method' and 'limit' keywords in "
+                f"{type(self).__name__}.pct_change are deprecated and will be "
+                "removed in a future version. Either fill in any non-leading "
+                "NA values prior to calling pct_change or specify "
+                "'fill_method=None' to not fill NA values.",
+                FutureWarning,
+            )
 
-        data = self.fillna(method=fill_method, limit=limit)
+        if fill_method is no_default:
+            fill_method = "ffill"
+        if limit is no_default:
+            limit = None
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            data = self.fillna(method=fill_method, limit=limit)
         diff = data.diff(periods=periods)
         change = diff / data.shift(periods=periods, freq=freq)
         return change
@@ -3326,7 +3629,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def where(self, cond, other=None, inplace=False):
         result_col = super().where(cond, other, inplace)
         return self._mimic_inplace(
-            self._from_data_like_self({self.name: result_col}),
+            self._from_data_like_self(
+                self._data._from_columns_like_self([result_col])
+            ),
             inplace=inplace,
         )
 
@@ -3617,11 +3922,14 @@ class DatetimeProperties:
         """
         return Series(
             data=(
-                self.series._column.get_dt_field("millisecond")
+                # Need to manually promote column to int32 because
+                # pandas-matching binop behaviour requires that this
+                # __mul__ returns an int16 column.
+                self.series._column.get_dt_field("millisecond").astype("int32")
                 * cudf.Scalar(1000, dtype="int32")
             )
             + self.series._column.get_dt_field("microsecond"),
-            index=self.series._index,
+            index=self.series.index,
             name=self.series.name,
         )
 
@@ -3855,7 +4163,7 @@ class DatetimeProperties:
         res = libcudf.datetime.is_leap_year(self.series._column).fillna(False)
         return Series._from_data(
             ColumnAccessor({None: res}),
-            index=self.series._index,
+            index=self.series.index,
             name=self.series.name,
         )
 
@@ -3889,7 +4197,79 @@ class DatetimeProperties:
         )
         return Series._from_data(
             {None: res},
-            index=self.series._index,
+            index=self.series.index,
+            name=self.series.name,
+        )
+
+    @_cudf_nvtx_annotate
+    def day_name(self, locale=None):
+        """
+        Return the day names. Currently supports English locale only.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> datetime_series = cudf.Series(cudf.date_range('2016-12-31',
+        ...     '2017-01-08', freq='D'))
+        >>> datetime_series
+        0   2016-12-31
+        1   2017-01-01
+        2   2017-01-02
+        3   2017-01-03
+        4   2017-01-04
+        5   2017-01-05
+        6   2017-01-06
+        7   2017-01-07
+        8   2017-01-08
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.day_name()
+        0     Saturday
+        1       Sunday
+        2       Monday
+        3      Tuesday
+        4    Wednesday
+        5     Thursday
+        6       Friday
+        7     Saturday
+        dtype: object
+        """
+        day_names = self.series._column.get_day_names(locale)
+        return Series._from_data(
+            ColumnAccessor({None: day_names}),
+            index=self.series.index,
+            name=self.series.name,
+        )
+
+    @_cudf_nvtx_annotate
+    def month_name(self, locale: str | None = None) -> Series:
+        """
+        Return the month names. Currently supports English locale only.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> datetime_series = cudf.Series(cudf.date_range("2017-12-30", periods=6, freq='W'))
+        >>> datetime_series
+        0   2017-12-30
+        1   2018-01-06
+        2   2018-01-13
+        3   2018-01-20
+        4   2018-01-27
+        5   2018-02-03
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.month_name()
+        0    December
+        1     January
+        2     January
+        3     January
+        4     January
+        5    February
+        dtype: object
+        """
+        month_names = self.series._column.get_month_names(locale)
+        return Series._from_data(
+            ColumnAccessor({None: month_names}),
+            index=self.series.index,
             name=self.series.name,
         )
 
@@ -3993,7 +4373,7 @@ class DatetimeProperties:
         res = libcudf.datetime.days_in_month(self.series._column)
         return Series._from_data(
             ColumnAccessor({None: res}),
-            index=self.series._index,
+            index=self.series.index,
             name=self.series.name,
         )
 
@@ -4039,7 +4419,7 @@ class DatetimeProperties:
         last_day = libcudf.datetime.last_day_of_month(self.series._column)
         last_day = Series._from_data(
             ColumnAccessor({None: last_day}),
-            index=self.series._index,
+            index=self.series.index,
             name=self.series.name,
         )
         return (self.day == last_day.dt.day).fillna(False)
@@ -4089,7 +4469,7 @@ class DatetimeProperties:
         result = ((day == cudf.Scalar(1)) & first_month).fillna(False)
         return Series._from_data(
             {None: result},
-            index=self.series._index,
+            index=self.series.index,
             name=self.series.name,
         )
 
@@ -4140,7 +4520,7 @@ class DatetimeProperties:
         result = ((day == last_day) & last_month).fillna(False)
         return Series._from_data(
             {None: result},
-            index=self.series._index,
+            index=self.series.index,
             name=self.series.name,
         )
 
@@ -4175,7 +4555,7 @@ class DatetimeProperties:
         ) == cudf.Scalar(1)
         return Series._from_data(
             {None: outcol.fillna(False)},
-            index=self.series._index,
+            index=self.series.index,
             name=self.series.name,
         )
 
@@ -4214,7 +4594,7 @@ class DatetimeProperties:
         result = result.fillna(False)
         return Series._from_data(
             {None: result},
-            index=self.series._index,
+            index=self.series.index,
             name=self.series.name,
         )
 
@@ -4222,7 +4602,7 @@ class DatetimeProperties:
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(
-            data=out_column, index=self.series._index, name=self.series.name
+            data=out_column, index=self.series.index, name=self.series.name
         )
 
     @_cudf_nvtx_annotate
@@ -4259,7 +4639,7 @@ class DatetimeProperties:
         out_column = self.series._column.ceil(freq)
 
         return Series._from_data(
-            data={self.series.name: out_column}, index=self.series._index
+            data={self.series.name: out_column}, index=self.series.index
         )
 
     @_cudf_nvtx_annotate
@@ -4296,7 +4676,7 @@ class DatetimeProperties:
         out_column = self.series._column.floor(freq)
 
         return Series._from_data(
-            data={self.series.name: out_column}, index=self.series._index
+            data={self.series.name: out_column}, index=self.series.index
         )
 
     @_cudf_nvtx_annotate
@@ -4336,7 +4716,7 @@ class DatetimeProperties:
         out_column = self.series._column.round(freq)
 
         return Series._from_data(
-            data={self.series.name: out_column}, index=self.series._index
+            data={self.series.name: out_column}, index=self.series.index
         )
 
     @_cudf_nvtx_annotate
@@ -4352,17 +4732,12 @@ class DatetimeProperties:
         Parameters
         ----------
         date_format : str
-            Date format string (e.g. “%Y-%m-%d”).
+            Date format string (e.g. "%Y-%m-%d").
 
         Returns
         -------
         Series
             Series of formatted strings.
-
-        Notes
-        -----
-        The following date format identifiers are not yet
-        supported: ``%c``, ``%x``,``%X``
 
         Examples
         --------
@@ -4390,6 +4765,12 @@ class DatetimeProperties:
         1    2000 / 30 / 06
         2    2000 / 30 / 09
         dtype: object
+
+        .. pandas-compat::
+            **series.DatetimeProperties.strftime**
+
+            The following date format identifiers are not yet
+            supported: ``%c``, ``%x``,``%X``
         """
 
         if not isinstance(date_format, str):
@@ -4417,7 +4798,38 @@ class DatetimeProperties:
             dtype="str", format=date_format
         )
         return Series(
-            data=str_col, index=self.series._index, name=self.series.name
+            data=str_col, index=self.series.index, name=self.series.name
+        )
+
+    @copy_docstring(DatetimeIndex.tz_localize)
+    def tz_localize(
+        self,
+        tz: str | None,
+        ambiguous: Literal["NaT"] = "NaT",
+        nonexistent: Literal["NaT"] = "NaT",
+    ):
+        result_col = self.series._column.tz_localize(
+            tz, ambiguous, nonexistent
+        )
+        return Series._from_data(
+            data={self.series.name: result_col},
+            index=self.series.index,
+        )
+
+    @copy_docstring(DatetimeIndex.tz_convert)
+    def tz_convert(self, tz: str | None):
+        """
+        Parameters
+        ----------
+        tz : str
+            Time zone for time. Corresponding timestamps would be converted
+            to this time zone of the Datetime Array/Index.
+            A `tz` of None will convert to UTC and remove the
+            timezone information.
+        """
+        result_col = self.series._column.tz_convert(tz)
+        return Series._from_data(
+            {self.series.name: result_col}, index=self.series.index
         )
 
 
@@ -4655,13 +5067,13 @@ class TimedeltaProperties:
         3      0      0       35       35           656             0            0
         4     37     13       12       14           234             0            0
         """  # noqa: E501
-        return self.series._column.components(index=self.series._index)
+        return self.series._column.components(index=self.series.index)
 
     @_cudf_nvtx_annotate
     def _get_td_field(self, field):
         out_column = getattr(self.series._column, field)
         return Series(
-            data=out_column, index=self.series._index, name=self.series.name
+            data=out_column, index=self.series.index, name=self.series.name
         )
 
 
@@ -4727,6 +5139,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     return result
 
 
+@acquire_spill_lock()
 @_cudf_nvtx_annotate
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     r"""Returns a boolean array where two arrays are equal within a tolerance.
@@ -4828,18 +5241,18 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
     if isinstance(a, cudf.Series) and isinstance(b, cudf.Series):
         b = b.reindex(a.index)
-        index = as_index(a.index)
+        index = cudf.Index(a.index)
 
-    a_col = column.as_column(a)
-    a_array = cupy.asarray(a_col.data_array_view)
+    a_col = as_column(a)
+    a_array = cupy.asarray(a_col.data_array_view(mode="read"))
 
-    b_col = column.as_column(b)
-    b_array = cupy.asarray(b_col.data_array_view)
+    b_col = as_column(b)
+    b_array = cupy.asarray(b_col.data_array_view(mode="read"))
 
     result = cupy.isclose(
         a=a_array, b=b_array, rtol=rtol, atol=atol, equal_nan=equal_nan
     )
-    result_col = column.as_column(result)
+    result_col = as_column(result)
 
     if a_col.null_count and b_col.null_count:
         a_nulls = a_col.isnull()

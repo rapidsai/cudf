@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -7,6 +7,7 @@ from pandas.api import types as pd_types
 
 import cudf
 from cudf.api import types
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 
 @pytest.mark.parametrize(
@@ -32,7 +33,6 @@ from cudf.api import types
         (np.float64, False),
         (np.complex128, False),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -41,7 +41,6 @@ from cudf.api import types
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -60,12 +59,11 @@ from cudf.api import types
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, True),
+        (pd.CategoricalDtype.type, True),
         (pd.CategoricalDtype, True),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
@@ -115,7 +113,7 @@ from cudf.api import types
     ),
 )
 def test_is_categorical_dtype(obj, expect):
-    assert types.is_categorical_dtype(obj) == expect
+    assert types._is_categorical_dtype(obj) == expect
 
 
 @pytest.mark.parametrize(
@@ -141,7 +139,6 @@ def test_is_categorical_dtype(obj, expect):
         (np.float64, True),
         (np.complex128, True),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -150,7 +147,6 @@ def test_is_categorical_dtype(obj, expect):
         (np.float64(), True),
         (np.complex128(), True),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -169,12 +165,11 @@ def test_is_categorical_dtype(obj, expect):
         (np.array([], dtype=np.float64), True),
         (np.array([], dtype=np.complex128), True),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), True),
@@ -246,7 +241,6 @@ def test_is_numeric_dtype(obj, expect):
         (np.float64, False),
         (np.complex128, False),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -255,7 +249,6 @@ def test_is_numeric_dtype(obj, expect):
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -274,12 +267,11 @@ def test_is_numeric_dtype(obj, expect):
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
@@ -351,7 +343,6 @@ def test_is_integer_dtype(obj, expect):
         (np.float64, False),
         (np.complex128, False),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -360,7 +351,6 @@ def test_is_integer_dtype(obj, expect):
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -379,12 +369,11 @@ def test_is_integer_dtype(obj, expect):
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
@@ -457,7 +446,6 @@ def test_is_integer(obj, expect):
         (np.float64, False),
         (np.complex128, False),
         (np.str_, True),
-        (np.unicode_, True),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -466,7 +454,6 @@ def test_is_integer(obj, expect):
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), True),
-        (np.unicode_(), True),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -485,20 +472,33 @@ def test_is_integer(obj, expect):
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), True),
-        (np.array([], dtype=np.unicode_), True),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         # (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
         (pd.Series(dtype="int"), False),
         (pd.Series(dtype="float"), False),
         (pd.Series(dtype="complex"), False),
-        (pd.Series(dtype="str"), True),
-        (pd.Series(dtype="unicode"), True),
+        pytest.param(
+            pd.Series(dtype="str"),
+            True,
+            marks=pytest.mark.skipif(
+                PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+                reason="bug in previous pandas versions",
+            ),
+        ),
+        pytest.param(
+            pd.Series(dtype="unicode"),
+            True,
+            marks=pytest.mark.skipif(
+                PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+                reason="bug in previous pandas versions",
+            ),
+        ),
         (pd.Series(dtype="datetime64[s]"), False),
         (pd.Series(dtype="timedelta64[s]"), False),
         (pd.Series(dtype="category"), False),
@@ -562,7 +562,6 @@ def test_is_string_dtype(obj, expect):
         (np.float64, False),
         (np.complex128, False),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, True),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -571,7 +570,6 @@ def test_is_string_dtype(obj, expect):
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), True),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -590,12 +588,11 @@ def test_is_string_dtype(obj, expect):
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), True),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
@@ -667,7 +664,6 @@ def test_is_datetime_dtype(obj, expect):
         (np.float64, False),
         (np.complex128, False),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -676,7 +672,6 @@ def test_is_datetime_dtype(obj, expect):
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -695,12 +690,11 @@ def test_is_datetime_dtype(obj, expect):
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
@@ -772,7 +766,6 @@ def test_is_list_dtype(obj, expect):
         (np.float64, False),
         (np.complex128, False),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -781,7 +774,6 @@ def test_is_list_dtype(obj, expect):
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -800,12 +792,11 @@ def test_is_list_dtype(obj, expect):
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
@@ -880,7 +871,6 @@ def test_is_struct_dtype(obj, expect):
         (np.float64, False),
         (np.complex128, False),
         (np.str_, False),
-        (np.unicode_, False),
         (np.datetime64, False),
         (np.timedelta64, False),
         # NumPy scalars.
@@ -889,7 +879,6 @@ def test_is_struct_dtype(obj, expect):
         (np.float64(), False),
         (np.complex128(), False),
         (np.str_(), False),
-        (np.unicode_(), False),
         (np.datetime64(), False),
         (np.timedelta64(), False),
         # NumPy dtype objects.
@@ -908,12 +897,11 @@ def test_is_struct_dtype(obj, expect):
         (np.array([], dtype=np.float64), False),
         (np.array([], dtype=np.complex128), False),
         (np.array([], dtype=np.str_), False),
-        (np.array([], dtype=np.unicode_), False),
         (np.array([], dtype=np.datetime64), False),
         (np.array([], dtype=np.timedelta64), False),
         (np.array([], dtype=object), False),
         # Pandas dtypes.
-        (pd.core.dtypes.dtypes.CategoricalDtypeType, False),
+        (pd.CategoricalDtype.type, False),
         (pd.CategoricalDtype, False),
         # Pandas objects.
         (pd.Series(dtype="bool"), False),
@@ -962,6 +950,10 @@ def test_is_decimal_dtype(obj, expect):
     assert types.is_decimal_dtype(obj) == expect
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="inconsistent warnings in older pandas versions",
+)
 @pytest.mark.parametrize(
     "obj",
     (
@@ -985,7 +977,6 @@ def test_is_decimal_dtype(obj, expect):
         np.float64,
         np.complex128,
         np.str_,
-        np.unicode_,
         np.datetime64,
         np.timedelta64,
         # NumPy scalars.
@@ -994,7 +985,6 @@ def test_is_decimal_dtype(obj, expect):
         np.float64(),
         np.complex128(),
         np.str_(),
-        np.unicode_(),
         np.datetime64(),
         np.timedelta64(),
         # NumPy dtype objects.
@@ -1013,13 +1003,12 @@ def test_is_decimal_dtype(obj, expect):
         np.array([], dtype=np.float64),
         np.array([], dtype=np.complex128),
         np.array([], dtype=np.str_),
-        np.array([], dtype=np.unicode_),
         np.array([], dtype=np.datetime64),
         np.array([], dtype=np.timedelta64),
         np.array([], dtype=object),
         # Pandas dtypes.
         # TODO: pandas does not consider these to be categoricals.
-        # pd.core.dtypes.dtypes.CategoricalDtypeType,
+        # pd.CategoricalDtype.type,
         # pd.CategoricalDtype,
         # Pandas objects.
         pd.Series(dtype="bool"),
@@ -1035,9 +1024,11 @@ def test_is_decimal_dtype(obj, expect):
     ),
 )
 def test_pandas_agreement(obj):
-    assert types.is_categorical_dtype(obj) == pd_types.is_categorical_dtype(
-        obj
-    )
+    with pytest.warns(DeprecationWarning):
+        expected = pd_types.is_categorical_dtype(obj)
+    with pytest.warns(DeprecationWarning):
+        actual = types.is_categorical_dtype(obj)
+    assert expected == actual
     assert types.is_numeric_dtype(obj) == pd_types.is_numeric_dtype(obj)
     assert types.is_integer_dtype(obj) == pd_types.is_integer_dtype(obj)
     assert types.is_integer(obj) == pd_types.is_integer(obj)
@@ -1067,7 +1058,6 @@ def test_pandas_agreement(obj):
         np.float64,
         np.complex128,
         np.str_,
-        np.unicode_,
         np.datetime64,
         np.timedelta64,
         # NumPy scalars.
@@ -1076,7 +1066,6 @@ def test_pandas_agreement(obj):
         np.float64(),
         np.complex128(),
         np.str_(),
-        np.unicode_(),
         np.datetime64(),
         np.timedelta64(),
         # NumPy dtype objects.
@@ -1095,13 +1084,12 @@ def test_pandas_agreement(obj):
         np.array([], dtype=np.float64),
         np.array([], dtype=np.complex128),
         np.array([], dtype=np.str_),
-        np.array([], dtype=np.unicode_),
         np.array([], dtype=np.datetime64),
         np.array([], dtype=np.timedelta64),
         np.array([], dtype=object),
         # Pandas dtypes.
         # TODO: pandas does not consider these to be categoricals.
-        # pd.core.dtypes.dtypes.CategoricalDtypeType,
+        # pd.CategoricalDtype.type,
         # pd.CategoricalDtype,
         # Pandas objects.
         pd.Series(dtype="bool"),

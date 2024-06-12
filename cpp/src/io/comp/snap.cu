@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,7 @@
  */
 
 #include "gpuinflate.hpp"
-
-#include <io/utilities/block_utils.cuh>
+#include "io/utilities/block_utils.cuh"
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -31,7 +30,7 @@ constexpr int hash_bits = 12;
  * @brief snappy compressor state
  */
 struct snap_state_s {
-  const uint8_t* src;                 ///< Ptr to uncompressed data
+  uint8_t const* src;                 ///< Ptr to uncompressed data
   uint32_t src_len;                   ///< Uncompressed data length
   uint8_t* dst_base;                  ///< Base ptr to output compressed data
   uint8_t* dst;                       ///< Current ptr to uncompressed data
@@ -53,10 +52,10 @@ static inline __device__ uint32_t snap_hash(uint32_t v)
 /**
  * @brief Fetches four consecutive bytes
  */
-static inline __device__ uint32_t fetch4(const uint8_t* src)
+static inline __device__ uint32_t fetch4(uint8_t const* src)
 {
   uint32_t src_align = 3 & reinterpret_cast<uintptr_t>(src);
-  const auto* src32  = reinterpret_cast<const uint32_t*>(src - src_align);
+  auto const* src32  = reinterpret_cast<uint32_t const*>(src - src_align);
   uint32_t v         = src32[0];
   return (src_align) ? __funnelshift_r(v, src32[1], src_align * 8) : v;
 }
@@ -73,7 +72,7 @@ static inline __device__ uint32_t fetch4(const uint8_t* src)
  * @return Updated pointer to compressed byte stream
  */
 static __device__ uint8_t* StoreLiterals(
-  uint8_t* dst, uint8_t* end, const uint8_t* src, uint32_t len_minus1, uint32_t t)
+  uint8_t* dst, uint8_t* end, uint8_t const* src, uint32_t len_minus1, uint32_t t)
 {
   if (len_minus1 < 60) {
     if (!t && dst < end) dst[0] = (len_minus1 << 2);
@@ -154,17 +153,7 @@ static __device__ uint8_t* StoreCopy(uint8_t* dst,
  */
 static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t)
 {
-#if (__CUDA_ARCH__ >= 700)
   return __match_any_sync(~0, v);
-#else
-  uint32_t err_map = 0;
-  for (uint32_t i = 0; i < hash_bits; i++, v >>= 1) {
-    uint32_t b       = v & 1;
-    uint32_t match_b = ballot(b);
-    err_map |= match_b ^ -(int32_t)b;
-  }
-  return ~err_map;
-#endif
 }
 
 /**
@@ -179,7 +168,7 @@ static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t)
  * @return Number of bytes before first match (literal length)
  */
 static __device__ uint32_t FindFourByteMatch(snap_state_s* s,
-                                             const uint8_t* src,
+                                             uint8_t const* src,
                                              uint32_t pos0,
                                              uint32_t t)
 {
@@ -233,8 +222,8 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s* s,
 }
 
 /// @brief Returns the number of matching bytes for two byte sequences up to 63 bytes
-static __device__ uint32_t Match60(const uint8_t* src1,
-                                   const uint8_t* src2,
+static __device__ uint32_t Match60(uint8_t const* src1,
+                                   uint8_t const* src2,
                                    uint32_t len,
                                    uint32_t t)
 {
@@ -257,7 +246,7 @@ static __device__ uint32_t Match60(const uint8_t* src1,
  * @param[out] outputs Compression status per block
  * @param[in] count Number of blocks to compress
  */
-__global__ void __launch_bounds__(128)
+CUDF_KERNEL void __launch_bounds__(128)
   snap_kernel(device_span<device_span<uint8_t const> const> inputs,
               device_span<device_span<uint8_t> const> outputs,
               device_span<compression_result> results)
@@ -267,7 +256,7 @@ __global__ void __launch_bounds__(128)
   snap_state_s* const s = &state_g;
   uint32_t t            = threadIdx.x;
   uint32_t pos;
-  const uint8_t* src;
+  uint8_t const* src;
 
   if (!t) {
     auto const src     = inputs[blockIdx.x].data();

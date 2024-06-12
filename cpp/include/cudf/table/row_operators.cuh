@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,21 +17,18 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/utilities/assert.cuh>
-#include <cudf/detail/utilities/hash_functions.cuh>
-#include <cudf/sorting.hpp>
+#include <cudf/hashing/detail/hash_functions.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/limits>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
-
-#include <limits>
 
 namespace cudf {
 
@@ -227,7 +224,7 @@ class element_equality_comparator {
 };
 
 /**
- * @brief Performs a relational comparison between two elements in two columns.
+ * @brief Performs a relational comparison between two elements in two tables.
  *
  * @tparam Nullate A cudf::nullate type describing how to check for nulls
  */
@@ -470,7 +467,9 @@ class element_hasher {
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
-    if (has_nulls && col.is_null(row_index)) { return std::numeric_limits<hash_value_type>::max(); }
+    if (has_nulls && col.is_null(row_index)) {
+      return cuda::std::numeric_limits<hash_value_type>::max();
+    }
     return hash_function<T>{}(col.element<T>(row_index));
   }
 
@@ -554,7 +553,7 @@ class element_hasher_with_seed {
 
  private:
   uint32_t _seed{DEFAULT_HASH_SEED};
-  hash_value_type _null_hash{std::numeric_limits<hash_value_type>::max()};
+  hash_value_type _null_hash{cuda::std::numeric_limits<hash_value_type>::max()};
   Nullate _has_nulls;
 };
 
@@ -600,7 +599,7 @@ class row_hasher {
   __device__ auto operator()(size_type row_index) const
   {
     // Hash the first column w/ the seed
-    auto const initial_hash = cudf::detail::hash_combine(
+    auto const initial_hash = cudf::hashing::detail::hash_combine(
       hash_value_type{0},
       type_dispatcher<dispatch_storage_type>(
         _table.column(0).type(),
@@ -626,7 +625,7 @@ class row_hasher {
       hasher,
       initial_hash,
       [](hash_value_type lhs, hash_value_type rhs) {
-        return cudf::detail::hash_combine(lhs, rhs);
+        return cudf::hashing::detail::hash_combine(lhs, rhs);
       });
   }
 

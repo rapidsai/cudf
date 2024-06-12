@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import json
 import re
@@ -15,9 +15,8 @@ import pytest
 
 import cudf
 from cudf import concat
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_150
 from cudf.core.column.string import StringColumn
-from cudf.core.index import StringIndex, as_index
+from cudf.core.index import Index
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -200,12 +199,12 @@ def test_string_astype(dtype):
         data = ["True", "False", "True", "False", "False"]
     elif dtype.startswith("datetime64"):
         data = [
-            "2019-06-04T00:00:00Z",
-            "2019-06-04T12:12:12Z",
-            "2019-06-03T00:00:00Z",
-            "2019-05-04T00:00:00Z",
-            "2018-06-04T00:00:00Z",
-            "1922-07-21T01:02:03Z",
+            "2019-06-04T00:00:00",
+            "2019-06-04T12:12:12",
+            "2019-06-03T00:00:00",
+            "2019-05-04T00:00:00",
+            "2018-06-04T00:00:00",
+            "1922-07-21T01:02:03",
         ]
     elif dtype == "str" or dtype == "object":
         data = ["ab", "cd", "ef", "gh", "ij"]
@@ -415,76 +414,52 @@ def _cat_convert_seq_to_cudf(others):
         ("f", "g", "h", "i", "j"),
         pd.Series(["f", "g", "h", "i", "j"]),
         pd.Series(["AbC", "de", "FGHI", "j", "kLm"]),
-        pytest.param(
+        pd.Index(["f", "g", "h", "i", "j"]),
+        pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
+        (
+            np.array(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+        ),
+        [
+            np.array(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+        ],
+        [
+            pd.Series(["f", "g", "h", "i", "j"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+        ],
+        (
+            pd.Series(["f", "g", "h", "i", "j"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+        ),
+        [
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+        ],
+        (
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+        ),
+        (
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Index(["1", "2", "3", "4", "5"]),
+            np.array(["f", "a", "b", "f", "a"]),
             pd.Index(["f", "g", "h", "i", "j"]),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_110,
-                reason="https://github.com/pandas-dev/pandas/issues/33436",
-            ),
-        ),
-        pytest.param(
-            pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_110,
-                reason="https://github.com/pandas-dev/pandas/issues/33436",
-            ),
-        ),
-        (
-            np.array(["f", "g", "h", "i", "j"]),
-            np.array(["f", "g", "h", "i", "j"]),
         ),
         [
-            np.array(["f", "g", "h", "i", "j"]),
-            np.array(["f", "g", "h", "i", "j"]),
+            pd.Index(["f", "g", "h", "i", "j"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Index(["f", "g", "h", "i", "j"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Index(["f", "g", "h", "i", "j"]),
         ],
-        [
-            pd.Series(["f", "g", "h", "i", "j"]),
-            pd.Series(["f", "g", "h", "i", "j"]),
-        ],
-        (
-            pd.Series(["f", "g", "h", "i", "j"]),
-            pd.Series(["f", "g", "h", "i", "j"]),
-        ),
-        [
-            pd.Series(["f", "g", "h", "i", "j"]),
-            np.array(["f", "g", "h", "i", "j"]),
-        ],
-        (
-            pd.Series(["f", "g", "h", "i", "j"]),
-            np.array(["f", "g", "h", "i", "j"]),
-        ),
-        pytest.param(
-            (
-                pd.Series(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Series(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Index(["1", "2", "3", "4", "5"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Index(["f", "g", "h", "i", "j"]),
-            ),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_110,
-                reason="https://github.com/pandas-dev/pandas/issues/33436",
-            ),
-        ),
-        pytest.param(
-            [
-                pd.Index(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Series(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Index(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Index(["f", "g", "h", "i", "j"]),
-            ],
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_110,
-                reason="https://github.com/pandas-dev/pandas/issues/33436",
-            ),
-        ),
         [
             pd.Series(["hello", "world", "abc", "xyz", "pqr"]),
             pd.Series(["abc", "xyz", "hello", "pqr", "world"]),
@@ -582,20 +557,8 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
         ("f", "g", "h", "i", "j"),
         pd.Series(["f", "g", "h", "i", "j"]),
         pd.Series(["AbC", "de", "FGHI", "j", "kLm"]),
-        pytest.param(
-            pd.Index(["f", "g", "h", "i", "j"]),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_110,
-                reason="https://github.com/pandas-dev/pandas/issues/33436",
-            ),
-        ),
-        pytest.param(
-            pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_110,
-                reason="https://github.com/pandas-dev/pandas/issues/33436",
-            ),
-        ),
+        pd.Index(["f", "g", "h", "i", "j"]),
+        pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
         (
             np.array(["f", "g", "h", "i", "j"]),
             np.array(["f", "g", "h", "i", "j"]),
@@ -608,38 +571,26 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
             pd.Series(["f", "g", "h", "i", "j"]),
             pd.Series(["f", "g", "h", "i", "j"]),
         ],
-        pytest.param(
-            (
-                pd.Series(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Series(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Index(["1", "2", "3", "4", "5"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Index(["f", "g", "h", "i", "j"]),
-            ),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_110,
-                reason="https://github.com/pandas-dev/pandas/issues/33436",
-            ),
+        (
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Index(["1", "2", "3", "4", "5"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Index(["f", "g", "h", "i", "j"]),
         ),
-        pytest.param(
-            [
-                pd.Index(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Series(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Index(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Index(["f", "g", "h", "i", "j"]),
-            ],
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_110,
-                reason="https://github.com/pandas-dev/pandas/issues/33436",
-            ),
-        ),
+        [
+            pd.Index(["f", "g", "h", "i", "j"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Index(["f", "g", "h", "i", "j"]),
+            np.array(["f", "a", "b", "f", "a"]),
+            pd.Index(["f", "g", "h", "i", "j"]),
+        ],
         [
             pd.Series(
                 ["hello", "world", "abc", "xyz", "pqr"],
@@ -701,20 +652,8 @@ def test_string_index_str_cat(data, others, sep, na_rep, name):
         None,
         ["f", "g", "h", "i", "j"],
         pd.Series(["AbC", "de", "FGHI", "j", "kLm"]),
-        pytest.param(
-            pd.Index(["f", "g", "h", "i", "j"]),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_110,
-                reason="https://github.com/pandas-dev/pandas/issues/33436",
-            ),
-        ),
-        pytest.param(
-            pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_110,
-                reason="https://github.com/pandas-dev/pandas/issues/33436",
-            ),
-        ),
+        pd.Index(["f", "g", "h", "i", "j"]),
+        pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
         [
             np.array(["f", "g", "h", "i", "j"]),
             np.array(["f", "g", "h", "i", "j"]),
@@ -844,6 +783,12 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
         assert_eq(expect, got)
 
 
+def test_string_invalid_regex():
+    gs = cudf.Series(["a"])
+    with pytest.raises(RuntimeError):
+        gs.str.extract(r"{\}")
+
+
 @pytest.mark.parametrize(
     "pat,regex",
     [
@@ -874,6 +819,17 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
         assert_eq(expect, got)
 
 
+def test_string_contains_case(ps_gs):
+    ps, gs = ps_gs
+    with pytest.raises(NotImplementedError):
+        gs.str.contains("A", case=False)
+    expected = ps.str.contains("A", regex=False, case=False)
+    got = gs.str.contains("A", regex=False, case=False)
+    assert_eq(expected, got)
+    got = gs.str.contains("a", regex=False, case=False)
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize(
     "pat,esc,expect",
     [
@@ -890,7 +846,6 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
     ],
 )
 def test_string_like(pat, esc, expect):
-
     expectation = does_not_raise()
     if len(esc) > 1:
         expectation = pytest.raises(ValueError)
@@ -936,7 +891,7 @@ def test_string_repeat(data, repeats):
 )
 @pytest.mark.parametrize("repl", ["qwerty", "", " "])
 @pytest.mark.parametrize("case,case_raise", [(None, 0), (True, 1), (False, 1)])
-@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (1, 1)])
+@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (re.U, 1)])
 def test_string_replace(
     ps_gs, pat, repl, case, case_raise, flags, flags_raise, regex
 ):
@@ -1017,8 +972,7 @@ def test_string_split_re(data, pat, n, expand):
     ps = pd.Series(data, dtype="str")
     gs = cudf.Series(data, dtype="str")
 
-    # Pandas does not support the regex parameter until 1.4.0
-    expect = ps.str.split(pat=pat, n=n, expand=expand)
+    expect = ps.str.split(pat=pat, n=n, expand=expand, regex=True)
     got = gs.str.split(pat=pat, n=n, expand=expand, regex=True)
 
     assert_eq(expect, got)
@@ -1118,7 +1072,7 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = Index(["a", "b", "c", "d", "e"], name="name")
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
@@ -1145,8 +1099,7 @@ def test_string_unique(item):
     gs = cudf.Series(item)
     # Pandas `unique` returns a numpy array
     pres = pd.Series(ps.unique())
-    # cudf returns sorted unique with `None` placed before other strings
-    pres = pres.sort_values(na_position="first").reset_index(drop=True)
+    # cudf returns a cudf.Series
     gres = gs.unique()
     assert_eq(pres, gres)
 
@@ -1547,7 +1500,7 @@ def test_strings_partition(data):
     assert_eq(ps.str.partition(","), gs.str.partition(","))
     assert_eq(ps.str.partition("-"), gs.str.partition("-"))
 
-    gi = as_index(data, name="new name")
+    gi = cudf.Index(data, name="new name")
     pi = pd.Index(data, name="new name")
     assert_eq(pi.str.partition(), gi.str.partition())
     assert_eq(pi.str.partition(","), gi.str.partition(","))
@@ -1686,7 +1639,7 @@ def test_strings_strip_tests(data, to_strip):
         ps.str.lstrip(to_strip=to_strip), gs.str.lstrip(to_strip=to_strip)
     )
 
-    gi = as_index(data)
+    gi = cudf.Index(data)
     pi = pd.Index(data)
 
     assert_eq(pi.str.strip(to_strip=to_strip), gi.str.strip(to_strip=to_strip))
@@ -1743,7 +1696,7 @@ def test_strings_filling_tests(data, width, fillchar):
         gs.str.rjust(width=width, fillchar=fillchar),
     )
 
-    gi = as_index(data)
+    gi = cudf.Index(data)
     pi = pd.Index(data)
 
     assert_eq(
@@ -1766,13 +1719,7 @@ def test_strings_filling_tests(data, width, fillchar):
         ["A,,B", "1,,5", "3,00,0"],
         ["Linda van der Berg", "George Pitt-Rivers"],
         ["³", "⅕", ""],
-        pytest.param(
-            ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/issues/20868",
-            ),
-        ),
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
         [" ", "\t\r\n ", ""],
         ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
     ],
@@ -1784,7 +1731,7 @@ def test_strings_zfill_tests(data, width):
 
     assert_eq(ps.str.zfill(width=width), gs.str.zfill(width=width))
 
-    gi = as_index(data)
+    gi = cudf.Index(data)
     pi = pd.Index(data)
 
     assert_eq(pi.str.zfill(width=width), gi.str.zfill(width=width))
@@ -1816,7 +1763,7 @@ def test_strings_pad_tests(data, width, side, fillchar):
         gs.str.pad(width=width, side=side, fillchar=fillchar),
     )
 
-    gi = as_index(data)
+    gi = cudf.Index(data)
     pi = pd.Index(data)
 
     assert_eq(
@@ -1842,7 +1789,14 @@ def test_string_wrap(data, width):
     ps = pd.Series(data)
 
     assert_eq(
-        gs.str.wrap(width=width),
+        gs.str.wrap(
+            width=width,
+            break_long_words=False,
+            expand_tabs=False,
+            replace_whitespace=True,
+            drop_whitespace=True,
+            break_on_hyphens=False,
+        ),
         ps.str.wrap(
             width=width,
             break_long_words=False,
@@ -1853,11 +1807,18 @@ def test_string_wrap(data, width):
         ),
     )
 
-    gi = as_index(data)
+    gi = cudf.Index(data)
     pi = pd.Index(data)
 
     assert_eq(
-        gi.str.wrap(width=width),
+        gi.str.wrap(
+            width=width,
+            break_long_words=False,
+            expand_tabs=False,
+            replace_whitespace=True,
+            drop_whitespace=True,
+            break_on_hyphens=False,
+        ),
         pi.str.wrap(
             width=width,
             break_long_words=False,
@@ -1894,7 +1855,11 @@ def test_string_count(data, pat, flags):
         ps.str.count(pat=pat, flags=flags),
         check_dtype=False,
     )
-    assert_eq(as_index(gs).str.count(pat=pat), pd.Index(ps).str.count(pat=pat))
+    assert_eq(
+        cudf.Index(gs).str.count(pat=pat),
+        pd.Index(ps).str.count(pat=pat),
+        exact=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -1976,7 +1941,7 @@ def test_string_replace_with_backrefs(find, replace):
     expected = ps.str.replace(find, replace, regex=True)
     assert_eq(got, expected)
 
-    got = as_index(gs).str.replace_with_backrefs(find, replace)
+    got = cudf.Index(gs).str.replace_with_backrefs(find, replace)
     expected = pd.Index(ps).str.replace(find, replace, regex=True)
     assert_eq(got, expected)
 
@@ -2019,18 +1984,12 @@ def test_string_starts_ends(data, pat):
             rfunc=gs.str.startswith,
             lfunc_args_and_kwargs=([pat],),
             rfunc_args_and_kwargs=([pat],),
-            compare_error_message=False,
-            expected_error_message="expected a string or a sequence-like "
-            "object, not NoneType",
         )
         assert_exceptions_equal(
             lfunc=ps.str.endswith,
             rfunc=gs.str.endswith,
             lfunc_args_and_kwargs=([pat],),
             rfunc_args_and_kwargs=([pat],),
-            compare_error_message=False,
-            expected_error_message="expected a string or a sequence-like "
-            "object, not NoneType",
         )
     else:
         assert_eq(
@@ -2089,6 +2048,33 @@ def test_string_starts_ends_list_like_pat(data, pat):
     ends_expected = pd.Series(ends_expected)
     assert_eq(starts_expected, gs.str.startswith(pat), check_dtype=False)
     assert_eq(ends_expected, gs.str.endswith(pat), check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["str_foo", "str_bar", "no_prefix", "", None],
+        ["foo_str", "bar_str", "no_suffix", "", None],
+    ],
+)
+def test_string_remove_suffix_prefix(data):
+    ps = pd.Series(data)
+    gs = cudf.Series(data)
+
+    got = gs.str.removeprefix("str_")
+    expect = ps.str.removeprefix("str_")
+    assert_eq(
+        expect,
+        got,
+        check_dtype=False,
+    )
+    got = gs.str.removesuffix("_str")
+    expect = ps.str.removesuffix("_str")
+    assert_eq(
+        expect,
+        got,
+        check_dtype=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -2239,7 +2225,11 @@ def test_string_str_rindex(data, sub, er):
 
     if er is None:
         assert_eq(ps.str.rindex(sub), gs.str.rindex(sub), check_dtype=False)
-        assert_eq(pd.Index(ps).str.rindex(sub), as_index(gs).str.rindex(sub))
+        assert_eq(
+            pd.Index(ps).str.rindex(sub),
+            cudf.Index(gs).str.rindex(sub),
+            exact=False,
+        )
 
     try:
         ps.str.rindex(sub)
@@ -2346,7 +2336,7 @@ def test_string_str_match(data, pat):
 
     assert_eq(ps.str.match(pat), gs.str.match(pat))
     assert_eq(
-        pd.Index(pd.Index(ps).str.match(pat)), as_index(gs).str.match(pat)
+        pd.Index(pd.Index(ps).str.match(pat)), cudf.Index(gs).str.match(pat)
     )
 
 
@@ -2373,7 +2363,7 @@ def test_string_str_translate(data):
     )
     assert_eq(
         pd.Index(ps).str.translate(str.maketrans({"a": "z"})),
-        as_index(gs).str.translate(str.maketrans({"a": "z"})),
+        cudf.Index(gs).str.translate(str.maketrans({"a": "z"})),
     )
     assert_eq(
         ps.str.translate(str.maketrans({"a": "z", "i": "$", "z": "1"})),
@@ -2383,7 +2373,7 @@ def test_string_str_translate(data):
         pd.Index(ps).str.translate(
             str.maketrans({"a": "z", "i": "$", "z": "1"})
         ),
-        as_index(gs).str.translate(
+        cudf.Index(gs).str.translate(
             str.maketrans({"a": "z", "i": "$", "z": "1"})
         ),
     )
@@ -2399,7 +2389,7 @@ def test_string_str_translate(data):
         pd.Index(ps).str.translate(
             str.maketrans({"+": "-", "-": "$", "?": "!", "B": "."})
         ),
-        as_index(gs).str.translate(
+        cudf.Index(gs).str.translate(
             str.maketrans({"+": "-", "-": "$", "?": "!", "B": "."})
         ),
     )
@@ -2410,7 +2400,6 @@ def test_string_str_translate(data):
 
 
 def test_string_str_filter_characters():
-
     data = [
         "hello world",
         "A+B+C+D",
@@ -2440,7 +2429,6 @@ def test_string_str_filter_characters():
 
 
 def test_string_str_code_points():
-
     data = [
         "abc",
         "Def",
@@ -2593,7 +2581,6 @@ def test_string_typecast_error(data, obj_type, dtype):
         rfunc=gsr.astype,
         lfunc_args_and_kwargs=([dtype],),
         rfunc_args_and_kwargs=([dtype],),
-        compare_error_message=False,
     )
 
 
@@ -2607,7 +2594,6 @@ def test_string_typecast_error(data, obj_type, dtype):
     ],
 )
 def test_string_hex_to_int(data):
-
     gsr = cudf.Series(data)
 
     expected = cudf.Series([263988422296292, 0, 281474976710655])
@@ -2663,6 +2649,13 @@ def test_string_istimestamp():
         ]
     )
     assert_eq(expected, got)
+
+
+def test_istimestamp_empty():
+    gsr = cudf.Series([], dtype="object")
+    result = gsr.str.istimestamp("%Y%m%d")
+    expected = cudf.Series([], dtype="bool")
+    assert_eq(result, expected)
 
 
 def test_string_ip4_to_int():
@@ -2764,7 +2757,7 @@ def test_string_str_subscriptable(data, index):
     assert_eq(psr.str[index], gsr.str[index])
 
     psi = pd.Index(data)
-    gsi = StringIndex(data)
+    gsi = cudf.Index(data)
 
     assert_eq(psi.str[index], gsi.str[index])
 
@@ -2786,8 +2779,8 @@ def test_string_str_byte_count(data, expected):
     actual = sr.str.byte_count()
     assert_eq(expected, actual)
 
-    si = as_index(data)
-    expected = as_index(expected, dtype="int32")
+    si = cudf.Index(data)
+    expected = cudf.Index(expected, dtype="int32")
     actual = si.str.byte_count()
     assert_eq(expected, actual)
 
@@ -2835,8 +2828,8 @@ def test_str_isinteger(data, expected):
     actual = sr.str.isinteger()
     assert_eq(expected, actual)
 
-    sr = as_index(data)
-    expected = as_index(expected)
+    sr = cudf.Index(data)
+    expected = cudf.Index(expected)
     actual = sr.str.isinteger()
     assert_eq(expected, actual)
 
@@ -2891,8 +2884,8 @@ def test_str_isfloat(data, expected):
     actual = sr.str.isfloat()
     assert_eq(expected, actual)
 
-    sr = as_index(data)
-    expected = as_index(expected)
+    sr = cudf.Index(data)
+    expected = cudf.Index(expected)
     actual = sr.str.isfloat()
     assert_eq(expected, actual)
 
@@ -2986,9 +2979,6 @@ def test_string_product():
     assert_exceptions_equal(
         lfunc=psr.product,
         rfunc=sr.product,
-        expected_error_message=re.escape(
-            f"cannot perform product with type {sr.dtype}"
-        ),
     )
 
 
@@ -2996,18 +2986,14 @@ def test_string_var():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = cudf.Series(["1", "2", "3", "4", "5"])
 
-    assert_exceptions_equal(
-        lfunc=psr.var, rfunc=sr.var, compare_error_message=False
-    )
+    assert_exceptions_equal(lfunc=psr.var, rfunc=sr.var)
 
 
 def test_string_std():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = cudf.Series(["1", "2", "3", "4", "5"])
 
-    assert_exceptions_equal(
-        lfunc=psr.std, rfunc=sr.std, compare_error_message=False
-    )
+    assert_exceptions_equal(lfunc=psr.std, rfunc=sr.std)
 
 
 def test_string_slice_with_mask():
@@ -3484,3 +3470,27 @@ def test_str_find_multiple_error():
         match=re.escape("patterns can only be of 'string' dtype, got: int64"),
     ):
         s.str.find_multiple(t)
+
+
+def test_str_iterate_error():
+    s = cudf.Series(["abc", "xyz"])
+    with pytest.raises(TypeError):
+        iter(s.str)
+
+
+def test_string_reduction_error():
+    s = cudf.Series([None, None], dtype="str")
+    ps = s.to_pandas(nullable=True)
+    assert_exceptions_equal(
+        s.any,
+        ps.any,
+        lfunc_args_and_kwargs=([], {"skipna": False}),
+        rfunc_args_and_kwargs=([], {"skipna": False}),
+    )
+
+    assert_exceptions_equal(
+        s.all,
+        ps.all,
+        lfunc_args_and_kwargs=([], {"skipna": False}),
+        rfunc_args_and_kwargs=([], {"skipna": False}),
+    )

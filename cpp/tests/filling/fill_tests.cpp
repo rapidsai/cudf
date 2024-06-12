@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -46,7 +47,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
             bool value_is_valid                     = true,
             BitInitializerType destination_validity = all_valid)
   {
-    static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
+    static_assert(cudf::is_fixed_width<T>(), "this code assumes fixed-width types.");
 
     cudf::size_type size{FillTypedTestFixture<T>::column_size};
 
@@ -276,8 +277,7 @@ TEST_F(FillStringTestFixture, SetRangeNullCount)
   this->test(0, size, value, true, odd_valid);
 }
 
-class FillErrorTestFixture : public cudf::test::BaseFixture {
-};
+class FillErrorTestFixture : public cudf::test::BaseFixture {};
 
 TEST_F(FillErrorTestFixture, InvalidInplaceCall)
 {
@@ -359,13 +359,12 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
 
   auto destination_view = cudf::mutable_column_view{destination};
 
-  EXPECT_THROW(cudf::fill_in_place(destination_view, 0, 10, *p_val), cudf::logic_error);
-  EXPECT_THROW(auto p_ret = cudf::fill(destination, 0, 10, *p_val), cudf::logic_error);
+  EXPECT_THROW(cudf::fill_in_place(destination_view, 0, 10, *p_val), cudf::data_type_error);
+  EXPECT_THROW(auto p_ret = cudf::fill(destination, 0, 10, *p_val), cudf::data_type_error);
 }
 
 template <typename T>
-class FixedPointAllReps : public cudf::test::BaseFixture {
-};
+class FixedPointAllReps : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointAllReps, cudf::test::FixedPointTypes);
 

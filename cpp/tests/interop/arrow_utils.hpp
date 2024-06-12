@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
-#include <arrow/util/bitmap_builders.h>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
@@ -25,11 +29,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/type_lists.hpp>
+
+#include <arrow/util/bitmap_builders.h>
 
 #pragma once
 
@@ -40,7 +41,8 @@ get_arrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {
 {
   std::shared_ptr<arrow::Buffer> data_buffer;
   arrow::BufferBuilder buff_builder;
-  buff_builder.Append(data.data(), sizeof(T) * data.size());
+  CUDF_EXPECTS(buff_builder.Append(data.data(), sizeof(T) * data.size()).ok(),
+               "Failed to append values");
   CUDF_EXPECTS(buff_builder.Finish(&data_buffer).ok(), "Failed to allocate buffer");
 
   std::shared_ptr<arrow::Buffer> mask_buffer =
@@ -185,14 +187,17 @@ template <typename T>
   auto constexpr BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(T);
 
   std::shared_ptr<arrow::Array> arr;
-  arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -scale),
+  arrow::Decimal128Builder decimal_builder(arrow::decimal(cudf::detail::max_precision<T>(), -scale),
                                            arrow::default_memory_pool());
 
   for (T i = 0; i < static_cast<T>(data.size() / BIT_WIDTH_RATIO); ++i) {
     if (validity.has_value() and not validity.value()[i]) {
-      decimal_builder.AppendNull();
+      CUDF_EXPECTS(decimal_builder.AppendNull().ok(), "Failed to append");
     } else {
-      decimal_builder.Append(reinterpret_cast<const uint8_t*>(data.data() + BIT_WIDTH_RATIO * i));
+      CUDF_EXPECTS(
+        decimal_builder.Append(reinterpret_cast<uint8_t const*>(data.data() + BIT_WIDTH_RATIO * i))
+          .ok(),
+        "Failed to append");
     }
   }
 

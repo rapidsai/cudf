@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,7 +73,7 @@ class python_oauth_refresh_callback : public RdKafka::OAuthBearerTokenRefreshCb 
    * @param handle
    * @param oauthbearer_config pointer to the OAuthBearerConfig object
    */
-  void oauthbearer_token_refresh_cb(RdKafka::Handle* handle, const std::string& oauthbearer_config);
+  void oauthbearer_token_refresh_cb(RdKafka::Handle* handle, std::string const& oauthbearer_config);
 
  private:
   kafka_oauth_callback_wrapper_type callback_wrapper_;

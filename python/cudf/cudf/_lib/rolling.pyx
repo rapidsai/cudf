@@ -1,20 +1,14 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-import pandas as pd
+from cudf.core.buffer import acquire_spill_lock
 
-import cudf
-
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-
-from cudf._lib.aggregation cimport RollingAggregation, make_rolling_aggregation
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.rolling cimport rolling_window as cpp_rolling_window
-from cudf._lib.cpp.types cimport size_type
+
+from cudf._lib import pylibcudf
+from cudf._lib.aggregation import make_aggregation
 
 
+@acquire_spill_lock()
 def rolling(Column source_column,
             Column pre_column_window,
             Column fwd_column_window,
@@ -42,20 +36,6 @@ def rolling(Column source_column,
     -------
     A Column with rolling calculations
     """
-    cdef size_type c_min_periods = min_periods
-    cdef size_type c_window = 0
-    cdef size_type c_forward_window = 0
-    cdef unique_ptr[column] c_result
-    cdef column_view source_column_view = source_column.view()
-    cdef column_view pre_column_window_view
-    cdef column_view fwd_column_window_view
-    cdef RollingAggregation cython_agg
-
-    if callable(op):
-        cython_agg = make_rolling_aggregation(
-            op, {'dtype': source_column.dtype})
-    else:
-        cython_agg = make_rolling_aggregation(op, agg_params)
 
     if window is None:
         if center:
@@ -63,34 +43,24 @@ def rolling(Column source_column,
             raise NotImplementedError(
                 "center is not implemented for offset-based windows"
             )
-        pre_column_window_view = pre_column_window.view()
-        fwd_column_window_view = fwd_column_window.view()
-        with nogil:
-            c_result = move(
-                cpp_rolling_window(
-                    source_column_view,
-                    pre_column_window_view,
-                    fwd_column_window_view,
-                    c_min_periods,
-                    cython_agg.c_obj.get()[0])
-            )
+        pre = pre_column_window.to_pylibcudf(mode="read")
+        fwd = fwd_column_window.to_pylibcudf(mode="read")
     else:
-        c_min_periods = min_periods
         if center:
-            c_window = (window // 2) + 1
-            c_forward_window = window - (c_window)
+            pre = (window // 2) + 1
+            fwd = window - (pre)
         else:
-            c_window = window
-            c_forward_window = 0
+            pre = window
+            fwd = 0
 
-        with nogil:
-            c_result = move(
-                cpp_rolling_window(
-                    source_column_view,
-                    c_window,
-                    c_forward_window,
-                    c_min_periods,
-                    cython_agg.c_obj.get()[0])
-            )
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        pylibcudf.rolling.rolling_window(
+            source_column.to_pylibcudf(mode="read"),
+            pre,
+            fwd,
+            min_periods,
+            make_aggregation(
+                op, {'dtype': source_column.dtype} if callable(op) else agg_params
+            ).c_obj,
+        )
+    )

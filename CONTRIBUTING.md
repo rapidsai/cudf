@@ -73,13 +73,13 @@ Compilers:
 
 * `gcc` version 9.3+
 * `nvcc` version 11.5+
-* `cmake` version 3.23.1+
+* `cmake` version 3.26.4+
 
 CUDA/GPU:
 
 * CUDA 11.5+
 * NVIDIA driver 450.80.02+
-* Pascal architecture or better
+* Volta architecture or better (Compute Capability >=7.0)
 
 You can obtain CUDA from
 [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
@@ -99,13 +99,13 @@ cd $CUDF_HOME
 **Note:** Using a conda environment is the easiest way to satisfy the library's dependencies.
 Instructions for a minimal build environment without conda are included below.
 
-- Create the conda development environment `cudf_dev`:
+- Create the conda development environment:
 
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
 # note: RAPIDS currently doesn't support `channel_priority: strict`;
 # use `channel_priority: flexible` instead
-conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda11.5.yml
+conda env create --name cudf_dev --file conda/environments/all_cuda-122_arch-x86_64.yaml
 # activate the environment
 conda activate cudf_dev
 ```
@@ -113,9 +113,6 @@ conda activate cudf_dev
 - **Note**: the conda environment files are updated frequently, so the
   development environment may also need to be updated if dependency versions or
   pinnings are changed.
-
-- For other CUDA versions, check the corresponding `cudf_dev_cuda*.yml` file in
-  `conda/environments/`.
 
 #### Building without a conda environment
 
@@ -154,116 +151,33 @@ cd $CUDF_HOME
 ./build.sh --help
 ```
 
-### Build, install and test cuDF libraries for contributors
+#### Building for development
 
-The general workflow is provided below. Please also see the last section about
-[code formatting](#code-formatting).
-
-#### `libcudf` (C++)
-
-- If you're only interested in building the library (and not the unit tests):
+To build Python packages for development purposes, add the `--pydevelop` flag.
+To build C++ tests, you can also request that build.sh build the `test` target.
+To build all libraries and tests, with Python packages in development mode, simply run
 
 ```bash
-cd $CUDF_HOME
-./build.sh libcudf
+./build.sh --pydevelop libcudf libcudf_kafka cudf dask_cudf cudf_kafka custreamz
 ```
 
-- If, in addition, you want to build tests:
+- **Note**: if Cython files (`*.pyx` or `*.pxd`) have changed, the Python build must be rerun.
+
+To run the C++ tests, run
 
 ```bash
-./build.sh libcudf tests
+ctest --test-dir ${CUDF_HOME}/cpp/build  # libcudf
+ctest --test-dir ${CUDF_HOME}/cpp/libcudf_kafka/build  # libcudf_kafka
 ```
 
-- To run the tests:
-
-```bash
-make test
-```
-
-#### `cudf` (Python)
-
-- First, build the `libcudf` C++ library following the steps above
-
-- To build and install in edit/develop `cudf` Python package:
-```bash
-cd $CUDF_HOME/python/cudf
-python setup.py build_ext --inplace
-python setup.py develop
-```
+To run python tests, run
 
 - To run `cudf` tests:
 ```bash
 cd $CUDF_HOME/python
-pytest -v cudf/cudf/tests
-```
-
-#### `dask-cudf` (Python)
-
-- First, build the `libcudf` C++ and `cudf` Python libraries following the steps above
-
-- To install the `dask-cudf` Python package in editable/develop mode:
-```bash
-cd $CUDF_HOME/python/dask_cudf
-python setup.py build_ext --inplace
-python setup.py develop
-```
-
-- To run `dask_cudf` tests:
-```bash
-cd $CUDF_HOME/python
-pytest -v dask_cudf
-```
-
-#### `libcudf_kafka` (C++)
-
-- If you're only interested in building the library (and not the unit tests):
-
-```bash
-cd $CUDF_HOME
-./build.sh libcudf_kafka
-```
-
-- If, in addition, you want to build tests:
-
-```bash
-./build.sh libcudf_kafka tests
-```
-
-- To run the tests:
-
-```bash
-make test
-```
-
-#### `cudf-kafka` (Python)
-
-- First, build the `libcudf` and `libcudf_kafka` libraries following the steps above
-
-- To install the `cudf-kafka` Python package in editable/develop mode:
-
-```bash
-cd $CUDF_HOME/python/cudf_kafka
-python setup.py build_ext --inplace
-python setup.py develop
-```
-
-#### `custreamz` (Python)
-
-- First, build `libcudf`, `libcudf_kafka`, and `cudf_kafka` following the steps above
-
-- To install the `custreamz` Python package in editable/develop mode:
-
-```bash
-cd $CUDF_HOME/python/custreamz
-python setup.py build_ext --inplace
-python setup.py develop
-```
-
-- To run `custreamz` tests :
-
-```bash
-cd $CUDF_HOME/python
-pytest -v custreamz
+pytest -v ${CUDF_HOME}/python/cudf/cudf/tests
+pytest -v ${CUDF_HOME}/python/dask_cudf/dask_cudf/ # There are tests in both tests/ and io/tests/
+pytest -v ${CUDF_HOME}/python/custreamz/custreamz/tests
 ```
 
 #### `cudf` (Java):
@@ -305,7 +219,7 @@ cuda-gdb -ex r --args python <program_name>.py <program_arguments>
 ```
 
 ```bash
-cuda-memcheck python <program_name>.py <program_arguments>
+compute-sanitizer --tool memcheck python <program_name>.py <program_arguments>
 ```
 
 ### Device debug symbols
@@ -326,33 +240,12 @@ This will add the device debug symbols for this object file in `libcudf.so`.  Yo
 
 ## Code Formatting
 
-### C++/CUDA
+### Using pre-commit hooks
 
-cuDF uses [`clang-format`](https://clang.llvm.org/docs/ClangFormat.html).
-
-In order to format the C++/CUDA files, navigate to the root (`cudf`) directory and run:
-
-```bash
-python3 ./cpp/scripts/run-clang-format.py -inplace
-```
-
-Additionally, many editors have plugins or extensions that you can set up to automatically run
-`clang-format` either manually or on file save.
-
-[`doxygen`](https://doxygen.nl/) is used as documentation generator and also as a documentation linter.
-In order to run doxygen as linter on C++/CUDA code, run
-```bash
-./ci/checks/doxygen.sh
-```
-
-### Python / Pre-commit hooks
-
-cuDF uses [pre-commit](https://pre-commit.com/) to execute code linters and formatters such as
-[Black](https://black.readthedocs.io/en/stable/), [isort](https://pycqa.github.io/isort/), and
-[flake8](https://flake8.pycqa.org/en/latest/). These tools ensure a consistent code format
-throughout the project. Using pre-commit ensures that linter versions and options are aligned for
-all developers. Additionally, there is a CI check in place to enforce that committed code follows
-our standards.
+cuDF uses [pre-commit](https://pre-commit.com/) to execute all code linters and formatters. These
+tools ensure a consistent code format throughout the project. Using pre-commit ensures that linter
+versions and options are aligned for all developers. Additionally, there is a CI check in place to
+enforce that committed code follows our standards.
 
 To use `pre-commit`, install via `conda` or `pip`:
 
@@ -370,6 +263,13 @@ Then run pre-commit hooks before committing code:
 pre-commit run
 ```
 
+By default, pre-commit runs on staged files (only changes and additions that will be committed).
+To run pre-commit checks on all files, execute:
+
+```bash
+pre-commit run --all-files
+```
+
 Optionally, you may set up the pre-commit hooks to run automatically when you make a git commit. This can be done by running:
 
 ```bash
@@ -380,9 +280,31 @@ Now code linters and formatters will be run each time you commit changes.
 
 You can skip these checks with `git commit --no-verify` or with the short version `git commit -n`.
 
+### Summary of pre-commit hooks
+
+The following section describes some of the core pre-commit hooks used by the repository.
+See `.pre-commit-config.yaml` for a full list.
+
+C++/CUDA is formatted with [`clang-format`](https://clang.llvm.org/docs/ClangFormat.html).
+
+[`doxygen`](https://doxygen.nl/) is used as documentation generator and also as a documentation linter.
+In order to run doxygen as a linter on C++/CUDA code, run
+
+```bash
+./ci/checks/doxygen.sh
+```
+
+Python code runs several linters including [Black](https://black.readthedocs.io/en/stable/),
+[isort](https://pycqa.github.io/isort/), and [flake8](https://flake8.pycqa.org/en/latest/).
+
+cuDF also uses [codespell](https://github.com/codespell-project/codespell) to find spelling
+mistakes, and this check is run as a pre-commit hook. To apply the suggested spelling fixes,
+you can run  `codespell -i 3 -w .` from the repository root directory.
+This will bring up an interactive prompt to select which spelling fixes to apply.
+
 ## Developer Guidelines
 
-The [C++ Developer Guide](cpp/docs/DEVELOPER_GUIDE.md) includes details on contributing to libcudf C++ code.
+The [C++ Developer Guide](cpp/doxygen/developer_guide/DEVELOPER_GUIDE.md) includes details on contributing to libcudf C++ code.
 
 The [Python Developer Guide](https://docs.rapids.ai/api/cudf/stable/developer_guide/index.html) includes details on contributing to cuDF Python code.
 

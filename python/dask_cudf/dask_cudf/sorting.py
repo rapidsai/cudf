@@ -1,12 +1,14 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+import warnings
 from collections.abc import Iterator
+from functools import wraps
 
 import cupy
 import numpy as np
 import tlz as toolz
 
-import dask
+from dask import config
 from dask.base import tokenize
 from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Index, Series
@@ -14,9 +16,36 @@ from dask.dataframe.shuffle import rearrange_by_column
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M
 
-import cudf as gd
-from cudf.api.types import is_categorical_dtype
-from cudf.utils.utils import _dask_cudf_nvtx_annotate
+import cudf
+from cudf.api.types import _is_categorical_dtype
+from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
+
+_SHUFFLE_SUPPORT = ("tasks", "p2p")  # "disk" not supported
+
+
+def _deprecate_shuffle_kwarg(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        old_arg_value = kwargs.pop("shuffle", None)
+
+        if old_arg_value is not None:
+            new_arg_value = old_arg_value
+            msg = (
+                "the 'shuffle' keyword is deprecated, "
+                "use 'shuffle_method' instead."
+            )
+
+            warnings.warn(msg, FutureWarning)
+            if kwargs.get("shuffle_method") is not None:
+                msg = (
+                    "Can only specify 'shuffle' "
+                    "or 'shuffle_method', not both."
+                )
+                raise TypeError(msg)
+            kwargs["shuffle_method"] = new_arg_value
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 @_dask_cudf_nvtx_annotate
@@ -48,7 +77,10 @@ def _quantile(a, q):
     n = len(a)
     if not len(a):
         return None, n
-    return (a.quantiles(q=q.tolist(), interpolation="nearest"), n)
+    return (
+        a.quantile(q=q.tolist(), interpolation="nearest", method="table"),
+        n,
+    )
 
 
 @_dask_cudf_nvtx_annotate
@@ -86,7 +118,7 @@ def merge_quantiles(finalq, qs, vals):
         return val
 
     # Sort by calculated quantile values, then number of observations.
-    combined_vals_counts = gd.core.reshape._merge_sorted(
+    combined_vals_counts = cudf.core.reshape._merge_sorted(
         [*map(_append_counts, vals, counts)]
     )
     combined_counts = cupy.asnumpy(combined_vals_counts["_counts"].values)
@@ -133,7 +165,7 @@ def _approximate_quantile(df, q):
     final_type = df._meta._constructor
 
     # Create metadata
-    meta = df._meta_nonempty.quantiles(q=q)
+    meta = df._meta_nonempty.quantile(q=q, method="table")
 
     # Define final action (create df with quantiles as index)
     def finalize_tsk(tsk):
@@ -148,7 +180,7 @@ def _approximate_quantile(df, q):
 
     if len(qs) == 0:
         name = "quantiles-" + token
-        empty_index = gd.Index([], dtype=float)
+        empty_index = cudf.Index([], dtype=float)
         return Series(
             {
                 (name, 0): final_type(
@@ -198,7 +230,7 @@ def quantile_divisions(df, by, npartitions):
     if (
         len(columns) == 1
         and df[columns[0]].dtype != "object"
-        and not is_categorical_dtype(df[columns[0]].dtype)
+        and not _is_categorical_dtype(df[columns[0]].dtype)
     ):
         dtype = df[columns[0]].dtype
         divisions = divisions[columns[0]].astype("int64")
@@ -215,13 +247,16 @@ def quantile_divisions(df, by, npartitions):
                 divisions[col].iloc[-1] += 1
                 divisions[col] = divisions[col].astype(dtype)
             else:
-                divisions[col].iloc[-1] = chr(
-                    ord(divisions[col].iloc[-1][0]) + 1
-                )
+                if last := divisions[col].iloc[-1]:
+                    val = chr(ord(last[0]) + 1)
+                else:
+                    val = "this string intentionally left empty"  # any but ""
+                divisions[col].iloc[-1] = val
         divisions = divisions.drop_duplicates().sort_index()
     return divisions
 
 
+@_deprecate_shuffle_kwarg
 @_dask_cudf_nvtx_annotate
 def sort_values(
     df,
@@ -232,7 +267,7 @@ def sort_values(
     ignore_index=False,
     ascending=True,
     na_position="last",
-    shuffle=None,
+    shuffle_method=None,
     sort_function=None,
     sort_function_kwargs=None,
 ):
@@ -270,7 +305,7 @@ def sort_values(
 
     # Step 2 - Perform repartitioning shuffle
     meta = df._meta._constructor_sliced([0])
-    if not isinstance(divisions, (gd.Series, gd.DataFrame)):
+    if not isinstance(divisions, (cudf.Series, cudf.DataFrame)):
         dtype = df[by[0]].dtype
         divisions = df._meta._constructor_sliced(divisions, dtype=dtype)
 
@@ -288,29 +323,39 @@ def sort_values(
         "_partitions",
         max_branch=max_branch,
         npartitions=len(divisions) - 1,
-        shuffle=_get_shuffle_type(shuffle),
+        shuffle_method=_get_shuffle_method(shuffle_method),
         ignore_index=ignore_index,
     ).drop(columns=["_partitions"])
     df3.divisions = (None,) * (df3.npartitions + 1)
 
     # Step 3 - Return final sorted df
     df4 = df3.map_partitions(sort_function, **sort_kwargs)
-    if not isinstance(divisions, gd.DataFrame) and set_divisions:
+    if not isinstance(divisions, cudf.DataFrame) and set_divisions:
         # Can't have multi-column divisions elsewhere in dask (yet)
         df4.divisions = tuple(methods.tolist(divisions))
 
     return df4
 
 
-def _get_shuffle_type(shuffle):
-    # Utility to set the shuffle-kwarg default
-    # and to validate user-specified options.
-    # The only supported options is currently "tasks"
-    shuffle = shuffle or dask.config.get("shuffle", "tasks")
-    if shuffle != "tasks":
+def get_default_shuffle_method():
+    # Note that `dask.utils.get_default_shuffle_method`
+    # will return "p2p" by default when a distributed
+    # client is present. Dask-cudf supports "p2p", but
+    # will not use it by default (yet)
+    default = config.get("dataframe.shuffle.method", "tasks")
+    if default not in _SHUFFLE_SUPPORT:
+        default = "tasks"
+    return default
+
+
+def _get_shuffle_method(shuffle_method):
+    # Utility to set the shuffle_method-kwarg default
+    # and to validate user-specified options
+    shuffle_method = shuffle_method or get_default_shuffle_method()
+    if shuffle_method not in _SHUFFLE_SUPPORT:
         raise ValueError(
-            f"Dask-cudf only supports in-memory shuffling with "
-            f"'tasks'. Got shuffle={shuffle}"
+            "Dask-cudf only supports the following shuffle "
+            f"methods: {_SHUFFLE_SUPPORT}. Got shuffle_method={shuffle_method}"
         )
 
-    return shuffle
+    return shuffle_method

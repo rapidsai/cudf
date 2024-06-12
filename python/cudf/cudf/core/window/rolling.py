@@ -1,6 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION
-
-import itertools
+# Copyright (c) 2020-2024, NVIDIA CORPORATION
 
 import numba
 import pandas as pd
@@ -9,8 +7,7 @@ from pandas.api.indexers import BaseIndexer
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_number
-from cudf.core import column
-from cudf.core._compat import PANDAS_GE_150
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import as_column
 from cudf.core.mixins import Reducible
 from cudf.utils import cudautils
@@ -236,25 +233,17 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             following_window = None
             window = self.window
         elif isinstance(self.window, BaseIndexer):
-            if PANDAS_GE_150:
-                start, end = self.window.get_window_bounds(
-                    num_values=len(self.obj),
-                    min_periods=self.min_periods,
-                    center=self.center,
-                    closed=None,
-                    step=None,
-                )
-            else:
-                start, end = self.window.get_window_bounds(
-                    num_values=len(self.obj),
-                    min_periods=self.min_periods,
-                    center=self.center,
-                    closed=None,
-                )
+            start, end = self.window.get_window_bounds(
+                num_values=len(self.obj),
+                min_periods=self.min_periods,
+                center=self.center,
+                closed=None,
+                step=None,
+            )
             start = as_column(start, dtype="int32")
             end = as_column(end, dtype="int32")
 
-            idx = cudf.core.column.arange(len(start))
+            idx = as_column(range(len(start)))
             preceding_window = (idx - start + cudf.Scalar(1, "int32")).astype(
                 "int32"
             )
@@ -264,8 +253,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             window = None
         else:
             preceding_window = as_column(self.window)
-            following_window = column.full(
-                self.window.size, 0, dtype=self.window.dtype
+            following_window = as_column(
+                0, length=self.window.size, dtype=self.window.dtype
             )
             window = None
 
@@ -280,27 +269,13 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             agg_params=self.agg_params,
         )
 
-    def _apply_agg_dataframe(self, df, agg_name):
-        return cudf.DataFrame._from_data(
-            {
-                col_name: self._apply_agg_column(col, agg_name)
-                for col_name, col in df._data.items()
-            },
-            index=df.index,
-        )
-
     def _apply_agg(self, agg_name):
-        if isinstance(self.obj, cudf.Series):
-            return cudf.Series._from_data(
-                {
-                    self.obj.name: self._apply_agg_column(
-                        self.obj._column, agg_name
-                    )
-                },
-                index=self.obj.index,
-            )
-        else:
-            return self._apply_agg_dataframe(self.obj, agg_name)
+        applied = (
+            self._apply_agg_column(col, agg_name) for col in self.obj._columns
+        )
+        return self.obj._from_data_like_self(
+            self.obj._data._from_columns_like_self(applied)
+        )
 
     def _reduce(
         self,
@@ -507,9 +482,11 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         if is_integer(window):
             return window
         else:
-            return cudautils.window_sizes_from_offset(
-                self.obj.index._values.data_array_view, window
-            )
+            with acquire_spill_lock():
+                return cudautils.window_sizes_from_offset(
+                    self.obj.index._values.data_array_view(mode="write"),
+                    window,
+                )
 
     def __repr__(self):
         return "{} [window={},min_periods={},center={}]".format(
@@ -544,34 +521,25 @@ class RollingGroupby(Rolling):
 
         super().__init__(obj, window, min_periods=min_periods, center=center)
 
+    @acquire_spill_lock()
     def _window_to_window_sizes(self, window):
         if is_integer(window):
             return cudautils.grouped_window_sizes_from_offset(
-                column.arange(len(self.obj)).data_array_view,
+                as_column(range(len(self.obj))).data_array_view(mode="read"),
                 self._group_starts,
                 window,
             )
         else:
             return cudautils.grouped_window_sizes_from_offset(
-                self.obj.index._values.data_array_view,
+                self.obj.index._values.data_array_view(mode="read"),
                 self._group_starts,
                 window,
             )
 
     def _apply_agg(self, agg_name):
-        if agg_name == "count" and not self._time_window:
-            self.min_periods = 0
-        index = cudf.MultiIndex.from_frame(
-            cudf.DataFrame(
-                {
-                    key: value
-                    for key, value in itertools.chain(
-                        self._group_keys._data.items(),
-                        self.obj.index._data.items(),
-                    )
-                }
-            )
+        index = cudf.MultiIndex._from_data(
+            {**self._group_keys._data, **self.obj.index._data}
         )
-
-        result = super()._apply_agg(agg_name).set_index(index)
+        result = super()._apply_agg(agg_name)
+        result.index = index
         return result

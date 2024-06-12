@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ std::vector<cudf::test::fixed_width_column_wrapper<T>> create_expected_columns(
         iter, iter + (indices[index + 1] - indices[index])));
     } else {
       auto valids = cudf::detail::make_counting_transform_iterator(
-        indices[index], [](auto i) { return i % 2 == 0 ? true : false; });
+        indices[index], [](auto i) { return i % 2 == 0; });
       result.push_back(cudf::test::fixed_width_column_wrapper<T>(
         iter, iter + (indices[index + 1] - indices[index]), valids));
     }
@@ -97,7 +97,7 @@ std::vector<cudf::test::fixed_width_column_wrapper<T>> create_expected_columns(
         iter, iter + (indices[index + 1] - indices[index])));
     } else {
       auto valids = cudf::detail::make_counting_transform_iterator(
-        indices[index], [](auto i) { return i % 2 == 0 ? true : false; });
+        indices[index], [](auto i) { return i % 2 == 0; });
       result.push_back(cudf::test::fixed_width_column_wrapper<T>(
         iter, iter + (indices[index + 1] - indices[index]), valids));
     }
@@ -141,7 +141,7 @@ std::vector<cudf::table> create_expected_tables(cudf::size_type num_cols,
         cols.push_back(wrap.release());
       } else {
         auto valids = cudf::detail::make_counting_transform_iterator(
-          indices[index], [](auto i) { return i % 2 == 0 ? true : false; });
+          indices[index], [](auto i) { return i % 2 == 0; });
         cudf::test::fixed_width_column_wrapper<T> wrap(
           iter, iter + (indices[index + 1] - indices[index]), valids);
         cols.push_back(wrap.release());
@@ -167,7 +167,7 @@ inline std::vector<cudf::test::strings_column_wrapper> create_expected_string_co
                                                           strings.begin() + indices[index + 1]));
     } else {
       auto valids = cudf::detail::make_counting_transform_iterator(
-        indices[index], [](auto i) { return i % 2 == 0 ? true : false; });
+        indices[index], [](auto i) { return i % 2 == 0; });
       result.push_back(cudf::test::strings_column_wrapper(
         strings.begin() + indices[index], strings.begin() + indices[index + 1], valids));
     }
@@ -209,7 +209,7 @@ inline std::vector<cudf::table> create_expected_string_tables(
         cols.push_back(wrap.release());
       } else {
         auto valids = cudf::detail::make_counting_transform_iterator(
-          indices[index], [](auto i) { return i % 2 == 0 ? true : false; });
+          indices[index], [](auto i) { return i % 2 == 0; });
         cudf::test::strings_column_wrapper wrap(
           strings[idx].begin() + indices[index], strings[idx].begin() + indices[index + 1], valids);
         cols.push_back(wrap.release());

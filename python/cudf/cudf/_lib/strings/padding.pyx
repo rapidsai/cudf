@@ -1,21 +1,23 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
 from libcpp.utility cimport move
 
+from cudf.core.buffer import acquire_spill_lock
+
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
-from cudf._lib.cpp.types cimport size_type
-from cudf._lib.scalar cimport DeviceScalar
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 from enum import IntEnum
 
-from libcpp.string cimport string
-
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.strings.padding cimport pad as cpp_pad, zfill as cpp_zfill
-from cudf._lib.cpp.strings.side_type cimport (
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.strings.padding cimport (
+    pad as cpp_pad,
+    zfill as cpp_zfill,
+)
+from cudf._lib.pylibcudf.libcudf.strings.side_type cimport (
     side_type,
     underlying_type_t_side_type,
 )
@@ -27,6 +29,7 @@ class SideType(IntEnum):
     BOTH = <underlying_type_t_side_type> side_type.BOTH
 
 
+@acquire_spill_lock()
 def pad(Column source_strings,
         size_type width,
         fill_char,
@@ -57,11 +60,12 @@ def pad(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def zfill(Column source_strings,
           size_type width):
     """
     Returns a Column by prepending strings in `source_strings`
-    with ‘0’ characters up to the given `width`.
+    with '0' characters up to the given `width`.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
@@ -75,6 +79,7 @@ def zfill(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def center(Column source_strings,
            size_type width,
            fill_char):
@@ -99,6 +104,7 @@ def center(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def ljust(Column source_strings,
           size_type width,
           fill_char):
@@ -122,6 +128,7 @@ def ljust(Column source_strings,
     return Column.from_unique_ptr(move(c_result))
 
 
+@acquire_spill_lock()
 def rjust(Column source_strings,
           size_type width,
           fill_char):

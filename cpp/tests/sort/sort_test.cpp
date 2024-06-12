@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
@@ -54,8 +55,7 @@ using TestTypes = cudf::test::Concat<cudf::test::NumericTypes,  // include integ
                                      cudf::test::ChronoTypes>;  // include timestamps and durations
 
 template <typename T>
-struct Sort : public cudf::test::BaseFixture {
-};
+struct Sort : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(Sort, TestTypes);
 
@@ -311,8 +311,9 @@ TYPED_TEST(Sort, WithNullableStructColumn)
   auto make_struct = [&](std::vector<std::unique_ptr<cudf::column>> child_cols,
                          std::vector<bool> nulls) {
     cudf::test::structs_column_wrapper struct_col(std::move(child_cols));
-    auto struct_ = struct_col.release();
-    struct_->set_null_mask(cudf::test::detail::make_null_mask(nulls.begin(), nulls.end()));
+    auto struct_                 = struct_col.release();
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(nulls.begin(), nulls.end());
+    struct_->set_null_mask(std::move(null_mask), null_count);
     return struct_;
   };
 
@@ -752,18 +753,30 @@ TYPED_TEST(Sort, WithListColumn)
   using T = TypeParam;
   if (std::is_same_v<T, bool>) { GTEST_SKIP(); }
 
+  /*
+  [
+    [[1, 2, 3], [], [4, 5], [], [0, 6, 0]], 0
+    [[1, 2, 3], [], [4, 5], [], [0, 6, 0]], 1
+    [[1, 2, 3], [], [4, 5], [0, 6, 0]],     2
+    [[1, 2], [3], [4, 5], [0, 6, 0]],       3
+    [[7, 8], []],                           4
+    [[], [], []],                           5
+    [[]],                                   6
+    [[10]],                                 7
+    []                                      8
+  ]
+  */
+
   using lcw = cudf::test::lists_column_wrapper<T, int32_t>;
-  lcw col{
-    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
-    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
-    {{1, 2, 3}, {}, {4, 5}, {0, 6, 0}},
-    {{1, 2}, {3}, {4, 5}, {0, 6, 0}},
-    {{7, 8}, {}},
-    lcw{lcw{}, lcw{}, lcw{}},
-    lcw{lcw{}},
-    {lcw{10}},
-    lcw{},
-  };
+  lcw col{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
+          {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
+          {{1, 2, 3}, {}, {4, 5}, {0, 6, 0}},
+          {{1, 2}, {3}, {4, 5}, {0, 6, 0}},
+          {{7, 8}, {}},
+          lcw{lcw{}, lcw{}, lcw{}},
+          lcw{lcw{}},
+          {lcw{10}},
+          lcw{}};
 
   auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{8, 6, 5, 3, 0, 1, 2, 4, 7};
   auto result = cudf::sorted_order(cudf::table_view({col}));
@@ -777,6 +790,24 @@ TYPED_TEST(Sort, WithNullableListColumn)
 
   using lcw = cudf::test::lists_column_wrapper<T, int32_t>;
   using cudf::test::iterators::nulls_at;
+
+  /*
+  [
+    [[1, 2, 3], [], [4, 5], [], [0, 6, 0]],   0
+    [[1, 2, 3], [], [4, 5], NULL, [0, 6, 0]], 1
+    [[1, 2, 3], [], [4, 5], [0, 6, 0]],       2
+    [[1, 2], [3], [4, 5], [0, 6, 0]],         3
+    [[1, 2], [3], [4, 5], [NULL, 6, 0]],      4
+    [[7, 8], []],                             5
+    [[], [], []],                             6
+    [[]],                                     7
+    [[10]],                                   8
+    [],                                       9
+    [[1, 2], [3], [4, 5], [NULL, 6, NULL]],   10
+    [[1, 2], [3], [4, 5], [NULL, 7]]          11
+  ]
+  */
+
   lcw col{
     {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},                   // 0
     {{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, nulls_at({3})},  // 1
@@ -796,6 +827,119 @@ TYPED_TEST(Sort, WithNullableListColumn)
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{9, 7, 6, 10, 4, 11, 3, 1, 0, 2, 5, 8};
   auto result = cudf::sorted_order(cudf::table_view({col}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
+}
+
+TYPED_TEST(Sort, MoreLists)
+{
+  using T = TypeParam;
+  if (std::is_same_v<T, bool>) { GTEST_SKIP(); }
+
+  using lcw = cudf::test::lists_column_wrapper<T, int32_t>;
+  using cudf::test::iterators::null_at;
+  using cudf::test::iterators::nulls_at;
+
+  {
+    /*
+    [
+      [[NULL], [-21827]], 0
+      [[NULL, NULL]]      1
+    ]
+    */
+    lcw col{
+      lcw{lcw{{0}, nulls_at({0})}, lcw{-21827}},  // 0
+      lcw{lcw{{0, 0}, nulls_at({0, 1})}}          // 1
+    };
+    cudf::test::fixed_width_column_wrapper<int32_t> expected{{0, 1}};
+    auto result = cudf::sorted_order(cudf::table_view({col}));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+
+  {
+    /*
+    [
+      [[1], [2]],         0
+      [[1, NULL], [2, 3]] 1
+    ]
+    */
+    auto const col = lcw{lcw{lcw{1}, lcw{2}}, lcw{lcw{{1, 0}, nulls_at({1})}, lcw{2, 3}}};
+    cudf::test::fixed_width_column_wrapper<int32_t> expected{{0, 1}};
+    auto result = cudf::sorted_order(cudf::table_view({col}));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+
+  {
+    /*
+    List<List<List<int>
+    [
+      [[[0, 0, 0]]],                                0
+      [[[0], [0], [0]]],                            1
+      [[[0]], [[0]], [[0]]],                        2
+      [[[0, 0, 0]], [[0]], [[0]]],                  3
+      [[[0, 0]], [[0, 0, 0, 0, 0, 0, 0, 0]], [[0]]] 4
+    ]
+    */
+    lcw col{lcw{lcw{lcw{0, 0, 0}}},
+            lcw{lcw{lcw{0}, lcw{0}, lcw{0}}},
+            lcw{lcw{lcw{0}}, lcw{lcw{0}}, lcw{lcw{0}}},
+            lcw{lcw{lcw{0, 0, 0}}, lcw{lcw{0}}, lcw{lcw{0}}},
+            lcw{lcw{lcw{0, 0}}, lcw{lcw{0, 0, 0, 0, 0, 0, 0, 0}}, lcw{lcw{0}}}};
+    cudf::test::fixed_width_column_wrapper<int32_t> expected{{2, 1, 4, 0, 3}};
+    auto result = cudf::sorted_order(cudf::table_view({col}));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+  {
+    /*
+    [
+      [],    0
+      [1],   1
+      [2, 2] 2
+      [2, 3] 3
+      []     4
+      NULL   5
+      [2]    6
+      NULL   7
+      [NULL] 8
+    ]
+    */
+    lcw col{{{}, {1}, {2, 2}, {2, 3}, {}, {} /*NULL*/, {2}, {} /*NULL*/, {{0}, null_at(0)}},
+            nulls_at({5, 7})};
+
+    // ASCENDING, null_order::BEFORE
+    {
+      cudf::test::fixed_width_column_wrapper<int32_t> expected{{5, 7, 0, 4, 8, 1, 6, 2, 3}};
+      auto result = cudf::sorted_order(cudf::table_view({col}));
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+    }
+    // ASCENDING, null_order::AFTER
+    {
+      cudf::test::fixed_width_column_wrapper<int32_t> expected{{0, 4, 8, 1, 6, 2, 3, 5, 7}};
+      auto result = cudf::sorted_order(cudf::table_view({col}), {}, {cudf::null_order::AFTER});
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+    }
+    // DESCENDING, null_order::BEFORE
+    {
+      cudf::test::fixed_width_column_wrapper<int32_t> expected{{3, 2, 6, 1, 8, 0, 4, 5, 7}};
+      auto result = cudf::sorted_order(cudf::table_view({col}), {cudf::order::DESCENDING});
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+    }
+    // DESCENDING, null_order::AFTER
+    {
+      cudf::test::fixed_width_column_wrapper<int32_t> expected{{5, 7, 3, 2, 6, 1, 8, 0, 4}};
+      auto result = cudf::sorted_order(
+        cudf::table_view({col}), {cudf::order::DESCENDING}, {cudf::null_order::AFTER});
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+    }
+  }
+  {
+    lcw col{lcw{lcw{}, lcw{-729297378, -627961465}},
+            lcw{lcw{{0}, null_at(0)}, lcw{881899016, -1415270016}}};
+
+    {
+      cudf::test::fixed_width_column_wrapper<int32_t> expected{{0, 1}};
+      auto result = cudf::sorted_order(cudf::table_view({col}));
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+    }
+  }
 }
 
 TYPED_TEST(Sort, WithSlicedListColumn)
@@ -845,8 +989,7 @@ TYPED_TEST(Sort, WithEmptyListColumn)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
 }
 
-struct SortByKey : public cudf::test::BaseFixture {
-};
+struct SortByKey : public cudf::test::BaseFixture {};
 
 TEST_F(SortByKey, ValueKeysSizeMismatch)
 {
@@ -864,8 +1007,7 @@ TEST_F(SortByKey, ValueKeysSizeMismatch)
 }
 
 template <typename T>
-struct SortFixedPointTest : public cudf::test::BaseFixture {
-};
+struct SortFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(SortFixedPointTest, cudf::test::FixedPointTypes);
 
@@ -901,8 +1043,7 @@ TYPED_TEST(SortFixedPointTest, SortedOrderGather)
   CUDF_TEST_EXPECT_TABLES_EQUAL(sorted_table, sorted->view());
 }
 
-struct SortCornerTest : public cudf::test::BaseFixture {
-};
+struct SortCornerTest : public cudf::test::BaseFixture {};
 
 TEST_F(SortCornerTest, WithEmptyStructColumn)
 {
@@ -910,9 +1051,9 @@ TEST_F(SortCornerTest, WithEmptyStructColumn)
 
   // struct{}, int, int
   int_col col_for_mask{{0, 0, 0, 0, 0, 0}, {1, 0, 1, 1, 1, 1}};
-  auto null_mask = cudf::copy_bitmask(col_for_mask.release()->view());
-  auto struct_col =
-    cudf::make_structs_column(6, {}, cudf::UNKNOWN_NULL_COUNT, std::move(null_mask));
+  auto null_mask  = cudf::copy_bitmask(col_for_mask);
+  auto struct_col = cudf::make_structs_column(
+    6, {}, cudf::column_view(col_for_mask).null_count(), std::move(null_mask));
 
   int_col col1{{1, 2, 3, 1, 2, 3}};
   int_col col2{{1, 1, 1, 2, 2, 2}};
@@ -939,10 +1080,10 @@ TEST_F(SortCornerTest, WithEmptyStructColumn)
 
   // struct{struct{}, struct{int}}
   int_col col_for_mask2{{0, 0, 0, 0, 0, 0}, {1, 0, 1, 1, 0, 1}};
-  auto null_mask2 = cudf::copy_bitmask(col_for_mask2.release()->view());
+  auto null_mask2 = cudf::copy_bitmask(col_for_mask2);
   std::vector<std::unique_ptr<cudf::column>> child_columns2;
-  auto child_col_1 =
-    cudf::make_structs_column(6, {}, cudf::UNKNOWN_NULL_COUNT, std::move(null_mask2));
+  auto child_col_1 = cudf::make_structs_column(
+    6, {}, cudf::column_view(col_for_mask2).null_count(), std::move(null_mask2));
   child_columns2.push_back(std::move(child_col_1));
   int_col col4{{5, 4, 3, 2, 1, 0}};
   std::vector<std::unique_ptr<cudf::column>> grand_child;

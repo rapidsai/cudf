@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
@@ -23,11 +29,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/iterator_utilities.hpp>
-#include <cudf_test/table_utilities.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -37,8 +39,7 @@ using strcol_wrapper = cudf::test::strings_column_wrapper;
 using column_vector  = std::vector<std::unique_ptr<cudf::column>>;
 using Table          = cudf::table;
 
-struct JoinTest : public cudf::test::BaseFixture {
-};
+struct JoinTest : public cudf::test::BaseFixture {};
 
 namespace {
 // This function is a wrapper around cudf's join APIs that takes the gather map
@@ -51,14 +52,14 @@ template <std::unique_ptr<rmm::device_uvector<cudf::size_type>> (*join_impl)(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   cudf::null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr)>
+  rmm::device_async_resource_ref mr)>
 std::unique_ptr<cudf::table> join_and_gather(
   cudf::table_view const& left_input,
   cudf::table_view const& right_input,
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   auto left_selected      = left_input.select(left_on);
   auto right_selected     = right_input.select(right_on);
@@ -101,8 +102,11 @@ TEST_F(JoinTest, TestSimple)
   auto right = cudf::table_view{{right_col0}};
 
   auto result    = left_semi_join(left, right);
-  auto result_cv = cudf::column_view(
-    cudf::data_type{cudf::type_to_id<cudf::size_type>()}, result->size(), result->data());
+  auto result_cv = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                                     result->size(),
+                                     result->data(),
+                                     nullptr,
+                                     0);
   column_wrapper<cudf::size_type> expected{0, 1};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_cv);
 }

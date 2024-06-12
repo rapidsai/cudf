@@ -1,43 +1,75 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
-{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
+{% set version = environ['RAPIDS_PACKAGE_VERSION'].lstrip('v') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set cuda_version = '.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
+{% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
 {% set cuda_major = cuda_version.split('.')[0] %}
-{% set cuda_spec = ">=" + cuda_major ~ ",<" + (cuda_major | int + 1) ~ ".0a0" %} # i.e. >=11,<12.0a0
+{% set date_string = environ['RAPIDS_DATE_STRING'] %}
 
 package:
   name: libcudf-split
 
 source:
-  git_url: ../../..
+  path: ../../..
 
 build:
   script_env:
-    - PARALLEL_LEVEL
-    - CMAKE_GENERATOR
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
+    - AWS_SESSION_TOKEN
     - CMAKE_C_COMPILER_LAUNCHER
-    - CMAKE_CXX_COMPILER_LAUNCHER
     - CMAKE_CUDA_COMPILER_LAUNCHER
+    - CMAKE_CXX_COMPILER_LAUNCHER
+    - CMAKE_GENERATOR
+    - PARALLEL_LEVEL
+    - RAPIDS_ARTIFACTS_DIR
+    - SCCACHE_BUCKET
+    - SCCACHE_IDLE_TIMEOUT
+    - SCCACHE_REGION
     - SCCACHE_S3_KEY_PREFIX=libcudf-aarch64 # [aarch64]
     - SCCACHE_S3_KEY_PREFIX=libcudf-linux64 # [linux64]
-    - SCCACHE_BUCKET=rapids-sccache
-    - SCCACHE_REGION=us-west-2
-    - SCCACHE_IDLE_TIMEOUT=32768
+    - SCCACHE_S3_USE_SSL
+    - SCCACHE_S3_NO_CREDENTIALS
 
 requirements:
   build:
     - cmake {{ cmake_version }}
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
-    - {{ compiler('cuda') }} {{ cuda_version }}
-    - sysroot_{{ target_platform }} {{ sysroot_version }}
+    {% if cuda_major == "11" %}
+    - {{ compiler('cuda11') }} ={{ cuda_version }}
+    {% else %}
+    - {{ compiler('cuda') }}
+    {% endif %}
+    - cuda-version ={{ cuda_version }}
+    - ninja
+    - {{ stdlib("c") }}
   host:
-    - librmm {{ minor_version }}.*
-    - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp {{ arrow_cpp_version }}
+    - librmm ={{ minor_version }}
+    - libkvikio ={{ minor_version }}
+    {% if cuda_major == "11" %}
+    - cudatoolkit
+    - libcufile {{ cuda11_libcufile_host_version }}  # [linux64]
+    - libcufile-dev {{ cuda11_libcufile_host_version }}  # [linux64]
+    - libcurand {{ cuda11_libcurand_host_version }}
+    - libcurand-dev {{ cuda11_libcurand_host_version }}
+    - cuda-nvrtc ={{ cuda_version }}
+    - cuda-nvrtc-dev ={{ cuda_version }}
+    - cuda-nvtx ={{ cuda_version }}
+    {% else %}
+    - cuda-nvrtc-dev
+    - cuda-nvtx-dev
+    - libcufile-dev  # [linux64]
+    - libcurand-dev
+    {% endif %}
+    - cuda-version ={{ cuda_version }}
+    - nvcomp {{ nvcomp_version }}
+    - libarrow {{ libarrow_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
+    - fmt {{ fmt_version }}
+    - spdlog {{ spdlog_version }}
+    - zlib {{ zlib_version }}
 
 outputs:
   - name: libcudf
@@ -45,261 +77,62 @@ outputs:
     script: install_libcudf.sh
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
-      string: cuda{{ cuda_major }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       run_exports:
         - {{ pin_subpackage("libcudf", max_pin="x.x") }}
       ignore_run_exports_from:
+        {% if cuda_major == "11" %}
+        - {{ compiler('cuda11') }}
+        {% else %}
         - {{ compiler('cuda') }}
+        {% endif %}
     requirements:
       build:
         - cmake {{ cmake_version }}
+      host:
+        - cuda-version ={{ cuda_version }}
+        - libarrow {{ libarrow_version }}
       run:
-        - cudatoolkit {{ cuda_spec }}
-        - librmm {{ minor_version }}.*
-        - arrow-cpp {{ arrow_cpp_version }}
+        - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
+        {% if cuda_major == "11" %}
+        - cudatoolkit
+        - libcufile {{ cuda11_libcufile_run_version }}  # [linux64]
+        {% else %}
+        - cuda-nvrtc
+        - libcufile  # [linux64]
+        {% endif %}
+        - nvcomp {{ nvcomp_version }}
+        - librmm ={{ minor_version }}
+        - libkvikio ={{ minor_version }}
         - dlpack {{ dlpack_version }}
     test:
       commands:
         - test -f $PREFIX/lib/libcudf.so
-        - test -f $PREFIX/lib/libcudftestutil.a
-        - test -f $PREFIX/include/cudf/aggregation.hpp
-        - test -f $PREFIX/include/cudf/ast/detail/expression_parser.hpp
-        - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
-        - test -f $PREFIX/include/cudf/ast/expressions.hpp
-        - test -f $PREFIX/include/cudf/binaryop.hpp
         - test -f $PREFIX/include/cudf/column/column.hpp
-        - test -f $PREFIX/include/cudf/column/column_factories.hpp
-        - test -f $PREFIX/include/cudf/column/column_view.hpp
-        - test -f $PREFIX/include/cudf/concatenate.hpp
-        - test -f $PREFIX/include/cudf/copying.hpp
-        - test -f $PREFIX/include/cudf/datetime.hpp
-        - test -f $PREFIX/include/cudf/detail/aggregation/aggregation.hpp
-        - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
-        - test -f $PREFIX/include/cudf/detail/binaryop.hpp
-        - test -f $PREFIX/include/cudf/detail/calendrical_month_sequence.cuh
-        - test -f $PREFIX/include/cudf/detail/concatenate.hpp
-        - test -f $PREFIX/include/cudf/detail/copy.cuh
-        - test -f $PREFIX/include/cudf/detail/copy.hpp
-        - test -f $PREFIX/include/cudf/detail/datetime.hpp
-        - test -f $PREFIX/include/cudf/detail/fill.hpp
-        - test -f $PREFIX/include/cudf/detail/gather.hpp
-        - test -f $PREFIX/include/cudf/detail/groupby.hpp
-        - test -f $PREFIX/include/cudf/detail/groupby/group_replace_nulls.hpp
-        - test -f $PREFIX/include/cudf/detail/groupby/sort_helper.hpp
-        - test -f $PREFIX/include/cudf/detail/hashing.hpp
-        - test -f $PREFIX/include/cudf/detail/interop.hpp
-        - test -f $PREFIX/include/cudf/detail/is_element_valid.hpp
-        - test -f $PREFIX/include/cudf/detail/join.hpp
-        - test -f $PREFIX/include/cudf/detail/label_bins.hpp
-        - test -f $PREFIX/include/cudf/detail/null_mask.hpp
-        - test -f $PREFIX/include/cudf/detail/nvtx/nvtx3.hpp
-        - test -f $PREFIX/include/cudf/detail/nvtx/ranges.hpp
-        - test -f $PREFIX/include/cudf/detail/quantiles.hpp
-        - test -f $PREFIX/include/cudf/detail/reduction_functions.hpp
-        - test -f $PREFIX/include/cudf/detail/repeat.hpp
-        - test -f $PREFIX/include/cudf/detail/replace.hpp
-        - test -f $PREFIX/include/cudf/detail/reshape.hpp
-        - test -f $PREFIX/include/cudf/detail/rolling.hpp
-        - test -f $PREFIX/include/cudf/detail/round.hpp
-        - test -f $PREFIX/include/cudf/detail/scan.hpp
-        - test -f $PREFIX/include/cudf/detail/scatter.hpp
-        - test -f $PREFIX/include/cudf/detail/search.hpp
-        - test -f $PREFIX/include/cudf/detail/sequence.hpp
-        - test -f $PREFIX/include/cudf/detail/sorting.hpp
-        - test -f $PREFIX/include/cudf/detail/stream_compaction.hpp
-        - test -f $PREFIX/include/cudf/detail/structs/utilities.hpp
-        - test -f $PREFIX/include/cudf/detail/tdigest/tdigest.hpp
-        - test -f $PREFIX/include/cudf/detail/transform.hpp
-        - test -f $PREFIX/include/cudf/detail/transpose.hpp
-        - test -f $PREFIX/include/cudf/detail/unary.hpp
-        - test -f $PREFIX/include/cudf/detail/utilities/alignment.hpp
-        - test -f $PREFIX/include/cudf/detail/utilities/default_stream.hpp
-        - test -f $PREFIX/include/cudf/detail/utilities/linked_column.hpp
-        - test -f $PREFIX/include/cudf/detail/utilities/int_fastdiv.h
-        - test -f $PREFIX/include/cudf/detail/utilities/integer_utils.hpp
-        - test -f $PREFIX/include/cudf/detail/utilities/vector_factories.hpp
-        - test -f $PREFIX/include/cudf/detail/utilities/visitor_overload.hpp
-        - test -f $PREFIX/include/cudf/dictionary/detail/concatenate.hpp
-        - test -f $PREFIX/include/cudf/dictionary/detail/encode.hpp
-        - test -f $PREFIX/include/cudf/dictionary/detail/merge.hpp
-        - test -f $PREFIX/include/cudf/dictionary/detail/replace.hpp
-        - test -f $PREFIX/include/cudf/dictionary/detail/search.hpp
-        - test -f $PREFIX/include/cudf/dictionary/detail/update_keys.hpp
-        - test -f $PREFIX/include/cudf/dictionary/dictionary_column_view.hpp
-        - test -f $PREFIX/include/cudf/dictionary/dictionary_factories.hpp
-        - test -f $PREFIX/include/cudf/dictionary/encode.hpp
-        - test -f $PREFIX/include/cudf/dictionary/search.hpp
-        - test -f $PREFIX/include/cudf/dictionary/update_keys.hpp
-        - test -f $PREFIX/include/cudf/filling.hpp
-        - test -f $PREFIX/include/cudf/fixed_point/fixed_point.hpp
-        - test -f $PREFIX/include/cudf/fixed_point/temporary.hpp
-        - test -f $PREFIX/include/cudf/groupby.hpp
-        - test -f $PREFIX/include/cudf/hashing.hpp
-        - test -f $PREFIX/include/cudf/interop.hpp
-        - test -f $PREFIX/include/cudf/io/avro.hpp
-        - test -f $PREFIX/include/cudf/io/csv.hpp
-        - test -f $PREFIX/include/cudf/io/data_sink.hpp
-        - test -f $PREFIX/include/cudf/io/datasource.hpp
-        - test -f $PREFIX/include/cudf/io/detail/avro.hpp
-        - test -f $PREFIX/include/cudf/io/detail/csv.hpp
-        - test -f $PREFIX/include/cudf/io/detail/json.hpp
-        - test -f $PREFIX/include/cudf/io/detail/orc.hpp
-        - test -f $PREFIX/include/cudf/io/detail/parquet.hpp
-        - test -f $PREFIX/include/cudf/io/detail/utils.hpp
-        - test -f $PREFIX/include/cudf/io/json.hpp
-        - test -f $PREFIX/include/cudf/io/orc.hpp
-        - test -f $PREFIX/include/cudf/io/orc_metadata.hpp
-        - test -f $PREFIX/include/cudf/io/parquet.hpp
-        - test -f $PREFIX/include/cudf/io/text/byte_range_info.hpp
-        - test -f $PREFIX/include/cudf/io/text/data_chunk_source.hpp
-        - test -f $PREFIX/include/cudf/io/text/data_chunk_source_factories.hpp
-        - test -f $PREFIX/include/cudf/io/text/detail/bgzip_utils.hpp
-        - test -f $PREFIX/include/cudf/io/text/detail/multistate.hpp
-        - test -f $PREFIX/include/cudf/io/text/detail/tile_state.hpp
-        - test -f $PREFIX/include/cudf/io/text/detail/trie.hpp
-        - test -f $PREFIX/include/cudf/io/text/multibyte_split.hpp
-        - test -f $PREFIX/include/cudf/io/types.hpp
-        - test -f $PREFIX/include/cudf/join.hpp
-        - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
-        - test -f $PREFIX/include/cudf/lists/combine.hpp
-        - test -f $PREFIX/include/cudf/lists/contains.hpp
-        - test -f $PREFIX/include/cudf/lists/count_elements.hpp
-        - test -f $PREFIX/include/cudf/lists/detail/combine.hpp
-        - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
-        - test -f $PREFIX/include/cudf/lists/detail/contains.hpp
-        - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
-        - test -f $PREFIX/include/cudf/lists/detail/dremel.hpp
-        - test -f $PREFIX/include/cudf/lists/detail/extract.hpp
-        - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp
-        - test -f $PREFIX/include/cudf/lists/detail/scatter_helper.cuh
-        - test -f $PREFIX/include/cudf/lists/detail/set_operations.hpp
-        - test -f $PREFIX/include/cudf/lists/detail/sorting.hpp
-        - test -f $PREFIX/include/cudf/lists/detail/stream_compaction.hpp
-        - test -f $PREFIX/include/cudf/lists/explode.hpp
-        - test -f $PREFIX/include/cudf/lists/extract.hpp
-        - test -f $PREFIX/include/cudf/lists/filling.hpp
-        - test -f $PREFIX/include/cudf/lists/gather.hpp
-        - test -f $PREFIX/include/cudf/lists/list_view.hpp
-        - test -f $PREFIX/include/cudf/lists/lists_column_factories.hpp
-        - test -f $PREFIX/include/cudf/lists/lists_column_view.hpp
-        - test -f $PREFIX/include/cudf/lists/set_operations.hpp
-        - test -f $PREFIX/include/cudf/lists/sorting.hpp
-        - test -f $PREFIX/include/cudf/lists/stream_compaction.hpp
-        - test -f $PREFIX/include/cudf/merge.hpp
-        - test -f $PREFIX/include/cudf/null_mask.hpp
-        - test -f $PREFIX/include/cudf/partitioning.hpp
-        - test -f $PREFIX/include/cudf/quantiles.hpp
-        - test -f $PREFIX/include/cudf/reduction.hpp
-        - test -f $PREFIX/include/cudf/replace.hpp
-        - test -f $PREFIX/include/cudf/reshape.hpp
-        - test -f $PREFIX/include/cudf/rolling.hpp
-        - test -f $PREFIX/include/cudf/rolling/range_window_bounds.hpp
-        - test -f $PREFIX/include/cudf/round.hpp
-        - test -f $PREFIX/include/cudf/scalar/scalar.hpp
-        - test -f $PREFIX/include/cudf/scalar/scalar_factories.hpp
-        - test -f $PREFIX/include/cudf/search.hpp
-        - test -f $PREFIX/include/cudf/sorting.hpp
-        - test -f $PREFIX/include/cudf/stream_compaction.hpp
-        - test -f $PREFIX/include/cudf/strings/attributes.hpp
-        - test -f $PREFIX/include/cudf/strings/capitalize.hpp
-        - test -f $PREFIX/include/cudf/strings/case.hpp
-        - test -f $PREFIX/include/cudf/strings/char_types/char_cases.hpp
-        - test -f $PREFIX/include/cudf/strings/char_types/char_types.hpp
-        - test -f $PREFIX/include/cudf/strings/char_types/char_types_enum.hpp
-        - test -f $PREFIX/include/cudf/strings/combine.hpp
-        - test -f $PREFIX/include/cudf/strings/contains.hpp
-        - test -f $PREFIX/include/cudf/strings/convert/convert_booleans.hpp
-        - test -f $PREFIX/include/cudf/strings/convert/convert_datetime.hpp
-        - test -f $PREFIX/include/cudf/strings/convert/convert_durations.hpp
-        - test -f $PREFIX/include/cudf/strings/convert/convert_fixed_point.hpp
-        - test -f $PREFIX/include/cudf/strings/convert/convert_floats.hpp
-        - test -f $PREFIX/include/cudf/strings/convert/convert_integers.hpp
-        - test -f $PREFIX/include/cudf/strings/convert/convert_ipv4.hpp
-        - test -f $PREFIX/include/cudf/strings/convert/convert_lists.hpp
-        - test -f $PREFIX/include/cudf/strings/convert/convert_urls.hpp
-        - test -f $PREFIX/include/cudf/strings/detail/char_tables.hpp
-        - test -f $PREFIX/include/cudf/strings/detail/combine.hpp
-        - test -f $PREFIX/include/cudf/strings/detail/concatenate.hpp
-        - test -f $PREFIX/include/cudf/strings/detail/converters.hpp
-        - test -f $PREFIX/include/cudf/strings/detail/copying.hpp
-        - test -f $PREFIX/include/cudf/strings/detail/fill.hpp
-        - test -f $PREFIX/include/cudf/strings/detail/json.hpp
-        - test -f $PREFIX/include/cudf/strings/detail/replace.hpp
-        - test -f $PREFIX/include/cudf/strings/detail/utf8.hpp
-        - test -f $PREFIX/include/cudf/strings/detail/utilities.hpp
-        - test -f $PREFIX/include/cudf/strings/extract.hpp
-        - test -f $PREFIX/include/cudf/strings/find.hpp
-        - test -f $PREFIX/include/cudf/strings/find_multiple.hpp
-        - test -f $PREFIX/include/cudf/strings/findall.hpp
-        - test -f $PREFIX/include/cudf/strings/json.hpp
-        - test -f $PREFIX/include/cudf/strings/padding.hpp
-        - test -f $PREFIX/include/cudf/strings/regex/flags.hpp
-        - test -f $PREFIX/include/cudf/strings/repeat_strings.hpp
-        - test -f $PREFIX/include/cudf/strings/replace.hpp
-        - test -f $PREFIX/include/cudf/strings/replace_re.hpp
-        - test -f $PREFIX/include/cudf/strings/side_type.hpp
-        - test -f $PREFIX/include/cudf/strings/split/partition.hpp
-        - test -f $PREFIX/include/cudf/strings/split/split.hpp
-        - test -f $PREFIX/include/cudf/strings/split/split_re.hpp
-        - test -f $PREFIX/include/cudf/strings/string_view.hpp
-        - test -f $PREFIX/include/cudf/strings/strings_column_view.hpp
-        - test -f $PREFIX/include/cudf/strings/strip.hpp
-        - test -f $PREFIX/include/cudf/strings/substring.hpp
-        - test -f $PREFIX/include/cudf/strings/translate.hpp
-        - test -f $PREFIX/include/cudf/strings/wrap.hpp
-        - test -f $PREFIX/include/cudf/structs/detail/concatenate.hpp
-        - test -f $PREFIX/include/cudf/structs/struct_view.hpp
-        - test -f $PREFIX/include/cudf/structs/structs_column_view.hpp
-        - test -f $PREFIX/include/cudf/table/table.hpp
-        - test -f $PREFIX/include/cudf/table/table_view.hpp
-        - test -f $PREFIX/include/cudf/tdigest/tdigest_column_view.cuh
-        - test -f $PREFIX/include/cudf/transform.hpp
-        - test -f $PREFIX/include/cudf/transpose.hpp
-        - test -f $PREFIX/include/cudf/types.hpp
-        - test -f $PREFIX/include/cudf/unary.hpp
-        - test -f $PREFIX/include/cudf/utilities/bit.hpp
-        - test -f $PREFIX/include/cudf/utilities/default_stream.hpp
-        - test -f $PREFIX/include/cudf/utilities/error.hpp
-        - test -f $PREFIX/include/cudf/utilities/span.hpp
-        - test -f $PREFIX/include/cudf/utilities/traits.hpp
-        - test -f $PREFIX/include/cudf/utilities/type_checks.hpp
-        - test -f $PREFIX/include/cudf/utilities/type_dispatcher.hpp
-        - test -f $PREFIX/include/cudf/wrappers/dictionary.hpp
-        - test -f $PREFIX/include/cudf/wrappers/durations.hpp
-        - test -f $PREFIX/include/cudf/wrappers/timestamps.hpp
-        - test -f $PREFIX/include/cudf_test/base_fixture.hpp
-        - test -f $PREFIX/include/cudf_test/column_utilities.hpp
-        - test -f $PREFIX/include/cudf_test/column_wrapper.hpp
-        - test -f $PREFIX/include/cudf_test/cudf_gtest.hpp
-        - test -f $PREFIX/include/cudf_test/cxxopts.hpp
-        - test -f $PREFIX/include/cudf_test/detail/column_utilities.hpp
-        - test -f $PREFIX/include/cudf_test/file_utilities.hpp
-        - test -f $PREFIX/include/cudf_test/io_metadata_utilities.hpp
-        - test -f $PREFIX/include/cudf_test/iterator_utilities.hpp
-        - test -f $PREFIX/include/cudf_test/stream_checking_resource_adapter.hpp
-        - test -f $PREFIX/include/cudf_test/table_utilities.hpp
-        - test -f $PREFIX/include/cudf_test/timestamp_utilities.cuh
-        - test -f $PREFIX/include/cudf_test/type_list_utilities.hpp
-        - test -f $PREFIX/include/cudf_test/type_lists.hpp
     about:
       home: https://rapids.ai/
       license: Apache-2.0
       license_family: APACHE
       license_file: LICENSE
       summary: libcudf library
-      prelink_message:
-        - nvcomp.txt
   - name: libcudf_kafka
     version: {{ version }}
     script: install_libcudf_kafka.sh
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
-      string: {{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
+        {% if cuda_major == "11" %}
+        - {{ compiler('cuda11') }}
+        {% else %}
         - {{ compiler('cuda') }}
+        {% endif %}
     requirements:
       build:
         - cmake {{ cmake_version }}
+      host:
+        - librdkafka {{ librdkafka_version }}
+        - {{ pin_subpackage('libcudf', exact=True) }}
       run:
         - librdkafka {{ librdkafka_version }}
         - {{ pin_subpackage('libcudf', exact=True) }}
@@ -317,42 +150,81 @@ outputs:
     script: install_libcudf_example.sh
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
-      string: {{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
+        {% if cuda_major == "11" %}
+        - {{ compiler('cuda11') }}
+        {% else %}
         - {{ compiler('cuda') }}
+        - cuda-nvtx-dev
+        {% endif %}
     requirements:
       build:
         - cmake {{ cmake_version }}
         - {{ compiler('c') }}
         - {{ compiler('cxx') }}
-        - sysroot_{{ target_platform }} {{ sysroot_version }}
+        {% if cuda_major == "11" %}
+        - {{ compiler('cuda11') }} ={{ cuda_version }}
+        {% else %}
+        - {{ compiler('cuda') }}
+        {% endif %}
+        - cuda-version ={{ cuda_version }}
+        - ninja
+        - {{ stdlib("c") }}
       host:
         - {{ pin_subpackage('libcudf', exact=True) }}
+        {% if cuda_major == "11" %}
+        - cuda-nvtx ={{ cuda_version }}
+        {% else %}
+        - cuda-nvtx-dev
+        {% endif %}
+        - cuda-version ={{ cuda_version }}
       run:
         - {{ pin_subpackage('libcudf', exact=True) }}
+        - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
+        {% if cuda_major != "11" %}
+        - cuda-nvtx
+        {% endif %}
     about:
       home: https://rapids.ai/
       license: Apache-2.0
       license_family: APACHE
       license_file: LICENSE
-      summary: libcudf_example library
+      summary: libcudf example executables
   - name: libcudf-tests
     version: {{ version }}
     script: install_libcudf_tests.sh
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
-      string: cuda{{ cuda_major }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
+        {% if cuda_major == "11" %}
+        - {{ compiler('cuda11') }}
+        {% else %}
         - {{ compiler('cuda') }}
+        - libcurand-dev
+        {% endif %}
     requirements:
       build:
         - cmake {{ cmake_version }}
-      run:
+      host:
         - {{ pin_subpackage('libcudf', exact=True) }}
         - {{ pin_subpackage('libcudf_kafka', exact=True) }}
-        - cudatoolkit {{ cuda_spec }}
-        - gtest {{ gtest_version }}
-        - gmock {{ gtest_version }}
+        - cuda-version ={{ cuda_version }}
+        {% if cuda_major == "11" %}
+        - libcurand {{ cuda11_libcurand_run_version }}
+        {% else %}
+        - libcurand-dev
+        {% endif %}
+      run:
+        - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
+        - {{ pin_subpackage('libcudf', exact=True) }}
+        - {{ pin_subpackage('libcudf_kafka', exact=True) }}
+        {% if cuda_major == "11" %}
+        - libcurand {{ cuda11_libcurand_run_version }}
+        {% else %}
+        - libcurand
+        {% endif %}
     about:
       home: https://rapids.ai/
       license: Apache-2.0

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,8 +41,8 @@ static constexpr size_type warp_size{32};
  */
 class grid_1d {
  public:
-  const int num_threads_per_block;
-  const int num_blocks;
+  int const num_threads_per_block;
+  int const num_blocks;
   /**
    * @param overall_num_elements The number of elements the kernel needs to
    * handle/process, in its main, one-dimensional/linear input (e.g. one or more
@@ -64,6 +64,82 @@ class grid_1d {
   {
     CUDF_EXPECTS(num_threads_per_block > 0, "num_threads_per_block must be > 0");
     CUDF_EXPECTS(num_blocks > 0, "num_blocks must be > 0");
+  }
+
+  /**
+   * @brief Returns the global thread index in a 1D grid.
+   *
+   * The returned index is unique across the entire grid.
+   *
+   * @param thread_id The thread index within the block
+   * @param block_id The block index within the grid
+   * @param num_threads_per_block The number of threads per block
+   * @return thread_index_type The global thread index
+   */
+  static constexpr thread_index_type global_thread_id(thread_index_type thread_id,
+                                                      thread_index_type block_id,
+                                                      thread_index_type num_threads_per_block)
+  {
+    return thread_id + block_id * num_threads_per_block;
+  }
+
+  /**
+   * @brief Returns the global thread index of the current thread in a 1D grid.
+   *
+   * @return thread_index_type The global thread index
+   */
+  static __device__ thread_index_type global_thread_id()
+  {
+    return global_thread_id(threadIdx.x, blockIdx.x, blockDim.x);
+  }
+
+  /**
+   * @brief Returns the global thread index of the current thread in a 1D grid.
+   *
+   * @tparam num_threads_per_block The number of threads per block
+   *
+   * @return thread_index_type The global thread index
+   */
+  template <thread_index_type num_threads_per_block>
+  static __device__ thread_index_type global_thread_id()
+  {
+    return global_thread_id(threadIdx.x, blockIdx.x, num_threads_per_block);
+  }
+
+  /**
+   * @brief Returns the stride of a 1D grid.
+   *
+   * The returned stride is the total number of threads in the grid.
+   *
+   * @param thread_id The thread index within the block
+   * @param block_id The block index within the grid
+   * @param num_threads_per_block The number of threads per block
+   * @return thread_index_type The global thread index
+   */
+  static constexpr thread_index_type grid_stride(thread_index_type num_threads_per_block,
+                                                 thread_index_type num_blocks_per_grid)
+  {
+    return num_threads_per_block * num_blocks_per_grid;
+  }
+
+  /**
+   * @brief Returns the stride of the current 1D grid.
+   *
+   * @return thread_index_type The number of threads in the grid.
+   */
+  static __device__ thread_index_type grid_stride() { return grid_stride(blockDim.x, gridDim.x); }
+
+  /**
+   * @brief Returns the stride of the current 1D grid.
+   *
+   * @tparam num_threads_per_block The number of threads per block
+   *
+   * @return thread_index_type The number of threads in the grid.
+   */
+  template <thread_index_type num_threads_per_block>
+  static __device__ thread_index_type grid_stride()
+  {
+    return grid_stride(num_threads_per_block, gridDim.x);
   }
 };
 
@@ -106,6 +182,10 @@ __device__ T single_lane_block_sum_reduce(T lane_value)
     lane_value = (lane_id < warps_per_block) ? lane_values[lane_id] : T{0};
     result     = cub::WarpReduce<T>(temp).Sum(lane_value);
   }
+  // Shared memory has block scope, so sync here to ensure no data
+  // races between successive calls to this function in the same
+  // kernel.
+  __syncthreads();
   return result;
 }
 
@@ -157,7 +237,7 @@ __device__ inline T round_up_pow2(T number_to_round, T modulus)
 }
 
 template <class F>
-__global__ void single_thread_kernel(F f)
+CUDF_KERNEL void single_thread_kernel(F f)
 {
   f();
 }
@@ -170,8 +250,7 @@ __global__ void single_thread_kernel(F f)
  * @param stream CUDA stream used for the kernel launch
  */
 template <class Functor>
-void device_single_thread(Functor functor,
-                          rmm::cuda_stream_view stream = cudf::get_default_stream())
+void device_single_thread(Functor functor, rmm::cuda_stream_view stream)
 {
   single_thread_kernel<<<1, 1, 0, stream.value()>>>(functor);
 }

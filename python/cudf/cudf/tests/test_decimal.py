@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import decimal
 from decimal import Decimal
@@ -6,6 +6,7 @@ from decimal import Decimal
 import numpy as np
 import pyarrow as pa
 import pytest
+from packaging import version
 
 import cudf
 from cudf.core.column import Decimal32Column, Decimal64Column, NumericalColumn
@@ -16,6 +17,7 @@ from cudf.testing._utils import (
     SIGNED_TYPES,
     _decimal_series,
     assert_eq,
+    expect_warning_if,
 )
 
 data_ = [
@@ -90,7 +92,15 @@ def test_from_arrow_max_precision_decimal32():
     "to_dtype",
     [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(18, 9)],
 )
-def test_typecast_from_float_to_decimal(data, from_dtype, to_dtype):
+def test_typecast_from_float_to_decimal(request, data, from_dtype, to_dtype):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=version.parse(pa.__version__) >= version.parse("13.0.0")
+            and from_dtype == np.dtype("float32")
+            and to_dtype.precision > 7,
+            reason="https://github.com/rapidsai/cudf/issues/14169",
+        )
+    )
     got = data.astype(from_dtype)
 
     pa_arr = got.to_arrow().cast(
@@ -200,7 +210,8 @@ def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
     elif isinstance(to_dtype, Decimal64Dtype):
         expected = cudf.Series(Decimal64Column.from_arrow(pa_arr))
 
-    got = s.astype(to_dtype)
+    with expect_warning_if(to_dtype.scale < s.dtype.scale, UserWarning):
+        got = s.astype(to_dtype)
 
     assert_eq(got, expected)
 
@@ -377,3 +388,13 @@ def test_decimal_invalid_precision():
 
     with pytest.raises(pa.ArrowInvalid):
         _ = cudf.Series([Decimal("300")], dtype=cudf.Decimal64Dtype(2, 1))
+
+
+def test_decimal_overflow():
+    s = cudf.Series([Decimal("0.0009384233522166997927180531650178250")])
+    result = s * s
+    assert_eq(cudf.Decimal128Dtype(precision=38, scale=37), result.dtype)
+
+    s = cudf.Series([1, 2], dtype=cudf.Decimal128Dtype(precision=38, scale=0))
+    result = s * Decimal("1.0")
+    assert_eq(cudf.Decimal128Dtype(precision=38, scale=1), result.dtype)

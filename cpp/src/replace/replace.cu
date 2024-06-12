@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,6 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
@@ -46,20 +45,20 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/replace.hpp>
-#include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/replace.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/pair.h>
-#include <thrust/tuple.h>
 
 namespace {  // anonymous
 
@@ -68,10 +67,10 @@ static constexpr int BLOCK_SIZE = 256;
 // return the new_value for output column at index `idx`
 template <class T, bool replacement_has_nulls>
 __device__ auto get_new_value(cudf::size_type idx,
-                              const T* __restrict__ input_data,
-                              const T* __restrict__ values_to_replace_begin,
-                              const T* __restrict__ values_to_replace_end,
-                              const T* __restrict__ d_replacement_values,
+                              T const* __restrict__ input_data,
+                              T const* __restrict__ values_to_replace_begin,
+                              T const* __restrict__ values_to_replace_end,
+                              T const* __restrict__ d_replacement_values,
                               cudf::bitmask_type const* __restrict__ replacement_valid)
 {
   auto found_ptr =
@@ -87,132 +86,6 @@ __device__ auto get_new_value(cudf::size_type idx,
     new_value = input_data[idx];
   }
   return thrust::make_pair(new_value, output_is_valid);
-}
-
-__device__ int get_new_string_value(cudf::size_type idx,
-                                    cudf::column_device_view& input,
-                                    cudf::column_device_view& values_to_replace,
-                                    cudf::column_device_view&)
-{
-  cudf::string_view input_string = input.element<cudf::string_view>(idx);
-  int match                      = -1;
-  for (int i = 0; i < values_to_replace.size(); i++) {
-    cudf::string_view value_string = values_to_replace.element<cudf::string_view>(i);
-    if (input_string == value_string) {
-      match = i;
-      break;
-    }
-  }
-  return match;
-}
-
-/**
- * @brief Kernel which does the first pass of strings replace.
- *
- * It computes the output null_mask, null_count, and the offsets.
- *
- * @param input The input column to replace strings in.
- * @param values_to_replace The string values to replace.
- * @param replacement The replacement values.
- * @param offsets The column which will contain the offsets of the new string column
- * @param indices Temporary column used to store the replacement indices
- * @param output_valid The output null_mask
- * @param output_valid_count The output valid count
- */
-template <bool input_has_nulls, bool replacement_has_nulls>
-__global__ void replace_strings_first_pass(cudf::column_device_view input,
-                                           cudf::column_device_view values_to_replace,
-                                           cudf::column_device_view replacement,
-                                           cudf::mutable_column_device_view offsets,
-                                           cudf::mutable_column_device_view indices,
-                                           cudf::bitmask_type* output_valid,
-                                           cudf::size_type* __restrict__ output_valid_count)
-{
-  cudf::size_type nrows = input.size();
-  cudf::size_type i     = blockIdx.x * blockDim.x + threadIdx.x;
-  uint32_t active_mask  = 0xffff'ffffu;
-  active_mask           = __ballot_sync(active_mask, i < nrows);
-  auto const lane_id{threadIdx.x % cudf::detail::warp_size};
-  uint32_t valid_sum{0};
-
-  while (i < nrows) {
-    bool input_is_valid = true;
-
-    if (input_has_nulls) input_is_valid = input.is_valid_nocheck(i);
-    bool output_is_valid = input_is_valid;
-
-    if (input_is_valid) {
-      int result               = get_new_string_value(i, input, values_to_replace, replacement);
-      cudf::string_view output = (result == -1) ? input.element<cudf::string_view>(i)
-                                                : replacement.element<cudf::string_view>(result);
-      offsets.data<cudf::size_type>()[i] = output.size_bytes();
-      indices.data<cudf::size_type>()[i] = result;
-      if (replacement_has_nulls && result != -1) {
-        output_is_valid = replacement.is_valid_nocheck(result);
-      }
-    } else {
-      offsets.data<cudf::size_type>()[i] = 0;
-      indices.data<cudf::size_type>()[i] = -1;
-    }
-
-    uint32_t bitmask = __ballot_sync(active_mask, output_is_valid);
-    if (0 == lane_id) {
-      output_valid[cudf::word_index(i)] = bitmask;
-      valid_sum += __popc(bitmask);
-    }
-
-    i += blockDim.x * gridDim.x;
-    active_mask = __ballot_sync(active_mask, i < nrows);
-  }
-
-  // Compute total valid count for this block and add it to global count
-  uint32_t block_valid_count = cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
-  // one thread computes and adds to output_valid_count
-  if (threadIdx.x == 0) { atomicAdd(output_valid_count, block_valid_count); }
-}
-
-/**
- * @brief Kernel which does the second pass of strings replace.
- *
- * It copies the string data needed from input and replacement into the new strings column chars
- * column.
- *
- * @param input The input column
- * @param replacement The replacement values
- * @param offsets The offsets column of the new strings column
- * @param strings The chars column of the new strings column
- * @param indices Temporary column used to store the replacement indices.
- */
-template <bool input_has_nulls, bool replacement_has_nulls>
-__global__ void replace_strings_second_pass(cudf::column_device_view input,
-                                            cudf::column_device_view replacement,
-                                            cudf::mutable_column_device_view offsets,
-                                            cudf::mutable_column_device_view strings,
-                                            cudf::mutable_column_device_view indices)
-{
-  cudf::size_type nrows = input.size();
-  cudf::size_type i     = blockIdx.x * blockDim.x + threadIdx.x;
-
-  while (i < nrows) {
-    bool output_is_valid = true;
-    bool input_is_valid  = true;
-    cudf::size_type idx  = indices.element<cudf::size_type>(i);
-
-    if (input_has_nulls) {
-      input_is_valid  = input.is_valid_nocheck(i);
-      output_is_valid = input_is_valid;
-    }
-    if (replacement_has_nulls && idx != -1) { output_is_valid = replacement.is_valid_nocheck(idx); }
-    if (output_is_valid) {
-      cudf::string_view output = (idx == -1) ? input.element<cudf::string_view>(i)
-                                             : replacement.element<cudf::string_view>(idx);
-      std::memcpy(strings.data<char>() + offsets.data<cudf::size_type>()[i],
-                  output.data(),
-                  output.size_bytes());
-    }
-
-    i += blockDim.x * gridDim.x;
-  }
 }
 
 /**
@@ -240,32 +113,34 @@ __global__ void replace_strings_second_pass(cudf::column_device_view input,
  * @param[in] replacement_valid Valid mask associated with d_replacement_values
  */
 template <class T, bool input_has_nulls, bool replacement_has_nulls>
-__global__ void replace_kernel(cudf::column_device_view input,
-                               cudf::mutable_column_device_view output,
-                               cudf::size_type* __restrict__ output_valid_count,
-                               cudf::size_type nrows,
-                               cudf::column_device_view values_to_replace,
-                               cudf::column_device_view replacement)
+CUDF_KERNEL void replace_kernel(cudf::column_device_view input,
+                                cudf::mutable_column_device_view output,
+                                cudf::size_type* __restrict__ output_valid_count,
+                                cudf::size_type nrows,
+                                cudf::column_device_view values_to_replace,
+                                cudf::column_device_view replacement)
 {
   T* __restrict__ output_data = output.data<T>();
 
-  cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
+  auto tid          = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
 
   uint32_t active_mask = 0xffff'ffffu;
-  active_mask          = __ballot_sync(active_mask, i < nrows);
+  active_mask          = __ballot_sync(active_mask, tid < nrows);
   auto const lane_id{threadIdx.x % cudf::detail::warp_size};
   uint32_t valid_sum{0};
 
-  while (i < nrows) {
+  while (tid < nrows) {
+    auto const idx = static_cast<cudf::size_type>(tid);
     bool output_is_valid{true};
     bool input_is_valid{true};
     if (input_has_nulls) {
-      input_is_valid  = input.is_valid_nocheck(i);
+      input_is_valid  = input.is_valid_nocheck(idx);
       output_is_valid = input_is_valid;
     }
     if (input_is_valid)
-      thrust::tie(output_data[i], output_is_valid) = get_new_value<T, replacement_has_nulls>(
-        i,
+      thrust::tie(output_data[idx], output_is_valid) = get_new_value<T, replacement_has_nulls>(
+        idx,
         input.data<T>(),
         values_to_replace.data<T>(),
         values_to_replace.data<T>() + values_to_replace.size(),
@@ -276,20 +151,22 @@ __global__ void replace_kernel(cudf::column_device_view input,
     if (input_has_nulls or replacement_has_nulls) {
       uint32_t bitmask = __ballot_sync(active_mask, output_is_valid);
       if (0 == lane_id) {
-        output.set_mask_word(cudf::word_index(i), bitmask);
+        output.set_mask_word(cudf::word_index(idx), bitmask);
         valid_sum += __popc(bitmask);
       }
     }
 
-    i += blockDim.x * gridDim.x;
-    active_mask = __ballot_sync(active_mask, i < nrows);
+    tid += stride;
+    active_mask = __ballot_sync(active_mask, tid < nrows);
   }
   if (input_has_nulls or replacement_has_nulls) {
     // Compute total valid count for this block and add it to global count
     uint32_t block_valid_count =
       cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
     // one thread computes and adds to output_valid_count
-    if (threadIdx.x == 0) { atomicAdd(output_valid_count, block_valid_count); }
+    if (threadIdx.x == 0) {
+      atomicAdd(output_valid_count, static_cast<cudf::size_type>(block_valid_count));
+    }
   }
 }
 
@@ -303,7 +180,7 @@ struct replace_kernel_forwarder {
                                            cudf::column_view const& values_to_replace,
                                            cudf::column_view const& replacement_values,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
   {
     rmm::device_scalar<cudf::size_type> valid_counter(0, stream);
     cudf::size_type* valid_count = valid_counter.data();
@@ -351,7 +228,7 @@ struct replace_kernel_forwarder {
                                            cudf::column_view const&,
                                            cudf::column_view const&,
                                            rmm::cuda_stream_view,
-                                           rmm::mr::device_memory_resource*)
+                                           rmm::device_async_resource_ref)
   {
     CUDF_FAIL("No specialization exists for this type");
   }
@@ -363,80 +240,10 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   cudf::column_view const& values_to_replace,
   cudf::column_view const& replacement_values,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
-  rmm::device_scalar<cudf::size_type> valid_counter(0, stream);
-  cudf::size_type* valid_count = valid_counter.data();
-
-  auto replace_first  = replace_strings_first_pass<true, false>;
-  auto replace_second = replace_strings_second_pass<true, false>;
-  if (input_col.has_nulls()) {
-    if (replacement_values.has_nulls()) {
-      replace_first  = replace_strings_first_pass<true, true>;
-      replace_second = replace_strings_second_pass<true, true>;
-    }
-  } else {
-    if (replacement_values.has_nulls()) {
-      replace_first  = replace_strings_first_pass<false, true>;
-      replace_second = replace_strings_second_pass<false, true>;
-    } else {
-      replace_first  = replace_strings_first_pass<false, false>;
-      replace_second = replace_strings_second_pass<false, false>;
-    }
-  }
-
-  // Create new offsets column to use in kernel
-  std::unique_ptr<cudf::column> sizes = cudf::make_numeric_column(
-    cudf::data_type(cudf::type_id::INT32), input_col.size(), cudf::mask_state::UNALLOCATED, stream);
-  std::unique_ptr<cudf::column> indices = cudf::make_numeric_column(
-    cudf::data_type(cudf::type_id::INT32), input_col.size(), cudf::mask_state::UNALLOCATED, stream);
-
-  auto sizes_view   = sizes->mutable_view();
-  auto indices_view = indices->mutable_view();
-
-  auto device_in                = cudf::column_device_view::create(input_col, stream);
-  auto device_values_to_replace = cudf::column_device_view::create(values_to_replace, stream);
-  auto device_replacement       = cudf::column_device_view::create(replacement_values, stream);
-  auto device_sizes             = cudf::mutable_column_device_view::create(sizes_view, stream);
-  auto device_indices           = cudf::mutable_column_device_view::create(indices_view, stream);
-
-  rmm::device_buffer valid_bits =
-    cudf::detail::create_null_mask(input_col.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
-
-  // Call first pass kernel to get sizes in offsets
-  cudf::detail::grid_1d grid{input_col.size(), BLOCK_SIZE, 1};
-  replace_first<<<grid.num_blocks, BLOCK_SIZE, 0, stream.value()>>>(
-    *device_in,
-    *device_values_to_replace,
-    *device_replacement,
-    *device_sizes,
-    *device_indices,
-    reinterpret_cast<cudf::bitmask_type*>(valid_bits.data()),
-    valid_count);
-
-  std::unique_ptr<cudf::column> offsets = cudf::strings::detail::make_offsets_child_column(
-    sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), stream, mr);
-  auto offsets_view   = offsets->mutable_view();
-  auto device_offsets = cudf::mutable_column_device_view::create(offsets_view, stream);
-  auto const bytes =
-    cudf::detail::get_value<int32_t>(offsets_view, offsets_view.size() - 1, stream);
-
-  // Allocate chars array and output null mask
-  cudf::size_type null_count = input_col.size() - valid_counter.value(stream);
-  std::unique_ptr<cudf::column> output_chars =
-    cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
-
-  auto output_chars_view = output_chars->mutable_view();
-  auto device_chars      = cudf::mutable_column_device_view::create(output_chars_view, stream);
-
-  replace_second<<<grid.num_blocks, BLOCK_SIZE, 0, stream.value()>>>(
-    *device_in, *device_replacement, *device_offsets, *device_chars, *device_indices);
-
-  return cudf::make_strings_column(input_col.size(),
-                                   std::move(offsets),
-                                   std::move(output_chars),
-                                   null_count,
-                                   std::move(valid_bits));
+  return cudf::strings::detail::find_and_replace_all(
+    input_col, values_to_replace, replacement_values, stream, mr);
 }
 
 template <>
@@ -445,7 +252,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
   cudf::column_view const& values_to_replace,
   cudf::column_view const& replacement_values,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto input        = cudf::dictionary_column_view(input_col);
   auto values       = cudf::dictionary_column_view(values_to_replace);
@@ -453,13 +260,16 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
 
   auto matched_input = [&] {
     auto new_keys = cudf::detail::concatenate(
-      std::vector<cudf::column_view>({values.keys(), replacements.keys()}), stream);
+      std::vector<cudf::column_view>({values.keys(), replacements.keys()}),
+      stream,
+      rmm::mr::get_current_device_resource());
     return cudf::dictionary::detail::add_keys(input, new_keys->view(), stream, mr);
   }();
   auto matched_view   = cudf::dictionary_column_view(matched_input->view());
-  auto matched_values = cudf::dictionary::detail::set_keys(values, matched_view.keys(), stream);
-  auto matched_replacements =
-    cudf::dictionary::detail::set_keys(replacements, matched_view.keys(), stream);
+  auto matched_values = cudf::dictionary::detail::set_keys(
+    values, matched_view.keys(), stream, rmm::mr::get_current_device_resource());
+  auto matched_replacements = cudf::dictionary::detail::set_keys(
+    replacements, matched_view.keys(), stream, rmm::mr::get_current_device_resource());
 
   auto indices_type = matched_view.indices().type();
   auto new_indices  = cudf::type_dispatcher<cudf::dispatch_storage_type>(
@@ -489,15 +299,16 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
                                                    cudf::column_view const& values_to_replace,
                                                    cudf::column_view const& replacement_values,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+                                                   rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(values_to_replace.size() == replacement_values.size(),
                "values_to_replace and replacement_values size mismatch.");
 
-  CUDF_EXPECTS(
-    input_col.type() == values_to_replace.type() && input_col.type() == replacement_values.type(),
-    "Columns type mismatch");
-  CUDF_EXPECTS(values_to_replace.has_nulls() == false, "values_to_replace must not have nulls");
+  CUDF_EXPECTS(cudf::have_same_types(input_col, values_to_replace) &&
+                 cudf::have_same_types(input_col, replacement_values),
+               "Columns type mismatch",
+               cudf::data_type_error);
+  CUDF_EXPECTS(not values_to_replace.has_nulls(), "values_to_replace must not have nulls");
 
   if (input_col.is_empty() or values_to_replace.is_empty() or replacement_values.is_empty()) {
     return std::make_unique<cudf::column>(input_col, stream, mr);
@@ -528,9 +339,9 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
 std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& input_col,
                                                    cudf::column_view const& values_to_replace,
                                                    cudf::column_view const& replacement_values,
-                                                   rmm::mr::device_memory_resource* mr)
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr)
 {
-  return detail::find_and_replace_all(
-    input_col, values_to_replace, replacement_values, cudf::get_default_stream(), mr);
+  return detail::find_and_replace_all(input_col, values_to_replace, replacement_values, stream, mr);
 }
 }  // namespace cudf

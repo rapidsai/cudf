@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_view.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/column/column_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -52,8 +52,7 @@ template <typename T>
 using rep_type_t = typename rep_type_impl<T>::type;
 
 template <typename T>
-struct ColumnViewAllTypesTests : public cudf::test::BaseFixture {
-};
+struct ColumnViewAllTypesTests : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ColumnViewAllTypesTests, cudf::test::FixedWidthTypes);
 
@@ -67,16 +66,16 @@ void do_bit_cast(cudf::column_view const& column_view, Iterator begin, Iterator 
     // Cast to same to_type
     auto output  = cudf::bit_cast(column_view, column_view.type());
     auto output1 = cudf::bit_cast(mutable_column_view, mutable_column_view.type());
-    cudf::test::expect_columns_equal(output, column_view);
-    cudf::test::expect_columns_equal(output1, mutable_column_view);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, column_view);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1, mutable_column_view);
   } else if (std::is_same_v<rep_type_t<FromType>, ToType> ||
              std::is_same_v<FromType, rep_type_t<ToType>>) {
     // Cast integer to timestamp or vice versa
     auto output  = cudf::bit_cast(column_view, to_type);
     auto output1 = cudf::bit_cast(mutable_column_view, to_type);
     cudf::test::fixed_width_column_wrapper<ToType, cudf::size_type> expected(begin, end);
-    cudf::test::expect_columns_equal(output, expected);
-    cudf::test::expect_columns_equal(output1, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1, expected);
   } else {
     if (cuda::std::is_trivially_copyable_v<FromType> &&
         cuda::std::is_trivially_copyable_v<ToType>) {
@@ -92,8 +91,8 @@ void do_bit_cast(cudf::column_view const& column_view, Iterator begin, Iterator 
         auto output2         = cudf::bit_cast(output1, from_type);
         auto output2_mutable = cudf::bit_cast(output1_mutable, from_type);
 
-        cudf::test::expect_columns_equal(output2, column_view);
-        cudf::test::expect_columns_equal(output2_mutable, mutable_column_view);
+        CUDF_TEST_EXPECT_COLUMNS_EQUAL(output2, column_view);
+        CUDF_TEST_EXPECT_COLUMNS_EQUAL(output2_mutable, mutable_column_view);
       } else {
         // Not allow to cast if sizes are mismatched
         EXPECT_THROW(cudf::bit_cast(column_view, to_type), cudf::logic_error);

@@ -1,5 +1,6 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
+import warnings
 from collections import abc
 from io import BytesIO, StringIO
 
@@ -11,7 +12,7 @@ from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
 from cudf.utils import ioutils
 from cudf.utils.dtypes import _maybe_convert_to_default_type
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
 
 @_cudf_nvtx_annotate
@@ -55,11 +56,21 @@ def read_csv(
 ):
     """{docstring}"""
 
+    if delim_whitespace is not False:
+        warnings.warn(
+            "The 'delim_whitespace' keyword in pd.read_csv is deprecated and "
+            "will be removed in a future version. Use ``sep='\\s+'`` instead",
+            FutureWarning,
+        )
+
     if use_python_file_object and bytes_per_thread is not None:
         raise ValueError(
             "bytes_per_thread is only supported when "
             "`use_python_file_object=False`"
         )
+
+    if bytes_per_thread is None:
+        bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
 
     is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
@@ -76,9 +87,7 @@ def read_csv(
         iotypes=(BytesIO, StringIO, NativeFile),
         use_python_file_object=use_python_file_object,
         storage_options=storage_options,
-        bytes_per_thread=256_000_000
-        if bytes_per_thread is None
-        else bytes_per_thread,
+        bytes_per_thread=bytes_per_thread,
     )
 
     if na_values is not None and is_scalar(na_values):
@@ -122,11 +131,11 @@ def read_csv(
     if dtype is None or isinstance(dtype, abc.Mapping):
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
-        dtype = {} if dtype is None else dtype
+        specified_dtypes = {} if dtype is None else dtype
         unspecified_dtypes = {
-            name: df._dtypes[name]
-            for name in df._column_names
-            if name not in dtype
+            name: dtype
+            for name, dtype in df._dtypes
+            if name not in specified_dtypes
         }
         default_dtypes = {}
 
@@ -154,7 +163,7 @@ def to_csv(
     index=True,
     encoding=None,
     compression=None,
-    line_terminator="\n",
+    lineterminator="\n",
     chunksize=None,
     storage_options=None,
 ):
@@ -232,7 +241,7 @@ def to_csv(
                 sep=sep,
                 na_rep=na_rep,
                 header=header,
-                line_terminator=line_terminator,
+                lineterminator=lineterminator,
                 rows_per_chunk=rows_per_chunk,
                 index=index,
             )
@@ -243,7 +252,7 @@ def to_csv(
             sep=sep,
             na_rep=na_rep,
             header=header,
-            line_terminator=line_terminator,
+            lineterminator=lineterminator,
             rows_per_chunk=rows_per_chunk,
             index=index,
         )

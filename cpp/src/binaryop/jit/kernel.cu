@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -24,8 +24,11 @@
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <binaryop/jit/operation-udf.hpp>
 #include <cuda/std/type_traits>
+
+// clang-format off
+#include "binaryop/jit/operation-udf.hpp"
+// clang-format on
 
 namespace cudf {
 namespace binops {
@@ -43,10 +46,10 @@ struct UserDefinedOp {
 };
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
-__global__ void kernel_v_v(cudf::size_type size,
-                           TypeOut* out_data,
-                           TypeLhs* lhs_data,
-                           TypeRhs* rhs_data)
+CUDF_KERNEL void kernel_v_v(cudf::size_type size,
+                            TypeOut* out_data,
+                            TypeLhs* lhs_data,
+                            TypeRhs* rhs_data)
 {
   int tid    = threadIdx.x;
   int blkid  = blockIdx.x;
@@ -62,15 +65,15 @@ __global__ void kernel_v_v(cudf::size_type size,
 }
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
-__global__ void kernel_v_v_with_validity(cudf::size_type size,
-                                         TypeOut* out_data,
-                                         TypeLhs* lhs_data,
-                                         TypeRhs* rhs_data,
-                                         cudf::bitmask_type* output_mask,
-                                         cudf::bitmask_type const* lhs_mask,
-                                         cudf::size_type lhs_offset,
-                                         cudf::bitmask_type const* rhs_mask,
-                                         cudf::size_type rhs_offset)
+CUDF_KERNEL void kernel_v_v_with_validity(cudf::size_type size,
+                                          TypeOut* out_data,
+                                          TypeLhs* lhs_data,
+                                          TypeRhs* rhs_data,
+                                          cudf::bitmask_type* output_mask,
+                                          cudf::bitmask_type const* lhs_mask,
+                                          cudf::size_type lhs_offset,
+                                          cudf::bitmask_type const* rhs_mask,
+                                          cudf::size_type rhs_offset)
 {
   int tid    = threadIdx.x;
   int blkid  = blockIdx.x;

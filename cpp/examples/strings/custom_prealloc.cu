@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda_runtime.h>
-#include <nvToolsExt.h>
+#include <nvtx3/nvToolsExt.h>
 
 /**
  * @brief Builds the output for each row
@@ -37,12 +37,12 @@
  * @param d_offsets Byte offset in `d_chars` for each row
  * @param d_output Output array of string_view objects
  */
-__global__ void redact_kernel(cudf::column_device_view const d_names,
-                              cudf::column_device_view const d_visibilities,
-                              cudf::string_view redaction,
-                              char* working_memory,
-                              cudf::offset_type const* d_offsets,
-                              cudf::string_view* d_output)
+__global__ static void redact_kernel(cudf::column_device_view const d_names,
+                                     cudf::column_device_view const d_visibilities,
+                                     cudf::string_view redaction,
+                                     char* working_memory,
+                                     cudf::size_type const* d_offsets,
+                                     cudf::string_view* d_output)
 {
   // The row index is resolved from the CUDA thread/block objects
   auto index = threadIdx.x + blockIdx.x * blockDim.x;
@@ -98,10 +98,10 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
   nvtxRangePushA("redact_strings");
 
   auto const scv     = cudf::strings_column_view(names);
-  auto const offsets = scv.offsets_begin();
+  auto const offsets = scv.offsets().begin<cudf::size_type>();
 
   // create working memory to hold the output of each string
-  auto working_memory = rmm::device_uvector<char>(scv.chars_size(), stream);
+  auto working_memory = rmm::device_uvector<char>(scv.chars_size(stream), stream);
   // create a vector for the output strings' pointers
   auto str_ptrs = rmm::device_uvector<cudf::string_view>(names.size(), stream);
 

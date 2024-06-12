@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-#include <strings/regex/utilities.cuh>
+#include "strings/regex/regex_program_impl.h"
+#include "strings/regex/utilities.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -28,7 +29,9 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuda/functional>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -41,7 +44,7 @@ namespace detail {
 
 namespace {
 
-using string_index_pair = thrust::pair<const char*, size_type>;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 /**
  * @brief This functor handles extracting strings by applying the compiled regex pattern
@@ -60,18 +63,19 @@ struct extract_fn {
 
     if (d_strings.is_valid(idx)) {
       auto const d_str = d_strings.element<string_view>(idx);
-
-      size_type begin = 0;
-      size_type end   = -1;  // handles empty strings automatically
-      if (d_prog.find(prog_idx, d_str, begin, end) > 0) {
+      auto const match = d_prog.find(prog_idx, d_str, d_str.begin());
+      if (match) {
+        auto const itr = d_str.begin() + match->first;
+        auto last_pos  = itr;
         for (auto col_idx = 0; col_idx < groups; ++col_idx) {
-          auto const extracted = d_prog.extract(prog_idx, d_str, begin, end, col_idx);
-          d_output[col_idx]    = [&] {
-            if (!extracted) return string_index_pair{nullptr, 0};
-            auto const offset = d_str.byte_offset((*extracted).first);
-            return string_index_pair{d_str.data() + offset,
-                                     d_str.byte_offset((*extracted).second) - offset};
-          }();
+          auto const extracted = d_prog.extract(prog_idx, d_str, itr, match->second, col_idx);
+          if (extracted) {
+            auto const d_extracted = string_from_match(*extracted, d_str, last_pos);
+            d_output[col_idx] = string_index_pair{d_extracted.data(), d_extracted.size_bytes()};
+            last_pos += (extracted->second - last_pos.position());
+          } else {
+            d_output[col_idx] = string_index_pair{nullptr, 0};
+          }
         }
         return;
       }
@@ -86,13 +90,12 @@ struct extract_fn {
 
 //
 std::unique_ptr<table> extract(strings_column_view const& input,
-                               std::string_view pattern,
-                               regex_flags const flags,
+                               regex_program const& prog,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
-  // compile regex into device object
-  auto d_prog = reprog_device::create(pattern, flags, capture_groups::EXTRACT, stream);
+  // create device object from regex_program
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   auto const groups = d_prog->group_counts();
   CUDF_EXPECTS(groups > 0, "Group indicators not found in regex pattern");
@@ -109,12 +112,12 @@ std::unique_ptr<table> extract(strings_column_view const& input,
   std::vector<std::unique_ptr<column>> results(groups);
   auto make_strings_lambda = [&](size_type column_index) {
     // this iterator transposes the extract results into column order
-    auto indices_itr =
-      thrust::make_permutation_iterator(indices.begin(),
-                                        cudf::detail::make_counting_transform_iterator(
-                                          0, [column_index, groups] __device__(size_type idx) {
-                                            return (idx * groups) + column_index;
-                                          }));
+    auto indices_itr = thrust::make_permutation_iterator(
+      indices.begin(),
+      cudf::detail::make_counting_transform_iterator(
+        0, cuda::proclaim_return_type<size_type>([column_index, groups] __device__(size_type idx) {
+          return (idx * groups) + column_index;
+        })));
     return make_strings_column(indices_itr, indices_itr + input.size(), stream, mr);
   };
 
@@ -130,13 +133,13 @@ std::unique_ptr<table> extract(strings_column_view const& input,
 
 // external API
 
-std::unique_ptr<table> extract(strings_column_view const& strings,
-                               std::string_view pattern,
-                               regex_flags const flags,
-                               rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> extract(strings_column_view const& input,
+                               regex_program const& prog,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract(strings, pattern, flags, cudf::get_default_stream(), mr);
+  return detail::extract(input, prog, stream, mr);
 }
 
 }  // namespace strings

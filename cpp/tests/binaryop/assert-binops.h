@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -21,32 +21,27 @@
 
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/cudf_gtest.hpp>
-#include <tests/binaryop/util/operation.h>
 
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <limits>
 
-namespace cudf {
-namespace test {
-namespace binop {
-
 // This is used to convert the expected binop result computed by the test utilities and the
 // result returned by the binop operation into string, which is then used for display purposes
 // when the values do not match.
 struct stringify_out_values {
   template <typename TypeOut>
-  std::string operator()(size_type i, TypeOut lhs, TypeOut rhs) const
+  std::string operator()(cudf::size_type i, TypeOut lhs, TypeOut rhs) const
   {
     std::stringstream out_str;
     out_str << "[" << i << "]:\n";
-    if constexpr (is_fixed_point<TypeOut>()) {
+    if constexpr (cudf::is_fixed_point<TypeOut>()) {
       out_str << "lhs: " << std::string(lhs) << "\nrhs: " << std::string(rhs);
-    } else if constexpr (is_timestamp<TypeOut>()) {
+    } else if constexpr (cudf::is_timestamp<TypeOut>()) {
       out_str << "lhs: " << lhs.time_since_epoch().count()
               << "\nrhs: " << rhs.time_since_epoch().count();
-    } else if constexpr (is_duration<TypeOut>()) {
+    } else if constexpr (cudf::is_duration<TypeOut>()) {
       out_str << "lhs: " << lhs.count() << "\nrhs: " << rhs.count();
     } else {
       out_str << "lhs: " << lhs << "\nrhs: " << rhs;
@@ -58,6 +53,8 @@ struct stringify_out_values {
 // This comparator can be used to compare two values that are within a max ULP error.
 // This is typically used to compare floating point values computed on CPU and GPU which is
 // expected to be *near* equal, or when computing large numbers can yield ULP errors
+//
+// TODO: This should not be used in favor of the built-in one in column_utilities
 template <typename TypeOut>
 struct NearEqualComparator {
   double ulp_;
@@ -78,9 +75,9 @@ template <typename TypeOut,
           typename TypeOp,
           typename ValueComparator = std::equal_to<TypeOut>,
           typename ScalarType      = cudf::scalar_type_t<TypeLhs>>
-void ASSERT_BINOP(column_view const& out,
-                  scalar const& lhs,
-                  column_view const& rhs,
+void ASSERT_BINOP(cudf::column_view const& out,
+                  cudf::scalar const& lhs,
+                  cudf::column_view const& rhs,
                   TypeOp&& op,
                   ValueComparator const& value_comparator = ValueComparator())
 {
@@ -94,30 +91,31 @@ void ASSERT_BINOP(column_view const& out,
   for (size_t i = 0; i < out_data.size(); ++i) {
     auto lhs = out_data[i];
     auto rhs = (TypeOut)(op(lhs_h, rhs_data[i]));
-    ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(i, lhs, rhs);
+    // TODO: This is incorrectly comparing row values that may be null
+    EXPECT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(i, lhs, rhs);
   }
 
   if (rhs.nullable()) {
-    ASSERT_TRUE(out.nullable());
+    EXPECT_TRUE(out.nullable());
     auto rhs_valid = rhs_h.second;
     auto out_valid = out_h.second;
 
-    uint32_t lhs_valid = (lhs.is_valid() ? std::numeric_limits<bitmask_type>::max() : 0);
+    uint32_t lhs_valid = (lhs.is_valid() ? std::numeric_limits<cudf::bitmask_type>::max() : 0);
     ASSERT_EQ(out_valid.size(), rhs_valid.size());
-    for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
-      ASSERT_EQ(out_valid[i], (lhs_valid & rhs_valid[i]));
+    for (cudf::size_type i = 0; i < cudf::num_bitmask_words(out_data.size()); ++i) {
+      EXPECT_EQ(out_valid[i], (lhs_valid & rhs_valid[i]));
     }
   } else {
     if (lhs.is_valid()) {
-      ASSERT_FALSE(out.nullable());
+      EXPECT_FALSE(out.nullable());
     } else {
       auto out_valid = out_h.second;
-      for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
-        ASSERT_EQ(out_valid[i], bitmask_type{0});
+      for (cudf::size_type i = 0; i < cudf::num_bitmask_words(out_data.size()); ++i) {
+        EXPECT_EQ(out_valid[i], cudf::bitmask_type{0});
       }
     }
   }
-}  // namespace binop
+}
 
 template <typename TypeOut,
           typename TypeLhs,
@@ -125,9 +123,9 @@ template <typename TypeOut,
           typename TypeOp,
           typename ValueComparator = std::equal_to<TypeOut>,
           typename ScalarType      = cudf::scalar_type_t<TypeRhs>>
-void ASSERT_BINOP(column_view const& out,
-                  column_view const& lhs,
-                  scalar const& rhs,
+void ASSERT_BINOP(cudf::column_view const& out,
+                  cudf::column_view const& lhs,
+                  cudf::scalar const& rhs,
                   TypeOp&& op,
                   ValueComparator const& value_comparator = ValueComparator())
 {
@@ -141,39 +139,40 @@ void ASSERT_BINOP(column_view const& out,
   for (size_t i = 0; i < out_data.size(); ++i) {
     auto lhs = out_data[i];
     auto rhs = (TypeOut)(op(lhs_data[i], rhs_h));
-    ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(i, lhs, rhs);
+    // TODO: This is incorrectly comparing row values that may be null
+    EXPECT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(i, lhs, rhs);
   }
 
   if (lhs.nullable()) {
-    ASSERT_TRUE(out.nullable());
+    EXPECT_TRUE(out.nullable());
     auto lhs_valid = lhs_h.second;
     auto out_valid = out_h.second;
 
-    uint32_t rhs_valid = (rhs.is_valid() ? std::numeric_limits<bitmask_type>::max() : 0);
+    uint32_t rhs_valid = (rhs.is_valid() ? std::numeric_limits<cudf::bitmask_type>::max() : 0);
     ASSERT_EQ(out_valid.size(), lhs_valid.size());
-    for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
-      ASSERT_EQ(out_valid[i], (rhs_valid & lhs_valid[i]));
+    for (cudf::size_type i = 0; i < cudf::num_bitmask_words(out_data.size()); ++i) {
+      EXPECT_EQ(out_valid[i], (rhs_valid & lhs_valid[i]));
     }
   } else {
     if (rhs.is_valid()) {
-      ASSERT_FALSE(out.nullable());
+      EXPECT_FALSE(out.nullable());
     } else {
       auto out_valid = out_h.second;
-      for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
-        ASSERT_EQ(out_valid[i], bitmask_type{0});
+      for (cudf::size_type i = 0; i < cudf::num_bitmask_words(out_data.size()); ++i) {
+        EXPECT_EQ(out_valid[i], cudf::bitmask_type{0});
       }
     }
   }
-}  // namespace test
+}
 
 template <typename TypeOut,
           typename TypeLhs,
           typename TypeRhs,
           typename TypeOp,
           typename ValueComparator = std::equal_to<TypeOut>>
-void ASSERT_BINOP(column_view const& out,
-                  column_view const& lhs,
-                  column_view const& rhs,
+void ASSERT_BINOP(cudf::column_view const& out,
+                  cudf::column_view const& lhs,
+                  cudf::column_view const& rhs,
                   TypeOp&& op,
                   ValueComparator const& value_comparator = ValueComparator())
 {
@@ -189,43 +188,40 @@ void ASSERT_BINOP(column_view const& out,
   for (size_t i = 0; i < out_data.size(); ++i) {
     auto lhs = out_data[i];
     auto rhs = (TypeOut)(op(lhs_data[i], rhs_data[i]));
-    ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(i, lhs, rhs);
+    // TODO: This is incorrectly comparing row values that may be null
+    EXPECT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(i, lhs, rhs);
   }
 
   if (lhs.nullable() and rhs.nullable()) {
-    ASSERT_TRUE(out.nullable());
+    EXPECT_TRUE(out.nullable());
     auto lhs_valid = lhs_h.second;
     auto rhs_valid = rhs_h.second;
     auto out_valid = out_h.second;
 
     ASSERT_EQ(out_valid.size(), lhs_valid.size());
     ASSERT_EQ(out_valid.size(), rhs_valid.size());
-    for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
-      ASSERT_EQ(out_valid[i], (lhs_valid[i] & rhs_valid[i]));
+    for (cudf::size_type i = 0; i < cudf::num_bitmask_words(out_data.size()); ++i) {
+      EXPECT_EQ(out_valid[i], (lhs_valid[i] & rhs_valid[i]));
     }
   } else if (not lhs.nullable() and rhs.nullable()) {
-    ASSERT_TRUE(out.nullable());
+    EXPECT_TRUE(out.nullable());
     auto rhs_valid = rhs_h.second;
     auto out_valid = out_h.second;
 
     ASSERT_EQ(out_valid.size(), rhs_valid.size());
-    for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
-      ASSERT_EQ(out_valid[i], rhs_valid[i]);
+    for (cudf::size_type i = 0; i < cudf::num_bitmask_words(out_data.size()); ++i) {
+      EXPECT_EQ(out_valid[i], rhs_valid[i]);
     }
   } else if (lhs.nullable() and not rhs.nullable()) {
-    ASSERT_TRUE(out.nullable());
+    EXPECT_TRUE(out.nullable());
     auto lhs_valid = lhs_h.second;
     auto out_valid = out_h.second;
 
     ASSERT_EQ(out_valid.size(), lhs_valid.size());
-    for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
-      ASSERT_EQ(out_valid[i], lhs_valid[i]);
+    for (cudf::size_type i = 0; i < cudf::num_bitmask_words(out_data.size()); ++i) {
+      EXPECT_EQ(out_valid[i], lhs_valid[i]);
     }
   } else {
-    ASSERT_FALSE(out.nullable());
+    EXPECT_FALSE(out.nullable());
   }
 }
-
-}  // namespace binop
-}  // namespace test
-}  // namespace cudf

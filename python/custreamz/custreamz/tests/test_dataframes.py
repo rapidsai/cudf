@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 """
 Tests for Streamz Dataframes (SDFs) built on top of cuDF DataFrames.
@@ -32,7 +32,7 @@ def client():
 
 
 @pytest.fixture(params=["core", "dask"])
-def stream(request, client):  # flake8: noqa
+def stream(request, client):
     if request.param == "core":
         return Stream()
     else:
@@ -749,7 +749,7 @@ def test_custom_aggregation():
 
 
 def test_groupby_aggregate_with_start_state(stream):
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example).groupby(["name"])
     output0 = sdf.amount.sum(start=None).stream.gather().sink_to_list()
     output1 = (
@@ -771,7 +771,7 @@ def test_groupby_aggregate_with_start_state(stream):
     assert assert_eq(output1[0][1].reset_index(), out_df1)
     assert assert_eq(output2[0].reset_index(), out_df2)
 
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example).groupby(["name"])
     output3 = sdf.amount.sum(start=output0[0]).stream.gather().sink_to_list()
     output4 = (
@@ -817,7 +817,7 @@ def test_reductions_with_start_state(stream):
 
 
 def test_rolling_aggs_with_start_state(stream):
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example)
     output0 = (
         sdf.rolling(2, with_state=True, start=())
@@ -863,7 +863,7 @@ def test_rolling_aggs_with_start_state(stream):
 
 
 def test_window_aggs_with_start_state(stream):
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example)
     output0 = (
         sdf.window(2, with_state=True, start=None)
@@ -881,7 +881,7 @@ def test_window_aggs_with_start_state(stream):
     assert output0[-1][1] == 450
 
     stream = Stream()
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example)
     output1 = (
         sdf.window(2, with_state=True, start=output0[-1][0])
@@ -895,7 +895,7 @@ def test_window_aggs_with_start_state(stream):
 
 
 def test_windowed_groupby_aggs_with_start_state(stream):
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example)
     output0 = (
         sdf.window(5, with_state=True, start=None)
@@ -915,7 +915,7 @@ def test_windowed_groupby_aggs_with_start_state(stream):
     stream.emit(df)
 
     stream = Stream()
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example)
     output1 = (
         sdf.window(5, with_state=True, start=output0[-1][0])

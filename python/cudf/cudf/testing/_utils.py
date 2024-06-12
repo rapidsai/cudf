@@ -1,7 +1,7 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import itertools
-import re
+import string
 import warnings
 from collections import abc
 from contextlib import contextmanager
@@ -11,11 +11,17 @@ import cupy
 import numpy as np
 import pandas as pd
 import pytest
+from numba.core.typing import signature as nb_signature
+from numba.core.typing.templates import AbstractTemplate
+from numba.cuda.cudadecl import registry as cuda_decl_registry
+from numba.cuda.cudaimpl import lower as cuda_lower
 from pandas import testing as tm
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
+from cudf.core.udf.strings_lowering import cast_string_view_to_udf_string
+from cudf.core.udf.strings_typing import StringView, string_view, udf_string
 from cudf.utils import dtypes as dtypeutils
 
 supported_numpy_dtypes = [
@@ -40,6 +46,33 @@ DATETIME_TYPES = sorted(list(dtypeutils.DATETIME_TYPES))
 TIMEDELTA_TYPES = sorted(list(dtypeutils.TIMEDELTA_TYPES))
 OTHER_TYPES = sorted(list(dtypeutils.OTHER_TYPES))
 ALL_TYPES = sorted(list(dtypeutils.ALL_TYPES))
+
+SERIES_OR_INDEX_NAMES = [
+    None,
+    pd.NA,
+    cudf.NA,
+    np.nan,
+    float("NaN"),
+    "abc",
+    1,
+    pd.NaT,
+    np.datetime64("nat"),
+    np.timedelta64("NaT"),
+    np.timedelta64(10, "D"),
+    np.timedelta64(5, "D"),
+    np.datetime64("1970-01-01 00:00:00.000000001"),
+    np.datetime64("1970-01-01 00:00:00.000000002"),
+    pd.Timestamp(1),
+    pd.Timestamp(2),
+    pd.Timedelta(1),
+    pd.Timedelta(2),
+    Decimal("NaN"),
+    Decimal("1.2"),
+    np.int64(1),
+    np.int32(1),
+    np.float32(1),
+    pd.Timestamp(1),
+]
 
 
 def set_random_null_mask_inplace(series, null_probability=0.5, seed=None):
@@ -161,8 +194,6 @@ def assert_exceptions_equal(
     lfunc_args_and_kwargs=None,
     rfunc_args_and_kwargs=None,
     check_exception_type=True,
-    compare_error_message=True,
-    expected_error_message=None,
 ):
     """Compares if two functions ``lfunc`` and ``rfunc`` raise
     same exception or not.
@@ -190,14 +221,6 @@ def assert_exceptions_equal(
         Whether to compare the exception types raised by ``lfunc``
         with ``rfunc`` exception type or not. If False, ``rfunc``
         is simply evaluated against `Exception` type.
-    compare_error_message : boolean, default True
-        Whether to compare the error messages raised
-        when calling both ``lfunc`` and
-        ``rfunc`` or not.
-    expected_error_message : str, default None
-        Expected error message to be raised by calling ``rfunc``.
-        Note that ``lfunc`` error message will not be compared to
-        this value.
 
     Returns
     -------
@@ -223,15 +246,7 @@ def assert_exceptions_equal(
     except KeyboardInterrupt:
         raise
     except Exception as e:
-        if not compare_error_message:
-            expected_error_message = None
-        elif expected_error_message is None:
-            expected_error_message = re.escape(str(e))
-
-        with pytest.raises(
-            type(e) if check_exception_type else Exception,
-            match=expected_error_message,
-        ):
+        with pytest.raises(type(e) if check_exception_type else Exception):
             rfunc(*rfunc_args, **rfunc_kwargs)
     else:
         raise AssertionError("Expected to fail with an Exception.")
@@ -313,9 +328,13 @@ def gen_rand(dtype, size, **kwargs):
     elif dtype.kind in ("O", "U"):
         low = kwargs.get("low", 10)
         high = kwargs.get("high", 11)
-        return pd._testing.rands_array(
-            np.random.randint(low=low, high=high, size=1)[0], size
+        nchars = np.random.randint(low=low, high=high, size=1)[0]
+        char_options = np.array(list(string.ascii_letters + string.digits))
+        all_chars = "".join(np.random.choice(char_options, nchars * size))
+        return np.array(
+            [all_chars[nchars * i : nchars * (i + 1)] for i in range(size)]
         )
+
     raise NotImplementedError(f"dtype.kind={dtype.kind}")
 
 
@@ -339,10 +358,6 @@ def does_not_raise():
     yield
 
 
-def xfail_param(param, **kwargs):
-    return pytest.param(param, marks=pytest.mark.xfail(**kwargs))
-
-
 def assert_column_memory_eq(
     lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
 ):
@@ -352,14 +367,23 @@ def assert_column_memory_eq(
     children to the same constraints. Also fails check if the number of
     children mismatches at any level.
     """
-    assert lhs.base_data_ptr == rhs.base_data_ptr
-    assert lhs.base_mask_ptr == rhs.base_mask_ptr
+
+    def get_ptr(x) -> int:
+        return x.get_ptr(mode="read") if x else 0
+
+    assert get_ptr(lhs.base_data) == get_ptr(rhs.base_data)
+    assert get_ptr(lhs.base_mask) == get_ptr(rhs.base_mask)
     assert lhs.base_size == rhs.base_size
     assert lhs.offset == rhs.offset
     assert lhs.size == rhs.size
     assert len(lhs.base_children) == len(rhs.base_children)
     for lhs_child, rhs_child in zip(lhs.base_children, rhs.base_children):
         assert_column_memory_eq(lhs_child, rhs_child)
+    if isinstance(lhs, cudf.core.column.CategoricalColumn) and isinstance(
+        rhs, cudf.core.column.CategoricalColumn
+    ):
+        assert_column_memory_eq(lhs.categories, rhs.categories)
+        assert_column_memory_eq(lhs.codes, rhs.codes)
 
 
 def assert_column_memory_ne(
@@ -372,14 +396,53 @@ def assert_column_memory_ne(
     raise AssertionError("lhs and rhs holds the same memory.")
 
 
-def _create_pandas_series(data=None, index=None, dtype=None, *args, **kwargs):
-    # Wrapper around pd.Series using a float64 default dtype for empty data.
-    if dtype is None and (data is None or len(data) == 0):
-        dtype = "float64"
-    return pd.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
-
-
 parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
     "left_dtype,right_dtype",
     list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
 )
+
+
+@contextmanager
+def expect_warning_if(condition, warning=FutureWarning, *args, **kwargs):
+    """Catch a warning using pytest.warns if the expect_warning is True.
+
+    All arguments are forwarded to pytest.warns if expect_warning is True.
+    """
+    if condition:
+        with pytest.warns(warning, *args, **kwargs):
+            yield
+    else:
+        yield
+
+
+def sv_to_udf_str(sv):
+    """
+    Cast a string_view object to a udf_string object
+
+    This placeholder function never runs in python
+    It exists only for numba to have something to replace
+    with the typing and lowering code below
+
+    This is similar conceptually to needing a translation
+    engine to emit an expression in target language "B" when
+    there is no equivalent in the source language "A" to
+    translate from. This function effectively defines the
+    expression in language "A" and the associated typing
+    and lowering describe the translation process, despite
+    the expression having no meaning in language "A"
+    """
+    pass
+
+
+@cuda_decl_registry.register_global(sv_to_udf_str)
+class StringViewToUDFStringDecl(AbstractTemplate):
+    def generic(self, args, kws):
+        if isinstance(args[0], StringView) and len(args) == 1:
+            return nb_signature(udf_string, string_view)
+
+
+@cuda_lower(sv_to_udf_str, string_view)
+def sv_to_udf_str_testing_lowering(context, builder, sig, args):
+    return cast_string_view_to_udf_string(
+        context, builder, sig.args[0], sig.return_type, args[0]
+    )

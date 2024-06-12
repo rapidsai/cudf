@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 
-#include <io/comp/gpuinflate.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
+#include "io/comp/gpuinflate.hpp"
+#include "io/utilities/hostdevice_vector.hpp"
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/utilities/default_stream.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <src/io/comp/nvcomp_adapter.hpp>
 
 #include <vector>
 
@@ -36,36 +39,36 @@ using cudf::device_span;
  */
 template <typename Decompressor>
 struct DecompressTest : public cudf::test::BaseFixture {
-  std::vector<uint8_t> vector_from_string(const char* str) const
+  std::vector<uint8_t> vector_from_string(char const* str) const
   {
-    return std::vector<uint8_t>(reinterpret_cast<const uint8_t*>(str),
-                                reinterpret_cast<const uint8_t*>(str) + strlen(str));
+    return std::vector<uint8_t>(reinterpret_cast<uint8_t const*>(str),
+                                reinterpret_cast<uint8_t const*>(str) + strlen(str));
   }
 
   void Decompress(std::vector<uint8_t>* decompressed,
-                  const uint8_t* compressed,
+                  uint8_t const* compressed,
                   size_t compressed_size)
   {
     auto stream = cudf::get_default_stream();
     rmm::device_buffer src{compressed, compressed_size, stream};
     rmm::device_uvector<uint8_t> dst{decompressed->size(), stream};
 
-    hostdevice_vector<device_span<uint8_t const>> inf_in(1, stream);
+    cudf::detail::hostdevice_vector<device_span<uint8_t const>> inf_in(1, stream);
     inf_in[0] = {static_cast<uint8_t const*>(src.data()), src.size()};
-    inf_in.host_to_device(stream);
+    inf_in.host_to_device_async(stream);
 
-    hostdevice_vector<device_span<uint8_t>> inf_out(1, stream);
+    cudf::detail::hostdevice_vector<device_span<uint8_t>> inf_out(1, stream);
     inf_out[0] = dst;
-    inf_out.host_to_device(stream);
+    inf_out.host_to_device_async(stream);
 
-    hostdevice_vector<cudf::io::compression_result> inf_stat(1, stream);
+    cudf::detail::hostdevice_vector<cudf::io::compression_result> inf_stat(1, stream);
     inf_stat[0] = {};
-    inf_stat.host_to_device(stream);
+    inf_stat.host_to_device_async(stream);
 
     static_cast<Decompressor*>(this)->dispatch(inf_in, inf_out, inf_stat);
-    cudaMemcpyAsync(
-      decompressed->data(), dst.data(), dst.size(), cudaMemcpyDeviceToHost, stream.value());
-    inf_stat.device_to_host(stream, true);
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      decompressed->data(), dst.data(), dst.size(), cudaMemcpyDefault, stream.value()));
+    inf_stat.device_to_host_sync(stream);
     ASSERT_EQ(inf_stat[0].status, cudf::io::compression_status::SUCCESS);
   }
 };
@@ -118,6 +121,8 @@ struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
   }
 };
 
+struct NvcompConfigTest : public cudf::test::BaseFixture {};
+
 TEST_F(GzipDecompressTest, HelloWorld)
 {
   constexpr char uncompressed[]  = "hello world";
@@ -164,6 +169,58 @@ TEST_F(BrotliDecompressTest, HelloWorld)
   std::vector<uint8_t> output(input.size());
   Decompress(&output, compressed, sizeof(compressed));
   EXPECT_EQ(output, input);
+}
+
+TEST_F(NvcompConfigTest, Compression)
+{
+  using cudf::io::nvcomp::compression_type;
+  auto const& comp_disabled = cudf::io::nvcomp::is_compression_disabled;
+
+  EXPECT_FALSE(comp_disabled(compression_type::DEFLATE, {2, 5, 0, true, true, 0}));
+  // version 2.5 required
+  EXPECT_TRUE(comp_disabled(compression_type::DEFLATE, {2, 4, 0, true, true, 0}));
+  // all integrations enabled required
+  EXPECT_TRUE(comp_disabled(compression_type::DEFLATE, {2, 5, 0, false, true, 0}));
+
+  EXPECT_FALSE(comp_disabled(compression_type::ZSTD, {2, 4, 0, true, true, 0}));
+  EXPECT_FALSE(comp_disabled(compression_type::ZSTD, {2, 4, 0, false, true, 0}));
+  // 2.4 version required
+  EXPECT_TRUE(comp_disabled(compression_type::ZSTD, {2, 3, 1, false, true, 0}));
+  // stable integrations enabled required
+  EXPECT_TRUE(comp_disabled(compression_type::ZSTD, {2, 4, 0, false, false, 0}));
+
+  EXPECT_FALSE(comp_disabled(compression_type::SNAPPY, {2, 5, 0, true, true, 0}));
+  EXPECT_FALSE(comp_disabled(compression_type::SNAPPY, {2, 4, 0, false, true, 0}));
+  // stable integrations enabled required
+  EXPECT_TRUE(comp_disabled(compression_type::SNAPPY, {2, 3, 0, false, false, 0}));
+}
+
+TEST_F(NvcompConfigTest, Decompression)
+{
+  using cudf::io::nvcomp::compression_type;
+  auto const& decomp_disabled = cudf::io::nvcomp::is_decompression_disabled;
+
+  EXPECT_FALSE(decomp_disabled(compression_type::DEFLATE, {2, 5, 0, true, true, 7}));
+  // version 2.5 required
+  EXPECT_TRUE(decomp_disabled(compression_type::DEFLATE, {2, 4, 0, true, true, 7}));
+  // all integrations enabled required
+  EXPECT_TRUE(decomp_disabled(compression_type::DEFLATE, {2, 5, 0, false, true, 7}));
+
+  EXPECT_FALSE(decomp_disabled(compression_type::ZSTD, {2, 4, 0, true, true, 7}));
+  EXPECT_FALSE(decomp_disabled(compression_type::ZSTD, {2, 3, 2, false, true, 6}));
+  EXPECT_FALSE(decomp_disabled(compression_type::ZSTD, {2, 3, 0, true, true, 6}));
+  // 2.3.1 and earlier requires all integrations to be enabled
+  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 3, 1, false, true, 7}));
+  // 2.3 version required
+  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 2, 0, true, true, 7}));
+  // stable integrations enabled required
+  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 4, 0, false, false, 7}));
+
+  EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {2, 4, 0, true, true, 7}));
+  EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {2, 3, 0, false, true, 7}));
+  EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {2, 2, 0, false, true, 7}));
+  // stable integrations enabled required
+  EXPECT_TRUE(decomp_disabled(compression_type::SNAPPY, {2, 2, 0, false, false, 7}));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

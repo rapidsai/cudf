@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
 #pragma once
 
 #include "dispatch_dfa.cuh"
-
-#include <io/utilities/hostdevice_vector.hpp>
+#include "io/utilities/hostdevice_vector.hpp"
 
 #include <cstdint>
 

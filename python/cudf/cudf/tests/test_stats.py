@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -8,11 +8,13 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.api.extensions import no_default
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.datasets import randomdata
 from cudf.testing._utils import (
-    _create_pandas_series,
     assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 params_dtypes = [np.int32, np.uint32, np.float32, np.float64]
@@ -180,7 +182,6 @@ def test_exact_quantiles_int(int_method):
 
 
 def test_approx_quantiles():
-
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
 
@@ -220,9 +221,8 @@ def test_approx_quantiles_int():
     ],
 )
 def test_misc_quantiles(data, q):
-
-    pdf_series = _create_pandas_series(data)
-    gdf_series = cudf.Series(data)
+    pdf_series = pd.Series(data, dtype="float64" if len(data) == 0 else None)
+    gdf_series = cudf.from_pandas(pdf_series)
 
     expected = pdf_series.quantile(q.get() if isinstance(q, cp.ndarray) else q)
     actual = gdf_series.quantile(q)
@@ -232,44 +232,52 @@ def test_misc_quantiles(data, q):
 @pytest.mark.parametrize(
     "data",
     [
-        cudf.Series(np.random.normal(-100, 100, 1000)),
-        cudf.Series(np.random.randint(-50, 50, 1000)),
-        cudf.Series(np.zeros(100)),
-        cudf.Series(np.repeat(np.nan, 100)),
-        cudf.Series(np.array([1.123, 2.343, np.nan, 0.0])),
-        cudf.Series(
-            [5, 10, 53, None, np.nan, None, 12, 43, -423], nan_as_null=False
-        ),
-        cudf.Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
-        cudf.Series([]),
-        cudf.Series([-3]),
+        {"data": np.random.normal(-100, 100, 1000)},
+        {"data": np.random.randint(-50, 50, 1000)},
+        {"data": (np.zeros(100))},
+        {"data": np.repeat(np.nan, 100)},
+        {"data": np.array([1.123, 2.343, np.nan, 0.0])},
+        {
+            "data": [5, 10, 53, None, np.nan, None, 12, 43, -423],
+            "nan_as_null": False,
+        },
+        {"data": [1.1032, 2.32, 43.4, 13, -312.0], "index": [0, 4, 3, 19, 6]},
+        {"data": [], "dtype": "float64"},
+        {"data": [-3]},
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
-def test_kurtosis_series(data, null_flag):
-    pdata = data.to_pandas()
+@pytest.mark.parametrize("numeric_only", [False, True])
+def test_kurtosis_series(data, null_flag, numeric_only):
+    gs = cudf.Series(**data)
+    ps = gs.to_pandas()
 
-    if null_flag and len(data) > 2:
-        data.iloc[[0, 2]] = None
-        pdata.iloc[[0, 2]] = None
+    if null_flag and len(gs) > 2:
+        gs.iloc[[0, 2]] = None
+        ps.iloc[[0, 2]] = None
 
-    got = data.kurtosis()
-    got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurtosis()
-    np.testing.assert_array_almost_equal(got, expected)
+    got = gs.kurtosis(numeric_only=numeric_only)
+    expected = ps.kurtosis(numeric_only=numeric_only)
 
-    got = data.kurt()
-    got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurt()
-    np.testing.assert_array_almost_equal(got, expected)
+    assert_eq(got, expected)
 
-    got = data.kurt(numeric_only=False)
-    got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurt(numeric_only=False)
-    np.testing.assert_array_almost_equal(got, expected)
+    got = gs.kurt(numeric_only=numeric_only)
+    expected = ps.kurt(numeric_only=numeric_only)
 
-    with pytest.raises(NotImplementedError):
-        data.kurt(numeric_only=True)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize("op", ["skew", "kurt"])
+def test_kurt_skew_error(op):
+    gs = cudf.Series(["ab", "cd"])
+    ps = gs.to_pandas()
+
+    assert_exceptions_equal(
+        getattr(gs, op),
+        getattr(ps, op),
+        lfunc_args_and_kwargs=([], {"numeric_only": True}),
+        rfunc_args_and_kwargs=([], {"numeric_only": True}),
+    )
 
 
 @pytest.mark.parametrize(
@@ -284,30 +292,23 @@ def test_kurtosis_series(data, null_flag):
             [5, 10, 53, None, np.nan, None, 12, 43, -423], nan_as_null=False
         ),
         cudf.Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
-        cudf.Series([]),
+        cudf.Series([], dtype="float64"),
         cudf.Series([-3]),
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
-def test_skew_series(data, null_flag):
+@pytest.mark.parametrize("numeric_only", [False, True])
+def test_skew_series(data, null_flag, numeric_only):
     pdata = data.to_pandas()
 
     if null_flag and len(data) > 2:
         data.iloc[[0, 2]] = None
         pdata.iloc[[0, 2]] = None
 
-    got = data.skew()
-    expected = pdata.skew()
-    got = got if np.isscalar(got) else got.to_numpy()
-    np.testing.assert_array_almost_equal(got, expected)
+    got = data.skew(numeric_only=numeric_only)
+    expected = pdata.skew(numeric_only=numeric_only)
 
-    got = data.skew(numeric_only=False)
-    expected = pdata.skew(numeric_only=False)
-    got = got if np.isscalar(got) else got.to_numpy()
-    np.testing.assert_array_almost_equal(got, expected)
-
-    with pytest.raises(NotImplementedError):
-        data.skew(numeric_only=True)
+    assert_eq(got, expected)
 
 
 @pytest.mark.parametrize("dtype", params_dtypes)
@@ -339,6 +340,10 @@ def test_series_median(dtype, num_na):
         np.testing.assert_approx_equal(actual, desired)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -347,19 +352,28 @@ def test_series_median(dtype, num_na):
         np.zeros(100),
         np.array([1.123, 2.343, np.nan, 0.0]),
         np.array([-2, 3.75, 6, None, None, None, -8.5, None, 4.2]),
-        cudf.Series([]),
+        cudf.Series([], dtype="float64"),
         cudf.Series([-3]),
     ],
 )
 @pytest.mark.parametrize("periods", range(-5, 5))
-@pytest.mark.parametrize("fill_method", ["ffill", "bfill", "pad", "backfill"])
+@pytest.mark.parametrize(
+    "fill_method", ["ffill", "bfill", "pad", "backfill", no_default, None]
+)
 def test_series_pct_change(data, periods, fill_method):
     cs = cudf.Series(data)
     ps = cs.to_pandas()
 
     if np.abs(periods) <= len(cs):
-        got = cs.pct_change(periods=periods, fill_method=fill_method)
-        expected = ps.pct_change(periods=periods, fill_method=fill_method)
+        with expect_warning_if(fill_method not in (no_default, None)):
+            got = cs.pct_change(periods=periods, fill_method=fill_method)
+        with expect_warning_if(
+            (
+                fill_method not in (no_default, None)
+                or (fill_method is not None and ps.isna().any())
+            )
+        ):
+            expected = ps.pct_change(periods=periods, fill_method=fill_method)
         np.testing.assert_array_almost_equal(
             got.to_numpy(na_value=np.nan), expected
         )
@@ -375,7 +389,7 @@ def test_series_pct_change(data, periods, fill_method):
         np.array([1.123, 2.343, np.nan, 0.0]),
         cudf.Series([5, 10, 53, None, np.nan, None], nan_as_null=False),
         cudf.Series([1.1, 2.32, 43.4], index=[0, 4, 3]),
-        cudf.Series([]),
+        cudf.Series([], dtype="float64"),
         cudf.Series([-3]),
     ],
 )
@@ -399,7 +413,13 @@ def test_cov1d(data1, data2):
     ps2 = gs2.to_pandas()
 
     got = gs1.cov(gs2)
-    expected = ps1.cov(ps2)
+    ps1_align, ps2_align = ps1.align(ps2, join="inner")
+    with expect_warning_if(
+        (len(ps1_align.dropna()) == 1 and len(ps2_align.dropna()) > 0)
+        or (len(ps2_align.dropna()) == 1 and len(ps1_align.dropna()) > 0),
+        RuntimeWarning,
+    ):
+        expected = ps1.cov(ps2)
     np.testing.assert_approx_equal(got, expected, significant=8)
 
 
@@ -413,7 +433,7 @@ def test_cov1d(data1, data2):
         np.array([1.123, 2.343, np.nan, 0.0]),
         cudf.Series([5, 10, 53, None, np.nan, None], nan_as_null=False),
         cudf.Series([1.1032, 2.32, 43.4], index=[0, 4, 3]),
-        cudf.Series([]),
+        cudf.Series([], dtype="float64"),
         cudf.Series([-3]),
     ],
 )
@@ -442,13 +462,41 @@ def test_corr1d(data1, data2, method):
     ps2 = gs2.to_pandas()
 
     got = gs1.corr(gs2, method)
-    expected = ps1.corr(ps2, method)
+
+    ps1_align, ps2_align = ps1.align(ps2, join="inner")
+
+    is_singular = (
+        len(ps1_align.dropna()) == 1 and len(ps2_align.dropna()) > 0
+    ) or (len(ps2_align.dropna()) == 1 and len(ps1_align.dropna()) > 0)
+    is_identical = (
+        len(ps1_align.dropna().unique()) == 1 and len(ps2_align.dropna()) > 0
+    ) or (
+        len(ps2_align.dropna().unique()) == 1 and len(ps1_align.dropna()) > 0
+    )
+
+    # Pearson correlation leads to division by 0 when either sample size is 1.
+    # Spearman allows for size 1 samples, but will error if all data in a
+    # sample is identical since the covariance is zero and so the correlation
+    # coefficient is not defined.
+    cond = ((is_singular or is_identical) and method == "pearson") or (
+        is_identical and not is_singular and method == "spearman"
+    )
+    if method == "spearman":
+        # SciPy has shuffled around the warning it throws a couple of times.
+        # It's not worth the effort of conditionally importing the appropriate
+        # warning based on the scipy version, just catching a base Warning is
+        # good enough validation.
+        expected_warning = Warning
+    elif method == "pearson":
+        expected_warning = RuntimeWarning
+
+    with expect_warning_if(cond, expected_warning):
+        expected = ps1.corr(ps2, method)
     np.testing.assert_approx_equal(got, expected, significant=8)
 
 
 @pytest.mark.parametrize("method", ["spearman", "pearson"])
 def test_df_corr(method):
-
     gdf = randomdata(100, {str(x): float for x in range(50)})
     pdf = gdf.to_pandas()
     got = gdf.corr(method)
@@ -459,7 +507,7 @@ def test_df_corr(method):
 @pytest.mark.parametrize(
     "data",
     [
-        [0.0, 1, 3, 6, np.NaN, 7, 5.0, np.nan, 5, 2, 3, -100],
+        [0.0, 1, 3, 6, np.nan, 7, 5.0, np.nan, 5, 2, 3, -100],
         [np.nan] * 3,
         [1, 5, 3],
         [],
@@ -488,15 +536,16 @@ def test_df_corr(method):
 )
 @pytest.mark.parametrize("skipna", [True, False])
 def test_nans_stats(data, ops, skipna):
-    psr = _create_pandas_series(data)
-    gsr = cudf.Series(data, nan_as_null=False)
+    psr = pd.Series(data, dtype="float64" if len(data) == 0 else None)
+    gsr = cudf.from_pandas(psr)
 
     assert_eq(
         getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
     )
 
-    psr = _create_pandas_series(data)
-    gsr = cudf.Series(data, nan_as_null=False)
+    gsr = cudf.Series(
+        data, dtype="float64" if len(data) == 0 else None, nan_as_null=False
+    )
     # Since there is no concept of `nan_as_null` in pandas,
     # nulls will be returned in the operations. So only
     # testing for `skipna=True` when `nan_as_null=False`
@@ -506,7 +555,7 @@ def test_nans_stats(data, ops, skipna):
 @pytest.mark.parametrize(
     "data",
     [
-        [0.0, 1, 3, 6, np.NaN, 7, 5.0, np.nan, 5, 2, 3, -100],
+        [0.0, 1, 3, 6, np.nan, 7, 5.0, np.nan, 5, 2, 3, -100],
         [np.nan] * 3,
         [1, 5, 3],
     ],
@@ -525,30 +574,28 @@ def test_min_count_ops(data, ops, skipna, min_count):
 
 
 @pytest.mark.parametrize(
-    "gsr",
+    "data1",
     [
-        cudf.Series([1, 2, 3, 4], dtype="datetime64[ns]"),
-        cudf.Series([1, 2, 3, 4], dtype="timedelta64[ns]"),
+        [1, 2, 3, 4],
+        [10, 1, 3, 5],
     ],
 )
-def test_cov_corr_invalid_dtypes(gsr):
-    psr = gsr.to_pandas()
+@pytest.mark.parametrize(
+    "data2",
+    [
+        [1, 2, 3, 4],
+        [10, 1, 3, 5],
+    ],
+)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]", "timedelta64[ns]"])
+def test_cov_corr_datetime_timedelta(data1, data2, dtype):
+    gsr1 = cudf.Series(data1, dtype=dtype)
+    gsr2 = cudf.Series(data2, dtype=dtype)
+    psr1 = gsr1.to_pandas()
+    psr2 = gsr2.to_pandas()
 
-    assert_exceptions_equal(
-        lfunc=psr.corr,
-        rfunc=gsr.corr,
-        lfunc_args_and_kwargs=([psr],),
-        rfunc_args_and_kwargs=([gsr],),
-        compare_error_message=False,
-    )
-
-    assert_exceptions_equal(
-        lfunc=psr.cov,
-        rfunc=gsr.cov,
-        lfunc_args_and_kwargs=([psr],),
-        rfunc_args_and_kwargs=([gsr],),
-        compare_error_message=False,
-    )
+    assert_eq(psr1.corr(psr2), gsr1.corr(gsr2))
+    assert_eq(psr1.cov(psr2), gsr1.cov(gsr2))
 
 
 @pytest.mark.parametrize(
@@ -560,26 +607,26 @@ def test_cov_corr_invalid_dtypes(gsr):
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
-def test_kurtosis_df(data, null_flag):
+@pytest.mark.parametrize("numeric_only", [False, True])
+def test_kurtosis_df(data, null_flag, numeric_only):
+    if not numeric_only:
+        data = data.select_dtypes(include="number")
     pdata = data.to_pandas()
 
     if null_flag and len(data) > 2:
         data.iloc[[0, 2]] = None
         pdata.iloc[[0, 2]] = None
 
-    got = data.kurtosis()
+    got = data.kurtosis(numeric_only=numeric_only)
     got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurtosis()
+
+    expected = pdata.kurtosis(numeric_only=numeric_only)
     np.testing.assert_array_almost_equal(got, expected)
 
-    got = data.kurt()
+    got = data.kurt(numeric_only=numeric_only)
     got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurt()
-    np.testing.assert_array_almost_equal(got, expected)
 
-    got = data.kurt(numeric_only=True)
-    got = got if np.isscalar(got) else got.to_numpy()
-    expected = pdata.kurt(numeric_only=True)
+    expected = pdata.kurt(numeric_only=numeric_only)
     np.testing.assert_array_almost_equal(got, expected)
 
 
@@ -592,19 +639,17 @@ def test_kurtosis_df(data, null_flag):
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
-def test_skew_df(data, null_flag):
+@pytest.mark.parametrize("numeric_only", [False, True])
+def test_skew_df(data, null_flag, numeric_only):
+    if not numeric_only:
+        data = data.select_dtypes(include="number")
     pdata = data.to_pandas()
 
     if null_flag and len(data) > 2:
         data.iloc[[0, 2]] = None
         pdata.iloc[[0, 2]] = None
 
-    got = data.skew()
-    expected = pdata.skew()
-    got = got if np.isscalar(got) else got.to_numpy()
-    np.testing.assert_array_almost_equal(got, expected)
-
-    got = data.skew(numeric_only=True)
-    expected = pdata.skew(numeric_only=True)
+    got = data.skew(numeric_only=numeric_only)
+    expected = pdata.skew(numeric_only=numeric_only)
     got = got if np.isscalar(got) else got.to_numpy()
     np.testing.assert_array_almost_equal(got, expected)

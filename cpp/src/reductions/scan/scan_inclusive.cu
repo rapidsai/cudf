@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#include <reductions/scan/scan.cuh>
-#include <reductions/struct_minmax_util.cuh>
+#include "reductions/scan/scan.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -23,11 +22,15 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/reduction.hpp>
+#include <cudf/strings/detail/scan.hpp>
+#include <cudf/structs/detail/scan.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/find.h>
 #include <thrust/functional.h>
@@ -40,10 +43,10 @@ namespace cudf {
 namespace detail {
 
 // logical-and scan of the null mask of the input view
-rmm::device_buffer mask_scan(column_view const& input_view,
-                             scan_type inclusive,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+std::pair<rmm::device_buffer, size_type> mask_scan(column_view const& input_view,
+                                                   scan_type inclusive,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr)
 {
   rmm::device_buffer mask =
     detail::create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
@@ -62,53 +65,17 @@ rmm::device_buffer mask_scan(column_view const& input_view,
   set_null_mask(static_cast<bitmask_type*>(mask.data()), 0, first_null_position, true, stream);
   set_null_mask(
     static_cast<bitmask_type*>(mask.data()), first_null_position, input_view.size(), false, stream);
-  return mask;
+  return {std::move(mask), input_view.size() - first_null_position};
 }
 
 namespace {
 
-/**
- * @brief Min/Max inclusive scan operator
- *
- * This operator will accept index values, check them and then
- * run the `Op` operation on the individual element objects.
- * The returned result is the appropriate index value.
- *
- * This was specifically created to workaround a thrust issue
- * https://github.com/NVIDIA/thrust/issues/1479
- * where invalid values are passed to the operator.
- */
-template <typename Element, typename Op>
-struct min_max_scan_operator {
-  column_device_view const col;      ///< strings column device view
-  Element const null_replacement{};  ///< value used when element is null
-  bool const has_nulls;              ///< true if col has null elements
-
-  min_max_scan_operator(column_device_view const& col, bool has_nulls = true)
-    : col{col}, null_replacement{Op::template identity<Element>()}, has_nulls{has_nulls}
-  {
-    // verify validity bitmask is non-null, otherwise, is_null_nocheck() will crash
-    if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
-  }
-
-  __device__ inline size_type operator()(size_type lhs, size_type rhs) const
-  {
-    // thrust::inclusive_scan may pass us garbage values so we need to protect ourselves;
-    // in these cases the return value does not matter since the result is not used
-    if (lhs < 0 || rhs < 0 || lhs >= col.size() || rhs >= col.size()) return 0;
-    Element d_lhs =
-      has_nulls && col.is_null_nocheck(lhs) ? null_replacement : col.element<Element>(lhs);
-    Element d_rhs =
-      has_nulls && col.is_null_nocheck(rhs) ? null_replacement : col.element<Element>(rhs);
-    return Op{}(d_lhs, d_rhs) == d_lhs ? lhs : rhs;
-  }
-};
-
 template <typename Op, typename T>
 struct scan_functor {
   static std::unique_ptr<column> invoke(column_view const& input_view,
+                                        bitmask_type const*,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     auto output_column = detail::allocate_like(
       input_view, input_view.size(), mask_allocation_policy::NEVER, stream, mr);
@@ -117,8 +84,11 @@ struct scan_functor {
     auto d_input = column_device_view::create(input_view, stream);
     auto const begin =
       make_null_replacement_iterator(*d_input, Op::template identity<T>(), input_view.has_nulls());
+
+    // CUB 2.0.0 requires that the binary operator returns the same type as the identity.
+    auto const binary_op = cudf::detail::cast_functor<T>(Op{});
     thrust::inclusive_scan(
-      rmm::exec_policy(stream), begin, begin + input_view.size(), result.data<T>(), Op{});
+      rmm::exec_policy(stream), begin, begin + input_view.size(), result.data<T>(), binary_op);
 
     CUDF_CHECK_CUDA(stream.value());
     return output_column;
@@ -128,73 +98,22 @@ struct scan_functor {
 template <typename Op>
 struct scan_functor<Op, cudf::string_view> {
   static std::unique_ptr<column> invoke(column_view const& input_view,
+                                        bitmask_type const* mask,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
-    auto d_input = column_device_view::create(input_view, stream);
-
-    // build indices of the scan operation results
-    rmm::device_uvector<size_type> result(input_view.size(), stream);
-    thrust::inclusive_scan(
-      rmm::exec_policy(stream),
-      thrust::counting_iterator<size_type>(0),
-      thrust::counting_iterator<size_type>(input_view.size()),
-      result.begin(),
-      min_max_scan_operator<cudf::string_view, Op>{*d_input, input_view.has_nulls()});
-
-    // call gather using the indices to build the output column
-    auto result_table = cudf::detail::gather(cudf::table_view({input_view}),
-                                             result,
-                                             out_of_bounds_policy::DONT_CHECK,
-                                             negative_index_policy::NOT_ALLOWED,
-                                             stream,
-                                             mr);
-    return std::move(result_table->release().front());
+    return cudf::strings::detail::scan_inclusive<Op>(input_view, mask, stream, mr);
   }
 };
 
 template <typename Op>
 struct scan_functor<Op, cudf::struct_view> {
   static std::unique_ptr<column> invoke(column_view const& input,
+                                        bitmask_type const*,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
-    // Create a gather map containing indices of the prefix min/max elements.
-    auto gather_map = rmm::device_uvector<size_type>(input.size(), stream);
-    auto const binop_generator =
-      cudf::reduction::detail::comparison_binop_generator::create<Op>(input, stream);
-    thrust::inclusive_scan(rmm::exec_policy(stream),
-                           thrust::counting_iterator<size_type>(0),
-                           thrust::counting_iterator<size_type>(input.size()),
-                           gather_map.begin(),
-                           binop_generator.binop());
-
-    // Gather the children columns of the input column. Must use `get_sliced_child` to properly
-    // handle input in case it is a sliced view.
-    auto const input_children = [&] {
-      auto const it = cudf::detail::make_counting_transform_iterator(
-        0, [structs_view = structs_column_view{input}, stream](auto const child_idx) {
-          return structs_view.get_sliced_child(child_idx);
-        });
-      return std::vector<column_view>(it, it + input.num_children());
-    }();
-
-    // Gather the children elements of the prefix min/max struct elements for the output.
-    auto scanned_children = cudf::detail::gather(table_view{input_children},
-                                                 gather_map,
-                                                 out_of_bounds_policy::DONT_CHECK,
-                                                 negative_index_policy::NOT_ALLOWED,
-                                                 stream,
-                                                 mr)
-                              ->release();
-
-    // Don't need to set a null mask because that will be handled at the caller.
-    return make_structs_column(input.size(),
-                               std::move(scanned_children),
-                               UNKNOWN_NULL_COUNT,
-                               rmm::device_buffer{0, stream, mr},
-                               stream,
-                               mr);
+    return cudf::structs::detail::scan_inclusive<Op>(input, stream, mr);
   }
 };
 
@@ -230,11 +149,11 @@ struct scan_dispatcher {
    */
   template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
-                                     null_policy,
+                                     bitmask_type const* output_mask,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
-    return scan_functor<Op, T>::invoke(input, stream, mr);
+    return scan_functor<Op, T>::invoke(input, output_mask, stream, mr);
   }
 
   template <typename T, typename... Args>
@@ -246,30 +165,45 @@ struct scan_dispatcher {
 
 }  // namespace
 
-std::unique_ptr<column> scan_inclusive(
-  column_view const& input,
-  scan_aggregation const& agg,
-  null_policy null_handling,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> scan_inclusive(column_view const& input,
+                                       scan_aggregation const& agg,
+                                       null_policy null_handling,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
 {
-  auto output = scan_agg_dispatch<scan_dispatcher>(input, agg, null_handling, stream, mr);
+  auto [mask, null_count] = [&] {
+    if (null_handling == null_policy::EXCLUDE) {
+      return std::make_pair(std::move(detail::copy_bitmask(input, stream, mr)), input.null_count());
+    } else if (input.nullable()) {
+      return mask_scan(input, scan_type::INCLUSIVE, stream, mr);
+    }
+    return std::make_pair(rmm::device_buffer{}, size_type{0});
+  }();
 
-  if (agg.kind == aggregation::EWMA) {
-    return output;
-  } else if (null_handling == null_policy::EXCLUDE) {
-    output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
-  } else if (input.nullable()) {
-    output->set_null_mask(mask_scan(input, scan_type::INCLUSIVE, stream, mr), UNKNOWN_NULL_COUNT);
-  }
+  auto output = scan_agg_dispatch<scan_dispatcher>(
+    input, agg, static_cast<bitmask_type*>(mask.data()), stream, mr);
+  // Use the null mask produced by the op for EWM
+  if (agg.kind != aggregation::EWMA) { output->set_null_mask(std::move(mask), null_count); }
 
   // If the input is a structs column, we also need to push down nulls from the parent output column
   // into the children columns.
   if (input.type().id() == type_id::STRUCT && output->has_nulls()) {
-    for (size_type idx = 0; idx < output->num_children(); ++idx) {
-      structs::detail::superimpose_parent_nulls(
-        output->view().null_mask(), output->null_count(), output->child(idx), stream, mr);
-    }
+    auto const num_rows   = output->size();
+    auto const null_count = output->null_count();
+    auto content          = output->release();
+
+    // Build new children columns.
+    auto const null_mask = reinterpret_cast<bitmask_type const*>(content.null_mask->data());
+    std::for_each(content.children.begin(),
+                  content.children.end(),
+                  [null_mask, null_count, stream, mr](auto& child) {
+                    child = structs::detail::superimpose_nulls(
+                      null_mask, null_count, std::move(child), stream, mr);
+                  });
+
+    // Replace the children columns.
+    output = cudf::make_structs_column(
+      num_rows, std::move(content.children), null_count, std::move(*content.null_mask), stream, mr);
   }
 
   return output;

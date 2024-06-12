@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,22 +15,23 @@
  */
 #pragma once
 
+#include <cudf_test/print_utilities.cuh>
+
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
-#include <cudf_test/print_utilities.cuh>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/cub.cuh>
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
+#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scatter.h>
-
-#include <cub/cub.cuh>
 
 #include <algorithm>
 #include <cstdint>
@@ -42,9 +43,18 @@ namespace cudf::io::fst {
  * @brief Describes the kind of stack operation.
  */
 enum class stack_op_type : int8_t {
-  READ = 0,  ///< Operation reading what is currently on top of the stack
-  PUSH = 1,  ///< Operation pushing a new item on top of the stack
-  POP  = 2   ///< Operation popping the item currently on top of the stack
+  READ  = 0,  ///< Operation reading what is currently on top of the stack
+  PUSH  = 1,  ///< Operation pushing a new item on top of the stack
+  POP   = 2,  ///< Operation popping the item currently on top of the stack
+  RESET = 3   ///< Operation popping all items currently on the stack
+};
+
+/**
+ * @brief Describes the kind of stack operations supported by the logical stack.
+ */
+enum class stack_op_support : bool {
+  NO_RESET_SUPPORT   = false,  ///< A stack that only supports push(x) and pop() operations
+  WITH_RESET_SUPPORT = true    ///< A stack that supports push(x), pop(), and reset() operations
 };
 
 namespace detail {
@@ -119,9 +129,9 @@ struct StackSymbolToStackOp {
   {
     stack_op_type stack_op = symbol_to_stack_op_type(stack_symbol);
     // PUSH => +1, POP => -1, READ => 0
-    int32_t level_delta = stack_op == stack_op_type::PUSH  ? 1
-                          : stack_op == stack_op_type::POP ? -1
-                                                           : 0;
+    int32_t level_delta = (stack_op == stack_op_type::PUSH)  ? 1
+                          : (stack_op == stack_op_type::POP) ? -1
+                                                             : 0;
     return StackOpT{static_cast<decltype(StackOpT::stack_level)>(level_delta), stack_symbol};
   }
 
@@ -130,9 +140,41 @@ struct StackSymbolToStackOp {
 };
 
 /**
+ * @brief Function object that maps a stack `reset` operation to `1`.
+ */
+template <typename StackSymbolToStackOpTypeT>
+struct NewlineToResetStackSegmentOp {
+  template <typename StackSymbolT>
+  constexpr CUDF_HOST_DEVICE uint32_t operator()(StackSymbolT const& stack_symbol) const
+  {
+    stack_op_type stack_op = symbol_to_stack_op_type(stack_symbol);
+
+    // Every reset operation marks the beginning of a new segment
+    return (stack_op == stack_op_type::RESET) ? 1 : 0;
+  }
+
+  /// Function object returning a stack operation type for a given stack symbol
+  StackSymbolToStackOpTypeT symbol_to_stack_op_type;
+};
+
+/**
+ * @brief Function object that wraps around for values that exceed the largest value of `TargetT`
+ */
+template <typename TargetT>
+struct ModToTargetTypeOpT {
+  template <typename T>
+  constexpr CUDF_HOST_DEVICE TargetT operator()(T const& val) const
+  {
+    return static_cast<TargetT>(
+      val % (static_cast<T>(cuda::std::numeric_limits<TargetT>::max()) + static_cast<T>(1)));
+  }
+};
+
+/**
  * @brief Binary reduction operator to compute the absolute stack level from relative stack levels
  * (i.e., +1 for a PUSH, -1 for a POP operation).
  */
+template <typename StackSymbolToStackOpTypeT>
 struct AddStackLevelFromStackOp {
   template <typename StackLevelT, typename ValueT>
   constexpr CUDF_HOST_DEVICE StackOp<StackLevelT, ValueT> operator()(
@@ -141,6 +183,9 @@ struct AddStackLevelFromStackOp {
     StackLevelT new_level = lhs.stack_level + rhs.stack_level;
     return StackOp<StackLevelT, ValueT>{new_level, rhs.value};
   }
+
+  /// Function object returning a stack operation type for a given stack symbol
+  StackSymbolToStackOpTypeT symbol_to_stack_op_type;
 };
 
 /**
@@ -223,6 +268,8 @@ struct RemapEmptyStack {
  * onto the stack or pop something from the stack and resolves the symbol that is on top of the
  * stack.
  *
+ * @tparam SupportResetOperation Whether the logical stack also supports `reset` operations that
+ * reset the stack to the empty stack
  * @tparam StackLevelT Signed integer type that must be sufficient to cover [-max_stack_level,
  * max_stack_level] for the given sequence of stack operations. Must be signed as it needs to cover
  * the stack level of any arbitrary subsequence of stack operations.
@@ -254,7 +301,8 @@ struct RemapEmptyStack {
  * what-is-on-top-of-the-stack
  * @param[in] stream The cuda stream to which to dispatch the work
  */
-template <typename StackLevelT,
+template <stack_op_support SupportResetOperation,
+          typename StackLevelT,
           typename StackSymbolItT,
           typename SymbolPositionT,
           typename StackSymbolToStackOpTypeT,
@@ -267,12 +315,15 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                      StackSymbolT const empty_stack_symbol,
                                      StackSymbolT const read_symbol,
                                      std::size_t const num_symbols_out,
-                                     rmm::cuda_stream_view stream = cudf::get_default_stream())
+                                     rmm::cuda_stream_view stream)
 {
   rmm::device_buffer temp_storage{};
 
   // Type used to hold pairs of (stack_level, value) pairs
   using StackOpT = detail::StackOp<StackLevelT, StackSymbolT>;
+
+  // Type used to mark *-by-key segments after `reset` operations
+  using StackSegmentT = uint8_t;
 
   // The unsigned integer type that we use for radix sorting items of type StackOpT
   using StackOpUnsignedT = detail::UnsignedStackOpType<StackOpT>;
@@ -284,6 +335,8 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // TransformInputIterator converting stack symbols to stack operations
   using TransformInputItT =
     cub::TransformInputIterator<StackOpT, StackSymbolToStackOpT, StackSymbolItT>;
+
+  constexpr bool supports_reset_op = SupportResetOperation == stack_op_support::WITH_RESET_SUPPORT;
 
   auto const num_symbols_in = d_symbol_positions.size();
 
@@ -323,13 +376,44 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
 
   // Getting temporary storage requirements for the prefix sum of the stack level after each
   // operation
-  CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(nullptr,
-                                               stack_level_scan_bytes,
-                                               stack_symbols_in,
-                                               d_kv_operations.Current(),
-                                               detail::AddStackLevelFromStackOp{},
-                                               num_symbols_in,
-                                               stream));
+  if constexpr (supports_reset_op) {
+    // Iterator that returns `1` for every symbol that corresponds to a `reset` operation
+    auto reset_segments_it = thrust::make_transform_iterator(
+      d_symbols,
+      detail::NewlineToResetStackSegmentOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op});
+
+    auto const fake_key_segment_it      = static_cast<StackSegmentT*>(nullptr);
+    std::size_t gen_segments_scan_bytes = 0;
+    std::size_t scan_by_key_bytes       = 0;
+    CUDF_CUDA_TRY(cub::DeviceScan::InclusiveSum(
+      nullptr,
+      gen_segments_scan_bytes,
+      reset_segments_it,
+      thrust::make_transform_output_iterator(fake_key_segment_it,
+                                             detail::ModToTargetTypeOpT<StackSegmentT>{}),
+      num_symbols_in,
+      stream));
+    CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScanByKey(
+      nullptr,
+      scan_by_key_bytes,
+      fake_key_segment_it,
+      stack_symbols_in,
+      d_kv_operations.Current(),
+      detail::AddStackLevelFromStackOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
+      num_symbols_in,
+      cub::Equality{},
+      stream));
+    stack_level_scan_bytes = std::max(gen_segments_scan_bytes, scan_by_key_bytes);
+  } else {
+    CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(
+      nullptr,
+      stack_level_scan_bytes,
+      stack_symbols_in,
+      d_kv_operations.Current(),
+      detail::AddStackLevelFromStackOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
+      num_symbols_in,
+      stream));
+  }
 
   // Getting temporary storage requirements for the stable radix sort (sorting by stack level of the
   // operations)
@@ -393,13 +477,41 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   d_kv_operations = cub::DoubleBuffer<StackOpT>{d_kv_ops_current.data(), d_kv_ops_alt.data()};
 
   // Compute prefix sum of the stack level after each operation
-  CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(temp_storage.data(),
-                                               total_temp_storage_bytes,
-                                               stack_symbols_in,
-                                               d_kv_operations.Current(),
-                                               detail::AddStackLevelFromStackOp{},
-                                               num_symbols_in,
-                                               stream));
+  if constexpr (supports_reset_op) {
+    // Iterator that returns `1` for every symbol that corresponds to a `reset` operation
+    auto reset_segments_it = thrust::make_transform_iterator(
+      d_symbols,
+      detail::NewlineToResetStackSegmentOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op});
+
+    rmm::device_uvector<StackSegmentT> key_segments{num_symbols_in, stream};
+    CUDF_CUDA_TRY(cub::DeviceScan::InclusiveSum(
+      temp_storage.data(),
+      total_temp_storage_bytes,
+      reset_segments_it,
+      thrust::make_transform_output_iterator(key_segments.data(),
+                                             detail::ModToTargetTypeOpT<StackSegmentT>{}),
+      num_symbols_in,
+      stream));
+    CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScanByKey(
+      temp_storage.data(),
+      total_temp_storage_bytes,
+      key_segments.data(),
+      stack_symbols_in,
+      d_kv_operations.Current(),
+      detail::AddStackLevelFromStackOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
+      num_symbols_in,
+      cub::Equality{},
+      stream));
+  } else {
+    CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(
+      temp_storage.data(),
+      total_temp_storage_bytes,
+      stack_symbols_in,
+      d_kv_operations.Current(),
+      detail::AddStackLevelFromStackOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
+      num_symbols_in,
+      stream));
+  }
 
   // Stable radix sort, sorting by stack level of the operations
   d_kv_operations_unsigned = cub::DoubleBuffer<StackOpUnsignedT>{
@@ -416,7 +528,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
 
   // TransformInputIterator that remaps all operations on stack level 0 to the empty stack symbol
   kv_ops_scan_in  = {reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Current()),
-                    detail::RemapEmptyStack<StackOpT>{empty_stack}};
+                     detail::RemapEmptyStack<StackOpT>{empty_stack}};
   kv_ops_scan_out = reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Alternate());
 
   // Inclusive scan to match pop operations with the latest push operation of that level

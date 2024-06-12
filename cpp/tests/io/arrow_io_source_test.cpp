@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,17 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/io/datasource.hpp>
+#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/parquet.hpp>
 
+#include <arrow/filesystem/filesystem.h>
+#include <arrow/filesystem/s3fs.h>
 #include <arrow/io/api.h>
+#include <arrow/util/config.h>
 
 #include <fstream>
 #include <memory>
@@ -36,19 +40,17 @@ auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
   ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
 // Base test fixture for tests
-struct ArrowIOTest : public cudf::test::BaseFixture {
-};
+struct ArrowIOTest : public cudf::test::BaseFixture {};
 
 TEST_F(ArrowIOTest, URIFileSystem)
 {
   const std::string file_name = temp_env->get_temp_dir() + "JsonLinesFileTest.json";
   std::ofstream outfile(file_name, std::ofstream::out);
-  outfile << "[11, 1.1]\n[22, 2.2]";
+  outfile << "{\"a\":11, \"b\":1.1}\n{\"a\":22, \"b\":2.2}";
   outfile.close();
 
   std::string file_uri = "file://" + file_name;
-  std::unique_ptr<cudf::io::arrow_io_source> datasource =
-    std::make_unique<cudf::io::arrow_io_source>(file_uri);
+  auto datasource      = std::make_unique<cudf::io::arrow_io_source>(file_uri);
 
   // Populate the JSON Reader Options
   cudf::io::json_reader_options options =
@@ -61,36 +63,41 @@ TEST_F(ArrowIOTest, URIFileSystem)
   ASSERT_EQ(2, tbl.tbl->num_rows());
 }
 
-#ifdef S3_ENABLED
-
 TEST_F(ArrowIOTest, S3FileSystem)
 {
   std::string s3_uri = "s3://rapidsai-data/cudf/test/tips.parquet?region=us-east-2";
-  std::unique_ptr<cudf::io::arrow_io_source> datasource =
-    std::make_unique<cudf::io::arrow_io_source>(s3_uri);
 
-  // Populate the Parquet Reader Options
-  cudf::io::source_info src(datasource.get());
-  std::vector<std::string> single_column;
-  single_column.insert(single_column.begin(), "total_bill");
-  cudf::io::parquet_reader_options_builder builder(src);
-  cudf::io::parquet_reader_options options = builder.columns(single_column).build();
+  // Check to see if Arrow was built with support for S3. If not, ensure this
+  // test throws. If so, validate the S3 file contents.
+  auto const s3_unsupported = arrow::fs::FileSystemFromUri(s3_uri).status().IsNotImplemented();
+  if (s3_unsupported) {
+    EXPECT_THROW(std::make_unique<cudf::io::arrow_io_source>(s3_uri), cudf::logic_error);
+  } else {
+    auto datasource = std::make_unique<cudf::io::arrow_io_source>(s3_uri);
 
-  // Read the Parquet file from S3
-  cudf::io::table_with_metadata tbl = cudf::io::read_parquet(options);
+    // Populate the Parquet Reader Options
+    cudf::io::source_info src(datasource.get());
+    std::vector<std::string> single_column;
+    single_column.insert(single_column.begin(), "total_bill");
+    cudf::io::parquet_reader_options_builder builder(src);
+    cudf::io::parquet_reader_options options = builder.columns(single_column).build();
 
-  ASSERT_EQ(1, tbl.tbl->num_columns());  // Only single column specified in reader_options
-  ASSERT_EQ(244, tbl.tbl->num_rows());   // known number of rows from the S3 file
-}
+    // Read the Parquet file from S3
+    cudf::io::table_with_metadata tbl = cudf::io::read_parquet(options);
 
-#else
+    ASSERT_EQ(1, tbl.tbl->num_columns());  // Only single column specified in reader_options
+    ASSERT_EQ(244, tbl.tbl->num_rows());   // known number of rows from the S3 file
+  }
 
-TEST_F(ArrowIOTest, S3URIWhenNotEnabled)
-{
-  std::string s3_uri = "s3://rapidsai-data/cudf/test/tips.parquet?region=us-east-2";
-  EXPECT_THROW(std::make_unique<cudf::io::arrow_io_source>(s3_uri), cudf::logic_error);
-}
-
+#ifdef ARROW_S3
+  if (!s3_unsupported) {
+    // Verify that we are using Arrow with S3, and call finalize
+    // https://github.com/apache/arrow/issues/36974
+    // This needs to be in a separate conditional to ensure we call
+    // finalize after all arrow_io_source instances have been deleted.
+    [[maybe_unused]] auto _ = arrow::fs::EnsureS3Finalized();
+  }
 #endif
+}
 
 CUDF_TEST_PROGRAM_MAIN()

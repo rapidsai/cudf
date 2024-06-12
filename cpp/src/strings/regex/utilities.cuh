@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,17 +16,22 @@
 
 #pragma once
 
-#include <strings/regex/regex.cuh>
+#include "strings/regex/regex.cuh"
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
+#include <cudf/detail/offsets_iterator_factory.cuh>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/scan.h>
+
+#include <stdexcept>
 
 namespace cudf {
 namespace strings {
@@ -35,7 +40,7 @@ namespace detail {
 constexpr auto regex_launch_kernel_block_size = 256;
 
 template <typename ForEachFunction>
-__global__ void for_each_kernel(ForEachFunction fn, reprog_device const d_prog, size_type size)
+CUDF_KERNEL void for_each_kernel(ForEachFunction fn, reprog_device const d_prog, size_type size)
 {
   extern __shared__ u_char shmem[];
   if (threadIdx.x == 0) { d_prog.store(shmem); }
@@ -69,10 +74,10 @@ void launch_for_each_kernel(ForEachFunction fn,
 }
 
 template <typename TransformFunction, typename OutputType>
-__global__ void transform_kernel(TransformFunction fn,
-                                 reprog_device const d_prog,
-                                 OutputType* d_output,
-                                 size_type size)
+CUDF_KERNEL void transform_kernel(TransformFunction fn,
+                                  reprog_device const d_prog,
+                                  OutputType* d_output,
+                                  size_type size)
 {
   extern __shared__ u_char shmem[];
   if (threadIdx.x == 0) { d_prog.store(shmem); }
@@ -111,12 +116,10 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                            reprog_device& d_prog,
                            size_type strings_count,
                            rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr)
+                           rmm::device_async_resource_ref mr)
 {
-  auto offsets = make_numeric_column(
-    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
-  auto d_offsets             = offsets->mutable_view().template data<int32_t>();
-  size_and_exec_fn.d_offsets = d_offsets;
+  auto output_sizes        = rmm::device_uvector<size_type>(strings_count, stream);
+  size_and_exec_fn.d_sizes = output_sizes.data();
 
   auto [buffer_size, thread_count] = d_prog.compute_strided_working_memory(strings_count);
 
@@ -130,16 +133,16 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
     for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
       size_and_exec_fn, d_prog, strings_count);
   }
-
-  // Convert sizes to offsets
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+  // Convert the sizes to offsets
+  auto [offsets, char_bytes] = cudf::strings::detail::make_offsets_child_column(
+    output_sizes.begin(), output_sizes.end(), stream, mr);
+  size_and_exec_fn.d_offsets =
+    cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
   // Now build the chars column
-  auto const char_bytes = cudf::detail::get_value<int32_t>(offsets->view(), strings_count, stream);
-  std::unique_ptr<column> chars = create_chars_child_column(char_bytes, stream, mr);
+  rmm::device_uvector<char> chars(char_bytes, stream, mr);
   if (char_bytes > 0) {
-    size_and_exec_fn.d_chars = chars->mutable_view().template data<char>();
+    size_and_exec_fn.d_chars = chars.data();
     for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
       size_and_exec_fn, d_prog, strings_count);
   }

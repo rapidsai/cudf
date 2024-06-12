@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,15 @@
 
 #include <benchmarks/io/cuio_common.hpp>
 
+#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/logger.hpp>
+
+#include <unistd.h>
+
 #include <cstdio>
 #include <fstream>
 #include <numeric>
 #include <string>
-
-#include <unistd.h>
 
 temp_directory const cuio_source_sink_pair::tmpdir{"cudf_gbench"};
 
@@ -37,7 +40,10 @@ std::string random_file_in_dir(std::string const& dir_path)
 }
 
 cuio_source_sink_pair::cuio_source_sink_pair(io_type type)
-  : type{type}, file_name{random_file_in_dir(tmpdir.path())}
+  : type{type},
+    d_buffer{0, cudf::get_default_stream()},
+    file_name{random_file_in_dir(tmpdir.path())},
+    void_sink{cudf::io::data_sink::create()}
 {
 }
 
@@ -45,7 +51,22 @@ cudf::io::source_info cuio_source_sink_pair::make_source_info()
 {
   switch (type) {
     case io_type::FILEPATH: return cudf::io::source_info(file_name);
-    case io_type::HOST_BUFFER: return cudf::io::source_info(buffer.data(), buffer.size());
+    case io_type::HOST_BUFFER: return cudf::io::source_info(h_buffer.data(), h_buffer.size());
+    case io_type::PINNED_BUFFER: {
+      pinned_buffer.resize(h_buffer.size());
+      std::copy(h_buffer.begin(), h_buffer.end(), pinned_buffer.begin());
+      return cudf::io::source_info(pinned_buffer.data(), pinned_buffer.size());
+    }
+    case io_type::DEVICE_BUFFER: {
+      // TODO: make cuio_source_sink_pair stream-friendly and avoid implicit use of the default
+      // stream
+      auto const stream = cudf::get_default_stream();
+      d_buffer.resize(h_buffer.size(), stream);
+      CUDF_CUDA_TRY(cudaMemcpyAsync(
+        d_buffer.data(), h_buffer.data(), h_buffer.size(), cudaMemcpyDefault, stream.value()));
+
+      return cudf::io::source_info(d_buffer);
+    }
     default: CUDF_FAIL("invalid input type");
   }
 }
@@ -53,9 +74,11 @@ cudf::io::source_info cuio_source_sink_pair::make_source_info()
 cudf::io::sink_info cuio_source_sink_pair::make_sink_info()
 {
   switch (type) {
-    case io_type::VOID: return cudf::io::sink_info(&void_sink);
+    case io_type::VOID: return cudf::io::sink_info(void_sink.get());
     case io_type::FILEPATH: return cudf::io::sink_info(file_name);
-    case io_type::HOST_BUFFER: return cudf::io::sink_info(&buffer);
+    case io_type::HOST_BUFFER:
+    case io_type::PINNED_BUFFER:
+    case io_type::DEVICE_BUFFER: return cudf::io::sink_info(&h_buffer);
     default: CUDF_FAIL("invalid output type");
   }
 }
@@ -63,11 +86,13 @@ cudf::io::sink_info cuio_source_sink_pair::make_sink_info()
 size_t cuio_source_sink_pair::size()
 {
   switch (type) {
-    case io_type::VOID: return void_sink.bytes_written();
+    case io_type::VOID: return void_sink->bytes_written();
     case io_type::FILEPATH:
       return static_cast<size_t>(
         std::ifstream(file_name, std::ifstream::ate | std::ifstream::binary).tellg());
-    case io_type::HOST_BUFFER: return buffer.size();
+    case io_type::HOST_BUFFER:
+    case io_type::PINNED_BUFFER:
+    case io_type::DEVICE_BUFFER: return h_buffer.size();
     default: CUDF_FAIL("invalid output type");
   }
 }
@@ -126,17 +151,18 @@ std::vector<std::string> select_column_names(std::vector<std::string> const& col
   return col_names_to_read;
 }
 
-std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks, int chunk)
+std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks, int chunk_idx)
 {
   CUDF_EXPECTS(num_segments >= num_chunks,
                "Number of chunks cannot be greater than the number of segments in the file");
-  auto start_segment = [num_segments, num_chunks](int chunk) {
-    return num_segments * chunk / num_chunks;
-  };
-  std::vector<cudf::size_type> selected_segments;
-  for (auto segment = start_segment(chunk); segment < start_segment(chunk + 1); ++segment) {
-    selected_segments.push_back(segment);
-  }
+  CUDF_EXPECTS(chunk_idx < num_chunks,
+               "Chunk index must be smaller than the number of chunks in the file");
+
+  auto const segments_in_chunk = cudf::util::div_rounding_up_unsafe(num_segments, num_chunks);
+  auto const begin_segment     = std::min(chunk_idx * segments_in_chunk, num_segments);
+  auto const end_segment       = std::min(begin_segment + segments_in_chunk, num_segments);
+  std::vector<cudf::size_type> selected_segments(end_segment - begin_segment);
+  std::iota(selected_segments.begin(), selected_segments.end(), begin_segment);
 
   return selected_segments;
 }
@@ -159,14 +185,55 @@ std::string exec_cmd(std::string_view cmd)
   return error_out;
 }
 
+void log_l3_warning_once()
+{
+  static bool is_logged = false;
+  if (not is_logged) {
+    CUDF_LOG_WARN(
+      "Running benchmarks without dropping the L3 cache; results may not reflect file IO "
+      "throughput");
+    is_logged = true;
+  }
+}
+
 void try_drop_l3_cache()
 {
   static bool is_drop_cache_enabled = std::getenv("CUDF_BENCHMARK_DROP_CACHE") != nullptr;
-  if (not is_drop_cache_enabled) { return; }
+  if (not is_drop_cache_enabled) {
+    log_l3_warning_once();
+    return;
+  }
 
   std::array drop_cache_cmds{"/sbin/sysctl vm.drop_caches=3", "sudo /sbin/sysctl vm.drop_caches=3"};
   CUDF_EXPECTS(std::any_of(drop_cache_cmds.cbegin(),
                            drop_cache_cmds.cend(),
                            [](auto& cmd) { return exec_cmd(cmd).empty(); }),
                "Failed to execute the drop cache command");
+}
+
+io_type retrieve_io_type_enum(std::string_view io_string)
+{
+  if (io_string == "FILEPATH") { return io_type::FILEPATH; }
+  if (io_string == "HOST_BUFFER") { return io_type::HOST_BUFFER; }
+  if (io_string == "PINNED_BUFFER") { return io_type::PINNED_BUFFER; }
+  if (io_string == "DEVICE_BUFFER") { return io_type::DEVICE_BUFFER; }
+  if (io_string == "VOID") { return io_type::VOID; }
+  CUDF_FAIL("Unsupported io_type.");
+}
+
+cudf::io::compression_type retrieve_compression_type_enum(std::string_view compression_string)
+{
+  if (compression_string == "NONE") { return cudf::io::compression_type::NONE; }
+  if (compression_string == "AUTO") { return cudf::io::compression_type::AUTO; }
+  if (compression_string == "SNAPPY") { return cudf::io::compression_type::SNAPPY; }
+  if (compression_string == "GZIP") { return cudf::io::compression_type::GZIP; }
+  if (compression_string == "BZIP2") { return cudf::io::compression_type::BZIP2; }
+  if (compression_string == "BROTLI") { return cudf::io::compression_type::BROTLI; }
+  if (compression_string == "ZIP") { return cudf::io::compression_type::ZIP; }
+  if (compression_string == "XZ") { return cudf::io::compression_type::XZ; }
+  if (compression_string == "ZLIB") { return cudf::io::compression_type::ZLIB; }
+  if (compression_string == "LZ4") { return cudf::io::compression_type::LZ4; }
+  if (compression_string == "LZO") { return cudf::io::compression_type::LZO; }
+  if (compression_string == "ZSTD") { return cudf::io::compression_type::ZSTD; }
+  CUDF_FAIL("Unsupported compression_type.");
 }

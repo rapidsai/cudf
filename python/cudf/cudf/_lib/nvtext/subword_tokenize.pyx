@@ -1,15 +1,17 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint32_t, uintptr_t
+from libc.stdint cimport uint32_t
+
+from cudf.core.buffer import acquire_spill_lock
+
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.nvtext.subword_tokenize cimport (
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.nvtext.subword_tokenize cimport (
     hashed_vocabulary as cpp_hashed_vocabulary,
     load_vocabulary_file as cpp_load_vocabulary_file,
     move as tr_move,
@@ -27,6 +29,7 @@ cdef class Hashed_Vocabulary:
             self.c_obj = move(cpp_load_vocabulary_file(c_hash_file))
 
 
+@acquire_spill_lock()
 def subword_tokenize_inmem_hash(
     Column strings,
     Hashed_Vocabulary hashed_vocabulary,
@@ -34,7 +37,6 @@ def subword_tokenize_inmem_hash(
     uint32_t stride=48,
     bool do_lower=True,
     bool do_truncate=False,
-    uint32_t max_rows_tensor=500
 ):
     """
     Subword tokenizes text series by using the pre-loaded hashed vocabulary
@@ -50,7 +52,6 @@ def subword_tokenize_inmem_hash(
                 stride,
                 do_lower,
                 do_truncate,
-                max_rows_tensor
             )
         )
     # return the 3 tensor components

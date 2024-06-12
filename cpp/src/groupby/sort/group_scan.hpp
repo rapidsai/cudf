@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -40,7 +41,24 @@ std::unique_ptr<column> sum_scan(column_view const& values,
                                  size_type num_groups,
                                  device_span<size_type const> group_labels,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr);
+                                 rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Internal API to calculate groupwise cumulative product
+ *
+ * Behaviour is undefined for signed integral types if any groupwise product overflows the type.
+ *
+ * @param values Grouped values to get product of
+ * @param num_groups Number of groups
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> product_scan(column_view const& values,
+                                     size_type num_groups,
+                                     device_span<size_type const> group_labels,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate groupwise cumulative minimum value
@@ -55,7 +73,7 @@ std::unique_ptr<column> min_scan(column_view const& values,
                                  size_type num_groups,
                                  device_span<size_type const> group_labels,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr);
+                                 rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate groupwise cumulative maximum value
@@ -70,7 +88,7 @@ std::unique_ptr<column> max_scan(column_view const& values,
                                  size_type num_groups,
                                  device_span<size_type const> group_labels,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr);
+                                 rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate cumulative number of values in each group
@@ -82,7 +100,7 @@ std::unique_ptr<column> max_scan(column_view const& values,
  */
 std::unique_ptr<column> count_scan(device_span<size_type const> group_labels,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr);
+                                   rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate groupwise min rank value
@@ -101,7 +119,7 @@ std::unique_ptr<column> min_rank_scan(column_view const& grouped_values,
                                       device_span<size_type const> group_labels,
                                       device_span<size_type const> group_offsets,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
+                                      rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate groupwise max rank value
@@ -111,14 +129,14 @@ std::unique_ptr<column> min_rank_scan(column_view const& grouped_values,
  *                                      device_span<size_type const> group_labels,
  *                                      device_span<size_type const> group_offsets,
  *                                      rmm::cuda_stream_view stream,
- *                                      rmm::mr::device_memory_resource* mr)
+ *                                      rmm::device_async_resource_ref mr)
  */
 std::unique_ptr<column> max_rank_scan(column_view const& grouped_values,
                                       column_view const& value_order,
                                       device_span<size_type const> group_labels,
                                       device_span<size_type const> group_offsets,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
+                                      rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate groupwise first rank value
@@ -128,14 +146,14 @@ std::unique_ptr<column> max_rank_scan(column_view const& grouped_values,
  *                                      device_span<size_type const> group_labels,
  *                                      device_span<size_type const> group_offsets,
  *                                      rmm::cuda_stream_view stream,
- *                                      rmm::mr::device_memory_resource* mr)
+ *                                      rmm::device_async_resource_ref mr)
  */
 std::unique_ptr<column> first_rank_scan(column_view const& grouped_values,
                                         column_view const& value_order,
                                         device_span<size_type const> group_labels,
                                         device_span<size_type const> group_offsets,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr);
+                                        rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate groupwise average rank value
@@ -145,14 +163,14 @@ std::unique_ptr<column> first_rank_scan(column_view const& grouped_values,
  *                                      device_span<size_type const> group_labels,
  *                                      device_span<size_type const> group_offsets,
  *                                      rmm::cuda_stream_view stream,
- *                                      rmm::mr::device_memory_resource* mr)
+ *                                      rmm::device_async_resource_ref mr)
  */
 std::unique_ptr<column> average_rank_scan(column_view const& grouped_values,
                                           column_view const& value_order,
                                           device_span<size_type const> group_labels,
                                           device_span<size_type const> group_offsets,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr);
+                                          rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate groupwise dense rank value
@@ -169,7 +187,7 @@ std::unique_ptr<column> dense_rank_scan(column_view const& grouped_values,
                                         device_span<size_type const> group_labels,
                                         device_span<size_type const> group_offsets,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr);
+                                        rmm::device_async_resource_ref mr);
 
 /**
  * @brief Convert groupwise rank to groupwise percentage rank
@@ -192,7 +210,7 @@ std::unique_ptr<column> group_rank_to_percentage(rank_method const method,
                                                  device_span<size_type const> group_labels,
                                                  device_span<size_type const> group_offsets,
                                                  rmm::cuda_stream_view stream,
-                                                 rmm::mr::device_memory_resource* mr);
+                                                 rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace groupby

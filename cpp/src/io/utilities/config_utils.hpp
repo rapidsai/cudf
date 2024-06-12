@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <cudf/detail/utilities/logger.hpp>
+
 #include <sstream>
 #include <string>
 
@@ -28,6 +30,13 @@ template <typename T>
 T getenv_or(std::string_view env_var_name, T default_val)
 {
   auto const env_val = std::getenv(env_var_name.data());
+  if (env_val != nullptr) {
+    CUDF_LOG_INFO("Environment variable {} read as {}", env_var_name, env_val);
+  } else {
+    CUDF_LOG_INFO(
+      "Environment variable {} is not set, using default value {}", env_var_name, default_val);
+  }
+
   if (env_val == nullptr) { return default_val; }
 
   std::stringstream sstream(env_val);

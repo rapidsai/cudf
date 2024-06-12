@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,8 @@
  */
 
 #include "backref_re.cuh"
-
-#include <strings/regex/utilities.cuh>
+#include "strings/regex/regex_program_impl.h"
+#include "strings/regex/utilities.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -30,6 +30,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <regex>
 
@@ -102,32 +103,31 @@ std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string_vie
 
 //
 std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
-                                              std::string_view pattern,
+                                              regex_program const& prog,
                                               std::string_view replacement,
-                                              regex_flags const flags,
                                               rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+                                              rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
-  CUDF_EXPECTS(!pattern.empty(), "Parameter pattern must not be empty");
+  CUDF_EXPECTS(!prog.pattern().empty(), "Parameter pattern must not be empty");
   CUDF_EXPECTS(!replacement.empty(), "Parameter replacement must not be empty");
 
-  // compile regex into device object
-  auto d_prog = reprog_device::create(pattern, flags, capture_groups::EXTRACT, stream);
+  // create device object from regex_program
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   // parse the repl string for back-ref indicators
   auto group_count = std::min(99, d_prog->group_counts());  // group count should NOT exceed 99
-  auto const parse_result = parse_backrefs(replacement, group_count);
-  rmm::device_uvector<backref_type> backrefs =
-    cudf::detail::make_device_uvector_async(parse_result.second, stream);
+  auto const parse_result                    = parse_backrefs(replacement, group_count);
+  rmm::device_uvector<backref_type> backrefs = cudf::detail::make_device_uvector_async(
+    parse_result.second, stream, rmm::mr::get_current_device_resource());
   string_scalar repl_scalar(parse_result.first, true, stream);
-  string_view const d_repl_template = repl_scalar.value();
+  string_view const d_repl_template = repl_scalar.value(stream);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
-  using BackRefIterator = decltype(backrefs.begin());
-  auto children         = make_strings_children(
+  using BackRefIterator        = decltype(backrefs.begin());
+  auto [offsets_column, chars] = make_strings_children(
     backrefs_fn<BackRefIterator>{*d_strings, d_repl_template, backrefs.begin(), backrefs.end()},
     *d_prog,
     input.size(),
@@ -135,8 +135,8 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
     mr);
 
   return make_strings_column(input.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             chars.release(),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
@@ -146,14 +146,13 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
 // external API
 
 std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings,
-                                              std::string_view pattern,
+                                              regex_program const& prog,
                                               std::string_view replacement,
-                                              regex_flags const flags,
-                                              rmm::mr::device_memory_resource* mr)
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_with_backrefs(
-    strings, pattern, replacement, flags, cudf::get_default_stream(), mr);
+  return detail::replace_with_backrefs(strings, prog, replacement, stream, mr);
 }
 
 }  // namespace strings

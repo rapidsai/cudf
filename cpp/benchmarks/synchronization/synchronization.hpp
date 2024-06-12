@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,9 @@
  * It is built on top of the idea of Resource acquisition is initialization
  * (RAII). In the following we show a minimal example of how to use this class.
 
-    #include <benchmark/benchmark.h>
     #include <cudf/utilities/default_stream.hpp>
+
+    #include <benchmark/benchmark.h>
 
     static void sample_cuda_benchmark(benchmark::State& state) {
 
@@ -58,17 +59,14 @@
 
  */
 
-#ifndef CUDF_BENCH_SYNCHRONIZATION_H
-#define CUDF_BENCH_SYNCHRONIZATION_H
-
-// Google Benchmark library
-#include <benchmark/benchmark.h>
+#pragma once
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <benchmark/benchmark.h>
 #include <driver_types.h>
 
 class cuda_event_timer {
@@ -102,5 +100,3 @@ class cuda_event_timer {
   rmm::cuda_stream_view stream;
   benchmark::State* p_state;
 };
-
-#endif

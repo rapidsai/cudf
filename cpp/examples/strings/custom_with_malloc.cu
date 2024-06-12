@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda_runtime.h>
-#include <nvToolsExt.h>
+#include <nvtx3/nvToolsExt.h>
 
 /**
  * @brief Reserve CUDA malloc heap size
@@ -64,10 +64,10 @@ void set_malloc_heap_size(size_t heap_size = 1073741824)  // 1GB
  * @param redaction Redacted string replacement
  * @param d_output Output array of string_view objects
  */
-__global__ void redact_kernel(cudf::column_device_view const d_names,
-                              cudf::column_device_view const d_visibilities,
-                              cudf::string_view redaction,
-                              cudf::string_view* d_output)
+__global__ static void redact_kernel(cudf::column_device_view const d_names,
+                                     cudf::column_device_view const d_visibilities,
+                                     cudf::string_view redaction,
+                                     cudf::string_view* d_output)
 {
   // The row index is resolved from the CUDA thread/block objects
   auto index = threadIdx.x + blockIdx.x * blockDim.x;
@@ -107,7 +107,9 @@ __global__ void redact_kernel(cudf::column_device_view const d_names,
  * @param redaction Redacted string replacement (not to be freed)
  * @param d_output Output array of string_view objects to free
  */
-__global__ void free_kernel(cudf::string_view redaction, cudf::string_view* d_output, int count)
+__global__ static void free_kernel(cudf::string_view redaction,
+                                   cudf::string_view* d_output,
+                                   int count)
 {
   auto index = threadIdx.x + blockIdx.x * blockDim.x;
   if (index >= count) return;

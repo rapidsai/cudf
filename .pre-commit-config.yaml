@@ -1,109 +1,155 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 repos:
-      - repo: https://github.com/PyCQA/isort
-        rev: 5.10.1
-        hooks:
-              - id: isort
-                # Use the config file specific to each subproject so that each
-                # project can specify its own first/third-party packages.
-                args: ["--config-root=python/", "--resolve-all-configs"]
-                files: python/.*
-                types_or: [python, cython, pyi]
-      - repo: https://github.com/psf/black
-        rev: 22.3.0
-        hooks:
-              - id: black
-                files: python/.*
-                # Explicitly specify the pyproject.toml at the repo root, not per-project.
-                args: ["--config", "pyproject.toml"]
-      - repo: https://github.com/PyCQA/flake8
-        rev: 5.0.4
-        hooks:
-              - id: flake8
-                args: ["--config=setup.cfg"]
-                files: python/.*$
-                types: [file]
-                types_or: [python, cython]
-                additional_dependencies: ["flake8-force"]
-      - repo: https://github.com/pre-commit/mirrors-mypy
-        rev: 'v0.971'
-        hooks:
-              - id: mypy
-                additional_dependencies: [types-cachetools]
-                args: ["--config-file=setup.cfg",
-                       "python/cudf/cudf",
-                       "python/custreamz/custreamz",
-                       "python/cudf_kafka/cudf_kafka",
-                       "python/dask_cudf/dask_cudf"]
-                pass_filenames: false
-      - repo: https://github.com/PyCQA/pydocstyle
-        rev: 6.1.1
-        hooks:
-              - id: pydocstyle
-                args: ["--config=setup.cfg"]
-      - repo: https://github.com/pre-commit/mirrors-clang-format
-        rev: v11.1.0
-        hooks:
-              - id: clang-format
-                types_or: [c, c++, cuda]
-                args: ["-fallback-style=none", "-style=file", "-i"]
-      - repo: local
-        hooks:
-              - id: no-deprecationwarning
-                name: no-deprecationwarning
-                description: 'Enforce that DeprecationWarning is not introduced (use FutureWarning instead)'
-                entry: '(category=|\s)DeprecationWarning[,)]'
-                language: pygrep
-                types_or: [python, cython]
-              - id: cmake-format
-                name: cmake-format
-                entry: ./cpp/scripts/run-cmake-format.sh cmake-format
-                language: python
-                types: [cmake]
-                # Note that pre-commit autoupdate does not update the versions
-                # of dependencies, so we'll have to update this manually.
-                additional_dependencies:
-                  - cmakelang==0.6.13
-                verbose: true
-                require_serial: true
-              - id: cmake-lint
-                name: cmake-lint
-                entry: ./cpp/scripts/run-cmake-format.sh cmake-lint
-                language: python
-                types: [cmake]
-                # Note that pre-commit autoupdate does not update the versions
-                # of dependencies, so we'll have to update this manually.
-                additional_dependencies:
-                  - cmakelang==0.6.13
-                verbose: true
-                require_serial: true
-              - id: copyright-check
-                name: copyright-check
-                entry: python ./ci/checks/copyright.py --git-modified-only --update-current-year
-                language: python
-                pass_filenames: false
-                additional_dependencies: [gitpython]
-              - id: doxygen-check
-                name: doxygen-check
-                entry: ./ci/checks/doxygen.sh
-                files: ^cpp/include/
-                types_or: [file]
-                language: system
-                pass_filenames: false
-                verbose: true
-              - id: headers-recipe-check
-                name: headers-recipe-check
-                entry: ./ci/checks/headers_test.sh
-                files: |
-                  (?x)^(
-                    ^cpp/include/|
-                    ^conda/.*/meta.yaml
-                  )
-                types_or: [file]
-                language: system
-                pass_filenames: false
-                verbose: false
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: |
+          (?x)^(
+            ^cpp/cmake/thirdparty/patches/.*|
+            ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
+          )
+      - id: end-of-file-fixer
+        exclude: |
+          (?x)^(
+            ^cpp/cmake/thirdparty/patches/.*|
+            ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
+          )
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        # Use the config file specific to each subproject so that each
+        # project can specify its own first/third-party packages.
+        args: ["--config-root=python/", "--resolve-all-configs"]
+        files: python/.*
+        exclude: |
+          (?x)^(^python/cudf_polars/.*)
+        types_or: [python, cython, pyi]
+  - repo: https://github.com/MarcoGorelli/cython-lint
+    rev: v0.16.2
+    hooks:
+      - id: cython-lint
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: 'v1.10.0'
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-cachetools]
+        args: ["--config-file=pyproject.toml",
+               "python/cudf/cudf",
+               "python/custreamz/custreamz",
+               "python/cudf_kafka/cudf_kafka",
+               "python/cudf_polars/cudf_polars",
+               "python/dask_cudf/dask_cudf"]
+        pass_filenames: false
+  - repo: https://github.com/nbQA-dev/nbQA
+    rev: 1.8.5
+    hooks:
+      - id: nbqa-isort
+        # Use the cudf_kafka isort orderings in notebooks so that dask
+        # and RAPIDS packages have their own sections.
+        args: ["--settings-file=python/cudf_kafka/pyproject.toml"]
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v16.0.6
+    hooks:
+      - id: clang-format
+        types_or: [c, c++, cuda]
+        args: ["-fallback-style=none", "-style=file", "-i"]
+  - repo: https://github.com/sirosen/texthooks
+    rev: 0.6.6
+    hooks:
+      - id: fix-smartquotes
+        exclude: |
+          (?x)^(
+            ^cpp/include/cudf_test/cxxopts.hpp|
+            ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*|
+            ^python/cudf/cudf/tests/text/test_text_methods.py
+          )
+  - repo: local
+    hooks:
+      - id: no-deprecationwarning
+        name: no-deprecationwarning
+        description: 'Enforce that DeprecationWarning is not introduced (use FutureWarning instead)'
+        entry: '(category=|\s)DeprecationWarning[,)]'
+        language: pygrep
+        types_or: [python, cython]
+        # We need to exclude just the following file because few APIs still need
+        # DeprecationWarning: https://github.com/pandas-dev/pandas/issues/54970
+        exclude: |
+          (?x)^(
+            ^python/cudf/cudf/core/dtypes.py|
+            ^python/cudf/cudf/tests/pytest.ini
+          )
+      - id: no-programmatic-xfail
+        name: no-programmatic-xfail
+        description: 'Enforce that pytest.xfail is not introduced (see dev docs for details)'
+        entry: 'pytest\.xfail'
+        language: pygrep
+        types: [python]
+      - id: cmake-format
+        name: cmake-format
+        entry: ./cpp/scripts/run-cmake-format.sh cmake-format
+        language: python
+        types: [cmake]
+        # Note that pre-commit autoupdate does not update the versions
+        # of dependencies, so we'll have to update this manually.
+        additional_dependencies:
+          - cmakelang==0.6.13
+        verbose: true
+        require_serial: true
+      - id: cmake-lint
+        name: cmake-lint
+        entry: ./cpp/scripts/run-cmake-format.sh cmake-lint
+        language: python
+        types: [cmake]
+        # Note that pre-commit autoupdate does not update the versions
+        # of dependencies, so we'll have to update this manually.
+        additional_dependencies:
+          - cmakelang==0.6.13
+        verbose: true
+        require_serial: true
+      - id: doxygen-check
+        name: doxygen-check
+        entry: ./ci/checks/doxygen.sh
+        files: ^cpp/include/
+        types_or: [file]
+        language: system
+        pass_filenames: false
+        verbose: true
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.2.6
+    hooks:
+      - id: codespell
+        additional_dependencies: [tomli]
+        args: ["--toml", "pyproject.toml"]
+        exclude: |
+          (?x)^(
+            .*test.*|
+            ^CHANGELOG.md$
+          )
+  - repo: https://github.com/rapidsai/dependency-file-generator
+    rev: v1.13.11
+    hooks:
+      - id: rapids-dependency-file-generator
+        args: ["--clean"]
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.8
+    hooks:
+      - id: ruff
+        files: python/.*$
+      - id: ruff-format
+        files: python/.*$
+  - repo: https://github.com/rapidsai/pre-commit-hooks
+    rev: v0.0.3
+    hooks:
+      - id: verify-copyright
+        exclude: |
+          (?x)^(
+            cpp/include/cudf_test/cxxopts[.]hpp$|
+            cpp/src/io/parquet/ipc/Message_generated[.]h$|
+            cpp/src/io/parquet/ipc/Schema_generated[.]h$
+          )
 
 default_language_version:
       python: python3

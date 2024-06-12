@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,10 +33,11 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
 #include <iterator>
@@ -46,9 +47,7 @@
 namespace cudf {
 
 // Copy ctor w/ optional stream/mr
-column::column(column const& other,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
+column::column(column const& other, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
   : _type{other._type},
     _size{other._size},
     _data{other._data, stream, mr},
@@ -117,36 +116,13 @@ mutable_column_view column::mutable_view()
     child_views.emplace_back(*c);
   }
 
-  // Store the old null count before resetting it. By accessing the value
-  // directly instead of calling `this->null_count()`, we can avoid a potential
-  // invocation of `cudf::detail::null_count()`. This does however mean that
-  // calling `this->null_count()` on the resulting mutable view could still
-  // potentially invoke `cudf::detail::null_count()`.
-  auto current_null_count = _null_count;
-
-  // The elements of a column could be changed through a `mutable_column_view`, therefore the
-  // existing `null_count` is no longer valid. Reset it to `UNKNOWN_NULL_COUNT` forcing it to be
-  // recomputed on the next invocation of `this->null_count()`.
-  set_null_count(cudf::UNKNOWN_NULL_COUNT);
-
   return mutable_column_view{type(),
                              size(),
                              _data.data(),
                              static_cast<bitmask_type*>(_null_mask.data()),
-                             current_null_count,
+                             _null_count,
                              0,
                              child_views};
-}
-
-// If the null count is known, return it. Else, compute and return it
-size_type column::null_count() const
-{
-  CUDF_FUNC_RANGE();
-  if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
-    _null_count = cudf::detail::null_count(
-      static_cast<bitmask_type const*>(_null_mask.data()), 0, size(), cudf::get_default_stream());
-  }
-  return _null_count;
 }
 
 void column::set_null_mask(rmm::device_buffer&& new_null_mask, size_type new_null_count)
@@ -183,7 +159,7 @@ namespace {
 struct create_column_from_view {
   cudf::column_view view;
   rmm::cuda_stream_view stream{cudf::get_default_stream()};
-  rmm::mr::device_memory_resource* mr;
+  rmm::device_async_resource_ref mr;
 
   template <typename ColumnType,
             std::enable_if_t<std::is_same_v<ColumnType, cudf::string_view>>* = nullptr>
@@ -228,7 +204,7 @@ struct create_column_from_view {
       view.type(),
       view.size(),
       rmm::device_buffer{
-        static_cast<const char*>(view.head()) + (view.offset() * cudf::size_of(view.type())),
+        static_cast<char const*>(view.head()) + (view.offset() * cudf::size_of(view.type())),
         view.size() * cudf::size_of(view.type()),
         stream,
         mr},
@@ -261,7 +237,7 @@ struct create_column_from_view {
                    std::back_inserter(children),
                    [begin, end, stream = this->stream, mr = this->mr](auto child) {
                      return std::make_unique<column>(
-                       cudf::detail::slice(child, begin, end), stream, mr);
+                       cudf::detail::slice(child, begin, end, stream), stream, mr);
                    });
 
     auto num_rows = view.size();
@@ -277,7 +253,7 @@ struct create_column_from_view {
 }  // anonymous namespace
 
 // Copy from a view
-column::column(column_view view, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+column::column(column_view view, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
   :  // Move is needed here because the dereference operator of unique_ptr returns
      // an lvalue reference, which would otherwise dispatch to the copy constructor
     column{std::move(*type_dispatcher(view.type(), create_column_from_view{view, stream, mr}))}

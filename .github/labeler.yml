@@ -1,21 +1,26 @@
 # Documentation for config - https://github.com/actions/labeler#common-examples
 
-cuDF (Python):
+Python:
   - 'python/**'
   - 'notebooks/**'
-  
+
+cudf.pandas:
+  - 'python/cudf/cudf/pandas/**'
+  - 'python/cudf/cudf_pandas_tests/**'
+
+cudf.polars:
+  - 'python/cudf_polars/**'
+
+pylibcudf:
+  - 'python/cudf/cudf/_lib/pylibcudf/**'
+
 libcudf:
   - 'cpp/**'
 
 CMake:
   - '**/CMakeLists.txt'
   - '**/cmake/**'
-  
-cuDF (Java):
+  - '**/*.cmake'
+
+Java:
   - 'java/**'
-
-gpuCI:
-  - 'ci/**'
-
-conda:
-  - 'conda/**'

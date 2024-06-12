@@ -1,24 +1,23 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
 from libcpp.utility cimport move
 
+from cudf.core.buffer import acquire_spill_lock
+
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
-from cudf._lib.cpp.strings.split.partition cimport (
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from cudf._lib.pylibcudf.libcudf.strings.split.partition cimport (
     partition as cpp_partition,
     rpartition as cpp_rpartition,
 )
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport data_from_unique_ptr
 
 
+@acquire_spill_lock()
 def partition(Column source_strings,
               object py_delimiter):
     """
@@ -46,6 +45,7 @@ def partition(Column source_strings,
     )
 
 
+@acquire_spill_lock()
 def rpartition(Column source_strings,
                object py_delimiter):
     """

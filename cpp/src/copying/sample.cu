@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,9 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/random.h>
 #include <thrust/random/uniform_int_distribution.h>
@@ -39,7 +41,7 @@ std::unique_ptr<table> sample(table_view const& input,
                               sample_with_replacement replacement,
                               int64_t const seed,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(n >= 0, "expected number of samples should be non-negative");
   auto const num_rows = input.num_rows();
@@ -51,12 +53,12 @@ std::unique_ptr<table> sample(table_view const& input,
   if (n == 0) return cudf::empty_like(input);
 
   if (replacement == sample_with_replacement::TRUE) {
-    auto RandomGen = [seed, num_rows] __device__(auto i) {
+    auto RandomGen = cuda::proclaim_return_type<size_type>([seed, num_rows] __device__(auto i) {
       thrust::default_random_engine rng(seed);
       thrust::uniform_int_distribution<size_type> dist{0, num_rows - 1};
       rng.discard(i);
       return dist(rng);
-    };
+    });
 
     auto begin = cudf::detail::make_counting_transform_iterator(0, RandomGen);
 
@@ -90,9 +92,10 @@ std::unique_ptr<table> sample(table_view const& input,
                               size_type const n,
                               sample_with_replacement replacement,
                               int64_t const seed,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sample(input, n, replacement, seed, cudf::get_default_stream(), mr);
+  return detail::sample(input, n, replacement, seed, stream, mr);
 }
 }  // namespace cudf

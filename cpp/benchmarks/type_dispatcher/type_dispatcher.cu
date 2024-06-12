@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,28 +58,32 @@ constexpr int block_size = 256;
 
 // This is for NO_DISPATCHING
 template <FunctorType functor_type, class T>
-__global__ void no_dispatching_kernel(T** A, cudf::size_type n_rows, cudf::size_type n_cols)
+CUDF_KERNEL void no_dispatching_kernel(T** A, cudf::size_type n_rows, cudf::size_type n_cols)
 {
-  using F               = Functor<T, functor_type>;
-  cudf::size_type index = blockIdx.x * blockDim.x + threadIdx.x;
-  while (index < n_rows) {
+  using F           = Functor<T, functor_type>;
+  auto tidx         = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
+  while (tidx < n_rows) {
+    auto const index = static_cast<cudf::size_type>(tidx);
     for (int c = 0; c < n_cols; c++) {
       A[c][index] = F::f(A[c][index]);
     }
-    index += blockDim.x * gridDim.x;
+    tidx += stride;
   }
 }
 
 // This is for HOST_DISPATCHING
 template <FunctorType functor_type, class T>
-__global__ void host_dispatching_kernel(cudf::mutable_column_device_view source_column)
+CUDF_KERNEL void host_dispatching_kernel(cudf::mutable_column_device_view source_column)
 {
-  using F               = Functor<T, functor_type>;
-  T* A                  = source_column.data<T>();
-  cudf::size_type index = blockIdx.x * blockDim.x + threadIdx.x;
-  while (index < source_column.size()) {
-    A[index] = F::f(A[index]);
-    index += blockDim.x * gridDim.x;
+  using F           = Functor<T, functor_type>;
+  T* A              = source_column.data<T>();
+  auto tidx         = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
+  while (tidx < source_column.size()) {
+    auto const index = static_cast<cudf::size_type>(tidx);
+    A[index]         = F::f(A[index]);
+    tidx += stride;
   }
 }
 
@@ -124,25 +128,26 @@ struct RowHandle {
 
 // This is for DEVICE_DISPATCHING
 template <FunctorType functor_type>
-__global__ void device_dispatching_kernel(cudf::mutable_table_device_view source)
+CUDF_KERNEL void device_dispatching_kernel(cudf::mutable_table_device_view source)
 {
-  const cudf::size_type n_rows = source.num_rows();
-  cudf::size_type index        = threadIdx.x + blockIdx.x * blockDim.x;
-
-  while (index < n_rows) {
+  cudf::size_type const n_rows = source.num_rows();
+  auto tidx                    = cudf::detail::grid_1d::global_thread_id();
+  auto const stride            = cudf::detail::grid_1d::grid_stride();
+  while (tidx < n_rows) {
+    auto const index = static_cast<cudf::size_type>(tidx);
     for (cudf::size_type i = 0; i < source.num_columns(); i++) {
       cudf::type_dispatcher(
         source.column(i).type(), RowHandle<functor_type>{}, source.column(i), index);
     }
-    index += blockDim.x * gridDim.x;
+    tidx += stride;
   }  // while
 }
 
 template <FunctorType functor_type, DispatchingType dispatching_type, class T>
 void launch_kernel(cudf::mutable_table_view input, T** d_ptr, int work_per_thread)
 {
-  const cudf::size_type n_rows = input.num_rows();
-  const cudf::size_type n_cols = input.num_columns();
+  cudf::size_type const n_rows = input.num_rows();
+  cudf::size_type const n_cols = input.num_columns();
 
   cudf::detail::grid_1d grid_config{n_rows, block_size};
   int grid_size = grid_config.num_blocks;
@@ -169,9 +174,9 @@ void launch_kernel(cudf::mutable_table_view input, T** d_ptr, int work_per_threa
 template <class TypeParam, FunctorType functor_type, DispatchingType dispatching_type>
 void type_dispatcher_benchmark(::benchmark::State& state)
 {
-  const auto n_cols          = static_cast<cudf::size_type>(state.range(0));
-  const auto source_size     = static_cast<cudf::size_type>(state.range(1));
-  const auto work_per_thread = static_cast<cudf::size_type>(state.range(2));
+  auto const n_cols          = static_cast<cudf::size_type>(state.range(0));
+  auto const source_size     = static_cast<cudf::size_type>(state.range(1));
+  auto const work_per_thread = static_cast<cudf::size_type>(state.range(2));
 
   auto init = cudf::make_fixed_width_scalar<TypeParam>(static_cast<TypeParam>(0));
 
@@ -194,8 +199,8 @@ void type_dispatcher_benchmark(::benchmark::State& state)
   rmm::device_uvector<TypeParam*> d_vec(n_cols, cudf::get_default_stream());
 
   if (dispatching_type == NO_DISPATCHING) {
-    CUDF_CUDA_TRY(cudaMemcpy(
-      d_vec.data(), h_vec_p.data(), sizeof(TypeParam*) * n_cols, cudaMemcpyHostToDevice));
+    CUDF_CUDA_TRY(
+      cudaMemcpy(d_vec.data(), h_vec_p.data(), sizeof(TypeParam*) * n_cols, cudaMemcpyDefault));
   }
 
   // Warm up
@@ -211,8 +216,7 @@ void type_dispatcher_benchmark(::benchmark::State& state)
                           sizeof(TypeParam));
 }
 
-class TypeDispatcher : public cudf::benchmark {
-};
+class TypeDispatcher : public cudf::benchmark {};
 
 #define TBM_BENCHMARK_DEFINE(name, TypeParam, functor_type, dispatching_type)    \
   BENCHMARK_DEFINE_F(TypeDispatcher, name)(::benchmark::State & state)           \

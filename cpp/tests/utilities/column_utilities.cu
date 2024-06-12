@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,31 +14,29 @@
  * limitations under the License.
  */
 
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/debug_utilities.hpp>
+#include <cudf_test/default_stream.hpp>
+
 #include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/lists/lists_column_view.hpp>
-#include <cudf/strings/convert/convert_datetime.hpp>
+#include <cudf/lists/list_view.hpp>
 #include <cudf/structs/struct_view.hpp>
-#include <cudf/structs/structs_column_view.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/detail/column_utilities.hpp>
-
-#include <jit/type.hpp>
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
 #include <thrust/equal.h>
@@ -48,6 +46,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/reduce.h>
+#include <thrust/remove.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
@@ -64,9 +63,9 @@ namespace {
 
 std::unique_ptr<column> generate_all_row_indices(size_type num_rows)
 {
-  auto indices =
-    cudf::make_fixed_width_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED);
-  thrust::sequence(rmm::exec_policy(cudf::get_default_stream()),
+  auto indices = cudf::make_fixed_width_column(
+    data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, cudf::test::get_default_stream());
+  thrust::sequence(rmm::exec_policy(cudf::test::get_default_stream()),
                    indices->mutable_view().begin<size_type>(),
                    indices->mutable_view().end<size_type>(),
                    0);
@@ -103,7 +102,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   // if we are checking for exact equality, we should be checking for "unsanitized" data that may
   // be hiding underneath nulls. so check all rows instead of just non-null rows
   if (check_exact_equality) {
-    return generate_all_row_indices(c.get_sliced_child(cudf::get_default_stream()).size());
+    return generate_all_row_indices(c.get_sliced_child(cudf::test::get_default_stream()).size());
   }
 
   // Example input
@@ -121,18 +120,18 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   // compute total # of child row indices we will be emitting.
   auto row_size_iter = cudf::detail::make_counting_transform_iterator(
     0,
-    [row_indices = row_indices.begin<size_type>(),
-     validity    = c.null_mask(),
-     offsets     = c.offsets().begin<offset_type>(),
-     offset      = c.offset()] __device__(int index) {
+    cuda::proclaim_return_type<size_type>([row_indices = row_indices.begin<size_type>(),
+                                           validity    = c.null_mask(),
+                                           offsets     = c.offsets().begin<size_type>(),
+                                           offset      = c.offset()] __device__(int index) {
       // both null mask and offsets data are not pre-sliced. so we need to add the column offset to
       // every incoming index.
       auto const true_index = row_indices[index] + offset;
       return !validity || cudf::bit_is_set(validity, true_index)
                ? (offsets[true_index + 1] - offsets[true_index])
                : 0;
-    });
-  auto const output_size = thrust::reduce(rmm::exec_policy(cudf::get_default_stream()),
+    }));
+  auto const output_size = thrust::reduce(rmm::exec_policy(cudf::test::get_default_stream()),
                                           row_size_iter,
                                           row_size_iter + row_indices.size());
   // no output. done.
@@ -147,7 +146,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   auto output_row_start = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, row_indices.size(), mask_state::UNALLOCATED);
-  thrust::exclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::exclusive_scan(rmm::exec_policy(cudf::test::get_default_stream()),
                          row_size_iter,
                          row_size_iter + row_indices.size(),
                          output_row_start->mutable_view().begin<size_type>());
@@ -156,10 +155,10 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   // result = [1, 1, 1, 1, 1]
   //
-  thrust::generate(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::generate(rmm::exec_policy(cudf::test::get_default_stream()),
                    result->mutable_view().begin<size_type>(),
                    result->mutable_view().end<size_type>(),
-                   [] __device__() { return 1; });
+                   cuda::proclaim_return_type<size_type>([] __device__() { return 1; }));
 
   // scatter the output row positions into result buffer
   //
@@ -167,15 +166,16 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   auto output_row_iter = cudf::detail::make_counting_transform_iterator(
     0,
-    [row_indices  = row_indices.begin<size_type>(),
-     offsets      = c.offsets().begin<offset_type>(),
-     offset       = c.offset(),
-     first_offset = cudf::detail::get_value<offset_type>(
-       c.offsets(), c.offset(), cudf::get_default_stream())] __device__(int index) {
-      auto const true_index = row_indices[index] + offset;
-      return offsets[true_index] - first_offset;
-    });
-  thrust::scatter_if(rmm::exec_policy(cudf::get_default_stream()),
+    cuda::proclaim_return_type<size_type>(
+      [row_indices  = row_indices.begin<size_type>(),
+       offsets      = c.offsets().begin<size_type>(),
+       offset       = c.offset(),
+       first_offset = cudf::detail::get_value<size_type>(
+         c.offsets(), c.offset(), cudf::test::get_default_stream())] __device__(int index) {
+        auto const true_index = row_indices[index] + offset;
+        return offsets[true_index] - first_offset;
+      }));
+  thrust::scatter_if(rmm::exec_policy(cudf::test::get_default_stream()),
                      output_row_iter,
                      output_row_iter + row_indices.size(),
                      output_row_start->view().begin<size_type>(),
@@ -189,18 +189,18 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   auto keys =
     cudf::make_fixed_width_column(data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED);
-  thrust::generate(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::generate(rmm::exec_policy(cudf::test::get_default_stream()),
                    keys->mutable_view().begin<size_type>(),
                    keys->mutable_view().end<size_type>(),
-                   [] __device__() { return 0; });
-  thrust::scatter_if(rmm::exec_policy(cudf::get_default_stream()),
+                   cuda::proclaim_return_type<size_type>([] __device__() { return 0; }));
+  thrust::scatter_if(rmm::exec_policy(cudf::test::get_default_stream()),
                      row_size_iter,
                      row_size_iter + row_indices.size(),
                      output_row_start->view().begin<size_type>(),
                      row_size_iter,
                      keys->mutable_view().begin<size_type>(),
                      [] __device__(auto row_size) { return row_size != 0; });
-  thrust::inclusive_scan(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::inclusive_scan(rmm::exec_policy(cudf::test::get_default_stream()),
                          keys->view().begin<size_type>(),
                          keys->view().end<size_type>(),
                          keys->mutable_view().begin<size_type>());
@@ -213,7 +213,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   // output
   //    result = [6, 7, 11, 12, 13]
   //
-  thrust::inclusive_scan_by_key(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::inclusive_scan_by_key(rmm::exec_policy(cudf::test::get_default_stream()),
                                 keys->view().begin<size_type>(),
                                 keys->view().end<size_type>(),
                                 result->view().begin<size_type>(),
@@ -239,28 +239,6 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
 
 template <bool check_exact_equality>
 struct column_property_comparator {
-  bool types_equivalent(cudf::data_type const& lhs, cudf::data_type const& rhs)
-  {
-    return is_fixed_point(lhs) ? lhs.id() == rhs.id() : lhs == rhs;
-  }
-
-  size_type count_nulls(cudf::column_view const& c, cudf::column_view const& row_indices)
-  {
-    auto validity_iter = cudf::detail::make_counting_transform_iterator(
-      0,
-      [row_indices = row_indices.begin<size_type>(),
-       validity    = c.null_mask(),
-       offset      = c.offset()] __device__(int index) {
-        // both null mask and offsets data are not pre-sliced. so we need to add the column offset
-        // to every incoming index.
-        auto const true_index = row_indices[index] + offset;
-        return !validity || cudf::bit_is_set(validity, true_index) ? 0 : 1;
-      });
-    return thrust::reduce(rmm::exec_policy(cudf::get_default_stream()),
-                          validity_iter,
-                          validity_iter + row_indices.size());
-  }
-
   bool compare_common(cudf::column_view const& lhs,
                       cudf::column_view const& rhs,
                       cudf::column_view const& lhs_row_indices,
@@ -270,9 +248,9 @@ struct column_property_comparator {
     bool result = true;
 
     if (check_exact_equality) {
-      PROP_EXPECT_EQ(lhs.type(), rhs.type());
+      PROP_EXPECT_EQ(cudf::have_same_types(lhs, rhs), true);
     } else {
-      PROP_EXPECT_EQ(types_equivalent(lhs.type(), rhs.type()), true);
+      PROP_EXPECT_EQ(cudf::column_types_equivalent(lhs, rhs), true);
     }
 
     auto const lhs_size = check_exact_equality ? lhs.size() : lhs_row_indices.size();
@@ -281,12 +259,7 @@ struct column_property_comparator {
 
     if (lhs_size > 0 && check_exact_equality) { PROP_EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
 
-    // DISCUSSION: does this make sense, semantically?
-    auto const lhs_null_count =
-      check_exact_equality ? lhs.null_count() : count_nulls(lhs, lhs_row_indices);
-    auto const rhs_null_count =
-      check_exact_equality ? rhs.null_count() : count_nulls(rhs, rhs_row_indices);
-    PROP_EXPECT_EQ(lhs_null_count, rhs_null_count);
+    PROP_EXPECT_EQ(lhs.null_count(), rhs.null_count());
 
     // equivalent, but not exactly equal columns can have a different number of children if their
     // sizes are both 0. Specifically, empty string columns may or may not have children.
@@ -328,8 +301,8 @@ struct column_property_comparator {
     auto lhs_child_indices =
       generate_child_row_indices(lhs_l, lhs_row_indices, check_exact_equality);
     if (lhs_child_indices->size() > 0) {
-      auto lhs_child = lhs_l.get_sliced_child(cudf::get_default_stream());
-      auto rhs_child = rhs_l.get_sliced_child(cudf::get_default_stream());
+      auto lhs_child = lhs_l.get_sliced_child(cudf::test::get_default_stream());
+      auto rhs_child = rhs_l.get_sliced_child(cudf::test::get_default_stream());
       auto rhs_child_indices =
         generate_child_row_indices(rhs_l, rhs_row_indices, check_exact_equality);
       return cudf::type_dispatcher(lhs_child.type(),
@@ -356,8 +329,8 @@ struct column_property_comparator {
     structs_column_view r_scv(rhs);
 
     for (size_type i = 0; i < lhs.num_children(); i++) {
-      column_view lhs_child = l_scv.get_sliced_child(i);
-      column_view rhs_child = r_scv.get_sliced_child(i);
+      column_view lhs_child = l_scv.get_sliced_child(i, cudf::test::get_default_stream());
+      column_view rhs_child = r_scv.get_sliced_child(i, cudf::test::get_default_stream());
       if (!cudf::type_dispatcher(lhs_child.type(),
                                  column_property_comparator<check_exact_equality>{},
                                  lhs_child,
@@ -373,55 +346,56 @@ struct column_property_comparator {
   }
 };
 
+template <typename DeviceComparator>
 class corresponding_rows_unequal {
  public:
-  corresponding_rows_unequal(table_device_view d_lhs,
-                             table_device_view d_rhs,
-                             column_device_view lhs_row_indices_,
+  corresponding_rows_unequal(column_device_view lhs_row_indices_,
                              column_device_view rhs_row_indices_,
-                             size_type /*fp_ulps*/)
-    : comp(cudf::nullate::YES{}, d_lhs, d_rhs, cudf::null_equality::EQUAL),
-      lhs_row_indices(lhs_row_indices_),
-      rhs_row_indices(rhs_row_indices_)
+                             size_type /*fp_ulps*/,
+                             DeviceComparator comp_,
+                             column_device_view /*lhs*/,
+                             column_device_view /*rhs*/)
+    : lhs_row_indices(lhs_row_indices_), rhs_row_indices(rhs_row_indices_), comp(comp_)
   {
   }
-
-  cudf::row_equality_comparator<cudf::nullate::YES> comp;
 
   __device__ bool operator()(size_type index)
   {
-    return !comp(lhs_row_indices.element<size_type>(index),
-                 rhs_row_indices.element<size_type>(index));
+    using cudf::experimental::row::lhs_index_type;
+    using cudf::experimental::row::rhs_index_type;
+
+    return !comp(lhs_index_type{lhs_row_indices.element<size_type>(index)},
+                 rhs_index_type{rhs_row_indices.element<size_type>(index)});
   }
 
   column_device_view lhs_row_indices;
   column_device_view rhs_row_indices;
+  DeviceComparator comp;
 };
 
+template <typename DeviceComparator>
 class corresponding_rows_not_equivalent {
-  table_device_view d_lhs;
-  table_device_view d_rhs;
-
   column_device_view lhs_row_indices;
   column_device_view rhs_row_indices;
-
   size_type const fp_ulps;
+  DeviceComparator comp;
+  column_device_view lhs;
+  column_device_view rhs;
 
  public:
-  corresponding_rows_not_equivalent(table_device_view d_lhs,
-                                    table_device_view d_rhs,
-                                    column_device_view lhs_row_indices_,
+  corresponding_rows_not_equivalent(column_device_view lhs_row_indices_,
                                     column_device_view rhs_row_indices_,
-                                    size_type fp_ulps_)
-    : d_lhs(d_lhs),
-      d_rhs(d_rhs),
-      comp(cudf::nullate::YES{}, d_lhs, d_rhs, null_equality::EQUAL),
-      lhs_row_indices(lhs_row_indices_),
+                                    size_type fp_ulps_,
+                                    DeviceComparator comp_,
+                                    column_device_view lhs_,
+                                    column_device_view rhs_)
+    : lhs_row_indices(lhs_row_indices_),
       rhs_row_indices(rhs_row_indices_),
-      fp_ulps(fp_ulps_)
+      fp_ulps(fp_ulps_),
+      comp(comp_),
+      lhs(lhs_),
+      rhs(rhs_)
   {
-    CUDF_EXPECTS(d_lhs.num_columns() == 1 and d_rhs.num_columns() == 1,
-                 "Unsupported number of columns");
   }
 
   struct typed_element_not_equivalent {
@@ -461,23 +435,17 @@ class corresponding_rows_not_equivalent {
     }
   };
 
-  cudf::row_equality_comparator<cudf::nullate::YES> comp;
-
   __device__ bool operator()(size_type index)
   {
+    using cudf::experimental::row::lhs_index_type;
+    using cudf::experimental::row::rhs_index_type;
+
     auto const lhs_index = lhs_row_indices.element<size_type>(index);
     auto const rhs_index = rhs_row_indices.element<size_type>(index);
 
-    if (not comp(lhs_index, rhs_index)) {
-      auto lhs_col = this->d_lhs.column(0);
-      auto rhs_col = this->d_rhs.column(0);
-      return type_dispatcher(lhs_col.type(),
-                             typed_element_not_equivalent{},
-                             lhs_col,
-                             rhs_col,
-                             lhs_index,
-                             rhs_index,
-                             fp_ulps);
+    if (not comp(lhs_index_type{lhs_index}, rhs_index_type{rhs_index})) {
+      return type_dispatcher(
+        lhs.type(), typed_element_not_equivalent{}, lhs, rhs, lhs_index, rhs_index, fp_ulps);
     }
     return false;
   }
@@ -495,7 +463,8 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
   CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` is empty");
   std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
   // move the differences to the host.
-  auto h_differences = cudf::detail::make_host_vector_sync(differences);
+  auto h_differences =
+    cudf::detail::make_host_vector_sync(differences, cudf::test::get_default_stream());
   if (verbosity == debug_output_level::ALL_ERRORS) {
     std::ostringstream buffer;
     buffer << depth_str << "differences:" << std::endl;
@@ -516,11 +485,11 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
     auto const index = h_differences[0];  // only stringify first difference
 
     auto const lhs_index =
-      cudf::detail::get_value<size_type>(lhs_row_indices, index, cudf::get_default_stream());
+      cudf::detail::get_value<size_type>(lhs_row_indices, index, cudf::test::get_default_stream());
     auto const rhs_index =
-      cudf::detail::get_value<size_type>(rhs_row_indices, index, cudf::get_default_stream());
-    auto diff_lhs = cudf::detail::slice(lhs, lhs_index, lhs_index + 1);
-    auto diff_rhs = cudf::detail::slice(rhs, rhs_index, rhs_index + 1);
+      cudf::detail::get_value<size_type>(rhs_row_indices, index, cudf::test::get_default_stream());
+    auto diff_lhs = cudf::slice(lhs, {lhs_index, lhs_index + 1}).front();
+    auto diff_rhs = cudf::slice(rhs, {rhs_index, rhs_index + 1}).front();
     return depth_str + "first difference: " + "lhs[" + std::to_string(index) +
            "] = " + to_string(diff_lhs, "") + ", rhs[" + std::to_string(index) +
            "] = " + to_string(diff_rhs, "");
@@ -538,28 +507,53 @@ struct column_comparator_impl {
                   size_type fp_ulps,
                   int depth)
   {
-    auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
-    auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
+    auto d_lhs_row_indices =
+      cudf::column_device_view::create(lhs_row_indices, cudf::test::get_default_stream());
+    auto d_rhs_row_indices =
+      cudf::column_device_view::create(rhs_row_indices, cudf::test::get_default_stream());
 
-    auto d_lhs_row_indices = cudf::column_device_view::create(lhs_row_indices);
-    auto d_rhs_row_indices = cudf::column_device_view::create(rhs_row_indices);
+    auto d_lhs = cudf::column_device_view::create(lhs, cudf::test::get_default_stream());
+    auto d_rhs = cudf::column_device_view::create(rhs, cudf::test::get_default_stream());
 
-    using ComparatorType = std::conditional_t<check_exact_equality,
-                                              corresponding_rows_unequal,
-                                              corresponding_rows_not_equivalent>;
+    auto lhs_tview = table_view{{lhs}};
+    auto rhs_tview = table_view{{rhs}};
+
+    auto const comparator = cudf::experimental::row::equality::two_table_comparator{
+      lhs_tview, rhs_tview, cudf::test::get_default_stream()};
+    auto const has_nulls = cudf::has_nulls(lhs_tview) or cudf::has_nulls(rhs_tview);
+
+    auto const device_comparator = comparator.equal_to<false>(cudf::nullate::DYNAMIC{has_nulls});
+
+    using ComparatorType =
+      std::conditional_t<check_exact_equality,
+                         corresponding_rows_unequal<decltype(device_comparator)>,
+                         corresponding_rows_not_equivalent<decltype(device_comparator)>>;
 
     auto differences = rmm::device_uvector<int>(
-      lhs.size(), cudf::get_default_stream());  // worst case: everything different
+      lhs_row_indices.size(),
+      cudf::test::get_default_stream());  // worst case: everything different
     auto input_iter = thrust::make_counting_iterator(0);
-    auto diff_iter  = thrust::copy_if(
-      rmm::exec_policy(cudf::get_default_stream()),
+
+    auto diff_map =
+      rmm::device_uvector<bool>(lhs_row_indices.size(), cudf::test::get_default_stream());
+
+    thrust::transform(
+      rmm::exec_policy(cudf::test::get_default_stream()),
       input_iter,
       input_iter + lhs_row_indices.size(),
-      differences.begin(),
-      ComparatorType(*d_lhs, *d_rhs, *d_lhs_row_indices, *d_rhs_row_indices, fp_ulps));
+      diff_map.begin(),
+      ComparatorType(
+        *d_lhs_row_indices, *d_rhs_row_indices, fp_ulps, device_comparator, *d_lhs, *d_rhs));
+
+    auto diff_iter = thrust::copy_if(rmm::exec_policy(cudf::test::get_default_stream()),
+                                     input_iter,
+                                     input_iter + lhs_row_indices.size(),
+                                     diff_map.begin(),
+                                     differences.begin(),
+                                     thrust::identity<bool>{});
 
     differences.resize(thrust::distance(differences.begin(), diff_iter),
-                       cudf::get_default_stream());  // shrink back down
+                       cudf::test::get_default_stream());  // shrink back down
 
     if (not differences.is_empty()) {
       if (verbosity != debug_output_level::QUIET) {
@@ -597,33 +591,37 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     if (lhs_row_indices.is_empty()) { return true; }
 
     // worst case - everything is different
-    rmm::device_uvector<int> differences(lhs_row_indices.size(), cudf::get_default_stream());
+    rmm::device_uvector<int> differences(lhs_row_indices.size(), cudf::test::get_default_stream());
 
     // compare offsets, taking slicing into account
 
     // left side
     size_type lhs_shift = cudf::detail::get_value<size_type>(
-      lhs_l.offsets(), lhs_l.offset(), cudf::get_default_stream());
+      lhs_l.offsets(), lhs_l.offset(), cudf::test::get_default_stream());
     auto lhs_offsets = thrust::make_transform_iterator(
       lhs_l.offsets().begin<size_type>() + lhs_l.offset(),
-      [lhs_shift] __device__(size_type offset) { return offset - lhs_shift; });
+      cuda::proclaim_return_type<size_type>(
+        [lhs_shift] __device__(size_type offset) { return offset - lhs_shift; }));
     auto lhs_valids = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
-      [mask = lhs_l.null_mask(), offset = lhs_l.offset()] __device__(size_type index) {
-        return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
-      });
+      cuda::proclaim_return_type<bool>(
+        [mask = lhs_l.null_mask(), offset = lhs_l.offset()] __device__(size_type index) {
+          return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
+        }));
 
     // right side
     size_type rhs_shift = cudf::detail::get_value<size_type>(
-      rhs_l.offsets(), rhs_l.offset(), cudf::get_default_stream());
+      rhs_l.offsets(), rhs_l.offset(), cudf::test::get_default_stream());
     auto rhs_offsets = thrust::make_transform_iterator(
       rhs_l.offsets().begin<size_type>() + rhs_l.offset(),
-      [rhs_shift] __device__(size_type offset) { return offset - rhs_shift; });
+      cuda::proclaim_return_type<size_type>(
+        [rhs_shift] __device__(size_type offset) { return offset - rhs_shift; }));
     auto rhs_valids = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
-      [mask = rhs_l.null_mask(), offset = rhs_l.offset()] __device__(size_type index) {
-        return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
-      });
+      cuda::proclaim_return_type<bool>(
+        [mask = rhs_l.null_mask(), offset = rhs_l.offset()] __device__(size_type index) {
+          return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
+        }));
 
     // when checking for equivalency, we can't compare offset values directly, we can only
     // compare lengths of the rows, and only if valid.  as a concrete example, you could have two
@@ -643,7 +641,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     //
     auto input_iter = thrust::make_counting_iterator(0);
     auto diff_iter  = thrust::copy_if(
-      rmm::exec_policy(cudf::get_default_stream()),
+      rmm::exec_policy(cudf::test::get_default_stream()),
       input_iter,
       input_iter + lhs_row_indices.size(),
       differences.begin(),
@@ -679,7 +677,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
       });
 
     differences.resize(thrust::distance(differences.begin(), diff_iter),
-                       cudf::get_default_stream());  // shrink back down
+                       cudf::test::get_default_stream());  // shrink back down
 
     if (not differences.is_empty()) {
       if (verbosity != debug_output_level::QUIET) {
@@ -698,8 +696,8 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     auto lhs_child_indices =
       generate_child_row_indices(lhs_l, lhs_row_indices, check_exact_equality);
     if (lhs_child_indices->size() > 0) {
-      auto lhs_child = lhs_l.get_sliced_child(cudf::get_default_stream());
-      auto rhs_child = rhs_l.get_sliced_child(cudf::get_default_stream());
+      auto lhs_child = lhs_l.get_sliced_child(cudf::test::get_default_stream());
+      auto rhs_child = rhs_l.get_sliced_child(cudf::test::get_default_stream());
       auto rhs_child_indices =
         generate_child_row_indices(rhs_l, rhs_row_indices, check_exact_equality);
       return cudf::type_dispatcher(lhs_child.type(),
@@ -731,8 +729,8 @@ struct column_comparator_impl<struct_view, check_exact_equality> {
     structs_column_view r_scv(rhs);
 
     for (size_type i = 0; i < lhs.num_children(); i++) {
-      column_view lhs_child = l_scv.get_sliced_child(i);
-      column_view rhs_child = r_scv.get_sliced_child(i);
+      column_view lhs_child = l_scv.get_sliced_child(i, cudf::test::get_default_stream());
+      column_view rhs_child = r_scv.get_sliced_child(i, cudf::test::get_default_stream());
       if (!cudf::type_dispatcher(lhs_child.type(),
                                  column_comparator<check_exact_equality>{},
                                  lhs_child,
@@ -777,8 +775,21 @@ struct column_comparator {
   }
 };
 
+void check_non_empty_nulls(column_view const& lhs, column_view const& rhs)
+{
+  auto check_column_nulls = [](column_view const& col, const char* col_name) {
+    if (cudf::detail::has_nonempty_nulls(col, cudf::get_default_stream())) {
+      throw std::invalid_argument(col_name + std::string(" column has non-empty nulls"));
+    }
+  };
+
+  check_column_nulls(lhs, "lhs");
+  check_column_nulls(rhs, "rhs");
+}
+
 }  // namespace
 
+namespace detail {
 /**
  * @copydoc cudf::test::expect_column_properties_equal
  */
@@ -786,6 +797,7 @@ bool expect_column_properties_equal(column_view const& lhs,
                                     column_view const& rhs,
                                     debug_output_level verbosity)
 {
+  check_non_empty_nulls(lhs, rhs);
   auto lhs_indices = generate_all_row_indices(lhs.size());
   auto rhs_indices = generate_all_row_indices(rhs.size());
   return cudf::type_dispatcher(lhs.type(),
@@ -804,6 +816,7 @@ bool expect_column_properties_equivalent(column_view const& lhs,
                                          column_view const& rhs,
                                          debug_output_level verbosity)
 {
+  check_non_empty_nulls(lhs, rhs);
   auto lhs_indices = generate_all_row_indices(lhs.size());
   auto rhs_indices = generate_all_row_indices(rhs.size());
   return cudf::type_dispatcher(lhs.type(),
@@ -822,6 +835,7 @@ bool expect_columns_equal(cudf::column_view const& lhs,
                           cudf::column_view const& rhs,
                           debug_output_level verbosity)
 {
+  check_non_empty_nulls(lhs, rhs);
   auto lhs_indices = generate_all_row_indices(lhs.size());
   auto rhs_indices = generate_all_row_indices(rhs.size());
   return cudf::type_dispatcher(lhs.type(),
@@ -842,6 +856,7 @@ bool expect_columns_equivalent(cudf::column_view const& lhs,
                                debug_output_level verbosity,
                                size_type fp_ulps)
 {
+  check_non_empty_nulls(lhs, rhs);
   auto lhs_indices = generate_all_row_indices(lhs.size());
   auto rhs_indices = generate_all_row_indices(rhs.size());
   return cudf::type_dispatcher(lhs.type(),
@@ -855,15 +870,6 @@ bool expect_columns_equivalent(cudf::column_view const& lhs,
 }
 
 /**
- * @copydoc cudf::test::expect_column_empty
- */
-void expect_column_empty(cudf::column_view const& col)
-{
-  EXPECT_EQ(0, col.size());
-  EXPECT_EQ(0, col.null_count());
-}
-
-/**
  * @copydoc cudf::test::expect_equal_buffers
  */
 void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_bytes)
@@ -874,8 +880,20 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
   }
   auto typed_lhs = static_cast<char const*>(lhs);
   auto typed_rhs = static_cast<char const*>(rhs);
-  EXPECT_TRUE(thrust::equal(
-    rmm::exec_policy(cudf::get_default_stream()), typed_lhs, typed_lhs + size_bytes, typed_rhs));
+  EXPECT_TRUE(thrust::equal(rmm::exec_policy(cudf::test::get_default_stream()),
+                            typed_lhs,
+                            typed_lhs + size_bytes,
+                            typed_rhs));
+}
+}  // namespace detail
+
+/**
+ * @copydoc cudf::test::expect_column_empty
+ */
+void expect_column_empty(cudf::column_view const& col)
+{
+  EXPECT_EQ(0, col.size());
+  EXPECT_EQ(0, col.null_count());
 }
 
 /**
@@ -884,409 +902,21 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
 {
   if (c.nullable()) {
-    auto num_bitmasks = num_bitmask_words(c.size());
-    std::vector<bitmask_type> host_bitmask(num_bitmasks);
-    if (c.offset() == 0) {
-      CUDF_CUDA_TRY(cudaMemcpy(host_bitmask.data(),
-                               c.null_mask(),
-                               num_bitmasks * sizeof(bitmask_type),
-                               cudaMemcpyDeviceToHost));
-    } else {
+    auto num_bitmasks      = num_bitmask_words(c.size());
+    auto [bitmask_span, _] = [&] {
+      if (c.offset() == 0) {
+        return std::pair{cudf::device_span<bitmask_type const>(c.null_mask(), num_bitmasks),
+                         rmm::device_buffer{}};
+      }
       auto mask = copy_bitmask(c.null_mask(), c.offset(), c.offset() + c.size());
-      CUDF_CUDA_TRY(cudaMemcpy(host_bitmask.data(),
-                               mask.data(),
-                               num_bitmasks * sizeof(bitmask_type),
-                               cudaMemcpyDeviceToHost));
-    }
-
-    return host_bitmask;
+      return std::pair{cudf::device_span<bitmask_type const>(
+                         static_cast<bitmask_type*>(mask.data()), num_bitmasks),
+                       std::move(mask)};
+    }();
+    return cudf::detail::make_std_vector_sync(bitmask_span, cudf::get_default_stream());
   } else {
     return std::vector<bitmask_type>{};
   }
-}
-
-namespace {
-
-template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-static auto numeric_to_string_precise(T value)
-{
-  return std::to_string(value);
-}
-
-template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-static auto numeric_to_string_precise(T value)
-{
-  std::ostringstream o;
-  o << std::setprecision(std::numeric_limits<T>::max_digits10) << value;
-  return o.str();
-}
-
-static auto duration_suffix(cudf::duration_D) { return " days"; }
-
-static auto duration_suffix(cudf::duration_s) { return " seconds"; }
-
-static auto duration_suffix(cudf::duration_ms) { return " milliseconds"; }
-
-static auto duration_suffix(cudf::duration_us) { return " microseconds"; }
-
-static auto duration_suffix(cudf::duration_ns) { return " nanoseconds"; }
-
-std::string get_nested_type_str(cudf::column_view const& view)
-{
-  if (view.type().id() == cudf::type_id::LIST) {
-    lists_column_view lcv(view);
-    return cudf::jit::get_type_name(view.type()) + "<" + (get_nested_type_str(lcv.child())) + ">";
-  }
-
-  if (view.type().id() == cudf::type_id::STRUCT) {
-    std::ostringstream out;
-
-    out << cudf::jit::get_type_name(view.type()) + "<";
-    std::transform(view.child_begin(),
-                   view.child_end(),
-                   std::ostream_iterator<std::string>(out, ","),
-                   [&out](auto const col) { return get_nested_type_str(col); });
-    out << ">";
-    return out.str();
-  }
-
-  return cudf::jit::get_type_name(view.type());
-}
-
-template <typename NestedColumnView>
-std::string nested_offsets_to_string(NestedColumnView const& c, std::string const& delimiter = ", ")
-{
-  column_view offsets = (c.parent()).child(NestedColumnView::offsets_column_index);
-  CUDF_EXPECTS(offsets.type().id() == type_id::INT32,
-               "Column does not appear to be an offsets column");
-  CUDF_EXPECTS(offsets.offset() == 0, "Offsets column has an internal offset!");
-  size_type output_size = c.size() + 1;
-
-  // the first offset value to normalize everything against
-  size_type first =
-    cudf::detail::get_value<size_type>(offsets, c.offset(), cudf::get_default_stream());
-  rmm::device_uvector<size_type> shifted_offsets(output_size, cudf::get_default_stream());
-
-  // normalize the offset values for the column offset
-  size_type const* d_offsets = offsets.head<size_type>() + c.offset();
-  thrust::transform(
-    rmm::exec_policy(cudf::get_default_stream()),
-    d_offsets,
-    d_offsets + output_size,
-    shifted_offsets.begin(),
-    [first] __device__(int32_t offset) { return static_cast<size_type>(offset - first); });
-
-  auto const h_shifted_offsets = cudf::detail::make_host_vector_sync(shifted_offsets);
-  std::ostringstream buffer;
-  for (size_t idx = 0; idx < h_shifted_offsets.size(); idx++) {
-    buffer << h_shifted_offsets[idx];
-    if (idx < h_shifted_offsets.size() - 1) { buffer << delimiter; }
-  }
-  return buffer.str();
-}
-
-struct column_view_printer {
-  template <typename Element, std::enable_if_t<is_numeric<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
-  {
-    auto h_data = cudf::test::to_host<Element>(col);
-
-    out.resize(col.size());
-
-    if (col.nullable()) {
-      std::transform(thrust::make_counting_iterator(size_type{0}),
-                     thrust::make_counting_iterator(col.size()),
-                     out.begin(),
-                     [&h_data](auto idx) {
-                       return bit_is_set(h_data.second.data(), idx)
-                                ? numeric_to_string_precise(h_data.first[idx])
-                                : std::string("NULL");
-                     });
-
-    } else {
-      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [](Element el) {
-        return numeric_to_string_precise(el);
-      });
-    }
-  }
-
-  template <typename Element, std::enable_if_t<is_timestamp<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
-  {
-    //  For timestamps, convert timestamp column to column of strings, then
-    //  call string version
-    std::string format = [&]() {
-      if constexpr (std::is_same_v<cudf::timestamp_s, Element>) {
-        return std::string{"%Y-%m-%dT%H:%M:%SZ"};
-      } else if constexpr (std::is_same_v<cudf::timestamp_ms, Element>) {
-        return std::string{"%Y-%m-%dT%H:%M:%S.%3fZ"};
-      } else if constexpr (std::is_same_v<cudf::timestamp_us, Element>) {
-        return std::string{"%Y-%m-%dT%H:%M:%S.%6fZ"};
-      } else if constexpr (std::is_same_v<cudf::timestamp_ns, Element>) {
-        return std::string{"%Y-%m-%dT%H:%M:%S.%9fZ"};
-      }
-      return std::string{"%Y-%m-%d"};
-    }();
-
-    auto col_as_strings = cudf::strings::from_timestamps(col, format);
-    if (col_as_strings->size() == 0) { return; }
-
-    this->template operator()<cudf::string_view>(*col_as_strings, out, indent);
-  }
-
-  template <typename Element, std::enable_if_t<cudf::is_fixed_point<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
-  {
-    auto const h_data = cudf::test::to_host<Element>(col);
-    if (col.nullable()) {
-      std::transform(thrust::make_counting_iterator(size_type{0}),
-                     thrust::make_counting_iterator(col.size()),
-                     std::back_inserter(out),
-                     [&h_data](auto idx) {
-                       return h_data.second.empty() || bit_is_set(h_data.second.data(), idx)
-                                ? static_cast<std::string>(h_data.first[idx])
-                                : std::string("NULL");
-                     });
-    } else {
-      std::transform(std::cbegin(h_data.first),
-                     std::cend(h_data.first),
-                     std::back_inserter(out),
-                     [col](auto const& fp) { return static_cast<std::string>(fp); });
-    }
-  }
-
-  template <typename Element,
-            std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
-  {
-    //
-    //  Implementation for strings, call special to_host variant
-    //
-    if (col.is_empty()) return;
-    auto h_data = cudf::test::to_host<std::string>(col);
-
-    // explicitly replace '\r' and '\n' characters with "\r" and "\n" strings respectively.
-    auto cleaned = [](std::string_view in) {
-      std::string out(in);
-      auto replace_char = [](std::string& out, char c, std::string_view repl) {
-        for (std::string::size_type pos{}; out.npos != (pos = out.find(c, pos)); pos++) {
-          out.replace(pos, 1, repl);
-        }
-      };
-      replace_char(out, '\r', "\\r");
-      replace_char(out, '\n', "\\n");
-      return out;
-    };
-
-    out.resize(col.size());
-    std::transform(thrust::make_counting_iterator(size_type{0}),
-                   thrust::make_counting_iterator(col.size()),
-                   out.begin(),
-                   [&](auto idx) {
-                     return h_data.second.empty() || bit_is_set(h_data.second.data(), idx)
-                              ? cleaned(h_data.first[idx])
-                              : std::string("NULL");
-                   });
-  }
-
-  template <typename Element,
-            std::enable_if_t<std::is_same_v<Element, cudf::dictionary32>>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
-  {
-    cudf::dictionary_column_view dictionary(col);
-    if (col.is_empty()) return;
-    std::vector<std::string> keys    = to_strings(dictionary.keys());
-    std::vector<std::string> indices = to_strings({dictionary.indices().type(),
-                                                   dictionary.size(),
-                                                   dictionary.indices().head(),
-                                                   dictionary.null_mask(),
-                                                   dictionary.null_count(),
-                                                   dictionary.offset()});
-    out.insert(out.end(), keys.begin(), keys.end());
-    if (!indices.empty()) {
-      std::string first = "\x08 : " + indices.front();  // use : as delimiter
-      out.push_back(first);                             // between keys and indices
-      out.insert(out.end(), indices.begin() + 1, indices.end());
-    }
-  }
-
-  // Print the tick counts with the units
-  template <typename Element, std::enable_if_t<is_duration<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
-  {
-    auto h_data = cudf::test::to_host<Element>(col);
-
-    out.resize(col.size());
-
-    if (col.nullable()) {
-      std::transform(thrust::make_counting_iterator(size_type{0}),
-                     thrust::make_counting_iterator(col.size()),
-                     out.begin(),
-                     [&h_data](auto idx) {
-                       return bit_is_set(h_data.second.data(), idx)
-                                ? numeric_to_string_precise(h_data.first[idx].count()) +
-                                    duration_suffix(h_data.first[idx])
-                                : std::string("NULL");
-                     });
-
-    } else {
-      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [](Element el) {
-        return numeric_to_string_precise(el.count()) + duration_suffix(el);
-      });
-    }
-  }
-
-  template <typename Element, std::enable_if_t<std::is_same_v<Element, cudf::list_view>>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
-  {
-    lists_column_view lcv(col);
-
-    // propagate slicing to the child if necessary
-    column_view child    = lcv.get_sliced_child(cudf::get_default_stream());
-    bool const is_sliced = lcv.offset() > 0 || child.offset() > 0;
-
-    std::string tmp =
-      get_nested_type_str(col) + (is_sliced ? "(sliced)" : "") + ":\n" + indent +
-      "Length : " + std::to_string(lcv.size()) + "\n" + indent +
-      "Offsets : " + (lcv.size() > 0 ? nested_offsets_to_string(lcv) : "") + "\n" +
-      (lcv.parent().nullable()
-         ? indent + "Null count: " + std::to_string(lcv.null_count()) + "\n" +
-             detail::to_string(bitmask_to_host(col), col.size(), indent) + "\n"
-         : "") +
-      // non-nested types don't typically display their null masks, so do it here for convenience.
-      (!is_nested(child.type()) && child.nullable()
-         ? "   " + detail::to_string(bitmask_to_host(child), child.size(), indent) + "\n"
-         : "") +
-      (detail::to_string(child, ", ", indent + "   ")) + "\n";
-
-    out.push_back(tmp);
-  }
-
-  template <typename Element,
-            std::enable_if_t<std::is_same_v<Element, cudf::struct_view>>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
-  {
-    structs_column_view view{col};
-
-    std::ostringstream out_stream;
-
-    out_stream << get_nested_type_str(col) << ":\n"
-               << indent << "Length : " << view.size() << ":\n";
-    if (view.nullable()) {
-      out_stream << indent << "Null count: " << view.null_count() << "\n"
-                 << detail::to_string(bitmask_to_host(col), col.size(), indent) << "\n";
-    }
-
-    auto iter = thrust::make_counting_iterator(0);
-    std::transform(
-      iter,
-      iter + view.num_children(),
-      std::ostream_iterator<std::string>(out_stream, "\n"),
-      [&](size_type index) {
-        auto child = view.get_sliced_child(index);
-
-        // non-nested types don't typically display their null masks, so do it here for convenience.
-        return (!is_nested(child.type()) && child.nullable()
-                  ? "   " + detail::to_string(bitmask_to_host(child), child.size(), indent) + "\n"
-                  : "") +
-               detail::to_string(child, ", ", indent + "   ");
-      });
-
-    out.push_back(out_stream.str());
-  }
-};
-
-}  // namespace
-
-namespace detail {
-
-/**
- * @copydoc cudf::test::detail::to_strings
- */
-std::vector<std::string> to_strings(cudf::column_view const& col, std::string const& indent)
-{
-  std::vector<std::string> reply;
-  cudf::type_dispatcher(col.type(), column_view_printer{}, col, reply, indent);
-  return reply;
-}
-
-/**
- * @copydoc cudf::test::detail::to_string(cudf::column_view, std::string, std::string)
- *
- * @param indent Indentation for all output
- */
-std::string to_string(cudf::column_view const& col,
-                      std::string const& delimiter,
-                      std::string const& indent)
-{
-  std::ostringstream buffer;
-  std::vector<std::string> h_data = to_strings(col, indent);
-
-  buffer << indent;
-  std::copy(h_data.begin(),
-            h_data.end() - (!h_data.empty()),
-            std::ostream_iterator<std::string>(buffer, delimiter.c_str()));
-  if (!h_data.empty()) buffer << h_data.back();
-
-  return buffer.str();
-}
-
-/**
- * @copydoc cudf::test::detail::to_string(std::vector<bitmask_type>, size_type, std::string)
- *
- * @param indent Indentation for all output.  See comment in `to_strings` for
- * a detailed description.
- */
-std::string to_string(std::vector<bitmask_type> const& null_mask,
-                      size_type null_mask_size,
-                      std::string const& indent)
-{
-  std::ostringstream buffer;
-  buffer << indent;
-  for (int idx = null_mask_size - 1; idx >= 0; idx--) {
-    buffer << (cudf::bit_is_set(null_mask.data(), idx) ? "1" : "0");
-  }
-  return buffer.str();
-}
-
-}  // namespace detail
-
-/**
- * @copydoc cudf::test::to_strings
- */
-std::vector<std::string> to_strings(cudf::column_view const& col)
-{
-  return detail::to_strings(col);
-}
-
-/**
- * @copydoc cudf::test::to_string(cudf::column_view, std::string)
- */
-std::string to_string(cudf::column_view const& col, std::string const& delimiter)
-{
-  return detail::to_string(col, delimiter);
-}
-
-/**
- * @copydoc cudf::test::to_string(std::vector<bitmask_type>, size_type)
- */
-std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null_mask_size)
-{
-  return detail::to_string(null_mask, null_mask_size);
-}
-
-/**
- * @copydoc cudf::test::print
- */
-void print(cudf::column_view const& col, std::ostream& os, std::string const& delimiter)
-{
-  os << to_string(col, delimiter) << std::endl;
 }
 
 /**
@@ -1303,6 +933,90 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
                               cudf::bit_is_set(got_mask.data(), index);
                      });
 }
+
+template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>*>
+std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
+{
+  using namespace numeric;
+  using Rep = typename T::rep;
+
+  auto col_span       = cudf::device_span<Rep const>(c.begin<Rep>(), c.size());
+  auto host_rep_types = cudf::detail::make_host_vector_sync(col_span, cudf::get_default_stream());
+
+  auto to_fp = [&](Rep val) { return T{scaled_integer<Rep>{val, scale_type{c.type().scale()}}}; };
+  auto begin = thrust::make_transform_iterator(std::cbegin(host_rep_types), to_fp);
+  auto const host_fixed_points = thrust::host_vector<T>(begin, begin + c.size());
+
+  return {std::move(host_fixed_points), bitmask_to_host(c)};
+}
+
+template std::pair<thrust::host_vector<numeric::decimal32>, std::vector<bitmask_type>> to_host(
+  column_view c);
+template std::pair<thrust::host_vector<numeric::decimal64>, std::vector<bitmask_type>> to_host(
+  column_view c);
+template std::pair<thrust::host_vector<numeric::decimal128>, std::vector<bitmask_type>> to_host(
+  column_view c);
+
+namespace {
+struct strings_to_host_fn {
+  template <typename OffsetType,
+            std::enable_if_t<std::is_same_v<OffsetType, int32_t> ||
+                             std::is_same_v<OffsetType, int64_t>>* = nullptr>
+  void operator()(thrust::host_vector<std::string>& host_data,
+                  char const* chars,
+                  cudf::column_view const& offsets,
+                  rmm::cuda_stream_view stream)
+  {
+    auto const h_offsets = cudf::detail::make_std_vector_sync(
+      cudf::device_span<OffsetType const>(offsets.data<OffsetType>(), offsets.size()), stream);
+    // build std::string vector from chars and offsets
+    std::transform(std::begin(h_offsets),
+                   std::end(h_offsets) - 1,
+                   std::begin(h_offsets) + 1,
+                   host_data.begin(),
+                   [&](auto start, auto end) { return std::string(chars + start, end - start); });
+  }
+
+  template <typename OffsetType,
+            std::enable_if_t<!std::is_same_v<OffsetType, int32_t> &&
+                             !std::is_same_v<OffsetType, int64_t>>* = nullptr>
+  void operator()(thrust::host_vector<std::string>&,
+                  char const*,
+                  cudf::column_view const&,
+                  rmm::cuda_stream_view)
+  {
+    CUDF_FAIL("invalid offsets type");
+  }
+};
+}  // namespace
+
+template <>
+std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c)
+{
+  thrust::host_vector<std::string> host_data(c.size());
+  auto stream = cudf::get_default_stream();
+  if (c.size() > c.null_count()) {
+    auto const scv     = strings_column_view(c);
+    auto const h_chars = cudf::detail::make_std_vector_sync<char>(
+      cudf::device_span<char const>(scv.chars_begin(stream), scv.chars_size(stream)), stream);
+    auto offsets =
+      cudf::slice(scv.offsets(), {scv.offset(), scv.offset() + scv.size() + 1}).front();
+    cudf::type_dispatcher(
+      offsets.type(), strings_to_host_fn{}, host_data, h_chars.data(), offsets, stream);
+  }
+  return {std::move(host_data), bitmask_to_host(c)};
+}
+
+large_strings_enabler::large_strings_enabler(bool default_enable)
+{
+  default_enable ? enable() : disable();
+}
+
+large_strings_enabler::~large_strings_enabler() { disable(); }
+
+void large_strings_enabler::enable() { setenv("LIBCUDF_LARGE_STRINGS_ENABLED", "1", 1); }
+
+void large_strings_enabler::disable() { setenv("LIBCUDF_LARGE_STRINGS_ENABLED", "0", 1); }
 
 }  // namespace test
 }  // namespace cudf

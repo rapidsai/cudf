@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,16 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/lists/extract.hpp>
-#include <cudf/lists/stream_compaction.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
+#include <cudf/lists/extract.hpp>
+#include <cudf/lists/stream_compaction.hpp>
 
 namespace cudf::test {
 
@@ -41,12 +41,10 @@ using strings = strings_column_wrapper;
 
 auto constexpr X = int32_t{0};  // Placeholder for NULL.
 
-struct ApplyBooleanMaskTest : public BaseFixture {
-};
+struct ApplyBooleanMaskTest : public BaseFixture {};
 
 template <typename T>
-struct ApplyBooleanMaskTypedTest : ApplyBooleanMaskTest {
-};
+struct ApplyBooleanMaskTypedTest : ApplyBooleanMaskTest {};
 
 TYPED_TEST_SUITE(ApplyBooleanMaskTypedTest, cudf::test::NumericTypes);
 
@@ -151,15 +149,16 @@ TYPED_TEST(ApplyBooleanMaskTypedTest, StructInput)
 
   auto constexpr num_input_rows = 7;
   auto const input              = [] {
-    auto child_num             = fwcw{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-    auto child_str             = strings{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
-    auto const null_mask_begin = null_at(5);
-    auto const null_mask_end   = null_mask_begin + num_input_rows;
+    auto child_num               = fwcw{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    auto child_str               = strings{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+    auto const null_mask_begin   = null_at(5);
+    auto const null_mask_end     = null_mask_begin + num_input_rows;
+    auto [null_mask, null_count] = detail::make_null_mask(null_mask_begin, null_mask_end);
     return cudf::make_lists_column(num_input_rows,
                                    offsets{0, 2, 3, 6, 6, 8, 8, 10}.release(),
                                    structs_column_wrapper{{child_num, child_str}}.release(),
-                                   1,
-                                   detail::make_null_mask(null_mask_begin, null_mask_end));
+                                   null_count,
+                                   std::move(null_mask));
   }();
   {
     // Unsliced.
@@ -168,15 +167,16 @@ TYPED_TEST(ApplyBooleanMaskTypedTest, StructInput)
     auto const filter   = filter_t{{1, 1}, {0}, {0, 1, 0}, {}, {1, 0}, {}, {0, 1}};
     auto const result   = apply_boolean_mask(lists_column_view{*input}, lists_column_view{filter});
     auto const expected = [] {
-      auto child_num             = fwcw{0, 1, 4, 6, 9};
-      auto child_str             = strings{"0", "1", "4", "6", "9"};
-      auto const null_mask_begin = null_at(5);
-      auto const null_mask_end   = null_mask_begin + num_input_rows;
+      auto child_num               = fwcw{0, 1, 4, 6, 9};
+      auto child_str               = strings{"0", "1", "4", "6", "9"};
+      auto const null_mask_begin   = null_at(5);
+      auto const null_mask_end     = null_mask_begin + num_input_rows;
+      auto [null_mask, null_count] = detail::make_null_mask(null_mask_begin, null_mask_end);
       return cudf::make_lists_column(num_input_rows,
                                      offsets{0, 2, 2, 3, 3, 4, 4, 5}.release(),
                                      structs_column_wrapper{{child_num, child_str}}.release(),
-                                     1,
-                                     detail::make_null_mask(null_mask_begin, null_mask_end));
+                                     null_count,
+                                     std::move(null_mask));
     }();
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
   }
@@ -189,15 +189,16 @@ TYPED_TEST(ApplyBooleanMaskTypedTest, StructInput)
     auto const result =
       apply_boolean_mask(lists_column_view{sliced_input}, lists_column_view{filter});
     auto const expected = [] {
-      auto child_num             = fwcw{4, 6, 9};
-      auto child_str             = strings{"4", "6", "9"};
-      auto const null_mask_begin = null_at(4);
-      auto const null_mask_end   = null_mask_begin + num_input_rows;
+      auto child_num               = fwcw{4, 6, 9};
+      auto child_str               = strings{"4", "6", "9"};
+      auto const null_mask_begin   = null_at(4);
+      auto const null_mask_end     = null_mask_begin + num_input_rows;
+      auto [null_mask, null_count] = detail::make_null_mask(null_mask_begin, null_mask_end);
       return cudf::make_lists_column(num_input_rows - 1,
                                      offsets{0, 0, 1, 1, 2, 2, 3}.release(),
                                      structs_column_wrapper{{child_num, child_str}}.release(),
-                                     1,
-                                     detail::make_null_mask(null_mask_begin, null_mask_end));
+                                     null_count,
+                                     std::move(null_mask));
     }();
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
   }
@@ -217,17 +218,15 @@ TEST_F(ApplyBooleanMaskTest, Failure)
     // Invalid mask type.
     auto const input  = lists<int32_t>{{1, 2, 3}, {4, 5, 6}};
     auto const filter = lists<int32_t>{{0, 0, 0}};
-    CUDF_EXPECT_THROW_MESSAGE(
-      apply_boolean_mask(lists_column_view{input}, lists_column_view{filter}),
-      "Mask must be of type BOOL8.");
+    EXPECT_THROW(apply_boolean_mask(lists_column_view{input}, lists_column_view{filter}),
+                 cudf::logic_error);
   }
   {
     // Mismatched number of rows.
     auto const input  = lists<int32_t>{{1, 2, 3}, {4, 5, 6}};
     auto const filter = filter_t{{0, 0, 0}};
-    CUDF_EXPECT_THROW_MESSAGE(
-      apply_boolean_mask(lists_column_view{input}, lists_column_view{filter}),
-      "Boolean masks column must have same number of rows as input.");
+    EXPECT_THROW(apply_boolean_mask(lists_column_view{input}, lists_column_view{filter}),
+                 cudf::logic_error);
   }
 }
 }  // namespace cudf::test

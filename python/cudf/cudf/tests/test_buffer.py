@@ -1,10 +1,11 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
-from typing import Callable
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import cupy as cp
 import pytest
 
-from cudf.core.buffer import Buffer, DeviceBufferLike, as_device_buffer_like
+from cudf.core.buffer import Buffer, as_buffer
+
+pytestmark = pytest.mark.spilling
 
 arr_len = 10
 
@@ -23,10 +24,10 @@ arr_len = 10
 def test_buffer_from_cuda_iface_contiguous(data):
     data, expect_success = data
     if expect_success:
-        as_device_buffer_like(data.view("|u1"))
+        as_buffer(data.view("|u1"))
     else:
         with pytest.raises(ValueError):
-            as_device_buffer_like(data.view("|u1"))
+            as_buffer(data.view("|u1"))
 
 
 @pytest.mark.parametrize(
@@ -41,24 +42,36 @@ def test_buffer_from_cuda_iface_contiguous(data):
 @pytest.mark.parametrize("dtype", ["uint8", "int8", "float32", "int32"])
 def test_buffer_from_cuda_iface_dtype(data, dtype):
     data = data.astype(dtype)
-    buf = as_device_buffer_like(data)
+    buf = as_buffer(data)
     got = cp.array(buf).reshape(-1).view("uint8")
     expect = data.reshape(-1).view("uint8")
     assert (expect == got).all()
 
 
-@pytest.mark.parametrize("creator", [Buffer, as_device_buffer_like])
-def test_buffer_creation_from_any(creator: Callable[[object], Buffer]):
+def test_buffer_creation_from_any():
     ary = cp.arange(arr_len)
-    b = creator(ary)
-    assert isinstance(b, DeviceBufferLike)
-    assert ary.__cuda_array_interface__["data"][0] == b.ptr
+    b = as_buffer(ary, exposed=True)
+    assert isinstance(b, Buffer)
+    assert ary.data.ptr == b.get_ptr(mode="read")
     assert ary.nbytes == b.size
 
     with pytest.raises(
         ValueError, match="size must be specified when `data` is an integer"
     ):
-        Buffer(42)
+        as_buffer(ary.data.ptr)
+
+    b = as_buffer(ary.data.ptr, size=ary.nbytes, owner=ary, exposed=True)
+    assert isinstance(b, Buffer)
+    assert ary.data.ptr == b.get_ptr(mode="read")
+    assert ary.nbytes == b.size
+    assert b.owner.owner.owner is ary
+
+
+@pytest.mark.parametrize("size", [10, 2**10 + 500, 2**20])
+def test_buffer_str(size):
+    ary = cp.arange(size, dtype="uint8")
+    buf = as_buffer(ary)
+    assert f"size={size}" in repr(buf)
 
 
 @pytest.mark.parametrize(
@@ -66,8 +79,8 @@ def test_buffer_creation_from_any(creator: Callable[[object], Buffer]):
 )
 def test_buffer_repr(size, expect):
     ary = cp.arange(size, dtype="uint8")
-    buf = as_device_buffer_like(ary)
-    assert f"size={expect}" in repr(buf)
+    buf = as_buffer(ary)
+    assert f"size={expect}" in str(buf)
 
 
 @pytest.mark.parametrize(
@@ -83,25 +96,25 @@ def test_buffer_repr(size, expect):
 )
 def test_buffer_slice(idx):
     ary = cp.arange(arr_len, dtype="uint8")
-    buf = as_device_buffer_like(ary)
+    buf = as_buffer(ary)
     expect = ary[idx]
     got = cp.array(buf[idx])
     assert (expect == got).all()
 
 
 @pytest.mark.parametrize(
-    "idx, err_msg",
+    "idx, err_type, err_msg",
     [
-        (1, "index must be an slice"),
-        (slice(3, 2), "size cannot be negative"),
-        (slice(1, 2, 2), "slice must be contiguous"),
-        (slice(1, 2, -1), "slice must be contiguous"),
-        (slice(3, 2, -1), "slice must be contiguous"),
+        (1, TypeError, "Argument 'key' has incorrect type"),
+        (slice(3, 2), ValueError, "size cannot be negative"),
+        (slice(1, 2, 2), ValueError, "slice must be C-contiguous"),
+        (slice(1, 2, -1), ValueError, "slice must be C-contiguous"),
+        (slice(3, 2, -1), ValueError, "slice must be C-contiguous"),
     ],
 )
-def test_buffer_slice_fail(idx, err_msg):
+def test_buffer_slice_fail(idx, err_type, err_msg):
     ary = cp.arange(arr_len, dtype="uint8")
-    buf = as_device_buffer_like(ary)
+    buf = as_buffer(ary)
 
-    with pytest.raises(ValueError, match=err_msg):
+    with pytest.raises(err_type, match=err_msg):
         buf[idx]

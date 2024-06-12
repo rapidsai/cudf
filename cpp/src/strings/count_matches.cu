@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-#include <strings/count_matches.hpp>
-#include <strings/regex/utilities.cuh>
+#include "strings/count_matches.hpp"
+#include "strings/regex/utilities.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/string_view.cuh>
+
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -41,12 +43,14 @@ struct count_fn {
     auto const nchars = d_str.length();
     int32_t count     = 0;
 
-    size_type begin = 0;
-    size_type end   = -1;
-    while ((begin <= nchars) && (prog.find(thread_idx, d_str, begin, end) > 0)) {
+    auto itr = d_str.begin();
+    while (itr.position() <= nchars) {
+      auto result = prog.find(thread_idx, d_str, itr);
+      if (!result) { break; }
       ++count;
-      begin = end + (begin == end);
-      end   = -1;
+      // increment the iterator is faster than creating a new one
+      // +1 if the match was on a virtual position (e.g. word boundary)
+      itr += (result->second - itr.position()) + (result->first == result->second);
     }
     return count;
   }
@@ -58,12 +62,12 @@ std::unique_ptr<column> count_matches(column_device_view const& d_strings,
                                       reprog_device& d_prog,
                                       size_type output_size,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   assert(output_size >= d_strings.size() and "Unexpected output size");
 
   auto results = make_numeric_column(
-    data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, output_size, mask_state::UNALLOCATED, stream, mr);
 
   if (d_strings.size() == 0) return results;
 

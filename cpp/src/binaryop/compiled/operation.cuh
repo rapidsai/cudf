@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,11 +91,43 @@ struct TrueDiv {
 };
 
 struct FloorDiv {
-  template <typename T1, typename T2>
-  __device__ inline auto operator()(T1 const& lhs, T2 const& rhs)
-    -> decltype(floor(static_cast<double>(lhs) / static_cast<double>(rhs)))
+  template <typename TypeLhs,
+            typename TypeRhs,
+            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> and
+                              std::is_signed_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
   {
-    return floor(static_cast<double>(lhs) / static_cast<double>(rhs));
+    auto const quotient          = x / y;
+    auto const nonzero_remainder = (x % y) != 0;
+    auto const mixed_sign        = (x ^ y) < 0;
+    return quotient - mixed_sign * nonzero_remainder;
+  }
+
+  template <typename TypeLhs,
+            typename TypeRhs,
+            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> and
+                              !std::is_signed_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
+  {
+    return x / y;
+  }
+
+  template <
+    typename TypeLhs,
+    typename TypeRhs,
+    std::enable_if_t<(std::is_same_v<std::common_type_t<TypeLhs, TypeRhs>, float>)>* = nullptr>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> float
+  {
+    return floorf(x / y);
+  }
+
+  template <
+    typename TypeLhs,
+    typename TypeRhs,
+    std::enable_if_t<(std::is_same_v<std::common_type_t<TypeLhs, TypeRhs>, double>)>* = nullptr>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> double
+  {
+    return floor(x / y);
   }
 };
 
@@ -390,13 +422,24 @@ struct NullEquals {
     TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x == y)
   {
     output_valid = true;
-    if (!lhs_valid && !rhs_valid) return true;
     if (lhs_valid && rhs_valid) return x == y;
-    return false;
+    return !lhs_valid && !rhs_valid;
   }
   // To allow std::is_invocable_v = true
   template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x == y);
+};
+
+struct NullNotEquals {
+  template <typename TypeLhs, typename TypeRhs>
+  __device__ inline auto operator()(
+    TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x != y)
+  {
+    return !NullEquals{}(x, y, lhs_valid, rhs_valid, output_valid);
+  }
+  // To allow std::is_invocable_v = true
+  template <typename TypeLhs, typename TypeRhs>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x != y);
 };
 
 struct NullMax {

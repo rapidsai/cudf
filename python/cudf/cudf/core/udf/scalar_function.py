@@ -1,10 +1,11 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from numba import cuda
 from numba.np import numpy_support
 
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.masked_typing import MaskedType
+from cudf.core.udf.strings_typing import string_view
 from cudf.core.udf.templates import (
     masked_input_initializer_template,
     scalar_kernel_template,
@@ -48,7 +49,9 @@ def _scalar_kernel_string_from_template(sr, args):
 
 
 def _get_scalar_kernel(sr, func, args):
-    sr_type = MaskedType(numpy_support.from_dtype(sr.dtype))
+    sr_type = MaskedType(
+        string_view if sr.dtype == "O" else numpy_support.from_dtype(sr.dtype)
+    )
     scalar_return_type = _get_udf_return_type(sr_type, func, args)
 
     sig = _construct_signature(sr, scalar_return_type, args=args)

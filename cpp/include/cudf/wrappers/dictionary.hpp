@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,9 @@
 
 #pragma once
 
-#include <cuda_runtime.h>
 #include <cudf/types.hpp>
+
+#include <cuda_runtime.h>
 
 #include <limits>
 
@@ -65,7 +66,7 @@ struct dictionary_wrapper {
    *
    * @return The reference to this dictionary wrapper object
    */
-  dictionary_wrapper& operator=(const dictionary_wrapper&) = default;
+  dictionary_wrapper& operator=(dictionary_wrapper const&) = default;
 
   /**
    * @brief Construct dictionary_wrapper from a value

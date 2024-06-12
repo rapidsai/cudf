@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef UNARY_OPS_H
-#define UNARY_OPS_H
+#pragma once
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
@@ -25,6 +24,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/transform.h>
 
@@ -35,7 +35,7 @@ struct launcher {
   static std::unique_ptr<cudf::column> launch(cudf::column_view const& input,
                                               cudf::unary_operator op,
                                               rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+                                              rmm::device_async_resource_ref mr)
   {
     std::unique_ptr<cudf::column> output = [&] {
       if (op == cudf::unary_operator::NOT) {
@@ -78,5 +78,3 @@ struct launcher {
 
 }  // namespace unary
 }  // namespace cudf
-
-#endif  // UNARY_OPS_H

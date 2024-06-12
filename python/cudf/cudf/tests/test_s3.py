@@ -1,15 +1,13 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import os
 import socket
 from contextlib import contextmanager
-from io import BytesIO
+from io import BytesIO, StringIO
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import pyarrow.fs as pa_fs
-import pyarrow.orc
 import pytest
 from fsspec.core import get_fs_token_paths
 
@@ -61,9 +59,12 @@ def s3_base(endpoint_ip, endpoint_port):
     with ensure_safe_environment_variables():
         # Fake aws credentials exported to prevent botocore looking for
         # system aws credentials, https://github.com/spulec/moto/issues/1793
-        os.environ.setdefault("AWS_ACCESS_KEY_ID", "foobar_key")
-        os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "foobar_secret")
-        os.environ.setdefault("S3FS_LOGGING_LEVEL", "DEBUG")
+        os.environ["AWS_ACCESS_KEY_ID"] = "foobar_key"
+        os.environ["AWS_SECRET_ACCESS_KEY"] = "foobar_secret"
+        os.environ["S3FS_LOGGING_LEVEL"] = "DEBUG"
+        os.environ["AWS_SECURITY_TOKEN"] = "foobar_security_token"
+        os.environ["AWS_SESSION_TOKEN"] = "foobar_session_token"
+        os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 
         # Launching moto in server mode, i.e., as a separate process
         # with an S3 endpoint on localhost
@@ -298,7 +299,6 @@ def test_read_parquet_ext(
             f"s3://{bucket}/{fname}",
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
-            footer_sample_size=3200,
             columns=columns,
         )
     if index:
@@ -433,7 +433,7 @@ def test_read_json(s3_base, s3so):
             storage_options=s3so,
         )
 
-    expect = pd.read_json(buffer, lines=True)
+    expect = pd.read_json(StringIO(buffer), lines=True)
     assert_eq(expect, got)
 
 
@@ -443,7 +443,7 @@ def test_read_orc(s3_base, s3so, datadir, use_python_file_object, columns):
     source_file = str(datadir / "orc" / "TestOrcFile.testSnappy.orc")
     fname = "test_orc_reader.orc"
     bucket = "orc"
-    expect = pa.orc.ORCFile(source_file).read().to_pandas()
+    expect = pd.read_orc(source_file)
 
     with open(source_file, "rb") as f:
         buffer = f.read()
@@ -466,7 +466,7 @@ def test_read_orc_arrow_nativefile(s3_base, s3so, datadir, columns):
     source_file = str(datadir / "orc" / "TestOrcFile.testSnappy.orc")
     fname = "test_orc_reader.orc"
     bucket = "orc"
-    expect = pa.orc.ORCFile(source_file).read().to_pandas()
+    expect = pd.read_orc(source_file)
 
     with open(source_file, "rb") as f:
         buffer = f.read()
@@ -492,7 +492,7 @@ def test_write_orc(s3_base, s3so, pdf):
         assert s3fs.exists(f"s3://{bucket}/{fname}")
 
         with s3fs.open(f"s3://{bucket}/{fname}") as f:
-            got = pa.orc.ORCFile(f).read().to_pandas()
+            got = pd.read_orc(f)
 
     assert_eq(pdf, got)
 
@@ -533,3 +533,18 @@ def test_write_chunked_parquet(s3_base, s3so):
             actual.sort_values(["b"]).reset_index(drop=True),
             cudf.concat([df1, df2]).sort_values(["b"]).reset_index(drop=True),
         )
+
+
+def test_no_s3fs_on_cudf_import():
+    import subprocess
+    import sys
+
+    output = subprocess.check_output(
+        [
+            sys.executable,
+            "-c",
+            "import cudf; import sys; print('pyarrow._s3fs' in sys.modules)",
+        ],
+        cwd="/",
+    )
+    assert output.strip() == b"False"

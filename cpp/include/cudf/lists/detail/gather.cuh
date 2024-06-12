@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -24,11 +25,12 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuda/functional>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
-#include <thrust/transform_scan.h>
 
 namespace cudf {
 namespace lists {
@@ -58,7 +60,7 @@ struct gather_data {
  *                                 MapItType gather_map,
  *                                 size_type gather_map_size,
  *                                 rmm::cuda_stream_view stream,
- *                                 rmm::mr::device_memory_resource* mr)
+ *                                 rmm::device_async_resource_ref mr)
  *
  * @param prev_base_offsets The buffer backing the base offsets used in the gather map. We can
  *                          free this buffer before allocating the new one to keep peak memory
@@ -70,35 +72,25 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
                              size_type gather_map_size,
                              rmm::device_uvector<int32_t>&& prev_base_offsets,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   // size of the gather map is the # of output rows
   size_type output_count = gather_map_size;
-  size_type offset_count = output_count + 1;
 
   // offsets of the source column
   int32_t const* src_offsets{source_column.offsets().data<int32_t>() + source_column.offset()};
   size_type const src_size = source_column.size();
 
-  // outgoing offsets.  these will persist as output from the entire gather operation
-  auto dst_offsets_c = cudf::make_fixed_width_column(
-    data_type{type_id::INT32}, offset_count, mask_state::UNALLOCATED, stream, mr);
-  mutable_column_view dst_offsets_v = dst_offsets_c->mutable_view();
   auto const source_column_nullmask = source_column.null_mask();
 
-  // generate the compacted outgoing offsets.
-  auto count_iter = thrust::make_counting_iterator<int32_t>(0);
-  thrust::transform_exclusive_scan(
-    rmm::exec_policy(stream),
-    count_iter,
-    count_iter + offset_count,
-    dst_offsets_v.begin<int32_t>(),
-    [source_column_nullmask,
-     source_column_offset = source_column.offset(),
-     gather_map,
-     output_count,
-     src_offsets,
-     src_size] __device__(int32_t index) -> int32_t {
+  auto sizes_itr = cudf::detail::make_counting_transform_iterator(
+    0,
+    cuda::proclaim_return_type<int32_t>([source_column_nullmask,
+                                         source_column_offset = source_column.offset(),
+                                         gather_map,
+                                         output_count,
+                                         src_offsets,
+                                         src_size] __device__(int32_t index) -> int32_t {
       int32_t offset_index = index < output_count ? gather_map[index] : 0;
 
       // if this is an invalid index, this will be a NULL list
@@ -112,9 +104,10 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
 
       // the length of this list
       return src_offsets[offset_index + 1] - src_offsets[offset_index];
-    },
-    0,
-    thrust::plus<int32_t>());
+    }));
+
+  auto [dst_offsets_c, map_size] =
+    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + output_count, stream, mr);
 
   // handle sliced columns
   size_type const shift =
@@ -125,7 +118,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
   // generate the base offsets
   rmm::device_uvector<int32_t> base_offsets = rmm::device_uvector<int32_t>(output_count, stream);
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     gather_map,
     gather_map + output_count,
     base_offsets.data(),
@@ -147,9 +140,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
     });
 
   // Retrieve size of the resulting gather map for level N+1 (the last offset)
-  size_type child_gather_map_size =
-    cudf::detail::get_value<size_type>(dst_offsets_c->view(), output_count, stream);
-
+  auto const child_gather_map_size = static_cast<size_type>(map_size);
   return {std::move(dst_offsets_c), std::move(base_offsets), child_gather_map_size};
 }
 
@@ -262,7 +253,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
                              MapItType gather_map,
                              size_type gather_map_size,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   return make_gather_data<NullifyOutOfBounds, MapItType>(
     source_column,
@@ -285,11 +276,10 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
  *
  * @returns column with elements gathered based on `gather_data`
  */
-std::unique_ptr<column> gather_list_nested(
-  lists_column_view const& list,
-  gather_data& gd,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> gather_list_nested(lists_column_view const& list,
+                                           gather_data& gd,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr);
 
 /**
  * @brief Gather a leaf column from a hierarchy of list columns.
@@ -303,26 +293,24 @@ std::unique_ptr<column> gather_list_nested(
  *
  * @returns column with elements gathered based on `gather_data`
  */
-std::unique_ptr<column> gather_list_leaf(
-  column_view const& column,
-  gather_data const& gd,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> gather_list_leaf(column_view const& column,
+                                         gather_data const& gd,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::lists::segmented_gather(lists_column_view const& source_column,
  *                                        lists_column_view const& gather_map_list,
  *                                        out_of_bounds_policy bounds_policy,
- *                                        rmm::mr::device_memory_resource* mr)
+ *                                        rmm::device_async_resource_ref mr)
  *
  * @param stream CUDA stream on which to execute kernels
  */
-std::unique_ptr<column> segmented_gather(
-  lists_column_view const& source_column,
-  lists_column_view const& gather_map_list,
-  out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> segmented_gather(lists_column_view const& source_column,
+                                         lists_column_view const& gather_map_list,
+                                         out_of_bounds_policy bounds_policy,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace lists

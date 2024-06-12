@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -114,17 +115,49 @@ std::vector<column_view> get_nullable_columns(table_view const& table)
   return result;
 }
 
+bool nullable(table_view const& view)
+{
+  return std::any_of(view.begin(), view.end(), [](auto const& col) { return col.nullable(); });
+}
+
+bool has_nulls(table_view const& view)
+{
+  return std::any_of(view.begin(), view.end(), [](auto const& col) { return col.has_nulls(); });
+}
+
+bool has_nested_nulls(table_view const& input)
+{
+  return std::any_of(input.begin(), input.end(), [](auto const& col) {
+    return col.has_nulls() ||
+           std::any_of(col.child_begin(), col.child_end(), [](auto const& child_col) {
+             return has_nested_nulls(table_view{{child_col}});
+           });
+  });
+}
+
+bool has_nested_nullable_columns(table_view const& input)
+{
+  return std::any_of(input.begin(), input.end(), [](auto const& col) {
+    return col.nullable() ||
+           std::any_of(col.child_begin(), col.child_end(), [](auto const& child_col) {
+             return has_nested_nullable_columns(table_view{{child_col}});
+           });
+  });
+}
+
 namespace detail {
 
 template <typename TableView>
 bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
 {
-  return std::all_of(thrust::counting_iterator<size_type>(0),
-                     thrust::counting_iterator<size_type>(lhs.num_columns()),
-                     [lhs, rhs](auto const i) {
-                       return lhs.column(i).type() == rhs.column(i).type() and
-                              cudf::is_relationally_comparable(lhs.column(i).type());
-                     });
+  return std::equal(lhs.begin(),
+                    lhs.end(),
+                    rhs.begin(),
+                    rhs.end(),
+                    [](column_view const& lcol, column_view const& rcol) {
+                      return cudf::is_relationally_comparable(lcol.type()) and
+                             cudf::have_same_types(lcol, rcol);
+                    });
 }
 
 // Explicit template instantiation for a table of immutable views

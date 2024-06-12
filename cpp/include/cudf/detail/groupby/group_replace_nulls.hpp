@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 namespace cudf {
 namespace groupby {
 namespace detail {
@@ -36,12 +37,11 @@ namespace detail {
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate device memory of the returned column.
  */
-std::unique_ptr<column> group_replace_nulls(
-  cudf::column_view const& grouped_value,
-  device_span<size_type const> group_labels,
-  cudf::replace_policy replace_policy,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_value,
+                                            device_span<size_type const> group_labels,
+                                            cudf::replace_policy replace_policy,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace groupby

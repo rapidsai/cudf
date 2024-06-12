@@ -383,7 +383,7 @@ public interface BinaryOperable {
   }
 
   /**
-   * Logical or (||) with the given output type. this || rhs  
+   * Logical or (||) with the given output type. this || rhs
    */
   default ColumnVector or(BinaryOperable rhs, DType outType) {
     return binaryOp(BinaryOp.LOGICAL_OR, rhs, outType);
@@ -544,6 +544,20 @@ public interface BinaryOperable {
    */
   default ColumnVector equalToNullAware(BinaryOperable rhs) {
     return equalToNullAware(rhs, DType.BOOL8);
+  }
+
+  /**
+   * like notEqualTo but NULL != NULL is TRUE and NULL != not NULL is FALSE
+   */
+  default ColumnVector notEqualToNullAware(BinaryOperable rhs, DType outType) {
+    return binaryOp(BinaryOp.NULL_NOT_EQUALS, rhs, outType);
+  }
+
+  /**
+   * like notEqualTo but NULL != NULL is TRUE and NULL != not NULL is FALSE
+   */
+  default ColumnVector notEqualToNullAware(BinaryOperable rhs) {
+    return notEqualToNullAware(rhs, DType.BOOL8);
   }
 
   /**

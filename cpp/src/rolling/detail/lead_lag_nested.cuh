@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +23,15 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/scatter.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
@@ -92,12 +97,13 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                                                     FollowingIter following,
                                                     size_type row_offset,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+                                                    rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(op == aggregation::LEAD || op == aggregation::LAG,
                "Unexpected aggregation type in compute_lead_lag_for_nested");
-  CUDF_EXPECTS(default_outputs.type().id() == input.type().id(),
-               "Defaults column type must match input column.");  // Because LEAD/LAG.
+  CUDF_EXPECTS(cudf::have_same_types(input, default_outputs),
+               "Defaults column type must match input column.",
+               cudf::data_type_error);  // Because LEAD/LAG.
 
   CUDF_EXPECTS(default_outputs.is_empty() || (input.size() == default_outputs.size()),
                "Number of defaults must match input column.");
@@ -140,25 +146,27 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                       thrust::make_counting_iterator(size_type{0}),
                       thrust::make_counting_iterator(size_type{input.size()}),
                       gather_map.begin<size_type>(),
-                      [following, input_size, null_index, row_offset] __device__(size_type i) {
-                        // Note: grouped_*rolling_window() trims preceding/following to
-                        // the beginning/end of the group. `rolling_window()` does not.
-                        // Must trim _following[i] so as not to go past the column end.
-                        auto _following = min(following[i], input_size - i - 1);
-                        return (row_offset > _following) ? null_index : (i + row_offset);
-                      });
+                      cuda::proclaim_return_type<size_type>(
+                        [following, input_size, null_index, row_offset] __device__(size_type i) {
+                          // Note: grouped_*rolling_window() trims preceding/following to
+                          // the beginning/end of the group. `rolling_window()` does not.
+                          // Must trim _following[i] so as not to go past the column end.
+                          auto _following = min(following[i], input_size - i - 1);
+                          return (row_offset > _following) ? null_index : (i + row_offset);
+                        }));
   } else {
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator(size_type{0}),
                       thrust::make_counting_iterator(size_type{input.size()}),
                       gather_map.begin<size_type>(),
-                      [preceding, input_size, null_index, row_offset] __device__(size_type i) {
-                        // Note: grouped_*rolling_window() trims preceding/following to
-                        // the beginning/end of the group. `rolling_window()` does not.
-                        // Must trim _preceding[i] so as not to go past the column start.
-                        auto _preceding = min(preceding[i], i + 1);
-                        return (row_offset > (_preceding - 1)) ? null_index : (i - row_offset);
-                      });
+                      cuda::proclaim_return_type<size_type>(
+                        [preceding, input_size, null_index, row_offset] __device__(size_type i) {
+                          // Note: grouped_*rolling_window() trims preceding/following to
+                          // the beginning/end of the group. `rolling_window()` does not.
+                          // Must trim _preceding[i] so as not to go past the column start.
+                          auto _preceding = min(preceding[i], i + 1);
+                          return (row_offset > (_preceding - 1)) ? null_index : (i - row_offset);
+                        }));
   }
 
   auto output_with_nulls = cudf::detail::gather(table_view{std::vector<column_view>{input}},
@@ -191,7 +199,8 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                          scatter_map,
                          out_of_bounds_policy::DONT_CHECK,
                          cudf::detail::negative_index_policy::NOT_ALLOWED,
-                         stream);
+                         stream,
+                         rmm::mr::get_current_device_resource());
 
   // Scatter defaults into locations where LEAD/LAG computed nulls.
   auto scattered_results = cudf::detail::scatter(

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,8 @@
  */
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -51,7 +51,9 @@ column_view_base::column_view_base(data_type type,
     CUDF_EXPECTS(nullptr == data, "EMPTY column should have no data.");
     CUDF_EXPECTS(nullptr == null_mask, "EMPTY column should have no null mask.");
   } else if (is_compound(type)) {
-    CUDF_EXPECTS(nullptr == data, "Compound (parent) columns cannot have data");
+    if (type.id() != type_id::STRING) {
+      CUDF_EXPECTS(nullptr == data, "Compound (parent) columns cannot have data");
+    }
   } else if (size > 0) {
     CUDF_EXPECTS(nullptr != data, "Null data pointer.");
   }
@@ -61,16 +63,6 @@ column_view_base::column_view_base(data_type type,
   if ((null_count > 0) and (type.id() != type_id::EMPTY)) {
     CUDF_EXPECTS(nullptr != null_mask, "Invalid null mask for non-zero null count.");
   }
-}
-
-// If null count is known, returns it. Else, compute and return it
-size_type column_view_base::null_count() const
-{
-  if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
-    _null_count = cudf::detail::null_count(
-      null_mask(), offset(), offset() + size(), cudf::get_default_stream());
-  }
-  return _null_count;
 }
 
 size_type column_view_base::null_count(size_type begin, size_type end) const
@@ -88,7 +80,7 @@ struct HashValue {
   explicit HashValue(std::size_t h) : hash{h} {}
   HashValue operator^(HashValue const& other) const
   {
-    return HashValue{hash_combine(hash, other.hash)};
+    return HashValue{cudf::hashing::detail::hash_combine(hash, other.hash)};
   }
 };
 
@@ -107,7 +99,7 @@ std::size_t shallow_hash_impl(column_view const& c, bool is_parent_empty = false
                          c.child_end(),
                          init,
                          [&c, is_parent_empty](std::size_t hash, auto const& child) {
-                           return hash_combine(
+                           return cudf::hashing::detail::hash_combine(
                              hash, shallow_hash_impl(child, c.is_empty() or is_parent_empty));
                          });
 }

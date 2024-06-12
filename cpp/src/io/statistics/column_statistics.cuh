@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,11 +21,9 @@
 
 #pragma once
 
-#include "temp_storage_wrapper.cuh"
-
-#include "typed_statistics_chunk.cuh"
-
 #include "statistics.cuh"
+#include "temp_storage_wrapper.cuh"
+#include "typed_statistics_chunk.cuh"
 
 namespace cudf {
 namespace io {
@@ -34,18 +32,18 @@ namespace io {
  * @brief shared state for statistics calculation kernel
  */
 struct stats_state_s {
-  stats_column_desc col;   ///< Column information
-  statistics_group group;  ///< Group description
-  statistics_chunk ck;     ///< Output statistics chunk
+  stats_column_desc col{};   ///< Column information
+  statistics_group group{};  ///< Group description
+  statistics_chunk ck{};     ///< Output statistics chunk
 };
 
 /**
  * @brief shared state for statistics merge kernel
  */
 struct merge_state_s {
-  stats_column_desc col;         ///< Column information
-  statistics_merge_group group;  ///< Group description
-  statistics_chunk ck;           ///< Resulting statistics chunk
+  stats_column_desc col{};         ///< Column information
+  statistics_merge_group group{};  ///< Group description
+  statistics_chunk ck{};           ///< Resulting statistics chunk
 };
 
 template <int dimension>
@@ -129,7 +127,13 @@ struct calculate_group_statistics_functor {
 
     chunk = block_reduce(chunk, storage);
 
-    if (t == 0) { s.ck = get_untyped_chunk(chunk); }
+    if (t == 0) {
+      // parquet wants total null count in stats, not just count of null leaf values
+      if constexpr (IO == detail::io_file_format::PARQUET) {
+        chunk.null_count += s.group.non_leaf_nulls;
+      }
+      s.ck = get_untyped_chunk(chunk);
+    }
   }
 
   template <typename T,
@@ -186,8 +190,8 @@ struct merge_group_statistics_functor {
   template <typename T,
             std::enable_if_t<detail::statistics_type_category<T, IO>::ignore>* = nullptr>
   __device__ void operator()(merge_state_s& s,
-                             const statistics_chunk* chunks,
-                             const uint32_t num_chunks,
+                             statistics_chunk const* chunks,
+                             uint32_t const num_chunks,
                              uint32_t t)
   {
     // No-op for unsupported aggregation types
@@ -198,8 +202,8 @@ struct merge_group_statistics_functor {
                              (IO == detail::io_file_format::ORC or
                               !std::is_same_v<T, list_view>)>* = nullptr>
   __device__ void operator()(merge_state_s& s,
-                             const statistics_chunk* chunks,
-                             const uint32_t num_chunks,
+                             statistics_chunk const* chunks,
+                             uint32_t const num_chunks,
                              uint32_t t)
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
@@ -221,8 +225,8 @@ struct merge_group_statistics_functor {
                              IO == detail::io_file_format::PARQUET and
                              std::is_same_v<T, list_view>>* = nullptr>
   __device__ void operator()(merge_state_s& s,
-                             const statistics_chunk* chunks,
-                             const uint32_t num_chunks,
+                             statistics_chunk const* chunks,
+                             uint32_t const num_chunks,
                              uint32_t t)
   {
     operator()<statistics::byte_array_view>(s, chunks, num_chunks, t);
@@ -233,8 +237,8 @@ struct merge_group_statistics_functor {
     std::enable_if_t<detail::statistics_type_category<T, IO>::include_count and
                      not detail::statistics_type_category<T, IO>::include_extrema>* = nullptr>
   __device__ void operator()(merge_state_s& s,
-                             const statistics_chunk* chunks,
-                             const uint32_t num_chunks,
+                             statistics_chunk const* chunks,
+                             uint32_t const num_chunks,
                              uint32_t t)
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
@@ -260,7 +264,7 @@ struct merge_group_statistics_functor {
  * @tparam T Type of object
  */
 template <typename T>
-__device__ void cooperative_load(T& destination, const T* source = nullptr)
+__device__ void cooperative_load(T& destination, T const* source = nullptr)
 {
   using load_type = std::conditional_t<((sizeof(T) % sizeof(uint32_t)) == 0), uint32_t, uint8_t>;
   if (source == nullptr) {
@@ -269,7 +273,7 @@ __device__ void cooperative_load(T& destination, const T* source = nullptr)
     }
   } else {
     for (auto i = threadIdx.x; i < sizeof(T) / sizeof(load_type); i += blockDim.x) {
-      reinterpret_cast<load_type*>(&destination)[i] = reinterpret_cast<const load_type*>(source)[i];
+      reinterpret_cast<load_type*>(&destination)[i] = reinterpret_cast<load_type const*>(source)[i];
     }
   }
 }
@@ -283,10 +287,10 @@ __device__ void cooperative_load(T& destination, const T* source = nullptr)
  * @tparam IO File format for which statistics calculation is being done
  */
 template <int block_size, detail::io_file_format IO>
-__global__ void __launch_bounds__(block_size, 1)
+CUDF_KERNEL void __launch_bounds__(block_size, 1)
   gpu_calculate_group_statistics(statistics_chunk* chunks,
-                                 const statistics_group* groups,
-                                 const bool int96_timestamps)
+                                 statistics_group const* groups,
+                                 bool const int96_timestamps)
 {
   __shared__ __align__(8) stats_state_s state;
   __shared__ block_reduce_storage<block_size> storage;
@@ -342,10 +346,10 @@ namespace detail {
  */
 template <detail::io_file_format IO>
 void calculate_group_statistics(statistics_chunk* chunks,
-                                const statistics_group* groups,
+                                statistics_group const* groups,
                                 uint32_t num_chunks,
                                 rmm::cuda_stream_view stream,
-                                const bool int96_timestamps = false)
+                                bool const int96_timestamps = false)
 {
   constexpr int block_size = 256;
   gpu_calculate_group_statistics<block_size, IO>
@@ -362,10 +366,10 @@ void calculate_group_statistics(statistics_chunk* chunks,
  * @tparam IO File format for which statistics calculation is being done
  */
 template <int block_size, detail::io_file_format IO>
-__global__ void __launch_bounds__(block_size, 1)
+CUDF_KERNEL void __launch_bounds__(block_size, 1)
   gpu_merge_group_statistics(statistics_chunk* chunks_out,
-                             const statistics_chunk* chunks_in,
-                             const statistics_merge_group* groups)
+                             statistics_chunk const* chunks_in,
+                             statistics_merge_group const* groups)
 {
   __shared__ __align__(8) merge_state_s state;
   __shared__ block_reduce_storage<block_size> storage;
@@ -396,8 +400,8 @@ __global__ void __launch_bounds__(block_size, 1)
  */
 template <detail::io_file_format IO>
 void merge_group_statistics(statistics_chunk* chunks_out,
-                            const statistics_chunk* chunks_in,
-                            const statistics_merge_group* groups,
+                            statistics_chunk const* chunks_in,
+                            statistics_merge_group const* groups,
                             uint32_t num_chunks,
                             rmm::cuda_stream_view stream)
 {

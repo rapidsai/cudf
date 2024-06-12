@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,11 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -53,16 +56,19 @@ namespace cudf::lists {
  * @throws cudf::logic_error if @p sizes column is not of integer types.
  * @throws cudf::logic_error if any input column has nulls.
  * @throws cudf::logic_error if @p starts and @p sizes columns do not have the same size.
+ * @throws std::overflow_error if the output column would exceed the column size limit.
  *
  * @param starts First values in the result sequences.
  * @param sizes Numbers of values in the result sequences.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return The result column containing generated sequences.
  */
 std::unique_ptr<column> sequences(
   column_view const& starts,
   column_view const& sizes,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create a lists column in which each row contains a sequence of values specified by a tuple
@@ -90,10 +96,12 @@ std::unique_ptr<column> sequences(
  * @throws cudf::logic_error if any input column has nulls.
  * @throws cudf::logic_error if @p starts and @p steps columns have different types.
  * @throws cudf::logic_error if @p starts, @p steps, and @p sizes columns do not have the same size.
+ * @throws std::overflow_error if the output column would exceed the column size limit.
  *
  * @param starts First values in the result sequences.
  * @param steps Increment values for the result sequences.
  * @param sizes Numbers of values in the result sequences.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return The result column containing generated sequences.
  */
@@ -101,7 +109,8 @@ std::unique_ptr<column> sequences(
   column_view const& starts,
   column_view const& steps,
   column_view const& sizes,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf::lists

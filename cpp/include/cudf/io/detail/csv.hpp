@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 #pragma once
 
 #include <cudf/io/csv.hpp>
-#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace io {
@@ -39,24 +39,24 @@ namespace csv {
 table_with_metadata read_csv(std::unique_ptr<cudf::io::datasource>&& source,
                              csv_reader_options const& options,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr);
+                             rmm::device_async_resource_ref mr);
 
 /**
  * @brief Write an entire dataset to CSV format.
  *
  * @param sink Output sink
  * @param table The set of columns
- * @param metadata The metadata associated with the table
+ * @param column_names Column names for the output CSV
  * @param options Settings for controlling behavior
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource to use for device memory allocation
  */
 void write_csv(data_sink* sink,
                table_view const& table,
-               const table_metadata* metadata,
+               host_span<std::string const> column_names,
                csv_writer_options const& options,
-               rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+               rmm::cuda_stream_view stream,
+               rmm::device_async_resource_ref mr);
 
 }  // namespace csv
 }  // namespace detail

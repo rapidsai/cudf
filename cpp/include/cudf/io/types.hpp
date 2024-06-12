@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,13 +32,6 @@
 #include <unordered_map>
 #include <vector>
 
-// Forward declarations
-namespace arrow {
-namespace io {
-class RandomAccessFile;
-}
-}  // namespace arrow
-
 namespace cudf {
 //! IO interfaces
 namespace io {
@@ -51,6 +44,12 @@ class datasource;
 namespace cudf {
 //! IO interfaces
 namespace io {
+/**
+ * @addtogroup io_types
+ * @{
+ * @file
+ */
+
 /**
  * @brief Compression algorithms
  */
@@ -75,6 +74,7 @@ enum class compression_type {
 enum class io_type {
   FILEPATH,          ///< Input/output is a file path
   HOST_BUFFER,       ///< Input/output is a buffer in host memory
+  DEVICE_BUFFER,     ///< Input/output is a buffer in device memory
   VOID,              ///< Input/output is nothing. No work is done. Useful for benchmarking
   USER_IMPLEMENTED,  ///< Input/output is handled by a custom user class
 };
@@ -100,41 +100,167 @@ enum statistics_freq {
 };
 
 /**
- * @brief Detailed name information for output columns.
+ * @brief Valid encodings for use with `column_in_metadata::set_encoding()`
+ */
+enum class column_encoding {
+  // Common encodings:
+  USE_DEFAULT = -1,  ///< No encoding has been requested, use default encoding
+  DICTIONARY,        ///< Use dictionary encoding
+  // Parquet encodings:
+  PLAIN,                    ///< Use plain encoding
+  DELTA_BINARY_PACKED,      ///< Use DELTA_BINARY_PACKED encoding (only valid for integer columns)
+  DELTA_LENGTH_BYTE_ARRAY,  ///< Use DELTA_LENGTH_BYTE_ARRAY encoding (only
+                            ///< valid for BYTE_ARRAY columns)
+  DELTA_BYTE_ARRAY,         ///< Use DELTA_BYTE_ARRAY encoding (only valid for
+                            ///< BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY columns)
+  BYTE_STREAM_SPLIT,        ///< Use BYTE_STREAM_SPLIT encoding (valid for all fixed width types)
+  // ORC encodings:
+  DIRECT,         ///< Use DIRECT encoding
+  DIRECT_V2,      ///< Use DIRECT_V2 encoding
+  DICTIONARY_V2,  ///< Use DICTIONARY_V2 encoding
+};
+
+/**
+ * @brief Statistics about compression performed by a writer.
+ */
+class writer_compression_statistics {
+ public:
+  /**
+   * @brief Default constructor
+   */
+  writer_compression_statistics() = default;
+
+  /**
+   * @brief Constructor with initial values.
+   *
+   * @param num_compressed_bytes The number of bytes that were successfully compressed
+   * @param num_failed_bytes The number of bytes that failed to compress
+   * @param num_skipped_bytes The number of bytes that were skipped during compression
+   * @param num_compressed_output_bytes The number of bytes in the compressed output
+   */
+  writer_compression_statistics(size_t num_compressed_bytes,
+                                size_t num_failed_bytes,
+                                size_t num_skipped_bytes,
+                                size_t num_compressed_output_bytes)
+    : _num_compressed_bytes(num_compressed_bytes),
+      _num_failed_bytes(num_failed_bytes),
+      _num_skipped_bytes(num_skipped_bytes),
+      _num_compressed_output_bytes(num_compressed_output_bytes)
+  {
+  }
+
+  /**
+   * @brief Adds the values from another `writer_compression_statistics` object.
+   *
+   * @param other The other writer_compression_statistics object
+   * @return writer_compression_statistics& Reference to this object
+   */
+  writer_compression_statistics& operator+=(writer_compression_statistics const& other) noexcept
+  {
+    _num_compressed_bytes += other._num_compressed_bytes;
+    _num_failed_bytes += other._num_failed_bytes;
+    _num_skipped_bytes += other._num_skipped_bytes;
+    _num_compressed_output_bytes += other._num_compressed_output_bytes;
+    return *this;
+  }
+
+  /**
+   * @brief Returns the number of bytes in blocks that were successfully compressed.
+   *
+   * This is the number of bytes that were actually compressed, not the size of the compressed
+   * output.
+   *
+   * @return size_t The number of bytes that were successfully compressed
+   */
+  [[nodiscard]] auto num_compressed_bytes() const noexcept { return _num_compressed_bytes; }
+
+  /**
+   * @brief Returns the number of bytes in blocks that failed to compress.
+   *
+   * @return size_t The number of bytes that failed to compress
+   */
+  [[nodiscard]] auto num_failed_bytes() const noexcept { return _num_failed_bytes; }
+
+  /**
+   * @brief Returns the number of bytes in blocks that were skipped during compression.
+   *
+   * @return size_t The number of bytes that were skipped during compression
+   */
+  [[nodiscard]] auto num_skipped_bytes() const noexcept { return _num_skipped_bytes; }
+
+  /**
+   * @brief Returns the total size of compression inputs.
+   *
+   * @return size_t The total size of compression inputs
+   */
+  [[nodiscard]] auto num_total_input_bytes() const noexcept
+  {
+    return num_compressed_bytes() + num_failed_bytes() + num_skipped_bytes();
+  }
+
+  /**
+   * @brief Returns the compression ratio for the successfully compressed blocks.
+   *
+   * Returns nan if there were no successfully compressed blocks.
+   *
+   * @return double The ratio between the size of the compression inputs and the size of the
+   * compressed output.
+   */
+  [[nodiscard]] auto compression_ratio() const noexcept
+  {
+    return static_cast<double>(num_compressed_bytes()) / _num_compressed_output_bytes;
+  }
+
+ private:
+  std::size_t _num_compressed_bytes = 0;  ///< The number of bytes that were successfully compressed
+  std::size_t _num_failed_bytes     = 0;  ///< The number of bytes that failed to compress
+  std::size_t _num_skipped_bytes = 0;  ///< The number of bytes that were skipped during compression
+  std::size_t _num_compressed_output_bytes = 0;  ///< The number of bytes in the compressed output
+};
+
+/**
+ * @brief Control use of dictionary encoding for parquet writer
+ */
+enum dictionary_policy {
+  NEVER    = 0,  ///< Never use dictionary encoding
+  ADAPTIVE = 1,  ///< Use dictionary when it will not impact compression
+  ALWAYS   = 2   ///< Use dictionary regardless of impact on compression
+};
+
+/**
+ * @brief Detailed name (and optionally nullability) information for output columns.
  *
  * The hierarchy of children matches the hierarchy of children in the output
  * cudf columns.
  */
 struct column_name_info {
   std::string name;                        ///< Column name
+  std::optional<bool> is_nullable;         ///< Column nullability
+  std::optional<bool> is_binary;           ///< Column is binary (i.e. not a list)
+  std::optional<int32_t> type_length;      ///< Byte width of data (for fixed length data)
   std::vector<column_name_info> children;  ///< Child column names
+
   /**
-   * @brief Construct a column name info with a name and no children
+   * @brief Construct a column name info with a name, optional nullabilty, and no children
    *
    * @param _name Column name
+   * @param _is_nullable True if column is nullable
+   * @param _is_binary True if column is binary data
    */
-  column_name_info(std::string const& _name) : name(_name) {}
+  column_name_info(std::string const& _name,
+                   std::optional<bool> _is_nullable = std::nullopt,
+                   std::optional<bool> _is_binary   = std::nullopt)
+    : name(_name), is_nullable(_is_nullable), is_binary(_is_binary)
+  {
+  }
+
   column_name_info() = default;
 };
 
 /**
- * @brief Table metadata for io readers/writers (primarily column names)
- *
- * For nested types (structs, maps, unions), the ordering of names in the column_names vector
- * corresponds to a pre-order traversal of the column tree.
- * In the example below (2 top-level columns: struct column "col1" and string column "col2"),
- *  column_names = {"col1", "s3", "f5", "f6", "f4", "col2"}.
- *
- *     col1     col2
- *      / \
- *     /   \
- *   s3    f4
- *   / \
- *  /   \
- * f5    f6
+ * @brief Table metadata returned by IO readers.
  */
 struct table_metadata {
-  std::vector<std::string> column_names;  //!< Names of columns contained in the table
   std::vector<column_name_info>
     schema_info;  //!< Detailed name information for the entire output hierarchy
   std::map<std::string, std::string> user_data;  //!< Format-dependent metadata of the first input
@@ -154,10 +280,13 @@ struct table_with_metadata {
 /**
  * @brief Non-owning view of a host memory buffer
  *
+ * @deprecated Since 23.04
+ *
  * Used to describe buffer input in `source_info` objects.
  */
 struct host_buffer {
-  const char* data = nullptr;  //!< Pointer to the buffer
+  // TODO: to be replaced by `host_span`
+  char const* data = nullptr;  //!< Pointer to the buffer
   size_t size      = 0;        //!< Size of the buffer
   host_buffer()    = default;
   /**
@@ -166,49 +295,138 @@ struct host_buffer {
    * @param data Pointer to the buffer
    * @param size Size of the buffer
    */
-  host_buffer(const char* data, size_t size) : data(data), size(size) {}
+  host_buffer(char const* data, size_t size) : data(data), size(size) {}
 };
+
+/**
+ * @brief Returns `true` if the type is byte-like, meaning it is reasonable to pass as a pointer to
+ * bytes.
+ *
+ * @tparam T The representation type
+ * @return `true` if the type is considered a byte-like type
+ */
+template <typename T>
+constexpr inline auto is_byte_like_type()
+{
+  using non_cv_T = std::remove_cv_t<T>;
+  return std::is_same_v<non_cv_T, int8_t> || std::is_same_v<non_cv_T, char> ||
+         std::is_same_v<non_cv_T, uint8_t> || std::is_same_v<non_cv_T, unsigned char> ||
+         std::is_same_v<non_cv_T, std::byte>;
+}
 
 /**
  * @brief Source information for read interfaces
  */
 struct source_info {
-  std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> _files;  //!< Input files
-
   source_info() = default;
 
   /**
-   * @brief Construct a new source info object for mutiple files
+   * @brief Construct a new source info object for multiple files
    *
    * @param file_paths Input files paths
    */
-  explicit source_info(std::vector<std::string> const& file_paths) : _filepaths(file_paths) {}
+  explicit source_info(std::vector<std::string> const& file_paths)
+    : _type(io_type::FILEPATH), _filepaths(file_paths)
+  {
+  }
 
   /**
    * @brief Construct a new source info object for a single file
    *
    * @param file_path Single input file
    */
-  explicit source_info(std::string const& file_path) : _filepaths({file_path}) {}
+  explicit source_info(std::string const& file_path)
+    : _type(io_type::FILEPATH), _filepaths({file_path})
+  {
+  }
+
+  /**
+   * @brief Construct a new source info object for multiple buffers in host memory
+   *
+   * @deprecated Since 23.04
+   *
+   * @param host_buffers Input buffers in host memory
+   */
+  explicit source_info(std::vector<host_buffer> const& host_buffers) : _type(io_type::HOST_BUFFER)
+  {
+    _host_buffers.reserve(host_buffers.size());
+    std::transform(host_buffers.begin(),
+                   host_buffers.end(),
+                   std::back_inserter(_host_buffers),
+                   [](auto const hb) {
+                     return cudf::host_span<std::byte const>{
+                       reinterpret_cast<std::byte const*>(hb.data), hb.size};
+                   });
+  }
+
+  /**
+   * @brief Construct a new source info object for a single buffer
+   *
+   * @deprecated Since 23.04
+   *
+   * @param host_data Input buffer in host memory
+   * @param size Size of the buffer
+   */
+  explicit source_info(char const* host_data, size_t size)
+    : _type(io_type::HOST_BUFFER),
+      _host_buffers(
+        {cudf::host_span<std::byte const>(reinterpret_cast<std::byte const*>(host_data), size)})
+  {
+  }
 
   /**
    * @brief Construct a new source info object for multiple buffers in host memory
    *
    * @param host_buffers Input buffers in host memory
    */
-  explicit source_info(std::vector<host_buffer> const& host_buffers)
-    : _type(io_type::HOST_BUFFER), _buffers(host_buffers)
+  template <typename T, CUDF_ENABLE_IF(is_byte_like_type<std::remove_cv_t<T>>())>
+  explicit source_info(cudf::host_span<cudf::host_span<T>> const host_buffers)
+    : _type(io_type::HOST_BUFFER)
   {
+    if constexpr (not std::is_same_v<std::remove_cv_t<T>, std::byte>) {
+      _host_buffers.reserve(host_buffers.size());
+      std::transform(host_buffers.begin(),
+                     host_buffers.end(),
+                     std::back_inserter(_host_buffers),
+                     [](auto const s) {
+                       return cudf::host_span<std::byte const>{
+                         reinterpret_cast<std::byte const*>(s.data()), s.size()};
+                     });
+    } else {
+      _host_buffers.assign(host_buffers.begin(), host_buffers.end());
+    }
   }
 
   /**
    * @brief Construct a new source info object for a single buffer
    *
    * @param host_data Input buffer in host memory
-   * @param size Size of the buffer
    */
-  explicit source_info(const char* host_data, size_t size)
-    : _type(io_type::HOST_BUFFER), _buffers({{host_data, size}})
+  template <typename T, CUDF_ENABLE_IF(is_byte_like_type<std::remove_cv_t<T>>())>
+  explicit source_info(cudf::host_span<T> host_data)
+    : _type(io_type::HOST_BUFFER),
+      _host_buffers{cudf::host_span<std::byte const>(
+        reinterpret_cast<std::byte const*>(host_data.data()), host_data.size())}
+  {
+  }
+
+  /**
+   * @brief Construct a new source info object for multiple buffers in device memory
+   *
+   * @param device_buffers Input buffers in device memory
+   */
+  explicit source_info(cudf::host_span<cudf::device_span<std::byte const>> device_buffers)
+    : _type(io_type::DEVICE_BUFFER), _device_buffers(device_buffers.begin(), device_buffers.end())
+  {
+  }
+
+  /**
+   * @brief Construct a new source info object from a device buffer
+   *
+   * @param d_buffer Input buffer in device memory
+   */
+  explicit source_info(cudf::device_span<std::byte const> d_buffer)
+    : _type(io_type::DEVICE_BUFFER), _device_buffers({{d_buffer}})
   {
   }
 
@@ -249,13 +467,13 @@ struct source_info {
    *
    * @return The host buffers of the input
    */
-  [[nodiscard]] auto const& buffers() const { return _buffers; }
+  [[nodiscard]] auto const& host_buffers() const { return _host_buffers; }
   /**
-   * @brief Get the input files
+   * @brief Get the device buffers of the input
    *
-   * @return The input files
+   * @return The device buffers of the input
    */
-  [[nodiscard]] auto const& files() const { return _files; }
+  [[nodiscard]] auto const& device_buffers() const { return _device_buffers; }
   /**
    * @brief Get the user sources of the input
    *
@@ -264,9 +482,10 @@ struct source_info {
   [[nodiscard]] auto const& user_sources() const { return _user_sources; }
 
  private:
-  io_type _type = io_type::FILEPATH;
+  io_type _type = io_type::VOID;
   std::vector<std::string> _filepaths;
-  std::vector<host_buffer> _buffers;
+  std::vector<cudf::host_span<std::byte const>> _host_buffers;
+  std::vector<cudf::device_span<std::byte const>> _device_buffers;
   std::vector<cudf::io::datasource*> _user_sources;
 };
 
@@ -389,9 +608,12 @@ class column_in_metadata {
   bool _list_column_is_map  = false;
   bool _use_int96_timestamp = false;
   bool _output_as_binary    = false;
+  bool _skip_compression    = false;
   std::optional<uint8_t> _decimal_precision;
   std::optional<int32_t> _parquet_field_id;
+  std::optional<int32_t> _type_length;
   std::vector<column_in_metadata> children;
+  column_encoding _encoding = column_encoding::USE_DEFAULT;
 
  public:
   column_in_metadata() = default;
@@ -427,8 +649,6 @@ class column_in_metadata {
 
   /**
    * @brief Set the nullability of this column
-   *
-   * Only valid in case of chunked writes. In single writes, this option is ignored.
    *
    * @param nullable Whether this column is nullable
    * @return this for chaining
@@ -480,6 +700,19 @@ class column_in_metadata {
   }
 
   /**
+   * @brief Set the data length of the column. Only valid if this column is a
+   * fixed-length byte array.
+   *
+   * @param length The data length to set for this column
+   * @return this for chaining
+   */
+  column_in_metadata& set_type_length(int32_t length) noexcept
+  {
+    _type_length = length;
+    return *this;
+  }
+
+  /**
    * @brief Set the parquet field id of this column.
    *
    * @param field_id The parquet field id to set
@@ -502,6 +735,40 @@ class column_in_metadata {
   column_in_metadata& set_output_as_binary(bool binary) noexcept
   {
     _output_as_binary = binary;
+    if (_output_as_binary and children.size() == 1) {
+      children.emplace_back();
+    } else if (!_output_as_binary and children.size() == 2) {
+      children.pop_back();
+    }
+    return *this;
+  }
+
+  /**
+   * @brief Specifies whether this column should not be compressed regardless of the compression
+   * codec specified for the file.
+   *
+   * @param skip If `true` do not compress this column
+   * @return this for chaining
+   */
+  column_in_metadata& set_skip_compression(bool skip) noexcept
+  {
+    _skip_compression = skip;
+    return *this;
+  }
+
+  /**
+   * @brief Sets the encoding to use for this column.
+   *
+   * This is just a request, and the encoder may still choose to use a different encoding
+   * depending on resource constraints. Use the constants defined in the `parquet_encoding`
+   * struct.
+   *
+   * @param encoding The encoding to use
+   * @return this for chaining
+   */
+  column_in_metadata& set_encoding(column_encoding encoding) noexcept
+  {
+    _encoding = encoding;
     return *this;
   }
 
@@ -538,8 +805,8 @@ class column_in_metadata {
   /**
    * @brief Gets the explicitly set nullability for this column.
    *
-   * @throws If nullability is not explicitly defined for this column.
-   *         Check using `is_nullability_defined()` first.
+   * @throws std::bad_optional_access If nullability is not explicitly defined
+   *         for this column. Check using `is_nullability_defined()` first.
    * @return Boolean indicating whether this column is nullable
    */
   [[nodiscard]] bool nullable() const { return _nullable.value(); }
@@ -572,11 +839,27 @@ class column_in_metadata {
   /**
    * @brief Get the decimal precision that was set for this column.
    *
-   * @throws If decimal precision was not set for this column.
-   *         Check using `is_decimal_precision_set()` first.
+   * @throws std::bad_optional_access If decimal precision was not set for this
+   *         column. Check using `is_decimal_precision_set()` first.
    * @return The decimal precision that was set for this column
    */
   [[nodiscard]] uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
+
+  /**
+   * @brief Get whether type length has been set for this column
+   *
+   * @return Boolean indicating whether type length has been set for this column
+   */
+  [[nodiscard]] bool is_type_length_set() const noexcept { return _type_length.has_value(); }
+
+  /**
+   * @brief Get the type length that was set for this column.
+   *
+   * @throws std::bad_optional_access If type length was not set for this
+   *         column. Check using `is_type_length_set()` first.
+   * @return The decimal precision that was set for this column
+   */
+  [[nodiscard]] uint8_t get_type_length() const { return _type_length.value(); }
 
   /**
    * @brief Get whether parquet field id has been set for this column.
@@ -591,8 +874,8 @@ class column_in_metadata {
   /**
    * @brief Get the parquet field id that was set for this column.
    *
-   * @throws If parquet field id was not set for this column.
-   *         Check using `is_parquet_field_id_set()` first.
+   * @throws std::bad_optional_access If parquet field id was not set for this
+   *         column. Check using `is_parquet_field_id_set()` first.
    * @return The parquet field id that was set for this column
    */
   [[nodiscard]] int32_t get_parquet_field_id() const { return _parquet_field_id.value(); }
@@ -610,6 +893,20 @@ class column_in_metadata {
    * @return Boolean indicating whether to encode this column as binary data
    */
   [[nodiscard]] bool is_enabled_output_as_binary() const noexcept { return _output_as_binary; }
+
+  /**
+   * @brief Get whether to skip compressing this column
+   *
+   * @return Boolean indicating whether to skip compression of this column
+   */
+  [[nodiscard]] bool is_enabled_skip_compression() const noexcept { return _skip_compression; }
+
+  /**
+   * @brief Get the encoding that was set for this column.
+   *
+   * @return The encoding that was set for this column
+   */
+  [[nodiscard]] column_encoding get_encoding() const { return _encoding; }
 };
 
 /**
@@ -626,7 +923,17 @@ class table_input_metadata {
    *
    * @param table The table_view to construct metadata for
    */
-  table_input_metadata(table_view const& table);
+  explicit table_input_metadata(table_view const& table);
+
+  /**
+   * @brief Construct a new table_input_metadata from a table_metadata object.
+   *
+   * The constructed table_input_metadata has the same structure, column names and nullability as
+   * the passed table_metadata.
+   *
+   * @param metadata The table_metadata to construct table_intput_metadata for
+   */
+  explicit table_input_metadata(table_metadata const& metadata);
 
   std::vector<column_in_metadata> column_metadata;  //!< List of column metadata
 };
@@ -660,6 +967,7 @@ struct partition_info {
 class reader_column_schema {
   // Whether to read binary data as a string column
   bool _convert_binary_to_strings{true};
+  int32_t _type_length{0};
 
   std::vector<reader_column_schema> children;
 
@@ -726,6 +1034,18 @@ class reader_column_schema {
   }
 
   /**
+   * @brief Sets the length of fixed length data.
+   *
+   * @param type_length Size of the data type in bytes
+   * @return this for chaining
+   */
+  reader_column_schema& set_type_length(int32_t type_length)
+  {
+    _type_length = type_length;
+    return *this;
+  }
+
+  /**
    * @brief Get whether to encode this column as binary or string data
    *
    * @return Boolean indicating whether to encode this column as binary data
@@ -736,6 +1056,13 @@ class reader_column_schema {
   }
 
   /**
+   * @brief Get the length in bytes of this fixed length data.
+   *
+   * @return The length in bytes of the data type
+   */
+  [[nodiscard]] int32_t get_type_length() const { return _type_length; }
+
+  /**
    * @brief Get the number of child objects
    *
    * @return number of children
@@ -743,5 +1070,6 @@ class reader_column_schema {
   [[nodiscard]] size_t get_num_children() const { return children.size(); }
 };
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

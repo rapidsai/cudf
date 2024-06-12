@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,12 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/combine.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -31,6 +33,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -47,8 +50,9 @@ struct concat_strings_base {
   table_device_view const d_table;
   string_scalar_device_view const d_narep;
   separator_on_nulls separate_nulls;
-  offset_type* d_offsets{};
-  char* d_chars{};
+  size_type* d_sizes;
+  char* d_chars;
+  cudf::detail::input_offsetalator d_offsets;
 
   /**
    * @brief Concatenate each table row to a single output string.
@@ -66,12 +70,12 @@ struct concat_strings_base {
         thrust::any_of(thrust::seq, d_table.begin(), d_table.end(), [idx](auto const& col) {
           return col.is_null(idx);
         })) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
     char* d_buffer       = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    offset_type bytes    = 0;
+    size_type bytes      = 0;
     bool write_separator = false;
 
     for (auto itr = d_table.begin(); itr < d_table.end(); ++itr) {
@@ -93,7 +97,7 @@ struct concat_strings_base {
         write_separator || (separate_nulls == separator_on_nulls::YES) || !null_element;
     }
 
-    if (!d_chars) d_offsets[idx] = bytes;
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 
@@ -111,7 +115,7 @@ struct concat_strings_fn : concat_strings_base {
   {
   }
 
-  __device__ void operator()(size_type idx) { process_row(idx, d_separator); }
+  __device__ void operator()(std::size_t idx) { process_row(idx, d_separator); }
 };
 
 }  // namespace
@@ -121,7 +125,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& narep,
                                     separator_on_nulls separate_nulls,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   auto const num_columns = strings_columns.num_columns();
   CUDF_EXPECTS(num_columns > 1, "At least two columns must be specified");
@@ -141,7 +145,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   // Create device views from the strings columns.
   auto d_table = table_device_view::create(strings_columns, stream);
   concat_strings_fn fn{*d_table, d_separator, d_narep, separate_nulls};
-  auto children = make_strings_children(fn, strings_count, stream, mr);
+  auto [offsets_column, chars] = make_strings_children(fn, strings_count, stream, mr);
 
   // create resulting null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(
@@ -155,11 +159,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
     stream,
     mr);
 
-  return make_strings_column(strings_count,
-                             std::move(children.first),
-                             std::move(children.second),
-                             null_count,
-                             std::move(null_mask));
+  return make_strings_column(
+    strings_count, std::move(offsets_column), chars.release(), null_count, std::move(null_mask));
 }
 
 namespace {
@@ -189,7 +190,7 @@ struct multi_separator_concat_fn : concat_strings_base {
   __device__ void operator()(size_type idx)
   {
     if (d_separators.is_null(idx) && !d_separator_narep.is_valid()) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -208,7 +209,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& col_narep,
                                     separator_on_nulls separate_nulls,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   auto const num_columns = strings_columns.num_columns();
   CUDF_EXPECTS(num_columns > 0, "At least one column must be specified");
@@ -236,7 +237,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 
   multi_separator_concat_fn mscf{
     *d_table, separator_col_view, separator_rep, col_rep, separate_nulls};
-  auto children = make_strings_children(mscf, strings_count, stream, mr);
+  auto [offsets_column, chars] = make_strings_children(mscf, strings_count, stream, mr);
 
   // Create resulting null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(
@@ -251,11 +252,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
     stream,
     mr);
 
-  return make_strings_column(strings_count,
-                             std::move(children.first),
-                             std::move(children.second),
-                             null_count,
-                             std::move(null_mask));
+  return make_strings_column(
+    strings_count, std::move(offsets_column), chars.release(), null_count, std::move(null_mask));
 }
 
 }  // namespace detail
@@ -266,11 +264,11 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& separator,
                                     string_scalar const& narep,
                                     separator_on_nulls separate_nulls,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(
-    strings_columns, separator, narep, separate_nulls, cudf::get_default_stream(), mr);
+  return detail::concatenate(strings_columns, separator, narep, separate_nulls, stream, mr);
 }
 
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
@@ -278,16 +276,12 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& separator_narep,
                                     string_scalar const& col_narep,
                                     separator_on_nulls separate_nulls,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(strings_columns,
-                             separators,
-                             separator_narep,
-                             col_narep,
-                             separate_nulls,
-                             cudf::get_default_stream(),
-                             mr);
+  return detail::concatenate(
+    strings_columns, separators, separator_narep, col_narep, separate_nulls, stream, mr);
 }
 
 }  // namespace strings

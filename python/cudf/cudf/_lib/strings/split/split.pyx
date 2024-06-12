@@ -1,14 +1,19 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
+from cudf.core.buffer import acquire_spill_lock
+
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
-from cudf._lib.cpp.strings.split.split cimport (
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from cudf._lib.pylibcudf.libcudf.strings.regex_flags cimport regex_flags
+from cudf._lib.pylibcudf.libcudf.strings.regex_program cimport regex_program
+from cudf._lib.pylibcudf.libcudf.strings.split.split cimport (
     rsplit as cpp_rsplit,
     rsplit_re as cpp_rsplit_re,
     rsplit_record as cpp_rsplit_record,
@@ -18,13 +23,13 @@ from cudf._lib.cpp.strings.split.split cimport (
     split_record as cpp_split_record,
     split_record_re as cpp_split_record_re,
 )
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport data_from_unique_ptr
 
 
+@acquire_spill_lock()
 def split(Column source_strings,
           object py_delimiter,
           size_type maxsplit):
@@ -55,6 +60,7 @@ def split(Column source_strings,
     )
 
 
+@acquire_spill_lock()
 def split_record(Column source_strings,
                  object py_delimiter,
                  size_type maxsplit):
@@ -84,6 +90,7 @@ def split_record(Column source_strings,
     )
 
 
+@acquire_spill_lock()
 def rsplit(Column source_strings,
            object py_delimiter,
            size_type maxsplit):
@@ -114,6 +121,7 @@ def rsplit(Column source_strings,
     )
 
 
+@acquire_spill_lock()
 def rsplit_record(Column source_strings,
                   object py_delimiter,
                   size_type maxsplit):
@@ -143,6 +151,7 @@ def rsplit_record(Column source_strings,
     )
 
 
+@acquire_spill_lock()
 def split_re(Column source_strings,
              object pattern,
              size_type maxsplit):
@@ -153,11 +162,14 @@ def split_re(Column source_strings,
     cdef unique_ptr[table] c_result
     cdef column_view source_view = source_strings.view()
     cdef string pattern_string = <string>str(pattern).encode()
+    cdef regex_flags c_flags = regex_flags.DEFAULT
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(pattern_string, c_flags))
         c_result = move(cpp_split_re(
             source_view,
-            pattern_string,
+            dereference(c_prog),
             maxsplit
         ))
 
@@ -167,6 +179,7 @@ def split_re(Column source_strings,
     )
 
 
+@acquire_spill_lock()
 def rsplit_re(Column source_strings,
               object pattern,
               size_type maxsplit):
@@ -178,11 +191,14 @@ def rsplit_re(Column source_strings,
     cdef unique_ptr[table] c_result
     cdef column_view source_view = source_strings.view()
     cdef string pattern_string = <string>str(pattern).encode()
+    cdef regex_flags c_flags = regex_flags.DEFAULT
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(pattern_string, c_flags))
         c_result = move(cpp_rsplit_re(
             source_view,
-            pattern_string,
+            dereference(c_prog),
             maxsplit
         ))
 
@@ -192,6 +208,7 @@ def rsplit_re(Column source_strings,
     )
 
 
+@acquire_spill_lock()
 def split_record_re(Column source_strings,
                     object pattern,
                     size_type maxsplit):
@@ -202,11 +219,14 @@ def split_record_re(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
     cdef string pattern_string = <string>str(pattern).encode()
+    cdef regex_flags c_flags = regex_flags.DEFAULT
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(pattern_string, c_flags))
         c_result = move(cpp_split_record_re(
             source_view,
-            pattern_string,
+            dereference(c_prog),
             maxsplit
         ))
 
@@ -215,6 +235,7 @@ def split_record_re(Column source_strings,
     )
 
 
+@acquire_spill_lock()
 def rsplit_record_re(Column source_strings,
                      object pattern,
                      size_type maxsplit):
@@ -226,11 +247,14 @@ def rsplit_record_re(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
     cdef string pattern_string = <string>str(pattern).encode()
+    cdef regex_flags c_flags = regex_flags.DEFAULT
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(pattern_string, c_flags))
         c_result = move(cpp_rsplit_record_re(
             source_view,
-            pattern_string,
+            dereference(c_prog),
             maxsplit
         ))
 

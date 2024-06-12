@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,23 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/lists/lists_column_view.hpp>
-#include <cudf/types.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/types.hpp>
+
 #include <rmm/device_buffer.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
-struct ListColumnWrapperTest : public cudf::test::BaseFixture {
-};
+struct ListColumnWrapperTest : public cudf::test::BaseFixture {};
 template <typename T>
 struct ListColumnWrapperTestTyped : public cudf::test::BaseFixture {
   ListColumnWrapperTestTyped() {}
@@ -47,7 +46,6 @@ TYPED_TEST_SUITE(ListColumnWrapperTestTyped, FixedWidthTypesNotBool);
 
 TYPED_TEST(ListColumnWrapperTestTyped, List)
 {
-  using namespace cudf;
   using T = TypeParam;
 
   // List<T>, 1 row
@@ -59,19 +57,19 @@ TYPED_TEST(ListColumnWrapperTestTyped, List)
   //    2, 3
   //
   {
-    test::lists_column_wrapper<T, int32_t> list{2, 3};
+    cudf::test::lists_column_wrapper<T, int32_t> list{2, 3};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 2);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 2});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto data = lcv.child();
     EXPECT_EQ(data.size(), 2);
-    test::fixed_width_column_wrapper<T, int32_t> e_data({2, 3});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> e_data({2, 3});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_data, data);
   }
 
@@ -84,30 +82,29 @@ TYPED_TEST(ListColumnWrapperTestTyped, List)
   //    2, 3
   //
   {
-    test::lists_column_wrapper<T, int32_t> list{{2, 3}};
+    cudf::test::lists_column_wrapper<T, int32_t> list{{2, 3}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 2);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 2});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto data = lcv.child();
     EXPECT_EQ(data.size(), 2);
-    test::fixed_width_column_wrapper<T, int32_t> e_data({2, 3});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> e_data({2, 3});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_data, data);
   }
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, ListWithValidity)
 {
-  using namespace cudf;
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<T>, 1 row
   //
@@ -118,19 +115,19 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListWithValidity)
   //    2, NULL
   //
   {
-    test::lists_column_wrapper<T, int32_t> list{{{2, 3}, valids}};
+    cudf::test::lists_column_wrapper<T, int32_t> list{{{2, 3}, valids}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 2);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 2});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto data = lcv.child();
     EXPECT_EQ(data.size(), 2);
-    test::fixed_width_column_wrapper<T, int32_t> e_data({2, 3}, valids);
+    cudf::test::fixed_width_column_wrapper<T, int32_t> e_data({2, 3}, valids);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_data, data);
   }
 
@@ -142,27 +139,26 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListWithValidity)
   // Children :
   //    2, NULL, 4, NULL, 6, NULL, 8
   {
-    test::lists_column_wrapper<T, int32_t> list{
+    cudf::test::lists_column_wrapper<T, int32_t> list{
       {{2, 3}, valids}, {{4, 5}, valids}, {{6, 7, 8}, valids}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2, 4, 7});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 2, 4, 7});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto data = lcv.child();
     EXPECT_EQ(data.size(), 7);
-    test::fixed_width_column_wrapper<T, int32_t> e_data({2, 3, 4, 5, 6, 7, 8}, valids);
+    cudf::test::fixed_width_column_wrapper<T, int32_t> e_data({2, 3, 4, 5, 6, 7, 8}, valids);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_data, data);
   }
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, ListFromIterator)
 {
-  using namespace cudf;
   using T = TypeParam;
 
   // List<T>, 1 row
@@ -175,30 +171,29 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIterator)
   //
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
 
-  test::lists_column_wrapper<T, typename decltype(sequence)::value_type> list{sequence,
-                                                                              sequence + 5};
+  cudf::test::lists_column_wrapper<T, typename decltype(sequence)::value_type> list{sequence,
+                                                                                    sequence + 5};
 
-  lists_column_view lcv(list);
+  cudf::lists_column_view lcv(list);
   EXPECT_EQ(lcv.size(), 1);
 
   auto offsets = lcv.offsets();
   EXPECT_EQ(offsets.size(), 2);
-  test::fixed_width_column_wrapper<size_type> e_offsets({0, 5});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 5});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
   auto data = lcv.child();
   EXPECT_EQ(data.size(), 5);
-  test::fixed_width_column_wrapper<T, int32_t> e_data({0, 1, 2, 3, 4});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> e_data({0, 1, 2, 3, 4});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_data, data);
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, ListFromIteratorWithValidity)
 {
-  using namespace cudf;
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<int>, 1 row
   //
@@ -210,26 +205,25 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIteratorWithValidity)
   //
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
 
-  test::lists_column_wrapper<T, typename decltype(sequence)::value_type> list{
+  cudf::test::lists_column_wrapper<T, typename decltype(sequence)::value_type> list{
     sequence, sequence + 5, valids};
 
-  lists_column_view lcv(list);
+  cudf::lists_column_view lcv(list);
   EXPECT_EQ(lcv.size(), 1);
 
   auto offsets = lcv.offsets();
   EXPECT_EQ(offsets.size(), 2);
-  test::fixed_width_column_wrapper<size_type> e_offsets({0, 5});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 5});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
   auto data = lcv.child();
   EXPECT_EQ(data.size(), 5);
-  test::fixed_width_column_wrapper<T, int32_t> e_data({0, 0, 2, 0, 4}, valids);
+  cudf::test::fixed_width_column_wrapper<T, int32_t> e_data({0, 0, 2, 0, 4}, valids);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_data, data);
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, ListOfLists)
 {
-  using namespace cudf;
   using T = TypeParam;
 
   // List<List<T>>, 1 row
@@ -244,28 +238,28 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfLists)
   //    Children :
   //      2, 3, 4, 5
   {
-    test::lists_column_wrapper<T, int32_t> list{{{2, 3}, {4, 5}}};
+    cudf::test::lists_column_wrapper<T, int32_t> list{{{2, 3}, {4, 5}}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 2);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 2});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 2);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 3);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 2, 4});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 2, 4});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_data = childv.child();
     EXPECT_EQ(child_data.size(), 4);
-    test::fixed_width_column_wrapper<T, int32_t> e_child_data({2, 3, 4, 5});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> e_child_data({2, 3, 4, 5});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_data, child_data);
   }
 
@@ -281,39 +275,40 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfLists)
   //    Children :
   //      1, 2, 3, 4, 5, 6, 7, 0, 8, 9, 10
   {
-    test::lists_column_wrapper<T, int32_t> list{{{1, 2}, {3, 4}}, {{5, 6, 7}, {0}, {8}}, {{9, 10}}};
+    cudf::test::lists_column_wrapper<T, int32_t> list{
+      {{1, 2}, {3, 4}}, {{5, 6, 7}, {0}, {8}}, {{9, 10}}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2, 5, 6});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 2, 5, 6});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 6);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 7);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 2, 4, 7, 8, 9, 11});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 2, 4, 7, 8, 9, 11});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_data = childv.child();
     EXPECT_EQ(child_data.size(), 11);
-    test::fixed_width_column_wrapper<T, int32_t> e_child_data({1, 2, 3, 4, 5, 6, 7, 0, 8, 9, 10});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> e_child_data(
+      {1, 2, 3, 4, 5, 6, 7, 0, 8, 9, 10});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_data, child_data);
   }
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, ListOfListsWithValidity)
 {
-  using namespace cudf;
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<List<T>>, 1 row
   //
@@ -328,28 +323,28 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListsWithValidity)
   //      2, NULL, 4, NULL
   {
     // equivalent to { {2, NULL}, {4, NULL} }
-    test::lists_column_wrapper<T, int32_t> list{{{{2, 3}, valids}, {{4, 5}, valids}}};
+    cudf::test::lists_column_wrapper<T, int32_t> list{{{{2, 3}, valids}, {{4, 5}, valids}}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 2);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 2});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 2);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 3);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 2, 4});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 2, 4});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_data = childv.child();
     EXPECT_EQ(child_data.size(), 4);
-    test::fixed_width_column_wrapper<T, int32_t> e_child_data({2, 3, 4, 5}, valids);
+    cudf::test::fixed_width_column_wrapper<T, int32_t> e_child_data({2, 3, 4, 5}, valids);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_data, child_data);
   }
 
@@ -368,41 +363,40 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListsWithValidity)
   //      1, 2, 5, 6, 7, 8, 9, 10
   {
     // equivalent to  { {{1, 2}, NULL}, {{5, 6, 7}, NULL, {8}}, {{9, 10}} }
-    test::lists_column_wrapper<T, int32_t> list{
+    cudf::test::lists_column_wrapper<T, int32_t> list{
       {{{1, 2}, {3, 4}}, valids}, {{{5, 6, 7}, {0}, {8}}, valids}, {{{9, 10}}, valids}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2, 5, 6});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 2, 5, 6});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 6);
     EXPECT_EQ(childv.null_count(), 2);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 7);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 2, 2, 5, 5, 6, 8});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 2, 2, 5, 5, 6, 8});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_data = childv.child();
     EXPECT_EQ(child_data.size(), 8);
-    test::fixed_width_column_wrapper<T, int32_t> e_child_data({1, 2, 5, 6, 7, 8, 9, 10});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> e_child_data({1, 2, 5, 6, 7, 8, 9, 10});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_data, child_data);
   }
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, ListOfListOfListsWithValidity)
 {
-  using namespace cudf;
   using T = TypeParam;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<List<List<T>>>, 2 rows
   //
@@ -423,39 +417,40 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListOfListsWithValidity)
   //        1, 2, 3, 4, 10, 20, 30, 40, 50, 60, 70, 0
   {
     // equivalent to  { {{{1, 2}, {3, 4}}, NULL}, {{{10, 20}, {30, 40}}, {{50, 60, 70}, {0}}} }
-    test::lists_column_wrapper<T, int32_t> list{{{{{1, 2}, {3, 4}}, {{5, 6, 7}, {0}}}, valids},
-                                                {{{10, 20}, {30, 40}}, {{50, 60, 70}, {0}}}};
+    cudf::test::lists_column_wrapper<T, int32_t> list{
+      {{{{1, 2}, {3, 4}}, {{5, 6, 7}, {0}}}, valids}, {{{10, 20}, {30, 40}}, {{50, 60, 70}, {0}}}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 2);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 3);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2, 4});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 2, 4});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 4);
     EXPECT_EQ(childv.null_count(), 1);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 5);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 2, 2, 4, 6});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 2, 2, 4, 6});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_child = childv.child();
-    lists_column_view child_childv(child_child);
+    cudf::lists_column_view child_childv(child_child);
     EXPECT_EQ(child_childv.size(), 6);
 
     auto child_child_offsets = child_childv.offsets();
     EXPECT_EQ(child_child_offsets.size(), 7);
-    test::fixed_width_column_wrapper<size_type> e_child_child_offsets({0, 2, 4, 6, 8, 11, 12});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_child_offsets(
+      {0, 2, 4, 6, 8, 11, 12});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_child_offsets, child_child_offsets);
 
     auto child_child_data = child_childv.child();
     EXPECT_EQ(child_child_data.size(), 12);
-    test::fixed_width_column_wrapper<T, int32_t> e_child_child_data(
+    cudf::test::fixed_width_column_wrapper<T, int32_t> e_child_child_data(
       {1, 2, 3, 4, 10, 20, 30, 40, 50, 60, 70, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_child_data, child_child_data);
   }
@@ -463,13 +458,12 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListOfListsWithValidity)
 
 TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
 {
-  using namespace cudf;
   using T = TypeParam;
 
   // to disambiguate between {} == 0 and {} == List{0}
   // Also, see note about compiler issues when declaring nested
   // empty lists in lists_column_wrapper documentation
-  using LCW = test::lists_column_wrapper<T, int32_t>;
+  using LCW = cudf::test::lists_column_wrapper<T, int32_t>;
 
   // List<T>, empty
   //
@@ -479,9 +473,9 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   // Children :
   {
     // equivalent to  {}
-    test::lists_column_wrapper<T> list{};
+    cudf::test::lists_column_wrapper<T> list{};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 0);
   }
 
@@ -493,14 +487,14 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   // Children :
   {
     // equivalent to  {}
-    test::lists_column_wrapper<T, int32_t> list{LCW{}};
+    cudf::test::lists_column_wrapper<T, int32_t> list{LCW{}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 2);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 0});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
   }
 
@@ -512,14 +506,14 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   // Children :
   {
     // equivalent to  {}
-    test::lists_column_wrapper<T, int32_t> list{LCW{}, LCW{}};
+    cudf::test::lists_column_wrapper<T, int32_t> list{LCW{}, LCW{}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 2);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 3);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 0, 0});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
   }
 
@@ -533,19 +527,19 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   {
     // equivalent to  {{1, 2}, {}, {3, 4}}
 
-    test::lists_column_wrapper<T, int32_t> list{{1, 2}, LCW{}, {3, 4}};
+    cudf::test::lists_column_wrapper<T, int32_t> list{{1, 2}, LCW{}, {3, 4}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2, 2, 4});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 2, 2, 4});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child_data = lcv.child();
     EXPECT_EQ(child_data.size(), 4);
-    test::fixed_width_column_wrapper<T, int32_t> e_child_data({1, 2, 3, 4});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> e_child_data({1, 2, 3, 4});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_data, child_data);
   }
 
@@ -562,45 +556,45 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyLists)
   //     1, 2, 3, 4, 5, 6, 7, 8
   {
     // equivalent to  { {{}}, {{1, 2}, {}, {3, 4}}, {{}, {5, 6, 7, 8}, {}} }
-    test::lists_column_wrapper<T, int32_t> list{
+    cudf::test::lists_column_wrapper<T, int32_t> list{
       {LCW{}}, {{1, 2}, LCW{}, {3, 4}}, {LCW{}, {5, 6, 7, 8}, LCW{}}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 1, 4, 7});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 1, 4, 7});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 7);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 8);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 0, 2, 2, 4, 4, 8, 8});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets(
+      {0, 0, 2, 2, 4, 4, 8, 8});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_data = childv.child();
     EXPECT_EQ(child_data.size(), 8);
-    test::fixed_width_column_wrapper<T, int32_t> e_child_data({1, 2, 3, 4, 5, 6, 7, 8});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> e_child_data({1, 2, 3, 4, 5, 6, 7, 8});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_data, child_data);
   }
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
 {
-  using namespace cudf;
   using T = TypeParam;
 
   // to disambiguate between {} == 0 and {} == List{0}
   // Also, see note about compiler issues when declaring nested
   // empty lists in lists_column_wrapper documentation
-  using LCW = test::lists_column_wrapper<T, int32_t>;
+  using LCW = cudf::test::lists_column_wrapper<T, int32_t>;
 
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<T>, 2 rows
   //
@@ -612,15 +606,15 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   // Children :
   {
     // equivalent to  {{}, NULL}
-    test::lists_column_wrapper<T, int32_t> list{{LCW{}, LCW{}}, valids};
+    cudf::test::lists_column_wrapper<T, int32_t> list{{LCW{}, LCW{}}, valids};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 2);
     EXPECT_EQ(lcv.null_count(), 1);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 3);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 0, 0});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
   }
 
@@ -634,15 +628,15 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   // Children :
   {
     // equivalent to  {{}, NULL, {}}
-    test::lists_column_wrapper<T, int32_t> list{{LCW{}, {1, 2, 3}, LCW{}}, valids};
+    cudf::test::lists_column_wrapper<T, int32_t> list{{LCW{}, {1, 2, 3}, LCW{}}, valids};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
     EXPECT_EQ(lcv.null_count(), 1);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 0, 0, 0});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 0, 0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
   }
 
@@ -657,15 +651,15 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   //   1, 2, 3
   {
     // equivalent to  {{}, NULL, {1, 2, 3}}
-    test::lists_column_wrapper<T, int32_t> list{{LCW{}, LCW{}, {1, 2, 3}}, valids};
+    cudf::test::lists_column_wrapper<T, int32_t> list{{LCW{}, LCW{}, {1, 2, 3}}, valids};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
     EXPECT_EQ(lcv.null_count(), 1);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 0, 0, 3});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 0, 0, 3});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
   }
 
@@ -684,42 +678,41 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   //     5, 6, 7, 8
   {
     // equivalent to  { {{}}, NULL, {{}, {5, 6, 7, 8}, {}} }
-    test::lists_column_wrapper<T, int32_t> list{
+    cudf::test::lists_column_wrapper<T, int32_t> list{
       {{LCW{}}, {{1, 2}, LCW{}, {3, 4}}, {LCW{}, {5, 6, 7, 8}, LCW{}}}, valids};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 1, 1, 4});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 1, 1, 4});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 4);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 5);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 0, 0, 4, 4});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 0, 0, 4, 4});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_data = childv.child();
     EXPECT_EQ(child_data.size(), 4);
-    test::fixed_width_column_wrapper<T, int32_t> e_child_data({5, 6, 7, 8});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> e_child_data({5, 6, 7, 8});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_data, child_data);
   }
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, IncompleteHierarchies)
 {
-  using namespace cudf;
   using T = TypeParam;
 
   // to disambiguate between {} == 0 and {} == List{0}
   // Also, see note about compiler issues when declaring nested
   // empty lists in lists_column_wrapper documentation
-  using LCW = test::lists_column_wrapper<T, int32_t>;
+  using LCW = cudf::test::lists_column_wrapper<T, int32_t>;
 
   // List<List<List<T>>>:
   // Length : 3
@@ -734,32 +727,32 @@ TYPED_TEST(ListColumnWrapperTestTyped, IncompleteHierarchies)
   //      Offsets : 0, 0
   //      Children :
   {
-    test::lists_column_wrapper<T, int32_t> list{{{LCW{}}}, {LCW{}}, LCW{}};
+    cudf::test::lists_column_wrapper<T, int32_t> list{{{LCW{}}}, {LCW{}}, LCW{}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 1, 2, 2});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 1, 2, 2});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 2);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 3);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 1, 1});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 1, 1});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_child = childv.child();
-    lists_column_view child_childv(child_child);
+    cudf::lists_column_view child_childv(child_child);
     EXPECT_EQ(child_childv.size(), 1);
 
     auto child_child_offsets = child_childv.offsets();
     EXPECT_EQ(child_child_offsets.size(), 2);
-    test::fixed_width_column_wrapper<size_type> e_child_child_offsets({0, 0});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_child_offsets({0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_child_offsets, child_child_offsets);
 
     auto child_child_data = child_childv.child();
@@ -779,32 +772,32 @@ TYPED_TEST(ListColumnWrapperTestTyped, IncompleteHierarchies)
   //       Offsets : 0, 0
   //       Children :
   {
-    test::lists_column_wrapper<T, int32_t> list{LCW{}, {LCW{}}, {{LCW{}}}};
+    cudf::test::lists_column_wrapper<T, int32_t> list{LCW{}, {LCW{}}, {{LCW{}}}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 0, 1, 2});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 0, 1, 2});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 2);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 3);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 0, 1});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 0, 1});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_child = childv.child();
-    lists_column_view child_childv(child_child);
+    cudf::lists_column_view child_childv(child_child);
     EXPECT_EQ(child_childv.size(), 1);
 
     auto child_child_offsets = child_childv.offsets();
     EXPECT_EQ(child_child_offsets.size(), 2);
-    test::fixed_width_column_wrapper<size_type> e_child_child_offsets({0, 0});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_child_offsets({0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_child_offsets, child_child_offsets);
 
     auto child_child_data = child_childv.child();
@@ -826,37 +819,37 @@ TYPED_TEST(ListColumnWrapperTestTyped, IncompleteHierarchies)
   //         1, 2, 3
   {
     // { {}, {{{1,2,3}}}, {{}} }
-    test::lists_column_wrapper<T, int32_t> list{LCW{}, {{{1, 2, 3}}}, {LCW{}}};
+    cudf::test::lists_column_wrapper<T, int32_t> list{LCW{}, {{{1, 2, 3}}}, {LCW{}}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 0, 1, 2});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 0, 1, 2});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 2);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 3);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 1, 1});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 1, 1});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_child = childv.child();
-    lists_column_view child_childv(child_child);
+    cudf::lists_column_view child_childv(child_child);
     EXPECT_EQ(child_childv.size(), 1);
 
     auto child_child_offsets = child_childv.offsets();
     EXPECT_EQ(child_child_offsets.size(), 2);
-    test::fixed_width_column_wrapper<size_type> e_child_child_offsets({0, 3});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_child_offsets({0, 3});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_child_offsets, child_child_offsets);
 
     auto child_child_data = child_childv.child();
     EXPECT_EQ(child_child_data.size(), 3);
-    test::fixed_width_column_wrapper<T, int32_t> e_child_child_data({1, 2, 3});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> e_child_child_data({1, 2, 3});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_child_data, child_child_data);
   }
 
@@ -877,33 +870,33 @@ TYPED_TEST(ListColumnWrapperTestTyped, IncompleteHierarchies)
   {
     // { {{{}}}, {{}}, null }
     std::vector<bool> valids{true, true, false};
-    test::lists_column_wrapper<T, int32_t> list{{{{LCW{}}}, {LCW{}}, LCW{}}, valids.begin()};
+    cudf::test::lists_column_wrapper<T, int32_t> list{{{{LCW{}}}, {LCW{}}, LCW{}}, valids.begin()};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
     EXPECT_EQ(lcv.null_count(), 1);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 1, 2, 2});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 1, 2, 2});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 2);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 3);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 1, 1});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 1, 1});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_child = childv.child();
-    lists_column_view child_childv(child_child);
+    cudf::lists_column_view child_childv(child_child);
     EXPECT_EQ(child_childv.size(), 1);
 
     auto child_child_offsets = child_childv.offsets();
     EXPECT_EQ(child_child_offsets.size(), 2);
-    test::fixed_width_column_wrapper<size_type> e_child_child_offsets({0, 0});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_child_offsets({0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_child_offsets, child_child_offsets);
   }
 
@@ -924,33 +917,33 @@ TYPED_TEST(ListColumnWrapperTestTyped, IncompleteHierarchies)
   {
     // { {{{}}}, null, {} }
     std::vector<bool> valids{true, false, true};
-    test::lists_column_wrapper<T, int32_t> list{{{{LCW{}}}, {LCW{}}, LCW{}}, valids.begin()};
+    cudf::test::lists_column_wrapper<T, int32_t> list{{{{LCW{}}}, {LCW{}}, LCW{}}, valids.begin()};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
     EXPECT_EQ(lcv.null_count(), 1);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 1, 1, 1});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 1, 1, 1});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 1);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 2);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 1});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 1});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_child = childv.child();
-    lists_column_view child_childv(child_child);
+    cudf::lists_column_view child_childv(child_child);
     EXPECT_EQ(child_childv.size(), 1);
 
     auto child_child_offsets = child_childv.offsets();
     EXPECT_EQ(child_child_offsets.size(), 2);
-    test::fixed_width_column_wrapper<size_type> e_child_child_offsets({0, 0});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_child_offsets({0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_child_offsets, child_child_offsets);
   }
 
@@ -967,24 +960,24 @@ TYPED_TEST(ListColumnWrapperTestTyped, IncompleteHierarchies)
   {
     // { null, {{}}, {} }
     std::vector<bool> valids{false, true, true};
-    test::lists_column_wrapper<T, int32_t> list{{{{LCW{}}}, {LCW{}}, LCW{}}, valids.begin()};
+    cudf::test::lists_column_wrapper<T, int32_t> list{{{{LCW{}}}, {LCW{}}, LCW{}}, valids.begin()};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
     EXPECT_EQ(lcv.null_count(), 1);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 0, 1, 1});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 0, 1, 1});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 1);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 2);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 0});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
   }
 
@@ -1001,19 +994,19 @@ TYPED_TEST(ListColumnWrapperTestTyped, IncompleteHierarchies)
   {
     // { null, null, null }
     std::vector<bool> valids{false, false, false};
-    test::lists_column_wrapper<T, int32_t> list{{{{LCW{}}}, {LCW{}}, LCW{}}, valids.begin()};
+    cudf::test::lists_column_wrapper<T, int32_t> list{{{{LCW{}}}, {LCW{}}, LCW{}}, valids.begin()};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
     EXPECT_EQ(lcv.null_count(), 3);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 0, 0, 0});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 0, 0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 0);
   }
 
@@ -1030,19 +1023,19 @@ TYPED_TEST(ListColumnWrapperTestTyped, IncompleteHierarchies)
   {
     // { null, null, null }
     std::vector<bool> valids{false, false, false};
-    test::lists_column_wrapper<T, int32_t> list{{LCW{}, {{LCW{}}}, {LCW{}}}, valids.begin()};
+    cudf::test::lists_column_wrapper<T, int32_t> list{{LCW{}, {{LCW{}}}, {LCW{}}}, valids.begin()};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
     EXPECT_EQ(lcv.null_count(), 3);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 0, 0, 0});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 0, 0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 0);
   }
 
@@ -1063,28 +1056,28 @@ TYPED_TEST(ListColumnWrapperTestTyped, IncompleteHierarchies)
   {
     // { {null}, {{}}, {} }
     std::vector<bool> valids{false};
-    test::lists_column_wrapper<T, int32_t> list{{{{LCW{}}}, valids.begin()}, {LCW{}}, LCW{}};
+    cudf::test::lists_column_wrapper<T, int32_t> list{{{{LCW{}}}, valids.begin()}, {LCW{}}, LCW{}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 1, 2, 2});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 1, 2, 2});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 2);
     EXPECT_EQ(childv.null_count(), 1);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 3);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 0, 0});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_child = childv.child();
-    lists_column_view child_childv(child_child);
+    cudf::lists_column_view child_childv(child_child);
     EXPECT_EQ(child_childv.size(), 0);
   }
 
@@ -1107,43 +1100,41 @@ TYPED_TEST(ListColumnWrapperTestTyped, IncompleteHierarchies)
     // { {{{1, 2, 3}, {4, 5}}}, {{}, {{}}}, {}, {{}, {}} }
     cudf::test::lists_column_wrapper<T, int32_t> list{
       {{{1, 2, 3}, {4, 5}}}, {LCW{}, {LCW{}}}, LCW{}, {LCW{}, LCW{}}};
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 4);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 5);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 1, 3, 3, 5});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 1, 3, 3, 5});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 5);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 6);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 2, 2, 3, 3, 3});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 2, 2, 3, 3, 3});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_child = childv.child();
-    lists_column_view child_childv(child_child);
+    cudf::lists_column_view child_childv(child_child);
     EXPECT_EQ(child_childv.size(), 3);
 
     auto child_child_offsets = child_childv.offsets();
     EXPECT_EQ(child_child_offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_child_child_offsets({0, 3, 5, 5});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_child_offsets({0, 3, 5, 5});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_child_offsets, child_child_offsets);
 
     auto child_child_data = child_childv.child();
     EXPECT_EQ(child_child_data.size(), 5);
-    test::fixed_width_column_wrapper<size_type> e_child_child_data({1, 2, 3, 4, 5});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_child_data({1, 2, 3, 4, 5});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_child_data, e_child_child_data);
   }
 }
 
 TEST_F(ListColumnWrapperTest, ListOfStrings)
 {
-  using namespace cudf;
-
   // List<string>, 2 rows
   //
   // List<cudf::string_view>:
@@ -1152,27 +1143,26 @@ TEST_F(ListColumnWrapperTest, ListOfStrings)
   // Children :
   //    one, two, three, four, five
   {
-    test::lists_column_wrapper<cudf::string_view> list{{"one", "two"}, {"three", "four", "five"}};
+    cudf::test::lists_column_wrapper<cudf::string_view> list{{"one", "two"},
+                                                             {"three", "four", "five"}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 2);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 3);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2, 5});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 2, 5});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto data = lcv.child();
     EXPECT_EQ(data.size(), 5);
-    test::strings_column_wrapper e_data({"one", "two", "three", "four", "five"});
+    cudf::test::strings_column_wrapper e_data({"one", "two", "three", "four", "five"});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_data, data);
   }
 }
 
 TEST_F(ListColumnWrapperTest, ListOfListOfStrings)
 {
-  using namespace cudf;
-
   // List<List<string>>, 2 rows
   //
   // List<List<cudf::string_view>>:
@@ -1185,29 +1175,29 @@ TEST_F(ListColumnWrapperTest, ListOfListOfStrings)
   //    Children :
   //      one, two, three, four, five, eight, nine, ten
   {
-    test::lists_column_wrapper<cudf::string_view> list{{{"one", "two"}, {"three", "four", "five"}},
-                                                       {{"eight"}, {"nine", "ten"}}};
+    cudf::test::lists_column_wrapper<cudf::string_view> list{
+      {{"one", "two"}, {"three", "four", "five"}}, {{"eight"}, {"nine", "ten"}}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 2);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 3);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2, 4});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 2, 4});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 4);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 5);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 2, 5, 6, 8});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 2, 5, 6, 8});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_data = childv.child();
     EXPECT_EQ(child_data.size(), 8);
-    test::strings_column_wrapper e_child_data(
+    cudf::test::strings_column_wrapper e_child_data(
       {"one", "two", "three", "four", "five", "eight", "nine", "ten"});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_data, child_data);
   }
@@ -1215,8 +1205,6 @@ TEST_F(ListColumnWrapperTest, ListOfListOfStrings)
 
 TEST_F(ListColumnWrapperTest, ListOfBools)
 {
-  using namespace cudf;
-
   // List<bool>, 1 row
   //
   // List<bool>:
@@ -1226,19 +1214,19 @@ TEST_F(ListColumnWrapperTest, ListOfBools)
   //   1, 0
   //
   {
-    test::lists_column_wrapper<bool> list{true, false};
+    cudf::test::lists_column_wrapper<bool> list{true, false};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 2);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 2});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto data = lcv.child();
     EXPECT_EQ(data.size(), 2);
-    test::fixed_width_column_wrapper<bool> e_data({true, false});
+    cudf::test::fixed_width_column_wrapper<bool> e_data({true, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_data, data);
   }
 
@@ -1251,29 +1239,27 @@ TEST_F(ListColumnWrapperTest, ListOfBools)
   //   1, 0, 0
   //
   {
-    test::lists_column_wrapper<bool> list{{true, false, false}};
+    cudf::test::lists_column_wrapper<bool> list{{true, false, false}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 2);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 3});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 3});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto data = lcv.child();
     EXPECT_EQ(data.size(), 3);
-    test::fixed_width_column_wrapper<bool> e_data({true, false, false});
+    cudf::test::fixed_width_column_wrapper<bool> e_data({true, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_data, data);
   }
 }
 
 TEST_F(ListColumnWrapperTest, ListOfBoolsWithValidity)
 {
-  using namespace cudf;
-
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<bool>, 3 rows
   //
@@ -1283,29 +1269,27 @@ TEST_F(ListColumnWrapperTest, ListOfBoolsWithValidity)
   // Children :
   //   1, NULL, 0, NULL, 0, NULL, 0
   {
-    test::lists_column_wrapper<bool> list{
+    cudf::test::lists_column_wrapper<bool> list{
       {{true, true}, valids}, {{false, true}, valids}, {{false, true, false}, valids}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2, 4, 7});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 2, 4, 7});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto data = lcv.child();
     EXPECT_EQ(data.size(), 7);
-    test::fixed_width_column_wrapper<bool> e_data({true, true, false, true, false, true, false},
-                                                  valids);
+    cudf::test::fixed_width_column_wrapper<bool> e_data(
+      {true, true, false, true, false, true, false}, valids);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_data, data);
   }
 }
 
 TEST_F(ListColumnWrapperTest, ListOfListOfBools)
 {
-  using namespace cudf;
-
   // List<List<bool>> 3 rows
   //
   // List<List<bool>>:
@@ -1318,29 +1302,29 @@ TEST_F(ListColumnWrapperTest, ListOfListOfBools)
   //    Children :
   //      0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1
   {
-    test::lists_column_wrapper<bool> list{
+    cudf::test::lists_column_wrapper<bool> list{
       {{false, true}, {true, true}}, {{true, false, true}, {true}, {true}}, {{false, true}}};
 
-    lists_column_view lcv(list);
+    cudf::lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 3);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 4);
-    test::fixed_width_column_wrapper<size_type> e_offsets({0, 2, 5, 6});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets({0, 2, 5, 6});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
-    lists_column_view childv(child);
+    cudf::lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 6);
 
     auto child_offsets = childv.offsets();
     EXPECT_EQ(child_offsets.size(), 7);
-    test::fixed_width_column_wrapper<size_type> e_child_offsets({0, 2, 4, 7, 8, 9, 11});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> e_child_offsets({0, 2, 4, 7, 8, 9, 11});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_offsets, child_offsets);
 
     auto child_child_data = childv.child();
     EXPECT_EQ(child_child_data.size(), 11);
-    test::fixed_width_column_wrapper<bool> e_child_child_data(
+    cudf::test::fixed_width_column_wrapper<bool> e_child_child_data(
       {false, true, true, true, true, false, true, true, true, false, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_child_child_data, child_child_data);
   }
@@ -1348,14 +1332,12 @@ TEST_F(ListColumnWrapperTest, ListOfListOfBools)
 
 TEST_F(ListColumnWrapperTest, MismatchedHierarchies)
 {
-  using namespace cudf;
-
   using T = int;
 
   // to disambiguate between {} == 0 and {} == List{0}
   // Also, see note about compiler issues when declaring nested
   // empty lists in lists_column_wrapper documentation
-  using LCW = test::lists_column_wrapper<T>;
+  using LCW = cudf::test::lists_column_wrapper<T>;
 
   // trying to build a column out of a List<List<int>> column, and a List<int> column
   // is not valid if the leaf lists are not empty.
@@ -1367,169 +1349,166 @@ TEST_F(ListColumnWrapperTest, MismatchedHierarchies)
 
 TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructs)
 {
-  using namespace cudf;
-
   using T = TypeParam;
 
   auto num_struct_rows = 8;
-  auto numeric_column  = test::fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 4, 5, 6, 7, 8};
-  auto bool_column     = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
-  auto struct_column   = test::structs_column_wrapper{{numeric_column, bool_column}}.release();
+  auto numeric_column  = cudf::test::fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 4, 5, 6, 7, 8};
+  auto bool_column     = cudf::test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto struct_column = cudf::test::structs_column_wrapper{{numeric_column, bool_column}}.release();
   EXPECT_EQ(struct_column->size(), num_struct_rows);
   EXPECT_TRUE(!struct_column->nullable());
 
-  auto lists_column_offsets = test::fixed_width_column_wrapper<size_type>{0, 2, 4, 8}.release();
-  auto num_lists            = lists_column_offsets->size() - 1;
-  auto lists_column         = make_lists_column(
-    num_lists, std::move(lists_column_offsets), std::move(struct_column), UNKNOWN_NULL_COUNT, {});
+  auto lists_column_offsets =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 4, 8}.release();
+  auto num_lists = lists_column_offsets->size() - 1;
+  auto lists_column =
+    make_lists_column(num_lists, std::move(lists_column_offsets), std::move(struct_column), 0, {});
 
   // Check if child column is unchanged.
 
   auto expected_numeric_column =
-    test::fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 4, 5, 6, 7, 8};
-  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+    cudf::test::fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 4, 5, 6, 7, 8};
+  auto expected_bool_column = cudf::test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
   auto expected_struct_column =
-    test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
+    cudf::test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
-  cudf::test::expect_columns_equal(*expected_struct_column,
-                                   lists_column_view(*lists_column).child());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_struct_column,
+                                 cudf::lists_column_view(*lists_column).child());
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, ListsOfStructsWithValidity)
 {
-  using namespace cudf;
-
   using T = TypeParam;
 
   auto num_struct_rows = 8;
-  auto numeric_column  = test::fixed_width_column_wrapper<T, int32_t>{{1, 2, 3, 4, 5, 6, 7, 8},
-                                                                     {1, 1, 1, 1, 0, 0, 0, 0}};
-  auto bool_column     = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
-  auto struct_column   = test::structs_column_wrapper{{numeric_column, bool_column}}.release();
-  EXPECT_EQ(struct_column->size(), num_struct_rows);
-  EXPECT_TRUE(!struct_column->nullable());
-
-  auto lists_column_offsets = test::fixed_width_column_wrapper<size_type>{0, 2, 4, 8}.release();
-  auto list_null_mask       = {1, 1, 0};
-  auto num_lists            = lists_column_offsets->size() - 1;
-  auto lists_column =
-    make_lists_column(num_lists,
-                      std::move(lists_column_offsets),
-                      std::move(struct_column),
-                      UNKNOWN_NULL_COUNT,
-                      test::detail::make_null_mask(list_null_mask.begin(), list_null_mask.end()));
-
-  // Check if child column is unchanged.
-
-  auto expected_numeric_column = test::fixed_width_column_wrapper<T, int32_t>{
+  auto numeric_column  = cudf::test::fixed_width_column_wrapper<T, int32_t>{
     {1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
-  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
-  auto expected_struct_column =
-    test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
-
-  cudf::test::expect_columns_equal(*expected_struct_column,
-                                   lists_column_view(*lists_column).child());
-}
-
-TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructs)
-{
-  using namespace cudf;
-
-  using T = TypeParam;
-
-  auto num_struct_rows = 8;
-  auto numeric_column  = test::fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 4, 5, 6, 7, 8};
-  auto bool_column     = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
-  auto struct_column   = test::structs_column_wrapper{{numeric_column, bool_column}}.release();
+  auto bool_column   = cudf::test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto struct_column = cudf::test::structs_column_wrapper{{numeric_column, bool_column}}.release();
   EXPECT_EQ(struct_column->size(), num_struct_rows);
   EXPECT_TRUE(!struct_column->nullable());
 
-  auto lists_column_offsets = test::fixed_width_column_wrapper<size_type>{0, 2, 4, 8}.release();
-  auto num_lists            = lists_column_offsets->size() - 1;
-  auto lists_column         = make_lists_column(
-    num_lists, std::move(lists_column_offsets), std::move(struct_column), UNKNOWN_NULL_COUNT, {});
-
-  auto lists_of_lists_column_offsets =
-    test::fixed_width_column_wrapper<size_type>{0, 2, 3}.release();
-  auto num_lists_of_lists = lists_of_lists_column_offsets->size() - 1;
-  auto lists_of_lists_of_structs_column =
-    make_lists_column(num_lists_of_lists,
-                      std::move(lists_of_lists_column_offsets),
-                      std::move(lists_column),
-                      UNKNOWN_NULL_COUNT,
-                      {});
+  auto lists_column_offsets =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 4, 8}.release();
+  auto list_null_mask = {1, 1, 0};
+  auto num_lists      = lists_column_offsets->size() - 1;
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(list_null_mask.begin(), list_null_mask.end());
+  auto lists_column = cudf::make_lists_column(num_lists,
+                                              std::move(lists_column_offsets),
+                                              std::move(struct_column),
+                                              null_count,
+                                              std::move(null_mask));
 
   // Check if child column is unchanged.
 
   auto expected_numeric_column =
-    test::fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 4, 5, 6, 7, 8};
-  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+    cudf::test::fixed_width_column_wrapper<T, int32_t>{{1, 2, 3, 4}, {1, 1, 1, 1}};
+  auto expected_bool_column = cudf::test::fixed_width_column_wrapper<bool>{1, 1, 1, 1};
   auto expected_struct_column =
-    test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
+    cudf::test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
-  cudf::test::expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_struct_column,
+                                 cudf::lists_column_view(*lists_column).child());
+}
+
+TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructs)
+{
+  using T = TypeParam;
+
+  auto num_struct_rows = 8;
+  auto numeric_column  = cudf::test::fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 4, 5, 6, 7, 8};
+  auto bool_column     = cudf::test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto struct_column = cudf::test::structs_column_wrapper{{numeric_column, bool_column}}.release();
+  EXPECT_EQ(struct_column->size(), num_struct_rows);
+  EXPECT_TRUE(!struct_column->nullable());
+
+  auto lists_column_offsets =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 4, 8}.release();
+  auto num_lists = lists_column_offsets->size() - 1;
+  auto lists_column =
+    make_lists_column(num_lists, std::move(lists_column_offsets), std::move(struct_column), 0, {});
+
+  auto lists_of_lists_column_offsets =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3}.release();
+  auto num_lists_of_lists               = lists_of_lists_column_offsets->size() - 1;
+  auto lists_of_lists_of_structs_column = make_lists_column(
+    num_lists_of_lists, std::move(lists_of_lists_column_offsets), std::move(lists_column), 0, {});
+
+  // Check if child column is unchanged.
+
+  auto expected_numeric_column =
+    cudf::test::fixed_width_column_wrapper<T, int32_t>{1, 2, 3, 4, 5, 6, 7, 8};
+  auto expected_bool_column = cudf::test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto expected_struct_column =
+    cudf::test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *expected_struct_column,
-    lists_column_view{lists_column_view{*lists_of_lists_of_structs_column}.child()}.child());
+    cudf::lists_column_view{cudf::lists_column_view{*lists_of_lists_of_structs_column}.child()}
+      .child());
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, ListsOfListsOfStructsWithValidity)
 {
-  using namespace cudf;
-
   using T = TypeParam;
 
   auto num_struct_rows = 8;
-  auto numeric_column  = test::fixed_width_column_wrapper<T, int32_t>{{1, 2, 3, 4, 5, 6, 7, 8},
-                                                                     {1, 1, 1, 1, 0, 0, 0, 0}};
-  auto bool_column     = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
-  auto struct_column   = test::structs_column_wrapper{{numeric_column, bool_column}}.release();
+  auto numeric_column  = cudf::test::fixed_width_column_wrapper<T, int32_t>{
+    {1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
+  auto bool_column   = cudf::test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto struct_column = cudf::test::structs_column_wrapper{{numeric_column, bool_column}}.release();
   EXPECT_EQ(struct_column->size(), num_struct_rows);
   EXPECT_TRUE(!struct_column->nullable());
 
-  auto lists_column_offsets = test::fixed_width_column_wrapper<size_type>{0, 2, 4, 8}.release();
-  auto num_lists            = lists_column_offsets->size() - 1;
-  auto list_null_mask       = {1, 1, 0};
-  auto lists_column =
-    make_lists_column(num_lists,
-                      std::move(lists_column_offsets),
-                      std::move(struct_column),
-                      UNKNOWN_NULL_COUNT,
-                      test::detail::make_null_mask(list_null_mask.begin(), list_null_mask.end()));
+  auto lists_column_offsets =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 4, 8}.release();
+  auto num_lists      = lists_column_offsets->size() - 1;
+  auto list_null_mask = {1, 1, 0};
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(list_null_mask.begin(), list_null_mask.end());
+  auto lists_column = cudf::make_lists_column(num_lists,
+                                              std::move(lists_column_offsets),
+                                              std::move(struct_column),
+                                              null_count,
+                                              std::move(null_mask));
 
   auto lists_of_lists_column_offsets =
-    test::fixed_width_column_wrapper<size_type>{0, 2, 3}.release();
-  auto num_lists_of_lists               = lists_of_lists_column_offsets->size() - 1;
-  auto list_of_lists_null_mask          = {1, 0};
-  auto lists_of_lists_of_structs_column = make_lists_column(
-    num_lists_of_lists,
-    std::move(lists_of_lists_column_offsets),
-    std::move(lists_column),
-    UNKNOWN_NULL_COUNT,
-    test::detail::make_null_mask(list_of_lists_null_mask.begin(), list_of_lists_null_mask.end()));
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3}.release();
+  auto num_lists_of_lists      = lists_of_lists_column_offsets->size() - 1;
+  auto list_of_lists_null_mask = {1, 0};
+
+  std::tie(null_mask, null_count) = cudf::test::detail::make_null_mask(
+    list_of_lists_null_mask.begin(), list_of_lists_null_mask.end());
+  auto lists_of_lists_of_structs_column =
+    cudf::make_lists_column(num_lists_of_lists,
+                            std::move(lists_of_lists_column_offsets),
+                            std::move(lists_column),
+                            null_count,
+                            std::move(null_mask));
 
   // Check if child column is unchanged.
 
-  auto expected_numeric_column = test::fixed_width_column_wrapper<T, int32_t>{
-    {1, 2, 3, 4, 5, 6, 7, 8}, {1, 1, 1, 1, 0, 0, 0, 0}};
-  auto expected_bool_column = test::fixed_width_column_wrapper<bool>{1, 1, 1, 1, 0, 0, 0, 0};
+  auto expected_numeric_column =
+    cudf::test::fixed_width_column_wrapper<T, int32_t>{{1, 2, 3, 4}, {1, 1, 1, 1}};
+  auto expected_bool_column = cudf::test::fixed_width_column_wrapper<bool>{1, 1, 1, 1};
   auto expected_struct_column =
-    test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
+    cudf::test::structs_column_wrapper{{expected_numeric_column, expected_bool_column}}.release();
 
-  cudf::test::expect_columns_equal(
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *expected_struct_column,
-    lists_column_view{lists_column_view{*lists_of_lists_of_structs_column}.child()}.child());
+    cudf::lists_column_view{cudf::lists_column_view{*lists_of_lists_of_structs_column}.child()}
+      .child());
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
 {
-  using namespace cudf;
-
   using T = TypeParam;
 
   auto num_struct_rows = 10000;
 
   // Creating Struct<Numeric, Bool>.
-  auto numeric_column = test::fixed_width_column_wrapper<T, int32_t>{
+  auto numeric_column = cudf::test::fixed_width_column_wrapper<T, int32_t>{
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(num_struct_rows),
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
@@ -1537,12 +1516,12 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
   auto bool_iterator =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3 == 0; });
   auto bool_column =
-    test::fixed_width_column_wrapper<bool>(bool_iterator, bool_iterator + num_struct_rows);
+    cudf::test::fixed_width_column_wrapper<bool>(bool_iterator, bool_iterator + num_struct_rows);
 
   auto struct_validity_iterator =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 5 == 0; });
   auto struct_column =
-    test::structs_column_wrapper{
+    cudf::test::structs_column_wrapper{
       {numeric_column, bool_column},
       std::vector<bool>(struct_validity_iterator, struct_validity_iterator + num_struct_rows)}
       .release();
@@ -1554,32 +1533,29 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
   auto num_list_rows = num_struct_rows / 50;
   auto list_offset_iterator =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 50; });
-  auto list_offset_column = test::fixed_width_column_wrapper<size_type>(
+  auto list_offset_column = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
                               list_offset_iterator, list_offset_iterator + num_list_rows + 1)
                               .release();
-  auto lists_column = make_lists_column(num_list_rows,
-                                        std::move(list_offset_column),
-                                        std::move(struct_column),
-                                        cudf::UNKNOWN_NULL_COUNT,
-                                        {});
+  auto lists_column = make_lists_column(
+    num_list_rows, std::move(list_offset_column), std::move(struct_column), 0, {});
 
   // List construction succeeded.
   // Verify that the child is unchanged.
 
-  auto expected_numeric_column = test::fixed_width_column_wrapper<T, int32_t>{
+  auto expected_numeric_column = cudf::test::fixed_width_column_wrapper<T, int32_t>{
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(num_struct_rows),
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
 
   auto expected_bool_column =
-    test::fixed_width_column_wrapper<bool>(bool_iterator, bool_iterator + num_struct_rows);
+    cudf::test::fixed_width_column_wrapper<bool>(bool_iterator, bool_iterator + num_struct_rows);
 
   auto expected_struct_column =
-    test::structs_column_wrapper{
+    cudf::test::structs_column_wrapper{
       {expected_numeric_column, expected_bool_column},
       std::vector<bool>(struct_validity_iterator, struct_validity_iterator + num_struct_rows)}
       .release();
 
-  cudf::test::expect_columns_equal(*expected_struct_column,
-                                   lists_column_view(*lists_column).child());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_struct_column,
+                                 cudf::lists_column_view(*lists_column).child());
 }

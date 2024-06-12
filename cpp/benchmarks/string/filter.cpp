@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,7 @@
 
 enum FilterAPI { filter, filter_chars, strip };
 
-class StringFilterChars : public cudf::benchmark {
-};
+class StringFilterChars : public cudf::benchmark {};
 
 static void BM_filter_chars(benchmark::State& state, FilterAPI api)
 {
@@ -58,7 +57,7 @@ static void BM_filter_chars(benchmark::State& state, FilterAPI api)
     }
   }
 
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
+  state.SetBytesProcessed(state.iterations() * input.chars_size(cudf::get_default_stream()));
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)

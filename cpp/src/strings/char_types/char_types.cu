@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,70 +21,95 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/logical.h>
 #include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
-//
-std::unique_ptr<column> all_characters_of_type(
-  strings_column_view const& strings,
-  string_character_types types,
-  string_character_types verify_types,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+namespace {
+
+/**
+ * @brief Returns true for each string where all characters match the given types.
+ *
+ * Only the characters that match to `verify_types` are checked.
+ * Returns false if no characters are checked or one character does not match `types`.
+ * Returns true if at least one character is checked and all checked characters match `types`.
+ */
+struct char_types_fn {
+  column_device_view const d_column;
+  character_flags_table_type const* d_flags;
+  string_character_types const types;
+  string_character_types const verify_types;
+
+  __device__ bool operator()(size_type idx) const
+  {
+    if (d_column.is_null(idx)) { return false; }
+    auto const d_str = d_column.element<string_view>(idx);
+    auto const end   = d_str.data() + d_str.size_bytes();
+
+    bool type_matched     = !d_str.empty();  // require at least one character;
+    size_type check_count = 0;               // count checked characters
+    for (auto itr = d_str.data(); type_matched && (itr < end); ++itr) {
+      uint8_t const chr = static_cast<uint8_t>(*itr);
+      if (is_utf8_continuation_char(chr)) { continue; }
+      auto u8 = static_cast<char_utf8>(chr);  // holds UTF8 value
+      // using max(int8) here since max(char)=255 on ARM systems
+      if (u8 > std::numeric_limits<int8_t>::max()) { to_char_utf8(itr, u8); }
+
+      // lookup flags in table by codepoint
+      auto const code_point = utf8_to_codepoint(u8);
+      auto const flag       = code_point <= 0x00'FFFF ? d_flags[code_point] : 0;
+
+      if ((verify_types & flag) ||                   // should flag be verified;
+          (flag == 0 && verify_types == ALL_TYPES))  // special edge case
+      {
+        type_matched = (types & flag) > 0;
+        ++check_count;
+      }
+    }
+
+    return type_matched && (check_count > 0);
+  }
+};
+}  // namespace
+
+std::unique_ptr<column> all_characters_of_type(strings_column_view const& input,
+                                               string_character_types types,
+                                               string_character_types verify_types,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
 {
-  auto strings_count  = strings.size();
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_column       = *strings_column;
+  auto d_strings = column_device_view::create(input.parent(), stream);
 
   // create output column
-  auto results      = make_numeric_column(data_type{type_id::BOOL8},
-                                     strings_count,
-                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
+  auto results = make_numeric_column(data_type{type_id::BOOL8},
+                                     input.size(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
                                      stream,
                                      mr);
-  auto results_view = results->mutable_view();
-  auto d_results    = results_view.data<bool>();
   // get the static character types table
   auto d_flags = detail::get_character_flags_table();
+
   // set the output values by checking the character types for each string
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings_count),
-                    d_results,
-                    [d_column, d_flags, types, verify_types, d_results] __device__(size_type idx) {
-                      if (d_column.is_null(idx)) return false;
-                      auto d_str            = d_column.element<string_view>(idx);
-                      bool check            = !d_str.empty();  // require at least one character
-                      size_type check_count = 0;
-                      for (auto itr = d_str.begin(); check && (itr != d_str.end()); ++itr) {
-                        auto code_point = detail::utf8_to_codepoint(*itr);
-                        // lookup flags in table by code-point
-                        auto flag = code_point <= 0x00'FFFF ? d_flags[code_point] : 0;
-                        if ((verify_types & flag) ||                   // should flag be verified
-                            (flag == 0 && verify_types == ALL_TYPES))  // special edge case
-                        {
-                          check = (types & flag) > 0;
-                          ++check_count;
-                        }
-                      }
-                      return check && (check_count > 0);
-                    });
-  //
-  results->set_null_count(strings.null_count());
+                    thrust::make_counting_iterator<size_type>(input.size()),
+                    results->mutable_view().data<bool>(),
+                    char_types_fn{*d_strings, d_flags, types, verify_types});
+
+  results->set_null_count(input.null_count());
   return results;
 }
 
@@ -105,8 +130,9 @@ struct filter_chars_fn {
   string_character_types const types_to_remove;
   string_character_types const types_to_keep;
   string_view const d_replacement;  ///< optional replacement for removed characters
-  int32_t* d_offsets{};             ///< size of the output string stored here during first pass
-  char* d_chars{};                  ///< this is null only during the first pass
+  size_type* d_sizes{};
+  char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   /**
    * @brief Returns true if the given character should be replaced.
@@ -125,7 +151,7 @@ struct filter_chars_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_column.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     auto const d_str  = d_column.element<string_view>(idx);
@@ -140,7 +166,7 @@ struct filter_chars_fn {
       nbytes += d_newchar.size_bytes() - char_size;
       if (out_ptr) out_ptr = cudf::strings::detail::copy_string(out_ptr, d_newchar);
     }
-    if (!out_ptr) d_offsets[idx] = nbytes;
+    if (!out_ptr) { d_sizes[idx] = nbytes; }
   }
 };
 
@@ -151,7 +177,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
                                                   string_scalar const& replacement,
                                                   string_character_types types_to_keep,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(replacement.is_valid(stream), "Parameter replacement must be valid");
   if (types_to_remove == ALL_TYPES)
@@ -176,12 +202,12 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // this utility calls filterer to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(filterer, strings_count, stream, mr);
+  auto [offsets_column, chars] = make_strings_children(filterer, strings_count, stream, mr);
 
   // return new strings column
   return make_strings_column(strings_count,
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             chars.release(),
                              strings.null_count(),
                              std::move(null_mask));
 }
@@ -190,25 +216,26 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
 
 // external API
 
-std::unique_ptr<column> all_characters_of_type(strings_column_view const& strings,
+std::unique_ptr<column> all_characters_of_type(strings_column_view const& input,
                                                string_character_types types,
                                                string_character_types verify_types,
-                                               rmm::mr::device_memory_resource* mr)
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::all_characters_of_type(
-    strings, types, verify_types, cudf::get_default_stream(), mr);
+  return detail::all_characters_of_type(input, types, verify_types, stream, mr);
 }
 
-std::unique_ptr<column> filter_characters_of_type(strings_column_view const& strings,
+std::unique_ptr<column> filter_characters_of_type(strings_column_view const& input,
                                                   string_character_types types_to_remove,
                                                   string_scalar const& replacement,
                                                   string_character_types types_to_keep,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::filter_characters_of_type(
-    strings, types_to_remove, replacement, types_to_keep, cudf::get_default_stream(), mr);
+    input, types_to_remove, replacement, types_to_keep, stream, mr);
 }
 
 }  // namespace strings

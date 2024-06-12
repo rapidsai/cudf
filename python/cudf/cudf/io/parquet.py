@@ -1,23 +1,28 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
+import itertools
 import math
+import operator
 import shutil
 import tempfile
 import warnings
 from collections import defaultdict
 from contextlib import ExitStack
-from typing import Dict, List, Tuple
+from functools import partial, reduce
+from typing import Callable, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 import numpy as np
-from pyarrow import dataset as ds, parquet as pq
+import pandas as pd
+from pyarrow import dataset as ds
 
 import cudf
 from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
-from cudf.core.column import as_column, build_categorical_column
+from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import ioutils
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
 BYTE_SIZES = {
     "kb": 1000,
@@ -54,12 +59,20 @@ def _write_parquet(
     statistics="ROWGROUP",
     metadata_file_path=None,
     int96_timestamps=False,
-    row_group_size_bytes=None,
+    row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,
+    max_dictionary_size=None,
     partitions_info=None,
-    **kwargs,
+    storage_options=None,
+    force_nullable_schema=False,
+    header_version="1.0",
+    use_dictionary=True,
+    skip_compression=None,
+    column_encoding=None,
+    column_type_length=None,
+    output_as_binary=None,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -73,7 +86,9 @@ def _write_parquet(
             ValueError("paths must be list-like when partitions_info provided")
 
     paths_or_bufs = [
-        ioutils.get_writer_filepath_or_buffer(path, mode="wb", **kwargs)
+        ioutils.get_writer_filepath_or_buffer(
+            path_or_data=path, mode="wb", storage_options=storage_options
+        )
         for path in paths
     ]
     common_args = {
@@ -86,7 +101,15 @@ def _write_parquet(
         "row_group_size_rows": row_group_size_rows,
         "max_page_size_bytes": max_page_size_bytes,
         "max_page_size_rows": max_page_size_rows,
+        "max_dictionary_size": max_dictionary_size,
         "partitions_info": partitions_info,
+        "force_nullable_schema": force_nullable_schema,
+        "header_version": header_version,
+        "use_dictionary": use_dictionary,
+        "skip_compression": skip_compression,
+        "column_encoding": column_encoding,
+        "column_type_length": column_type_length,
+        "output_as_binary": output_as_binary,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -111,12 +134,26 @@ def _write_parquet(
 def write_to_dataset(
     df,
     root_path,
+    compression="snappy",
     filename=None,
     partition_cols=None,
     fs=None,
     preserve_index=False,
     return_metadata=False,
-    **kwargs,
+    statistics="ROWGROUP",
+    int96_timestamps=False,
+    row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
+    row_group_size_rows=None,
+    max_page_size_bytes=None,
+    max_page_size_rows=None,
+    storage_options=None,
+    force_nullable_schema=False,
+    header_version="1.0",
+    use_dictionary=True,
+    skip_compression=None,
+    column_encoding=None,
+    column_type_length=None,
+    output_as_binary=None,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -136,29 +173,81 @@ def write_to_dataset(
     df : cudf.DataFrame
     root_path : string,
         The root directory of the dataset
+    compression : {'snappy', 'ZSTD', None}, default 'snappy'
+        Name of the compression to use. Use ``None`` for no compression.
     filename : string, default None
         The file name to use (within each partition directory). If None,
         a random uuid4 hex string will be used for each file name.
+    partition_cols : list,
+        Column names by which to partition the dataset.
+        Columns are partitioned in the order they are given.
     fs : FileSystem, default None
         If nothing passed, paths assumed to be found in the local on-disk
         filesystem
     preserve_index : bool, default False
         Preserve index values in each parquet file.
-    partition_cols : list,
-        Column names by which to partition the dataset
-        Columns are partitioned in the order they are given
     return_metadata : bool, default False
         Return parquet metadata for written data. Returned metadata will
         include the file-path metadata (relative to `root_path`).
-    **kwargs : dict,
-        kwargs for to_parquet function.
+    int96_timestamps : bool, default False
+        If ``True``, write timestamps in int96 format. This will convert
+        timestamps from timestamp[ns], timestamp[ms], timestamp[s], and
+        timestamp[us] to the int96 format, which is the number of Julian
+        days and the number of nanoseconds since midnight of 1970-01-01.
+        If ``False``, timestamps will not be altered.
+    row_group_size_bytes: integer or None, default None
+        Maximum size of each stripe of the output.
+        If None, 134217728 (128MB) will be used.
+    row_group_size_rows: integer or None, default None
+        Maximum number of rows of each stripe of the output.
+        If None, 1000000 will be used.
+    max_page_size_bytes: integer or None, default None
+        Maximum uncompressed size of each page of the output.
+        If None, 524288 (512KB) will be used.
+    max_page_size_rows: integer or None, default None
+        Maximum number of rows of each page of the output.
+        If None, 20000 will be used.
+    storage_options : dict, optional, default None
+        Extra options that make sense for a particular storage connection,
+        e.g. host, port, username, password, etc. For HTTP(S) URLs the
+        key-value pairs are forwarded to ``urllib.request.Request`` as
+        header options. For other URLs (e.g. starting with "s3://", and
+        "gcs://") the key-value pairs are forwarded to ``fsspec.open``.
+        Please see ``fsspec`` and ``urllib`` for more details.
+    force_nullable_schema : bool, default False.
+        If True, writes all columns as `null` in schema.
+        If False, columns are written as `null` if they contain null values,
+        otherwise as `not null`.
+    header_version : {{'1.0', '2.0'}}, default "1.0"
+        Controls whether to use version 1.0 or version 2.0 page headers when
+        encoding. Version 1.0 is more portable, but version 2.0 enables the
+        use of newer encoding schemes.
+    force_nullable_schema : bool, default False.
+        If True, writes all columns as `null` in schema.
+        If False, columns are written as `null` if they contain null values,
+        otherwise as `not null`.
+    skip_compression : set, optional, default None
+        If a column name is present in the set, that column will not be compressed,
+        regardless of the ``compression`` setting.
+    column_encoding : dict, optional, default None
+        Sets the page encoding to use on a per-column basis. The key is a column
+        name, and the value is one of: 'PLAIN', 'DICTIONARY', 'DELTA_BINARY_PACKED',
+        'DELTA_LENGTH_BYTE_ARRAY', 'DELTA_BYTE_ARRAY', 'BYTE_STREAM_SPLIT', or
+        'USE_DEFAULT'.
+    column_type_length : dict, optional, default None
+        Specifies the width in bytes of ``FIXED_LEN_BYTE_ARRAY`` column elements.
+        The key is a column name and the value is an integer. The named column
+        will be output as unannotated binary (i.e. the column will behave as if
+        ``output_as_binary`` was set).
+    output_as_binary : set, optional, default None
+        If a column name is present in the set, that column will be output as
+        unannotated binary, rather than the default 'UTF-8'.
     """
 
-    fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
+    fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
     fs.mkdirs(root_path, exist_ok=True)
 
     if partition_cols is not None and len(partition_cols) > 0:
-
         (
             full_paths,
             metadata_file_paths,
@@ -166,47 +255,109 @@ def write_to_dataset(
             part_offsets,
             _,
         ) = _get_partitioned(
-            df,
-            root_path,
-            partition_cols,
-            filename,
-            fs,
-            preserve_index,
-            **kwargs,
+            df=df,
+            root_path=root_path,
+            partition_cols=partition_cols,
+            filename=filename,
+            fs=fs,
+            preserve_index=preserve_index,
+            storage_options=storage_options,
         )
-
-        if return_metadata:
-            kwargs["metadata_file_path"] = metadata_file_paths
+        metadata_file_path = metadata_file_paths if return_metadata else None
         metadata = to_parquet(
-            grouped_df,
-            full_paths,
+            df=grouped_df,
+            path=full_paths,
+            compression=compression,
             index=preserve_index,
             partition_offsets=part_offsets,
-            **kwargs,
+            storage_options=storage_options,
+            metadata_file_path=metadata_file_path,
+            statistics=statistics,
+            int96_timestamps=int96_timestamps,
+            row_group_size_bytes=row_group_size_bytes,
+            row_group_size_rows=row_group_size_rows,
+            max_page_size_bytes=max_page_size_bytes,
+            max_page_size_rows=max_page_size_rows,
+            force_nullable_schema=force_nullable_schema,
+            header_version=header_version,
+            use_dictionary=use_dictionary,
+            skip_compression=skip_compression,
+            column_encoding=column_encoding,
+            column_type_length=column_type_length,
+            output_as_binary=output_as_binary,
         )
 
     else:
         filename = filename or _generate_filename()
         full_path = fs.sep.join([root_path, filename])
-        if return_metadata:
-            kwargs["metadata_file_path"] = filename
-        metadata = df.to_parquet(full_path, index=preserve_index, **kwargs)
+
+        metadata_file_path = filename if return_metadata else None
+
+        metadata = df.to_parquet(
+            path=full_path,
+            compression=compression,
+            index=preserve_index,
+            storage_options=storage_options,
+            metadata_file_path=metadata_file_path,
+            statistics=statistics,
+            int96_timestamps=int96_timestamps,
+            row_group_size_bytes=row_group_size_bytes,
+            row_group_size_rows=row_group_size_rows,
+            max_page_size_bytes=max_page_size_bytes,
+            max_page_size_rows=max_page_size_rows,
+            force_nullable_schema=force_nullable_schema,
+            header_version=header_version,
+            use_dictionary=use_dictionary,
+            skip_compression=skip_compression,
+            column_encoding=column_encoding,
+            column_type_length=column_type_length,
+            output_as_binary=output_as_binary,
+        )
 
     return metadata
 
 
 @ioutils.doc_read_parquet_metadata()
 @_cudf_nvtx_annotate
-def read_parquet_metadata(path):
+def read_parquet_metadata(filepath_or_buffer):
     """{docstring}"""
+    # Multiple sources are passed as a list. If a single source is passed,
+    # wrap it in a list for unified processing downstream.
+    if not is_list_like(filepath_or_buffer):
+        filepath_or_buffer = [filepath_or_buffer]
 
-    pq_file = pq.ParquetFile(path)
+    # Start by trying to construct a filesystem object
+    fs, paths = ioutils._get_filesystem_and_paths(
+        path_or_data=filepath_or_buffer, storage_options=None
+    )
 
-    num_rows = pq_file.metadata.num_rows
-    num_row_groups = pq_file.num_row_groups
-    col_names = pq_file.schema.names
+    # Check if filepath or buffer
+    filepath_or_buffer = paths if paths else filepath_or_buffer
 
-    return num_rows, num_row_groups, col_names
+    # List of filepaths or buffers
+    filepaths_or_buffers = []
+
+    for source in filepath_or_buffer:
+        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
+            path_or_data=source,
+            compression=None,
+            fs=fs,
+            use_python_file_object=True,
+            open_file_options=None,
+            storage_options=None,
+            bytes_per_thread=None,
+        )
+
+        if compression is not None:
+            raise ValueError(
+                "URL content-encoding decompression is not supported"
+            )
+        if isinstance(tmp_source, list):
+            filepath_or_buffer.extend(tmp_source)
+        else:
+            filepaths_or_buffers.append(tmp_source)
+
+    return libparquet.read_parquet_metadata(filepaths_or_buffers)
 
 
 @_cudf_nvtx_annotate
@@ -216,6 +367,7 @@ def _process_dataset(
     filters=None,
     row_groups=None,
     categorical_partitions=True,
+    dataset_kwargs=None,
 ):
     # Returns:
     #     file_list - Expanded/filtered list of paths
@@ -235,7 +387,9 @@ def _process_dataset(
 
     # Convert filters to ds.Expression
     if filters is not None:
-        filters = pq._filters_to_expression(filters)
+        from pyarrow.parquet import filters_to_expression
+
+        filters = filters_to_expression(filters)
 
     # Initialize ds.FilesystemDataset
     # TODO: Remove the if len(paths) workaround after following bug is fixed:
@@ -243,8 +397,13 @@ def _process_dataset(
     dataset = ds.dataset(
         source=paths[0] if len(paths) == 1 else paths,
         filesystem=fs,
-        format="parquet",
-        partitioning="hive",
+        **(
+            dataset_kwargs
+            or {
+                "format": "parquet",
+                "partitioning": "hive",
+            }
+        ),
     )
 
     file_list = dataset.files
@@ -361,18 +520,23 @@ def read_parquet(
     filepath_or_buffer,
     engine="cudf",
     columns=None,
+    storage_options=None,
     filters=None,
     row_groups=None,
-    strings_to_categorical=False,
     use_pandas_metadata=True,
     use_python_file_object=True,
     categorical_partitions=True,
     open_file_options=None,
+    bytes_per_thread=None,
+    dataset_kwargs=None,
     *args,
     **kwargs,
 ):
     """{docstring}"""
-
+    if engine not in {"cudf", "pyarrow"}:
+        raise ValueError(
+            f"Only supported engines are {{'cudf', 'pyarrow'}}, got {engine=}"
+        )
     # Do not allow the user to set file-opening options
     # when `use_python_file_object=False` is specified
     if use_python_file_object is False:
@@ -382,6 +546,9 @@ def read_parquet(
                 "use_python_file_object is set to False."
             )
         open_file_options = {}
+
+    if bytes_per_thread is None:
+        bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
 
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
@@ -403,7 +570,12 @@ def read_parquet(
 
     # Start by trying construct a filesystem object, so we
     # can apply filters on remote file-systems
-    fs, paths = ioutils._get_filesystem_and_paths(filepath_or_buffer, **kwargs)
+    fs, paths = ioutils._get_filesystem_and_paths(
+        path_or_data=filepath_or_buffer, storage_options=storage_options
+    )
+
+    # Normalize and validate filters
+    filters = _normalize_filters(filters)
 
     # Use pyarrow dataset to detect/process directory-partitioned
     # data and apply filters. Note that we can only support partitioned
@@ -418,32 +590,32 @@ def read_parquet(
             partition_keys,
             partition_categories,
         ) = _process_dataset(
-            paths,
-            fs,
+            paths=paths,
+            fs=fs,
             filters=filters,
             row_groups=row_groups,
             categorical_partitions=categorical_partitions,
+            dataset_kwargs=dataset_kwargs,
         )
-    elif filters is not None:
-        raise ValueError("cudf cannot apply filters to open file objects.")
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
     filepaths_or_buffers = []
     if use_python_file_object:
         open_file_options = _default_open_file_options(
-            open_file_options,
-            columns,
-            row_groups,
+            open_file_options=open_file_options,
+            columns=columns,
+            row_groups=row_groups,
             fs=fs,
         )
-    for i, source in enumerate(filepath_or_buffer):
+    for source in filepath_or_buffer:
         tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source,
             compression=None,
             fs=fs,
             use_python_file_object=use_python_file_object,
             open_file_options=open_file_options,
-            **kwargs,
+            storage_options=storage_options,
+            bytes_per_thread=bytes_per_thread,
         )
 
         if compression is not None:
@@ -469,18 +641,148 @@ def read_parquet(
                 "for full CPU-based filtering functionality."
             )
 
-    return _parquet_to_frame(
+    # Make sure we read in the columns needed for row-wise
+    # filtering after IO. This means that one or more columns
+    # will be dropped almost immediately after IO. However,
+    # we do NEED these columns for accurate filtering.
+    projected_columns = None
+    if columns and filters:
+        projected_columns = columns
+        columns = sorted(
+            set(v[0] for v in itertools.chain.from_iterable(filters))
+            | set(columns)
+        )
+
+    # Convert parquet data to a cudf.DataFrame
+    df = _parquet_to_frame(
         filepaths_or_buffers,
         engine,
         *args,
         columns=columns,
         row_groups=row_groups,
-        strings_to_categorical=strings_to_categorical,
         use_pandas_metadata=use_pandas_metadata,
         partition_keys=partition_keys,
         partition_categories=partition_categories,
+        dataset_kwargs=dataset_kwargs,
         **kwargs,
     )
+
+    # Apply filters row-wise (if any are defined), and return
+    df = _apply_post_filters(df, filters)
+    if projected_columns:
+        # Elements of `projected_columns` may now be in the index.
+        # We must filter these names from our projection
+        projected_columns = [
+            col for col in projected_columns if col in df._column_names
+        ]
+        return df[projected_columns]
+    return df
+
+
+def _normalize_filters(filters: list | None) -> List[List[tuple]] | None:
+    # Utility to normalize and validate the `filters`
+    # argument to `read_parquet`
+    if not filters:
+        return None
+
+    msg = (
+        f"filters must be None, or non-empty List[Tuple] "
+        f"or List[List[Tuple]]. Got {filters}"
+    )
+    if not isinstance(filters, list):
+        raise TypeError(msg)
+
+    def _validate_predicate(item):
+        if not isinstance(item, tuple) or len(item) != 3:
+            raise TypeError(
+                f"Predicate must be Tuple[str, str, Any], " f"got {predicate}."
+            )
+
+    filters = filters if isinstance(filters[0], list) else [filters]
+    for conjunction in filters:
+        if not conjunction or not isinstance(conjunction, list):
+            raise TypeError(msg)
+        for predicate in conjunction:
+            _validate_predicate(predicate)
+
+    return filters
+
+
+def _apply_post_filters(
+    df: cudf.DataFrame, filters: List[List[tuple]] | None
+) -> cudf.DataFrame:
+    """Apply DNF filters to an in-memory DataFrame
+
+    Disjunctive normal form (DNF) means that the inner-most
+    tuple describes a single column predicate. These inner
+    predicates are combined with an AND conjunction into a
+    larger predicate. The outer-most list then combines all
+    of the combined filters with an OR disjunction.
+    """
+
+    if not filters:
+        # No filters to apply
+        return df
+
+    def _handle_in(column: cudf.Series, value, *, negate) -> cudf.Series:
+        if not isinstance(value, (list, set, tuple)):
+            raise TypeError(
+                "Value of 'in'/'not in' filter must be a list, set, or tuple."
+            )
+        return ~column.isin(value) if negate else column.isin(value)
+
+    def _handle_is(column: cudf.Series, value, *, negate) -> cudf.Series:
+        if value not in {np.nan, None}:
+            raise TypeError(
+                "Value of 'is'/'is not' filter must be np.nan or None."
+            )
+        return ~column.isna() if negate else column.isna()
+
+    handlers: Dict[str, Callable] = {
+        "==": operator.eq,
+        "!=": operator.ne,
+        "<": operator.lt,
+        "<=": operator.le,
+        ">": operator.gt,
+        ">=": operator.ge,
+        "in": partial(_handle_in, negate=False),
+        "not in": partial(_handle_in, negate=True),
+        "is": partial(_handle_is, negate=False),
+        "is not": partial(_handle_is, negate=True),
+    }
+
+    # Can re-set the index before returning if we filter
+    # out rows from a DataFrame with a default RangeIndex
+    # (to reduce memory usage)
+    reset_index = (
+        isinstance(df.index, cudf.RangeIndex)
+        and df.index.name is None
+        and df.index.start == 0
+        and df.index.step == 1
+    )
+
+    try:
+        selection: cudf.Series = reduce(
+            operator.or_,
+            (
+                reduce(
+                    operator.and_,
+                    (
+                        handlers[op](df[column], value)
+                        for (column, op, value) in expr
+                    ),
+                )
+                for expr in filters
+            ),
+        )
+        if reset_index:
+            return df[selection].reset_index(drop=True)
+        return df[selection]
+    except (KeyError, TypeError):
+        warnings.warn(
+            f"Row-wise filtering failed in read_parquet for {filters}"
+        )
+        return df
 
 
 @_cudf_nvtx_annotate
@@ -490,9 +792,9 @@ def _parquet_to_frame(
     row_groups=None,
     partition_keys=None,
     partition_categories=None,
+    dataset_kwargs=None,
     **kwargs,
 ):
-
     # If this is not a partitioned read, only need
     # one call to `_read_parquet`
     if not partition_keys:
@@ -501,6 +803,13 @@ def _parquet_to_frame(
             *args,
             row_groups=row_groups,
             **kwargs,
+        )
+
+    partition_meta = None
+    partitioning = (dataset_kwargs or {}).get("partitioning", None)
+    if hasattr(partitioning, "schema"):
+        partition_meta = cudf.DataFrame.from_arrow(
+            partitioning.schema.empty_table()
         )
 
     # For partitioned data, we need a distinct read for each
@@ -529,12 +838,13 @@ def _parquet_to_frame(
             )
         )
         # Add partition columns to the last DataFrame
-        for (name, value) in part_key:
+        for name, value in part_key:
+            _len = len(dfs[-1])
             if partition_categories and name in partition_categories:
                 # Build the categorical column from `codes`
                 codes = as_column(
                     partition_categories[name].index(value),
-                    length=len(dfs[-1]),
+                    length=_len,
                 )
                 dfs[-1][name] = build_categorical_column(
                     categories=partition_categories[name],
@@ -546,15 +856,33 @@ def _parquet_to_frame(
             else:
                 # Not building categorical columns, so
                 # `value` is already what we want
-                dfs[-1][name] = as_column(value, length=len(dfs[-1]))
+                _dtype = (
+                    partition_meta[name].dtype
+                    if partition_meta is not None
+                    else None
+                )
+                if pd.isna(value):
+                    dfs[-1][name] = column_empty(
+                        row_count=_len,
+                        dtype=_dtype,
+                        masked=True,
+                    )
+                else:
+                    dfs[-1][name] = as_column(
+                        value,
+                        dtype=_dtype,
+                        length=_len,
+                    )
 
-    # Concatenate dfs and return.
-    # Assume we can ignore the index if it has no name.
-    return (
-        cudf.concat(dfs, ignore_index=dfs[-1].index.name is None)
-        if len(dfs) > 1
-        else dfs[0]
-    )
+    if len(dfs) > 1:
+        # Concatenate dfs and return.
+        # Assume we can ignore the index if it has no name.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            res = cudf.concat(dfs, ignore_index=dfs[-1].index.name is None)
+        return res
+    else:
+        return dfs[0]
 
 
 @_cudf_nvtx_annotate
@@ -563,7 +891,6 @@ def _read_parquet(
     engine,
     columns=None,
     row_groups=None,
-    strings_to_categorical=None,
     use_pandas_metadata=None,
     *args,
     **kwargs,
@@ -571,17 +898,36 @@ def _read_parquet(
     # Simple helper function to dispatch between
     # cudf and pyarrow to read parquet data
     if engine == "cudf":
+        if kwargs:
+            raise ValueError(
+                "cudf engine doesn't support the "
+                f"following keyword arguments: {list(kwargs.keys())}"
+            )
+        if args:
+            raise ValueError(
+                "cudf engine doesn't support the "
+                f"following positional arguments: {list(args)}"
+            )
         return libparquet.read_parquet(
             filepaths_or_buffers,
             columns=columns,
             row_groups=row_groups,
-            strings_to_categorical=strings_to_categorical,
             use_pandas_metadata=use_pandas_metadata,
         )
     else:
-        return cudf.DataFrame.from_arrow(
-            pq.ParquetDataset(filepaths_or_buffers).read_pandas(
-                columns=columns, *args, **kwargs
+        if (
+            isinstance(filepaths_or_buffers, list)
+            and len(filepaths_or_buffers) == 1
+        ):
+            filepaths_or_buffers = filepaths_or_buffers[0]
+
+        return cudf.DataFrame.from_pandas(
+            pd.read_parquet(
+                filepaths_or_buffers,
+                columns=columns,
+                engine=engine,
+                *args,
+                **kwargs,
             )
         )
 
@@ -600,16 +946,36 @@ def to_parquet(
     statistics="ROWGROUP",
     metadata_file_path=None,
     int96_timestamps=False,
-    row_group_size_bytes=None,
+    row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,
+    max_dictionary_size=None,
+    storage_options=None,
+    return_metadata=False,
+    force_nullable_schema=False,
+    header_version="1.0",
+    use_dictionary=True,
+    skip_compression=None,
+    column_encoding=None,
+    column_type_length=None,
+    output_as_binary=None,
     *args,
     **kwargs,
 ):
     """{docstring}"""
 
     if engine == "cudf":
+        if kwargs:
+            raise ValueError(
+                "cudf engine doesn't support the "
+                f"following keyword arguments: {list(kwargs.keys())}"
+            )
+        if args:
+            raise ValueError(
+                "cudf engine doesn't support the "
+                f"following positional arguments: {list(args)}"
+            )
         # Ensure that no columns dtype is 'category'
         for col in df._column_names:
             if partition_cols is None or col not in partition_cols:
@@ -626,34 +992,39 @@ def to_parquet(
                     "partition_cols are provided. To request returning the "
                     "metadata binary blob, pass `return_metadata=True`"
                 )
-            kwargs.update(
-                {
-                    "compression": compression,
-                    "statistics": statistics,
-                    "int96_timestamps": int96_timestamps,
-                    "row_group_size_bytes": row_group_size_bytes,
-                    "row_group_size_rows": row_group_size_rows,
-                    "max_page_size_bytes": max_page_size_bytes,
-                    "max_page_size_rows": max_page_size_rows,
-                }
-            )
+
             return write_to_dataset(
                 df,
                 filename=partition_file_name,
                 partition_cols=partition_cols,
                 root_path=path,
                 preserve_index=index,
-                **kwargs,
+                compression=compression,
+                statistics=statistics,
+                int96_timestamps=int96_timestamps,
+                row_group_size_bytes=row_group_size_bytes,
+                row_group_size_rows=row_group_size_rows,
+                max_page_size_bytes=max_page_size_bytes,
+                max_page_size_rows=max_page_size_rows,
+                return_metadata=return_metadata,
+                storage_options=storage_options,
+                force_nullable_schema=force_nullable_schema,
+                header_version=header_version,
+                use_dictionary=use_dictionary,
+                skip_compression=skip_compression,
+                column_encoding=column_encoding,
+                column_type_length=column_type_length,
+                output_as_binary=output_as_binary,
             )
 
-        if partition_offsets:
-            kwargs["partitions_info"] = list(
-                zip(
-                    partition_offsets,
-                    np.roll(partition_offsets, -1) - partition_offsets,
-                )
-            )[:-1]
-
+        partition_info = (
+            [
+                (i, j - i)
+                for i, j in zip(partition_offsets, partition_offsets[1:])
+            ]
+            if partition_offsets is not None
+            else None
+        )
         return _write_parquet(
             df,
             paths=path if is_list_like(path) else [path],
@@ -666,10 +1037,21 @@ def to_parquet(
             row_group_size_rows=row_group_size_rows,
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
-            **kwargs,
+            max_dictionary_size=max_dictionary_size,
+            partitions_info=partition_info,
+            storage_options=storage_options,
+            force_nullable_schema=force_nullable_schema,
+            header_version=header_version,
+            use_dictionary=use_dictionary,
+            skip_compression=skip_compression,
+            column_encoding=column_encoding,
+            column_type_length=column_type_length,
+            output_as_binary=output_as_binary,
         )
 
     else:
+        import pyarrow.parquet as pq
+
         if partition_offsets is not None:
             warnings.warn(
                 "partition_offsets will be ignored when engine is not cudf"
@@ -679,15 +1061,10 @@ def to_parquet(
         if index is None:
             index = True
 
-        # Convert partition_file_name to a call back
-        if partition_file_name:
-            partition_file_name = lambda x: partition_file_name  # noqa: E731
-
         pa_table = df.to_arrow(preserve_index=index)
         return pq.write_to_dataset(
             pa_table,
             root_path=path,
-            partition_filename_cb=partition_file_name,
             partition_cols=partition_cols,
             *args,
             **kwargs,
@@ -730,9 +1107,11 @@ def _get_partitioned(
     filename=None,
     fs=None,
     preserve_index=False,
-    **kwargs,
+    storage_options=None,
 ):
-    fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
+    fs = ioutils._ensure_filesystem(
+        fs, root_path, storage_options=storage_options
+    )
     fs.mkdirs(root_path, exist_ok=True)
 
     part_names, grouped_df, part_offsets = _get_groups_and_offsets(
@@ -743,7 +1122,10 @@ def _get_partitioned(
     metadata_file_paths = []
     for keys in part_names.itertuples(index=False):
         subdir = fs.sep.join(
-            [f"{name}={val}" for name, val in zip(partition_cols, keys)]
+            [
+                _hive_dirname(name, val)
+                for name, val in zip(partition_cols, keys)
+            ]
         )
         prefix = fs.sep.join([root_path, subdir])
         fs.mkdirs(prefix, exist_ok=True)
@@ -762,19 +1144,22 @@ def _get_groups_and_offsets(
     preserve_index=False,
     **kwargs,
 ):
-
     if not (set(df._data) - set(partition_cols)):
-        raise ValueError("No data left to save outside partition columns")
+        warnings.warn("No data left to save outside partition columns")
 
-    part_names, part_offsets, _, grouped_df = df.groupby(
-        partition_cols
+    _, part_offsets, part_keys, grouped_df = df.groupby(
+        partition_cols,
+        dropna=False,
     )._grouped()
     if not preserve_index:
         grouped_df.reset_index(drop=True, inplace=True)
     grouped_df.drop(columns=partition_cols, inplace=True)
     # Copy the entire keys df in one operation rather than using iloc
-    part_names = part_names.to_pandas().to_frame(index=False)
-
+    part_names = (
+        part_keys.take(part_offsets[:-1])
+        .to_pandas(nullable=True)
+        .to_frame(index=False)
+    )
     return part_names, grouped_df, part_offsets
 
 
@@ -872,6 +1257,13 @@ class ParquetDatasetWriter:
     file_name_prefix : str
         This is a prefix to file names generated only when
         `max_file_size` is specified.
+    storage_options : dict, optional, default None
+        Extra options that make sense for a particular storage connection,
+        e.g. host, port, username, password, etc. For HTTP(S) URLs the
+        key-value pairs are forwarded to ``urllib.request.Request`` as
+        header options. For other URLs (e.g. starting with "s3://", and
+        "gcs://") the key-value pairs are forwarded to ``fsspec.open``.
+        Please see ``fsspec`` and ``urllib`` for more details.
 
 
     Examples
@@ -915,13 +1307,17 @@ class ParquetDatasetWriter:
         statistics="ROWGROUP",
         max_file_size=None,
         file_name_prefix=None,
-        **kwargs,
+        storage_options=None,
     ) -> None:
         if isinstance(path, str) and path.startswith("s3://"):
             self.fs_meta = {"is_s3": True, "actual_path": path}
-            self.path = tempfile.TemporaryDirectory().name
+            self.dir_: Optional[tempfile.TemporaryDirectory] = (
+                tempfile.TemporaryDirectory()
+            )
+            self.path = self.dir_.name
         else:
             self.fs_meta = {}
+            self.dir_ = None
             self.path = path
 
         self.common_args = {
@@ -938,7 +1334,7 @@ class ParquetDatasetWriter:
         # Map of partition_col values to their ParquetWriter's index
         # in self._chunked_writers for reverse lookup
         self.path_cw_map: Dict[str, int] = {}
-        self.kwargs = kwargs
+        self.storage_options = storage_options
         self.filename = file_name_prefix
         self.max_file_size = max_file_size
         if max_file_size is not None:
@@ -956,12 +1352,12 @@ class ParquetDatasetWriter:
         """
         Write a dataframe to the file/dataset
         """
-        (part_names, grouped_df, part_offsets,) = _get_groups_and_offsets(
+        part_names, grouped_df, part_offsets = _get_groups_and_offsets(
             df=df,
             partition_cols=self.partition_cols,
             preserve_index=self.common_args["index"],
         )
-        fs = ioutils._ensure_filesystem(None, self.path)
+        fs = ioutils._ensure_filesystem(None, self.path, None)
         fs.mkdirs(self.path, exist_ok=True)
 
         full_paths = []
@@ -1044,10 +1440,11 @@ class ParquetDatasetWriter:
         )
         existing_cw_batch = defaultdict(dict)
         new_cw_paths = []
+        partition_info = [(i, j - i) for i, j in zip(offsets, offsets[1:])]
 
         for path, part_info, meta_path in zip(
             paths,
-            zip(offsets, np.roll(offsets, -1) - offsets),
+            partition_info,
             metadata_file_paths,
         ):
             if path in self.path_cw_map:  # path is a currently open file
@@ -1097,10 +1494,13 @@ class ParquetDatasetWriter:
             local_path = self.path
             s3_path = self.fs_meta["actual_path"]
             s3_file, _ = ioutils._get_filesystem_and_paths(
-                s3_path, **self.kwargs
+                s3_path, storage_options=self.storage_options
             )
             s3_file.put(local_path, s3_path, recursive=True)
             shutil.rmtree(self.path)
+
+        if self.dir_ is not None:
+            self.dir_.cleanup()
 
         if return_metadata:
             return (
@@ -1152,3 +1552,10 @@ def _default_open_file_options(
         )
     open_file_options["precache_options"] = precache_options
     return open_file_options
+
+
+def _hive_dirname(name, val):
+    # Simple utility to produce hive directory name
+    if pd.isna(val):
+        val = "__HIVE_DEFAULT_PARTITION__"
+    return f"{name}={val}"

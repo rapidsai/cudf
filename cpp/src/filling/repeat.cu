@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -54,16 +56,12 @@ struct count_accessor {
   std::enable_if_t<std::is_integral_v<T>, cudf::size_type> operator()(rmm::cuda_stream_view stream)
   {
     using ScalarType = cudf::scalar_type_t<T>;
-#if 1
-    // TODO: temporary till cudf::scalar's value() function is marked as const
-    auto p_count = const_cast<ScalarType*>(static_cast<ScalarType const*>(this->p_scalar));
-#else
-    auto p_count = static_cast<ScalarType const*>(this->p_scalar);
-#endif
-    auto count = p_count->value(stream);
+    auto p_count     = static_cast<ScalarType const*>(this->p_scalar);
+    auto count       = p_count->value(stream);
     // static_cast is necessary due to bool
     CUDF_EXPECTS(static_cast<int64_t>(count) <= std::numeric_limits<cudf::size_type>::max(),
-                 "count should not exceed size_type's limit.");
+                 "count should not exceed the column size limit",
+                 std::overflow_error);
     return static_cast<cudf::size_type>(count);
   }
 
@@ -86,7 +84,8 @@ struct count_checker {
       auto max = thrust::reduce(
         rmm::exec_policy(stream), count.begin<T>(), count.end<T>(), 0, thrust::maximum<T>());
       CUDF_EXPECTS(max <= std::numeric_limits<cudf::size_type>::max(),
-                   "count should not have values larger than size_type maximum.");
+                   "count exceeds the column size limit",
+                   std::overflow_error);
     }
   }
 
@@ -104,10 +103,10 @@ namespace detail {
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(input_table.num_rows() == count.size(), "in and count must have equal size");
-  CUDF_EXPECTS(count.has_nulls() == false, "count cannot contain nulls");
+  CUDF_EXPECTS(not count.has_nulls(), "count cannot contain nulls");
 
   if (input_table.num_rows() == 0) { return cudf::empty_like(input_table); }
 
@@ -133,18 +132,19 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 std::unique_ptr<table> repeat(table_view const& input_table,
                               size_type count,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(count >= 0, "count value should be non-negative");
-  CUDF_EXPECTS(
-    static_cast<int64_t>(input_table.num_rows()) * count <= std::numeric_limits<size_type>::max(),
-    "The resulting table has more rows than size_type's limit.");
-
   if ((input_table.num_rows() == 0) || (count == 0)) { return cudf::empty_like(input_table); }
+
+  CUDF_EXPECTS(count >= 0, "count value should be non-negative");
+  CUDF_EXPECTS(input_table.num_rows() <= std::numeric_limits<size_type>::max() / count,
+               "The resulting table exceeds the column size limit",
+               std::overflow_error);
 
   auto output_size = input_table.num_rows() * count;
   auto map_begin   = cudf::detail::make_counting_transform_iterator(
-    0, [count] __device__(auto i) { return i / count; });
+    0,
+    cuda::proclaim_return_type<size_type>([count] __device__(size_type i) { return i / count; }));
   auto map_end = map_begin + output_size;
 
   return gather(input_table, map_begin, map_end, out_of_bounds_policy::DONT_CHECK, stream, mr);
@@ -154,18 +154,20 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat(input_table, count, cudf::get_default_stream(), mr);
+  return detail::repeat(input_table, count, stream, mr);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
                               size_type count,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat(input_table, count, cudf::get_default_stream(), mr);
+  return detail::repeat(input_table, count, stream, mr);
 }
 
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/table/table.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -43,19 +44,21 @@ namespace strings {
  *
  * Any null string entries return corresponding null output columns.
  *
- * @param strings_column Strings instance for this operation.
- * @param delimiter UTF-8 encoded string indicating the split points in each string.
+ * @param strings_column Strings instance for this operation
+ * @param delimiter UTF-8 encoded string indicating the split points in each string;
  *        Default of empty string indicates split on whitespace.
- * @param maxsplit Maximum number of splits to perform.
+ * @param maxsplit Maximum number of splits to perform;
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned table's device memory.
- * @return New table of strings columns.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return New table of strings columns
  */
 std::unique_ptr<table> split(
   strings_column_view const& strings_column,
-  string_scalar const& delimiter      = string_scalar(""),
-  size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  string_scalar const& delimiter    = string_scalar(""),
+  size_type maxsplit                = -1,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a list of columns by splitting each string using the
@@ -71,19 +74,21 @@ std::unique_ptr<table> split(
  *
  * Any null string entries return corresponding null output columns.
  *
- * @param strings_column Strings instance for this operation.
- * @param delimiter UTF-8 encoded string indicating the split points in each string.
+ * @param strings_column Strings instance for this operation
+ * @param delimiter UTF-8 encoded string indicating the split points in each string;
  *        Default of empty string indicates split on whitespace.
- * @param maxsplit Maximum number of splits to perform.
+ * @param maxsplit Maximum number of splits to perform;
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned table's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return New strings columns.
  */
 std::unique_ptr<table> rsplit(
   strings_column_view const& strings_column,
-  string_scalar const& delimiter      = string_scalar(""),
-  size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  string_scalar const& delimiter    = string_scalar(""),
+  size_type maxsplit                = -1,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Splits individual strings elements into a list of strings.
@@ -139,23 +144,25 @@ std::unique_ptr<table> rsplit(
  *
  * A null string element will result in a null list item for that row.
  *
- * @throw cudf:logic_error if `delimiter` is invalid.
+ * @throw cudf::logic_error if `delimiter` is invalid.
  *
- * @param strings A column of string elements to be split.
- * @param delimiter The string to identify split points in each string.
+ * @param strings A column of string elements to be split
+ * @param delimiter The string to identify split points in each string;
  *        Default of empty string indicates split on whitespace.
- * @param maxsplit Maximum number of splits to perform.
- *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return Lists column of strings
- *         Each vector of the lists column holds splits from a single row
+ * @param maxsplit Maximum number of splits to perform;
+ *        Default of -1 indicates all possible splits on each string
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned result's device memory
+ * @return Lists column of strings;
+ *         Each row of the lists column holds splits from a single row
  *         element of the input column.
  */
 std::unique_ptr<column> split_record(
   strings_column_view const& strings,
-  string_scalar const& delimiter      = string_scalar(""),
-  size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  string_scalar const& delimiter    = string_scalar(""),
+  size_type maxsplit                = -1,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Splits individual strings elements into a list of strings starting
@@ -216,23 +223,25 @@ std::unique_ptr<column> split_record(
  *
  * A null string element will result in a null list item for that row.
  *
- * @throw cudf:logic_error if `delimiter` is invalid.
+ * @throw cudf::logic_error if `delimiter` is invalid.
  *
- * @param strings A column of string elements to be split.
- * @param delimiter The string to identify split points in each string.
+ * @param strings A column of string elements to be split
+ * @param delimiter The string to identify split points in each string;
  *        Default of empty string indicates split on whitespace.
- * @param maxsplit Maximum number of splits to perform.
- *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return Lists column of strings
- *         Each vector of the lists column holds splits from a single row
+ * @param maxsplit Maximum number of splits to perform;
+ *        Default of -1 indicates all possible splits on each string
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned result's device memory
+ * @return Lists column of strings;
+ *         Each row of the lists column holds splits from a single row
  *         element of the input column.
  */
 std::unique_ptr<column> rsplit_record(
   strings_column_view const& strings,
-  string_scalar const& delimiter      = string_scalar(""),
-  size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  string_scalar const& delimiter    = string_scalar(""),
+  size_type maxsplit                = -1,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

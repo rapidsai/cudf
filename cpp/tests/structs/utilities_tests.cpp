@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "cudf_test/default_stream.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -27,6 +29,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 template <typename T>
 using nums = cudf::test::fixed_width_column_wrapper<T, int32_t>;
@@ -34,12 +37,10 @@ using nums = cudf::test::fixed_width_column_wrapper<T, int32_t>;
 template <typename T>
 using lists = cudf::test::lists_column_wrapper<T, int32_t>;
 
-struct StructUtilitiesTest : cudf::test::BaseFixture {
-};
+struct StructUtilitiesTest : cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedStructUtilitiesTest : StructUtilitiesTest {
-};
+struct TypedStructUtilitiesTest : StructUtilitiesTest {};
 
 TYPED_TEST_SUITE(TypedStructUtilitiesTest, cudf::test::FixedWidthTypes);
 
@@ -53,29 +54,15 @@ TYPED_TEST(TypedStructUtilitiesTest, ListsAtTopLevel)
   auto nums_col  = nums{{0, 1, 2}, cudf::test::iterators::null_at(6)};
 
   auto table = cudf::table_view{{lists_col, nums_col}};
-
-  CUDF_TEST_EXPECT_TABLES_EQUAL(table,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
-}
-
-TYPED_TEST(TypedStructUtilitiesTest, NestedListsUnsupported)
-{
-  using T     = TypeParam;
-  using lists = cudf::test::lists_column_wrapper<T, int32_t>;
-  using nums  = cudf::test::fixed_width_column_wrapper<T, int32_t>;
-
-  auto lists_member = lists{{0, 1}, {22, 33}, {44, 55, 66}};
-  auto nums_member  = nums{{0, 1, 2}, cudf::test::iterators::null_at(6)};
-  auto structs_col  = cudf::test::structs_column_wrapper{{nums_member, lists_member}};
-  auto nums_col     = nums{{0, 1, 2}, cudf::test::iterators::null_at(6)};
-
-  EXPECT_THROW(
-    cudf::structs::detail::flatten_nested_columns(cudf::table_view{{nums_col, structs_col}},
+  auto flattened_table =
+    cudf::structs::detail::flatten_nested_columns(table,
                                                   {},
                                                   {},
-                                                  cudf::structs::detail::column_nullability::FORCE),
-    cudf::logic_error);
+                                                  cudf::structs::detail::column_nullability::FORCE,
+                                                  cudf::get_default_stream(),
+                                                  rmm::mr::get_current_device_resource());
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table, flattened_table->flattened_columns());
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, NoStructs)
@@ -89,10 +76,15 @@ TYPED_TEST(TypedStructUtilitiesTest, NoStructs)
   auto nuther_nums_col = nums{{0, 1, 2, 3, 4, 5, 6}, cudf::test::iterators::null_at(6)};
 
   auto table = cudf::table_view{{nums_col, strings_col, nuther_nums_col}};
+  auto flattened_table =
+    cudf::structs::detail::flatten_nested_columns(table,
+                                                  {},
+                                                  {},
+                                                  cudf::structs::detail::column_nullability::FORCE,
+                                                  cudf::get_default_stream(),
+                                                  rmm::mr::get_current_device_resource());
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(table,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table, flattened_table->flattened_columns());
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStruct)
@@ -109,16 +101,21 @@ TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStruct)
 
   auto expected_nums_col_1  = cudf::column(nums_col);
   auto expected_structs_col = cudf::test::fixed_width_column_wrapper<bool>{{1, 1, 1, 1, 1, 1, 1}};
-  auto expected_nums_col_2 =
-    cudf::column(static_cast<cudf::structs_column_view>(structs_col).get_sliced_child(0));
-  auto expected_strings_col =
-    cudf::column(static_cast<cudf::structs_column_view>(structs_col).get_sliced_child(1));
-  auto expected = cudf::table_view{
-    {expected_nums_col_1, expected_structs_col, expected_nums_col_2, expected_strings_col}};
+  auto expected_nums_col_2  = cudf::column(static_cast<cudf::structs_column_view>(structs_col)
+                                            .get_sliced_child(0, cudf::get_default_stream()));
+  auto expected_strings_col = cudf::column(static_cast<cudf::structs_column_view>(structs_col)
+                                             .get_sliced_child(1, cudf::get_default_stream()));
+  auto expected             = cudf::table_view{
+                {expected_nums_col_1, expected_structs_col, expected_nums_col_2, expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
+  auto flattened_table =
+    cudf::structs::detail::flatten_nested_columns(table,
+                                                  {},
+                                                  {},
+                                                  cudf::structs::detail::column_nullability::FORCE,
+                                                  cudf::get_default_stream(),
+                                                  rmm::mr::get_current_device_resource());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStructWithNulls)
@@ -137,16 +134,21 @@ TYPED_TEST(TypedStructUtilitiesTest, SingleLevelStructWithNulls)
   auto expected_nums_col_1  = cudf::column(nums_col);
   auto expected_structs_col = cudf::test::fixed_width_column_wrapper<bool>{
     {1, 1, 0, 1, 1, 1, 1}, cudf::test::iterators::null_at(2)};
-  auto expected_nums_col_2 =
-    cudf::column(static_cast<cudf::structs_column_view>(structs_col).get_sliced_child(0));
-  auto expected_strings_col =
-    cudf::column(static_cast<cudf::structs_column_view>(structs_col).get_sliced_child(1));
-  auto expected = cudf::table_view{
-    {expected_nums_col_1, expected_structs_col, expected_nums_col_2, expected_strings_col}};
+  auto expected_nums_col_2  = cudf::column(static_cast<cudf::structs_column_view>(structs_col)
+                                            .get_sliced_child(0, cudf::get_default_stream()));
+  auto expected_strings_col = cudf::column(static_cast<cudf::structs_column_view>(structs_col)
+                                             .get_sliced_child(1, cudf::get_default_stream()));
+  auto expected             = cudf::table_view{
+                {expected_nums_col_1, expected_structs_col, expected_nums_col_2, expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
+  auto flattened_table =
+    cudf::structs::detail::flatten_nested_columns(table,
+                                                  {},
+                                                  {},
+                                                  cudf::structs::detail::column_nullability::FORCE,
+                                                  cudf::get_default_stream(),
+                                                  rmm::mr::get_current_device_resource());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStruct)
@@ -170,12 +172,17 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStruct)
   auto expected_nums_col_1    = cudf::column(nums_col);
   auto expected_structs_col_1 = cudf::test::fixed_width_column_wrapper<bool>{{1, 1, 1, 1, 1, 1, 1}};
   auto expected_nums_col_2 =
-    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(0));
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(0, cudf::get_default_stream()));
   auto expected_structs_col_2 = cudf::test::fixed_width_column_wrapper<bool>{{1, 1, 1, 1, 1, 1, 1}};
-  auto expected_nums_col_3    = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(0));
-  auto expected_strings_col = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(1));
+  auto expected_nums_col_3 =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(0));
+  auto expected_strings_col =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(1));
   auto expected = cudf::table_view{{expected_nums_col_1,
                                     expected_structs_col_1,
                                     expected_nums_col_2,
@@ -183,9 +190,14 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStruct)
                                     expected_nums_col_3,
                                     expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
+  auto flattened_table =
+    cudf::structs::detail::flatten_nested_columns(table,
+                                                  {},
+                                                  {},
+                                                  cudf::structs::detail::column_nullability::FORCE,
+                                                  cudf::get_default_stream(),
+                                                  rmm::mr::get_current_device_resource());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtLeafLevel)
@@ -209,13 +221,18 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtLeafLevel)
   auto expected_nums_col_1    = cudf::column(nums_col);
   auto expected_structs_col_1 = cudf::test::fixed_width_column_wrapper<bool>{{1, 1, 1, 1, 1, 1, 1}};
   auto expected_nums_col_2 =
-    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(0));
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(0, cudf::get_default_stream()));
   auto expected_structs_col_2 = cudf::test::fixed_width_column_wrapper<bool>{
     {1, 1, 0, 1, 1, 1, 1}, cudf::test::iterators::null_at(2)};
-  auto expected_nums_col_3 = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(0));
-  auto expected_strings_col = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(1));
+  auto expected_nums_col_3 =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(0));
+  auto expected_strings_col =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(1));
   auto expected = cudf::table_view{{expected_nums_col_1,
                                     expected_structs_col_1,
                                     expected_nums_col_2,
@@ -223,9 +240,14 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtLeafLevel)
                                     expected_nums_col_3,
                                     expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
+  auto flattened_table =
+    cudf::structs::detail::flatten_nested_columns(table,
+                                                  {},
+                                                  {},
+                                                  cudf::structs::detail::column_nullability::FORCE,
+                                                  cudf::get_default_stream(),
+                                                  rmm::mr::get_current_device_resource());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtTopLevel)
@@ -250,13 +272,18 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtTopLevel)
   auto expected_structs_col_1 = cudf::test::fixed_width_column_wrapper<bool>{
     {1, 1, 1, 1, 0, 1, 1}, cudf::test::iterators::null_at(4)};
   auto expected_nums_col_2 =
-    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(0));
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(0, cudf::get_default_stream()));
   auto expected_structs_col_2 = cudf::test::fixed_width_column_wrapper<bool>{
     {1, 1, 1, 1, 0, 1, 1}, cudf::test::iterators::null_at(4)};
-  auto expected_nums_col_3 = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(0));
-  auto expected_strings_col = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(1));
+  auto expected_nums_col_3 =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(0));
+  auto expected_strings_col =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(1));
   auto expected = cudf::table_view{{expected_nums_col_1,
                                     expected_structs_col_1,
                                     expected_nums_col_2,
@@ -264,9 +291,14 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtTopLevel)
                                     expected_nums_col_3,
                                     expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
+  auto flattened_table =
+    cudf::structs::detail::flatten_nested_columns(table,
+                                                  {},
+                                                  {},
+                                                  cudf::structs::detail::column_nullability::FORCE,
+                                                  cudf::get_default_stream(),
+                                                  rmm::mr::get_current_device_resource());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
 TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtAllLevels)
@@ -291,13 +323,18 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtAllLevels)
   auto expected_structs_col_1 = cudf::test::fixed_width_column_wrapper<bool>{
     {1, 1, 1, 1, 0, 1, 1}, cudf::test::iterators::null_at(4)};
   auto expected_nums_col_2 =
-    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(0));
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(0, cudf::get_default_stream()));
   auto expected_structs_col_2 =
     cudf::test::fixed_width_column_wrapper<bool>{{1, 1, 0, 1, 0, 1, 1}, {1, 1, 0, 1, 0, 1, 1}};
-  auto expected_nums_col_3 = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(0));
-  auto expected_strings_col = cudf::column(
-    static_cast<cudf::structs_column_view>(struct_of_structs_col).get_sliced_child(1).child(1));
+  auto expected_nums_col_3 =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(0));
+  auto expected_strings_col =
+    cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
+                   .get_sliced_child(1, cudf::get_default_stream())
+                   .child(1));
   auto expected = cudf::table_view{{expected_nums_col_1,
                                     expected_structs_col_1,
                                     expected_nums_col_2,
@@ -305,49 +342,34 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtAllLevels)
                                     expected_nums_col_3,
                                     expected_strings_col}};
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected,
-                                cudf::structs::detail::flatten_nested_columns(
-                                  table, {}, {}, cudf::structs::detail::column_nullability::FORCE));
-}
-
-TYPED_TEST(TypedStructUtilitiesTest, ListsAreUnsupported)
-{
-  using T    = TypeParam;
-  using ints = cudf::test::fixed_width_column_wrapper<int32_t>;
-  using lcw  = cudf::test::lists_column_wrapper<T, int32_t>;
-
-  // clang-format off
-  auto lists_member = lcw{  {0,1,2}, {3,4,5}, {6,7,8,9} };
-  auto ints_member  = ints{       0,       1,         2 };
-  // clang-format on
-
-  auto structs_with_lists_col = cudf::test::structs_column_wrapper{lists_member, ints_member};
-
-  EXPECT_THROW(
-    cudf::structs::detail::flatten_nested_columns(cudf::table_view{{structs_with_lists_col}},
+  auto flattened_table =
+    cudf::structs::detail::flatten_nested_columns(table,
                                                   {},
                                                   {},
-                                                  cudf::structs::detail::column_nullability::FORCE),
-    cudf::logic_error);
+                                                  cudf::structs::detail::column_nullability::FORCE,
+                                                  cudf::get_default_stream(),
+                                                  rmm::mr::get_current_device_resource());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, flattened_table->flattened_columns());
 }
 
-struct SuperimposeTest : StructUtilitiesTest {
-};
+struct SuperimposeTest : StructUtilitiesTest {};
 
 template <typename T>
-struct TypedSuperimposeTest : StructUtilitiesTest {
-};
+struct TypedSuperimposeTest : StructUtilitiesTest {};
 
 TYPED_TEST_SUITE(TypedSuperimposeTest, cudf::test::FixedWidthTypes);
 
 void test_non_struct_columns(cudf::column_view const& input)
 {
-  // superimpose_parent_nulls() on non-struct columns should return the input column, unchanged.
-  auto [superimposed, backing_validity_buffers] =
-    cudf::structs::detail::superimpose_parent_nulls(input);
+  // push_down_nulls() on non-struct columns should return the input column, unchanged.
+  auto [superimposed, backing_data] = cudf::structs::detail::push_down_nulls(
+    input, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input, superimposed);
-  EXPECT_TRUE(backing_validity_buffers.empty());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, superimposed);
+  EXPECT_TRUE(backing_data.new_null_masks.empty());
+  if (input.type().id() != cudf::type_id::STRING && input.type().id() != cudf::type_id::LIST) {
+    EXPECT_TRUE(backing_data.new_columns.empty());
+  }
 }
 
 TYPED_TEST(TypedSuperimposeTest, NoStructInput)
@@ -395,25 +417,26 @@ TYPED_TEST(TypedSuperimposeTest, BasicStruct)
 
   // Reset STRUCTs' null-mask. Mark first STRUCT row as null.
   auto structs_view = structs_input->mutable_view();
-  cudf::detail::set_null_mask(structs_view.null_mask(), 0, 1, false);
+  cudf::detail::set_null_mask(structs_view.null_mask(), 0, 1, false, cudf::get_default_stream());
 
   // At this point, the STRUCT nulls aren't pushed down to members,
   // even though the parent null-mask was modified.
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(structs_view.child(0),
-                                      make_nums_member<T>(cudf::test::iterators::nulls_at({3, 6})));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    structs_view.child(1), make_lists_member<T>(cudf::test::iterators::nulls_at({4, 5})));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(structs_view.child(0),
+                                 make_nums_member<T>(cudf::test::iterators::nulls_at({3, 6})));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(structs_view.child(1),
+                                 make_lists_member<T>(cudf::test::iterators::nulls_at({4, 5})));
 
-  auto [output, backing_buffers] = cudf::structs::detail::superimpose_parent_nulls(structs_view);
+  auto [output, backing_data] = cudf::structs::detail::push_down_nulls(
+    structs_view, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
-  // After superimpose_parent_nulls(), the struct nulls (i.e. at index-0) should have been pushed
+  // After push_down_nulls(), the struct nulls (i.e. at index-0) should have been pushed
   // down to the children. All members should have nulls at row-index 0.
   auto expected_nums_member    = make_nums_member<T>(cudf::test::iterators::nulls_at({0, 3, 6}));
   auto expected_lists_member   = make_lists_member<T>(cudf::test::iterators::nulls_at({0, 4, 5}));
   auto expected_structs_output = cudf::test::structs_column_wrapper{
     {expected_nums_member, expected_lists_member}, cudf::test::iterators::null_at(0)};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output, expected_structs_output);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, expected_structs_output);
 }
 
 TYPED_TEST(TypedSuperimposeTest, NonNullableParentStruct)
@@ -429,17 +452,17 @@ TYPED_TEST(TypedSuperimposeTest, NonNullableParentStruct)
                                                           cudf::test::iterators::no_nulls()}
                          .release();
 
-  auto [output, backing_buffers] =
-    cudf::structs::detail::superimpose_parent_nulls(structs_input->view());
+  auto [output, backing_data] = cudf::structs::detail::push_down_nulls(
+    structs_input->view(), cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
-  // After superimpose_parent_nulls(), none of the child structs should have changed,
+  // After push_down_nulls(), none of the child structs should have changed,
   // because the parent had no nulls to begin with.
   auto expected_nums_member    = make_nums_member<T>(cudf::test::iterators::nulls_at({3, 6}));
   auto expected_lists_member   = make_lists_member<T>(cudf::test::iterators::nulls_at({4, 5}));
   auto expected_structs_output = cudf::test::structs_column_wrapper{
     {expected_nums_member, expected_lists_member}, cudf::test::iterators::no_nulls()};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output, expected_structs_output);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, expected_structs_output);
 }
 
 TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNonNullable)
@@ -459,23 +482,23 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNonNullable)
 
   // Reset STRUCTs' null-mask. Mark first STRUCT row as null.
   auto structs_view = outer_struct_members.back()->mutable_view();
-  cudf::detail::set_null_mask(structs_view.null_mask(), 0, 1, false);
+  cudf::detail::set_null_mask(structs_view.null_mask(), 0, 1, false, cudf::get_default_stream());
 
   auto structs_of_structs =
     cudf::test::structs_column_wrapper{std::move(outer_struct_members)}.release();
 
-  auto [output, backing_buffers] =
-    cudf::structs::detail::superimpose_parent_nulls(structs_of_structs->view());
+  auto [output, backing_data] = cudf::structs::detail::push_down_nulls(
+    structs_of_structs->view(), cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
-  // After superimpose_parent_nulls(), outer-struct column should not have pushed nulls to child
+  // After push_down_nulls(), outer-struct column should not have pushed nulls to child
   // structs. But the child struct column must push its nulls to its own children.
   auto expected_nums_member  = make_nums_member<T>(cudf::test::iterators::nulls_at({0, 3, 6}));
   auto expected_lists_member = make_lists_member<T>(cudf::test::iterators::nulls_at({0, 4, 5}));
   auto expected_structs      = cudf::test::structs_column_wrapper{
-    {expected_nums_member, expected_lists_member}, cudf::test::iterators::null_at(0)};
+         {expected_nums_member, expected_lists_member}, cudf::test::iterators::null_at(0)};
   auto expected_structs_of_structs = cudf::test::structs_column_wrapper{{expected_structs}};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output, expected_structs_of_structs);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, expected_structs_of_structs);
 }
 
 TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
@@ -496,7 +519,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
   // Reset STRUCTs' null-mask. Mark first STRUCT row as null.
   auto structs_view = outer_struct_members.back()->mutable_view();
   auto num_rows     = structs_view.size();
-  cudf::detail::set_null_mask(structs_view.null_mask(), 0, 1, false);
+  cudf::detail::set_null_mask(structs_view.null_mask(), 0, 1, false, cudf::get_default_stream());
 
   auto structs_of_structs = cudf::test::structs_column_wrapper{std::move(outer_struct_members),
                                                                std::vector<bool>(num_rows, true)}
@@ -504,21 +527,22 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
 
   // Modify STRUCT-of-STRUCT's null-mask. Mark second STRUCT row as null.
   auto structs_of_structs_view = structs_of_structs->mutable_view();
-  cudf::detail::set_null_mask(structs_of_structs_view.null_mask(), 1, 2, false);
+  cudf::detail::set_null_mask(
+    structs_of_structs_view.null_mask(), 1, 2, false, cudf::get_default_stream());
 
-  auto [output, backing_buffers] =
-    cudf::structs::detail::superimpose_parent_nulls(structs_of_structs->view());
+  auto [output, backing_data] = cudf::structs::detail::push_down_nulls(
+    structs_of_structs->view(), cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
-  // After superimpose_parent_nulls(), outer-struct column should not have pushed nulls to child
+  // After push_down_nulls(), outer-struct column should not have pushed nulls to child
   // structs. But the child struct column must push its nulls to its own children.
   auto expected_nums_member  = make_nums_member<T>(cudf::test::iterators::nulls_at({0, 1, 3, 6}));
   auto expected_lists_member = make_lists_member<T>(cudf::test::iterators::nulls_at({0, 1, 4, 5}));
   auto expected_structs      = cudf::test::structs_column_wrapper{
-    {expected_nums_member, expected_lists_member}, cudf::test::iterators::nulls_at({0, 1})};
+         {expected_nums_member, expected_lists_member}, cudf::test::iterators::nulls_at({0, 1})};
   auto expected_structs_of_structs =
     cudf::test::structs_column_wrapper{{expected_structs}, cudf::test::iterators::null_at(1)};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output, expected_structs_of_structs);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, expected_structs_of_structs);
 }
 
 cudf::column_view slice_off_first_and_last_rows(cudf::column_view const& col)
@@ -528,13 +552,14 @@ cudf::column_view slice_off_first_and_last_rows(cudf::column_view const& col)
 
 void mark_row_as_null(cudf::mutable_column_view const& col, cudf::size_type row_index)
 {
-  cudf::detail::set_null_mask(col.null_mask(), row_index, row_index + 1, false);
+  cudf::detail::set_null_mask(
+    col.null_mask(), row_index, row_index + 1, false, cudf::get_default_stream());
 }
 
 TYPED_TEST(TypedSuperimposeTest, Struct_Sliced)
 {
   // Test with a sliced STRUCT column.
-  // Ensure that superimpose_parent_nulls() produces the right results, even when the input is
+  // Ensure that push_down_nulls() produces the right results, even when the input is
   // sliced.
 
   using T = TypeParam;
@@ -561,9 +586,10 @@ TYPED_TEST(TypedSuperimposeTest, Struct_Sliced)
   // nums_member:  11011
   // lists_member: 00111
 
-  auto [output, backing_buffers] = cudf::structs::detail::superimpose_parent_nulls(sliced_structs);
+  auto [output, backing_data] = cudf::structs::detail::push_down_nulls(
+    sliced_structs, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
-  // After superimpose_parent_nulls(), the null masks should be:
+  // After push_down_nulls(), the null masks should be:
   // STRUCT:       11110
   // nums_member:  11010
   // lists_member: 00110
@@ -576,13 +602,13 @@ TYPED_TEST(TypedSuperimposeTest, Struct_Sliced)
     {expected_nums, expected_lists}, cudf::test::iterators::nulls_at({1})};
   auto expected_structs = slice_off_first_and_last_rows(expected_unsliced_structs);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output, expected_structs);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, expected_structs);
 }
 
 TYPED_TEST(TypedSuperimposeTest, NestedStruct_Sliced)
 {
   // Test with a sliced STRUCT<STRUCT> column.
-  // Ensure that superimpose_parent_nulls() produces the right results, even when the input is
+  // Ensure that push_down_nulls() produces the right results, even when the input is
   // sliced.
 
   using T = TypeParam;
@@ -613,9 +639,10 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_Sliced)
   // nums_member:    11010
   // lists_member:   00110
 
-  auto [output, backing_buffers] = cudf::structs::detail::superimpose_parent_nulls(sliced_structs);
+  auto [output, backing_data] = cudf::structs::detail::push_down_nulls(
+    sliced_structs, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
-  // After superimpose_parent_nulls(), the null masks will be:
+  // After push_down_nulls(), the null masks will be:
   // STRUCT<STRUCT>: 11101
   // STRUCT:         11100
   // nums_member:    11000
@@ -631,5 +658,5 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_Sliced)
     cudf::test::structs_column_wrapper{{expected_structs}, cudf::test::iterators::null_at(2)};
   auto expected_sliced_structs = slice_off_first_and_last_rows(expected_struct_structs);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output, expected_sliced_structs);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, expected_sliced_structs);
 }

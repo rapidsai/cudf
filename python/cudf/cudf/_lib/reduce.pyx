@@ -1,40 +1,17 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
-
-from cython.operator import dereference
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import cudf
-from cudf.api.types import is_decimal_dtype
+from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.reduce cimport cpp_minmax, cpp_reduce, cpp_scan, scan_type
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.types cimport data_type, type_id
 from cudf._lib.scalar cimport DeviceScalar
+from cudf._lib.types cimport dtype_to_pylibcudf_type, is_decimal_type_id
 
-from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
-
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move, pair
-
-from cudf._lib.aggregation cimport (
-    ReduceAggregation,
-    ScanAggregation,
-    make_reduce_aggregation,
-    make_scan_aggregation,
-)
-from cudf._lib.types cimport (
-    dtype_to_data_type,
-    is_decimal_type_id,
-    underlying_type_t_type_id,
-)
-
-import numpy as np
-
-cimport cudf._lib.cpp.types as libcudf_types
+from cudf._lib import pylibcudf
+from cudf._lib.aggregation import make_aggregation
 
 
+@acquire_spill_lock()
 def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     """
     Top level Cython reduce function wrapping libcudf reductions.
@@ -55,13 +32,6 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
         else incol._reduction_result_dtype(reduction_op)
     )
 
-    cdef column_view c_incol_view = incol.view()
-    cdef unique_ptr[scalar] c_result
-    cdef ReduceAggregation cython_agg = make_reduce_aggregation(
-        reduction_op, kwargs)
-
-    cdef data_type c_out_dtype = dtype_to_data_type(col_dtype)
-
     # check empty case
     if len(incol) <= incol.null_count:
         if reduction_op == 'sum' or reduction_op == 'sum_of_squares':
@@ -73,24 +43,23 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
 
         return cudf.utils.dtypes._get_nan_for_dtype(col_dtype)
 
-    with nogil:
-        c_result = move(cpp_reduce(
-            c_incol_view,
-            dereference(cython_agg.c_obj),
-            c_out_dtype
-        ))
+    result = pylibcudf.reduce.reduce(
+        incol.to_pylibcudf(mode="read"),
+        make_aggregation(reduction_op, kwargs).c_obj,
+        dtype_to_pylibcudf_type(col_dtype),
+    )
 
-    if is_decimal_type_id(c_result.get()[0].type().id()):
-        scale = -c_result.get()[0].type().scale()
+    if is_decimal_type_id(result.type().id()):
+        scale = -result.type().scale()
         precision = _reduce_precision(col_dtype, reduction_op, len(incol))
-        py_result = DeviceScalar.from_unique_ptr(
-            move(c_result), dtype=col_dtype.__class__(precision, scale)
-        )
-    else:
-        py_result = DeviceScalar.from_unique_ptr(move(c_result))
-    return py_result.value
+        return DeviceScalar.from_pylibcudf(
+            result,
+            dtype=col_dtype.__class__(precision, scale),
+        ).value
+    return DeviceScalar.from_pylibcudf(result).value
 
 
+@acquire_spill_lock()
 def scan(scan_op, Column incol, inclusive, **kwargs):
     """
     Top level Cython scan function wrapping libcudf scans.
@@ -104,24 +73,17 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
     inclusive: bool
         Flag for including nulls in relevant scan
     """
-    cdef column_view c_incol_view = incol.view()
-    cdef unique_ptr[column] c_result
-    cdef ScanAggregation cython_agg = make_scan_aggregation(scan_op, kwargs)
-
-    cdef scan_type c_inclusive = \
-        scan_type.INCLUSIVE if inclusive else scan_type.EXCLUSIVE
-
-    with nogil:
-        c_result = move(cpp_scan(
-            c_incol_view,
-            dereference(cython_agg.c_obj),
-            c_inclusive
-        ))
-
-    py_result = Column.from_unique_ptr(move(c_result))
-    return py_result
+    return Column.from_pylibcudf(
+        pylibcudf.reduce.scan(
+            incol.to_pylibcudf(mode="read"),
+            make_aggregation(scan_op, kwargs).c_obj,
+            pylibcudf.reduce.ScanType.INCLUSIVE if inclusive
+            else pylibcudf.reduce.ScanType.EXCLUSIVE,
+        )
+    )
 
 
+@acquire_spill_lock()
 def minmax(Column incol):
     """
     Top level Cython minmax function wrapping libcudf minmax.
@@ -135,18 +97,10 @@ def minmax(Column incol):
     -------
     A pair of ``(min, max)`` values of ``incol``
     """
-    cdef column_view c_incol_view = incol.view()
-    cdef pair[unique_ptr[scalar], unique_ptr[scalar]] c_result
-
-    with nogil:
-        c_result = move(cpp_minmax(c_incol_view))
-
-    py_result_min = DeviceScalar.from_unique_ptr(move(c_result.first))
-    py_result_max = DeviceScalar.from_unique_ptr(move(c_result.second))
-
+    min, max = pylibcudf.reduce.minmax(incol.to_pylibcudf(mode="read"))
     return (
-        cudf.Scalar.from_device_scalar(py_result_min),
-        cudf.Scalar.from_device_scalar(py_result_max)
+        cudf.Scalar.from_device_scalar(DeviceScalar.from_pylibcudf(min)),
+        cudf.Scalar.from_device_scalar(DeviceScalar.from_pylibcudf(max)),
     )
 
 

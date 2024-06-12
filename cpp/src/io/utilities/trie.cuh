@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ inline trie_view make_trie_view(optional_trie const& t)
  *
  * @return A host vector of nodes representing the serialized trie
  */
-trie create_serialized_trie(const std::vector<std::string>& keys, rmm::cuda_stream_view stream);
+trie create_serialized_trie(std::vector<std::string> const& keys, rmm::cuda_stream_view stream);
 
 /*
  * @brief Searches for a string in a serialized trie.
@@ -83,8 +83,8 @@ trie create_serialized_trie(const std::vector<std::string>& keys, rmm::cuda_stre
 __host__ __device__ inline bool serialized_trie_contains(device_span<serial_trie_node const> trie,
                                                          device_span<char const> key)
 {
-  if (trie.data() == nullptr || trie.empty()) return false;
-  if (key.empty()) return trie.front().is_leaf;
+  if (trie.empty()) { return false; }
+  if (key.empty()) { return trie.front().is_leaf; }
   auto curr_node = trie.begin() + 1;
   for (auto curr_key = key.begin(); curr_key < key.end(); ++curr_key) {
     // Don't jump away from root node

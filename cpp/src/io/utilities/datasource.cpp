@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,17 +15,22 @@
  */
 
 #include "file_io_utilities.hpp"
+#include "io/utilities/config_utils.hpp"
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
-#include <io/utilities/config_utils.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <kvikio/file_handle.hpp>
+
 #include <rmm/device_buffer.hpp>
 
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
+
+#include <unordered_map>
 
 namespace cudf {
 namespace io {
@@ -36,10 +41,13 @@ namespace {
  */
 class file_source : public datasource {
  public:
-  explicit file_source(const char* filepath) : _file(filepath, O_RDONLY)
+  explicit file_source(char const* filepath) : _file(filepath, O_RDONLY)
   {
+    detail::force_init_cuda_context();
     if (detail::cufile_integration::is_kvikio_enabled()) {
       _kvikio_file = kvikio::FileHandle(filepath);
+      CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode {}.",
+                    _kvikio_file.is_compat_mode_on() ? "on" : "off");
     } else {
       _cufile_in = detail::make_cufile_input(filepath);
     }
@@ -54,8 +62,8 @@ class file_source : public datasource {
 
   [[nodiscard]] bool is_device_read_preferred(size_t size) const override
   {
-    return !_kvikio_file.closed() ||
-           (_cufile_in != nullptr && _cufile_in->is_cufile_io_preferred(size));
+    if (size < _gds_read_preferred_threshold) { return false; }
+    return supports_device_read();
   }
 
   std::future<size_t> device_read_async(size_t offset,
@@ -96,7 +104,30 @@ class file_source : public datasource {
  private:
   std::unique_ptr<detail::cufile_input_impl> _cufile_in;
   kvikio::FileHandle _kvikio_file;
+  // The read size above which GDS is faster then posix-read + h2d-copy
+  static constexpr size_t _gds_read_preferred_threshold = 128 << 10;  // 128KB
 };
+
+/**
+ * @brief Memoized pageableMemoryAccessUsesHostPageTables device property.
+ */
+[[nodiscard]] bool pageableMemoryAccessUsesHostPageTables()
+{
+  static std::unordered_map<int, bool> result_cache{};
+
+  int deviceId{};
+  CUDF_CUDA_TRY(cudaGetDevice(&deviceId));
+
+  if (result_cache.find(deviceId) == result_cache.end()) {
+    cudaDeviceProp props{};
+    CUDF_CUDA_TRY(cudaGetDeviceProperties(&props, deviceId));
+    result_cache[deviceId] = (props.pageableMemoryAccessUsesHostPageTables == 1);
+    CUDF_LOG_INFO(
+      "Device {} pageableMemoryAccessUsesHostPageTables: {}", deviceId, result_cache[deviceId]);
+  }
+
+  return result_cache[deviceId];
+}
 
 /**
  * @brief Implementation class for reading from a file using memory mapped access.
@@ -106,15 +137,21 @@ class file_source : public datasource {
  */
 class memory_mapped_source : public file_source {
  public:
-  explicit memory_mapped_source(const char* filepath, size_t offset, size_t size)
+  explicit memory_mapped_source(char const* filepath, size_t offset, size_t size)
     : file_source(filepath)
   {
-    if (_file.size() != 0) map(_file.desc(), offset, size);
+    if (_file.size() != 0) {
+      map(_file.desc(), offset, size);
+      register_mmap_buffer();
+    }
   }
 
   ~memory_mapped_source() override
   {
-    if (_map_addr != nullptr) { munmap(_map_addr, _map_size); }
+    if (_map_addr != nullptr) {
+      munmap(_map_addr, _map_size);
+      unregister_mmap_buffer();
+    }
   }
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
@@ -141,6 +178,42 @@ class memory_mapped_source : public file_source {
   }
 
  private:
+  /**
+   * @brief Page-locks (registers) the memory range of the mapped file.
+   *
+   * Fixes nvbugs/4215160
+   */
+  void register_mmap_buffer()
+  {
+    if (_map_addr == nullptr or _map_size == 0 or not pageableMemoryAccessUsesHostPageTables()) {
+      return;
+    }
+
+    auto const result = cudaHostRegister(_map_addr, _map_size, cudaHostRegisterDefault);
+    if (result == cudaSuccess) {
+      _is_map_registered = true;
+    } else {
+      CUDF_LOG_WARN("cudaHostRegister failed with {} ({})",
+                    static_cast<int>(result),
+                    cudaGetErrorString(result));
+    }
+  }
+
+  /**
+   * @brief Unregisters the memory range of the mapped file.
+   */
+  void unregister_mmap_buffer()
+  {
+    if (not _is_map_registered) { return; }
+
+    auto const result = cudaHostUnregister(_map_addr);
+    if (result != cudaSuccess) {
+      CUDF_LOG_WARN("cudaHostUnregister failed with {} ({})",
+                    static_cast<int>(result),
+                    cudaGetErrorString(result));
+    }
+  }
+
   void map(int fd, size_t offset, size_t size)
   {
     CUDF_EXPECTS(offset < _file.size(), "Offset is past end of file");
@@ -159,9 +232,10 @@ class memory_mapped_source : public file_source {
   }
 
  private:
-  size_t _map_size   = 0;
-  size_t _map_offset = 0;
-  void* _map_addr    = nullptr;
+  size_t _map_size        = 0;
+  size_t _map_offset      = 0;
+  void* _map_addr         = nullptr;
+  bool _is_map_registered = false;
 };
 
 /**
@@ -172,7 +246,7 @@ class memory_mapped_source : public file_source {
  */
 class direct_read_source : public file_source {
  public:
-  explicit direct_read_source(const char* filepath) : file_source(filepath) {}
+  explicit direct_read_source(char const* filepath) : file_source(filepath) {}
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
@@ -197,6 +271,97 @@ class direct_read_source : public file_source {
                  "read failed");
     return read_size;
   }
+};
+
+/**
+ * @brief Implementation class for reading from a device buffer source
+ */
+class device_buffer_source final : public datasource {
+ public:
+  explicit device_buffer_source(cudf::device_span<std::byte const> d_buffer) : _d_buffer{d_buffer}
+  {
+  }
+
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    auto const count  = std::min(size, this->size() - offset);
+    auto const stream = cudf::get_default_stream();
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(dst, _d_buffer.data() + offset, count, cudaMemcpyDefault, stream.value()));
+    stream.synchronize();
+    return count;
+  }
+
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  {
+    auto const count  = std::min(size, this->size() - offset);
+    auto const stream = cudf::get_default_stream();
+    auto h_data       = cudf::detail::make_std_vector_async(
+      cudf::device_span<std::byte const>{_d_buffer.data() + offset, count}, stream);
+    stream.synchronize();
+    return std::make_unique<owning_buffer<std::vector<std::byte>>>(std::move(h_data));
+  }
+
+  [[nodiscard]] bool supports_device_read() const override { return true; }
+
+  std::future<size_t> device_read_async(size_t offset,
+                                        size_t size,
+                                        uint8_t* dst,
+                                        rmm::cuda_stream_view stream) override
+  {
+    auto const count = std::min(size, this->size() - offset);
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(dst, _d_buffer.data() + offset, count, cudaMemcpyDefault, stream.value()));
+    return std::async(std::launch::deferred, [count] { return count; });
+  }
+
+  size_t device_read(size_t offset,
+                     size_t size,
+                     uint8_t* dst,
+                     rmm::cuda_stream_view stream) override
+  {
+    return device_read_async(offset, size, dst, stream).get();
+  }
+
+  std::unique_ptr<buffer> device_read(size_t offset,
+                                      size_t size,
+                                      rmm::cuda_stream_view stream) override
+  {
+    return std::make_unique<non_owning_buffer>(
+      reinterpret_cast<uint8_t const*>(_d_buffer.data() + offset), size);
+  }
+
+  [[nodiscard]] size_t size() const override { return _d_buffer.size(); }
+
+ private:
+  cudf::device_span<std::byte const> _d_buffer;  ///< A non-owning view of the existing device data
+};
+
+// zero-copy host buffer source
+class host_buffer_source final : public datasource {
+ public:
+  explicit host_buffer_source(cudf::host_span<std::byte const> h_buffer) : _h_buffer{h_buffer} {}
+
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    auto const count = std::min(size, this->size() - offset);
+    std::memcpy(dst, _h_buffer.data() + offset, count);
+    return count;
+  }
+
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  {
+    auto const count = std::min(size, this->size() - offset);
+    return std::make_unique<non_owning_buffer>(
+      reinterpret_cast<uint8_t const*>(_h_buffer.data() + offset), count);
+  }
+
+  [[nodiscard]] bool supports_device_read() const override { return false; }
+
+  [[nodiscard]] size_t size() const override { return _h_buffer.size(); }
+
+ private:
+  cudf::host_span<std::byte const> _h_buffer;  ///< A non-owning view of the existing host data
 };
 
 /**
@@ -225,6 +390,11 @@ class user_datasource_wrapper : public datasource {
     return source->supports_device_read();
   }
 
+  [[nodiscard]] bool is_device_read_preferred(size_t size) const override
+  {
+    return source->is_device_read_preferred(size);
+  }
+
   size_t device_read(size_t offset,
                      size_t size,
                      uint8_t* dst,
@@ -240,7 +410,17 @@ class user_datasource_wrapper : public datasource {
     return source->device_read(offset, size, stream);
   }
 
+  std::future<size_t> device_read_async(size_t offset,
+                                        size_t size,
+                                        uint8_t* dst,
+                                        rmm::cuda_stream_view stream) override
+  {
+    return source->device_read_async(offset, size, dst, stream);
+  }
+
   [[nodiscard]] size_t size() const override { return source->size(); }
+
+  [[nodiscard]] bool is_empty() const override { return source->is_empty(); }
 
  private:
   datasource* const source;  ///< A non-owning pointer to the user-implemented datasource
@@ -248,7 +428,7 @@ class user_datasource_wrapper : public datasource {
 
 }  // namespace
 
-std::unique_ptr<datasource> datasource::create(const std::string& filepath,
+std::unique_ptr<datasource> datasource::create(std::string const& filepath,
                                                size_t offset,
                                                size_t size)
 {
@@ -264,9 +444,18 @@ std::unique_ptr<datasource> datasource::create(const std::string& filepath,
 
 std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
 {
-  // Use Arrow IO buffer class for zero-copy reads of host memory
-  return std::make_unique<arrow_io_source>(std::make_shared<arrow::io::BufferReader>(
-    reinterpret_cast<const uint8_t*>(buffer.data), buffer.size));
+  return create(
+    cudf::host_span<std::byte const>{reinterpret_cast<std::byte const*>(buffer.data), buffer.size});
+}
+
+std::unique_ptr<datasource> datasource::create(cudf::host_span<std::byte const> buffer)
+{
+  return std::make_unique<host_buffer_source>(buffer);
+}
+
+std::unique_ptr<datasource> datasource::create(cudf::device_span<std::byte const> buffer)
+{
+  return std::make_unique<device_buffer_source>(buffer);
 }
 
 std::unique_ptr<datasource> datasource::create(datasource* source)

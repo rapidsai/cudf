@@ -1,7 +1,7 @@
 /*
  * Copyright 2019 BlazingDB, Inc.
  *     Copyright 2019 Eyal Rozenberg <eyalroz@blazingdb.com>
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ namespace util {
  * `modulus` is positive. The safety is in regard to rollover.
  */
 template <typename S>
-S round_up_safe(S number_to_round, S modulus)
+constexpr S round_up_safe(S number_to_round, S modulus)
 {
   auto remainder = number_to_round % modulus;
   if (remainder == 0) { return number_to_round; }
@@ -67,7 +67,7 @@ S round_up_safe(S number_to_round, S modulus)
  * `modulus` is positive and does not check for overflow.
  */
 template <typename S>
-S round_down_safe(S number_to_round, S modulus) noexcept
+constexpr S round_down_safe(S number_to_round, S modulus) noexcept
 {
   auto remainder    = number_to_round % modulus;
   auto rounded_down = number_to_round - remainder;
@@ -107,7 +107,7 @@ constexpr S round_up_unsafe(S number_to_round, S modulus) noexcept
  * the result will be incorrect
  */
 template <typename S, typename T>
-constexpr S div_rounding_up_unsafe(const S& dividend, const T& divisor) noexcept
+constexpr S div_rounding_up_unsafe(S const& dividend, T const& divisor) noexcept
 {
   return (dividend + divisor - 1) / divisor;
 }

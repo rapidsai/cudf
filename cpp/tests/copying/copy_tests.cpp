@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,9 +30,10 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
+#include <stdexcept>
+
 template <typename T>
-struct CopyTest : public cudf::test::BaseFixture {
-};
+struct CopyTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(CopyTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
@@ -216,7 +217,7 @@ TYPED_TEST(CopyTest, CopyIfElseBadInputLength)
     wrapper<T, int32_t> lhs_w({5, 5, 5, 5});
     wrapper<T, int32_t> rhs_w({6, 6, 6, 6});
 
-    EXPECT_THROW(cudf::copy_if_else(lhs_w, rhs_w, mask_w), cudf::logic_error);
+    EXPECT_THROW(cudf::copy_if_else(lhs_w, rhs_w, mask_w), std::invalid_argument);
   }
 
   // column length mismatch
@@ -226,12 +227,11 @@ TYPED_TEST(CopyTest, CopyIfElseBadInputLength)
     wrapper<T, int32_t> lhs_w({5, 5, 5});
     wrapper<T, int32_t> rhs_w({6, 6, 6, 6});
 
-    EXPECT_THROW(cudf::copy_if_else(lhs_w, rhs_w, mask_w), cudf::logic_error);
+    EXPECT_THROW(cudf::copy_if_else(lhs_w, rhs_w, mask_w), std::invalid_argument);
   }
 }
 
-struct CopyEmptyNested : public cudf::test::BaseFixture {
-};
+struct CopyEmptyNested : public cudf::test::BaseFixture {};
 
 TEST_F(CopyEmptyNested, CopyIfElseTestEmptyNestedColumns)
 {
@@ -310,8 +310,7 @@ TEST_F(CopyEmptyNested, CopyIfElseTestEmptyNestedScalars)
 }
 
 template <typename T>
-struct CopyTestNumeric : public cudf::test::BaseFixture {
-};
+struct CopyTestNumeric : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(CopyTestNumeric, cudf::test::NumericTypes);
 
 TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarColumn)
@@ -325,11 +324,11 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarColumn)
 
   cudf::numeric_scalar<T> lhs_w(5);
 
-  const auto rhs = cudf::test::make_type_param_vector<T>({6, 6, 6, 6});
+  auto const rhs = cudf::test::make_type_param_vector<T>({6, 6, 6, 6});
   bool rhs_v[]   = {true, false, true, true};
   wrapper<T> rhs_w(rhs.begin(), rhs.end(), rhs_v);
 
-  const auto expected = cudf::test::make_type_param_vector<T>({5, 6, 6, 5});
+  auto const expected = cudf::test::make_type_param_vector<T>({5, 6, 6, 5});
   wrapper<T> expected_w(expected.begin(), expected.end(), rhs_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
@@ -346,13 +345,13 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestColumnScalar)
   bool mask_v[] = {true, true, true, false};
   cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + num_els, mask_v);
 
-  const auto lhs = cudf::test::make_type_param_vector<T>({5, 5, 5, 5});
+  auto const lhs = cudf::test::make_type_param_vector<T>({5, 5, 5, 5});
   bool lhs_v[]   = {false, true, true, true};
   wrapper<T> lhs_w(lhs.begin(), lhs.end(), lhs_v);
 
   cudf::numeric_scalar<T> rhs_w(6);
 
-  const auto expected = cudf::test::make_type_param_vector<T>({5, 6, 6, 6});
+  auto const expected = cudf::test::make_type_param_vector<T>({5, 6, 6, 6});
   wrapper<T> expected_w(expected.begin(), expected.end(), lhs_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
@@ -371,7 +370,7 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarScalar)
   cudf::numeric_scalar<T> lhs_w(5);
   cudf::numeric_scalar<T> rhs_w(6, false);
 
-  const auto expected = cudf::test::make_type_param_vector<T>({5, 6, 6, 5});
+  auto const expected = cudf::test::make_type_param_vector<T>({5, 6, 6, 5});
   wrapper<T> expected_w(expected.begin(), expected.end(), mask);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
@@ -398,8 +397,7 @@ struct create_chrono_scalar {
 };
 
 template <typename T>
-struct CopyTestChrono : public cudf::test::BaseFixture {
-};
+struct CopyTestChrono : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(CopyTestChrono, cudf::test::ChronoTypes);
 
 TYPED_TEST(CopyTestChrono, CopyIfElseTestScalarColumn)
@@ -460,8 +458,7 @@ TYPED_TEST(CopyTestChrono, CopyIfElseTestScalarScalar)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
-struct CopyTestUntyped : public cudf::test::BaseFixture {
-};
+struct CopyTestUntyped : public cudf::test::BaseFixture {};
 
 TEST_F(CopyTestUntyped, CopyIfElseTypeMismatch)
 {
@@ -470,20 +467,19 @@ TEST_F(CopyTestUntyped, CopyIfElseTypeMismatch)
   wrapper<float> lhs_w{5, 5, 5, 5};
   wrapper<int32_t> rhs_w{6, 6, 6, 6};
 
-  EXPECT_THROW(cudf::copy_if_else(lhs_w, rhs_w, mask_w), cudf::logic_error);
+  EXPECT_THROW(cudf::copy_if_else(lhs_w, rhs_w, mask_w), cudf::data_type_error);
 }
 
-struct StringsCopyIfElseTest : public cudf::test::BaseFixture {
-};
+struct StringsCopyIfElseTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsCopyIfElseTest, CopyIfElse)
 {
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
-  std::vector<const char*> h_strings1{"eee", "bb", "", "aa", "bbb", "ééé"};
+  std::vector<char const*> h_strings1{"eee", "bb", "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings1(h_strings1.begin(), h_strings1.end(), valids);
-  std::vector<const char*> h_strings2{"zz", "", "yyy", "w", "ééé", "ooo"};
+  std::vector<char const*> h_strings2{"zz", "", "yyy", "w", "ééé", "ooo"};
   cudf::test::strings_column_wrapper strings2(h_strings2.begin(), h_strings2.end(), valids);
 
   bool mask[]   = {true, true, false, true, false, true};
@@ -492,7 +488,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElse)
 
   auto results = cudf::copy_if_else(strings1, strings2, mask_w);
 
-  std::vector<const char*> h_expected;
+  std::vector<char const*> h_expected;
   for (cudf::size_type idx = 0; idx < static_cast<cudf::size_type>(h_strings1.size()); ++idx) {
     if (mask[idx] and mask_v[idx])
       h_expected.push_back(h_strings1[idx]);
@@ -505,12 +501,12 @@ TEST_F(StringsCopyIfElseTest, CopyIfElse)
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn)
 {
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
-  std::vector<const char*> h_string1{"eee"};
+  std::vector<char const*> h_string1{"eee"};
   cudf::string_scalar strings1{h_string1[0]};
-  std::vector<const char*> h_strings2{"zz", "", "yyy", "w", "ééé", "ooo"};
+  std::vector<char const*> h_strings2{"zz", "", "yyy", "w", "ééé", "ooo"};
   cudf::test::strings_column_wrapper strings2(h_strings2.begin(), h_strings2.end(), valids);
 
   bool mask[]   = {true, false, true, false, true, false};
@@ -519,7 +515,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn)
 
   auto results = cudf::copy_if_else(strings1, strings2, mask_w);
 
-  std::vector<const char*> h_expected;
+  std::vector<char const*> h_expected;
   for (cudf::size_type idx = 0; idx < static_cast<cudf::size_type>(h_strings2.size()); ++idx) {
     if (mask[idx] and mask_v[idx]) {
       h_expected.push_back(h_string1[0]);
@@ -533,12 +529,12 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn)
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar)
 {
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
-  std::vector<const char*> h_string1{"eee"};
+  std::vector<char const*> h_string1{"eee"};
   cudf::string_scalar strings1{h_string1[0]};
-  std::vector<const char*> h_strings2{"zz", "", "yyy", "w", "ééé", "ooo"};
+  std::vector<char const*> h_strings2{"zz", "", "yyy", "w", "ééé", "ooo"};
   cudf::test::strings_column_wrapper strings2(h_strings2.begin(), h_strings2.end(), valids);
 
   bool mask[] = {false, true, true, true, false, true};
@@ -546,7 +542,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar)
 
   auto results = cudf::copy_if_else(strings2, strings1, mask_w);
 
-  std::vector<const char*> h_expected;
+  std::vector<char const*> h_expected;
   for (cudf::size_type idx = 0; idx < static_cast<cudf::size_type>(h_strings2.size()); ++idx) {
     if (mask[idx]) {
       h_expected.push_back(h_strings2[idx]);
@@ -560,12 +556,12 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar)
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
 {
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
-  std::vector<const char*> h_string1{"eee"};
+  std::vector<char const*> h_string1{"eee"};
   cudf::string_scalar string1{h_string1[0]};
-  std::vector<const char*> h_string2{"aaa"};
+  std::vector<char const*> h_string2{"aaa"};
   cudf::string_scalar string2{h_string2[0], false};
 
   constexpr cudf::size_type mask_size = 6;
@@ -574,7 +570,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
 
   auto results = cudf::copy_if_else(string1, string2, mask_w);
 
-  std::vector<const char*> h_expected;
+  std::vector<char const*> h_expected;
   for (bool idx : mask) {
     if (idx) {
       h_expected.push_back(h_string1[0]);
@@ -587,8 +583,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
 }
 
 template <typename T>
-struct FixedPointTypes : public cudf::test::BaseFixture {
-};
+struct FixedPointTypes : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTypes, cudf::test::FixedPointTypes);
 
@@ -611,7 +606,6 @@ TYPED_TEST(FixedPointTypes, FixedPointSimple)
 TYPED_TEST(FixedPointTypes, FixedPointLarge)
 {
   using namespace numeric;
-  using namespace cudf::test;
   using decimalXX  = TypeParam;
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
@@ -642,19 +636,18 @@ TYPED_TEST(FixedPointTypes, FixedPointScaleMismatch)
   auto const a    = fp_wrapper{{110, 220, 330, 440, 550, 660}, scale_type{-2}};
   auto const b    = fp_wrapper{{0, 0, 0, 0, 0, 0}, scale_type{-1}};
 
-  EXPECT_THROW(cudf::copy_if_else(a, b, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::copy_if_else(a, b, mask), cudf::data_type_error);
 }
 
-struct DictionaryCopyIfElseTest : public cudf::test::BaseFixture {
-};
+struct DictionaryCopyIfElseTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryCopyIfElseTest, ColumnColumn)
 {
   auto valids = cudf::test::iterators::null_at(2);
-  std::vector<const char*> h_strings1{"eee", "bb", "", "aa", "bb", "ééé"};
+  std::vector<char const*> h_strings1{"eee", "bb", "", "aa", "bb", "ééé"};
   cudf::test::dictionary_column_wrapper<std::string> input1(
     h_strings1.begin(), h_strings1.end(), valids);
-  std::vector<const char*> h_strings2{"zz", "bb", "", "aa", "ééé", "ooo"};
+  std::vector<char const*> h_strings2{"zz", "bb", "", "aa", "ééé", "ooo"};
   cudf::test::dictionary_column_wrapper<std::string> input2(
     h_strings2.begin(), h_strings2.end(), valids);
 
@@ -665,7 +658,7 @@ TEST_F(DictionaryCopyIfElseTest, ColumnColumn)
   auto results = cudf::copy_if_else(input1, input2, mask_w);
   auto decoded = cudf::dictionary::decode(cudf::dictionary_column_view(results->view()));
 
-  std::vector<const char*> h_expected;
+  std::vector<char const*> h_expected;
   for (cudf::size_type idx = 0; idx < static_cast<cudf::size_type>(h_strings1.size()); ++idx) {
     if (mask[idx] and mask_v[idx])
       h_expected.push_back(h_strings1[idx]);
@@ -680,7 +673,7 @@ TEST_F(DictionaryCopyIfElseTest, ColumnScalar)
 {
   std::string h_string{"eee"};
   cudf::string_scalar input1{h_string};
-  std::vector<const char*> h_strings{"zz", "", "yyy", "w", "ééé", "ooo"};
+  std::vector<char const*> h_strings{"zz", "", "yyy", "w", "ééé", "ooo"};
   auto valids = cudf::test::iterators::null_at(1);
   cudf::test::dictionary_column_wrapper<std::string> input2(
     h_strings.begin(), h_strings.end(), valids);
@@ -691,8 +684,8 @@ TEST_F(DictionaryCopyIfElseTest, ColumnScalar)
   auto results = cudf::copy_if_else(input2, input1, mask_w);
   auto decoded = cudf::dictionary::decode(cudf::dictionary_column_view(results->view()));
 
-  std::vector<const char*> h_expected1;
-  std::vector<const char*> h_expected2;
+  std::vector<char const*> h_expected1;
+  std::vector<char const*> h_expected2;
   for (cudf::size_type idx = 0; idx < static_cast<cudf::size_type>(h_strings.size()); ++idx) {
     if (mask[idx]) {
       h_expected1.push_back(h_strings[idx]);
@@ -719,10 +712,10 @@ TEST_F(DictionaryCopyIfElseTest, TypeMismatch)
   cudf::test::dictionary_column_wrapper<double> input2({1.0, 1.0, 1.0, 1.0});
   cudf::test::fixed_width_column_wrapper<bool> mask({1, 0, 0, 1});
 
-  EXPECT_THROW(cudf::copy_if_else(input1, input2, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::copy_if_else(input1, input2, mask), cudf::data_type_error);
 
   cudf::string_scalar input3{"1"};
-  EXPECT_THROW(cudf::copy_if_else(input1, input3, mask), cudf::logic_error);
-  EXPECT_THROW(cudf::copy_if_else(input3, input2, mask), cudf::logic_error);
-  EXPECT_THROW(cudf::copy_if_else(input2, input3, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::copy_if_else(input1, input3, mask), cudf::data_type_error);
+  EXPECT_THROW(cudf::copy_if_else(input3, input2, mask), cudf::data_type_error);
+  EXPECT_THROW(cudf::copy_if_else(input2, input3, mask), cudf::data_type_error);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include "jit/cache.hpp"
+#include "jit/parser.hpp"
+#include "jit/util.hpp"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -23,13 +27,10 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
-
-#include <jit/cache.hpp>
-#include <jit/parser.hpp>
-#include <jit/type.hpp>
-
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
 
 namespace cudf {
 namespace transformation {
@@ -37,20 +38,20 @@ namespace jit {
 
 void unary_operation(mutable_column_view output,
                      column_view input,
-                     const std::string& udf,
+                     std::string const& udf,
                      data_type output_type,
                      bool is_ptx,
                      rmm::cuda_stream_view stream)
 {
   std::string kernel_name =
     jitify2::reflection::Template("cudf::transformation::jit::kernel")  //
-      .instantiate(cudf::jit::get_type_name(output.type()),  // list of template arguments
-                   cudf::jit::get_type_name(input.type()));
+      .instantiate(cudf::type_to_name(output.type()),  // list of template arguments
+                   cudf::type_to_name(input.type()));
 
   std::string cuda_source =
     is_ptx ? cudf::jit::parse_single_function_ptx(udf,  //
                                                   "GENERIC_UNARY_OP",
-                                                  cudf::jit::get_type_name(output_type),
+                                                  cudf::type_to_name(output_type),
                                                   {0})
            : cudf::jit::parse_single_function_cuda(udf,  //
                                                    "GENERIC_UNARY_OP");
@@ -73,12 +74,12 @@ std::unique_ptr<column> transform(column_view const& input,
                                   data_type output_type,
                                   bool is_ptx,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(is_fixed_width(input.type()), "Unexpected non-fixed-width type.");
 
   std::unique_ptr<column> output = make_fixed_width_column(
-    output_type, input.size(), copy_bitmask(input), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+    output_type, input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
 
   if (input.is_empty()) { return output; }
 
@@ -96,7 +97,7 @@ std::unique_ptr<column> transform(column_view const& input,
                                   std::string const& unary_udf,
                                   data_type output_type,
                                   bool is_ptx,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::transform(input, unary_udf, output_type, is_ptx, cudf::get_default_stream(), mr);

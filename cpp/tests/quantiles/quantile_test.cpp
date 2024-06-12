@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,25 +14,21 @@
  * limitations under the License.
  */
 
-#include <cudf/quantiles.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/quantiles.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+
 #include <limits>
 #include <memory>
 #include <type_traits>
 #include <vector>
-
-using namespace cudf::test;
-
-using cudf::null_order;
-using cudf::order;
-using std::vector;
 
 namespace {
 struct q_res {
@@ -77,9 +73,9 @@ struct q_expect {
 
 template <typename T>
 struct test_case {
-  fixed_width_column_wrapper<T> column;
-  vector<q_expect> expectations;
-  fixed_width_column_wrapper<cudf::size_type> ordered_indices;
+  cudf::test::fixed_width_column_wrapper<T> column;
+  std::vector<q_expect> expectations;
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> ordered_indices;
 };
 
 // interpolate_center
@@ -104,7 +100,7 @@ test_case<T> interpolate_center()
   }();
   auto max_d = static_cast<double>(max);
   auto low_d = static_cast<double>(low);
-  return test_case<T>{fixed_width_column_wrapper<T>({low, max}),
+  return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({low, max}),
                       {q_expect{0.50, max_d, low_d, lin_d, mid_d, low_d}}};
 }
 
@@ -116,7 +112,7 @@ test_case<bool> interpolate_center()
   auto mid_d = 0.5;
   auto low_d = static_cast<double>(low);
   auto max_d = static_cast<double>(max);
-  return test_case<bool>{fixed_width_column_wrapper<bool>({low, max}),
+  return test_case<bool>{cudf::test::fixed_width_column_wrapper<bool>({low, max}),
                          {q_expect{0.5, max_d, low_d, mid_d, mid_d, low_d}}};
 }
 
@@ -130,7 +126,7 @@ test_case<T> interpolate_extrema_high()
   auto low_d   = static_cast<double>(low);
   auto max_d   = static_cast<double>(max);
   auto exact_d = static_cast<double>(max - 1);
-  return test_case<T>{fixed_width_column_wrapper<T>({low, max}),
+  return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({low, max}),
                       {q_expect{0.50, max_d, low_d, exact_d, exact_d, low_d}}};
 }
 
@@ -151,7 +147,7 @@ test_case<T> interpolate_extrema_low()
   auto a_d     = static_cast<double>(a);
   auto b_d     = static_cast<double>(b);
   auto exact_d = static_cast<double>(a + 1);
-  return test_case<T>{fixed_width_column_wrapper<T>({a, b}),
+  return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({a, b}),
                       {q_expect{0.50, b_d, a_d, exact_d, exact_d, a_d}}};
 }
 
@@ -166,7 +162,7 @@ test_case<bool> interpolate_extrema_low<bool>()
 template <typename T>
 std::enable_if_t<std::is_floating_point_v<T>, test_case<T>> single()
 {
-  return test_case<T>{fixed_width_column_wrapper<T>({7.309999942779541}),
+  return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({7.309999942779541}),
                       {
                         q_expect{
                           -1.0,
@@ -198,13 +194,15 @@ std::enable_if_t<std::is_floating_point_v<T>, test_case<T>> single()
 template <typename T>
 std::enable_if_t<std::is_integral_v<T> and not cudf::is_boolean<T>(), test_case<T>> single()
 {
-  return test_case<T>{fixed_width_column_wrapper<T>({1}), {q_expect{0.7, 1, 1, 1, 1, 1}}};
+  return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({1}),
+                      {q_expect{0.7, 1, 1, 1, 1, 1}}};
 }
 
 template <typename T>
 std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> single()
 {
-  return test_case<T>{fixed_width_column_wrapper<T>({1}), {q_expect{0.7, 1.0, 1.0, 1.0, 1.0, 1.0}}};
+  return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({1}),
+                      {q_expect{0.7, 1.0, 1.0, 1.0, 1.0, 1.0}}};
 }
 
 // all_invalid
@@ -213,25 +211,25 @@ template <typename T>
 std::enable_if_t<std::is_floating_point_v<T>, test_case<T>> all_invalid()
 {
   return test_case<T>{
-    fixed_width_column_wrapper<T>({6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7},
-                                  {0, 0, 0, 0, 0, 0, 0, 0, 0}),
+    cudf::test::fixed_width_column_wrapper<T>({6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7},
+                                              {0, 0, 0, 0, 0, 0, 0, 0, 0}),
     {q_expect{-1.0}, q_expect{0.0}, q_expect{0.5}, q_expect{1.0}, q_expect{2.0}}};
 }
 
 template <typename T>
 std::enable_if_t<std::is_integral_v<T> and not cudf::is_boolean<T>(), test_case<T>> all_invalid()
 {
-  return test_case<T>{
-    fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6}, {0, 0, 0, 0, 0, 0, 0, 0, 0}),
-    {q_expect{0.7}}};
+  return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6},
+                                                                {0, 0, 0, 0, 0, 0, 0, 0, 0}),
+                      {q_expect{0.7}}};
 }
 
 template <typename T>
 std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> all_invalid()
 {
-  return test_case<T>{
-    fixed_width_column_wrapper<T>({1, 0, 1, 1, 0, 1, 0, 1, 1}, {0, 0, 0, 0, 0, 0, 0, 0, 0}),
-    {q_expect{0.7}}};
+  return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({1, 0, 1, 1, 0, 1, 0, 1, 1},
+                                                                {0, 0, 0, 0, 0, 0, 0, 0, 0}),
+                      {q_expect{0.7}}};
 }
 
 // some invalid
@@ -244,14 +242,14 @@ std::enable_if_t<std::is_same_v<T, double>, test_case<T>> some_invalid()
   T mid  = -0.432;
   T lin  = -0.432;
   return test_case<T>{
-    fixed_width_column_wrapper<T>({6.8, high, 3.4, 4.17, 2.13, 1.11, low, 0.8, 5.7},
-                                  {0, 1, 0, 0, 0, 0, 1, 0, 0}),
+    cudf::test::fixed_width_column_wrapper<T>({6.8, high, 3.4, 4.17, 2.13, 1.11, low, 0.8, 5.7},
+                                              {0, 1, 0, 0, 0, 0, 1, 0, 0}),
     {q_expect{-1.0, low, low, low, low, low},
      q_expect{0.0, low, low, low, low, low},
      q_expect{0.5, high, low, lin, mid, low},
      q_expect{1.0, high, high, high, high, high},
      q_expect{2.0, high, high, high, high, high}},
-    fixed_width_column_wrapper<cudf::size_type>({6, 1})};
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({6, 1})};
 }
 
 template <typename T>
@@ -261,7 +259,7 @@ std::enable_if_t<std::is_same_v<T, float>, test_case<T>> some_invalid()
   T low      = -1.024;
   double mid = -0.43200002610683441;
   double lin = -0.43200002610683441;
-  return test_case<T>{fixed_width_column_wrapper<T>(
+  return test_case<T>{cudf::test::fixed_width_column_wrapper<T>(
                         {T(6.8), high, T(3.4), T(4.17), T(2.13), T(1.11), low, T(0.8), T(5.7)},
                         {0, 1, 0, 0, 0, 0, 1, 0, 0}),
                       {q_expect{-1.0, low, low, low, low, low},
@@ -269,29 +267,29 @@ std::enable_if_t<std::is_same_v<T, float>, test_case<T>> some_invalid()
                        q_expect{0.5, high, low, lin, mid, low},
                        q_expect{1.0, high, high, high, high, high},
                        q_expect{2.0, high, high, high, high, high}},
-                      fixed_width_column_wrapper<cudf::size_type>({6, 1})};
+                      cudf::test::fixed_width_column_wrapper<cudf::size_type>({6, 1})};
 }
 
 template <typename T>
 std::enable_if_t<std::is_integral_v<T> and not cudf::is_boolean<T>(), test_case<T>> some_invalid()
 {
-  return test_case<T>{
-    fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6}, {0, 0, 1, 0, 0, 0, 0, 0, 1}),
-    {q_expect{0.0, 3.0, 3.0, 3.0, 3.0, 3.0},
-     q_expect{0.5, 6.0, 3.0, 4.5, 4.5, 3.0},
-     q_expect{1.0, 6.0, 6.0, 6.0, 6.0, 6.0}},
-    fixed_width_column_wrapper<cudf::size_type>({2, 8})};
+  return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6},
+                                                                {0, 0, 1, 0, 0, 0, 0, 0, 1}),
+                      {q_expect{0.0, 3.0, 3.0, 3.0, 3.0, 3.0},
+                       q_expect{0.5, 6.0, 3.0, 4.5, 4.5, 3.0},
+                       q_expect{1.0, 6.0, 6.0, 6.0, 6.0, 6.0}},
+                      cudf::test::fixed_width_column_wrapper<cudf::size_type>({2, 8})};
 }
 
 template <typename T>
 std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> some_invalid()
 {
-  return test_case<T>{
-    fixed_width_column_wrapper<T>({1, 0, 1, 1, 0, 1, 0, 1, 1}, {0, 0, 1, 0, 1, 0, 0, 0, 0}),
-    {q_expect{0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
-     q_expect{0.5, 1.0, 0.0, 0.5, 0.5, 0.0},
-     q_expect{1.0, 1.0, 1.0, 1.0, 1.0, 1.0}},
-    fixed_width_column_wrapper<cudf::size_type>({4, 2})};
+  return test_case<T>{cudf::test::fixed_width_column_wrapper<T>({1, 0, 1, 1, 0, 1, 0, 1, 1},
+                                                                {0, 0, 1, 0, 1, 0, 0, 0, 0}),
+                      {q_expect{0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+                       q_expect{0.5, 1.0, 0.0, 0.5, 0.5, 0.0},
+                       q_expect{1.0, 1.0, 1.0, 1.0, 1.0, 1.0}},
+                      cudf::test::fixed_width_column_wrapper<cudf::size_type>({4, 2})};
 }
 
 // unsorted
@@ -300,38 +298,41 @@ template <typename T>
 std::enable_if_t<std::is_floating_point_v<T>, test_case<T>> unsorted()
 {
   return test_case<T>{
-    fixed_width_column_wrapper<T>({6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.00, 0.8, 5.7}),
+    cudf::test::fixed_width_column_wrapper<T>({6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.00, 0.8, 5.7}),
     {
       q_expect{0.0, -1.00, -1.00, -1.00, -1.00, -1.00},
     },
-    fixed_width_column_wrapper<cudf::size_type>({6, 1, 7, 5, 4, 2, 3, 8, 0})};
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({6, 1, 7, 5, 4, 2, 3, 8, 0})};
 }
 
 template <typename T>
 std::enable_if_t<std::is_integral_v<T> and not cudf::is_boolean<T>(), test_case<T>> unsorted()
 {
   return std::is_signed<T>()
-           ? test_case<T>{fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6}),
+           ? test_case<T>{cudf::test::fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, -1, 1, 6}),
                           {q_expect{0.0, -1, -1, -1, -1, -1}},
-                          fixed_width_column_wrapper<cudf::size_type>({6, 1, 7, 5, 4, 2, 3, 8, 0})}
-           : test_case<T>{fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, 1, 1, 6}),
+                          cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+                            {6, 1, 7, 5, 4, 2, 3, 8, 0})}
+           : test_case<T>{cudf::test::fixed_width_column_wrapper<T>({6, 0, 3, 4, 2, 1, 1, 1, 6}),
                           {q_expect{0.0, 1, 1, 1, 1, 1}},
-                          fixed_width_column_wrapper<cudf::size_type>({6, 1, 7, 5, 4, 2, 3, 8, 0})};
+                          cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+                            {6, 1, 7, 5, 4, 2, 3, 8, 0})};
 }
 
 template <typename T>
 std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> unsorted()
 {
-  return test_case<T>{fixed_width_column_wrapper<T>({0, 0, 1, 1, 0, 1, 1, 0, 1}),
-                      {q_expect{
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                        0.0,
-                      }},
-                      fixed_width_column_wrapper<cudf::size_type>({0, 1, 4, 7, 2, 3, 5, 6, 9})};
+  return test_case<T>{
+    cudf::test::fixed_width_column_wrapper<T>({0, 0, 1, 1, 0, 1, 1, 0, 1}),
+    {q_expect{
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+    }},
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 1, 4, 7, 2, 3, 5, 6, 9})};
 }
 
 }  // namespace testdata
@@ -342,40 +343,39 @@ std::enable_if_t<cudf::is_boolean<T>(), test_case<T>> unsorted()
 template <typename T>
 void test(testdata::test_case<T> test_case)
 {
-  using namespace cudf;
-
   for (auto& expected : test_case.expectations) {
     auto q = std::vector<double>{expected.quantile};
 
     auto nullable = static_cast<cudf::column_view>(test_case.column).nullable();
 
     auto make_expected_column = [nullable](q_res expected) {
-      return nullable ? fixed_width_column_wrapper<double>({expected.value}, {expected.is_valid})
-                      : fixed_width_column_wrapper<double>({expected.value});
+      return nullable ? cudf::test::fixed_width_column_wrapper<double>({expected.value},
+                                                                       {expected.is_valid})
+                      : cudf::test::fixed_width_column_wrapper<double>({expected.value});
     };
 
     auto actual_higher =
-      quantile(test_case.column, q, interpolation::HIGHER, test_case.ordered_indices);
+      cudf::quantile(test_case.column, q, cudf::interpolation::HIGHER, test_case.ordered_indices);
     auto expected_higher_col = make_expected_column(expected.higher);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_higher_col, actual_higher->view());
 
     auto actual_lower =
-      quantile(test_case.column, q, interpolation::LOWER, test_case.ordered_indices);
+      cudf::quantile(test_case.column, q, cudf::interpolation::LOWER, test_case.ordered_indices);
     auto expected_lower_col = make_expected_column(expected.lower);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_col, actual_lower->view());
 
     auto actual_linear =
-      quantile(test_case.column, q, interpolation::LINEAR, test_case.ordered_indices);
+      cudf::quantile(test_case.column, q, cudf::interpolation::LINEAR, test_case.ordered_indices);
     auto expected_linear_col = make_expected_column(expected.linear);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_linear_col, actual_linear->view());
 
     auto actual_midpoint =
-      quantile(test_case.column, q, interpolation::MIDPOINT, test_case.ordered_indices);
+      cudf::quantile(test_case.column, q, cudf::interpolation::MIDPOINT, test_case.ordered_indices);
     auto expected_midpoint_col = make_expected_column(expected.midpoint);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_midpoint_col, actual_midpoint->view());
 
     auto actual_nearest =
-      quantile(test_case.column, q, interpolation::NEAREST, test_case.ordered_indices);
+      cudf::quantile(test_case.column, q, cudf::interpolation::NEAREST, test_case.ordered_indices);
     auto expected_nearest_col = make_expected_column(expected.nearest);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_nearest_col, actual_nearest->view());
   }
@@ -385,10 +385,9 @@ void test(testdata::test_case<T> test_case)
 // ----- tests -----------------------------------------------------------------
 
 template <typename T>
-struct QuantileTest : public BaseFixture {
-};
+struct QuantileTest : public cudf::test::BaseFixture {};
 
-using TestTypes = NumericTypes;
+using TestTypes = cudf::test::NumericTypes;
 TYPED_TEST_SUITE(QuantileTest, TestTypes);
 
 TYPED_TEST(QuantileTest, TestSingle) { test(testdata::single<TypeParam>()); }
@@ -413,60 +412,63 @@ TYPED_TEST(QuantileTest, TestInterpolateExtremaLow)
 
 TYPED_TEST(QuantileTest, TestEmpty)
 {
-  auto input    = fixed_width_column_wrapper<TypeParam>({});
+  auto input    = cudf::test::fixed_width_column_wrapper<TypeParam>({});
   auto expected = cudf::test::fixed_width_column_wrapper<double>({0, 0}, {0, 0});
   auto actual   = cudf::quantile(input, {0.5, 0.25});
 }
 
 template <typename T>
-struct QuantileUnsupportedTypesTest : public BaseFixture {
-};
+struct QuantileUnsupportedTypesTest : public cudf::test::BaseFixture {};
 
 // TODO add tests for FixedPointTypes
-using UnsupportedTestTypes = RemoveIf<ContainedIn<Concat<TestTypes, FixedPointTypes>>, AllTypes>;
+using UnsupportedTestTypes = cudf::test::RemoveIf<
+  cudf::test::ContainedIn<cudf::test::Concat<TestTypes, cudf::test::FixedPointTypes>>,
+  cudf::test::AllTypes>;
 TYPED_TEST_SUITE(QuantileUnsupportedTypesTest, UnsupportedTestTypes);
 
 TYPED_TEST(QuantileUnsupportedTypesTest, TestZeroElements)
 {
-  fixed_width_column_wrapper<TypeParam> input({});
+  cudf::test::fixed_width_column_wrapper<TypeParam> input({});
 
   EXPECT_THROW(cudf::quantile(input, {0}), cudf::logic_error);
 }
 
 TYPED_TEST(QuantileUnsupportedTypesTest, TestOneElements)
 {
-  fixed_width_column_wrapper<TypeParam, int32_t> input({0});
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> input({0});
 
   EXPECT_THROW(cudf::quantile(input, {0}), cudf::logic_error);
 }
 
 TYPED_TEST(QuantileUnsupportedTypesTest, TestMultipleElements)
 {
-  fixed_width_column_wrapper<TypeParam, int32_t> input({0, 1, 2});
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> input({0, 1, 2});
 
   EXPECT_THROW(cudf::quantile(input, {0}), cudf::logic_error);
 }
 
-struct QuantileDictionaryTest : public BaseFixture {
-};
+struct QuantileDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(QuantileDictionaryTest, TestValid)
 {
-  dictionary_column_wrapper<int32_t> col{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  fixed_width_column_wrapper<int32_t> indices{0, 2, 4, 6, 8, 1, 3, 5, 7, 9};
+  cudf::test::dictionary_column_wrapper<int32_t> col{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  cudf::test::fixed_width_column_wrapper<int32_t> indices{0, 2, 4, 6, 8, 1, 3, 5, 7, 9};
 
   auto result = cudf::quantile(col, {0.5}, cudf::interpolation::LINEAR);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), fixed_width_column_wrapper<double>{5.5});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(),
+                                      cudf::test::fixed_width_column_wrapper<double>{5.5});
 
   result = cudf::quantile(col, {0.5}, cudf::interpolation::LINEAR, indices);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), fixed_width_column_wrapper<double>{5.5});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(),
+                                      cudf::test::fixed_width_column_wrapper<double>{5.5});
 
   result = cudf::quantile(col, {0.1, 0.2}, cudf::interpolation::HIGHER);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), fixed_width_column_wrapper<double>{2.0, 3.0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(),
+                                      cudf::test::fixed_width_column_wrapper<double>{2.0, 3.0});
 
   result = cudf::quantile(col, {0.25, 0.5, 0.75}, cudf::interpolation::MIDPOINT);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(),
-                                      fixed_width_column_wrapper<double>{3.5, 5.5, 7.5});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    result->view(), cudf::test::fixed_width_column_wrapper<double>{3.5, 5.5, 7.5});
 };
 
 }  // anonymous namespace

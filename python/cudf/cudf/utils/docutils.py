@@ -1,8 +1,9 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 """
 Helper functions for parameterized docstring
 """
+
 import functools
 import re
 import string
@@ -20,7 +21,7 @@ _wrapopts = {"width": 78, "replace_whitespace": False}
 def docfmt(**kwargs):
     """Format docstring.
 
-    Similiar to saving the result of ``__doc__.format(**kwargs)`` as the
+    Similar to saving the result of ``__doc__.format(**kwargs)`` as the
     function's docstring.
     """
     kwargs = {k: v.lstrip() for k, v in kwargs.items()}
@@ -83,7 +84,7 @@ doc_describe = docfmt_partial(
         Generate descriptive statistics.
 
         Descriptive statistics include those that summarize the
-        central tendency, dispersion and shape of a dataset’s
+        central tendency, dispersion and shape of a dataset's
         distribution, excluding ``NaN`` values.
 
         Analyzes both numeric and object series, as well as
@@ -125,10 +126,6 @@ doc_describe = docfmt_partial(
               ``select_dtypes`` (e.g. ``df.describe(include=['O'])``). To
               exclude pandas categorical columns, use ``'category'``
             - None (default) : The result will exclude nothing.
-
-        datetime_is_numeric : bool, default False
-            For DataFrame input, this also controls whether datetime columns
-            are included by default.
 
         Returns
         -------
@@ -213,12 +210,11 @@ doc_describe = docfmt_partial(
 
         Describing a timestamp ``Series``.
 
-        >>> import numpy as np
         >>> s = cudf.Series([
-        ...   np.datetime64("2000-01-01"),
-        ...   np.datetime64("2010-01-01"),
-        ...   np.datetime64("2010-01-01")
-        ... ])
+        ...   "2000-01-01",
+        ...   "2010-01-01",
+        ...   "2010-01-01"
+        ... ], dtype="datetime64[s]")
         >>> s
         0   2000-01-01
         1   2010-01-01

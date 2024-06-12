@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 import socket
 
 import pytest
@@ -7,7 +7,6 @@ from custreamz import kafka
 
 @pytest.fixture(scope="session")
 def kafka_client():
-
     # Check for the existence of a kafka broker
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:

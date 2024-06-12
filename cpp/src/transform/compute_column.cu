@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -33,6 +34,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace detail {
@@ -53,7 +55,7 @@ namespace detail {
  * @param output_column The destination for the results of evaluating the expression.
  */
 template <cudf::size_type max_block_size, bool has_nulls>
-__launch_bounds__(max_block_size) __global__
+__launch_bounds__(max_block_size) CUDF_KERNEL
   void compute_column_kernel(table_device_view const table,
                              ast::detail::expression_device_view device_expression_data,
                              mutable_column_device_view output_column)
@@ -68,9 +70,8 @@ __launch_bounds__(max_block_size) __global__
 
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
-  auto const start_idx =
-    static_cast<cudf::thread_index_type>(threadIdx.x + blockIdx.x * blockDim.x);
-  auto const stride = static_cast<cudf::thread_index_type>(blockDim.x * gridDim.x);
+  auto start_idx    = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
   auto evaluator =
     cudf::ast::detail::expression_evaluator<has_nulls>(table, device_expression_data);
 
@@ -83,7 +84,7 @@ __launch_bounds__(max_block_size) __global__
 std::unique_ptr<column> compute_column(table_view const& table,
                                        ast::expression const& expr,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   // If evaluating the expression may produce null outputs we create a nullable
   // output column and follow the null-supporting expression evaluation code
@@ -97,6 +98,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
 
   auto output_column = cudf::make_fixed_width_column(
     parser.output_type(), table.num_rows(), output_column_mask_state, stream, mr);
+  if (table.num_rows() == 0) { return output_column; }
   auto mutable_output_device =
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
@@ -127,6 +129,8 @@ std::unique_ptr<column> compute_column(table_view const& table,
         *table_device, device_expression_data, *mutable_output_device);
   }
   CUDF_CHECK_CUDA(stream.value());
+  output_column->set_null_count(
+    cudf::detail::null_count(mutable_output_device->null_mask(), 0, output_column->size(), stream));
   return output_column;
 }
 
@@ -134,7 +138,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
 
 std::unique_ptr<column> compute_column(table_view const& table,
                                        ast::expression const& expr,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::compute_column(table, expr, cudf::get_default_stream(), mr);

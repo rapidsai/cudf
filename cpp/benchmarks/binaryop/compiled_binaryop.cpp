@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,7 @@
 
 #include <cudf/binaryop.hpp>
 
-class COMPILED_BINARYOP : public cudf::benchmark {
-};
+class COMPILED_BINARYOP : public cudf::benchmark {};
 
 template <typename TypeLhs, typename TypeRhs, typename TypeOut>
 void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
@@ -43,6 +42,10 @@ void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
     cuda_event_timer timer(state, true);
     cudf::binary_operation(lhs, rhs, binop, output_dtype);
   }
+
+  // use number of bytes read and written to global memory
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * column_size *
+                          (sizeof(TypeLhs) + sizeof(TypeRhs) + sizeof(TypeOut)));
 }
 
 // TODO tparam boolean for null.
@@ -66,8 +69,14 @@ void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
 #define BINARYOP_BENCHMARK_DEFINE(lhs, rhs, bop, tout) \
   BM_BINARYOP_BENCHMARK_DEFINE(build_name(bop, lhs, rhs, tout), lhs, rhs, bop, tout)
 
-using namespace cudf;
-using namespace numeric;
+using cudf::duration_D;
+using cudf::duration_ms;
+using cudf::duration_ns;
+using cudf::duration_s;
+using cudf::timestamp_D;
+using cudf::timestamp_ms;
+using cudf::timestamp_s;
+using numeric::decimal32;
 
 // clang-format off
 BINARYOP_BENCHMARK_DEFINE(float,        int64_t,      ADD,                  int32_t);
@@ -102,5 +111,6 @@ BINARYOP_BENCHMARK_DEFINE(decimal32,    decimal32,    NOT_EQUAL,            bool
 BINARYOP_BENCHMARK_DEFINE(timestamp_s,  timestamp_s,  LESS,                 bool);
 BINARYOP_BENCHMARK_DEFINE(timestamp_ms, timestamp_s,  GREATER,              bool);
 BINARYOP_BENCHMARK_DEFINE(duration_ms,  duration_ns,  NULL_EQUALS,          bool);
+BINARYOP_BENCHMARK_DEFINE(duration_ms,  duration_ns,  NULL_NOT_EQUALS,      bool);
 BINARYOP_BENCHMARK_DEFINE(decimal32,    decimal32,    NULL_MAX,             decimal32);
 BINARYOP_BENCHMARK_DEFINE(timestamp_D,  timestamp_s,  NULL_MIN,             timestamp_s);

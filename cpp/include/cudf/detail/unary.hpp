@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/transform.h>
 
@@ -45,13 +46,12 @@ namespace detail {
  */
 
 template <typename InputIterator, typename Predicate>
-std::unique_ptr<column> true_if(
-  InputIterator begin,
-  InputIterator end,
-  size_type size,
-  Predicate p,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> true_if(InputIterator begin,
+                                InputIterator end,
+                                size_type size,
+                                Predicate p,
+                                rmm::cuda_stream_view stream,
+                                rmm::device_async_resource_ref mr)
 {
   auto output =
     make_numeric_column(data_type(type_id::BOOL8), size, mask_state::UNALLOCATED, stream, mr);
@@ -65,45 +65,40 @@ std::unique_ptr<column> true_if(
 
 /**
  * @copydoc cudf::unary_operation
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> unary_operation(
-  cudf::column_view const& input,
-  cudf::unary_operator op,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
+                                              cudf::unary_operator op,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr);
+
+/**
+ * @copydoc cudf::is_valid
+ */
+std::unique_ptr<cudf::column> is_valid(cudf::column_view const& input,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::cast
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> cast(
-  column_view const& input,
-  data_type type,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> cast(column_view const& input,
+                             data_type type,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::is_nan
- *
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> is_nan(
-  cudf::column_view const& input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> is_nan(cudf::column_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::is_not_nan
- *
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> is_not_nan(
-  cudf::column_view const& input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <nvtext/replace.hpp>
 
@@ -28,12 +28,11 @@
 
 #include <vector>
 
-struct TextReplaceTest : public cudf::test::BaseFixture {
-};
+struct TextReplaceTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextReplaceTest, ReplaceTokens)
 {
-  std::vector<const char*> h_strings{"the fox jumped over the dog",
+  std::vector<char const*> h_strings{"the fox jumped over the dog",
                                      "is theme of the thesis",
                                      nullptr,
                                      "",
@@ -45,7 +44,7 @@ TEST_F(TextReplaceTest, ReplaceTokens)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   cudf::test::strings_column_wrapper targets({"is", "the"});
   cudf::test::strings_column_wrapper repls({"___", ""});
-  std::vector<const char*> h_expected{" fox jumped over  dog",
+  std::vector<char const*> h_expected{" fox jumped over  dog",
                                       "___ theme of  thesis",
                                       nullptr,
                                       "",
@@ -87,6 +86,28 @@ TEST_F(TextReplaceTest, ReplaceTokensEmptyTest)
   auto const results = nvtext::replace_tokens(strings_view, strings_view, strings_view);
   EXPECT_EQ(results->size(), 0);
   EXPECT_EQ(results->has_nulls(), false);
+}
+
+TEST_F(TextReplaceTest, ReplaceTokensLongStrings)
+{
+  cudf::test::strings_column_wrapper input{
+    "pellentesque ut euismod semo phaselus tristiut libero ut dui congusem non pellentesque nunc ",
+    "pellentesque ut euismod se phaselus tristiut libero ut dui congusem non pellentesque ",
+    "pellentesque ut euismod phaselus tristiut libero ut dui congusem non pellentesque nun ",
+    "pellentesque ut euismod seem phaselus tristiut libero ut dui congusem non pellentesque un "};
+  cudf::test::strings_column_wrapper targets({"ut", "pellentesque"});
+  cudf::test::strings_column_wrapper repls({"___", "é"});
+
+  auto expected = cudf::test::strings_column_wrapper{
+    "é ___ euismod semo phaselus tristiut libero ___ dui congusem non é nunc ",
+    "é ___ euismod se phaselus tristiut libero ___ dui congusem non é ",
+    "é ___ euismod phaselus tristiut libero ___ dui congusem non é nun ",
+    "é ___ euismod seem phaselus tristiut libero ___ dui congusem non é un "};
+
+  auto results = nvtext::replace_tokens(cudf::strings_column_view(input),
+                                        cudf::strings_column_view(targets),
+                                        cudf::strings_column_view(repls));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(TextReplaceTest, ReplaceTokensErrorTest)

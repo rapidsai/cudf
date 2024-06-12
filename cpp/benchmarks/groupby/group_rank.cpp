@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/groupby.hpp>
@@ -28,32 +27,33 @@ template <cudf::rank_method method>
 static void nvbench_groupby_rank(nvbench::state& state,
                                  nvbench::type_list<nvbench::enum_type<method>>)
 {
-  using namespace cudf;
-  constexpr auto dtype = type_to_id<int64_t>();
-  cudf::rmm_pool_raii pool_raii;
+  constexpr auto dtype = cudf::type_to_id<int64_t>();
 
   bool const is_sorted              = state.get_int64("is_sorted");
   cudf::size_type const column_size = state.get_int64("data_size");
-  constexpr int num_groups          = 100;
+  auto const cardinality            = static_cast<cudf::size_type>(state.get_int64("cardinality"));
 
-  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
-    dtype, distribution_id::UNIFORM, 0, num_groups);
+  data_profile const profile = data_profile_builder()
+                                 .cardinality(cardinality)
+                                 .no_validity()
+                                 .distribution(dtype, distribution_id::UNIFORM, 0, column_size);
 
   auto source_table = create_random_table({dtype, dtype}, row_count{column_size}, profile);
 
   // values to be pre-sorted too for groupby rank
   if (is_sorted) source_table = cudf::sort(*source_table);
 
-  table_view keys{{source_table->view().column(0)}};
-  column_view order_by{source_table->view().column(1)};
+  cudf::table_view keys{{source_table->view().column(0)}};
+  cudf::column_view order_by{source_table->view().column(1)};
 
-  auto agg = cudf::make_rank_aggregation<groupby_scan_aggregation>(method);
-  std::vector<groupby::scan_request> requests;
-  requests.emplace_back(groupby::scan_request());
+  auto agg = cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(method);
+  std::vector<cudf::groupby::scan_request> requests;
+  requests.emplace_back(cudf::groupby::scan_request());
   requests[0].values = order_by;
   requests[0].aggregations.push_back(std::move(agg));
 
-  groupby::groupby gb_obj(keys, null_policy::EXCLUDE, is_sorted ? sorted::YES : sorted::NO);
+  cudf::groupby::groupby gb_obj(
+    keys, cudf::null_policy::EXCLUDE, is_sorted ? cudf::sorted::YES : cudf::sorted::NO);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
@@ -102,5 +102,5 @@ NVBENCH_BENCH_TYPES(nvbench_groupby_rank, NVBENCH_TYPE_AXES(methods))
                     10000000,   // 10M
                     100000000,  // 100M
                   })
-
+  .add_int64_axis("cardinality", {0})
   .add_int64_axis("is_sorted", {0, 1});

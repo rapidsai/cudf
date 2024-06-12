@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -31,6 +32,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/fill.h>
 #include <thrust/scan.h>
@@ -53,7 +55,7 @@ mixed_join(
   join_kind join_type,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> const& output_size_data,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(left_conditional.num_rows() == left_equality.num_rows(),
                "The left conditional and equality tables must have the same number of rows.");
@@ -80,7 +82,9 @@ mixed_join(
       // Left and full joins all return all the row indices from
       // left with a corresponding NULL from the right.
       case join_kind::LEFT_JOIN:
-      case join_kind::FULL_JOIN: return get_trivial_left_join_indices(left_conditional, stream);
+      case join_kind::FULL_JOIN:
+        return get_trivial_left_join_indices(
+          left_conditional, stream, rmm::mr::get_current_device_resource());
       // Inner joins return empty output because no matches can exist.
       case join_kind::INNER_JOIN:
         return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
@@ -96,7 +100,8 @@ mixed_join(
                          std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
       // Full joins need to return the trivial complement.
       case join_kind::FULL_JOIN: {
-        auto ret_flipped = get_trivial_left_join_indices(right_conditional, stream);
+        auto ret_flipped = get_trivial_left_join_indices(
+          right_conditional, stream, rmm::mr::get_current_device_resource());
         return std::pair(std::move(ret_flipped.second), std::move(ret_flipped.first));
       }
       default: CUDF_FAIL("Invalid join kind."); break;
@@ -106,9 +111,9 @@ mixed_join(
   // If evaluating the expression may produce null outputs we create a nullable
   // output column and follow the null-supporting expression evaluation code
   // path.
-  auto const has_nulls =
+  auto const has_nulls = cudf::nullate::DYNAMIC{
     cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
-    binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream);
+    binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream)};
 
   auto const parser = ast::detail::expression_parser{
     binary_predicate, left_conditional, right_conditional, has_nulls, stream, mr};
@@ -122,23 +127,28 @@ mixed_join(
   auto& build     = swap_tables ? left_equality : right_equality;
   auto probe_view = table_device_view::create(probe, stream);
   auto build_view = table_device_view::create(build, stream);
-  row_equality equality_probe{
-    cudf::nullate::DYNAMIC{has_nulls}, *probe_view, *build_view, compare_nulls};
 
   // Don't use multimap_type because we want a CG size of 1.
-  mixed_multimap_type hash_table{
-    compute_hash_table_size(build.num_rows()),
-    cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
-    cuco::sentinel::empty_value{cudf::detail::JoinNoneValue},
-    stream.value(),
-    detail::hash_table_allocator_type{default_allocator<char>{}, stream}};
+  mixed_multimap_type hash_table{compute_hash_table_size(build.num_rows()),
+                                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+                                 cuco::empty_value{cudf::detail::JoinNoneValue},
+                                 stream.value(),
+                                 cudf::detail::cuco_allocator{stream}};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
-  auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
-  build_join_hash_table(
-    build, hash_table, compare_nulls, static_cast<bitmask_type const*>(row_bitmask.data()), stream);
+  auto const row_bitmask =
+    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
+  auto const preprocessed_build =
+    experimental::row::equality::preprocessed_table::create(build, stream);
+  build_join_hash_table(build,
+                        preprocessed_build,
+                        hash_table,
+                        has_nulls,
+                        compare_nulls,
+                        static_cast<bitmask_type const*>(row_bitmask.data()),
+                        stream);
   auto hash_table_view = hash_table.get_device_view();
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
@@ -157,6 +167,14 @@ mixed_join(
   // not passed as input, and rmm::device_uvector is not default constructible
   std::optional<rmm::device_uvector<size_type>> matches_per_row{};
   device_span<size_type const> matches_per_row_span{};
+
+  auto const preprocessed_probe =
+    experimental::row::equality::preprocessed_table::create(probe, stream);
+  auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  auto const hash_probe = row_hash.device_hasher(has_nulls);
+  auto const row_comparator =
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
+  auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
   if (output_size_data.has_value()) {
     join_size            = output_size_data->first;
@@ -180,6 +198,7 @@ mixed_join(
           *right_conditional_view,
           *probe_view,
           *build_view,
+          hash_probe,
           equality_probe,
           kernel_join_type,
           hash_table_view,
@@ -194,6 +213,7 @@ mixed_join(
           *right_conditional_view,
           *probe_view,
           *build_view,
+          hash_probe,
           equality_probe,
           kernel_join_type,
           hash_table_view,
@@ -237,6 +257,7 @@ mixed_join(
         *right_conditional_view,
         *probe_view,
         *build_view,
+        hash_probe,
         equality_probe,
         kernel_join_type,
         hash_table_view,
@@ -252,6 +273,7 @@ mixed_join(
         *right_conditional_view,
         *probe_view,
         *build_view,
+        hash_probe,
         equality_probe,
         kernel_join_type,
         hash_table_view,
@@ -283,7 +305,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
                                null_equality compare_nulls,
                                join_kind join_type,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   // Until we add logic to handle the number of non-matches in the right table,
   // full joins are not supported in this function. Note that this does not
@@ -354,9 +376,9 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // If evaluating the expression may produce null outputs we create a nullable
   // output column and follow the null-supporting expression evaluation code
   // path.
-  auto const has_nulls =
+  auto const has_nulls = cudf::nullate::DYNAMIC{
     cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
-    binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream);
+    binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream)};
 
   auto const parser = ast::detail::expression_parser{
     binary_predicate, left_conditional, right_conditional, has_nulls, stream, mr};
@@ -370,23 +392,28 @@ compute_mixed_join_output_size(table_view const& left_equality,
   auto& build     = swap_tables ? left_equality : right_equality;
   auto probe_view = table_device_view::create(probe, stream);
   auto build_view = table_device_view::create(build, stream);
-  row_equality equality_probe{
-    cudf::nullate::DYNAMIC{has_nulls}, *probe_view, *build_view, compare_nulls};
 
   // Don't use multimap_type because we want a CG size of 1.
-  mixed_multimap_type hash_table{
-    compute_hash_table_size(build.num_rows()),
-    cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
-    cuco::sentinel::empty_value{cudf::detail::JoinNoneValue},
-    stream.value(),
-    detail::hash_table_allocator_type{default_allocator<char>{}, stream}};
+  mixed_multimap_type hash_table{compute_hash_table_size(build.num_rows()),
+                                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+                                 cuco::empty_value{cudf::detail::JoinNoneValue},
+                                 stream.value(),
+                                 cudf::detail::cuco_allocator{stream}};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
-  auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
-  build_join_hash_table(
-    build, hash_table, compare_nulls, static_cast<bitmask_type const*>(row_bitmask.data()), stream);
+  auto const row_bitmask =
+    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
+  auto const preprocessed_build =
+    experimental::row::equality::preprocessed_table::create(build, stream);
+  build_join_hash_table(build,
+                        preprocessed_build,
+                        hash_table,
+                        has_nulls,
+                        compare_nulls,
+                        static_cast<bitmask_type const*>(row_bitmask.data()),
+                        stream);
   auto hash_table_view = hash_table.get_device_view();
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
@@ -400,6 +427,14 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // Allocate storage for the counter used to get the size of the join output
   rmm::device_scalar<std::size_t> size(0, stream, mr);
 
+  auto const preprocessed_probe =
+    experimental::row::equality::preprocessed_table::create(probe, stream);
+  auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  auto const hash_probe = row_hash.device_hasher(has_nulls);
+  auto const row_comparator =
+    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
+  auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
+
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
   if (has_nulls) {
@@ -409,6 +444,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
         *right_conditional_view,
         *probe_view,
         *build_view,
+        hash_probe,
         equality_probe,
         join_type,
         hash_table_view,
@@ -423,6 +459,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
         *right_conditional_view,
         *probe_view,
         *build_view,
+        hash_probe,
         equality_probe,
         join_type,
         hash_table_view,
@@ -447,7 +484,7 @@ mixed_inner_join(
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> const output_size_data,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::mixed_join(left_equality,
@@ -469,7 +506,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::compute_mixed_join_output_size(left_equality,
@@ -493,7 +530,7 @@ mixed_left_join(
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> const output_size_data,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::mixed_join(left_equality,
@@ -515,7 +552,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::compute_mixed_join_output_size(left_equality,
@@ -539,7 +576,7 @@ mixed_full_join(
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> const output_size_data,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::mixed_join(left_equality,

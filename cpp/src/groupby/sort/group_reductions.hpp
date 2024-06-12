@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -52,7 +53,7 @@ std::unique_ptr<column> group_sum(column_view const& values,
                                   size_type num_groups,
                                   cudf::device_span<size_type const> group_labels,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr);
+                                  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate groupwise product
@@ -75,7 +76,7 @@ std::unique_ptr<column> group_product(column_view const& values,
                                       size_type num_groups,
                                       cudf::device_span<size_type const> group_labels,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
+                                      rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate groupwise minimum value
@@ -98,7 +99,7 @@ std::unique_ptr<column> group_min(column_view const& values,
                                   size_type num_groups,
                                   cudf::device_span<size_type const> group_labels,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr);
+                                  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate groupwise maximum value
@@ -121,7 +122,7 @@ std::unique_ptr<column> group_max(column_view const& values,
                                   size_type num_groups,
                                   cudf::device_span<size_type const> group_labels,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr);
+                                  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate group-wise indices of maximum values.
@@ -146,7 +147,7 @@ std::unique_ptr<column> group_argmax(column_view const& values,
                                      cudf::device_span<size_type const> group_labels,
                                      column_view const& key_sort_order,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr);
+                                     rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate group-wise indices of minimum values.
@@ -171,7 +172,7 @@ std::unique_ptr<column> group_argmin(column_view const& values,
                                      cudf::device_span<size_type const> group_labels,
                                      column_view const& key_sort_order,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr);
+                                     rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate number of non-null values in each group of
@@ -195,7 +196,7 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
                                           cudf::device_span<size_type const> group_labels,
                                           size_type num_groups,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr);
+                                          rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate number of values in each group of @p values
@@ -215,7 +216,34 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
 std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group_offsets,
                                         size_type num_groups,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr);
+                                        rmm::device_async_resource_ref mr);
+/**
+ * @brief Internal API to compute histogram for each group in @p values.
+ *
+ * The returned column is a lists column, each list corresponds to one input group and stores the
+ * histogram of the distinct elements in that group in the form of `STRUCT<value, count>`.
+ *
+ * Note that the order of distinct elements in each output list is not specified.
+ *
+ * @code{.pseudo}
+ * values       = [2, 1, 1, 3, 5, 2, 2, 3, 1, 4]
+ * group_labels = [0, 0, 0, 1, 1, 1, 1, 1, 2, 2]
+ * num_groups   = 3
+ *
+ * output = [[<1, 2>, <2, 1>], [<2, 2>, <3, 2>, <5, 1>], [<1, 1>, <4, 1>]]
+ * @endcode
+ *
+ * @param values Grouped values to compute histogram
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param num_groups Number of groups
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_histogram(column_view const& values,
+                                        cudf::device_span<size_type const> group_labels,
+                                        size_type num_groups,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate sum of squares of differences from means.
@@ -239,7 +267,7 @@ std::unique_ptr<column> group_m2(column_view const& values,
                                  column_view const& group_means,
                                  cudf::device_span<size_type const> group_labels,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr);
+                                 rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate groupwise variance
@@ -269,7 +297,7 @@ std::unique_ptr<column> group_var(column_view const& values,
                                   cudf::device_span<size_type const> group_labels,
                                   size_type ddof,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr);
+                                  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate groupwise quantiles
@@ -299,7 +327,7 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
                                         std::vector<double> const& quantiles,
                                         interpolation interp,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr);
+                                        rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate number of unique values in each group of
@@ -331,7 +359,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                                       cudf::device_span<size_type const> group_offsets,
                                       null_policy null_handling,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
+                                      rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to calculate nth values in each group of  @p values
@@ -366,7 +394,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                                           size_type n,
                                           null_policy null_handling,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr);
+                                          rmm::device_async_resource_ref mr);
 /**
  * @brief Internal API to collect grouped values into a lists column
  *
@@ -391,7 +419,7 @@ std::unique_ptr<column> group_collect(column_view const& values,
                                       size_type num_groups,
                                       null_policy null_handling,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
+                                      rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to merge grouped lists into one list.
@@ -414,7 +442,7 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
                                           cudf::device_span<size_type const> group_offsets,
                                           size_type num_groups,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr);
+                                          rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to merge grouped M2 values corresponding to the same key.
@@ -440,7 +468,35 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
                                        cudf::device_span<size_type const> group_offsets,
                                        size_type num_groups,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr);
+                                       rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Internal API to merge multiple output of HISTOGRAM aggregation.
+ *
+ * The input values column should be given as a lists column in the form of
+ * `LIST<STRUCT<value, count>>`.
+ * After merging, the order of distinct elements in each output list is not specified.
+ *
+ * @code{.pseudo}
+ * values        = [ [<1, 2>, <2, 1>], [<2, 2>], [<3, 2>, <2, 1>], [<1, 1>, <2, 1>] ]
+ * group_offsets = [ 0,                          2,                                 4]
+ * num_groups    = 2
+ *
+ * output = [[<1, 2>, <2, 3>], [<1, 1>, <2, 2>, <3, 2>]]]
+ * @endcode
+ *
+ * @param values Grouped values to get valid count of
+ * @param group_offsets Offsets of groups' starting points within @p values
+ * @param num_groups Number of groups
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_merge_histogram(column_view const& values,
+                                              cudf::device_span<size_type const> group_offsets,
+                                              size_type num_groups,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr);
+
 /**
  * @brief Internal API to find covariance of child columns of a non-nullable struct column.
  *
@@ -466,7 +522,7 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
                                          size_type min_periods,
                                          size_type ddof,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr);
+                                         rmm::device_async_resource_ref mr);
 
 /**
  * @brief Internal API to find correlation from covariance and standard deviation.
@@ -481,7 +537,7 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
                                           column_view const& stddev_0,
                                           column_view const& stddev_1,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr);
+                                          rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace groupby

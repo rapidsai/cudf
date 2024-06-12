@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -40,11 +40,30 @@ import java.util.function.Consumer;
  */
 public final class HostColumnVector extends HostColumnVectorCore {
   /**
+   * Interface to handle events for this HostColumnVector. Only invoked during
+   * close, hence `onClosed` is the only event.
+   */
+  public interface EventHandler {
+    /**
+     * `onClosed` is invoked with the updated `refCount` during `close`.
+     * The last invocation of `onClosed` will be with `refCount=0`.
+     *
+     * @note the callback is invoked with this `HostColumnVector`'s lock held.
+     *
+     * @param cv reference to the HostColumnVector we are closing
+     * @param refCount the updated ref count for this HostColumnVector at
+     *                 the time of invocation
+     */
+    void onClosed(HostColumnVector cv, int refCount);
+  }
+
+  /**
    * The size in bytes of an offset entry
    */
   static final int OFFSET_SIZE = DType.INT32.getSizeInBytes();
 
   private int refCount;
+  private EventHandler eventHandler;
 
   /**
    * Create a new column vector with data populated on the host.
@@ -94,6 +113,27 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   /**
+   * Set an event handler for this host vector. This method can be invoked with
+   * null to unset the handler.
+   *
+   * @param newHandler - the EventHandler to use from this point forward
+   * @return the prior event handler, or null if not set.
+   */
+  public synchronized EventHandler setEventHandler(EventHandler newHandler) {
+    EventHandler prev = this.eventHandler;
+    this.eventHandler = newHandler;
+    return prev;
+  }
+
+  /**
+   * Returns the current event handler for this HostColumnVector or null if no
+   * handler is associated.
+   */
+  public synchronized EventHandler getEventHandler() {
+    return this.eventHandler;
+  }
+
+  /**
    * This is a really ugly API, but it is possible that the lifecycle of a column of
    * data may not have a clear lifecycle thanks to java and GC. This API informs the leak
    * tracking code that this is expected for this column, and big scary warnings should
@@ -110,14 +150,20 @@ public final class HostColumnVector extends HostColumnVectorCore {
   public synchronized void close() {
     refCount--;
     offHeap.delRef();
-    if (refCount == 0) {
-      offHeap.clean(false);
-      for( HostColumnVectorCore child : children) {
-        child.close();
+    try {
+      if (refCount == 0) {
+        offHeap.clean(false);
+        for (HostColumnVectorCore child : children) {
+          child.close();
+        }
+      } else if (refCount < 0) {
+        offHeap.logRefCountDebug("double free " + this);
+        throw new IllegalStateException("Close called too many times " + this);
       }
-    } else if (refCount < 0) {
-      offHeap.logRefCountDebug("double free " + this);
-      throw new IllegalStateException("Close called too many times " + this);
+    } finally {
+      if (eventHandler != null) {
+        eventHandler.onClosed(this, refCount);
+      }
     }
   }
 
@@ -156,7 +202,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
   /**
    * Returns this column's current refcount
    */
-  synchronized int getRefCount() {
+  public synchronized int getRefCount() {
     return refCount;
   }
 
@@ -1010,14 +1056,25 @@ public final class HostColumnVector extends HostColumnVectorCore {
      * incrementing the row counts. Please call this method before appending any value or null.
      */
     private void growFixedWidthBuffersAndRows() {
-      assert rows + 1 <= Integer.MAX_VALUE : "Row count cannot go over Integer.MAX_VALUE";
-      rows++;
+      growFixedWidthBuffersAndRows(1);
+    }
+
+    /**
+     * A method automatically grows data buffer for fixed-width columns for a given size as needed
+     * along with incrementing the row counts. Please call this method before appending
+     * multiple values or nulls.
+     */
+    private void growFixedWidthBuffersAndRows(int numRows) {
+      assert rows + numRows <= Integer.MAX_VALUE : "Row count cannot go over Integer.MAX_VALUE";
+      rows += numRows;
 
       if (data == null) {
-        data = HostMemoryBuffer.allocate(estimatedRows << bitShiftBySize);
-        rowCapacity = estimatedRows;
+        long neededSize = Math.max(rows, estimatedRows);
+        data = HostMemoryBuffer.allocate(neededSize << bitShiftBySize);
+        rowCapacity = neededSize;
       } else if (rows > rowCapacity) {
-        long newCap = Math.min(rowCapacity * 2, Integer.MAX_VALUE - 1);
+        long neededSize = Math.max(rows, rowCapacity * 2);
+        long newCap = Math.min(neededSize, Integer.MAX_VALUE - 1);
         data = copyBuffer(HostMemoryBuffer.allocate(newCap << bitShiftBySize), data);
         rowCapacity = newCap;
       }
@@ -1125,12 +1182,12 @@ public final class HostColumnVector extends HostColumnVectorCore {
     private ColumnBuilder append(StructData structData) {
       assert type.isNestedType();
       if (type.equals(DType.STRUCT)) {
-        if (structData == null || structData.dataRecord == null) {
+        if (structData == null || structData.isNull()) {
           return appendNull();
         } else {
           for (int i = 0; i < structData.getNumFields(); i++) {
             ColumnBuilder childBuilder = childBuilders.get(i);
-            appendChildOrNull(childBuilder, structData.dataRecord.get(i));
+            appendChildOrNull(childBuilder, structData.getField(i));
           }
           endStruct();
         }
@@ -1345,6 +1402,41 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     /**
+     * Append multiple non-null byte values.
+     */
+    public ColumnBuilder append(byte[] value, int srcOffset, int length) {
+      assert type.isBackedByByte();
+      assert srcOffset >= 0;
+      assert length >= 0;
+      assert length + srcOffset <= value.length;
+
+      if (length > 0) {
+        growFixedWidthBuffersAndRows(length);
+        assert currentIndex < rows;
+        data.setBytes(currentIndex, value, srcOffset, length);
+      }
+      currentIndex += length;
+      return this;
+    }
+
+    /**
+     * Appends byte to a LIST of INT8/UINT8
+     */
+    public ColumnBuilder appendByteList(byte[] value) {
+      return appendByteList(value, 0, value.length);
+    }
+
+    /**
+     * Appends bytes to a LIST of INT8/UINT8
+     */
+    public ColumnBuilder appendByteList(byte[] value, int srcOffset, int length) {
+      assert value != null : "appendNull must be used to append null bytes";
+      assert type.equals(DType.LIST) : " type " + type + " is not LIST";
+      getChild(0).append(value, srcOffset, length);
+      return endList();
+    }
+
+    /**
      * Accepts a byte array containing the two's-complement representation of the unscaled value, which
      * is in big-endian byte-order. Then, transforms it into the representation of cuDF Decimal128 for
      * appending.
@@ -1404,7 +1496,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       }
       return "ColumnBuilder{" +
           "type=" + type +
-          ", children=" + sj.toString() +
+          ", children=" + sj +
           ", data=" + data +
           ", valid=" + valid +
           ", currentIndex=" + currentIndex +
@@ -1613,7 +1705,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert value != null : "appendNull must be used to append null strings";
       assert offset >= 0;
       assert length >= 0;
-      assert value.length + offset <= length;
+      assert length + offset <= value.length;
       assert type.equals(DType.STRING);
       assert currentIndex < rows;
       // just for strings we want to throw a real exception if we would overrun the buffer
@@ -1988,10 +2080,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   public static abstract class DataType {
-    abstract DType getType();
-    abstract boolean isNullable();
-    abstract DataType getChild(int index);
-    abstract int getNumChildren();
+    public abstract DType getType();
+    public abstract boolean isNullable();
+    public abstract DataType getChild(int index);
+    public abstract int getNumChildren();
   }
 
   public static class ListType extends HostColumnVector.DataType {
@@ -2004,17 +2096,17 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    DType getType() {
+    public DType getType() {
       return DType.LIST;
     }
 
     @Override
-    boolean isNullable() {
+    public boolean isNullable() {
       return isNullable;
     }
 
     @Override
-    HostColumnVector.DataType getChild(int index) {
+    public HostColumnVector.DataType getChild(int index) {
       if (index > 0) {
         return null;
       }
@@ -2022,7 +2114,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    int getNumChildren() {
+    public int getNumChildren() {
       return 1;
     }
   }
@@ -2045,6 +2137,14 @@ public final class HostColumnVector extends HostColumnVectorCore {
         return 0;
       }
     }
+
+    public boolean isNull() {
+      return (this.dataRecord == null);
+    }
+
+    public Object getField(int index) {
+      return this.dataRecord.get(index);
+    }
   }
 
   public static class StructType extends HostColumnVector.DataType {
@@ -2061,22 +2161,22 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    DType getType() {
+    public DType getType() {
       return DType.STRUCT;
     }
 
     @Override
-    boolean isNullable() {
+    public boolean isNullable() {
       return isNullable;
     }
 
     @Override
-    HostColumnVector.DataType getChild(int index) {
+    public HostColumnVector.DataType getChild(int index) {
       return children.get(index);
     }
 
     @Override
-    int getNumChildren() {
+    public int getNumChildren() {
       return children.size();
     }
   }
@@ -2091,22 +2191,22 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    DType getType() {
+    public DType getType() {
       return type;
     }
 
     @Override
-    boolean isNullable() {
+    public boolean isNullable() {
       return isNullable;
     }
 
     @Override
-    HostColumnVector.DataType getChild(int index) {
+    public HostColumnVector.DataType getChild(int index) {
       return null;
     }
 
     @Override
-    int getNumChildren() {
+    public int getNumChildren() {
       return 0;
     }
   }

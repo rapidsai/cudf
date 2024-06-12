@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,35 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
+constexpr bool is_whitespace(char_utf8 ch) { return ch <= ' '; }
+
+/**
+ * @brief Count tokens delimited by whitespace
+ *
+ * @param d_str String to tokenize
+ * @param max_tokens Maximum number of tokens to count
+ * @return Number of tokens delimited by whitespace
+ */
+__device__ inline size_type count_tokens_whitespace(
+  string_view d_str, size_type const max_tokens = std::numeric_limits<size_type>::max())
+{
+  auto token_count = size_type{0};
+  auto spaces      = true;
+  auto itr         = d_str.data();
+  auto const end   = itr + d_str.size_bytes();
+  while (itr < end && token_count < max_tokens) {
+    cudf::char_utf8 ch   = 0;
+    auto const chr_width = cudf::strings::detail::to_char_utf8(itr, ch);
+    if (spaces == is_whitespace(ch)) {
+      itr += chr_width;
+    } else {
+      token_count += static_cast<size_type>(spaces);
+      spaces = !spaces;
+    }
+  }
+  return token_count;
+}
+
 // JIT has trouble including thrust/pair.h
 struct position_pair {
   size_type first;
@@ -43,26 +72,33 @@ struct whitespace_string_tokenizer {
    */
   __device__ bool next_token()
   {
-    if (itr != d_str.begin()) {  // skip these 2 lines the first time through
-      ++itr;
-      start_position = itr.byte_offset();  // end_position + 1;
+    if (start_position >= d_str.size_bytes()) { return false; }
+    auto const src_ptr = d_str.data();
+    if (current_position != 0) {
+      current_position += cudf::strings::detail::bytes_in_char_utf8(src_ptr[current_position]);
+      start_position = current_position;
     }
-    if (start_position >= d_str.size_bytes()) return false;
+    if (start_position >= d_str.size_bytes()) { return false; }
     // continue search for the next token
     end_position = d_str.size_bytes();
-    for (; itr < d_str.end(); ++itr) {
-      if (spaces == (*itr <= ' ')) {
-        if (spaces)
-          start_position = (itr + 1).byte_offset();
-        else
-          end_position = (itr + 1).byte_offset();
+    while (current_position < d_str.size_bytes()) {
+      cudf::char_utf8 ch   = 0;
+      auto const chr_width = cudf::strings::detail::to_char_utf8(src_ptr + current_position, ch);
+      if (spaces == is_whitespace(ch)) {
+        current_position += chr_width;
+        if (spaces) {
+          start_position = current_position;
+        } else {
+          end_position = current_position;
+        }
         continue;
       }
       spaces = !spaces;
       if (spaces) {
-        end_position = itr.byte_offset();
+        end_position = current_position;
         break;
       }
+      current_position += chr_width;
     }
     return start_position < end_position;
   }
@@ -106,7 +142,8 @@ struct whitespace_string_tokenizer {
       spaces(true),
       start_position{reverse ? d_str.size_bytes() + 1 : 0},
       end_position{d_str.size_bytes()},
-      itr{reverse ? d_str.end() : d_str.begin()}
+      itr{reverse ? d_str.end() : d_str.begin()},
+      current_position{0}
   {
   }
 
@@ -116,6 +153,7 @@ struct whitespace_string_tokenizer {
   cudf::string_view::const_iterator itr;
   size_type start_position;
   size_type end_position;
+  size_type current_position;
 };
 
 }  // namespace detail

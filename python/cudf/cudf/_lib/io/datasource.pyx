@@ -1,14 +1,15 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport shared_ptr
 from pyarrow.includes.libarrow cimport CRandomAccessFile
 from pyarrow.lib cimport NativeFile
 
-from cudf._lib.cpp.io.types cimport arrow_io_source, datasource
+from cudf._lib.pylibcudf.libcudf.io.arrow_io_source cimport arrow_io_source
+from cudf._lib.pylibcudf.libcudf.io.datasource cimport datasource
 
 
 cdef class Datasource:
-    cdef datasource* get_datasource(self) nogil except *:
+    cdef datasource* get_datasource(self) except * nogil:
         with gil:
             raise NotImplementedError("get_datasource() should not "
                                       + "be directly invoked here")

@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from pyarrow import orc
 
 import cudf
 from cudf.testing._utils import assert_eq
@@ -212,7 +211,7 @@ def test_read_orc(datadir, hdfs, test_url):
         hd_fpath = f"hdfs://{basedir}/file.orc"
 
     got = cudf.read_orc(hd_fpath)
-    expect = orc.ORCFile(buffer).read().to_pandas()
+    expect = pd.read_orc(buffer)
     assert_eq(expect, got)
 
 
@@ -232,7 +231,7 @@ def test_write_orc(pdf, hdfs, test_url):
 
     assert hdfs.exists(f"{basedir}/test_orc_writer.orc")
     with hdfs.open(f"{basedir}/test_orc_writer.orc", mode="rb") as f:
-        got = orc.ORCFile(f).read().to_pandas()
+        got = pd.read_orc(f)
 
     assert_eq(pdf, got)
 

@@ -1,8 +1,8 @@
-diff --git a/dependencies/cub/cub/device/dispatch/dispatch_radix_sort.cuh b/dependencies/cub/cub/device/dispatch/dispatch_radix_sort.cuh
-index b188c75f..3f36656f 100644
---- a/dependencies/cub/cub/device/dispatch/dispatch_radix_sort.cuh
-+++ b/dependencies/cub/cub/device/dispatch/dispatch_radix_sort.cuh
-@@ -736,7 +736,7 @@ struct DeviceRadixSortPolicy
+diff --git a/cub/cub/device/dispatch/dispatch_radix_sort.cuh b/cub/cub/device/dispatch/dispatch_radix_sort.cuh
+index 84b6ccffd..25a237f93 100644
+--- a/cub/cub/device/dispatch/dispatch_radix_sort.cuh
++++ b/cub/cub/device/dispatch/dispatch_radix_sort.cuh
+@@ -808,7 +808,7 @@ struct DeviceRadixSortPolicy
 
 
      /// SM60 (GP100)
@@ -11,29 +11,29 @@ index b188c75f..3f36656f 100644
      {
          enum {
              PRIMARY_RADIX_BITS      = (sizeof(KeyT) > 1) ? 7 : 5,    // 6.9B 32b keys/s (Quadro P100)
-diff --git a/dependencies/cub/cub/device/dispatch/dispatch_reduce.cuh b/dependencies/cub/cub/device/dispatch/dispatch_reduce.cuh
-index e0470ccb..6a0c2ed6 100644
---- a/dependencies/cub/cub/device/dispatch/dispatch_reduce.cuh
-+++ b/dependencies/cub/cub/device/dispatch/dispatch_reduce.cuh
-@@ -280,7 +280,7 @@ struct DeviceReducePolicy
-     };
+diff --git a/cub/cub/device/dispatch/dispatch_reduce.cuh b/cub/cub/device/dispatch/dispatch_reduce.cuh
+index 994adc095..d3e6719a7 100644
+--- a/cub/cub/device/dispatch/dispatch_reduce.cuh
++++ b/cub/cub/device/dispatch/dispatch_reduce.cuh
+@@ -479,7 +479,7 @@ struct DeviceReducePolicy
+   };
 
-     /// SM60
--    struct Policy600 : ChainedPolicy<600, Policy600, Policy350>
-+    struct Policy600 : ChainedPolicy<600, Policy600, Policy600>
-     {
-         // ReducePolicy (P100: 591 GB/s @ 64M 4B items; 583 GB/s @ 256M 1B items)
-         typedef AgentReducePolicy<
-diff --git a/dependencies/cub/cub/device/dispatch/dispatch_scan.cuh b/dependencies/cub/cub/device/dispatch/dispatch_scan.cuh
-index c2d04588..ac2d10e0 100644
---- a/dependencies/cub/cub/device/dispatch/dispatch_scan.cuh
-+++ b/dependencies/cub/cub/device/dispatch/dispatch_scan.cuh
-@@ -177,7 +177,7 @@ struct DeviceScanPolicy
-     };
+   /// SM60
+-  struct Policy600 : ChainedPolicy<600, Policy600, Policy350>
++  struct Policy600 : ChainedPolicy<600, Policy600, Policy600>
+   {
+     static constexpr int threads_per_block  = 256;
+     static constexpr int items_per_thread   = 16;
+diff --git a/cub/cub/device/dispatch/tuning/tuning_scan.cuh b/cub/cub/device/dispatch/tuning/tuning_scan.cuh
+index 0ea5c41ad..1bcd8a111 100644
+--- a/cub/cub/device/dispatch/tuning/tuning_scan.cuh
++++ b/cub/cub/device/dispatch/tuning/tuning_scan.cuh
+@@ -303,7 +303,7 @@ struct DeviceScanPolicy
+   /// SM600
+   struct Policy600
+       : DefaultTuning
+-      , ChainedPolicy<600, Policy600, Policy520>
++      , ChainedPolicy<600, Policy600, Policy600>
+   {};
 
-     /// SM600
--    struct Policy600 : ChainedPolicy<600, Policy600, Policy520>
-+    struct Policy600 : ChainedPolicy<600, Policy600, Policy600>
-     {
-         typedef AgentScanPolicy<
-                 128, 15,                                        ///< Threads per block, items per thread
+   /// SM800

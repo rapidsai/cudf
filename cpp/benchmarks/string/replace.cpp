@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,7 @@
 
 #include <limits>
 
-class StringReplace : public cudf::benchmark {
-};
+class StringReplace : public cudf::benchmark {};
 
 enum replace_type { scalar, slice, multi };
 
@@ -53,13 +52,13 @@ static void BM_replace(benchmark::State& state, replace_type rt)
       case scalar: cudf::strings::replace(input, target, repl); break;
       case slice: cudf::strings::replace_slice(input, repl, 1, 10); break;
       case multi:
-        cudf::strings::replace(
+        cudf::strings::replace_multiple(
           input, cudf::strings_column_view(targets), cudf::strings_column_view(repls));
         break;
     }
   }
 
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
+  state.SetBytesProcessed(state.iterations() * input.chars_size(cudf::get_default_stream()));
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)
@@ -69,7 +68,7 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   int const row_mult   = 8;
   int const min_rowlen = 1 << 5;
   int const max_rowlen = 1 << 13;
-  int const len_mult   = 4;
+  int const len_mult   = 2;
   generate_string_bench_args(b, min_rows, max_rows, row_mult, min_rowlen, max_rowlen, len_mult);
 }
 

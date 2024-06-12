@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,16 @@
 
 #pragma once
 
-#include <cudf/labeling/label_bins.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/labeling/label_bins.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 
@@ -41,18 +41,17 @@ namespace detail {
 /**
  * @copydoc cudf::label_bins(column_view const& input, column_view const& left_edges, inclusive
  * left_inclusive, column_view const& right_edges, inclusive right_inclusive, rmm::cuda_stream_view,
- * rmm::mr::device_memory_resource* mr)
+ * rmm::device_async_resource_ref mr)
  *
  * @param stream Stream view on which to allocate resources and queue execution.
  */
-std::unique_ptr<column> label_bins(
-  column_view const& input,
-  column_view const& left_edges,
-  inclusive left_inclusive,
-  column_view const& right_edges,
-  inclusive right_inclusive,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> label_bins(column_view const& input,
+                                   column_view const& left_edges,
+                                   inclusive left_inclusive,
+                                   column_view const& right_edges,
+                                   inclusive right_inclusive,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr);
 
 /** @} */  // end of group
 }  // namespace detail

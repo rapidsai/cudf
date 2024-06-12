@@ -33,6 +33,18 @@ public interface RmmEventHandler {
   }
 
   /**
+   * Invoked after every memory allocation when debug mode is enabled.
+   * @param size number of bytes allocated
+   */
+  default void onAllocated(long size) {}
+
+  /**
+   * Invoked after every memory deallocation when debug mode is enabled.
+   * @param size number of bytes deallocated
+   */
+  default void onDeallocated(long size) {}
+
+  /**
    * Invoked on a memory allocation failure.
    * @param sizeRequested number of bytes that failed to allocate
    * @param retryCount number of times this allocation has been retried after failure

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,12 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
+#include <cudf/detail/utilities/default_stream.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/csv.hpp>
-#include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
 
@@ -32,8 +32,6 @@ void BM_csv_read_varying_options(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<ColSelection>, nvbench::enum_type<RowSelection>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const data_types =
     dtypes_for_column_selection(get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                                    static_cast<int32_t>(data_type::FLOAT),
@@ -42,8 +40,9 @@ void BM_csv_read_varying_options(
                                                    static_cast<int32_t>(data_type::DURATION),
                                                    static_cast<int32_t>(data_type::STRING)}),
                                 ColSelection);
-  auto const cols_to_read = select_column_indexes(data_types.size(), ColSelection);
-  auto const num_chunks   = state.get_int64("num_chunks");
+  auto const cols_to_read                 = select_column_indexes(data_types.size(), ColSelection);
+  cudf::size_type const expected_num_cols = cols_to_read.size();
+  size_t const num_chunks                 = state.get_int64("num_chunks");
 
   auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
   auto const view = tbl->view();
@@ -63,43 +62,48 @@ void BM_csv_read_varying_options(
       .comment('#')
       .prefix("BM_");
 
-  size_t const chunk_size             = source_sink.size() / num_chunks;
-  cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
-  auto const mem_stats_logger         = cudf::memory_stats_logger();
+  size_t const chunk_size = cudf::util::div_rounding_up_safe(source_sink.size(), num_chunks);
+  auto const chunk_row_cnt =
+    cudf::util::div_rounding_up_safe(view.num_rows(), static_cast<cudf::size_type>(num_chunks));
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
              [&](nvbench::launch& launch, auto& timer) {
                try_drop_l3_cache();  // Drop L3 cache for accurate measurement
-
+               cudf::size_type num_rows_read = 0;
                timer.start();
-               for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {
-                 // only read the header in the first chunk
-                 read_options.set_header(chunk == 0 ? 0 : -1);
-
-                 auto const is_last_chunk = chunk == (num_chunks - 1);
+               for (auto chunk = 0u; chunk < num_chunks; ++chunk) {
                  switch (RowSelection) {
                    case row_selection::ALL: break;
                    case row_selection::BYTE_RANGE:
+                     // with byte_range, we can't read the header in any chunk but the first
+                     read_options.set_header(chunk == 0 ? 0 : -1);
                      read_options.set_byte_range_offset(chunk * chunk_size);
                      read_options.set_byte_range_size(chunk_size);
-                     if (is_last_chunk) read_options.set_byte_range_size(0);
                      break;
                    case row_selection::NROWS:
                      read_options.set_skiprows(chunk * chunk_row_cnt);
                      read_options.set_nrows(chunk_row_cnt);
-                     if (is_last_chunk) read_options.set_nrows(-1);
                      break;
-                   case row_selection::SKIPFOOTER:
+                   case row_selection::SKIPFOOTER: {
                      read_options.set_skiprows(chunk * chunk_row_cnt);
-                     read_options.set_skipfooter(view.num_rows() - (chunk + 1) * chunk_row_cnt);
-                     if (is_last_chunk) read_options.set_skipfooter(0);
+                     cudf::size_type const next_chunk_start = (chunk + 1) * chunk_row_cnt;
+                     auto const skip_footer =
+                       view.num_rows() > next_chunk_start ? view.num_rows() - next_chunk_start : 0;
+                     read_options.set_skipfooter(skip_footer);
                      break;
+                   }
                    default: CUDF_FAIL("Unsupported row selection method");
                  }
 
-                 cudf::io::read_csv(read_options);
+                 auto const result = cudf::io::read_csv(read_options);
+
+                 num_rows_read += result.tbl->num_rows();
+                 CUDF_EXPECTS(result.tbl->num_columns() == expected_num_cols,
+                              "Unexpected number of columns");
                }
                timer.stop();
+               CUDF_EXPECTS(num_rows_read == view.num_rows(), "Unexpected number of rows");
              });
 
   auto const elapsed_time   = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");

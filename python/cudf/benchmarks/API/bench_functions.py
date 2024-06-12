@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 """Benchmarks of free functions that accept cudf objects."""
 
@@ -9,7 +9,9 @@ from config import NUM_ROWS, cudf, cupy
 from utils import benchmark_with_object
 
 
-@pytest_cases.parametrize_with_cases("objs", prefix="concat")
+@pytest_cases.parametrize_with_cases(
+    "objs", prefix="concat", cases="cases_functions"
+)
 @pytest.mark.parametrize(
     "axis",
     [

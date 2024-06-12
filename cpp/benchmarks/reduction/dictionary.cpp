@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,14 +23,13 @@
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 
-class ReductionDictionary : public cudf::benchmark {
-};
+class ReductionDictionary : public cudf::benchmark {};
 
 template <typename T>
 void BM_reduction_dictionary(benchmark::State& state,
                              std::unique_ptr<cudf::reduce_aggregation> const& agg)
 {
-  const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
+  cudf::size_type const column_size{static_cast<cudf::size_type>(state.range(0))};
 
   // int column and encoded dictionary column
   data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(

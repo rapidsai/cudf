@@ -449,8 +449,87 @@ column data. Null elements are treated as equivalent.
 
 Verifies the bitwise equality of two device memory buffers.
 
+#### Caveats
+
+Column comparison functions in the `cudf::test::detail` namespace should **NOT** be used directly.
+
 ### Printing and accessing column data
 
-`include/cudf_test/column_utilities.hpp` defines various functions and overloads for printing
+The `<cudf_test/debug_utilities.hpp>` header defines various functions and overloads for printing
 columns (`print`), converting column data to string (`to_string`, `to_strings`), and copying data to
-the host (`to_host`).
+the host (`to_host`). For example, to print a `cudf::column_view` contents or `column_wrapper` instance
+to the console use the `cudf::test::print()`:
+```cpp
+  cudf::test::fixed_width_column_wrapper<int32_t> input({1,2,3,4});
+  auto splits = cudf::split(input,{2});
+  cudf::test::print(input);
+  cudf::test::print(splits.front());
+```
+Fixed-width and strings columns output as comma-separated entries including null rows.
+Nested columns are also supported and output includes the offsets and data children as well as
+the null mask bits.
+
+## Validating Stream Usage
+
+### Background
+
+libcudf employs a custom-built [preload
+library](https://man7.org/linux/man-pages/man8/ld.so.8.html) to validate its internal stream usage
+(the code may be found
+[`here`](https://github.com/rapidsai/cudf/blob/main/cpp/tests/utilities/identify_stream_usage.cpp)).
+This library wraps every asynchronous CUDA runtime API call that accepts a stream with a check to
+ensure that the passed CUDA stream is a valid one, immediately throwing an exception if an invalid
+stream is detected. Running tests with this library loaded immediately triggers errors if any test
+accidentally runs code on an invalid stream.
+
+Stream validity is determined by overloading the definition of libcudf's default stream. Normally, in
+libcudf `cudf::get_default_stream` returns one of `rmm`'s default stream values (depending on
+whether or not libcudf is compiled with per thread default stream enabled). In the preload library,
+this function is redefined to instead return a new user-created stream managed using a
+function-local static `rmm::cuda_stream`. An invalid stream in this situation is defined as any of
+CUDA's default stream values (cudaStreamLegacy, cudaStreamDefault, or cudaStreamPerThread), since
+any kernel that properly uses `cudf::get_default_stream` will now instead be using the custom stream
+created by the preload library.
+
+The preload library supports two different modes, `cudf` mode and `testing` mode. The previous
+paragraph describes the behavior of `cudf` mode, where `cudf::get_default_stream` is overloaded. In
+`cudf` mode, the preload library ensures that all CUDA runtime APIs are being provided cudf's
+default stream. This will detect oversights where, for example, a Thrust call has no stream specified, or
+when one of CUDA's default stream values is explicitly specified to a kernel. However, it will not
+detect cases where a stream is not correctly forwarded down the call stack, for instance if
+some `detail` function that accepts a stream parameter fails to forward it along and instead
+erroneously calls `cudf::get_default_stream` instead.
+
+In `testing` mode, the library instead overloads `cudf::test::get_default_stream`. This function
+defined in the `cudf::test` namespace enables a more stringent mode of testing. In `testing` mode,
+the preload library instead verifies that all CUDA runtime APIs are instead called using the test
+namespace's default stream. This distinction is important because cudf internals never use
+`cudf::test::get_default_stream`, so this stream value can only appear internally if it was provided
+to a public API and forwarded properly all the way down the call stack. While `testing` mode is more
+strict than `cudf` mode, it is also more intrusive. `cudf` mode can operate with no changes to the
+library or the tests because the preload library overwrites the relevant APIs in place. `testing`
+mode, however, can only be used to validate tests that are correctly passing
+`cudf::test::get_default_stream` to public libcudf APIs.
+
+In addition to the preload library, the test suite also implements a [custom memory
+resource](https://github.com/rapidsai/cudf/blob/main/cpp/include/cudf_test/stream_checking_resource_adaptor.hpp)
+that performs analogous stream verification when its `do_allocate` method is called. During testing
+this rmm's default memory resource is set to use this adaptor for additional stream validation.
+
+### Usage
+
+When writing tests for a libcudf API, a special set of additional tests should be added to validate
+the API's stream usage. These tests should be placed in the `cpp/tests/streams` directory in a file
+corresponding to the header containing the tested APIs, e.g. `cpp/tests/streams/copying_test.cpp`
+for all APIs declared in `cpp/include/cudf/copying.hpp`. These tests should contain a minimal
+invocation of the tested API with no additional assertions since they are solely designed to check
+stream usage. When adding these tests to `cpp/tests/CMakeLists.txt`, the `ConfigureTest` CMake
+function should be provided the arguments `STREAM_MODE testing`. This change is sufficient for
+CTest to set up the test to automatically load the preload library compiled in `testing` mode when
+running the test.
+
+The rest of the test suite is configured to run with the preload library in `cudf` mode. As a
+result, all test runs with `ctest` will always include stream validation. Since this configuration
+is managed via CMake and CTest, direct execution of the test executables will not use the preload
+library at all. Tests will still run and pass normally in this situation, however (with the
+exception of the test of the preload library itself).

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,9 @@
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
@@ -69,23 +71,57 @@ auto deterministic_engine(unsigned seed) { return thrust::minstd_rand{seed}; }
  *  Computes the mean value for a distribution of given type and value bounds.
  */
 template <typename T>
-T get_distribution_mean(distribution_params<T> const& dist)
+double get_distribution_mean(distribution_params<T> const& dist)
 {
   switch (dist.id) {
     case distribution_id::NORMAL:
     case distribution_id::UNIFORM: return (dist.lower_bound / 2.) + (dist.upper_bound / 2.);
     case distribution_id::GEOMETRIC: {
-      auto const range_size = dist.lower_bound < dist.upper_bound
-                                ? dist.upper_bound - dist.lower_bound
-                                : dist.lower_bound - dist.upper_bound;
-      auto const p          = geometric_dist_p(range_size);
+      // Geometric distribution is approximated by a half-normal distribution
+      // Doubling the standard deviation because the dist range only includes half of the (unfolded)
+      // normal distribution
+      auto const gauss_std_dev   = std_dev_from_range(dist.lower_bound, dist.upper_bound) * 2;
+      auto const half_gauss_mean = gauss_std_dev * sqrt(2. / M_PI);
       if (dist.lower_bound < dist.upper_bound)
-        return dist.lower_bound + (1. / p);
+        return dist.lower_bound + half_gauss_mean;
       else
-        return dist.lower_bound - (1. / p);
+        return dist.lower_bound - half_gauss_mean;
     }
     default: CUDF_FAIL("Unsupported distribution type.");
   }
+}
+
+/**
+ * @brief Calculates the number of direct parents needed to generate a struct column hierarchy with
+ * lowest maximum number of children in any nested column.
+ *
+ * Used to generate an "evenly distributed" struct column hierarchy with the given number of leaf
+ * columns and nesting levels. The column tree is considered evenly distributed if all columns have
+ * nearly the same number of child columns (difference not larger than one).
+ */
+int num_direct_parents(int num_lvls, int num_leaf_columns)
+{
+  // Estimated average number of children in the hierarchy;
+  auto const num_children_avg = std::pow(num_leaf_columns, 1. / num_lvls);
+  // Minimum number of children columns for any column in the hierarchy
+  int const num_children_min = std::floor(num_children_avg);
+  // Maximum number of children columns for any column in the hierarchy
+  int const num_children_max = num_children_min + 1;
+
+  // Minimum number of columns needed so that their number of children does not exceed the maximum
+  int const min_for_current_nesting =
+    std::ceil(static_cast<double>(num_leaf_columns) / num_children_max);
+  // Minimum number of columns needed so that columns at the higher levels have at least the minimum
+  // number of children
+  int const min_for_upper_nesting = std::pow(num_children_min, num_lvls - 1);
+  // Both conditions need to be satisfied
+  return std::max(min_for_current_nesting, min_for_upper_nesting);
+}
+
+// Size of the null mask for each row, in bytes
+[[nodiscard]] double row_null_mask_size(data_profile const& profile)
+{
+  return profile.get_null_probability().has_value() ? 1. / 8 : 0.;
 }
 
 /**
@@ -95,60 +131,95 @@ T get_distribution_mean(distribution_params<T> const& dist)
  * the element size of non-fixed-width columns. For lists and structs, `avg_element_size` is called
  * recursively to determine the size of nested columns.
  */
-size_t avg_element_size(data_profile const& profile, cudf::data_type dtype);
+double avg_element_size(data_profile const& profile, cudf::data_type dtype);
 
 // Utilities to determine the mean size of an element, given the data profile
 template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_width<T>())>
-size_t non_fixed_width_size(data_profile const& profile)
+double non_fixed_width_size(data_profile const& profile)
 {
   CUDF_FAIL("Should not be called, use `size_of` for this type instead");
 }
 
 template <typename T, CUDF_ENABLE_IF(!cudf::is_fixed_width<T>())>
-size_t non_fixed_width_size(data_profile const& profile)
+double non_fixed_width_size(data_profile const& profile)
 {
   CUDF_FAIL("not implemented!");
 }
 
 template <>
-size_t non_fixed_width_size<cudf::string_view>(data_profile const& profile)
+double non_fixed_width_size<cudf::string_view>(data_profile const& profile)
 {
   auto const dist = profile.get_distribution_params<cudf::string_view>().length_params;
-  return get_distribution_mean(dist);
+  return get_distribution_mean(dist) * profile.get_valid_probability() + sizeof(cudf::size_type) +
+         row_null_mask_size(profile);
 }
 
-template <>
-size_t non_fixed_width_size<cudf::list_view>(data_profile const& profile)
+double geometric_sum(size_t n, double p)
 {
-  auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
-  auto const single_level_mean = get_distribution_mean(dist_params.length_params);
-  auto const element_size = avg_element_size(profile, cudf::data_type{dist_params.element_type});
-  return element_size * pow(single_level_mean, dist_params.max_depth);
+  if (p == 1) { return n; }
+  return (1 - std::pow(p, n)) / (1 - p);
 }
 
 template <>
-size_t non_fixed_width_size<cudf::struct_view>(data_profile const& profile)
+double non_fixed_width_size<cudf::list_view>(data_profile const& profile)
+{
+  auto const dist_params = profile.get_distribution_params<cudf::list_view>();
+  auto const single_level_mean =
+    get_distribution_mean(dist_params.length_params) * profile.get_valid_probability();
+
+  // Leaf column size
+  auto const element_size  = avg_element_size(profile, cudf::data_type{dist_params.element_type});
+  auto const element_count = std::pow(single_level_mean, dist_params.max_depth);
+
+  auto const offset_size = avg_element_size(profile, cudf::data_type{cudf::type_id::INT32});
+  // Each nesting level includes offsets, this is the sum of all levels
+  auto const total_offset_count = geometric_sum(dist_params.max_depth, single_level_mean);
+
+  return element_size * element_count + offset_size * total_offset_count;
+}
+
+[[nodiscard]] cudf::size_type num_struct_columns(data_profile const& profile)
 {
   auto const dist_params = profile.get_distribution_params<cudf::struct_view>();
-  return std::accumulate(dist_params.leaf_types.cbegin(),
-                         dist_params.leaf_types.cend(),
-                         0ul,
-                         [&](auto& sum, auto type_id) {
-                           return sum + avg_element_size(profile, cudf::data_type{type_id});
-                         });
+
+  cudf::size_type children_count     = dist_params.leaf_types.size();
+  cudf::size_type total_parent_count = 0;
+  for (cudf::size_type lvl = dist_params.max_depth; lvl > 0; --lvl) {
+    children_count = num_direct_parents(lvl, children_count);
+    total_parent_count += children_count;
+  }
+  return total_parent_count;
+}
+
+template <>
+double non_fixed_width_size<cudf::struct_view>(data_profile const& profile)
+{
+  auto const dist_params = profile.get_distribution_params<cudf::struct_view>();
+  auto const total_children_size =
+    std::accumulate(dist_params.leaf_types.cbegin(),
+                    dist_params.leaf_types.cend(),
+                    0ul,
+                    [&](auto& sum, auto type_id) {
+                      return sum + avg_element_size(profile, cudf::data_type{type_id});
+                    });
+
+  // struct columns have a null mask for each row
+  auto const structs_null_mask_size = num_struct_columns(profile) * row_null_mask_size(profile);
+
+  return total_children_size + structs_null_mask_size;
 }
 
 struct non_fixed_width_size_fn {
   template <typename T>
-  size_t operator()(data_profile const& profile)
+  double operator()(data_profile const& profile)
   {
     return non_fixed_width_size<T>(profile);
   }
 };
 
-size_t avg_element_size(data_profile const& profile, cudf::data_type dtype)
+double avg_element_size(data_profile const& profile, cudf::data_type dtype)
 {
-  if (cudf::is_fixed_width(dtype)) { return cudf::size_of(dtype); }
+  if (cudf::is_fixed_width(dtype)) { return cudf::size_of(dtype) + row_null_mask_size(profile); }
   return cudf::type_dispatcher(dtype, non_fixed_width_size_fn{}, profile);
 }
 
@@ -232,12 +303,12 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_chrono<T>()>> {
       sec.end(),
       ns.begin(),
       result.begin(),
-      [] __device__(int64_t sec_value, int64_t nanoseconds_value) {
+      cuda::proclaim_return_type<T>([] __device__(int64_t sec_value, int64_t nanoseconds_value) {
         auto const timestamp_ns =
           cudf::duration_s{sec_value} + cudf::duration_ns{nanoseconds_value};
         // Return value in the type's precision
         return T(cuda::std::chrono::duration_cast<typename T::duration>(timestamp_ns));
-      });
+      }));
     return result;
   }
 };
@@ -253,10 +324,11 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
   distribution_fn<DeviceType> dist;
   std::optional<numeric::scale_type> scale;
 
-  random_value_fn(distribution_params<DeviceType> const& desc)
+  random_value_fn(distribution_params<T> const& desc)
     : lower_bound{desc.lower_bound},
       upper_bound{desc.upper_bound},
-      dist{make_distribution<DeviceType>(desc.id, desc.lower_bound, desc.upper_bound)}
+      dist{make_distribution<DeviceType>(desc.id, lower_bound, upper_bound)},
+      scale{desc.scale}
   {
   }
 
@@ -352,12 +424,13 @@ rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_t
     // This is gather.
     auto avg_repeated_sample_indices_iterator = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
-      [rb              = run_lens.begin(),
-       re              = run_lens.end(),
-       samples_indices = samples_indices.begin()] __device__(cudf::size_type i) {
-        auto sample_idx = thrust::upper_bound(thrust::seq, rb, re, i) - rb;
-        return samples_indices[sample_idx];
-      });
+      cuda::proclaim_return_type<cudf::size_type>(
+        [rb              = run_lens.begin(),
+         re              = run_lens.end(),
+         samples_indices = samples_indices.begin()] __device__(cudf::size_type i) {
+          auto sample_idx = thrust::upper_bound(thrust::seq, rb, re, i) - rb;
+          return samples_indices[sample_idx];
+        }));
     rmm::device_uvector<cudf::size_type> repeated_sample_indices(num_rows,
                                                                  cudf::get_default_stream());
     thrust::copy(thrust::device,
@@ -430,13 +503,18 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
   }
 
   auto [result_bitmask, null_count] =
-    cudf::detail::valid_if(null_mask.begin(), null_mask.end(), thrust::identity<bool>{});
+    cudf::detail::valid_if(null_mask.begin(),
+                           null_mask.end(),
+                           thrust::identity<bool>{},
+                           cudf::get_default_stream(),
+                           rmm::mr::get_current_device_resource());
 
   return std::make_unique<cudf::column>(
     dtype,
     num_rows,
     data.release(),
-    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
+    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{},
+    profile.get_null_probability().has_value() ? null_count : 0);
 }
 
 struct valid_or_zero {
@@ -493,7 +571,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
     lengths.end(),
     null_mask.begin(),
     lengths.begin(),
-    [] __device__(auto) { return 0; },
+    cuda::proclaim_return_type<cudf::size_type>([] __device__(auto) { return 0; }),
     thrust::logical_not<bool>{});
   auto valid_lengths = thrust::make_transform_iterator(
     thrust::make_zip_iterator(thrust::make_tuple(lengths.begin(), null_mask.begin())),
@@ -501,7 +579,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
   rmm::device_uvector<cudf::size_type> offsets(num_rows + 1, cudf::get_default_stream());
   thrust::exclusive_scan(
     thrust::device, valid_lengths, valid_lengths + lengths.size(), offsets.begin());
-  // offfsets are ready.
+  // offsets are ready.
   auto chars_length = *thrust::device_pointer_cast(offsets.end() - 1);
   rmm::device_uvector<char> chars(chars_length, cudf::get_default_stream());
   thrust::for_each_n(thrust::device,
@@ -509,11 +587,16 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
                      num_rows,
                      string_generator{chars.data(), engine});
   auto [result_bitmask, null_count] =
-    cudf::detail::valid_if(null_mask.begin(), null_mask.end() - 1, thrust::identity<bool>{});
+    cudf::detail::valid_if(null_mask.begin(),
+                           null_mask.end() - 1,
+                           thrust::identity<bool>{},
+                           cudf::get_default_stream(),
+                           rmm::mr::get_current_device_resource());
   return cudf::make_strings_column(
     num_rows,
-    std::move(offsets),
-    std::move(chars),
+    std::make_unique<cudf::column>(std::move(offsets), rmm::device_buffer{}, 0),
+    chars.release(),
+    null_count,
     profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
 }
 
@@ -541,7 +624,9 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
   auto str_table      = cudf::detail::gather(cudf::table_view{{sample_strings->view()}},
                                         sample_indices,
                                         cudf::out_of_bounds_policy::DONT_CHECK,
-                                        cudf::detail::negative_index_policy::NOT_ALLOWED);
+                                        cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                        cudf::get_default_stream(),
+                                        rmm::mr::get_current_device_resource());
   return std::move(str_table->release()[0]);
 }
 
@@ -566,32 +651,6 @@ struct create_rand_col_fn {
     return create_random_column<T>(profile, engine, num_rows);
   }
 };
-
-/**
- * @brief Calculates the number of direct parents needed to generate a struct column hierarchy with
- * lowest maximum number of children in any nested column.
- *
- * Used to generate an "evenly distributed" struct column hierarchy with the given number of leaf
- * columns and nesting levels. The column tree is considered evenly distributed if all columns have
- * nearly the same number of child columns (difference not larger than one).
- */
-int num_direct_parents(int num_lvls, int num_leaf_columns)
-{
-  // Estimated average number of children in the hierarchy;
-  auto const num_children_avg = std::pow(num_leaf_columns, 1. / num_lvls);
-  // Minimum number of children columns for any column in the hierarchy
-  int const num_children_min = std::floor(num_children_avg);
-  // Maximum number of children columns for any column in the hierarchy
-  int const num_children_max = num_children_min + 1;
-
-  // Minimum number of columns needed so that their number of children does not exceed the maximum
-  int const min_for_current_nesting = std::ceil((double)num_leaf_columns / num_children_max);
-  // Minimum number of columns needed so that columns at the higher levels have at least the minimum
-  // number of children
-  int const min_for_upper_nesting = std::pow(num_children_min, num_lvls - 1);
-  // Both conditions need to be satisfied
-  return std::max(min_for_current_nesting, min_for_upper_nesting);
-}
 
 template <>
 std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profile const& profile,
@@ -625,7 +684,11 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
       auto [null_mask, null_count] = [&]() {
         if (profile.get_null_probability().has_value()) {
           auto valids = valid_dist(engine, num_rows);
-          return cudf::detail::valid_if(valids.begin(), valids.end(), thrust::identity<bool>{});
+          return cudf::detail::valid_if(valids.begin(),
+                                        valids.end(),
+                                        thrust::identity<bool>{},
+                                        cudf::get_default_stream(),
+                                        rmm::mr::get_current_device_resource());
         }
         return std::pair<rmm::device_buffer, cudf::size_type>{};
       }();
@@ -679,7 +742,8 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
 {
   auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
-  auto const num_elements      = num_rows * pow(single_level_mean, dist_params.max_depth);
+  cudf::size_type const num_elements =
+    std::lround(num_rows * std::pow(single_level_mean, dist_params.max_depth));
 
   auto leaf_column = cudf::type_dispatcher(
     cudf::data_type(dist_params.element_type), create_rand_col_fn{}, profile, engine, num_elements);
@@ -690,13 +754,16 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
 
   // Generate the list column bottom-up
   auto list_column = std::move(leaf_column);
-  for (int lvl = 0; lvl < dist_params.max_depth; ++lvl) {
+  for (int lvl = dist_params.max_depth; lvl > 0; --lvl) {
     // Generating the next level - offsets point into the current list column
-    auto current_child_column      = std::move(list_column);
-    cudf::size_type const num_rows = current_child_column->size() / single_level_mean;
+    auto current_child_column = std::move(list_column);
+    // Because single_level_mean is not a whole number, rounding errors can lead to slightly
+    // different row count; top-level column needs to have exactly num_rows rows, so enforce it here
+    cudf::size_type const current_num_rows =
+      (lvl == 1) ? num_rows : std::lround(current_child_column->size() / single_level_mean);
 
-    auto offsets = len_dist(engine, num_rows + 1);
-    auto valids  = valid_dist(engine, num_rows);
+    auto offsets = len_dist(engine, current_num_rows + 1);
+    auto valids  = valid_dist(engine, current_num_rows);
     // to ensure these values <= current_child_column->size()
     auto output_offsets = thrust::make_transform_output_iterator(
       offsets.begin(), clamp_down{current_child_column->size()});
@@ -705,16 +772,22 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     thrust::device_pointer_cast(offsets.end())[-1] =
       current_child_column->size();  // Always include all elements
 
-    auto offsets_column = std::make_unique<cudf::column>(
-      cudf::data_type{cudf::type_id::INT32}, num_rows + 1, offsets.release());
+    auto offsets_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
+                                                         current_num_rows + 1,
+                                                         offsets.release(),
+                                                         rmm::device_buffer{},
+                                                         0);
 
-    auto [null_mask, null_count] =
-      cudf::detail::valid_if(valids.begin(), valids.end(), thrust::identity<bool>{});
-    list_column = cudf::make_lists_column(
-      num_rows,
+    auto [null_mask, null_count] = cudf::detail::valid_if(valids.begin(),
+                                                          valids.end(),
+                                                          thrust::identity<bool>{},
+                                                          cudf::get_default_stream(),
+                                                          rmm::mr::get_current_device_resource());
+    list_column                  = cudf::make_lists_column(
+      current_num_rows,
       std::move(offsets_column),
       std::move(current_child_column),
-      profile.get_null_probability().has_value() ? null_count : 0,  // cudf::UNKNOWN_NULL_COUNT,
+      profile.get_null_probability().has_value() ? null_count : 0,
       profile.get_null_probability().has_value() ? std::move(null_mask) : rmm::device_buffer{});
   }
   return list_column;  // return the top-level column
@@ -762,18 +835,41 @@ std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_
   return out_dtypes;
 }
 
+/**
+ * @brief Repeat the given two data types with a given ratio of a:b.
+ *
+ * The first dtype will have 'first_num' columns and the second will have 'num_cols - first_num'
+ * columns.
+ */
+std::vector<cudf::type_id> mix_dtypes(std::pair<cudf::type_id, cudf::type_id> const& dtype_ids,
+                                      cudf::size_type num_cols,
+                                      int first_num)
+{
+  std::vector<cudf::type_id> out_dtypes;
+  out_dtypes.reserve(num_cols);
+  for (cudf::size_type col = 0; col < first_num; ++col)
+    out_dtypes.push_back(dtype_ids.first);
+  for (cudf::size_type col = first_num; col < num_cols; ++col)
+    out_dtypes.push_back(dtype_ids.second);
+  return out_dtypes;
+}
+
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
                                                  table_size_bytes table_bytes,
                                                  data_profile const& profile,
                                                  unsigned seed)
 {
-  size_t const avg_row_bytes =
-    std::accumulate(dtype_ids.begin(), dtype_ids.end(), 0ul, [&](size_t sum, auto tid) {
+  auto const avg_row_bytes =
+    std::accumulate(dtype_ids.begin(), dtype_ids.end(), 0., [&](size_t sum, auto tid) {
       return sum + avg_element_size(profile, cudf::data_type(tid));
     });
-  cudf::size_type const num_rows = table_bytes.size / avg_row_bytes;
+  std::size_t const num_rows = std::lround(table_bytes.size / avg_row_bytes);
+  CUDF_EXPECTS(num_rows > 0, "Table size is too small for the given data types");
+  CUDF_EXPECTS(num_rows < std::numeric_limits<cudf::size_type>::max(),
+               "Table size is too large for the given data types");
 
-  return create_random_table(dtype_ids, row_count{num_rows}, profile, seed);
+  return create_random_table(
+    dtype_ids, row_count{static_cast<cudf::size_type>(num_rows)}, profile, seed);
 }
 
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
@@ -835,7 +931,9 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(
   } else {
     return cudf::detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
                                   thrust::make_counting_iterator<cudf::size_type>(size),
-                                  bool_generator{seed, 1.0 - *null_probability});
+                                  bool_generator{seed, 1.0 - *null_probability},
+                                  cudf::get_default_stream(),
+                                  rmm::mr::get_current_device_resource());
   }
 }
 

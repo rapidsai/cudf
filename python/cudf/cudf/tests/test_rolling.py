@@ -1,35 +1,14 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import math
-from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_GE_110,
-    PANDAS_GE_130,
-    PANDAS_GE_150,
-    PANDAS_LT_140,
-)
-from cudf.testing._utils import _create_pandas_series, assert_eq
+from cudf.testing._utils import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
-
-
-@contextmanager
-def _hide_pandas_rolling_min_periods_warning(agg):
-    if agg == "count":
-        with pytest.warns(
-            FutureWarning,
-            match="min_periods=None will default to the size of window "
-            "consistent with other methods in a future version. Specify "
-            "min_periods=0 instead.",
-        ):
-            yield
-    else:
-        yield
 
 
 @pytest.mark.parametrize(
@@ -48,10 +27,7 @@ def _hide_pandas_rolling_min_periods_warning(agg):
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_series_basic(data, index, agg, nulls, center):
     rng = np.random.default_rng(1)
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
+
     if len(data) > 0:
         if nulls == "one":
             p = rng.integers(0, len(data))
@@ -63,8 +39,8 @@ def test_rolling_series_basic(data, index, agg, nulls, center):
         elif nulls == "all":
             data = [np.nan] * len(data)
 
-    psr = _create_pandas_series(data, index=index)
-    gsr = cudf.Series(psr)
+    psr = pd.Series(data, index=index)
+    gsr = cudf.from_pandas(psr)
     for window_size in range(1, len(data) + 1):
         for min_periods in range(1, window_size + 1):
             expect = getattr(
@@ -73,7 +49,7 @@ def test_rolling_series_basic(data, index, agg, nulls, center):
             got = getattr(
                 gsr.rolling(window_size, min_periods, center), agg
             )().fillna(-1)
-            assert_eq(expect, got, check_dtype=False, **kwargs)
+            assert_eq(expect, got, check_dtype=False, check_freq=False)
 
 
 @pytest.mark.parametrize(
@@ -98,16 +74,17 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
     pdf = pd.DataFrame(data)
 
     if len(pdf) > 0:
-        for col_idx in range(len(pdf.columns)):
-            if nulls == "one":
-                p = rng.integers(0, len(data))
-                pdf.iloc[p, col_idx] = np.nan
-            elif nulls == "some":
-                p1, p2 = rng.integers(0, len(data), (2,))
-                pdf.iloc[p1, col_idx] = np.nan
-                pdf.iloc[p2, col_idx] = np.nan
-            elif nulls == "all":
-                pdf.iloc[:, col_idx] = np.nan
+        if nulls == "all":
+            pdf = pd.DataFrame(np.nan, columns=pdf.columns, index=pdf.index)
+        else:
+            for col_idx in range(len(pdf.columns)):
+                if nulls == "one":
+                    p = rng.integers(0, len(data))
+                    pdf.iloc[p, col_idx] = np.nan
+                elif nulls == "some":
+                    p1, p2 = rng.integers(0, len(data), (2,))
+                    pdf.iloc[p1, col_idx] = np.nan
+                    pdf.iloc[p2, col_idx] = np.nan
 
     gdf = cudf.from_pandas(pdf)
     for window_size in range(1, len(data) + 1):
@@ -159,11 +136,6 @@ def test_rolling_with_offset(agg):
 @pytest.mark.parametrize("seed", [100, 2000])
 @pytest.mark.parametrize("window_size", [2, 10, 100])
 def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
-
     iupper_bound = math.sqrt(np.iinfo(np.int64).max / window_size)
     ilower_bound = -math.sqrt(abs(np.iinfo(np.int64).min) / window_size)
 
@@ -214,15 +186,11 @@ def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
             mask = (got[col].fillna(-1) != 0).to_pandas()
             expect[col] = expect[col][mask]
             got[col] = got[col][mask]
-            assert_eq(expect[col], got[col], **kwargs)
+            assert_eq(expect[col], got[col], check_freq=False)
     else:
-        assert_eq(expect, got, **kwargs)
+        assert_eq(expect, got, check_freq=False)
 
 
-@pytest.mark.xfail(
-    condition=not PANDAS_GE_130,
-    reason="https://github.com/pandas-dev/pandas/issues/37051",
-)
 def test_rolling_var_uniform_window():
     """
     Pandas adopts an online variance calculation algorithm. This gives a
@@ -310,17 +278,17 @@ def test_rolling_getitem():
 
 
 def test_rolling_getitem_window():
-    if PANDAS_GE_110:
-        kwargs = {"check_freq": False}
-    else:
-        kwargs = {}
     index = pd.DatetimeIndex(
         pd.date_range("2000-01-01", "2000-01-02", freq="1h")
     )
     pdf = pd.DataFrame({"x": np.arange(len(index))}, index=index)
     gdf = cudf.from_pandas(pdf)
 
-    assert_eq(pdf.rolling("2h").x.mean(), gdf.rolling("2h").x.mean(), **kwargs)
+    assert_eq(
+        pdf.rolling("2h").x.mean(),
+        gdf.rolling("2h").x.mean(),
+        check_freq=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -328,8 +296,7 @@ def test_rolling_getitem_window():
 )
 @pytest.mark.parametrize("center", [True, False])
 def test_rollling_series_numba_udf_basic(data, index, center):
-
-    psr = _create_pandas_series(data, index=index)
+    psr = pd.Series(data, index=index)
     gsr = cudf.from_pandas(psr)
 
     def some_func(A):
@@ -365,7 +332,6 @@ def test_rollling_series_numba_udf_basic(data, index, center):
 )
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_dataframe_numba_udf_basic(data, center):
-
     pdf = pd.DataFrame(data)
     gdf = cudf.from_pandas(pdf)
 
@@ -428,10 +394,9 @@ def test_rolling_groupby_simple(agg):
     gdf = cudf.from_pandas(pdf)
 
     for window_size in range(1, len(pdf) + 1):
-        with _hide_pandas_rolling_min_periods_warning(agg):
-            expect = getattr(
-                pdf.groupby("a").rolling(window_size), agg
-            )().fillna(-1)
+        expect = getattr(pdf.groupby("a").rolling(window_size), agg)().fillna(
+            -1
+        )
         got = getattr(gdf.groupby("a").rolling(window_size), agg)().fillna(-1)
         assert_eq(expect, got, check_dtype=False)
 
@@ -441,10 +406,9 @@ def test_rolling_groupby_simple(agg):
     gdf = cudf.from_pandas(pdf)
 
     for window_size in range(1, len(pdf) + 1):
-        with _hide_pandas_rolling_min_periods_warning(agg):
-            expect = getattr(
-                pdf.groupby("a").rolling(window_size), agg
-            )().fillna(-1)
+        expect = getattr(pdf.groupby("a").rolling(window_size), agg)().fillna(
+            -1
+        )
         got = getattr(gdf.groupby("a").rolling(window_size), agg)().fillna(-1)
         assert_eq(expect, got, check_dtype=False)
 
@@ -463,10 +427,9 @@ def test_rolling_groupby_multi(agg):
     gdf = cudf.from_pandas(pdf)
 
     for window_size in range(1, len(pdf) + 1):
-        with _hide_pandas_rolling_min_periods_warning(agg):
-            expect = getattr(
-                pdf.groupby(["a", "b"], sort=True).rolling(window_size), agg
-            )().fillna(-1)
+        expect = getattr(
+            pdf.groupby(["a", "b"], sort=True).rolling(window_size), agg
+        )().fillna(-1)
         got = getattr(
             gdf.groupby(["a", "b"], sort=True).rolling(window_size), agg
         )().fillna(-1)
@@ -499,7 +462,7 @@ def test_rolling_custom_index_support():
     from pandas.api.indexers import BaseIndexer
 
     class CustomIndexer(BaseIndexer):
-        def custom_get_window_bounds(
+        def get_window_bounds(
             self, num_values, min_periods, center, closed, step=None
         ):
             start = np.empty(num_values, dtype=np.int64)
@@ -514,24 +477,6 @@ def test_rolling_custom_index_support():
                     end[i] = i + self.window_size
 
             return start, end
-
-        if PANDAS_GE_150:
-
-            def get_window_bounds(
-                self, num_values, min_periods, center, closed, step
-            ):
-                return self.custom_get_window_bounds(
-                    num_values, min_periods, center, closed, step
-                )
-
-        else:
-
-            def get_window_bounds(
-                self, num_values, min_periods, center, closed
-            ):
-                return self.custom_get_window_bounds(
-                    num_values, min_periods, center, closed
-                )
 
     use_expanding = [True, False, True, False, True]
     indexer = CustomIndexer(window_size=1, use_expanding=use_expanding)
@@ -549,10 +494,9 @@ def test_rolling_custom_index_support():
     "indexer",
     [
         pd.api.indexers.FixedForwardWindowIndexer(window_size=2),
-        pd.core.window.expanding.ExpandingIndexer(),
-        pd.core.window.indexers.FixedWindowIndexer(window_size=3)
-        if PANDAS_LT_140
-        else pd.core.indexers.objects.FixedWindowIndexer(window_size=3),
+        pd.api.indexers.VariableOffsetWindowIndexer(
+            index=pd.date_range("2020", periods=5), offset=pd.offsets.BDay(1)
+        ),
     ],
 )
 def test_rolling_indexer_support(indexer):
@@ -561,5 +505,15 @@ def test_rolling_indexer_support(indexer):
 
     expected = df.rolling(window=indexer, min_periods=2).sum()
     actual = gdf.rolling(window=indexer, min_periods=2).sum()
+
+    assert_eq(expected, actual)
+
+
+def test_rolling_series():
+    df = cudf.DataFrame({"a": range(0, 100), "b": [10, 20, 30, 40, 50] * 20})
+    pdf = df.to_pandas()
+
+    expected = pdf.groupby("b")["a"].rolling(5).mean()
+    actual = df.groupby("b")["a"].rolling(5).mean()
 
     assert_eq(expected, actual)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -25,10 +26,7 @@
 
 #include <vector>
 
-constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
-
-struct StringsConvertTest : public cudf::test::BaseFixture {
-};
+struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConvertTest, IsFloat)
 {
@@ -67,7 +65,7 @@ TEST_F(StringsConvertTest, IsFloat)
 
 TEST_F(StringsConvertTest, ToFloats32)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "1234",    nullptr,        "-876",     "543.2",
     "-0.12",   ".25",          "-.002",    "",
     "-0.0",    "1.2e4",        "NAN",      "abc123",
@@ -79,7 +77,7 @@ TEST_F(StringsConvertTest, ToFloats32)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   std::vector<float> h_expected;
-  std::for_each(h_strings.begin(), h_strings.end(), [&](const char* str) {
+  std::for_each(h_strings.begin(), h_strings.end(), [&](char const* str) {
     h_expected.push_back(str ? std::atof(str) : 0);
   });
 
@@ -90,7 +88,7 @@ TEST_F(StringsConvertTest, ToFloats32)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
 TEST_F(StringsConvertTest, FromFloats32)
@@ -104,7 +102,7 @@ TEST_F(StringsConvertTest, FromFloats32)
                               std::numeric_limits<float>::quiet_NaN(),
                               839542223232.79,
                               -0.0};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "100.0", "654321.25", "-12761.125", "0.0", "5.0", "-4.0", "NaN", "8.395422433e+11", "-0.0"};
 
   cudf::test::fixed_width_column_wrapper<float> floats(
@@ -119,38 +117,41 @@ TEST_F(StringsConvertTest, FromFloats32)
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
 TEST_F(StringsConvertTest, ToFloats64)
 {
   // clang-format off
   std::vector<const char*> h_strings{
-    "1234",   nullptr,    "-876",     "543.2",         "-0.12",   ".25",
+    "1234",   "",         "-876",     "543.2",         "-0.12",   ".25",
     "-.002",  "",         "-0.0",     "1.28e256",      "NaN",     "abc123",
     "123abc", "456e",     "-1.78e+5", "-122.33644782", "12e+309", "1.7976931348623159E308",
     "-Inf",   "-INFINITY", "1.0",     "1.7976931348623157e+308",  "1.7976931348623157e-307",
     // subnormal numbers:           v--- smallest double               v--- result is 0
-    "4e-308", "3.3333333333e-320", "4.940656458412465441765688e-324", "1.e-324" };
+    "4e-308", "3.3333333333e-320", "4.940656458412465441765688e-324", "1.e-324",
+    // another very small number
+    "9.299999257686047e-0005603333574677677" };
   // clang-format on
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  auto validity = cudf::test::iterators::null_at(1);
+  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(), validity);
 
   std::vector<double> h_expected;
-  std::for_each(h_strings.begin(), h_strings.end(), [&](const char* str) {
-    h_expected.push_back(str ? std::atof(str) : 0);
+  std::for_each(h_strings.begin(), h_strings.end(), [&](char const* str) {
+    h_expected.push_back(std::atof(str));
   });
 
   auto strings_view = cudf::strings_column_view(strings);
   auto results = cudf::strings::to_floats(strings_view, cudf::data_type{cudf::type_id::FLOAT64});
 
   cudf::test::fixed_width_column_wrapper<double> expected(
-    h_expected.begin(),
-    h_expected.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected, verbosity);
+    h_expected.begin(), h_expected.end(), validity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  results = cudf::strings::is_float(strings_view);
+  cudf::test::fixed_width_column_wrapper<bool> is_expected(
+    {1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, validity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, is_expected);
 }
 
 TEST_F(StringsConvertTest, FromFloats64)
@@ -164,7 +165,7 @@ TEST_F(StringsConvertTest, FromFloats64)
                                std::numeric_limits<double>::quiet_NaN(),
                                839542223232.794248339,
                                -0.0};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "100.0", "654321.25", "-12761.125", "0.0", "5.0", "-4.0", "NaN", "8.395422232e+11", "-0.0"};
 
   cudf::test::fixed_width_column_wrapper<double> floats(
@@ -179,7 +180,7 @@ TEST_F(StringsConvertTest, FromFloats64)
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnFloat)

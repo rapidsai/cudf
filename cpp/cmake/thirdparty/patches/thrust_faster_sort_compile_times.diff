@@ -1,7 +1,7 @@
-diff --git a/dependencies/cub/cub/block/block_merge_sort.cuh b/dependencies/cub/cub/block/block_merge_sort.cuh
-index 4769df36..d86d6342 100644
---- a/dependencies/cub/cub/block/block_merge_sort.cuh
-+++ b/dependencies/cub/cub/block/block_merge_sort.cuh
+diff --git a/cub/cub/block/block_merge_sort.cuh b/cub/cub/block/block_merge_sort.cuh
+index dc07ef6c2..a066c14da 100644
+--- a/cub/cub/block/block_merge_sort.cuh
++++ b/cub/cub/block/block_merge_sort.cuh
 @@ -91,7 +91,7 @@ __device__ __forceinline__ void SerialMerge(KeyT *keys_shared,
    KeyT key1 = keys_shared[keys1_beg];
    KeyT key2 = keys_shared[keys2_beg];
@@ -20,19 +20,10 @@ index 4769df36..d86d6342 100644
        for (int item = 1; item < ITEMS_PER_THREAD; ++item)
        {
          if (ITEMS_PER_THREAD * linear_tid + item < valid_items)
-@@ -407,7 +407,7 @@ public:
-     // each thread has sorted keys
-     // merge sort keys in shared memory
-     //
--    #pragma unroll
-+    #pragma unroll 1
-     for (int target_merged_threads_number = 2;
-          target_merged_threads_number <= NUM_THREADS;
-          target_merged_threads_number *= 2)
-diff --git a/dependencies/cub/cub/thread/thread_sort.cuh b/dependencies/cub/cub/thread/thread_sort.cuh
-index 5d486789..b42fb5f0 100644
---- a/dependencies/cub/cub/thread/thread_sort.cuh
-+++ b/dependencies/cub/cub/thread/thread_sort.cuh
+diff --git a/cub/cub/thread/thread_sort.cuh b/cub/cub/thread/thread_sort.cuh
+index 5d4867896..b42fb5f00 100644
+--- a/cub/cub/thread/thread_sort.cuh
++++ b/cub/cub/thread/thread_sort.cuh
 @@ -83,10 +83,10 @@ StableOddEvenSort(KeyT (&keys)[ITEMS_PER_THREAD],
  {
    constexpr bool KEYS_ONLY = std::is_same<ValueT, NullType>::value;
@@ -46,4 +37,3 @@ index 5d486789..b42fb5f0 100644
      for (int j = 1 & i; j < ITEMS_PER_THREAD - 1; j += 2)
      {
        if (compare_op(keys[j + 1], keys[j]))
-       

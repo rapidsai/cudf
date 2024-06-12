@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,38 +14,34 @@
  * limitations under the License.
  */
 
-// Include Jitify's cstddef header first
-#include <cstddef>
+#include <cudf/types.hpp>
+#include <cudf/wrappers/durations.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/std/climits>
 #include <cuda/std/cstddef>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
-#include <cudf/wrappers/durations.hpp>
-#include <cudf/wrappers/timestamps.hpp>
+#include <cstddef>
 
-#include <transform/jit/operation-udf.hpp>
-
-#include <cudf/types.hpp>
-#include <cudf/wrappers/timestamps.hpp>
+// clang-format off
+#include "transform/jit/operation-udf.hpp"
+// clang-format on
 
 namespace cudf {
 namespace transformation {
 namespace jit {
 
 template <typename TypeOut, typename TypeIn>
-__global__ void kernel(cudf::size_type size, TypeOut* out_data, TypeIn* in_data)
+CUDF_KERNEL void kernel(cudf::size_type size, TypeOut* out_data, TypeIn* in_data)
 {
-  int tid    = threadIdx.x;
-  int blkid  = blockIdx.x;
-  int blksz  = blockDim.x;
-  int gridsz = gridDim.x;
+  // cannot use global_thread_id utility due to a JIT build issue by including
+  // the `cudf/detail/utilities/cuda.cuh` header
+  thread_index_type const start  = threadIdx.x + blockIdx.x * blockDim.x;
+  thread_index_type const stride = blockDim.x * gridDim.x;
 
-  int start = tid + blkid * blksz;
-  int step  = blksz * gridsz;
-
-  for (cudf::size_type i = start; i < size; i += step) {
+  for (auto i = start; i < static_cast<thread_index_type>(size); i += stride) {
     GENERIC_UNARY_OP(&out_data[i], in_data[i]);
   }
 }

@@ -71,8 +71,30 @@ ForEachMacros:
   - foreach
   - Q_FOREACH
   - BOOST_FOREACH
-IncludeBlocks: Preserve
-IncludeIsMainRegex: '([-_](test|unittest))?$'
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex:           '^"' # quoted includes
+    Priority:        1
+  - Regex:           '^<(benchmarks|tests)/' # benchmark includes
+    Priority:        2
+  - Regex:           '^<cudf_test/' # cuDF includes
+    Priority:        3
+  - Regex:           '^<cudf/' # cuDF includes
+    Priority:        4
+  - Regex:           '^<(nvtext|cudf_kafka)' # other libcudf includes
+    Priority:        5
+  - Regex:           '^<(cugraph|cuml|cuspatial|raft|kvikio)' # Other RAPIDS includes
+    Priority:        6
+  - Regex:           '^<rmm/' # RMM includes
+    Priority:        7
+  - Regex:           '^<(thrust|cub|cuda)/' # CCCL includes
+    Priority:        8
+  - Regex:           '^<(cooperative_groups|cuco|cuda.h|cuda_runtime|device_types|math_constants|nvtx3)' # CUDA includes
+    Priority:        8
+  - Regex:           '^<.*\..*' # other system includes (e.g. with a '.')
+    Priority:        9
+  - Regex:           '^<[^.]+' # STL includes (no '.')
+    Priority:        10
 IndentCaseLabels: true
 IndentPPDirectives: None
 IndentWidth:     2

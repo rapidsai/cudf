@@ -1,11 +1,16 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import pytest
 
 from cudf import NA, DataFrame
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import _utils as utils
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in all versions of pandas",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -25,12 +30,21 @@ from cudf.testing import _utils as utils
     ],
 )
 @pytest.mark.parametrize("na_action", [None, "ignore"])
-def test_applymap_dataframe(data, func, na_action):
+def test_applymap_dataframe(data, func, na_action, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
+            and request.node.callspec.id == "None-<lambda>2-data3",
+            reason="https://github.com/pandas-dev/pandas/issues/57390",
+        )
+    )
     gdf = DataFrame(data)
     pdf = gdf.to_pandas(nullable=True)
 
-    expect = pdf.applymap(func, na_action=na_action)
-    got = gdf.applymap(func, na_action=na_action)
+    with pytest.warns(FutureWarning):
+        expect = pdf.applymap(func, na_action=na_action)
+    with pytest.warns(FutureWarning):
+        got = gdf.applymap(func, na_action=na_action)
 
     utils.assert_eq(expect, got, check_dtype=False)
 
@@ -41,8 +55,10 @@ def test_applymap_raise_cases():
     def f(x, some_kwarg=0):
         return x + some_kwarg
 
-    with pytest.raises(NotImplementedError):
-        df.applymap(f, some_kwarg=1)
+    with pytest.warns(FutureWarning):
+        with pytest.raises(NotImplementedError):
+            df.applymap(f, some_kwarg=1)
 
-    with pytest.raises(ValueError):
-        df.applymap(f, na_action="some_invalid_option")
+    with pytest.warns(FutureWarning):
+        with pytest.raises(ValueError):
+            df.applymap(f, na_action="some_invalid_option")

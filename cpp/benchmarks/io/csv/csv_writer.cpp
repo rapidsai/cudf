@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,91 +17,110 @@
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/io/cuio_common.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
+#include <benchmarks/io/nvbench_helpers.hpp>
 
 #include <cudf/io/csv.hpp>
 
-// to enable, run cmake with -DBUILD_BENCHMARKS=ON
+#include <nvbench/nvbench.cuh>
 
+// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// run on most GPUs, but large enough to allow highest throughput
 constexpr size_t data_size         = 256 << 20;
 constexpr cudf::size_type num_cols = 64;
 
-class CsvWrite : public cudf::benchmark {
-};
-
-void BM_csv_write_varying_inout(benchmark::State& state)
+template <data_type DataType, io_type IO>
+void BM_csv_write_dtype_io(nvbench::state& state,
+                           nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IO>>)
 {
-  auto const data_types = get_type_or_group(state.range(0));
-  auto const sink_type  = static_cast<io_type>(state.range(1));
+  auto const data_types = get_type_or_group(static_cast<int32_t>(DataType));
+  auto const sink_type  = IO;
 
   auto const tbl =
     create_random_table(cycle_dtypes(data_types, num_cols), table_size_bytes{data_size});
   auto const view = tbl->view();
 
-  cuio_source_sink_pair source_sink(sink_type);
-  auto mem_stats_logger = cudf::memory_stats_logger();
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::io::csv_writer_options options =
-      cudf::io::csv_writer_options::builder(source_sink.make_sink_info(), view);
-    cudf::io::write_csv(options);
-  }
+  std::size_t encoded_file_size = 0;
 
-  state.SetBytesProcessed(data_size * state.iterations());
-  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
-  state.counters["encoded_file_size"] = source_sink.size();
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch, auto& timer) {
+               cuio_source_sink_pair source_sink(sink_type);
+
+               timer.start();
+               cudf::io::csv_writer_options options =
+                 cudf::io::csv_writer_options::builder(source_sink.make_sink_info(), view);
+               cudf::io::write_csv(options);
+               timer.stop();
+
+               encoded_file_size = source_sink.size();
+             });
+
+  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
+  state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
+  state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
 }
 
-void BM_csv_write_varying_options(benchmark::State& state)
+void BM_csv_write_varying_options(nvbench::state& state)
 {
-  auto const na_per_len     = state.range(0);
-  auto const rows_per_chunk = 1 << state.range(1);
+  auto const na_per_len     = state.get_int64("na_per_len");
+  auto const rows_per_chunk = state.get_int64("rows_per_chunk");
 
-  auto const data_types = get_type_or_group({int32_t(type_group_id::INTEGRAL),
-                                             int32_t(type_group_id::FLOATING_POINT),
-                                             int32_t(type_group_id::FIXED_POINT),
-                                             int32_t(type_group_id::TIMESTAMP),
-                                             int32_t(type_group_id::DURATION),
-                                             int32_t(cudf::type_id::STRING)});
+  auto const data_types = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
+                                             static_cast<int32_t>(data_type::FLOAT),
+                                             static_cast<int32_t>(data_type::DECIMAL),
+                                             static_cast<int32_t>(data_type::TIMESTAMP),
+                                             static_cast<int32_t>(data_type::DURATION),
+                                             static_cast<int32_t>(data_type::STRING)});
 
   auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
   auto const view = tbl->view();
 
   std::string const na_per(na_per_len, '#');
-  cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
-  auto mem_stats_logger = cudf::memory_stats_logger();
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::io::csv_writer_options options =
-      cudf::io::csv_writer_options::builder(source_sink.make_sink_info(), view)
-        .na_rep(na_per)
-        .rows_per_chunk(rows_per_chunk);
-    cudf::io::write_csv(options);
-  }
+  std::size_t encoded_file_size = 0;
 
-  state.SetBytesProcessed(data_size * state.iterations());
-  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
-  state.counters["encoded_file_size"] = source_sink.size();
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch, auto& timer) {
+               cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
+
+               timer.start();
+               cudf::io::csv_writer_options options =
+                 cudf::io::csv_writer_options::builder(source_sink.make_sink_info(), view)
+                   .na_rep(na_per)
+                   .rows_per_chunk(rows_per_chunk);
+               cudf::io::write_csv(options);
+               timer.stop();
+
+               encoded_file_size = source_sink.size();
+             });
+
+  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
+  state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
+  state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
 }
 
-#define CSV_WR_BM_INOUTS_DEFINE(name, type_or_group, sink_type)       \
-  BENCHMARK_DEFINE_F(CsvWrite, name)                                  \
-  (::benchmark::State & state) { BM_csv_write_varying_inout(state); } \
-  BENCHMARK_REGISTER_F(CsvWrite, name)                                \
-    ->Args({int32_t(type_or_group), sink_type})                       \
-    ->Unit(benchmark::kMillisecond)                                   \
-    ->UseManualTime();
+using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
+                                            data_type::FLOAT,
+                                            data_type::DECIMAL,
+                                            data_type::TIMESTAMP,
+                                            data_type::DURATION,
+                                            data_type::STRING>;
 
-WR_BENCHMARK_DEFINE_ALL_SINKS(CSV_WR_BM_INOUTS_DEFINE, integral, type_group_id::INTEGRAL);
-WR_BENCHMARK_DEFINE_ALL_SINKS(CSV_WR_BM_INOUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
-WR_BENCHMARK_DEFINE_ALL_SINKS(CSV_WR_BM_INOUTS_DEFINE, decimal, type_group_id::FIXED_POINT);
-WR_BENCHMARK_DEFINE_ALL_SINKS(CSV_WR_BM_INOUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
-WR_BENCHMARK_DEFINE_ALL_SINKS(CSV_WR_BM_INOUTS_DEFINE, durations, type_group_id::DURATION);
-WR_BENCHMARK_DEFINE_ALL_SINKS(CSV_WR_BM_INOUTS_DEFINE, string, cudf::type_id::STRING);
+using io_list = nvbench::enum_type_list<io_type::FILEPATH, io_type::HOST_BUFFER, io_type::VOID>;
 
-BENCHMARK_DEFINE_F(CsvWrite, writer_options)
-(::benchmark::State& state) { BM_csv_write_varying_options(state); }
-BENCHMARK_REGISTER_F(CsvWrite, writer_options)
-  ->ArgsProduct({{0, 16}, {8, 10, 12, 14, 16, 18, 20}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
+NVBENCH_BENCH_TYPES(BM_csv_write_dtype_io, NVBENCH_TYPE_AXES(d_type_list, io_list))
+  .set_name("csv_write_dtype_io")
+  .set_type_axes_names({"data_type", "io"})
+  .set_min_samples(4);
+
+NVBENCH_BENCH(BM_csv_write_varying_options)
+  .set_name("csv_write_options")
+  .set_min_samples(4)
+  .add_int64_axis("na_per_len", {0, 16})
+  .add_int64_power_of_two_axis("rows_per_chunk", nvbench::range(8, 20, 2));

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
@@ -25,8 +24,6 @@
 
 #include <nvbench/nvbench.cuh>
 
-// to enable, run cmake with -DBUILD_BENCHMARKS=ON
-
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   cudf::io::statistics_freq,
   [](auto value) {
@@ -34,19 +31,20 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
       case cudf::io::statistics_freq::STATISTICS_NONE: return "STATISTICS_NONE";
       case cudf::io::statistics_freq::STATISTICS_ROWGROUP: return "STATISTICS_ROWGROUP";
       case cudf::io::statistics_freq::STATISTICS_PAGE: return "STATISTICS_PAGE";
+      case cudf::io::statistics_freq::STATISTICS_COLUMN: return "STATISTICS_COLUMN";
       default: return "Unknown";
     }
   },
   [](auto) { return std::string{}; })
 
+// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// run on most GPUs, but large enough to allow highest throughput
 constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
 template <data_type DataType>
 void BM_parq_write_encode(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const data_types             = get_type_or_group(static_cast<int32_t>(DataType));
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
@@ -84,13 +82,11 @@ void BM_parq_write_encode(nvbench::state& state, nvbench::type_list<nvbench::enu
   state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
 }
 
-template <cudf::io::io_type IO, cudf::io::compression_type Compression>
+template <io_type IO, cudf::io::compression_type Compression>
 void BM_parq_write_io_compression(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<IO>, nvbench::enum_type<Compression>>)
 {
-  cudf::rmm_pool_raii rmm_pool;
-
   auto const data_types = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                              static_cast<int32_t>(data_type::FLOAT),
                                              static_cast<int32_t>(data_type::DECIMAL),
@@ -192,15 +188,14 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::LIST,
                                             data_type::STRUCT>;
 
-using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
-                                        cudf::io::io_type::HOST_BUFFER,
-                                        cudf::io::io_type::VOID>;
+using io_list = nvbench::enum_type_list<io_type::FILEPATH, io_type::HOST_BUFFER, io_type::VOID>;
 
 using compression_list =
   nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
 
 using stats_list = nvbench::enum_type_list<cudf::io::STATISTICS_NONE,
                                            cudf::io::STATISTICS_ROWGROUP,
+                                           cudf::io::STATISTICS_COLUMN,
                                            cudf::io::STATISTICS_PAGE>;
 
 NVBENCH_BENCH_TYPES(BM_parq_write_encode, NVBENCH_TYPE_AXES(d_type_list))

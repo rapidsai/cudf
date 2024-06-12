@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,10 +25,10 @@
 #include <cudf/detail/groupby/group_replace_nulls.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/reduction/detail/histogram.hpp>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -36,8 +36,11 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -64,7 +67,7 @@ groupby::groupby(table_view const& keys,
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::dispatch_aggregation(
   host_span<aggregation_request const> requests,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   // If sort groupby has been called once on this groupby object, then
   // always use sort groupby from now on. Because once keys are sorted,
@@ -107,8 +110,17 @@ struct empty_column_constructor {
 
     if constexpr (k == aggregation::Kind::COLLECT_LIST || k == aggregation::Kind::COLLECT_SET) {
       return make_lists_column(
-        0, make_empty_column(type_to_id<offset_type>()), empty_like(values), 0, {});
+        0, make_empty_column(type_to_id<size_type>()), empty_like(values), 0, {});
     }
+
+    if constexpr (k == aggregation::Kind::HISTOGRAM) {
+      return make_lists_column(0,
+                               make_empty_column(type_to_id<size_type>()),
+                               cudf::reduction::detail::make_empty_histogram_like(values),
+                               0,
+                               {});
+    }
+    if constexpr (k == aggregation::Kind::MERGE_HISTOGRAM) { return empty_like(values); }
 
     if constexpr (k == aggregation::Kind::RANK) {
       auto const& rank_agg = dynamic_cast<cudf::detail::rank_aggregation const&>(agg);
@@ -183,7 +195,16 @@ void verify_valid_requests(host_span<RequestType const> requests)
 
 // Compute aggregation requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggregate(
-  host_span<aggregation_request const> requests, rmm::mr::device_memory_resource* mr)
+  host_span<aggregation_request const> requests, rmm::device_async_resource_ref mr)
+{
+  return aggregate(requests, cudf::get_default_stream(), mr);
+}
+
+// Compute aggregation requests
+std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggregate(
+  host_span<aggregation_request const> requests,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
@@ -194,14 +215,14 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
   verify_valid_requests(requests);
 
-  if (_keys.num_rows() == 0) { return std::pair(empty_like(_keys), empty_results(requests)); }
+  if (_keys.num_rows() == 0) { return {empty_like(_keys), empty_results(requests)}; }
 
-  return dispatch_aggregation(requests, cudf::get_default_stream(), mr);
+  return dispatch_aggregation(requests, stream, mr);
 }
 
 // Compute scan requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan(
-  host_span<scan_request const> requests, rmm::mr::device_memory_resource* mr)
+  host_span<scan_request const> requests, rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
@@ -217,7 +238,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan
   return sort_scan(requests, cudf::get_default_stream(), mr);
 }
 
-groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr)
+groupby::groups groupby::get_groups(table_view values, rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto const stream = cudf::get_default_stream();
@@ -243,7 +264,7 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls(
   table_view const& values,
   host_span<cudf::replace_policy const> replace_policies,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(_keys.num_rows() == values.num_rows(),
@@ -279,25 +300,28 @@ detail::sort::sort_groupby_helper& groupby::helper()
 {
   if (_helper) return *_helper;
   _helper = std::make_unique<detail::sort::sort_groupby_helper>(
-    _keys, _include_null_keys, _keys_are_sorted);
+    _keys, _include_null_keys, _keys_are_sorted, _null_precedence);
   return *_helper;
 };
 
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
   table_view const& values,
   host_span<size_type const> offsets,
-  std::vector<std::reference_wrapper<const scalar>> const& fill_values,
-  rmm::mr::device_memory_resource* mr)
+  std::vector<std::reference_wrapper<scalar const>> const& fill_values,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(fill_values.size()),
                "Mismatch number of fill_values and columns.");
-  CUDF_EXPECTS(
-    std::all_of(thrust::make_counting_iterator(0),
-                thrust::make_counting_iterator(values.num_columns()),
-                [&](auto i) { return values.column(i).type() == fill_values[i].get().type(); }),
-    "values and fill_value should have the same type.");
-
+  CUDF_EXPECTS(std::equal(values.begin(),
+                          values.end(),
+                          fill_values.cbegin(),
+                          fill_values.cend(),
+                          [](auto const& col, auto const& scalar) {
+                            return cudf::have_same_types(col, scalar.get());
+                          }),
+               "values and fill_value should have the same type.",
+               cudf::data_type_error);
   auto stream = cudf::get_default_stream();
   std::vector<std::unique_ptr<column>> results;
   auto const& group_offsets = helper().group_offsets(stream);
@@ -306,7 +330,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
     thrust::make_counting_iterator(values.num_columns()),
     std::back_inserter(results),
     [&](size_type i) {
-      auto grouped_values = helper().grouped_values(values.column(i), stream);
+      auto grouped_values =
+        helper().grouped_values(values.column(i), stream, rmm::mr::get_current_device_resource());
       return cudf::detail::segmented_shift(
         grouped_values->view(), group_offsets, offsets[i], fill_values[i].get(), stream, mr);
     });

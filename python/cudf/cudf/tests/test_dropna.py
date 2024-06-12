@@ -1,11 +1,11 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import _create_pandas_series, assert_eq
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -21,8 +21,7 @@ from cudf.testing._utils import _create_pandas_series, assert_eq
 @pytest.mark.parametrize("nulls", ["one", "some", "all", "none"])
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dropna_series(data, nulls, inplace):
-
-    psr = _create_pandas_series(data)
+    psr = pd.Series(data)
 
     if len(data) > 0:
         if nulls == "one":
@@ -259,13 +258,7 @@ def test_dropna_multiindex(data, how):
 
     expect = pi.dropna(how)
     got = gi.dropna(how)
-
-    with pytest.raises(AssertionError, match="different"):
-        # pandas-gh44792. Pandas infers the dtypes as (int64, int64), though
-        # int64 doesn't really store null/nans. The dtype propagates to the
-        # result of dropna. cuDF infers the dtypes as (float, float), which
-        # differs from pandas.
-        assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(

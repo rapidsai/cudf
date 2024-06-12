@@ -1,13 +1,11 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import random
-from collections import OrderedDict
 
 import fastavro
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-import pyorc
 
 import cudf
 from cudf.testing._utils import assert_eq
@@ -24,6 +22,8 @@ _PANDAS_TO_AVRO_SCHEMA_MAP = {
     pd.Int16Dtype(): ["int", "null"],
     pd.Int32Dtype(): ["int", "null"],
     pd.Int64Dtype(): ["long", "null"],
+    pd.Float32Dtype(): ["float", "null"],
+    pd.Float64Dtype(): ["double", "null"],
     pd.BooleanDtype(): ["boolean", "null"],
     pd.StringDtype(): ["string", "null"],
     cudf.dtype("bool_"): "boolean",
@@ -37,38 +37,6 @@ _PANDAS_TO_AVRO_SCHEMA_MAP = {
     cudf.dtype("<M8[ns]"): {"type": "long", "logicalType": "timestamp-millis"},
     cudf.dtype("<M8[ms]"): {"type": "long", "logicalType": "timestamp-millis"},
     cudf.dtype("<M8[us]"): {"type": "long", "logicalType": "timestamp-micros"},
-}
-
-PANDAS_TO_ORC_TYPES = {
-    cudf.dtype("int8"): pyorc.TinyInt(),
-    pd.Int8Dtype(): pyorc.TinyInt(),
-    pd.Int16Dtype(): pyorc.SmallInt(),
-    pd.Int32Dtype(): pyorc.Int(),
-    pd.Int64Dtype(): pyorc.BigInt(),
-    pd.BooleanDtype(): pyorc.Boolean(),
-    cudf.dtype("bool_"): pyorc.Boolean(),
-    cudf.dtype("int16"): pyorc.SmallInt(),
-    cudf.dtype("int32"): pyorc.Int(),
-    cudf.dtype("int64"): pyorc.BigInt(),
-    cudf.dtype("O"): pyorc.String(),
-    pd.StringDtype(): pyorc.String(),
-    cudf.dtype("float32"): pyorc.Float(),
-    cudf.dtype("float64"): pyorc.Double(),
-    cudf.dtype("<M8[ns]"): pyorc.Timestamp(),
-    cudf.dtype("<M8[ms]"): pyorc.Timestamp(),
-    cudf.dtype("<M8[us]"): pyorc.Timestamp(),
-}
-
-ORC_TO_PANDAS_TYPES = {
-    pyorc.TinyInt().name: pd.Int8Dtype(),
-    pyorc.Int().name: pd.Int32Dtype(),
-    pyorc.Boolean().name: pd.BooleanDtype(),
-    pyorc.SmallInt().name: pd.Int16Dtype(),
-    pyorc.BigInt().name: pd.Int64Dtype(),
-    pyorc.String().name: cudf.dtype("O"),
-    pyorc.Float().name: cudf.dtype("float32"),
-    pyorc.Double().name: cudf.dtype("float64"),
-    pyorc.Timestamp().name: cudf.dtype("<M8[ns]"),
 }
 
 
@@ -131,9 +99,9 @@ def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
                     low=1, high=10
                 )
             else:
-                meta[
-                    "max_types_at_each_level"
-                ] = obj._max_struct_types_at_each_level
+                meta["max_types_at_each_level"] = (
+                    obj._max_struct_types_at_each_level
+                )
 
         elif dtype == "decimal64":
             meta["max_precision"] = cudf.Decimal64Dtype.MAX_PRECISION
@@ -209,46 +177,12 @@ def get_avro_dtype_info(dtype):
         )
 
 
-def get_orc_dtype_info(dtype):
-    if dtype in PANDAS_TO_ORC_TYPES:
-        return PANDAS_TO_ORC_TYPES[dtype]
-    else:
-        raise TypeError(
-            f"Unsupported dtype({dtype}) according to orc spec:"
-            f" https://orc.apache.org/specification/"
-        )
-
-
-def get_arrow_dtype_info_for_pyorc(dtype):
-    if isinstance(dtype, pa.StructType):
-        return get_orc_schema(df=None, arrow_table_schema=dtype)
-    else:
-        pd_dtype = cudf.dtype(dtype.to_pandas_dtype())
-        return get_orc_dtype_info(pd_dtype)
-
-
 def get_avro_schema(df):
     fields = [
         {"name": col_name, "type": get_avro_dtype_info(col_dtype)}
         for col_name, col_dtype in df.dtypes.items()
     ]
     schema = {"type": "record", "name": "Root", "fields": fields}
-    return schema
-
-
-def get_orc_schema(df, arrow_table_schema=None):
-    if arrow_table_schema is None:
-        ordered_dict = OrderedDict(
-            (col_name, get_orc_dtype_info(col_dtype))
-            for col_name, col_dtype in df.dtypes.items()
-        )
-    else:
-        ordered_dict = OrderedDict(
-            (field.name, get_arrow_dtype_info_for_pyorc(field.type))
-            for field in arrow_table_schema
-        )
-
-    schema = pyorc.Struct(**ordered_dict)
     return schema
 
 
@@ -282,7 +216,7 @@ def pandas_to_avro(df, file_name=None, file_io_obj=None):
     schema = get_avro_schema(df)
     avro_schema = fastavro.parse_schema(schema)
 
-    records = df.to_dict("records")
+    records = df.to_dict(orient="records")
     records = convert_nulls_to_none(records, df)
 
     if file_name is not None:
@@ -292,99 +226,19 @@ def pandas_to_avro(df, file_name=None, file_io_obj=None):
         fastavro.writer(file_io_obj, avro_schema, records)
 
 
-def _preprocess_to_orc_tuple(df, arrow_table_schema):
-    def _null_to_None(value):
-        if value is pd.NA or value is pd.NaT:
-            return None
-        else:
-            return value
-
-    def sanitize(value, struct_type):
-        if value is None:
-            return None
-
-        values_list = []
-        for name, sub_type in struct_type.fields.items():
-            if isinstance(sub_type, cudf.StructDtype):
-                values_list.append(sanitize(value[name], sub_type))
-            else:
-                values_list.append(value[name])
-        return tuple(values_list)
-
-    has_nulls_or_nullable_dtype = any(
-        (col := df[colname]).dtype in pandas_dtypes_to_np_dtypes
-        or col.isnull().any()
-        for colname in df.columns
-    )
-    pdf = df.copy(deep=True)
-    for field in arrow_table_schema:
-        if isinstance(field.type, pa.StructType):
-            pdf[field.name] = pdf[field.name].apply(
-                sanitize, args=(cudf.StructDtype.from_arrow(field.type),)
-            )
-        else:
-            pdf[field.name] = pdf[field.name]
-
-    tuple_list = [
-        tuple(map(_null_to_None, tup)) if has_nulls_or_nullable_dtype else tup
-        for tup in pdf.itertuples(index=False, name=None)
-    ]
-
-    return tuple_list, pdf, df
-
-
-def pandas_to_orc(
-    df,
-    file_name=None,
-    file_io_obj=None,
-    stripe_size=67108864,
-    arrow_table_schema=None,
-):
-    schema = get_orc_schema(df, arrow_table_schema=arrow_table_schema)
-
-    tuple_list, pdf, df = _preprocess_to_orc_tuple(
-        df, arrow_table_schema=arrow_table_schema
-    )
-
-    if file_name is not None:
-        with open(file_name, "wb") as data:
-            with pyorc.Writer(data, schema, stripe_size=stripe_size) as writer:
-                writer.writerows(tuple_list)
-    elif file_io_obj is not None:
-        with pyorc.Writer(
-            file_io_obj, schema, stripe_size=stripe_size
-        ) as writer:
-            writer.writerows(tuple_list)
-
-
 def orc_to_pandas(file_name=None, file_io_obj=None, stripes=None):
     if file_name is not None:
         f = open(file_name, "rb")
     elif file_io_obj is not None:
         f = file_io_obj
 
-    reader = pyorc.Reader(f)
-
-    dtypes = {
-        col: ORC_TO_PANDAS_TYPES[pyorc_type.name]
-        for col, pyorc_type in reader.schema.fields.items()
-    }
-
     if stripes is None:
-        df = pd.DataFrame.from_records(
-            reader, columns=reader.schema.fields.keys()
-        )
+        df = pd.read_orc(f)
     else:
-        records = [
-            record for i in stripes for record in list(reader.read_stripe(i))
-        ]
-        df = pd.DataFrame.from_records(
-            records, columns=reader.schema.fields.keys()
-        )
-
-    # Need to type-cast to extracted `dtypes` from pyorc schema because
-    # a fully empty/ full <NA> can result in incorrect dtype by pandas.
-    df = df.astype(dtypes)
+        orc_file = pa.orc.ORCFile(f)
+        records = [orc_file.read_stripe(i) for i in stripes]
+        pa_table = pa.Table.from_batches(records)
+        df = pa_table.to_pandas()
 
     return df
 

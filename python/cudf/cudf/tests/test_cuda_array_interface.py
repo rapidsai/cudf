@@ -1,16 +1,22 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import types
 from contextlib import ExitStack as does_not_raise
 
 import cupy
+import numba.cuda
 import numpy as np
 import pandas as pd
 import pytest
-from numba import cuda
 
 import cudf
-from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.core.buffer.spill_manager import get_global_manager
+from cudf.testing._utils import (
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    TIMEDELTA_TYPES,
+    assert_eq,
+)
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
@@ -24,7 +30,7 @@ def test_cuda_array_interface_interop_in(dtype, module):
         if dtype in DATETIME_TYPES:
             expectation = pytest.raises(ValueError)
     elif module == "numba":
-        module_constructor = cuda.to_device
+        module_constructor = numba.cuda.to_device
 
     with expectation:
         module_data = module_constructor(np_data)
@@ -41,12 +47,14 @@ def test_cuda_array_interface_interop_in(dtype, module):
         assert_eq(pd_data, gdf["test"])
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + ["str"])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["str"]
+)
 @pytest.mark.parametrize("module", ["cupy", "numba"])
 def test_cuda_array_interface_interop_out(dtype, module):
     expectation = does_not_raise()
     if dtype == "str":
-        expectation = pytest.raises(NotImplementedError)
+        expectation = pytest.raises(AttributeError)
     if module == "cupy":
         module_constructor = cupy.asarray
 
@@ -54,7 +62,7 @@ def test_cuda_array_interface_interop_out(dtype, module):
             return cupy.asnumpy(x)
 
     elif module == "numba":
-        module_constructor = cuda.as_cuda_array
+        module_constructor = numba.cuda.as_cuda_array
 
         def to_host_function(x):
             return x.copy_to_host()
@@ -72,7 +80,9 @@ def test_cuda_array_interface_interop_out(dtype, module):
         assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES
+)
 @pytest.mark.parametrize("module", ["cupy", "numba"])
 def test_cuda_array_interface_interop_out_masked(dtype, module):
     expectation = does_not_raise()
@@ -88,7 +98,7 @@ def test_cuda_array_interface_interop_out_masked(dtype, module):
 
     elif module == "numba":
         expectation = pytest.raises(NotImplementedError)
-        module_constructor = cuda.as_cuda_array
+        module_constructor = numba.cuda.as_cuda_array
 
         def to_host_function(x):
             return x.copy_to_host()
@@ -103,7 +113,9 @@ def test_cuda_array_interface_interop_out_masked(dtype, module):
         module_data = module_constructor(cudf_data)  # noqa: F841
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES
+)
 @pytest.mark.parametrize("nulls", ["all", "some", "bools", "none"])
 @pytest.mark.parametrize("mask_type", ["bits", "bools"])
 def test_cuda_array_interface_as_column(dtype, nulls, mask_type):
@@ -134,9 +146,11 @@ def test_cuda_array_interface_as_column(dtype, nulls, mask_type):
 
     if mask_type == "bools":
         if nulls == "some":
-            obj.__cuda_array_interface__["mask"] = cuda.to_device(mask)
+            obj.__cuda_array_interface__["mask"] = numba.cuda.to_device(mask)
         elif nulls == "all":
-            obj.__cuda_array_interface__["mask"] = cuda.to_device([False] * 10)
+            obj.__cuda_array_interface__["mask"] = numba.cuda.to_device(
+                [False] * 10
+            )
 
     expect = sr
     got = cudf.Series(obj)
@@ -161,14 +175,21 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
     a = cudf.Series(cupy.asarray([1, 2, 3]))._column
     a = cudf.core.column.as_column(a)
     b = cupy.asarray([1, 1, 1])  # noqa: F841
-    assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
+    assert_eq(pd.Index([1, 2, 3]), a.to_pandas())
 
     a = cudf.Series(cupy.asarray([1, 2, 3]))._column
     a.name = "b"
     b = cupy.asarray([1, 1, 1])  # noqa: F841
-    assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
+    assert_eq(pd.Index([1, 2, 3]), a.to_pandas())
 
 
+@pytest.mark.xfail(
+    get_global_manager() is not None,
+    reason=(
+        "spilling doesn't support PyTorch, see "
+        "`cudf.core.buffer.spillable_buffer.DelayedPointerTuple`"
+    ),
+)
 def test_cuda_array_interface_pytorch():
     torch = pytest.importorskip("torch", minversion="1.6.0")
     if not torch.cuda.is_available():
@@ -179,18 +200,21 @@ def test_cuda_array_interface_pytorch():
     got = cudf.Series(tensor)
 
     assert_eq(got, series)
-    buffer = cudf.core.buffer.as_device_buffer_like(
-        cupy.ones(10, dtype=np.bool_)
-    )
+    buffer = cudf.core.buffer.as_buffer(cupy.ones(10, dtype=np.bool_))
     tensor = torch.tensor(buffer)
     got = cudf.Series(tensor, dtype=np.bool_)
 
     assert_eq(got, cudf.Series(buffer, dtype=np.bool_))
 
-    index = cudf.Index([])
-    tensor = torch.tensor(index)
-    got = cudf.Index(tensor)
-    assert_eq(got, index)
+    # TODO: This test fails with PyTorch 2. It appears that PyTorch
+    # checks that the pointer is device-accessible even when the
+    # size is zero. See
+    # https://github.com/pytorch/pytorch/issues/98133
+    #
+    # index = cudf.Index([], dtype="float64")
+    # tensor = torch.tensor(index)
+    # got = cudf.Index(tensor)
+    # assert_eq(got, index)
 
     index = cudf.core.index.RangeIndex(start=0, stop=100)
     tensor = torch.tensor(index)
@@ -206,7 +230,7 @@ def test_cuda_array_interface_pytorch():
 
     str_series = cudf.Series(["a", "g"])
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(AttributeError):
         str_series.__cuda_array_interface__
 
     cat_series = str_series.astype("category")

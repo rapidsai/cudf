@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -43,20 +44,22 @@ namespace strings {
  *
  * @throw cudf::logic_error if start position is greater than stop position.
  *
- * @param strings Strings instance for this operation.
- * @param target UTF-8 encoded string to search for in each string.
- * @param start First character position to include in the search.
+ * @param input Strings instance for this operation
+ * @param target UTF-8 encoded string to search for in each string
+ * @param start First character position to include in the search
  * @param stop Last position (exclusive) to include in the search.
  *             Default of -1 will search to the end of the string.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New integer column with character position values.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New integer column with character position values
  */
 std::unique_ptr<column> find(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   string_scalar const& target,
-  size_type start                     = 0,
-  size_type stop                      = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  size_type start                   = 0,
+  size_type stop                    = -1,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a column of character position values where the target
@@ -72,20 +75,49 @@ std::unique_ptr<column> find(
  *
  * @throw cudf::logic_error if start position is greater than stop position.
  *
- * @param strings Strings instance for this operation.
- * @param target UTF-8 encoded string to search for in each string.
- * @param start First position to include in the search.
+ * @param input Strings instance for this operation
+ * @param target UTF-8 encoded string to search for in each string
+ * @param start First position to include in the search
  * @param stop Last position (exclusive) to include in the search.
  *             Default of -1 will search starting at the end of the string.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New integer column with character position values.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New integer column with character position values
  */
 std::unique_ptr<column> rfind(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   string_scalar const& target,
-  size_type start                     = 0,
-  size_type stop                      = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  size_type start                   = 0,
+  size_type stop                    = -1,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a column of character position values where the target
+ * string is first found in the corresponding string of the provided column
+ *
+ * The output of row `i` is the character position of the target string for row `i`
+ * within input string of row `i` starting at the character position `start`.
+ * If the target is not found within the input string, -1 is returned for that
+ * row entry in the output column.
+ *
+ * Any null input or target entries return corresponding null output column entries.
+ *
+ * @throw cudf::logic_error if `input.size() != target.size()`
+ *
+ * @param input Strings to search against
+ * @param target Strings to search for in `input`
+ * @param start First character position to include in the search
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New integer column with character position values
+ */
+std::unique_ptr<column> find(
+  strings_column_view const& input,
+  strings_column_view const& target,
+  size_type start                   = 0,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -96,38 +128,42 @@ std::unique_ptr<column> rfind(
  *
  * Any null string entries return corresponding null entries in the output columns.
  *
- * @param strings Strings instance for this operation.
- * @param target UTF-8 encoded string to search for in each string.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New type_id::BOOL8 column.
+ * @param input Strings instance for this operation
+ * @param target UTF-8 encoded string to search for in each string
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New BOOL8 column
  */
 std::unique_ptr<column> contains(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   string_scalar const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
  * the corresponding target string was found within that string in the provided column.
  *
- * The 'output[i] = true` if string `targets[i]` is found inside `strings[i]` otherwise
+ * The 'output[i] = true` if string `targets[i]` is found inside `input[i]` otherwise
  * `output[i] = false`.
  * If `target[i]` is an empty string, true is returned for `output[i]`.
  * If `target[i]` is null, false is returned for `output[i]`.
  *
- * Any null `strings[i]` row results in a null `output[i]` row.
+ * Any null string entries return corresponding null entries in the output columns.
  *
  * @throw cudf::logic_error if `strings.size() != targets.size()`.
  *
- * @param strings Strings instance for this operation.
- * @param targets Strings column of targets to check row-wise in `strings`.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New type_id::BOOL8 column.
+ * @param input Strings instance for this operation
+ * @param targets Strings column of targets to check row-wise in `strings`
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New BOOL8 column
  */
 std::unique_ptr<column> contains(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   strings_column_view const& targets,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -139,15 +175,17 @@ std::unique_ptr<column> contains(
  *
  * Any null string entries return corresponding null entries in the output columns.
  *
- * @param strings Strings instance for this operation.
- * @param target UTF-8 encoded string to search for in each string.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param input Strings instance for this operation
+ * @param target UTF-8 encoded string to search for in each string
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> starts_with(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   string_scalar const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -163,15 +201,17 @@ std::unique_ptr<column> starts_with(
  *
  * @throw cudf::logic_error if `strings.size() != targets.size()`.
  *
- * @param strings Strings instance for this operation.
- * @param targets Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New type_id::BOOL8 column.
+ * @param input Strings instance for this operation
+ * @param targets Strings instance for this operation
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New BOOL8 column
  */
 std::unique_ptr<column> starts_with(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   strings_column_view const& targets,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -183,15 +223,17 @@ std::unique_ptr<column> starts_with(
  *
  * Any null string entries return corresponding null entries in the output columns.
  *
- * @param strings Strings instance for this operation.
- * @param target UTF-8 encoded string to search for in each string.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New type_id::BOOL8 column.
+ * @param input Strings instance for this operation
+ * @param target UTF-8 encoded string to search for in each string
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New BOOL8 column
  */
 std::unique_ptr<column> ends_with(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   string_scalar const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -207,15 +249,17 @@ std::unique_ptr<column> ends_with(
  *
  * @throw cudf::logic_error if `strings.size() != targets.size()`.
  *
- * @param strings Strings instance for this operation.
- * @param targets Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New type_id::BOOL8 column.
+ * @param input Strings instance for this operation
+ * @param targets Strings instance for this operation
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New BOOL8 column
  */
 std::unique_ptr<column> ends_with(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   strings_column_view const& targets,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

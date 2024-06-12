@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <math_constants.h>
-
 #include <thrust/extrema.h>
 
 namespace cudf {
@@ -42,7 +41,7 @@ namespace io {
  */
 class union_member {
   template <typename U, typename V>
-  using reference_type = std::conditional_t<std::is_const_v<U>, const V&, V&>;
+  using reference_type = std::conditional_t<std::is_const_v<U>, V const&, V&>;
 
  public:
   template <typename T, typename U>
@@ -103,8 +102,7 @@ class union_member {
  * @tparam is_aggregation_supported Set to true if input type is meant to be aggregated
  */
 template <typename T, bool is_aggregation_supported>
-struct typed_statistics_chunk {
-};
+struct typed_statistics_chunk {};
 
 template <typename T>
 struct typed_statistics_chunk<T, true> {
@@ -128,7 +126,7 @@ struct typed_statistics_chunk<T, true> {
   {
   }
 
-  __device__ void reduce(const T& elem)
+  __device__ void reduce(T const& elem)
   {
     non_nulls++;
     minimum_value = thrust::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
@@ -137,7 +135,7 @@ struct typed_statistics_chunk<T, true> {
     has_minmax = true;
   }
 
-  __device__ void reduce(const statistics_chunk& chunk)
+  __device__ void reduce(statistics_chunk const& chunk)
   {
     if (chunk.has_minmax) {
       minimum_value = thrust::min<E>(minimum_value, union_member::get<E>(chunk.min_value));
@@ -167,7 +165,7 @@ struct typed_statistics_chunk<T, false> {
   {
   }
 
-  __device__ void reduce(const T& elem)
+  __device__ void reduce(T const& elem)
   {
     non_nulls++;
     minimum_value = thrust::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
@@ -175,7 +173,7 @@ struct typed_statistics_chunk<T, false> {
     has_minmax    = true;
   }
 
-  __device__ void reduce(const statistics_chunk& chunk)
+  __device__ void reduce(statistics_chunk const& chunk)
   {
     if (chunk.has_minmax) {
       minimum_value = thrust::min<E>(minimum_value, union_member::get<E>(chunk.min_value));
@@ -237,7 +235,7 @@ __inline__ __device__ typed_statistics_chunk<T, include_aggregate> block_reduce(
  */
 template <typename T, bool include_aggregate>
 __inline__ __device__ statistics_chunk
-get_untyped_chunk(const typed_statistics_chunk<T, include_aggregate>& chunk)
+get_untyped_chunk(typed_statistics_chunk<T, include_aggregate> const& chunk)
 {
   using E = typename detail::extrema_type<T>::type;
   statistics_chunk stat{};
@@ -245,9 +243,9 @@ get_untyped_chunk(const typed_statistics_chunk<T, include_aggregate>& chunk)
   stat.null_count = chunk.null_count;
   stat.has_minmax = chunk.has_minmax;
   stat.has_sum    = [&]() {
-    if (!chunk.has_minmax) return false;
     // invalidate the sum if overflow or underflow is possible
     if constexpr (std::is_floating_point_v<E> or std::is_integral_v<E>) {
+      if (!chunk.has_minmax) { return true; }
       return std::numeric_limits<E>::max() / chunk.non_nulls >=
                static_cast<E>(chunk.maximum_value) and
              std::numeric_limits<E>::lowest() / chunk.non_nulls <=

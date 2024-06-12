@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -50,18 +51,20 @@ namespace strings {
  *
  * @throw cudf::logic_error if the input column is not a LIST type with a STRING child.
  *
- * @param input Lists column to format.
- * @param na_rep Replacement string for null elements.
- * @param separators Strings to use for enclosing list components and separating elements.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column.
+ * @param input Lists column to format
+ * @param na_rep Replacement string for null elements
+ * @param separators Strings to use for enclosing list components and separating elements
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column
  */
 std::unique_ptr<column> format_list_column(
   lists_column_view const& input,
-  string_scalar const& na_rep           = string_scalar("NULL"),
+  string_scalar const& na_rep           = string_scalar(""),
   strings_column_view const& separators = strings_column_view(column_view{
-    data_type{type_id::STRING}, 0, nullptr}),
-  rmm::mr::device_memory_resource* mr   = rmm::mr::get_current_device_resource());
+    data_type{type_id::STRING}, 0, nullptr, nullptr, 0}),
+  rmm::cuda_stream_view stream          = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr     = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

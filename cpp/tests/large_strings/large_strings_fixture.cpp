@@ -1,0 +1,133 @@
+/*
+ * Copyright (c) 2024, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "large_strings_fixture.hpp"
+
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/testing_main.hpp>
+
+#include <cudf/column/column.hpp>
+#include <cudf/strings/combine.hpp>
+#include <cudf/strings/repeat_strings.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+
+#include <map>
+#include <memory>
+#include <vector>
+
+namespace cudf::test {
+class LargeStringsData {
+ public:
+  using DataPointer = std::unique_ptr<cudf::table>;
+
+  virtual ~LargeStringsData() {}
+
+  void add_table(std::string_view name, std::unique_ptr<cudf::table>&& data)
+  {
+    _data[std::string(name)] = std::move(data);
+  }
+
+  cudf::table_view get_table(std::string_view name) const
+  {
+    std::string key{name};
+    return _data.find(key) != _data.end() ? _data.at(key)->view() : cudf::table_view{};
+  }
+
+  void add_column(std::string_view name, std::unique_ptr<cudf::column>&& data)
+  {
+    std::vector<std::unique_ptr<cudf::column>> cols;
+    cols.emplace_back(std::move(data));
+    _data[std::string(name)] = std::make_unique<cudf::table>(std::move(cols));
+  }
+
+  cudf::column_view get_column(std::string_view name) const
+  {
+    std::string key{name};
+    return _data.find(key) != _data.end() ? _data.at(key)->view().column(0) : cudf::column_view{};
+  }
+
+  bool has_key(std::string_view name) const { return _data.find(std::string(name)) != _data.end(); }
+
+ protected:
+  std::map<std::string, DataPointer> _data;
+};
+
+cudf::column_view StringsLargeTest::wide_column()
+{
+  std::string name{"wide1"};
+  if (!g_ls_data->has_key(name)) {
+    auto input =
+      cudf::test::strings_column_wrapper({"the quick brown fox jumps over the lazy dog",
+                                          "the fat cat lays next to the other accénted cat",
+                                          "a slow moving turtlé cannot catch the bird",
+                                          "which can be composéd together to form a more complete",
+                                          "The result does not include the value in the sum in"});
+    auto counts = cudf::test::fixed_width_column_wrapper<int>({8, 8, 8, 8, 8});
+    auto result = cudf::strings::repeat_strings(cudf::strings_column_view(input), counts);
+    g_ls_data->add_column(name, std::move(result));
+  }
+  return g_ls_data->get_column(name);
+}
+
+cudf::column_view StringsLargeTest::long_column()
+{
+  std::string name("long1");
+  if (!g_ls_data->has_key(name)) {
+    auto itr = thrust::constant_iterator<std::string_view>(
+      "abcdefghijklmnopqrstuvwxyABCDEFGHIJKLMNOPQRSTUVWXY");                // 50 bytes
+    auto input = cudf::test::strings_column_wrapper(itr, itr + 5'000'000);  // 250MB
+    g_ls_data->add_column(name, input.release());
+  }
+  return g_ls_data->get_column(name);
+}
+
+cudf::column_view StringsLargeTest::very_long_column()
+{
+  std::string name("long2");
+  if (!g_ls_data->has_key(name)) {
+    auto itr   = thrust::constant_iterator<std::string_view>("12345");
+    auto input = cudf::test::strings_column_wrapper(itr, itr + 30'000'000);
+    g_ls_data->add_column(name, input.release());
+  }
+  return g_ls_data->get_column(name);
+}
+
+std::unique_ptr<LargeStringsData> StringsLargeTest::get_ls_data()
+{
+  CUDF_EXPECTS(g_ls_data == nullptr, "invalid call to get_ls_data");
+  auto lsd_data = std::make_unique<LargeStringsData>();
+  g_ls_data     = lsd_data.get();
+  return lsd_data;
+}
+
+LargeStringsData* StringsLargeTest::g_ls_data = nullptr;
+}  // namespace cudf::test
+
+int main(int argc, char** argv)
+{
+  ::testing::InitGoogleTest(&argc, argv);
+  auto const cmd_opts = parse_cudf_test_opts(argc, argv);
+  // hardcoding the CUDA memory resource to keep from exceeding the pool
+  auto mr = cudf::test::make_cuda();
+  rmm::mr::set_current_device_resource(mr.get());
+  auto adaptor = make_stream_mode_adaptor(cmd_opts);
+
+  // create object to automatically be destroyed at the end of main()
+  auto lsd = cudf::test::StringsLargeTest::get_ls_data();
+
+  return RUN_ALL_TESTS();
+}

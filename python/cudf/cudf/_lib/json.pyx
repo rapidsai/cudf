@@ -1,31 +1,55 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
-
-# cython: boundscheck = False
-
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import io
 import os
 from collections import abc
 
 import cudf
+from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
 from libcpp.map cimport map
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-cimport cudf._lib.cpp.io.types as cudf_io_types
-cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.cpp.io.json cimport (
+cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
+from cudf._lib.column cimport Column
+from cudf._lib.io.utils cimport (
+    make_sink_info,
+    make_source_info,
+    update_struct_field_names,
+)
+from cudf._lib.pylibcudf.libcudf.io.data_sink cimport data_sink
+from cudf._lib.pylibcudf.libcudf.io.json cimport (
     json_reader_options,
+    json_recovery_mode_t,
+    json_writer_options,
     read_json as libcudf_read_json,
     schema_element,
+    write_json as libcudf_write_json,
 )
-from cudf._lib.cpp.types cimport data_type, size_type, type_id
-from cudf._lib.io.utils cimport make_source_info, update_struct_field_names
+from cudf._lib.pylibcudf.libcudf.io.types cimport (
+    column_name_info,
+    compression_type,
+    sink_info,
+    table_metadata,
+    table_with_metadata,
+)
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.types cimport data_type, size_type
 from cudf._lib.types cimport dtype_to_data_type
-from cudf._lib.utils cimport data_from_unique_ptr
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
+
+
+cdef json_recovery_mode_t _get_json_recovery_mode(object on_bad_lines):
+    if on_bad_lines.lower() == "error":
+        return json_recovery_mode_t.FAIL
+    elif on_bad_lines.lower() == "recover":
+        return json_recovery_mode_t.RECOVER_WITH_NULL
+    else:
+        raise TypeError(f"Invalid parameter for {on_bad_lines=}")
 
 
 cpdef read_json(object filepaths_or_buffers,
@@ -33,8 +57,10 @@ cpdef read_json(object filepaths_or_buffers,
                 bool lines,
                 object compression,
                 object byte_range,
-                bool experimental,
-                bool keep_quotes):
+                bool keep_quotes,
+                bool mixed_types_as_string,
+                bool prune_columns,
+                object on_bad_lines):
     """
     Cython function to call into libcudf API, see `read_json`.
 
@@ -73,6 +99,8 @@ cpdef read_json(object filepaths_or_buffers,
             c_compression = cudf_io_types.compression_type.GZIP
         elif compression == 'bz2':
             c_compression = cudf_io_types.compression_type.BZIP2
+        elif compression == 'zip':
+            c_compression = cudf_io_types.compression_type.ZIP
         else:
             c_compression = cudf_io_types.compression_type.AUTO
     else:
@@ -101,7 +129,7 @@ cpdef read_json(object filepaths_or_buffers,
         .lines(c_lines)
         .byte_range_offset(c_range_offset)
         .byte_range_size(c_range_size)
-        .experimental(experimental)
+        .recovery_mode(_get_json_recovery_mode(on_bad_lines))
         .build()
     )
     if is_list_like_dtypes:
@@ -110,6 +138,9 @@ cpdef read_json(object filepaths_or_buffers,
         opts.set_dtypes(c_dtypes_schema_map)
 
     opts.enable_keep_quotes(keep_quotes)
+    opts.enable_mixed_types_as_string(mixed_types_as_string)
+    opts.enable_prune_columns(prune_columns)
+
     # Read JSON
     cdef cudf_io_types.table_with_metadata c_result
 
@@ -127,16 +158,78 @@ cpdef read_json(object filepaths_or_buffers,
     return df
 
 
-cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except +:
+@acquire_spill_lock()
+def write_json(
+    table,
+    object path_or_buf=None,
+    object na_rep="null",
+    bool include_nulls=True,
+    bool lines=False,
+    bool index=False,
+    int rows_per_chunk=1024*64,  # 64K rows
+):
+    """
+    Cython function to call into libcudf API, see `write_json`.
+
+    See Also
+    --------
+    cudf.to_json
+    """
+    cdef table_view input_table_view = table_view_from_table(
+        table, ignore_index=True
+    )
+
+    cdef unique_ptr[data_sink] data_sink_c
+    cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
+    cdef string na_c = na_rep.encode()
+    cdef bool include_nulls_c = include_nulls
+    cdef bool lines_c = lines
+    cdef int rows_per_chunk_c = rows_per_chunk
+    cdef string true_value_c = 'true'.encode()
+    cdef string false_value_c = 'false'.encode()
+    cdef table_metadata tbl_meta
+
+    num_index_cols_meta = 0
+    cdef column_name_info child_info
+    for i, name in enumerate(table._column_names, num_index_cols_meta):
+        child_info.name = name.encode()
+        tbl_meta.schema_info.push_back(child_info)
+        _set_col_children_metadata(
+            table[name]._column,
+            tbl_meta.schema_info[i]
+        )
+
+    cdef json_writer_options options = move(
+        json_writer_options.builder(sink_info_c, input_table_view)
+        .metadata(tbl_meta)
+        .na_rep(na_c)
+        .include_nulls(include_nulls_c)
+        .lines(lines_c)
+        .rows_per_chunk(rows_per_chunk_c)
+        .true_value(true_value_c)
+        .false_value(false_value_c)
+        .build()
+    )
+
+    try:
+        with nogil:
+            libcudf_write_json(options)
+    except OverflowError:
+        raise OverflowError(
+            f"Writing JSON file with rows_per_chunk={rows_per_chunk} failed. "
+            "Consider providing a smaller rows_per_chunk argument."
+        )
+
+
+cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except *:
     cdef schema_element s_element
     cdef data_type lib_type
-    if cudf.api.types.is_categorical_dtype(dtype):
+    dtype = cudf.dtype(dtype)
+    if isinstance(dtype, cudf.CategoricalDtype):
         raise NotImplementedError(
             "CategoricalDtype as dtype is not yet "
             "supported in JSON reader"
         )
-
-    dtype = cudf.dtype(dtype)
     lib_type = dtype_to_data_type(dtype)
     s_element.type = lib_type
     if isinstance(dtype, cudf.StructDtype):
@@ -152,12 +245,32 @@ cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except +:
     return s_element
 
 
-cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:
-    if cudf.api.types.is_categorical_dtype(dtype):
+cdef data_type _get_cudf_data_type_from_dtype(object dtype) except *:
+    dtype = cudf.dtype(dtype)
+    if isinstance(dtype, cudf.CategoricalDtype):
         raise NotImplementedError(
             "CategoricalDtype as dtype is not yet "
             "supported in JSON reader"
         )
-
-    dtype = cudf.dtype(dtype)
     return dtype_to_data_type(dtype)
+
+cdef _set_col_children_metadata(Column col,
+                                column_name_info& col_meta):
+    cdef column_name_info child_info
+    if isinstance(col.dtype, cudf.StructDtype):
+        for i, (child_col, name) in enumerate(
+            zip(col.children, list(col.dtype.fields))
+        ):
+            child_info.name = name.encode()
+            col_meta.children.push_back(child_info)
+            _set_col_children_metadata(
+                child_col, col_meta.children[i]
+            )
+    elif isinstance(col.dtype, cudf.ListDtype):
+        for i, child_col in enumerate(col.children):
+            col_meta.children.push_back(child_info)
+            _set_col_children_metadata(
+                child_col, col_meta.children[i]
+            )
+    else:
+        return

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from io import BufferedWriter, IOBase
 
@@ -25,37 +25,45 @@ def _read_orc_stripe(fs, path, stripe, columns, kwargs=None):
 
 
 def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
-    """Read cudf dataframe from ORC file(s).
+    """Read ORC files into a :class:`.DataFrame`.
 
     Note that this function is mostly borrowed from upstream Dask.
 
     Parameters
     ----------
-    path: str or list(str)
+    path : str or list[str]
         Location of file(s), which can be a full URL with protocol specifier,
         and may include glob character if a single string.
-    columns: None or list(str)
+    columns : None or list[str]
         Columns to load. If None, loads all.
     filters : None or list of tuple or list of lists of tuples
-        If not None, specifies a filter predicate used to filter out row groups
-        using statistics stored for each row group as Parquet metadata. Row
-        groups that do not match the given filter predicate are not read. The
-        predicate is expressed in disjunctive normal form (DNF) like
-        `[[('x', '=', 0), ...], ...]`. DNF allows arbitrary boolean logical
-        combinations of single column predicates. The innermost tuples each
-        describe a single column predicate. The list of inner predicates is
-        interpreted as a conjunction (AND), forming a more selective and
-        multiple column predicate. Finally, the outermost list combines
-        these filters as a disjunction (OR). Predicates may also be passed
-        as a list of tuples. This form is interpreted as a single conjunction.
-        To express OR in predicates, one must use the (preferred) notation of
-        list of lists of tuples.
-    storage_options: None or dict
+        If not None, specifies a filter predicate used to filter out
+        row groups using statistics stored for each row group as
+        Parquet metadata. Row groups that do not match the given
+        filter predicate are not read. The predicate is expressed in
+        `disjunctive normal form (DNF)
+        <https://en.wikipedia.org/wiki/Disjunctive_normal_form>`__
+        like ``[[('x', '=', 0), ...], ...]``. DNF allows arbitrary
+        boolean logical combinations of single column predicates. The
+        innermost tuples each describe a single column predicate. The
+        list of inner predicates is interpreted as a conjunction
+        (AND), forming a more selective and multiple column predicate.
+        Finally, the outermost list combines these filters as a
+        disjunction (OR). Predicates may also be passed as a list of
+        tuples. This form is interpreted as a single conjunction. To
+        express OR in predicates, one must use the (preferred)
+        notation of list of lists of tuples.
+    storage_options : None or dict
         Further parameters to pass to the bytes backend.
+
+    See Also
+    --------
+    dask.dataframe.read_orc
 
     Returns
     -------
-    cudf.DataFrame
+    dask_cudf.DataFrame
+
     """
 
     storage_options = storage_options or {}
@@ -92,7 +100,7 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
             **kwargs,
         )
 
-    name = "read-orc-" + tokenize(fs_token, path, columns, **kwargs)
+    name = "read-orc-" + tokenize(fs_token, path, columns, filters, **kwargs)
     dsk = {}
     N = 0
     for path, n in zip(paths, nstripes_per_file):
@@ -133,22 +141,25 @@ def to_orc(
     compute=True,
     **kwargs,
 ):
-    """Write a dask_cudf dataframe to ORC file(s) (one file per partition).
+    """
+    Write a :class:`.DataFrame` to ORC file(s) (one file per partition).
 
     Parameters
     ----------
-    df : dask_cudf.DataFrame
-    path: string or pathlib.Path
+    df : DataFrame
+    path : str or pathlib.Path
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
     write_index : boolean, optional
         Whether or not to write the index. Defaults to True.
-    storage_options: None or dict
+    storage_options : None or dict
         Further parameters to pass to the bytes backend.
     compression : string or dict, optional
     compute : bool, optional
-        If True (default) then the result is computed immediately. If False
-        then a ``dask.delayed`` object is returned for future computation.
+        If True (default) then the result is computed immediately. If
+        False then a :class:`~dask.delayed.Delayed` object is returned
+        for future computation.
+
     """
 
     from dask import compute as dask_compute, delayed

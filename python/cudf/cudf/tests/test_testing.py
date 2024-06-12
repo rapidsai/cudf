@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -6,7 +6,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core.column.column import as_column, full
+from cudf.core.column.column import as_column
 from cudf.testing import (
     assert_frame_equal,
     assert_index_equal,
@@ -112,7 +112,6 @@ def test_basic_assert_series_equal(
     check_categorical,
     dtype,
 ):
-
     p_left = pd.Series([1, 2, 3], name="a", dtype=dtype)
     p_right = pd.Series(rdata, name=rname, dtype=dtype)
 
@@ -173,8 +172,8 @@ def test_assert_column_equal_dtype_edge_cases(other):
     assert_column_equal(base.slice(0, 0), other.slice(0, 0), check_dtype=False)
     assert_column_equal(other.slice(0, 0), base.slice(0, 0), check_dtype=False)
 
-    base = full(len(base), fill_value=cudf.NA, dtype=base.dtype)
-    other = full(len(other), fill_value=cudf.NA, dtype=other.dtype)
+    base = as_column(cudf.NA, length=len(base), dtype=base.dtype)
+    other = as_column(cudf.NA, length=len(other), dtype=other.dtype)
 
     assert_column_equal(base, other, check_dtype=False)
     assert_column_equal(other, base, check_dtype=False)
@@ -339,15 +338,15 @@ def test_series_different_type_cases(dtype, check_exact, check_dtype):
 
 
 @pytest.mark.parametrize(
-    "index",
-    [cudf.Int8Index, cudf.Int16Index, cudf.Int32Index, cudf.Int64Index],
+    "dtype",
+    ["int8", "int16", "int32", "int64"],
 )
 @pytest.mark.parametrize("exact", ["equiv", True, False])
-def test_range_index_and_int_index_eqaulity(index, exact):
+def test_range_index_and_int_index_eqaulity(dtype, exact):
     pidx1 = pd.RangeIndex(0, stop=5, step=1)
     pidx2 = pd.Index([0, 1, 2, 3, 4])
     idx1 = cudf.from_pandas(pidx1)
-    idx2 = index([0, 1, 2, 3, 4])
+    idx2 = cudf.Index([0, 1, 2, 3, 4], dtype=dtype)
 
     kind = None
     try:
@@ -429,10 +428,10 @@ def test_assert_column_memory_slice(arrow_arrays):
 
 def test_assert_column_memory_basic_same(arrow_arrays):
     data = cudf.core.column.ColumnBase.from_arrow(arrow_arrays)
-    buf = cudf.core.buffer.as_device_buffer_like(data.base_data)
+    buf = cudf.core.buffer.as_buffer(data.base_data)
 
-    left = cudf.core.column.build_column(buf, dtype=np.int32)
-    right = cudf.core.column.build_column(buf, dtype=np.int32)
+    left = cudf.core.column.build_column(buf, dtype=np.int8)
+    right = cudf.core.column.build_column(buf, dtype=np.int8)
 
     assert_column_memory_eq(left, right)
     with pytest.raises(AssertionError):

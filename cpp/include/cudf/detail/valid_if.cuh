@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/distance.h>
 
@@ -44,13 +45,13 @@ namespace detail {
  * @param[out] valid_count The count of set bits in the output bitmask
  */
 template <size_type block_size, typename InputIterator, typename Predicate>
-__global__ void valid_if_kernel(
+CUDF_KERNEL void valid_if_kernel(
   bitmask_type* output, InputIterator begin, size_type size, Predicate p, size_type* valid_count)
 {
   constexpr size_type leader_lane{0};
   auto const lane_id{threadIdx.x % warp_size};
-  thread_index_type i            = threadIdx.x + blockIdx.x * blockDim.x;
-  thread_index_type const stride = blockDim.x * gridDim.x;
+  auto i            = cudf::detail::grid_1d::global_thread_id<block_size>();
+  auto const stride = cudf::detail::grid_1d::grid_stride<block_size>();
   size_type warp_valid_count{0};
 
   auto active_mask = __ballot_sync(0xFFFF'FFFFu, i < size);
@@ -86,12 +87,11 @@ __global__ void valid_if_kernel(
  * null count
  */
 template <typename InputIterator, typename Predicate>
-std::pair<rmm::device_buffer, size_type> valid_if(
-  InputIterator begin,
-  InputIterator end,
-  Predicate p,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
+                                                  InputIterator end,
+                                                  Predicate p,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(begin <= end, "Invalid range.");
 
@@ -120,7 +120,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
 
  * Given a set of bitmasks, `masks`, the state of bit `j` in mask `i` is
  * determined by `p( *(begin1 + i), *(begin2 + j))`. If the predicate evaluates
- * to true, the the bit is set to `1`. If false, set to `0`.
+ * to true, the bit is set to `1`. If false, set to `0`.
  *
  * Example Arguments:
  * begin1:        zero-based counting iterator,
@@ -152,13 +152,13 @@ template <typename InputIterator1,
           typename InputIterator2,
           typename BinaryPredicate,
           int32_t block_size>
-__global__ void valid_if_n_kernel(InputIterator1 begin1,
-                                  InputIterator2 begin2,
-                                  BinaryPredicate p,
-                                  bitmask_type* masks[],
-                                  size_type mask_count,
-                                  size_type mask_num_bits,
-                                  size_type* valid_counts)
+CUDF_KERNEL void valid_if_n_kernel(InputIterator1 begin1,
+                                   InputIterator2 begin2,
+                                   BinaryPredicate p,
+                                   bitmask_type* masks[],
+                                   size_type mask_count,
+                                   size_type mask_num_bits,
+                                   size_type* valid_counts)
 {
   for (size_type mask_idx = 0; mask_idx < mask_count; mask_idx++) {
     auto const mask = masks[mask_idx];

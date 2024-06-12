@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,33 +21,38 @@
 #pragma once
 
 #include <cudf/io/detail/utils.hpp>
+#include <cudf/io/parquet_metadata.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
+namespace cudf::io {
 
 // Forward declaration
 class parquet_reader_options;
 class parquet_writer_options;
 class chunked_parquet_writer_options;
 
-namespace detail {
-namespace parquet {
+namespace parquet::detail {
 
 /**
  * @brief Class to read Parquet dataset data into columns.
  */
 class reader {
- private:
+ protected:
   class impl;
   std::unique_ptr<impl> _impl;
+
+  /**
+   * @brief Default constructor, needed for subclassing.
+   */
+  reader();
 
  public:
   /**
@@ -61,21 +66,111 @@ class reader {
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                   parquet_reader_options const& options,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  rmm::device_async_resource_ref mr);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
    */
-  ~reader();
+  virtual ~reader();
 
   /**
    * @brief Reads the dataset as per given options.
    *
-   * @param options Settings for controlling reading behavior
-   *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(parquet_reader_options const& options);
+  table_with_metadata read();
+};
+
+/**
+ * @brief The reader class that supports iterative reading of a given file.
+ *
+ * This class intentionally subclasses the `reader` class with private inheritance to hide the
+ * `reader::read()` API. As such, only chunked reading APIs are supported.
+ */
+class chunked_reader : private reader {
+ public:
+  /**
+   * @brief Constructor from an output size memory limit and an input size memory limit and an array
+   * of data sources with reader options.
+   *
+   * The typical usage should be similar to this:
+   * ```
+   *  do {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  } while (reader.has_next());
+   *
+   * // Alternatively
+   *
+   *  while (reader.has_next()) {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  }
+   *
+   * ```
+   *
+   * If `chunk_read_limit == 0` (i.e., no output limit), and `pass_read_limit == 0` (no input
+   * temporary memory size limit) a call to `read_chunk()` will read the whole file and return a
+   * table containing all rows.
+   *
+   * The chunk_read_limit parameter controls the size of the output chunks produces.  If the user
+   * specifies 100 MB of data, the reader will attempt to return chunks containing tables that have
+   * a total bytes size (over all columns) of 100 MB or less.  This is a soft limit and the code
+   * will not fail if it cannot satisfy the limit.  It will make a best-effort attempt only.
+   *
+   * The pass_read_limit parameter controls how much temporary memory is used in the process of
+   * decoding the file.  The primary contributor to this memory usage is the uncompressed size of
+   * the data read out of the file and the decompressed (but not yet decoded) size of the data. The
+   * granularity of a given pass is at the row group level. It will not attempt to read at the sub
+   * row-group level.
+   *
+   * Combined, the way to visualize passes and chunks is as follows:
+   *
+   * @code{.pseudo}
+   * for(each pass){
+   *    for(each output chunk within a pass){
+   *       return a table that fits within the output chunk limit
+   *    }
+   *  }
+   * @endcode
+   *
+   * With a pass_read_limit of `0` you are simply saying you have one pass that reads the entire
+   * file as normal.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   * or `0` if there is no limit
+   * @param pass_read_limit Limit on total amount of memory used for temporary computations during
+   * loading, or `0` if there is no limit
+   * @param sources Input `datasource` objects to read the dataset from
+   * @param options Settings for controlling reading behavior
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  explicit chunked_reader(std::size_t chunk_read_limit,
+                          std::size_t pass_read_limit,
+                          std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                          parquet_reader_options const& options,
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr);
+
+  /**
+   * @brief Destructor explicitly-declared to avoid inlined in header.
+   *
+   * Since the declaration of the internal `_impl` object does not exist in this header, this
+   * destructor needs to be defined in a separate source file which can access to that object's
+   * declaration.
+   */
+  ~chunked_reader();
+
+  /**
+   * @copydoc cudf::io::chunked_parquet_reader::has_next
+   */
+  [[nodiscard]] bool has_next() const;
+
+  /**
+   * @copydoc cudf::io::chunked_parquet_reader::read_chunk
+   */
+  [[nodiscard]] table_with_metadata read_chunk() const;
 };
 
 /**
@@ -94,13 +189,11 @@ class writer {
    * @param options Settings for controlling writing behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::vector<std::unique_ptr<data_sink>> sinks,
                   parquet_writer_options const& options,
-                  SingleWriteMode mode,
-                  rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  cudf::io::detail::single_write_mode mode,
+                  rmm::cuda_stream_view stream);
 
   /**
    * @brief Constructor for writer to handle chunked parquet options.
@@ -109,15 +202,13 @@ class writer {
    * @param options Settings for controlling writing behavior for chunked writer
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
    *
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
   explicit writer(std::vector<std::unique_ptr<data_sink>> sinks,
                   chunked_parquet_writer_options const& options,
-                  SingleWriteMode mode,
-                  rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr);
+                  cudf::io::detail::single_write_mode mode,
+                  rmm::cuda_stream_view stream);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -126,6 +217,8 @@ class writer {
 
   /**
    * @brief Writes a single subtable as part of a larger parquet file/table write.
+   *
+   * @throws rmm::bad_alloc if there is insufficient space for temporary buffers
    *
    * @param[in] table The table information to be written
    * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
@@ -151,10 +244,17 @@ class writer {
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
   static std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
-    const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
+    std::vector<std::unique_ptr<std::vector<uint8_t>>> const& metadata_list);
 };
 
-};  // namespace parquet
-};  // namespace detail
-};  // namespace io
-};  // namespace cudf
+/**
+ * @brief Reads metadata of parquet dataset.
+ *
+ * @param sources Dataset sources to read from
+ *
+ * @return parquet_metadata with parquet schema, number of rows, number of row groups and key-value
+ * metadata.
+ */
+parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources);
+}  // namespace parquet::detail
+}  // namespace cudf::io

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <nvtext/stemmer.hpp>
 
@@ -28,12 +28,11 @@
 
 #include <vector>
 
-struct TextStemmerTest : public cudf::test::BaseFixture {
-};
+struct TextStemmerTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextStemmerTest, PorterStemmer)
 {
-  std::vector<const char*> h_strings{"abandon",
+  std::vector<char const*> h_strings{"abandon",
                                      nullptr,
                                      "abbey",
                                      "cleans",
@@ -59,7 +58,7 @@ TEST_F(TextStemmerTest, PorterStemmer)
 
 TEST_F(TextStemmerTest, IsLetterIndex)
 {
-  std::vector<const char*> h_strings{"abandon",
+  std::vector<char const*> h_strings{"abandon",
                                      nullptr,
                                      "abbey",
                                      "cleans",
@@ -118,7 +117,7 @@ TEST_F(TextStemmerTest, IsLetterIndex)
 
 TEST_F(TextStemmerTest, IsLetterIndices)
 {
-  std::vector<const char*> h_strings{"abandon",
+  std::vector<char const*> h_strings{"abandon",
                                      nullptr,
                                      "abbey",
                                      "cleans",

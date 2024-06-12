@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,8 +36,7 @@ constexpr int32_t null{0};  // Mark for null child elements
 constexpr int32_t XXX{0};   // Mark for null struct elements
 
 template <typename T>
-struct TypedStructScatterTest : public cudf::test::BaseFixture {
-};
+struct TypedStructScatterTest : public cudf::test::BaseFixture {};
 
 using TestTypes = cudf::test::Concat<cudf::test::IntegralTypes,
                                      cudf::test::FloatingPointTypes,
@@ -212,7 +211,7 @@ TYPED_TEST(TypedStructScatterTest, ScatterStructOfListsTest)
   // Expected data
   auto const validity_expected = std::vector<bool>{0, 1, 1, 0, 0, 1, 1, 0, 0};
   auto lists_col_expected      = lists_col{
-    {{1}, {2, 3}, {80}, {70, 75}, {55, 60, 65}, {35, 40, 45, 50}, {5}, {10, 15}, {20, 25, 30}},
+         {{1}, {2, 3}, {80}, {70, 75}, {55, 60, 65}, {35, 40, 45, 50}, {5}, {10, 15}, {20, 25, 30}},
     validity_expected.begin()};
   auto const structs_expected = structs_col{{lists_col_expected}}.release();
 
