@@ -248,7 +248,7 @@ TEST_F(JsonTest, StackContextUtf8)
 struct JsonDelimiterParamTest : public cudf::test::BaseFixture,
                                 public testing::WithParamInterface<char> {};
 
-// Parametrize qualifying JSON tests for executing both nested reader and legacy JSON lines reader
+// Parametrize qualifying JSON tests for multiple delimiters
 INSTANTIATE_TEST_SUITE_P(JsonDelimiterParamTest,
                          JsonDelimiterParamTest,
                          ::testing::Values('\n', '\b', '\v', '\f', 'h'));

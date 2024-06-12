@@ -22,12 +22,7 @@ from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.extensions import no_default
-from cudf.api.types import (
-    is_bool_dtype,
-    is_float_dtype,
-    is_list_like,
-    is_numeric_dtype,
-)
+from cudf.api.types import is_bool_dtype, is_list_like, is_numeric_dtype
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, StructDtype, as_column
@@ -38,6 +33,15 @@ from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import GetAttrGetItemMixin
+
+
+def _deprecate_collect():
+    warnings.warn(
+        "Groupby.collect is deprecated and "
+        "will be removed in a future version. "
+        "Use `.agg(list)` instead.",
+        FutureWarning,
+    )
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]
@@ -326,12 +330,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             FutureWarning,
         )
         index = self.grouping.keys.unique().sort_values().to_pandas()
-        obj_dtypes = self.obj._dtypes
         return pd.DataFrame(
-            {
-                name: [obj_dtypes[name]] * len(index)
-                for name in self.obj._data.names
-            },
+            {name: [dtype] * len(index) for name, dtype in self.obj._dtypes},
             index=index,
         )
 
@@ -490,8 +490,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # treats NaNs the way we treat nulls.
         if cudf.get_option("mode.pandas_compatible"):
             if any(
-                is_float_dtype(typ)
-                for typ in self.grouping.values._dtypes.values()
+                col.dtype.kind == "f" for col in self.grouping.values._columns
             ):
                 raise NotImplementedError(
                     "NaNs are not supported in groupby.rank."
@@ -940,7 +939,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         result = result[sizes > n]
 
-        result._index = self.obj.index.take(
+        result.index = self.obj.index.take(
             result._data["__groupbynth_order__"]
         )
         del result._data["__groupbynth_order__"]
@@ -1029,7 +1028,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         if has_null_group:
             group_ids.iloc[-1] = cudf.NA
 
-        group_ids._index = index
+        group_ids.index = index
         return self._broadcast(group_ids)
 
     def sample(
@@ -1199,7 +1198,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def _grouped(self, *, include_groups: bool = True):
         offsets, grouped_key_cols, grouped_value_cols = self._groupby.groups(
-            [*self.obj._index._columns, *self.obj._columns]
+            [*self.obj.index._columns, *self.obj._columns]
         )
         grouped_keys = cudf.core.index._index_from_data(
             dict(enumerate(grouped_key_cols))
@@ -2180,7 +2179,8 @@ class GroupBy(Serializable, Reducible, Scannable):
     @_cudf_nvtx_annotate
     def collect(self):
         """Get a list of all the values for each column in each group."""
-        return self.agg("collect")
+        _deprecate_collect()
+        return self.agg(list)
 
     @_cudf_nvtx_annotate
     def unique(self):
@@ -2790,15 +2790,13 @@ class _Grouping(Serializable):
         nkeys = len(self._key_columns)
 
         if nkeys == 0:
-            return cudf.core.index.as_index([], name=None)
+            return cudf.Index([], name=None)
         elif nkeys > 1:
             return cudf.MultiIndex._from_data(
                 dict(zip(range(nkeys), self._key_columns))
             )._set_names(self.names)
         else:
-            return cudf.core.index.as_index(
-                self._key_columns[0], name=self.names[0]
-            )
+            return cudf.Index(self._key_columns[0], name=self.names[0])
 
     @property
     def values(self) -> cudf.core.frame.Frame:
@@ -2839,8 +2837,8 @@ class _Grouping(Serializable):
             self._key_columns.append(self._obj._data[by])
         except KeyError as e:
             # `by` can be index name(label) too.
-            if by in self._obj._index.names:
-                self._key_columns.append(self._obj._index._data[by])
+            if by in self._obj.index.names:
+                self._key_columns.append(self._obj.index._data[by])
             else:
                 raise e
         self.names.append(by)

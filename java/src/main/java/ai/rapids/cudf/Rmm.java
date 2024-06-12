@@ -273,8 +273,11 @@ public class Rmm {
    *
    * @param size initial and maximum size for the cuDF default pinned pool.
    *        Pass size=0 to disable the default pool.
+   *
+   * @return true if we were able to setup the default resource, false if there was
+   *         a resource already set.
    */
-  public static synchronized native void configureDefaultCudfPinnedPoolSize(long size);
+  public static synchronized native boolean configureDefaultCudfPinnedPoolSize(long size);
 
   /**
    * Get the most recently set pool size or -1 if RMM has not been initialized or pooling is
@@ -594,7 +597,7 @@ public class Rmm {
 
   public static native long newPinnedPoolMemoryResource(long initSize, long maxSize);
 
-  public static native long setCuioPinnedPoolMemoryResource(long poolPtr);
+  public static native long setCudfPinnedPoolMemoryResource(long poolPtr);
 
   public static native void releasePinnedPoolMemoryResource(long poolPtr);
 

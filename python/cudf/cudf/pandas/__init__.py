@@ -2,12 +2,14 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+
 import warnings
 
+from .fast_slow_proxy import is_proxy_object
 from .magics import load_ipython_extension
 from .profiler import Profiler
 
-__all__ = ["Profiler", "load_ipython_extension", "install"]
+__all__ = ["Profiler", "load_ipython_extension", "install", "is_proxy_object"]
 
 
 LOADED = False
@@ -24,7 +26,7 @@ def install():
 
     if (rmm_mode := os.getenv("CUDF_PANDAS_RMM_MODE", None)) is not None:
         import rmm.mr
-        from rmm._lib.memory_resource import get_free_device_memory
+        from rmm.mr import available_device_memory
 
         # Check if a non-default memory resource is set
         current_mr = rmm.mr.get_current_device_resource()
@@ -33,7 +35,8 @@ def install():
                 f"cudf.pandas detected an already configured memory resource, ignoring 'CUDF_PANDAS_RMM_MODE'={str(rmm_mode)}",
                 UserWarning,
             )
-
+        free_memory, _ = available_device_memory()
+        free_memory = int(float(free_memory) / 80.0)
         if rmm_mode == "cuda":
             mr = rmm.mr.CudaMemoryResource()
             rmm.mr.set_current_device_resource(mr)
@@ -41,13 +44,11 @@ def install():
             rmm.mr.set_current_device_resource(
                 rmm.mr.PoolMemoryResource(
                     rmm.mr.get_current_device_resource(),
-                    initial_pool_size=get_free_device_memory(80),
+                    initial_pool_size=free_memory,
                 )
             )
         elif rmm_mode == "async":
-            mr = rmm.mr.CudaAsyncMemoryResource(
-                initial_pool_size=get_free_device_memory(80)
-            )
+            mr = rmm.mr.CudaAsyncMemoryResource(initial_pool_size=free_memory)
             rmm.mr.set_current_device_resource(mr)
         elif rmm_mode == "managed":
             mr = rmm.mr.ManagedMemoryResource()
@@ -56,7 +57,7 @@ def install():
             rmm.reinitialize(
                 managed_memory=True,
                 pool_allocator=True,
-                initial_pool_size=get_free_device_memory(80),
+                initial_pool_size=free_memory,
             )
         else:
             raise TypeError(f"Unsupported rmm mode: {rmm_mode}")

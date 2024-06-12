@@ -30,7 +30,6 @@ from cudf.core.index import (
     BaseIndex,
     _get_indexer_basic,
     _lexsorted_equal_range,
-    as_index,
 )
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.utils.dtypes import is_column_like
@@ -527,7 +526,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_cudf_nvtx_annotate
     def nlevels(self):
         """Integer number of levels in this MultiIndex."""
-        return len(self._data)
+        return self._num_columns
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -563,7 +562,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def ndim(self):
+    def ndim(self) -> int:
         """Dimension of the data. For MultiIndex ndim is always 2."""
         return 2
 
@@ -824,7 +823,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # it into an Index and name the final index values according
             # to that column's name.
             *_, last_column = index._data.columns
-            out_index = as_index(last_column)
+            out_index = cudf.Index(last_column)
             out_index.name = index.names[-1]
             index = out_index
         elif out_index._num_columns > 1:
@@ -1082,7 +1081,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 raise KeyError(f"Level not found: '{level}'")
         else:
             level_idx = colnames.index(level)
-        level_values = as_index(self._data[level], name=self.names[level_idx])
+        level_values = cudf.Index(
+            self._data[level], name=self.names[level_idx]
+        )
         return level_values
 
     def _is_numeric(self):

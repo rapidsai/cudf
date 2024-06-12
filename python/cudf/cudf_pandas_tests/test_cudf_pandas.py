@@ -21,7 +21,7 @@ from numba import NumbaDeprecationWarning
 from pytz import utc
 
 from cudf.pandas import LOADED, Profiler
-from cudf.pandas.fast_slow_proxy import _Unusable
+from cudf.pandas.fast_slow_proxy import _Unusable, is_proxy_object
 
 if not LOADED:
     raise ImportError("These tests must be run with cudf.pandas loaded")
@@ -42,8 +42,9 @@ from pandas.tseries.holiday import (
     get_calendar,
 )
 
-# Accelerated pandas has the real pandas module as an attribute
+# Accelerated pandas has the real pandas and cudf modules as attributes
 pd = xpd._fsproxy_slow
+cudf = xpd._fsproxy_fast
 
 
 @pytest.fixture
@@ -1450,3 +1451,82 @@ def test_rmm_option_on_import(env_value):
         assert sp_completed.returncode == 0
     else:
         assert sp_completed.returncode == 1
+
+
+def test_cudf_pandas_debugging_different_results(monkeypatch):
+    cudf_mean = cudf.Series.mean
+
+    def mock_mean_one(self, *args, **kwargs):
+        return np.float64(1.0)
+
+    with monkeypatch.context() as monkeycontext:
+        monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", mock_mean_one)
+        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
+        s = xpd.Series([1, 2])
+        with pytest.warns(
+            UserWarning,
+            match="The results from cudf and pandas were different.",
+        ):
+            assert s.mean() == 1.0
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", cudf_mean)
+
+
+def test_cudf_pandas_debugging_pandas_error(monkeypatch):
+    pd_mean = pd.Series.mean
+
+    def mock_mean_exception(self, *args, **kwargs):
+        raise Exception()
+
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setattr(
+            xpd.Series.mean, "_fsproxy_slow", mock_mean_exception
+        )
+        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
+        s = xpd.Series([1, 2])
+        with pytest.warns(
+            UserWarning,
+            match="The result from pandas could not be computed.",
+        ):
+            s = xpd.Series([1, 2])
+            assert s.mean() == 1.5
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
+
+
+def test_cudf_pandas_debugging_failed(monkeypatch):
+    pd_mean = pd.Series.mean
+
+    def mock_mean_none(self, *args, **kwargs):
+        return None
+
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setattr(xpd.Series.mean, "_fsproxy_slow", mock_mean_none)
+        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
+        s = xpd.Series([1, 2])
+        with pytest.warns(
+            UserWarning,
+            match="Pandas debugging mode failed.",
+        ):
+            s = xpd.Series([1, 2])
+            assert s.mean() == 1.5
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
+
+
+def test_excelwriter_pathlike():
+    assert isinstance(pd.ExcelWriter("foo.xlsx"), os.PathLike)
+
+
+def test_is_proxy_object():
+    np_arr = np.array([1])
+
+    s1 = xpd.Series([1])
+    s2 = pd.Series([1])
+
+    np_arr_proxy = s1.to_numpy()
+
+    assert not is_proxy_object(np_arr)
+    assert is_proxy_object(np_arr_proxy)
+    assert is_proxy_object(s1)
+    assert not is_proxy_object(s2)

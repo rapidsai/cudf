@@ -175,12 +175,12 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
     a = cudf.Series(cupy.asarray([1, 2, 3]))._column
     a = cudf.core.column.as_column(a)
     b = cupy.asarray([1, 1, 1])  # noqa: F841
-    assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
+    assert_eq(pd.Index([1, 2, 3]), a.to_pandas())
 
     a = cudf.Series(cupy.asarray([1, 2, 3]))._column
     a.name = "b"
     b = cupy.asarray([1, 1, 1])  # noqa: F841
-    assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
+    assert_eq(pd.Index([1, 2, 3]), a.to_pandas())
 
 
 @pytest.mark.xfail(

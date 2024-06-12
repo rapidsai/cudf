@@ -15,7 +15,6 @@
  */
 
 #include "io/comp/io_uncomp.hpp"
-#include "io/json/legacy/read_json.hpp"
 #include "io/json/nested_json.hpp"
 #include "read_json.hpp"
 
@@ -86,7 +85,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                                   sources.end(),
                                   prefsum_source_sizes.begin(),
                                   std::plus<int>{},
-                                  [](const std::unique_ptr<datasource>& s) { return s->size(); });
+                                  [](std::unique_ptr<datasource> const& s) { return s->size(); });
     auto upper =
       std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
     size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
@@ -266,14 +265,6 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-
-  // TODO remove this if-statement once legacy is removed
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-  if (reader_opts.is_enabled_legacy()) {
-    return legacy::read_json(sources, reader_opts, stream, mr);
-  }
-#pragma GCC diagnostic pop
 
   if (reader_opts.get_byte_range_offset() != 0 or reader_opts.get_byte_range_size() != 0) {
     CUDF_EXPECTS(reader_opts.is_enabled_lines(),

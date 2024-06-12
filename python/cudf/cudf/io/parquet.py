@@ -69,6 +69,10 @@ def _write_parquet(
     force_nullable_schema=False,
     header_version="1.0",
     use_dictionary=True,
+    skip_compression=None,
+    column_encoding=None,
+    column_type_length=None,
+    output_as_binary=None,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -102,6 +106,10 @@ def _write_parquet(
         "force_nullable_schema": force_nullable_schema,
         "header_version": header_version,
         "use_dictionary": use_dictionary,
+        "skip_compression": skip_compression,
+        "column_encoding": column_encoding,
+        "column_type_length": column_type_length,
+        "output_as_binary": output_as_binary,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -140,6 +148,12 @@ def write_to_dataset(
     max_page_size_rows=None,
     storage_options=None,
     force_nullable_schema=False,
+    header_version="1.0",
+    use_dictionary=True,
+    skip_compression=None,
+    column_encoding=None,
+    column_type_length=None,
+    output_as_binary=None,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -204,6 +218,30 @@ def write_to_dataset(
         If True, writes all columns as `null` in schema.
         If False, columns are written as `null` if they contain null values,
         otherwise as `not null`.
+    header_version : {{'1.0', '2.0'}}, default "1.0"
+        Controls whether to use version 1.0 or version 2.0 page headers when
+        encoding. Version 1.0 is more portable, but version 2.0 enables the
+        use of newer encoding schemes.
+    force_nullable_schema : bool, default False.
+        If True, writes all columns as `null` in schema.
+        If False, columns are written as `null` if they contain null values,
+        otherwise as `not null`.
+    skip_compression : set, optional, default None
+        If a column name is present in the set, that column will not be compressed,
+        regardless of the ``compression`` setting.
+    column_encoding : dict, optional, default None
+        Sets the page encoding to use on a per-column basis. The key is a column
+        name, and the value is one of: 'PLAIN', 'DICTIONARY', 'DELTA_BINARY_PACKED',
+        'DELTA_LENGTH_BYTE_ARRAY', 'DELTA_BYTE_ARRAY', 'BYTE_STREAM_SPLIT', or
+        'USE_DEFAULT'.
+    column_type_length : dict, optional, default None
+        Specifies the width in bytes of ``FIXED_LEN_BYTE_ARRAY`` column elements.
+        The key is a column name and the value is an integer. The named column
+        will be output as unannotated binary (i.e. the column will behave as if
+        ``output_as_binary`` was set).
+    output_as_binary : set, optional, default None
+        If a column name is present in the set, that column will be output as
+        unannotated binary, rather than the default 'UTF-8'.
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
@@ -241,6 +279,12 @@ def write_to_dataset(
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
             force_nullable_schema=force_nullable_schema,
+            header_version=header_version,
+            use_dictionary=use_dictionary,
+            skip_compression=skip_compression,
+            column_encoding=column_encoding,
+            column_type_length=column_type_length,
+            output_as_binary=output_as_binary,
         )
 
     else:
@@ -262,6 +306,12 @@ def write_to_dataset(
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
             force_nullable_schema=force_nullable_schema,
+            header_version=header_version,
+            use_dictionary=use_dictionary,
+            skip_compression=skip_compression,
+            column_encoding=column_encoding,
+            column_type_length=column_type_length,
+            output_as_binary=output_as_binary,
         )
 
     return metadata
@@ -906,6 +956,10 @@ def to_parquet(
     force_nullable_schema=False,
     header_version="1.0",
     use_dictionary=True,
+    skip_compression=None,
+    column_encoding=None,
+    column_type_length=None,
+    output_as_binary=None,
     *args,
     **kwargs,
 ):
@@ -955,6 +1009,12 @@ def to_parquet(
                 return_metadata=return_metadata,
                 storage_options=storage_options,
                 force_nullable_schema=force_nullable_schema,
+                header_version=header_version,
+                use_dictionary=use_dictionary,
+                skip_compression=skip_compression,
+                column_encoding=column_encoding,
+                column_type_length=column_type_length,
+                output_as_binary=output_as_binary,
             )
 
         partition_info = (
@@ -983,6 +1043,10 @@ def to_parquet(
             force_nullable_schema=force_nullable_schema,
             header_version=header_version,
             use_dictionary=use_dictionary,
+            skip_compression=skip_compression,
+            column_encoding=column_encoding,
+            column_type_length=column_type_length,
+            output_as_binary=output_as_binary,
         )
 
     else:

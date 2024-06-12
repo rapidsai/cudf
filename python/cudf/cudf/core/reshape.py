@@ -836,7 +836,7 @@ def get_dummies(
                     dtype=dtype,
                 )
                 result_data.update(col_enc_data)
-            return cudf.DataFrame._from_data(result_data, index=df._index)
+            return cudf.DataFrame._from_data(result_data, index=df.index)
     else:
         ser = cudf.Series(df)
         unique = _get_unique(column=ser._column, dummy_na=dummy_na)
@@ -847,7 +847,7 @@ def get_dummies(
             prefix_sep=prefix_sep,
             dtype=dtype,
         )
-        return cudf.DataFrame._from_data(data, index=ser._index)
+        return cudf.DataFrame._from_data(data, index=ser.index)
 
 
 def _merge_sorted(
@@ -899,7 +899,7 @@ def _merge_sorted(
         raise ValueError("`by_index` and `ignore_index` cannot both be True")
 
     if by_index:
-        key_columns_indices = list(range(0, objs[0]._index.nlevels))
+        key_columns_indices = list(range(0, objs[0].index.nlevels))
     else:
         if keys is None:
             key_columns_indices = list(range(0, objs[0]._num_columns))
@@ -909,12 +909,12 @@ def _merge_sorted(
             ]
         if not ignore_index:
             key_columns_indices = [
-                idx + objs[0]._index.nlevels for idx in key_columns_indices
+                idx + objs[0].index.nlevels for idx in key_columns_indices
             ]
 
     columns = [
         [
-            *(obj._index._data.columns if not ignore_index else ()),
+            *(obj.index._data.columns if not ignore_index else ()),
             *obj._columns,
         ]
         for obj in objs
@@ -1210,9 +1210,7 @@ def _get_unique(column, dummy_na):
     else:
         unique = column.unique().sort_values()
     if not dummy_na:
-        if np.issubdtype(unique.dtype, np.floating):
-            unique = unique.nans_to_nulls()
-        unique = unique.dropna()
+        unique = unique.nans_to_nulls().dropna()
     return unique
 
 

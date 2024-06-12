@@ -146,7 +146,7 @@ class SpillableBufferOwner(BufferOwner):
         """Create a spillabe buffer from host memory.
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
-        be convertible to a buffer object using `numpy.array()`
+        be convertible to a buffer object using `numpy.asanyarray()`
 
         The new buffer is marked as spilled to host memory already.
 
@@ -165,7 +165,7 @@ class SpillableBufferOwner(BufferOwner):
 
         # Convert to a memoryview using numpy array, this will not copy data
         # in most cases.
-        data = memoryview(numpy.array(data, copy=False, subok=True))
+        data = memoryview(numpy.asanyarray(data))
         if not data.c_contiguous:
             raise ValueError("Buffer data must be C-contiguous")
         data = data.cast("B")  # Make sure itemsize==1

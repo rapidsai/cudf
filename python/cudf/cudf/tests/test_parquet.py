@@ -22,6 +22,7 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
+from cudf._lib.parquet import ParquetReader
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
@@ -2870,6 +2871,82 @@ def test_parquet_reader_fixed_len_with_dict(tmpdir):
     assert_eq(expect, got)
 
 
+def test_parquet_flba_round_trip(tmpdir):
+    def flba(i):
+        hasher = hashlib.sha256()
+        hasher.update(i.to_bytes(4, "little"))
+        return hasher.digest()
+
+    # use pyarrow to write table of fixed_len_byte_array
+    num_rows = 200
+    data = pa.array([flba(i) for i in range(num_rows)], type=pa.binary(32))
+    padf = pa.Table.from_arrays([data], names=["flba"])
+    padf_fname = tmpdir.join("padf.parquet")
+    pq.write_table(padf, padf_fname)
+
+    # round trip data with cudf
+    cdf = cudf.read_parquet(padf_fname)
+    cdf_fname = tmpdir.join("cdf.parquet")
+    cdf.to_parquet(cdf_fname, column_type_length={"flba": 32})
+
+    # now read back in with pyarrow to test it was written properly by cudf
+    padf2 = pq.read_table(padf_fname)
+    padf3 = pq.read_table(cdf_fname)
+    assert_eq(padf2, padf3)
+    assert_eq(padf2.schema[0].type, padf3.schema[0].type)
+
+
+@pytest.mark.parametrize(
+    "encoding",
+    [
+        "PLAIN",
+        "DICTIONARY",
+        "DELTA_BINARY_PACKED",
+        "BYTE_STREAM_SPLIT",
+        "USE_DEFAULT",
+    ],
+)
+def test_per_column_options(tmpdir, encoding):
+    pdf = pd.DataFrame({"ilist": [[1, 2, 3, 1, 2, 3]], "i1": [1]})
+    cdf = cudf.from_pandas(pdf)
+    fname = tmpdir.join("ilist.parquet")
+    cdf.to_parquet(
+        fname,
+        column_encoding={"ilist.list.element": encoding},
+        compression="SNAPPY",
+        skip_compression={"ilist.list.element"},
+    )
+    # DICTIONARY and USE_DEFAULT should both result in a PLAIN_DICTIONARY encoding in parquet
+    encoding_name = (
+        "PLAIN_DICTIONARY"
+        if encoding == "DICTIONARY" or encoding == "USE_DEFAULT"
+        else encoding
+    )
+    pf = pq.ParquetFile(fname)
+    fmd = pf.metadata
+    assert encoding_name in fmd.row_group(0).column(0).encodings
+    assert fmd.row_group(0).column(0).compression == "UNCOMPRESSED"
+    assert fmd.row_group(0).column(1).compression == "SNAPPY"
+
+
+@pytest.mark.parametrize(
+    "encoding",
+    ["DELTA_LENGTH_BYTE_ARRAY", "DELTA_BYTE_ARRAY"],
+)
+def test_per_column_options_string_col(tmpdir, encoding):
+    pdf = pd.DataFrame({"s": ["a string"], "i1": [1]})
+    cdf = cudf.from_pandas(pdf)
+    fname = tmpdir.join("strcol.parquet")
+    cdf.to_parquet(
+        fname,
+        column_encoding={"s": encoding},
+        compression="SNAPPY",
+    )
+    pf = pq.ParquetFile(fname)
+    fmd = pf.metadata
+    assert encoding in fmd.row_group(0).column(0).encodings
+
+
 def test_parquet_reader_rle_boolean(datadir):
     fname = datadir / "rle_boolean_encoding.parquet"
 
@@ -3331,3 +3408,29 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema():
 
     # Check results
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
+@pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
+@pytest.mark.parametrize("use_pandas_metadata", [True, False])
+@pytest.mark.parametrize("row_groups", [[[0]], None, [[0, 1]]])
+def test_parquet_chunked_reader(
+    chunk_read_limit, pass_read_limit, use_pandas_metadata, row_groups
+):
+    df = pd.DataFrame(
+        {"a": [1, 2, 3, 4] * 1000000, "b": ["av", "qw", "hi", "xyz"] * 1000000}
+    )
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+    reader = ParquetReader(
+        [buffer],
+        chunk_read_limit=chunk_read_limit,
+        pass_read_limit=pass_read_limit,
+        use_pandas_metadata=use_pandas_metadata,
+        row_groups=row_groups,
+    )
+    expected = cudf.read_parquet(
+        buffer, use_pandas_metadata=use_pandas_metadata, row_groups=row_groups
+    )
+    actual = reader.read()
+    assert_eq(expected, actual)

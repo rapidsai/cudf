@@ -498,7 +498,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointColumnWrapper)
 TYPED_TEST(FixedPointTestAllReps, NoScaleOrWrongTypeID)
 {
   EXPECT_THROW(cudf::make_fixed_point_column(cudf::data_type{cudf::type_id::INT32}, 0),
-               cudf::logic_error);
+               cudf::data_type_error);
 }
 
 TYPED_TEST(FixedPointTestAllReps, SimpleFixedPointColumnWrapper)

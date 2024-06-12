@@ -17,13 +17,7 @@ import pytest
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype
-from cudf.core.index import (
-    CategoricalIndex,
-    DatetimeIndex,
-    Index,
-    RangeIndex,
-    as_index,
-)
+from cudf.core.index import CategoricalIndex, DatetimeIndex, Index, RangeIndex
 from cudf.testing._utils import (
     ALL_TYPES,
     FLOAT_TYPES,
@@ -200,11 +194,11 @@ def test_pandas_as_index():
     pdf_category_index = pd.CategoricalIndex(["a", "b", "c", "b", "a"])
 
     # Define cudf Indexes
-    gdf_int_index = as_index(pdf_int_index)
-    gdf_uint_index = as_index(pdf_uint_index)
-    gdf_float_index = as_index(pdf_float_index)
-    gdf_datetime_index = as_index(pdf_datetime_index)
-    gdf_category_index = as_index(pdf_category_index)
+    gdf_int_index = Index(pdf_int_index)
+    gdf_uint_index = Index(pdf_uint_index)
+    gdf_float_index = Index(pdf_float_index)
+    gdf_datetime_index = Index(pdf_datetime_index)
+    gdf_category_index = Index(pdf_category_index)
 
     # Check instance types
     assert isinstance(gdf_int_index, Index)
@@ -232,7 +226,7 @@ def test_pandas_as_index():
 @pytest.mark.parametrize("name", SERIES_OR_INDEX_NAMES)
 def test_index_rename(initial_name, name):
     pds = pd.Index([1, 2, 3], name=initial_name)
-    gds = as_index(pds)
+    gds = Index(pds)
 
     assert_eq(pds, gds)
 
@@ -245,18 +239,18 @@ def test_index_rename(initial_name, name):
     and if name is being handles in recursive creation.
     """
     pds = pd.Index(expect)
-    gds = as_index(got)
+    gds = Index(got)
 
     assert_eq(pds, gds)
 
     pds = pd.Index(pds, name="abc")
-    gds = as_index(gds, name="abc")
+    gds = Index(gds, name="abc")
     assert_eq(pds, gds)
 
 
 def test_index_rename_inplace():
     pds = pd.Index([1, 2, 3], name="asdf")
-    gds = as_index(pds)
+    gds = Index(pds)
 
     # inplace=False should yield a deep copy
     gds_renamed_deep = gds.rename("new_name", inplace=False)
@@ -280,7 +274,7 @@ def test_index_rename_preserves_arg():
     assert idx1.name == "orig_name"
 
     # a new object but referencing the same data
-    idx3 = as_index(idx1, name="last_name")
+    idx3 = Index(idx1, name="last_name")
 
     assert idx3.name == "last_name"
     assert idx1.name == "orig_name"
@@ -456,7 +450,7 @@ def test_from_pandas_gen():
 
 
 def test_index_names():
-    idx = cudf.core.index.as_index([1, 2, 3], name="idx")
+    idx = Index([1, 2, 3], name="idx")
     assert idx.names == ("idx",)
 
 
@@ -874,8 +868,8 @@ def test_index_equals(data, other):
     pd_data = pd.Index(data)
     pd_other = pd.Index(other)
 
-    gd_data = cudf.core.index.as_index(data)
-    gd_other = cudf.core.index.as_index(other)
+    gd_data = Index(data)
+    gd_other = Index(other)
 
     expected = pd_data.equals(pd_other)
     actual = gd_data.equals(gd_other)
@@ -920,8 +914,8 @@ def test_index_categories_equal(data, other):
     pd_data = pd.Index(data).astype("category")
     pd_other = pd.Index(other)
 
-    gd_data = cudf.core.index.as_index(data).astype("category")
-    gd_other = cudf.core.index.as_index(other)
+    gd_data = Index(data).astype("category")
+    gd_other = Index(other)
 
     expected = pd_data.equals(pd_other)
     actual = gd_data.equals(gd_other)
@@ -970,7 +964,7 @@ def test_index_equal_misc(data, other):
     pd_data = pd.Index(data)
     pd_other = other
 
-    gd_data = cudf.core.index.as_index(data)
+    gd_data = Index(data)
     gd_other = other
 
     expected = pd_data.equals(pd_other)
@@ -1089,8 +1083,8 @@ def test_index_empty_append_name_conflict():
     ],
 )
 def test_index_append_error(data, other):
-    gd_data = cudf.core.index.as_index(data)
-    gd_other = cudf.core.index.as_index(other)
+    gd_data = Index(data)
+    gd_other = Index(other)
 
     got_dtype = (
         gd_other.dtype
@@ -3266,3 +3260,17 @@ def test_index_datetime_repeat():
     actual = gidx.to_frame().repeat(5)
 
     assert_eq(actual.index, expected)
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        cudf.Index([1]),
+        cudf.RangeIndex(1),
+        cudf.MultiIndex(levels=[[0]], codes=[[0]]),
+    ],
+)
+def test_index_assignment_no_shallow_copy(index):
+    df = cudf.DataFrame(range(1))
+    df.index = index
+    assert df.index is index

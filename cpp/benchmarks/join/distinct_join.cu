@@ -20,17 +20,16 @@ template <typename Key, bool Nullable>
 void distinct_inner_join(nvbench::state& state,
                          nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
 {
-  auto join = [](cudf::table_view const& build_input,
-                 cudf::table_view const& probe_input,
-                 cudf::null_equality compare_nulls,
-                 rmm::cuda_stream_view stream) {
+  auto join = [](cudf::table_view const& probe_input,
+                 cudf::table_view const& build_input,
+                 cudf::null_equality compare_nulls) {
     auto const has_nulls =
       cudf::has_nested_nulls(build_input) || cudf::has_nested_nulls(probe_input)
         ? cudf::nullable_join::YES
         : cudf::nullable_join::NO;
     auto hj_obj = cudf::distinct_hash_join<cudf::has_nested::NO>{
-      build_input, probe_input, has_nulls, compare_nulls, stream};
-    return hj_obj.inner_join(stream);
+      build_input, probe_input, has_nulls, compare_nulls};
+    return hj_obj.inner_join();
   };
 
   BM_join<Key, Nullable>(state, join);
@@ -40,17 +39,16 @@ template <typename Key, bool Nullable>
 void distinct_left_join(nvbench::state& state,
                         nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
 {
-  auto join = [](cudf::table_view const& build_input,
-                 cudf::table_view const& probe_input,
-                 cudf::null_equality compare_nulls,
-                 rmm::cuda_stream_view stream) {
+  auto join = [](cudf::table_view const& probe_input,
+                 cudf::table_view const& build_input,
+                 cudf::null_equality compare_nulls) {
     auto const has_nulls =
       cudf::has_nested_nulls(build_input) || cudf::has_nested_nulls(probe_input)
         ? cudf::nullable_join::YES
         : cudf::nullable_join::NO;
     auto hj_obj = cudf::distinct_hash_join<cudf::has_nested::NO>{
-      build_input, probe_input, has_nulls, compare_nulls, stream};
-    return hj_obj.left_join(stream);
+      build_input, probe_input, has_nulls, compare_nulls};
+    return hj_obj.left_join();
   };
 
   BM_join<Key, Nullable>(state, join);
