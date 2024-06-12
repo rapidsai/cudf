@@ -190,6 +190,7 @@ cdef class SinkInfo:
 
     def __init__(self, list sinks):
         cdef vector[data_sink *] data_sinks
+        cdef unique_ptr[data_sink] sink
 
         cdef vector[string] paths
         if isinstance(sinks[0], io.StringIO):
@@ -207,16 +208,18 @@ cdef class SinkInfo:
                 # bytes, which requires conversion from utf-8. If the underlying
                 # buffer is utf-8, we can bypass this conversion by writing
                 # directly to it.
-                if (
-                    isinstance(s, io.TextIOBase) and
-                    codecs.lookup(s.encoding).name not in {
+                if isinstance(s, io.TextIOBase):
+                    if codecs.lookup(s.encoding).name not in {
                         "utf-8",
                         "ascii",
-                    }
-                ):
-                    raise NotImplementedError(f"Unsupported encoding {s.encoding}")
+                    }:
+                        raise NotImplementedError(f"Unsupported encoding {s.encoding}")
+                    sink = unique_ptr[data_sink](new iobase_data_sink(s.buffer))
+                else:
+                    sink = unique_ptr[data_sink](new iobase_data_sink(s))
+
                 self.sink_storage.push_back(
-                    unique_ptr[data_sink](new iobase_data_sink(s.buffer))
+                    sink
                 )
                 data_sinks.push_back(self.sink_storage.back().get())
             self.c_obj = sink_info(data_sinks)
