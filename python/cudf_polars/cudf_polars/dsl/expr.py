@@ -679,13 +679,13 @@ class StringFunction(Expr):
 
             literal, _ = self.options
             if literal:
-                val = (
-                    arg.value
-                    if isinstance(arg, Literal)
-                    else arg.evaluate(df, context=context, mapping=mapping).obj
+                pat = arg.evaluate(df, context=context, mapping=mapping)
+                pattern = (
+                    pat.obj_scalar
+                    if pat.is_scalar and pat.obj.size() != column.obj.size()
+                    else pat.obj
                 )
-                return Column(plc.strings.find.contains(column.obj, val))
-
+                return Column(plc.strings.find.contains(column.obj, pattern))
             else:
                 prog = plc.strings.regex_program.RegexProgram.create(
                     arg.value.as_py(),
