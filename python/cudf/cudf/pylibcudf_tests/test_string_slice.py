@@ -19,10 +19,7 @@ def plc_col(pa_col):
 
 @pytest.fixture(
     scope="module",
-    params=[
-        (1, 3, 1),
-        (0, 3, -1),
-    ],
+    params=[(1, 3, 1), (0, 3, -1), (3, 2, 1), (1, 5, 5), (1, 100, 2)],
 )
 def pa_start_stop_step(request):
     return tuple(pa.scalar(x, type=pa.int32()) for x in request.param)
