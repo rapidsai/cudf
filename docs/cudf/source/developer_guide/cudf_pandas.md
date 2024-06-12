@@ -20,6 +20,7 @@ The "wrapped" types/classes are the Pandas and cuDF specific types that have bee
 Wrapped objects and proxy objects are instances of wrapped types and proxy types, respectively.
 In the snippet below `s1` and `s2` are wrapped objects and `s3` is a fast-slow proxy object.
 Also note that the module `xpd` is a wrapped module and contains cuDF and Pandas modules as attributes.
+To check if an object is a proxy type, we can use `cudf.pandas.is_proxy_object`.
   ```python
   import cudf.pandas
   cudf.pandas.install()
@@ -31,6 +32,14 @@ Also note that the module `xpd` is a wrapped module and contains cuDF and Pandas
   s1 = cudf.Series([1,2])
   s2 = pd.Series([1,2])
   s3 = xpd.Series([1,2])
+
+  from cudf.pandas import is_proxy_object
+
+  is_proxy_object(s1) # returns False
+
+  is_proxy_object(s2) # returns False
+
+  is_proxy_object(s3) # returns True
   ```
 
 ```{note}

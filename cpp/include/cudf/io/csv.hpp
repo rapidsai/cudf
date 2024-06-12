@@ -27,6 +27,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -431,7 +432,8 @@ class csv_reader_options {
    *
    * @return Per-column types
    */
-  std::variant<std::vector<data_type>, std::map<std::string, data_type>> const& get_dtypes() const
+  [[nodiscard]] std::variant<std::vector<data_type>, std::map<std::string, data_type>> const&
+  get_dtypes() const
   {
     return _dtypes;
   }
@@ -441,49 +443,49 @@ class csv_reader_options {
    *
    * @return Additional values to recognize as boolean true values
    */
-  std::vector<std::string> const& get_true_values() const { return _true_values; }
+  [[nodiscard]] std::vector<std::string> const& get_true_values() const { return _true_values; }
 
   /**
    * @brief Returns additional values to recognize as boolean false values.
    *
    * @return Additional values to recognize as boolean false values
    */
-  std::vector<std::string> const& get_false_values() const { return _false_values; }
+  [[nodiscard]] std::vector<std::string> const& get_false_values() const { return _false_values; }
 
   /**
    * @brief Returns additional values to recognize as null values.
    *
    * @return Additional values to recognize as null values
    */
-  std::vector<std::string> const& get_na_values() const { return _na_values; }
+  [[nodiscard]] std::vector<std::string> const& get_na_values() const { return _na_values; }
 
   /**
    * @brief Whether to keep the built-in default NA values.
    *
    * @return `true` if the built-in default NA values are kept
    */
-  bool is_enabled_keep_default_na() const { return _keep_default_na; }
+  [[nodiscard]] bool is_enabled_keep_default_na() const { return _keep_default_na; }
 
   /**
    * @brief Whether to disable null filter.
    *
    * @return `true` if null filter is enabled
    */
-  bool is_enabled_na_filter() const { return _na_filter; }
+  [[nodiscard]] bool is_enabled_na_filter() const { return _na_filter; }
 
   /**
    * @brief Whether to parse dates as DD/MM versus MM/DD.
    *
    * @return True if dates are parsed as DD/MM, false if MM/DD
    */
-  bool is_enabled_dayfirst() const { return _dayfirst; }
+  [[nodiscard]] bool is_enabled_dayfirst() const { return _dayfirst; }
 
   /**
    * @brief Returns timestamp_type to which all timestamp columns will be cast.
    *
    * @return timestamp_type to which all timestamp columns will be cast
    */
-  data_type get_timestamp_type() const { return _timestamp_type; }
+  [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
    * @brief Sets compression format of the source.
@@ -1399,8 +1401,8 @@ class csv_writer_options {
    * @param sink The sink used for writer output
    * @param table Table to be written to output
    */
-  explicit csv_writer_options(sink_info const& sink, table_view const& table)
-    : _sink(sink), _table(table), _rows_per_chunk(table.num_rows())
+  explicit csv_writer_options(sink_info sink, table_view const& table)
+    : _sink(std::move(sink)), _table(table), _rows_per_chunk(table.num_rows())
   {
   }
 
