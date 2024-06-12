@@ -213,14 +213,18 @@ bool config_default_pinned_memory_resource(pinned_mr_options const& opts)
   return did_configure;
 }
 
-CUDF_EXPORT auto& kernel_copy_threshold()
+CUDF_EXPORT auto& kernel_pinned_copy_threshold()
 {
-  static std::atomic<size_t> threshold = 0;  // use cudaMemcpyAsync for all pinned copies
+  // use cudaMemcpyAsync for all pinned copies
+  static std::atomic<size_t> threshold = 0;
   return threshold;
 }
 
-void set_kernel_copy_threshold(size_t threshold) { kernel_copy_threshold() = threshold; }
+void set_kernel_pinned_copy_threshold(size_t threshold)
+{
+  kernel_pinned_copy_threshold() = threshold;
+}
 
-size_t get_kernel_copy_threshold() { return kernel_copy_threshold(); }
+size_t get_kernel_pinned_copy_threshold() { return kernel_pinned_copy_threshold(); }
 
 }  // namespace cudf

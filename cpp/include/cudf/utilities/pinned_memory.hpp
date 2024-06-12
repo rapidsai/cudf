@@ -63,13 +63,13 @@ bool config_default_pinned_memory_resource(pinned_mr_options const& opts);
  * threshold, the copy will be done using cudaMemcpyAsync.
  */
 
-void set_kernel_copy_threshold(size_t threshold);
+void kernel_pinned_copy_threshold(size_t threshold);
 
 /**
  * @brief Get the threshold size for using kernels for pinned memory copies.
  *
  * @return The threshold size in bytes.
  */
-size_t get_kernel_copy_threshold();
+size_t get_kernel_pinned_copy_threshold();
 
 }  // namespace cudf

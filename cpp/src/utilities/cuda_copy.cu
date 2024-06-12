@@ -28,7 +28,7 @@ void copy_pinned(void* dst, void const* src, std::size_t size, rmm::cuda_stream_
 {
   if (size == 0) return;
 
-  if (size < get_kernel_copy_threshold()) {
+  if (size < get_kernel_pinned_copy_threshold()) {
     thrust::copy_n(rmm::exec_policy_nosync(stream),
                    static_cast<const char*>(src),
                    size,
