@@ -224,7 +224,7 @@ class hostdevice_2dvector {
 
   T const* base_device_ptr(size_t offset = 0) const { return _data.device_ptr(offset); }
 
-  size_t size_bytes() const noexcept { return _data.size_bytes(); }
+  [[nodiscard]] size_t size_bytes() const noexcept { return _data.size_bytes(); }
 
   void host_to_device_async(rmm::cuda_stream_view stream) { _data.host_to_device_async(stream); }
   void host_to_device_sync(rmm::cuda_stream_view stream) { _data.host_to_device_sync(stream); }

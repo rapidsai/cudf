@@ -137,8 +137,11 @@ class column_buffer_base {
   auto& null_count() { return _null_count; }
 
   auto data() { return static_cast<string_policy*>(this)->data_impl(); }
-  auto data() const { return static_cast<string_policy const*>(this)->data_impl(); }
-  auto data_size() const { return static_cast<string_policy const*>(this)->data_size_impl(); }
+  [[nodiscard]] auto data() const { return static_cast<string_policy const*>(this)->data_impl(); }
+  [[nodiscard]] auto data_size() const
+  {
+    return static_cast<string_policy const*>(this)->data_size_impl();
+  }
 
   std::unique_ptr<column> make_string_column(rmm::cuda_stream_view stream)
   {
@@ -191,9 +194,9 @@ class gather_column_buffer : public column_buffer_base<gather_column_buffer> {
 
   void allocate_strings_data(rmm::cuda_stream_view stream);
 
-  void* data_impl() { return _strings ? _strings->data() : _data.data(); }
-  void const* data_impl() const { return _strings ? _strings->data() : _data.data(); }
-  size_t data_size_impl() const { return _strings ? _strings->size() : _data.size(); }
+  [[nodiscard]] void* data_impl() { return _strings ? _strings->data() : _data.data(); }
+  [[nodiscard]] void const* data_impl() const { return _strings ? _strings->data() : _data.data(); }
+  [[nodiscard]] size_t data_size_impl() const { return _strings ? _strings->size() : _data.size(); }
 
   std::unique_ptr<column> make_string_column_impl(rmm::cuda_stream_view stream);
 
@@ -226,14 +229,14 @@ class inline_column_buffer : public column_buffer_base<inline_column_buffer> {
   void allocate_strings_data(rmm::cuda_stream_view stream);
 
   void* data_impl() { return _data.data(); }
-  void const* data_impl() const { return _data.data(); }
-  size_t data_size_impl() const { return _data.size(); }
+  [[nodiscard]] void const* data_impl() const { return _data.data(); }
+  [[nodiscard]] size_t data_size_impl() const { return _data.size(); }
   std::unique_ptr<column> make_string_column_impl(rmm::cuda_stream_view stream);
 
   void create_string_data(size_t num_bytes, rmm::cuda_stream_view stream);
   void* string_data() { return _string_data.data(); }
-  void const* string_data() const { return _string_data.data(); }
-  size_t string_size() const { return _string_data.size(); }
+  [[nodiscard]] void const* string_data() const { return _string_data.data(); }
+  [[nodiscard]] size_t string_size() const { return _string_data.size(); }
 
  private:
   rmm::device_buffer _string_data{};
