@@ -153,4 +153,4 @@ class CompactProtocolReader {
 };
 
 }  // namespace io::parquet::detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

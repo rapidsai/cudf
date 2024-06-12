@@ -973,4 +973,4 @@ std::unique_ptr<column> purge_nonempty_nulls(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

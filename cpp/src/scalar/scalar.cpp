@@ -306,7 +306,7 @@ template class fixed_width_scalar<duration_ms>;
 template class fixed_width_scalar<duration_us>;
 template class fixed_width_scalar<duration_ns>;
 
-}  // namespace detail
+}  // namespace CUDF_HIDDEN detail
 
 template <typename T>
 numeric_scalar<T>::numeric_scalar(T value,

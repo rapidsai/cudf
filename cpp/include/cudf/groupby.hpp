@@ -421,4 +421,4 @@ class groupby {
 };
 /** @} */
 }  // namespace groupby
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

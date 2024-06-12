@@ -402,4 +402,4 @@ cudf::size_type distinct_count(table_view const& input,
                                null_equality nulls_equal = null_equality::EQUAL);
 
 /** @} */
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

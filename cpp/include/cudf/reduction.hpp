@@ -233,4 +233,4 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
 
 /** @} */  // end of group
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

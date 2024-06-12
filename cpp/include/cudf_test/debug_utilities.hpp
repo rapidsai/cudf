@@ -47,4 +47,4 @@ std::vector<std::string> to_strings(cudf::column_view const& col);
 void print(cudf::column_view const& col, std::ostream& os = std::cout);
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

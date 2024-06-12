@@ -31,4 +31,4 @@ void expect_metadata_equal(cudf::io::table_input_metadata in_meta,
 void expect_metadata_equal(cudf::io::table_metadata lhs_meta, cudf::io::table_metadata rhs_meta);
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

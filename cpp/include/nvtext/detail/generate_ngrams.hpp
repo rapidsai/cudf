@@ -35,4 +35,4 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
                                                     rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace nvtext
+}  // namespace CUDF_EXPORT nvtext

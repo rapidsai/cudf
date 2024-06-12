@@ -34,7 +34,7 @@
 #include <vector>
 
 namespace cudf {
-  namespace io {
+namespace io {
 
 // Forward declaration
 class CUDF_EXPORT parquet_reader_options;

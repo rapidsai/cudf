@@ -115,4 +115,4 @@ std::unique_ptr<column> sequences(
 
 /** @} */  // end of group
 }  // namespace lists
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

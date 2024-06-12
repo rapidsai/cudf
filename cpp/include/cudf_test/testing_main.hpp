@@ -93,7 +93,7 @@ inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
 }
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
 
 /**
  * @brief Parses the cuDF test command line options.

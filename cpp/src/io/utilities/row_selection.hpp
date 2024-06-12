@@ -40,4 +40,4 @@ std::pair<int64_t, int64_t> skip_rows_num_rows_from_options(int64_t skip_rows,
                                                             int64_t num_source_rows);
 
 }  // namespace io::detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -173,4 +173,4 @@ std::unique_ptr<cudf::column> porter_stemmer_measure(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
-}  // namespace nvtext
+}  // namespace CUDF_EXPORT nvtext

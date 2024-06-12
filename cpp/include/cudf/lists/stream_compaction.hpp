@@ -97,4 +97,4 @@ std::unique_ptr<column> distinct(
 /** @} */  // end of group
 
 }  // namespace lists
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

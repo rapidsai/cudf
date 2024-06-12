@@ -90,4 +90,4 @@ class arrow_io_source : public datasource {
 
 /** @} */  // end of group
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -188,4 +188,4 @@ std::unique_ptr<column> xxhash_64(
 }  // namespace hashing
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

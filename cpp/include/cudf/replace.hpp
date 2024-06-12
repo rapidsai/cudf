@@ -309,4 +309,4 @@ void normalize_nans_and_zeros(mutable_column_view& in_out,
                               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

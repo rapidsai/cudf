@@ -60,7 +60,7 @@ void expect_tables_equal(cudf::table_view lhs, cudf::table_view rhs);
 void expect_tables_equivalent(cudf::table_view lhs, cudf::table_view rhs);
 
 }  // namespace test::detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
 
 // Macros for showing line of failure.
 #define CUDF_TEST_EXPECT_TABLE_PROPERTIES_EQUAL(lhs, rhs)        \

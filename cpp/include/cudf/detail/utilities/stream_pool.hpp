@@ -125,4 +125,4 @@ cuda_stream_pool& global_cuda_stream_pool();
 void join_streams(host_span<rmm::cuda_stream_view const> streams, rmm::cuda_stream_view stream);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

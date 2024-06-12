@@ -62,4 +62,4 @@ void write_csv(data_sink* sink,
 }  // namespace csv
 }  // namespace detail
 }  // namespace io
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

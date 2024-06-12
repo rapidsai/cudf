@@ -19,9 +19,9 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
-#include <cudf/search.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+#include <cudf/search.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>

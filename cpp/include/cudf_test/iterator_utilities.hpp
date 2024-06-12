@@ -137,4 +137,4 @@ template <class T>
 
 }  // namespace iterators
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -100,4 +100,4 @@ class TempDirTestEnvironment : public ::testing::Environment {
 };
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

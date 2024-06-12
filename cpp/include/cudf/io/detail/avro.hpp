@@ -46,4 +46,4 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
 }  // namespace avro
 }  // namespace detail
 }  // namespace io
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

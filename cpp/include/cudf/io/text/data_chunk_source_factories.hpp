@@ -87,4 +87,4 @@ std::unique_ptr<data_chunk_source> make_source_from_bgzip_file(std::string_view 
 std::unique_ptr<data_chunk_source> make_source(cudf::string_scalar& data);
 
 }  // namespace io::text
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

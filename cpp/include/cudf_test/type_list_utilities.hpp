@@ -629,4 +629,4 @@ using Unique = typename UniqueImpl<TYPES>::type;
 
 }  // namespace test
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -1407,4 +1407,4 @@ class parquet_chunked_writer {
 /** @} */  // end of group
 
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

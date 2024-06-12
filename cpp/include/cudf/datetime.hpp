@@ -402,4 +402,4 @@ std::unique_ptr<cudf::column> round_datetimes(
 /** @} */  // end of group
 
 }  // namespace datetime
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

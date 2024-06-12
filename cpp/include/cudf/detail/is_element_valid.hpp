@@ -45,4 +45,4 @@ bool is_element_valid_sync(column_view const& col_view,
                            rmm::cuda_stream_view stream);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

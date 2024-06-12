@@ -584,4 +584,4 @@ void tdigest_merge_empty(MergeFunc merge_op)
 }
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

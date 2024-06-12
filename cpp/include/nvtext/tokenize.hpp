@@ -310,4 +310,4 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of tokenize group
-}  // namespace nvtext
+}  // namespace CUDF_EXPORT nvtext

@@ -180,7 +180,7 @@ class table_view_base {
   table_view_base& operator=(table_view_base&&) = default;
 };
 
-}  // namespace detail
+}  // namespace CUDF_HIDDEN detail
 
 /**
  * @brief Determine if any nested columns exist in a given table.

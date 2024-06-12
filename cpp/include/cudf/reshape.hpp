@@ -106,4 +106,4 @@ std::unique_ptr<column> byte_cast(
 
 /** @} */  // end of group
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

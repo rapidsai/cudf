@@ -527,8 +527,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
 
   // Modify STRUCT-of-STRUCT's null-mask. Mark second STRUCT row as null.
   auto structs_of_structs_view = structs_of_structs->mutable_view();
-  cudf::set_null_mask(
-    structs_of_structs_view.null_mask(), 1, 2, false, cudf::get_default_stream());
+  cudf::set_null_mask(structs_of_structs_view.null_mask(), 1, 2, false, cudf::get_default_stream());
 
   auto [output, backing_data] = cudf::structs::detail::push_down_nulls(
     structs_of_structs->view(), cudf::get_default_stream(), rmm::mr::get_current_device_resource());
@@ -552,8 +551,7 @@ cudf::column_view slice_off_first_and_last_rows(cudf::column_view const& col)
 
 void mark_row_as_null(cudf::mutable_column_view const& col, cudf::size_type row_index)
 {
-  cudf::set_null_mask(
-    col.null_mask(), row_index, row_index + 1, false, cudf::get_default_stream());
+  cudf::set_null_mask(col.null_mask(), row_index, row_index + 1, false, cudf::get_default_stream());
 }
 
 TYPED_TEST(TypedSuperimposeTest, Struct_Sliced)

@@ -26,7 +26,7 @@
 
 #include <type_traits>
 
-namespace CUDF_EXPORT {
+namespace CUDF_EXPORT cudf {
 namespace test::print {
 
 constexpr int32_t hex_tag = 0;
@@ -140,4 +140,4 @@ void print_array(std::size_t count, rmm::cuda_stream_view stream, Ts... args)
 }
 
 }  // namespace test::print
-}  // namespace CUDF_EXPORT
+}  // namespace CUDF_EXPORT cudf
