@@ -597,7 +597,7 @@ public class Rmm {
 
   public static native long newPinnedPoolMemoryResource(long initSize, long maxSize);
 
-  public static native long setCuioPinnedPoolMemoryResource(long poolPtr);
+  public static native long setCudfPinnedPoolMemoryResource(long poolPtr);
 
   public static native void releasePinnedPoolMemoryResource(long poolPtr);
 

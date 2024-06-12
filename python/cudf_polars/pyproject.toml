@@ -49,9 +49,6 @@ license-files = ["LICENSE"]
 [tool.setuptools.dynamic]
 version = {file = "cudf_polars/VERSION"}
 
-[tool.setuptools.packages.find]
-exclude = ["*tests*"]
-
 [tool.pytest.ini_options]
 xfail_strict = true
 

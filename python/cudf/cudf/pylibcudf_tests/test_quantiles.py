@@ -19,13 +19,9 @@ interp_mapping = {
 
 
 @pytest.fixture(scope="module", params=[[1, 2, 3, 4, 5], [5, 4, 3, 2, 1]])
-def pa_col_data(request, numeric_pa_type):
-    return pa.array(request.param, type=numeric_pa_type)
-
-
-@pytest.fixture(scope="module")
-def plc_col_data(pa_col_data):
-    return plc.interop.from_arrow(pa_col_data)
+def col_data(request, numeric_pa_type):
+    pa_array = pa.array(request.param, type=numeric_pa_type)
+    return pa_array, plc.interop.from_arrow(pa_array)
 
 
 @pytest.fixture(
@@ -60,7 +56,8 @@ def plc_tbl_data(request):
 
 @pytest.mark.parametrize("q", [[], [0], [0.5], [0.1, 0.5, 0.7, 0.9]])
 @pytest.mark.parametrize("exact", [True, False])
-def test_quantile(pa_col_data, plc_col_data, interp_opt, q, exact):
+def test_quantile(col_data, interp_opt, q, exact):
+    pa_col_data, plc_col_data = col_data
     ordered_indices = plc.interop.from_arrow(
         pc.cast(pc.sort_indices(pa_col_data), pa.int32())
     )
@@ -210,7 +207,8 @@ def test_quantiles_invalid_interp(plc_tbl_data, invalid_interp):
     "q",
     [[0.1], (0.1,), np.array([0.1])],
 )
-def test_quantile_q_array_like(pa_col_data, plc_col_data, q):
+def test_quantile_q_array_like(col_data, q):
+    pa_col_data, plc_col_data = col_data
     ordered_indices = plc.interop.from_arrow(
         pc.cast(pc.sort_indices(pa_col_data), pa.int32())
     )

@@ -1,11 +1,12 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from .fast_slow_proxy import is_proxy_object
 from .magics import load_ipython_extension
 from .profiler import Profiler
 
-__all__ = ["Profiler", "load_ipython_extension", "install"]
+__all__ = ["Profiler", "load_ipython_extension", "install", "is_proxy_object"]
 
 
 LOADED = False
