@@ -1450,5 +1450,3 @@ def test_rmm_option_on_import(env_value):
         assert sp_completed.returncode == 0
     else:
         assert sp_completed.returncode == 1
-
-    del env["CUDF_PANDAS_RMM_MODE"]
