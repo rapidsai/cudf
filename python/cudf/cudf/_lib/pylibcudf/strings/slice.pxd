@@ -11,5 +11,5 @@ cpdef Column slice_strings(
     Column input,
     ColumnOrScalar start=*,
     ColumnOrScalar stop=*,
-    ColumnOrScalar step=*
+    Scalar step=*
 )

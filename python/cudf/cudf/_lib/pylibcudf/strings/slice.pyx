@@ -27,7 +27,7 @@ cpdef Column slice_strings(
     ``start`` and ``stop`` may be a
     :py:class:`~cudf._lib.pylibcudf.column.Column` or a
     :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`. But ``step`` must be a
-    :py:class:`~cudf._lib.pylibcudf.column.Scalar`.
+    :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
 
     For details, see :cpp:func:`cudf::strings::slice_strings`.
 
