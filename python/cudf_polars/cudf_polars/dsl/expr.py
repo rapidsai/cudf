@@ -134,14 +134,14 @@ class Expr:
         True if the two expressions are equal, false otherwise.
         """
         if type(self) is not type(other):
-            return False
+            return False  # pragma: no cover; __eq__ trips first
         return self._ctor_arguments(self.children) == other._ctor_arguments(
             other.children
         )
 
     def __eq__(self, other: Any) -> bool:
         """Equality of expressions."""
-        if type(self) != type(other) or hash(self) != hash(other):
+        if type(self) is not type(other) or hash(self) != hash(other):
             return False
         else:
             return self.is_equal(other)
@@ -196,7 +196,9 @@ class Expr:
             are returned during translation to the IR, but for now we
             are not perfect.
         """
-        raise NotImplementedError(f"Evaluation of {type(self).__name__}")
+        raise NotImplementedError(
+            f"Evaluation of expression {type(self).__name__}"
+        )  # pragma: no cover; translation of unimplemented nodes trips first
 
     def evaluate(
         self,
@@ -266,7 +268,7 @@ class Expr:
         """
         raise NotImplementedError(
             f"Collecting aggregation info for {type(self).__name__}"
-        )
+        )  # pragma: no cover; check_agg trips first
 
 
 class NamedExpr:
@@ -287,7 +289,7 @@ class NamedExpr:
 
     def __repr__(self) -> str:
         """Repr of the expression."""
-        return f"NamedExpr({self.name}, {self.value}"
+        return f"NamedExpr({self.name}, {self.value})"
 
     def __eq__(self, other: Any) -> bool:
         """Equality of two expressions."""
