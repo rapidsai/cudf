@@ -748,7 +748,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def dt(self) -> DatetimeProperties | TimedeltaProperties:
+    def dt(self):
         """
         Accessor object for datetime-like properties of the Series values.
 
