@@ -1829,7 +1829,7 @@ TYPED_TEST(JsonValidFixedPointReaderTest, SingleColumnPositiveScale)
 
 TYPED_TEST(JsonFixedPointReaderTest, EmptyValues)
 {
-  auto const buffer = std::string{"{\"col0\":\"\"}"};
+  auto const buffer = std::string{R"({"col0":""})"};
 
   cudf::io::json_reader_options const in_opts =
     cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
@@ -2424,7 +2424,7 @@ TEST_P(JsonDelimiterParamTest, JsonLinesDelimiter)
    * linearly in O(n), we can do it in O(log n) by doubling the input in each iteration. The total
    * number of such iterations is log_repetitions.
    */
-  std::size_t const log_repetitions =
+  auto const log_repetitions =
     static_cast<std::size_t>(std::ceil(std::log2(string_size / input.size())));
   std::size_t const repetitions = 1UL << log_repetitions;
   for (std::size_t i = 0; i < log_repetitions; i++) {

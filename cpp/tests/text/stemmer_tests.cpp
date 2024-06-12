@@ -168,7 +168,7 @@ TEST_F(TextStemmerTest, EmptyTest)
 TEST_F(TextStemmerTest, ErrorTest)
 {
   auto empty = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
-  cudf::test::fixed_width_column_wrapper<int32_t> indices({0}, {0});
+  cudf::test::fixed_width_column_wrapper<int32_t> indices({0}, {false});
   EXPECT_THROW(nvtext::is_letter(
                  cudf::strings_column_view(empty->view()), nvtext::letter_type::VOWEL, indices),
                cudf::logic_error);

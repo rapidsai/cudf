@@ -187,7 +187,7 @@ class parquet_reader_options {
    *
    * @return Timestamp type used to cast timestamp columns
    */
-  data_type get_timestamp_type() const { return _timestamp_type; }
+  [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
    * @brief Sets names of the columns to be read.
@@ -626,7 +626,7 @@ class parquet_writer_options_base {
    *
    * @param sink The sink used for writer output
    */
-  explicit parquet_writer_options_base(sink_info const& sink) : _sink(sink) {}
+  explicit parquet_writer_options_base(sink_info sink) : _sink(std::move(sink)) {}
 
  public:
   /**
@@ -1287,7 +1287,7 @@ class chunked_parquet_writer_options : public parquet_writer_options_base {
    *
    * @param sink Sink used for writer output
    */
-  explicit chunked_parquet_writer_options(sink_info const& sink);
+  explicit chunked_parquet_writer_options(sink_info sink);
 
   friend chunked_parquet_writer_options_builder;
 

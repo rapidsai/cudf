@@ -450,7 +450,7 @@ class pinned_fallback_host_memory_resource {
   {
     try {
       return _pool->allocate(bytes, alignment);
-    } catch (const std::exception& unused) {
+    } catch (std::exception const& unused) {
       // try to allocate using the underlying pinned resource
       return prior_cudf_pinned_mr().allocate(bytes, alignment);
     }
@@ -558,13 +558,13 @@ class pinned_fallback_host_memory_resource {
   /**
    * @briefreturn{true if the specified resource is the same type as this resource.}
    */
-  bool operator==(const pinned_fallback_host_memory_resource&) const { return true; }
+  bool operator==(pinned_fallback_host_memory_resource const&) const { return true; }
 
   /**
    * @briefreturn{true if the specified resource is not the same type as this resource, otherwise
    * false.}
    */
-  bool operator!=(const pinned_fallback_host_memory_resource&) const { return false; }
+  bool operator!=(pinned_fallback_host_memory_resource const&) const { return false; }
 
   /**
    * @brief Enables the `cuda::mr::device_accessible` property
@@ -1067,7 +1067,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromPinnedPool(JNIEnv* env,
     auto pool = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
     void* ret = pool->allocate(size);
     return reinterpret_cast<jlong>(ret);
-  } catch (const std::exception& unused) {
+  } catch (std::exception const& unused) {
     return -1;
   }
 }

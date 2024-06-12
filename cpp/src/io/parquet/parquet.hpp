@@ -105,43 +105,51 @@ struct LogicalType {
   LogicalType(TimestampType&& tst) : type(TIMESTAMP), timestamp_type(tst) {}
   LogicalType(IntType&& it) : type(INTEGER), int_type(it) {}
 
-  constexpr bool is_time_millis() const
+  [[nodiscard]] constexpr bool is_time_millis() const
   {
     return type == TIME and time_type->unit.type == TimeUnit::MILLIS;
   }
 
-  constexpr bool is_time_micros() const
+  [[nodiscard]] constexpr bool is_time_micros() const
   {
     return type == TIME and time_type->unit.type == TimeUnit::MICROS;
   }
 
-  constexpr bool is_time_nanos() const
+  [[nodiscard]] constexpr bool is_time_nanos() const
   {
     return type == TIME and time_type->unit.type == TimeUnit::NANOS;
   }
 
-  constexpr bool is_timestamp_millis() const
+  [[nodiscard]] constexpr bool is_timestamp_millis() const
   {
     return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::MILLIS;
   }
 
-  constexpr bool is_timestamp_micros() const
+  [[nodiscard]] constexpr bool is_timestamp_micros() const
   {
     return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::MICROS;
   }
 
-  constexpr bool is_timestamp_nanos() const
+  [[nodiscard]] constexpr bool is_timestamp_nanos() const
   {
     return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::NANOS;
   }
+  [[nodiscard]] constexpr int8_t bit_width() const
+  {
+    return type == INTEGER ? int_type->bitWidth : -1;
+  }
 
-  constexpr int8_t bit_width() const { return type == INTEGER ? int_type->bitWidth : -1; }
+  [[nodiscard]] constexpr bool is_signed() const { return type == INTEGER and int_type->isSigned; }
 
-  constexpr bool is_signed() const { return type == INTEGER and int_type->isSigned; }
+  [[nodiscard]] constexpr int32_t scale() const
+  {
+    return type == DECIMAL ? decimal_type->scale : -1;
+  }
 
-  constexpr int32_t scale() const { return type == DECIMAL ? decimal_type->scale : -1; }
-
-  constexpr int32_t precision() const { return type == DECIMAL ? decimal_type->precision : -1; }
+  [[nodiscard]] constexpr int32_t precision() const
+  {
+    return type == DECIMAL ? decimal_type->precision : -1;
+  }
 };
 
 /**
