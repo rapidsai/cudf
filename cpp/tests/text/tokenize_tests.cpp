@@ -102,7 +102,7 @@ TEST_F(TextTokenizeTest, TokenizeErrorTest)
     EXPECT_THROW(nvtext::count_tokens(strings_view, delimiters_view), cudf::logic_error);
   }
   {
-    cudf::test::strings_column_wrapper delimiters({"", ""}, {0, 0});  // null delimiters
+    cudf::test::strings_column_wrapper delimiters({"", ""}, {false, false});  // null delimiters
     cudf::strings_column_view delimiters_view(delimiters);
     EXPECT_THROW(nvtext::tokenize(strings_view, delimiters_view), cudf::logic_error);
     EXPECT_THROW(nvtext::count_tokens(strings_view, delimiters_view), cudf::logic_error);
@@ -127,7 +127,7 @@ TEST_F(TextTokenizeTest, TokenizeEmptyTest)
   auto view  = cudf::strings_column_view(input->view());
   cudf::test::strings_column_wrapper all_empty_wrapper({"", "", ""});
   auto all_empty = cudf::strings_column_view(all_empty_wrapper);
-  cudf::test::strings_column_wrapper all_null_wrapper({"", "", ""}, {0, 0, 0});
+  cudf::test::strings_column_wrapper all_null_wrapper({"", "", ""}, {false, false, false});
   auto all_null = cudf::strings_column_view(all_null_wrapper);
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected({0, 0, 0});
 
@@ -278,7 +278,7 @@ TEST_F(TextTokenizeTest, TokenizeErrors)
   cudf::strings_column_view view(empty);
   EXPECT_THROW(nvtext::load_vocabulary(view), cudf::logic_error);
 
-  cudf::test::strings_column_wrapper vocab_nulls({""}, {0});
+  cudf::test::strings_column_wrapper vocab_nulls({""}, {false});
   cudf::strings_column_view nulls(vocab_nulls);
   EXPECT_THROW(nvtext::load_vocabulary(nulls), cudf::logic_error);
 

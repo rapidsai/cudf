@@ -48,10 +48,10 @@ thrust::optional<LogicalType> converted_to_logical_type(SchemaElement const& sch
       case LIST: return LogicalType{LogicalType::LIST};
       case DECIMAL: return LogicalType{DecimalType{schema.decimal_scale, schema.decimal_precision}};
       case DATE: return LogicalType{LogicalType::DATE};
-      case TIME_MILLIS: return LogicalType{TimeType{true, TimeUnit::MILLIS}};
-      case TIME_MICROS: return LogicalType{TimeType{true, TimeUnit::MICROS}};
-      case TIMESTAMP_MILLIS: return LogicalType{TimestampType{true, TimeUnit::MILLIS}};
-      case TIMESTAMP_MICROS: return LogicalType{TimestampType{true, TimeUnit::MICROS}};
+      case TIME_MILLIS: return LogicalType{TimeType{true, {TimeUnit::MILLIS}}};
+      case TIME_MICROS: return LogicalType{TimeType{true, {TimeUnit::MICROS}}};
+      case TIMESTAMP_MILLIS: return LogicalType{TimestampType{true, {TimeUnit::MILLIS}}};
+      case TIMESTAMP_MICROS: return LogicalType{TimestampType{true, {TimeUnit::MICROS}}};
       case UINT_8: return LogicalType{IntType{8, false}};
       case UINT_16: return LogicalType{IntType{16, false}};
       case UINT_32: return LogicalType{IntType{32, false}};
@@ -1093,12 +1093,11 @@ aggregate_reader_metadata::select_columns(
                                         has_list_parent || col_type == type_id::LIST);
         }
       } else {
-        for (size_t idx = 0; idx < col_name_info->children.size(); idx++) {
-          path_is_valid |=
-            build_column(&col_name_info->children[idx],
-                         find_schema_child(schema_elem, col_name_info->children[idx].name),
-                         output_col.children,
-                         has_list_parent || col_type == type_id::LIST);
+        for (const auto& idx : col_name_info->children) {
+          path_is_valid |= build_column(&idx,
+                                        find_schema_child(schema_elem, idx.name),
+                                        output_col.children,
+                                        has_list_parent || col_type == type_id::LIST);
         }
       }
 
@@ -1106,7 +1105,7 @@ aggregate_reader_metadata::select_columns(
       // data stored) so add me to the list.
       if (schema_elem.num_children == 0) {
         input_column_info& input_col = input_columns.emplace_back(
-          input_column_info{schema_idx, schema_elem.name, schema_elem.max_repetition_level > 0});
+          schema_idx, schema_elem.name, schema_elem.max_repetition_level > 0);
 
         // set up child output column for one-level encoding list
         if (one_level_list) {
@@ -1257,10 +1256,9 @@ aggregate_reader_metadata::select_columns(
      */
     for (auto const& path : use_names3) {
       auto array_to_find_in = &selected_columns;
-      for (size_t depth = 0; depth < path.size(); ++depth) {
+      for (auto const& name_to_find : path) {
         // Check if the path exists in our selected_columns and if not, add it.
-        auto const& name_to_find = path[depth];
-        auto found_col           = std::find_if(
+        auto found_col = std::find_if(
           array_to_find_in->begin(),
           array_to_find_in->end(),
           [&name_to_find](column_name_info const& col) { return col.name == name_to_find; });

@@ -31,14 +31,16 @@ struct DictionarySliceTest : public cudf::test::BaseFixture {};
 TEST_F(DictionarySliceTest, SliceColumn)
 {
   cudf::test::strings_column_wrapper strings{
-    {"eee", "aaa", "ddd", "bbb", "ccc", "", "ccc", "eee", "aaa"}, {1, 1, 1, 1, 1, 0, 1, 1, 1}};
+    {"eee", "aaa", "ddd", "bbb", "ccc", "", "ccc", "eee", "aaa"},
+    {true, true, true, true, true, false, true, true, true}};
   auto dictionary = cudf::dictionary::encode(strings);
 
   std::vector<cudf::size_type> splits{1, 6};
   auto result = cudf::slice(dictionary->view(), splits);
 
   auto output = cudf::dictionary::decode(cudf::dictionary_column_view(result.front()));
-  cudf::test::strings_column_wrapper expected{{"aaa", "ddd", "bbb", "ccc", ""}, {1, 1, 1, 1, 0}};
+  cudf::test::strings_column_wrapper expected{{"aaa", "ddd", "bbb", "ccc", ""},
+                                              {true, true, true, true, false}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *output);
 
   {
@@ -69,21 +71,22 @@ TEST_F(DictionarySliceTest, SliceColumn)
 TEST_F(DictionarySliceTest, SplitColumn)
 {
   cudf::test::fixed_width_column_wrapper<float> input{{4.25, 7.125, 0.5, 0., -11.75, 7.125, 0.5},
-                                                      {1, 1, 1, 0, 1, 1, 1}};
+                                                      {true, true, true, false, true, true, true}};
   auto dictionary = cudf::dictionary::encode(input);
 
   std::vector<cudf::size_type> splits{2, 6};
   auto results = cudf::split(dictionary->view(), splits);
 
-  cudf::test::fixed_width_column_wrapper<float> expected1{{4.25, 7.125}, {1, 1}};
+  cudf::test::fixed_width_column_wrapper<float> expected1{{4.25, 7.125}, {true, true}};
   auto output1 = cudf::dictionary::decode(cudf::dictionary_column_view(results[0]));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, output1->view());
 
-  cudf::test::fixed_width_column_wrapper<float> expected2{{0.5, 0., -11.75, 7.125}, {1, 0, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<float> expected2{{0.5, 0., -11.75, 7.125},
+                                                          {true, false, true, true}};
   auto output2 = cudf::dictionary::decode(cudf::dictionary_column_view(results[1]));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, output2->view());
 
-  cudf::test::fixed_width_column_wrapper<float> expected3({0.5}, {1});
+  cudf::test::fixed_width_column_wrapper<float> expected3({0.5}, {true});
   auto output3 = cudf::dictionary::decode(cudf::dictionary_column_view(results[2]));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, output3->view());
 }
