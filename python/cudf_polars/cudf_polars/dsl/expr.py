@@ -801,7 +801,7 @@ class Gather(Expr):
             obj = plc.replace.replace_nulls(
                 indices.obj,
                 plc.interop.from_arrow(
-                    pa.scalar(n, type=plc.interop.to_arrow(indices.obj.data_type()))
+                    pa.scalar(n, type=plc.interop.to_arrow(indices.obj.type()))
                 ),
             )
         else:
