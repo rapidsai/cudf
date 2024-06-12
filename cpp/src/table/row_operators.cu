@@ -652,7 +652,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   auto d_depths = detail::make_device_uvector_async(
     verticalized_col_depths, stream, rmm::mr::get_current_device_resource());
 
-  if (detail::has_nested_columns(preprocessed_input)) {
+  if (has_nested_columns(preprocessed_input)) {
     auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(preprocessed_input, stream);
     return std::shared_ptr<preprocessed_table>(
       new preprocessed_table(std::move(d_table),

@@ -115,7 +115,7 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTables)
                                   auto const& comparator,
                                   auto const& expected) {
     auto const order = sorted_order(
-      preprocessed, input.num_rows(), cudf::detail::has_nested_columns(input), comparator, stream);
+      preprocessed, input.num_rows(), cudf::has_nested_columns(input), comparator, stream);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, order->view());
   };
 
@@ -194,7 +194,7 @@ TYPED_TEST(TypedTableViewTest, TestSortSameTableFromTwoTablesWithListsOfStructs)
                                   auto const& comparator,
                                   auto const& expected) {
     auto const order = sorted_order(
-      preprocessed, input.num_rows(), cudf::detail::has_nested_columns(input), comparator, stream);
+      preprocessed, input.num_rows(), cudf::has_nested_columns(input), comparator, stream);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, order->view());
   };
 

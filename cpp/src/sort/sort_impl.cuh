@@ -90,7 +90,7 @@ std::unique_ptr<column> sorted_order(table_view input,
 
   auto const comp = cudf::experimental::row::lexicographic::self_comparator(
     input, column_order, null_precedence, stream);
-  if (cudf::detail::has_nested_columns(input)) {
+  if (cudf::has_nested_columns(input)) {
     auto const comparator = comp.less<true>(nullate::DYNAMIC{has_nested_nulls(input)});
     do_sort(comparator);
   } else {

@@ -68,7 +68,7 @@ std::unique_ptr<table> unique(table_view const& input,
   auto comp = cudf::experimental::row::equality::self_comparator(keys_view, stream);
 
   size_type const unique_size = [&] {
-    if (cudf::detail::has_nested_columns(keys_view)) {
+    if (cudf::has_nested_columns(keys_view)) {
       // Using a temporary buffer for intermediate transform results from the functor containing
       // the comparator speeds up compile-time significantly without much degradation in
       // runtime performance over using the comparator directly in thrust::unique_copy.

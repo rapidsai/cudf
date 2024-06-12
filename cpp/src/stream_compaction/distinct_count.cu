@@ -174,7 +174,7 @@ cudf::size_type distinct_count(table_view const& keys,
     return key_set.insert(iter, iter + num_rows, stream.value());
   };
 
-  if (cudf::detail::has_nested_columns(keys)) {
+  if (cudf::has_nested_columns(keys)) {
     auto const row_equal = row_comp.equal_to<true>(has_nulls, nulls_equal);
     return comparator_helper(row_equal);
   } else {

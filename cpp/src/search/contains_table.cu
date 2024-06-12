@@ -270,7 +270,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
       }
     };
 
-  if (cudf::detail::has_nested_columns(haystack)) {
+  if (cudf::has_nested_columns(haystack)) {
     dispatch_nan_comparator<true>(compare_nulls,
                                   compare_nans,
                                   haystack_has_nulls,

@@ -554,8 +554,8 @@ table_ptr_type merge(cudf::table_view const& left_table,
   // extract merged row order according to indices:
   //
   auto const merged_indices = [&]() {
-    if (cudf::detail::has_nested_columns(left_table) or
-        cudf::detail::has_nested_columns(right_table)) {
+    if (cudf::has_nested_columns(left_table) or
+        cudf::has_nested_columns(right_table)) {
       return generate_merged_indices_nested(
         index_left_view, index_right_view, column_order, null_precedence, nullable, stream);
     } else {

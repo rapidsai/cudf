@@ -148,7 +148,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
   auto const sorted_order = key_sort_order(stream).data<size_type>();
   decltype(group_offsets->begin()) result_end;
 
-  if (cudf::detail::has_nested_columns(_keys)) {
+  if (cudf::has_nested_columns(_keys)) {
     auto const d_key_equal = comparator.equal_to<true>(
       cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
     // Using a temporary buffer for intermediate transform results from the iterator containing

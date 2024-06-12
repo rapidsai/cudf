@@ -43,7 +43,7 @@ bool is_sorted(cudf::table_view const& in,
   auto const comparator =
     experimental::row::lexicographic::self_comparator{in, column_order, null_precedence, stream};
 
-  if (cudf::detail::has_nested_columns(in)) {
+  if (cudf::has_nested_columns(in)) {
     auto const device_comparator = comparator.less<true>(has_nested_nulls(in));
 
     // Using a temporary buffer for intermediate transform results from the lambda containing

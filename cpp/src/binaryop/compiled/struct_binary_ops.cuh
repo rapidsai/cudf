@@ -93,7 +93,7 @@ void apply_struct_binary_op(mutable_column_view& out,
       out.end<bool>(),
       device_comparison_functor{optional_iter, is_lhs_scalar, is_rhs_scalar, device_comparator});
   };
-  if (cudf::detail::has_nested_columns(tlhs) || cudf::detail::has_nested_columns(trhs)) {
+  if (cudf::has_nested_columns(tlhs) || cudf::has_nested_columns(trhs)) {
     is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>
       ? tabulate_device_operator(
           table_comparator.less_equivalent<true>(comparator_nulls, comparator))
@@ -173,7 +173,7 @@ void apply_struct_equality_op(mutable_column_view& out,
                        op != binary_operator::NOT_EQUAL));
   };
 
-  if (cudf::detail::has_nested_columns(tlhs) or cudf::detail::has_nested_columns(trhs)) {
+  if (cudf::has_nested_columns(tlhs) or cudf::has_nested_columns(trhs)) {
     auto device_comparator = table_comparator.equal_to<true>(
       nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)},
       null_equality::EQUAL,

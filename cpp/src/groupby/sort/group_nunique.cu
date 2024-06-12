@@ -111,7 +111,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                       fn);
   };
 
-  if (cudf::detail::has_nested_columns(values_view)) {
+  if (cudf::has_nested_columns(values_view)) {
     auto const d_equal = comparator.equal_to<true>(
       cudf::nullate::DYNAMIC{cudf::has_nested_nulls(values_view)}, null_equality::EQUAL);
     comparator_helper(d_equal);
