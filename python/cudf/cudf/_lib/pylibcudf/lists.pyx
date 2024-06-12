@@ -1,18 +1,30 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
 from libcpp.utility cimport move
 
 from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.lists cimport explode as cpp_explode
+from cudf._lib.pylibcudf.libcudf.lists cimport (
+    contains as cpp_contains,
+    explode as cpp_explode,
+)
 from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
     concatenate_list_elements as cpp_concatenate_list_elements,
     concatenate_null_policy,
     concatenate_rows as cpp_concatenate_rows,
 )
+from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
+    lists_column_view,
+)
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
+
+from cudf._lib.pylibcudf.libcudf.lists.contains import \
+    duplicate_find_option as DuplicateFindOption  # no-cython-lint
+
+from cudf._lib.scalar cimport DeviceScalar
 
 from .column cimport Column
 from .table cimport Table
@@ -71,15 +83,15 @@ cpdef Column concatenate_list_elements(Column input, bool dropna):
     ----------
     input : Column
         The input column
+    dropna : bool
+        If true, null list elements will be ignored
+        from concatenation. Otherwise any input null values will result in
+        the corresponding output row being set to null.
 
     Returns
     -------
     Column
         A new Column of concatenated list elements
-    dropna : bool
-        If true, null list elements will be ignored
-        from concatenation. Otherwise any input null values will result in
-        the corresponding output row being set to null.
     """
     cdef concatenate_null_policy null_policy = (
         concatenate_null_policy.IGNORE if dropna
@@ -93,4 +105,45 @@ cpdef Column concatenate_list_elements(Column input, bool dropna):
             null_policy,
         ))
 
+    return Column.from_libcudf(move(c_result))
+
+cpdef Column contains(Column input, ColumnOrScalar search_key):
+    """Create a column of bool values based upon the search key.
+
+    ``search_key`` may be a
+    :py:class:`~cudf._lib.pylibcudf.column.Column` or a
+    :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
+
+    For details, see :cpp:func:`contains`.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+    search_key : Union[Column, Scalar]
+        The search key.
+
+    Returns
+    -------
+    Column
+        A new Column of bools
+    """
+    cdef unique_ptr[column] c_result
+    cdef shared_ptr[lists_column_view] list_view = (
+        make_shared[lists_column_view](input.view())
+    )
+    if ColumnOrScalar is Column:
+        with nogil:
+            c_result = move(cpp_contains.contains(
+                list_view.get()[0],
+                search_key.view(),
+            ))
+        return Column.from_libcudf(move(c_result))
+    cdef DeviceScalar key = search_key.device_value
+    cdef const scalar* key_value = key.get_raw_ptr()
+    with nogil:
+        c_result = move(cpp_contains.contains(
+            list_view.get()[0],
+            key_value[0],
+        ))
     return Column.from_libcudf(move(c_result))

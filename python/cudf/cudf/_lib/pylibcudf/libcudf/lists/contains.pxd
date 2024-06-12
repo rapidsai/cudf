@@ -15,17 +15,17 @@ from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 cdef extern from "cudf/lists/contains.hpp" namespace "cudf::lists" nogil:
 
     cpdef enum class duplicate_find_option(int32_t):
-        FIND_FIRST
-        FIND_LAST
+        FIND_FIRST "cudf::lists::duplicate_find_option::FIND_FIRST"
+        FIND_LAST "cudf::lists::duplicate_find_option::FIND_LAST"
 
     cdef unique_ptr[column] contains(
-        lists_column_view lists,
-        scalar search_key,
+        const lists_column_view& lists,
+        const scalar& search_key,
     ) except +cudf_exception_handler
 
     cdef unique_ptr[column] contains(
-        lists_column_view lists,
-        column_view search_keys,
+        const lists_column_view& lists,
+        const column_view& search_keys,
     ) except +cudf_exception_handler
 
     cdef unique_ptr[column] contains_nulls(
@@ -35,9 +35,11 @@ cdef extern from "cudf/lists/contains.hpp" namespace "cudf::lists" nogil:
     cdef unique_ptr[column] index_of(
         lists_column_view lists,
         scalar search_key,
+        # duplicate_find_option find_option,
     ) except +cudf_exception_handler
 
     cdef unique_ptr[column] index_of(
         lists_column_view lists,
         column_view search_keys,
+        # duplicate_find_option find_option,
     ) except +cudf_exception_handler

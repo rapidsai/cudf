@@ -44,3 +44,7 @@ def test_concatenate_list_elements(test_data, dropna, expected):
     expect = pa.array(expected)
 
     assert_column_eq(expect, res)
+
+
+def test_contains():
+    pass
