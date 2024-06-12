@@ -687,11 +687,14 @@ class StringFunction(Expr):
                 )
                 return Column(plc.strings.find.contains(column.obj, pattern))
             else:
-                prog = plc.strings.regex_program.RegexProgram.create(
-                    arg.value.as_py(),
-                    flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
-                )
-                return Column(plc.strings.contains.contains_re(column.obj, prog))
+                if isinstance(arg, Literal):
+                    prog = plc.strings.regex_program.RegexProgram.create(
+                        arg.value.as_py(),
+                        flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
+                    )
+                    return Column(plc.strings.contains.contains_re(column.obj, prog))
+                else:
+                    raise NotImplementedError
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
