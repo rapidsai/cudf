@@ -777,7 +777,7 @@ struct column_comparator {
 
 void check_non_empty_nulls(column_view const& lhs, column_view const& rhs)
 {
-  auto check_column_nulls = [](column_view const& col, const char* col_name) {
+  auto check_column_nulls = [](column_view const& col, char const* col_name) {
     if (cudf::detail::has_nonempty_nulls(col, cudf::get_default_stream())) {
       throw std::invalid_argument(col_name + std::string(" column has non-empty nulls"));
     }
