@@ -20,9 +20,9 @@
 #include <benchmarks/io/nvbench_helpers.hpp>
 
 #include <cudf/detail/utilities/stream_pool.hpp>
-#include <cudf/io/memory_resource.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 #include <cudf/utilities/thread_pool.hpp>
 
 #include <nvtx3/nvtx3.hpp>
