@@ -35,6 +35,15 @@ def test_contains(substr):
     assert_gpu_result_equal(query)
 
 
+def test_contains_column():
+    ldf = pl.DataFrame(
+        {"a": ["AbC", "de", "FGHI", "j", "kLm", "nOPq", None, "RsT", None, "uVw"]}
+    ).lazy()
+
+    query = ldf.select(pl.col("a").str.contains(pl.col("a"), literal=True))
+    assert_gpu_result_equal(query)
+
+
 @pytest.mark.parametrize("pat", ["["])
 def test_contains_invalid(pat):
     ldf = pl.DataFrame(

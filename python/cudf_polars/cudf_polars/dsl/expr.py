@@ -674,16 +674,21 @@ class StringFunction(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         if self.name == pl_expr.StringFunction.Contains:
-            child, pattern = self.children
+            child, arg = self.children
             column = child.evaluate(df, context=context, mapping=mapping)
-            assert isinstance(pattern, Literal)
 
             literal, _ = self.options
             if literal:
-                return Column(plc.strings.find.contains(column.obj, pattern.value))
+                val = (
+                    arg.value
+                    if isinstance(arg, Literal)
+                    else arg.evaluate(df, context=context, mapping=mapping).obj
+                )
+                return Column(plc.strings.find.contains(column.obj, val))
+
             else:
                 prog = plc.strings.regex_program.RegexProgram.create(
-                    pattern.value.as_py(),
+                    arg.value.as_py(),
                     flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
                 )
                 return Column(plc.strings.contains.contains_re(column.obj, prog))
