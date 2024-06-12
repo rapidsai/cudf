@@ -16,7 +16,7 @@
 
 #include "cudf_jni_apis.hpp"
 
-#include <cudf/io/memory_resource.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/aligned.hpp>
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>
@@ -395,15 +395,17 @@ class java_debug_event_handler_memory_resource final : public java_event_handler
   }
 };
 
-inline auto& prior_cuio_host_mr()
+inline auto& prior_cudf_pinned_mr()
 {
-  static rmm::host_async_resource_ref _prior_cuio_host_mr = cudf::io::get_host_memory_resource();
-  return _prior_cuio_host_mr;
+  static rmm::host_device_async_resource_ref _prior_cudf_pinned_mr =
+    cudf::get_pinned_memory_resource();
+  return _prior_cudf_pinned_mr;
 }
 
 /**
  * This is a pinned fallback memory resource that will try to allocate `pool`
- * and if that fails, attempt to allocate from the prior resource used by cuIO `prior_cuio_host_mr`.
+ * and if that fails, attempt to allocate from the prior resource used by cuDF
+ * `prior_cudf_pinned_mr`.
  *
  * We detect whether a pointer to free is inside of the pool by checking its address (see
  * constructor)
@@ -433,7 +435,7 @@ class pinned_fallback_host_memory_resource {
 
   /**
    * @brief Allocates pinned host memory of size at least \p bytes bytes from either the
-   *        _pool argument provided, or prior_cuio_host_mr.
+   *        _pool argument provided, or prior_cudf_pinned_mr.
    *
    * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
    * reason.
@@ -450,7 +452,7 @@ class pinned_fallback_host_memory_resource {
       return _pool->allocate(bytes, alignment);
     } catch (const std::exception& unused) {
       // try to allocate using the underlying pinned resource
-      return prior_cuio_host_mr().allocate(bytes, alignment);
+      return prior_cudf_pinned_mr().allocate(bytes, alignment);
     }
     // we should not reached here
     return nullptr;
@@ -459,7 +461,7 @@ class pinned_fallback_host_memory_resource {
   /**
    * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes. We attempt
    *        to deallocate from _pool, if ptr is detected to be in the pool address range,
-   *        otherwise we deallocate from `prior_cuio_host_mr`.
+   *        otherwise we deallocate from `prior_cudf_pinned_mr`.
    *
    * @param ptr Pointer to be deallocated.
    * @param bytes Size of the allocation.
@@ -472,7 +474,7 @@ class pinned_fallback_host_memory_resource {
     if (ptr >= pool_begin_ && ptr <= pool_end_) {
       _pool->deallocate(ptr, bytes, alignment);
     } else {
-      prior_cuio_host_mr().deallocate(ptr, bytes, alignment);
+      prior_cudf_pinned_mr().deallocate(ptr, bytes, alignment);
     }
   }
 
@@ -1025,7 +1027,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPinnedPoolMemoryResource(JNIE
   CATCH_STD(env, 0)
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCuioPinnedPoolMemoryResource(JNIEnv* env,
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCudfPinnedPoolMemoryResource(JNIEnv* env,
                                                                                jclass clazz,
                                                                                jlong pool_ptr)
 {
@@ -1035,7 +1037,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCuioPinnedPoolMemoryResource(J
     // create a pinned fallback pool that will allocate pinned memory
     // if the regular pinned pool is exhausted
     pinned_fallback_mr.reset(new pinned_fallback_host_memory_resource(pool));
-    prior_cuio_host_mr() = cudf::io::set_host_memory_resource(*pinned_fallback_mr);
+    prior_cudf_pinned_mr() = cudf::set_pinned_memory_resource(*pinned_fallback_mr);
   }
   CATCH_STD(env, )
 }
@@ -1047,8 +1049,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releasePinnedPoolMemoryResource(J
   try {
     cudf::jni::auto_set_device(env);
     // set the cuio host memory resource to what it was before, or the same
-    // if we didn't overwrite it with setCuioPinnedPoolMemoryResource
-    cudf::io::set_host_memory_resource(prior_cuio_host_mr());
+    // if we didn't overwrite it with setCudfPinnedPoolMemoryResource
+    cudf::set_pinned_memory_resource(prior_cudf_pinned_mr());
     pinned_fallback_mr.reset();
     delete reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
   }
@@ -1088,7 +1090,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromFallbackPinnedPool(JNIE
                                                                             jlong size)
 {
   cudf::jni::auto_set_device(env);
-  void* ret = cudf::io::get_host_memory_resource().allocate(size);
+  void* ret = cudf::get_pinned_memory_resource().allocate(size);
   return reinterpret_cast<jlong>(ret);
 }
 
@@ -1101,7 +1103,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromFallbackPinnedPool(JNIEnv
   try {
     cudf::jni::auto_set_device(env);
     void* cptr = reinterpret_cast<void*>(ptr);
-    cudf::io::get_host_memory_resource().deallocate(cptr, size);
+    cudf::get_pinned_memory_resource().deallocate(cptr, size);
   }
   CATCH_STD(env, )
 }
@@ -1112,7 +1114,7 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Rmm_configureDefaultCudfPinnedPoo
 {
   try {
     cudf::jni::auto_set_device(env);
-    return cudf::io::config_default_host_memory_resource(cudf::io::host_mr_options{size});
+    return cudf::config_default_pinned_memory_resource(cudf::pinned_mr_options{size});
   }
   CATCH_STD(env, false)
 }
