@@ -48,4 +48,4 @@ std::string get_stacktrace(capture_last_stackframe capture_last_frame);
 /** @} */  // end of group
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

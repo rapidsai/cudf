@@ -345,4 +345,4 @@ table_view unpack(packed_columns const& input);
 table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data);
 
 /** @} */
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

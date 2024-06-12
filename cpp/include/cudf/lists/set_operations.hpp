@@ -179,4 +179,4 @@ std::unique_ptr<column> difference_distinct(
 
 /** @} */  // end of group
 }  // namespace lists
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

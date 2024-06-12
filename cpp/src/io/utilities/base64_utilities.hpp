@@ -88,4 +88,4 @@ std::string base64_encode(std::string_view string_to_encode);
 std::string base64_decode(std::string_view encoded_string);
 
 }  // namespace io::detail
-}
+}  // namespace CUDF_EXPORT cudf

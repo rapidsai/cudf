@@ -425,9 +425,12 @@ std::unique_ptr<Base> make_sum_aggregation()
   return std::make_unique<detail::sum_aggregation>();
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_sum_aggregation<aggregation>();
-template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_sum_aggregation<rolling_aggregation>();
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_sum_aggregation<groupby_aggregation>();
-template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation> make_sum_aggregation<groupby_scan_aggregation>();
+template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
+make_sum_aggregation<rolling_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_sum_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation>
+make_sum_aggregation<groupby_scan_aggregation>();
 template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_sum_aggregation<reduce_aggregation>();
 template CUDF_EXPORT std::unique_ptr<scan_aggregation> make_sum_aggregation<scan_aggregation>();
 template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
@@ -440,10 +443,12 @@ std::unique_ptr<Base> make_product_aggregation()
   return std::make_unique<detail::product_aggregation>();
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_product_aggregation<aggregation>();
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_product_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_product_aggregation<groupby_aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation>
 make_product_aggregation<groupby_scan_aggregation>();
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_product_aggregation<reduce_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_product_aggregation<reduce_aggregation>();
 template CUDF_EXPORT std::unique_ptr<scan_aggregation> make_product_aggregation<scan_aggregation>();
 template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
 make_product_aggregation<segmented_reduce_aggregation>();
@@ -455,9 +460,12 @@ std::unique_ptr<Base> make_min_aggregation()
   return std::make_unique<detail::min_aggregation>();
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_min_aggregation<aggregation>();
-template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_min_aggregation<rolling_aggregation>();
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_min_aggregation<groupby_aggregation>();
-template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation> make_min_aggregation<groupby_scan_aggregation>();
+template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
+make_min_aggregation<rolling_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_min_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation>
+make_min_aggregation<groupby_scan_aggregation>();
 template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_min_aggregation<reduce_aggregation>();
 template CUDF_EXPORT std::unique_ptr<scan_aggregation> make_min_aggregation<scan_aggregation>();
 template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
@@ -470,9 +478,12 @@ std::unique_ptr<Base> make_max_aggregation()
   return std::make_unique<detail::max_aggregation>();
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_max_aggregation<aggregation>();
-template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_max_aggregation<rolling_aggregation>();
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_max_aggregation<groupby_aggregation>();
-template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation> make_max_aggregation<groupby_scan_aggregation>();
+template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
+make_max_aggregation<rolling_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_max_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation>
+make_max_aggregation<groupby_scan_aggregation>();
 template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_max_aggregation<reduce_aggregation>();
 template CUDF_EXPORT std::unique_ptr<scan_aggregation> make_max_aggregation<scan_aggregation>();
 template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
@@ -488,12 +499,12 @@ std::unique_ptr<Base> make_count_aggregation(null_policy null_handling)
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_count_aggregation<aggregation>(
   null_policy null_handling);
-template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_count_aggregation<rolling_aggregation>(
-  null_policy null_handling);
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_count_aggregation<groupby_aggregation>(
-  null_policy null_handling);
-template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation> make_count_aggregation<groupby_scan_aggregation>(
-  null_policy null_handling);
+template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
+make_count_aggregation<rolling_aggregation>(null_policy null_handling);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_count_aggregation<groupby_aggregation>(null_policy null_handling);
+template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation>
+make_count_aggregation<groupby_scan_aggregation>(null_policy null_handling);
 
 /// Factory to create a HISTOGRAM aggregation
 template <typename Base>
@@ -502,8 +513,10 @@ std::unique_ptr<Base> make_histogram_aggregation()
   return std::make_unique<detail::histogram_aggregation>();
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_histogram_aggregation<aggregation>();
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_histogram_aggregation<groupby_aggregation>();
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_histogram_aggregation<reduce_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_histogram_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_histogram_aggregation<reduce_aggregation>();
 
 /// Factory to create a ANY aggregation
 template <typename Base>
@@ -536,7 +549,8 @@ std::unique_ptr<Base> make_sum_of_squares_aggregation()
 template CUDF_EXPORT std::unique_ptr<aggregation> make_sum_of_squares_aggregation<aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_sum_of_squares_aggregation<groupby_aggregation>();
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_sum_of_squares_aggregation<reduce_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_sum_of_squares_aggregation<reduce_aggregation>();
 template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
 make_sum_of_squares_aggregation<segmented_reduce_aggregation>();
 
@@ -547,9 +561,12 @@ std::unique_ptr<Base> make_mean_aggregation()
   return std::make_unique<detail::mean_aggregation>();
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_mean_aggregation<aggregation>();
-template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_mean_aggregation<rolling_aggregation>();
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_mean_aggregation<groupby_aggregation>();
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_mean_aggregation<reduce_aggregation>();
+template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
+make_mean_aggregation<rolling_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_mean_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_mean_aggregation<reduce_aggregation>();
 template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
 make_mean_aggregation<segmented_reduce_aggregation>();
 
@@ -560,7 +577,8 @@ std::unique_ptr<Base> make_m2_aggregation()
   return std::make_unique<detail::m2_aggregation>();
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_m2_aggregation<aggregation>();
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_m2_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_m2_aggregation<groupby_aggregation>();
 
 /// Factory to create a VARIANCE aggregation
 template <typename Base>
@@ -568,13 +586,14 @@ std::unique_ptr<Base> make_variance_aggregation(size_type ddof)
 {
   return std::make_unique<detail::var_aggregation>(ddof);
 }
-template CUDF_EXPORT std::unique_ptr<aggregation> make_variance_aggregation<aggregation>(size_type ddof);
-template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_variance_aggregation<rolling_aggregation>(
+template CUDF_EXPORT std::unique_ptr<aggregation> make_variance_aggregation<aggregation>(
   size_type ddof);
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_variance_aggregation<groupby_aggregation>(
-  size_type ddof);
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_variance_aggregation<reduce_aggregation>(
-  size_type ddof);
+template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
+make_variance_aggregation<rolling_aggregation>(size_type ddof);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_variance_aggregation<groupby_aggregation>(size_type ddof);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_variance_aggregation<reduce_aggregation>(size_type ddof);
 template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
 make_variance_aggregation<segmented_reduce_aggregation>(size_type ddof);
 
@@ -601,8 +620,10 @@ std::unique_ptr<Base> make_median_aggregation()
   return std::make_unique<detail::median_aggregation>();
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_median_aggregation<aggregation>();
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_median_aggregation<groupby_aggregation>();
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_median_aggregation<reduce_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_median_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_median_aggregation<reduce_aggregation>();
 
 /// Factory to create a QUANTILE aggregation
 template <typename Base>
@@ -613,10 +634,12 @@ std::unique_ptr<Base> make_quantile_aggregation(std::vector<double> const& quant
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_quantile_aggregation<aggregation>(
   std::vector<double> const& quantiles, interpolation interp);
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_quantile_aggregation<groupby_aggregation>(
-  std::vector<double> const& quantiles, interpolation interp);
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_quantile_aggregation<reduce_aggregation>(
-  std::vector<double> const& quantiles, interpolation interp);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_quantile_aggregation<groupby_aggregation>(std::vector<double> const& quantiles,
+                                               interpolation interp);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_quantile_aggregation<reduce_aggregation>(std::vector<double> const& quantiles,
+                                              interpolation interp);
 
 /// Factory to create an ARGMAX aggregation
 template <typename Base>
@@ -625,8 +648,10 @@ std::unique_ptr<Base> make_argmax_aggregation()
   return std::make_unique<detail::argmax_aggregation>();
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_argmax_aggregation<aggregation>();
-template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_argmax_aggregation<rolling_aggregation>();
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_argmax_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
+make_argmax_aggregation<rolling_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_argmax_aggregation<groupby_aggregation>();
 
 /// Factory to create an ARGMIN aggregation
 template <typename Base>
@@ -635,8 +660,10 @@ std::unique_ptr<Base> make_argmin_aggregation()
   return std::make_unique<detail::argmin_aggregation>();
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_argmin_aggregation<aggregation>();
-template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_argmin_aggregation<rolling_aggregation>();
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_argmin_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
+make_argmin_aggregation<rolling_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_argmin_aggregation<groupby_aggregation>();
 
 /// Factory to create an NUNIQUE aggregation
 template <typename Base>
@@ -646,10 +673,10 @@ std::unique_ptr<Base> make_nunique_aggregation(null_policy null_handling)
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_nunique_aggregation<aggregation>(
   null_policy null_handling);
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_nunique_aggregation<groupby_aggregation>(
-  null_policy null_handling);
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_nunique_aggregation<reduce_aggregation>(
-  null_policy null_handling);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_nunique_aggregation<groupby_aggregation>(null_policy null_handling);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_nunique_aggregation<reduce_aggregation>(null_policy null_handling);
 template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
 make_nunique_aggregation<segmented_reduce_aggregation>(null_policy null_handling);
 
@@ -661,12 +688,12 @@ std::unique_ptr<Base> make_nth_element_aggregation(size_type n, null_policy null
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_nth_element_aggregation<aggregation>(
   size_type n, null_policy null_handling);
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_nth_element_aggregation<groupby_aggregation>(
-  size_type n, null_policy null_handling);
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_nth_element_aggregation<reduce_aggregation>(
-  size_type n, null_policy null_handling);
-template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_nth_element_aggregation<rolling_aggregation>(
-  size_type n, null_policy null_handling);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_nth_element_aggregation<groupby_aggregation>(size_type n, null_policy null_handling);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_nth_element_aggregation<reduce_aggregation>(size_type n, null_policy null_handling);
+template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
+make_nth_element_aggregation<rolling_aggregation>(size_type n, null_policy null_handling);
 
 /// Factory to create a ROW_NUMBER aggregation
 template <typename Base>
@@ -675,7 +702,8 @@ std::unique_ptr<Base> make_row_number_aggregation()
   return std::make_unique<detail::row_number_aggregation>();
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_row_number_aggregation<aggregation>();
-template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_row_number_aggregation<rolling_aggregation>();
+template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
+make_row_number_aggregation<rolling_aggregation>();
 
 /// Factory to create an EWMA aggregation
 template <typename Base>
@@ -683,9 +711,9 @@ std::unique_ptr<Base> make_ewma_aggregation(double const com, cudf::ewm_history 
 {
   return std::make_unique<detail::ewma_aggregation>(com, history);
 }
-template std::unique_ptr<aggregation> make_ewma_aggregation<aggregation>(double const com,
-                                                                         cudf::ewm_history history);
-template std::unique_ptr<scan_aggregation> make_ewma_aggregation<scan_aggregation>(
+template CUDF_EXPORT std::unique_ptr<aggregation> make_ewma_aggregation<aggregation>(
+  double const com, cudf::ewm_history history);
+template CUDF_EXPORT std::unique_ptr<scan_aggregation> make_ewma_aggregation<scan_aggregation>(
   double const com, cudf::ewm_history history);
 
 /// Factory to create a RANK aggregation
@@ -705,12 +733,12 @@ template CUDF_EXPORT std::unique_ptr<aggregation> make_rank_aggregation<aggregat
   null_policy null_handling,
   null_order null_precedence,
   rank_percentage percentage);
-template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation> make_rank_aggregation<groupby_scan_aggregation>(
-  rank_method method,
-  order column_order,
-  null_policy null_handling,
-  null_order null_precedence,
-  rank_percentage percentage);
+template CUDF_EXPORT std::unique_ptr<groupby_scan_aggregation>
+make_rank_aggregation<groupby_scan_aggregation>(rank_method method,
+                                                order column_order,
+                                                null_policy null_handling,
+                                                null_order null_precedence,
+                                                rank_percentage percentage);
 template CUDF_EXPORT std::unique_ptr<scan_aggregation> make_rank_aggregation<scan_aggregation>(
   rank_method method,
   order column_order,
@@ -726,12 +754,12 @@ std::unique_ptr<Base> make_collect_list_aggregation(null_policy null_handling)
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_collect_list_aggregation<aggregation>(
   null_policy null_handling);
-template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_collect_list_aggregation<rolling_aggregation>(
-  null_policy null_handling);
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_collect_list_aggregation<groupby_aggregation>(
-  null_policy null_handling);
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_collect_list_aggregation<reduce_aggregation>(
-  null_policy null_handling);
+template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
+make_collect_list_aggregation<rolling_aggregation>(null_policy null_handling);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_collect_list_aggregation<groupby_aggregation>(null_policy null_handling);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_collect_list_aggregation<reduce_aggregation>(null_policy null_handling);
 
 /// Factory to create a COLLECT_SET aggregation
 template <typename Base>
@@ -743,12 +771,18 @@ std::unique_ptr<Base> make_collect_set_aggregation(null_policy null_handling,
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_collect_set_aggregation<aggregation>(
   null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal);
-template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_collect_set_aggregation<rolling_aggregation>(
-  null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal);
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_collect_set_aggregation<groupby_aggregation>(
-  null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal);
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_collect_set_aggregation<reduce_aggregation>(
-  null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal);
+template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
+make_collect_set_aggregation<rolling_aggregation>(null_policy null_handling,
+                                                  null_equality nulls_equal,
+                                                  nan_equality nans_equal);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_collect_set_aggregation<groupby_aggregation>(null_policy null_handling,
+                                                  null_equality nulls_equal,
+                                                  nan_equality nans_equal);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_collect_set_aggregation<reduce_aggregation>(null_policy null_handling,
+                                                 null_equality nulls_equal,
+                                                 nan_equality nans_equal);
 
 /// Factory to create a LAG aggregation
 template <typename Base>
@@ -756,7 +790,8 @@ std::unique_ptr<Base> make_lag_aggregation(size_type offset)
 {
   return std::make_unique<detail::lead_lag_aggregation>(aggregation::LAG, offset);
 }
-template CUDF_EXPORT std::unique_ptr<aggregation> make_lag_aggregation<aggregation>(size_type offset);
+template CUDF_EXPORT std::unique_ptr<aggregation> make_lag_aggregation<aggregation>(
+  size_type offset);
 template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_lag_aggregation<rolling_aggregation>(
   size_type offset);
 
@@ -766,9 +801,10 @@ std::unique_ptr<Base> make_lead_aggregation(size_type offset)
 {
   return std::make_unique<detail::lead_lag_aggregation>(aggregation::LEAD, offset);
 }
-template CUDF_EXPORT std::unique_ptr<aggregation> make_lead_aggregation<aggregation>(size_type offset);
-template CUDF_EXPORT std::unique_ptr<rolling_aggregation> make_lead_aggregation<rolling_aggregation>(
+template CUDF_EXPORT std::unique_ptr<aggregation> make_lead_aggregation<aggregation>(
   size_type offset);
+template CUDF_EXPORT std::unique_ptr<rolling_aggregation>
+make_lead_aggregation<rolling_aggregation>(size_type offset);
 
 /// Factory to create a UDF aggregation
 template <typename Base>
@@ -794,8 +830,10 @@ std::unique_ptr<Base> make_merge_lists_aggregation()
   return std::make_unique<detail::merge_lists_aggregation>();
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_merge_lists_aggregation<aggregation>();
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_merge_lists_aggregation<groupby_aggregation>();
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_merge_lists_aggregation<reduce_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_merge_lists_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_merge_lists_aggregation<reduce_aggregation>();
 
 /// Factory to create a MERGE_SETS aggregation
 template <typename Base>
@@ -804,12 +842,12 @@ std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal,
 {
   return std::make_unique<detail::merge_sets_aggregation>(nulls_equal, nans_equal);
 }
-template CUDF_EXPORT std::unique_ptr<aggregation> make_merge_sets_aggregation<aggregation>(null_equality,
-                                                                               nan_equality);
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_merge_sets_aggregation<groupby_aggregation>(
+template CUDF_EXPORT std::unique_ptr<aggregation> make_merge_sets_aggregation<aggregation>(
   null_equality, nan_equality);
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_merge_sets_aggregation<reduce_aggregation>(
-  null_equality, nan_equality);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+  make_merge_sets_aggregation<groupby_aggregation>(null_equality, nan_equality);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+  make_merge_sets_aggregation<reduce_aggregation>(null_equality, nan_equality);
 
 /// Factory to create a MERGE_M2 aggregation
 template <typename Base>
@@ -818,7 +856,8 @@ std::unique_ptr<Base> make_merge_m2_aggregation()
   return std::make_unique<detail::merge_m2_aggregation>();
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_merge_m2_aggregation<aggregation>();
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_merge_m2_aggregation<groupby_aggregation>();
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_merge_m2_aggregation<groupby_aggregation>();
 
 /// Factory to create a MERGE_HISTOGRAM aggregation
 template <typename Base>
@@ -829,7 +868,8 @@ std::unique_ptr<Base> make_merge_histogram_aggregation()
 template CUDF_EXPORT std::unique_ptr<aggregation> make_merge_histogram_aggregation<aggregation>();
 template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_merge_histogram_aggregation<groupby_aggregation>();
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_merge_histogram_aggregation<reduce_aggregation>();
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_merge_histogram_aggregation<reduce_aggregation>();
 
 /// Factory to create a COVARIANCE aggregation
 template <typename Base>
@@ -839,8 +879,8 @@ std::unique_ptr<Base> make_covariance_aggregation(size_type min_periods, size_ty
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_covariance_aggregation<aggregation>(
   size_type min_periods, size_type ddof);
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_covariance_aggregation<groupby_aggregation>(
-  size_type min_periods, size_type ddof);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_covariance_aggregation<groupby_aggregation>(size_type min_periods, size_type ddof);
 
 /// Factory to create a CORRELATION aggregation
 template <typename Base>
@@ -850,19 +890,20 @@ std::unique_ptr<Base> make_correlation_aggregation(correlation_type type, size_t
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_correlation_aggregation<aggregation>(
   correlation_type type, size_type min_periods);
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_correlation_aggregation<groupby_aggregation>(
-  correlation_type type, size_type min_periods);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_correlation_aggregation<groupby_aggregation>(correlation_type type, size_type min_periods);
 
 template <typename Base>
 std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids)
 {
   return std::make_unique<detail::tdigest_aggregation>(max_centroids);
 }
-template CUDF_EXPORT std::unique_ptr<aggregation> make_tdigest_aggregation<aggregation>(int max_centroids);
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_tdigest_aggregation<groupby_aggregation>(
+template CUDF_EXPORT std::unique_ptr<aggregation> make_tdigest_aggregation<aggregation>(
   int max_centroids);
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_tdigest_aggregation<reduce_aggregation>(
-  int max_centroids);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_tdigest_aggregation<groupby_aggregation>(int max_centroids);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_tdigest_aggregation<reduce_aggregation>(int max_centroids);
 
 template <typename Base>
 std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids)
@@ -871,10 +912,10 @@ std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids)
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_merge_tdigest_aggregation<aggregation>(
   int max_centroids);
-template CUDF_EXPORT std::unique_ptr<groupby_aggregation> make_merge_tdigest_aggregation<groupby_aggregation>(
-  int max_centroids);
-template CUDF_EXPORT std::unique_ptr<reduce_aggregation> make_merge_tdigest_aggregation<reduce_aggregation>(
-  int max_centroids);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_merge_tdigest_aggregation<groupby_aggregation>(int max_centroids);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_merge_tdigest_aggregation<reduce_aggregation>(int max_centroids);
 
 namespace detail {
 namespace {

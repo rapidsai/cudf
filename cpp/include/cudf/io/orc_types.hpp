@@ -108,4 +108,4 @@ enum ProtofType : uint8_t {
 
 /** @} */  // end of group
 }  // namespace io::orc
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

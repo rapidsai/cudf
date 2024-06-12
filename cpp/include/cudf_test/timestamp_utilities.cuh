@@ -76,4 +76,4 @@ inline cudf::test::fixed_width_column_wrapper<T, int64_t> generate_timestamps(in
 }
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

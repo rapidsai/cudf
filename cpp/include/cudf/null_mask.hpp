@@ -209,4 +209,4 @@ cudf::size_type null_count(bitmask_type const* bitmask,
                            size_type stop,
                            rmm::cuda_stream_view stream = cudf::get_default_stream());
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

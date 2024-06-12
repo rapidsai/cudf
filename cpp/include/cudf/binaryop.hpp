@@ -309,7 +309,7 @@ std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
 }  // namespace binops
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
 
 namespace cudf::binops::compiled::detail {
 

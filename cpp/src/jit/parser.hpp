@@ -241,4 +241,4 @@ inline std::string parse_single_function_ptx(std::string const& src,
 std::string parse_single_function_cuda(std::string const& src, std::string const& function_name);
 
 }  // namespace jit
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

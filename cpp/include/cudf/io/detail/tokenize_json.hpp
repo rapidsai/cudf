@@ -24,8 +24,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace CUDF_EXPORT cudf {
-namespace io::json {
+namespace cudf::io::json {
 
 /// Type used to represent the atomic symbol type used within the finite-state machine
 using SymbolT = char;
@@ -119,7 +118,7 @@ enum token_t : PdaTokenT {
   NUM_TOKENS
 };
 
-namespace detail {
+namespace CUDF_EXPORT detail {
 
 /**
  * @brief Parses the given JSON string and emits a sequence of tokens that demarcate relevant
@@ -138,9 +137,6 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
-}  // namespace detail
+}  // namespace CUDF_EXPORT detail
 
-}  // namespace io::json
-
-}  // namespace CUDF_EXPORT cudf
-
+}  // namespace cudf::io::json

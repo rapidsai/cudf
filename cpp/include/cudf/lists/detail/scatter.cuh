@@ -239,11 +239,11 @@ std::unique_ptr<column> scatter(scalar const& slr,
   auto const num_rows = target.size();
   if (num_rows == 0) { return cudf::empty_like(target); }
 
-  auto lv        = static_cast<list_scalar const*>(&slr);
-  bool slr_valid = slr.is_valid(stream);
-  rmm::device_buffer null_mask =
-    slr_valid ? cudf::create_null_mask(1, mask_state::UNALLOCATED, stream, mr)
-              : cudf::create_null_mask(1, mask_state::ALL_NULL, stream, mr);
+  auto lv                      = static_cast<list_scalar const*>(&slr);
+  bool slr_valid               = slr.is_valid(stream);
+  rmm::device_buffer null_mask = slr_valid
+                                   ? cudf::create_null_mask(1, mask_state::UNALLOCATED, stream, mr)
+                                   : cudf::create_null_mask(1, mask_state::ALL_NULL, stream, mr);
   auto offset_column =
     make_numeric_column(data_type{type_to_id<size_type>()}, 2, mask_state::UNALLOCATED, stream, mr);
   thrust::sequence(rmm::exec_policy_nosync(stream),

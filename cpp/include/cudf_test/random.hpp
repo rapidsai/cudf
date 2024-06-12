@@ -171,4 +171,4 @@ class UniformRandomGenerator {
 };
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

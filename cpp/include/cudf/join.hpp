@@ -44,13 +44,24 @@ enum class has_nested : bool { YES, NO };
 
 // forward declaration
 namespace hashing::detail {
+
+/**
+ * @brief Forward declaration for our Murmur Hash 3 implementation
+ */
 template <typename T>
 class MurmurHash3_x86_32;
 }  // namespace hashing::detail
 namespace detail {
+
+/**
+ * @brief Forward declaration for our hash join
+ */
 template <typename T>
 class hash_join;
 
+/**
+ * @brief Forward declaration for our distinct hash join
+ */
 template <cudf::has_nested HasNested>
 class distinct_hash_join;
 }  // namespace detail
@@ -1180,4 +1191,4 @@ std::size_t conditional_left_anti_join_size(
   ast::expression const& binary_predicate,
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

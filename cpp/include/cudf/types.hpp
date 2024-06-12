@@ -346,4 +346,4 @@ inline bool operator!=(data_type const& lhs, data_type const& rhs) { return !(lh
 std::size_t size_of(data_type t);
 
 /** @} */
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

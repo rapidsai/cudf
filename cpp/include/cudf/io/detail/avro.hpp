@@ -41,6 +41,5 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr);
 
-
 }  // namespace io::detail::avro
 }  // namespace CUDF_EXPORT cudf

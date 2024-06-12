@@ -434,4 +434,4 @@ static constexpr std::array<cudf::type_id, 2> non_fixed_width_type_ids{cudf::typ
                                                                        cudf::type_id::STRING};
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

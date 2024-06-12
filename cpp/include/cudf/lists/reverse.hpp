@@ -57,4 +57,4 @@ std::unique_ptr<column> reverse(
 /** @} */  // end of doxygen group
 
 }  // namespace lists
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

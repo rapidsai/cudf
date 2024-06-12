@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <ftw.h>
 

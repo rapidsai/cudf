@@ -40,4 +40,4 @@ namespace test {
 rmm::cuda_stream_view const get_default_stream();
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

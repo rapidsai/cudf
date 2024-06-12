@@ -111,4 +111,4 @@ std::unique_ptr<cudf::table> merge(
   rmm::cuda_stream_view stream                         = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr                    = rmm::mr::get_current_device_resource());
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

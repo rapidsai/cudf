@@ -21,7 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf ::strings ::detail {
+namespace cudf::strings::detail {
 /**
  * @brief Merges two strings columns
  *

@@ -54,4 +54,4 @@ std::unique_ptr<table> make_timezone_transition_table(
   std::string_view timezone_name,
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

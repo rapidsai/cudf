@@ -1497,11 +1497,10 @@ struct mutable_value_accessor {
  * @return The device pointer to be used for the d_children member of the given column
  */
 template <typename ColumnDeviceView, typename ColumnViewIterator>
-CUDF_HIDDEN
-ColumnDeviceView* child_columns_to_device_array(ColumnViewIterator child_begin,
-                                                ColumnViewIterator child_end,
-                                                void* h_ptr,
-                                                void* d_ptr)
+CUDF_HIDDEN ColumnDeviceView* child_columns_to_device_array(ColumnViewIterator child_begin,
+                                                            ColumnViewIterator child_end,
+                                                            void* h_ptr,
+                                                            void* d_ptr)
 {
   ColumnDeviceView* d_children = detail::align_ptr_for_type<ColumnDeviceView>(d_ptr);
   auto num_children            = std::distance(child_begin, child_end);

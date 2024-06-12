@@ -64,4 +64,4 @@ std::unique_ptr<scalar> get_insert_index(dictionary_column_view const& dictionar
 
 }  // namespace detail
 }  // namespace dictionary
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
