@@ -32,3 +32,8 @@ add_executable(load_text load_text.cpp)
 target_compile_features(load_text PRIVATE cxx_std_17)
 target_link_libraries(load_text PRIVATE cudf::cudf nvToolsExt cudf::cudftestutil)
 install(TARGETS load_text DESTINATION bin/examples/libcudf)
+
+add_executable(load_text_chunks load_text_chunks.cpp)
+target_compile_features(load_text_chunks PRIVATE cxx_std_17)
+target_link_libraries(load_text_chunks PRIVATE cudf::cudf nvToolsExt cudf::cudftestutil)
+install(TARGETS load_text_chunks DESTINATION bin/examples/libcudf)

@@ -82,7 +82,7 @@ class rmm_host_allocator {
   using size_type       = std::size_t;     ///< The type used for the size of the allocation
   using difference_type = std::ptrdiff_t;  ///< The type of the distance between two pointers
 
-  typedef cuda::std::true_type propagate_on_container_move_assignment;
+  using propagate_on_container_move_assignment = cuda::std::true_type;
 
   /**
    * @brief converts a `rmm_host_allocator<T>` to `rmm_host_allocator<U>`
@@ -147,7 +147,7 @@ class rmm_host_allocator {
    *  @return The maximum number of objects that may be allocated
    *          by a single call to \p allocate().
    */
-  constexpr inline size_type max_size() const
+  [[nodiscard]] constexpr inline size_type max_size() const
   {
     return (std::numeric_limits<size_type>::max)() / sizeof(T);
   }

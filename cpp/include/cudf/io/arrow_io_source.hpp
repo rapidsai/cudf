@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 
 namespace cudf::io {
 /**
@@ -49,7 +50,10 @@ class arrow_io_source : public datasource {
    *
    * @param file The `arrow` object from which the data is read
    */
-  explicit arrow_io_source(std::shared_ptr<arrow::io::RandomAccessFile> file) : arrow_file(file) {}
+  explicit arrow_io_source(std::shared_ptr<arrow::io::RandomAccessFile> file)
+    : arrow_file(std::move(file))
+  {
+  }
 
   /**
    * @brief Returns a buffer with a subset of data from the `arrow` source.
