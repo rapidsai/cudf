@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,7 +102,8 @@ TEST_F(StringsStripTest, EmptyStringsColumn)
 
 TEST_F(StringsStripTest, AllEmptyStrings)
 {
-  auto input = cudf::test::strings_column_wrapper({"", "", "", "", "", ""}, {1, 1, 0, 1, 1});
+  auto input =
+    cudf::test::strings_column_wrapper({"", "", "", "", "", ""}, {true, true, false, true, true});
   auto results =
     cudf::strings::strip(cudf::strings_column_view(input), cudf::strings::side_type::BOTH);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, input);
