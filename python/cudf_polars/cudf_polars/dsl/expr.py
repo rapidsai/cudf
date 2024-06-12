@@ -689,7 +689,9 @@ class StringFunction(Expr):
                 )
             )
         else:
-            raise NotImplementedError(f"StringFunction {self.name}")
+            raise NotImplementedError(
+                f"StringFunction {self.name}"
+            )  # pragma: no cover; handled by init raising
 
 
 class Sort(Expr):
