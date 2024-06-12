@@ -933,10 +933,10 @@ class Union(IR):
     """Optional slice to apply after concatenation."""
 
     def __post_init__(self) -> None:
-        """Validated preconditions."""
+        """Validate preconditions."""
         schema = self.dfs[0].schema
         if not all(s.schema == schema for s in self.dfs[1:]):
-            raise ValueError("Schema mismatch")
+            raise NotImplementedError("Schema mismatch")
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
