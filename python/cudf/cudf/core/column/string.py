@@ -44,7 +44,7 @@ def str_to_boolean(column: StringColumn):
 
 if TYPE_CHECKING:
     import cupy
-    from numba import cuda
+    import numba.cuda
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -5599,7 +5599,7 @@ class StringColumn(column.ColumnBase):
 
     def data_array_view(
         self, *, mode="write"
-    ) -> cuda.devicearray.DeviceNDArray:
+    ) -> numba.cuda.devicearray.DeviceNDArray:
         raise ValueError("Cannot get an array view of a StringColumn")
 
     @property

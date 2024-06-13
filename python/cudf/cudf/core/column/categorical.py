@@ -27,7 +27,7 @@ from cudf.utils.dtypes import (
 if TYPE_CHECKING:
     from collections import abc
 
-    from numba import cuda
+    import numba.cuda
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -876,7 +876,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def data_array_view(
         self, *, mode="write"
-    ) -> cuda.devicearray.DeviceNDArray:
+    ) -> numba.cuda.devicearray.DeviceNDArray:
         return self.codes.data_array_view(mode=mode)
 
     def unique(self) -> CategoricalColumn:

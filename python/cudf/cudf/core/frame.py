@@ -48,7 +48,7 @@ from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 
 if TYPE_CHECKING:
-    import types
+    from types import ModuleType
 
     from cudf._typing import Dtype
 
@@ -414,7 +414,7 @@ class Frame(BinaryOperand, Scannable):
     def _to_array(
         self,
         get_array: Callable,
-        module: types.ModuleType,
+        module: ModuleType,
         copy: bool,
         dtype: Union[Dtype, None] = None,
         na_value=None,
