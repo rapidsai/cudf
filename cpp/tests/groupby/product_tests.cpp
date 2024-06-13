@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,7 +120,7 @@ TYPED_TEST(groupby_product_test, null_keys_and_values)
 
   // clang-format off
   cudf::test::fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
-                                            { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+                                            { true, true, true, true, true, true, true, false, true, true, true});
   cudf::test::fixed_width_column_wrapper<V> vals(       { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 3},
                                             { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 

@@ -21,7 +21,6 @@ import pytest
 import cudf
 from cudf.api.extensions import no_default
 from cudf.core.column import as_column
-from cudf.core.index import as_index
 from cudf.testing._utils import (
     assert_eq,
     assert_exceptions_equal,
@@ -158,8 +157,6 @@ def test_multiindex_swaplevel():
 
 
 def test_string_index():
-    from cudf.core.index import Index
-
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = cudf.from_pandas(pdf)
     stringIndex = ["a", "b", "c", "d", "e"]
@@ -170,11 +167,11 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = Index(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = cudf.Index(["a", "b", "c", "d", "e"], name="name")
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = as_index(as_column(["a", "b", "c", "d", "e"]), name="name")
+    stringIndex = cudf.Index(as_column(["a", "b", "c", "d", "e"]), name="name")
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)

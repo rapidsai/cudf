@@ -68,12 +68,14 @@ function(ConfigureTest CMAKE_TEST_NAME)
     INSTALL_COMPONENT_SET testing
   )
 
-  set_tests_properties(
-    ${CMAKE_TEST_NAME}
-    PROPERTIES
-      ENVIRONMENT
-      "GTEST_CUDF_STREAM_MODE=new_${_CUDF_TEST_STREAM_MODE}_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_${_CUDF_TEST_STREAM_MODE}>"
-  )
+  if(CUDF_BUILD_STREAMS_TEST_UTIL)
+    set_tests_properties(
+      ${CMAKE_TEST_NAME}
+      PROPERTIES
+        ENVIRONMENT
+        "GTEST_CUDF_STREAM_MODE=new_${_CUDF_TEST_STREAM_MODE}_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_${_CUDF_TEST_STREAM_MODE}>"
+    )
+  endif()
 endfunction()
 
 # ##################################################################################################
@@ -378,15 +380,16 @@ ConfigureTest(
 # * utilities tests -------------------------------------------------------------------------------
 ConfigureTest(
   UTILITIES_TEST
-  utilities_tests/type_list_tests.cpp
   utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
+  utilities_tests/default_stream_tests.cpp
   utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
   utilities_tests/logger_tests.cpp
-  utilities_tests/default_stream_tests.cpp
+  utilities_tests/pinned_memory_tests.cpp
   utilities_tests/type_check_tests.cpp
+  utilities_tests/type_list_tests.cpp
 )
 
 # ##################################################################################################
@@ -401,14 +404,10 @@ ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
 ConfigureTest(SPAN_TEST_DEVICE_VECTOR utilities_tests/span_tests.cu)
 
 # Overwrite the environments set by ConfigureTest
-set_tests_properties(
-  SPAN_TEST
-  PROPERTIES
-    ENVIRONMENT
-    "GTEST_FILTER=-${_allowlist_filter};GTEST_CUDF_STREAM_MODE=new_cudf_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_cudf>"
-)
-set_tests_properties(
-  SPAN_TEST_DEVICE_VECTOR PROPERTIES ENVIRONMENT "GTEST_FILTER=${_allowlist_filter}"
+set_property(
+  TEST SPAN_TEST SPAN_TEST_DEVICE_VECTOR
+  APPEND
+  PROPERTY ENVIRONMENT "GTEST_FILTER=-${_allowlist_filter}"
 )
 
 # ##################################################################################################
@@ -573,6 +572,7 @@ ConfigureTest(
   large_strings/case_tests.cpp
   large_strings/json_tests.cpp
   large_strings/large_strings_fixture.cpp
+  large_strings/many_strings_tests.cpp
   large_strings/merge_tests.cpp
   large_strings/parquet_tests.cpp
   large_strings/reshape_tests.cpp
@@ -672,9 +672,11 @@ target_include_directories(JIT_PARSER_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOU
 
 # ##################################################################################################
 # * stream testing ---------------------------------------------------------------------------------
-ConfigureTest(
-  STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
-)
+if(CUDF_BUILD_STREAMS_TEST_UTIL)
+  ConfigureTest(
+    STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
+  )
+endif()
 
 ConfigureTest(STREAM_BINARYOP_TEST streams/binaryop_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_CONCATENATE_TEST streams/concatenate_test.cpp STREAM_MODE testing)

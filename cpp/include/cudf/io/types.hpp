@@ -30,6 +30,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace cudf {
@@ -247,10 +248,10 @@ struct column_name_info {
    * @param _is_nullable True if column is nullable
    * @param _is_binary True if column is binary data
    */
-  column_name_info(std::string const& _name,
+  column_name_info(std::string _name,
                    std::optional<bool> _is_nullable = std::nullopt,
                    std::optional<bool> _is_binary   = std::nullopt)
-    : name(_name), is_nullable(_is_nullable), is_binary(_is_binary)
+    : name(std::move(_name)), is_nullable(_is_nullable), is_binary(_is_binary)
   {
   }
 

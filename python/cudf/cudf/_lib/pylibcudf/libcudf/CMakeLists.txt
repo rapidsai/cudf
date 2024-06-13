@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-set(cython_sources aggregation.pyx binaryop.pyx copying.pyx replace.pyx reduce.pxd round.pyx
+set(cython_sources aggregation.pyx binaryop.pyx copying.pyx reduce.pyx replace.pyx round.pyx
                    stream_compaction.pyx types.pyx unary.pyx
 )
 

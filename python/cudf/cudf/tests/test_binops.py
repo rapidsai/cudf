@@ -12,10 +12,9 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf import Series
+from cudf import Index, Series
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
-from cudf.core.index import as_index
 from cudf.testing import _utils as utils
 from cudf.utils.dtypes import (
     BOOL_TYPES,
@@ -186,8 +185,8 @@ def test_series_binop(binop, obj_class):
     sr2 = Series(arr2)
 
     if obj_class == "Index":
-        sr1 = as_index(sr1)
-        sr2 = as_index(sr2)
+        sr1 = Index(sr1)
+        sr2 = Index(sr2)
 
     result = binop(sr1, sr2)
     expect = binop(pd.Series(arr1), pd.Series(arr2))
@@ -225,7 +224,7 @@ def test_series_binop_scalar(nelem, binop, obj_class, use_cudf_scalar):
 
     sr = Series(arr)
     if obj_class == "Index":
-        sr = as_index(sr)
+        sr = Index(sr)
 
     if use_cudf_scalar:
         result = binop(sr, rhs)
@@ -251,8 +250,8 @@ def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
     sr2 = Series(arr2)
 
     if obj_class == "Index":
-        sr1 = as_index(sr1)
-        sr2 = as_index(sr2)
+        sr1 = Index(sr1)
+        sr2 = Index(sr2)
 
     result = binop(sr1, sr2)
 
@@ -274,8 +273,8 @@ def test_series_compare(cmpop, obj_class, dtype):
     sr2 = Series(arr2)
 
     if obj_class == "Index":
-        sr1 = as_index(sr1)
-        sr2 = as_index(sr2)
+        sr1 = Index(sr1)
+        sr2 = Index(sr2)
 
     result1 = cmpop(sr1, sr1)
     result2 = cmpop(sr2, sr2)
@@ -402,7 +401,7 @@ def test_series_compare_scalar(
         rhs = cudf.Scalar(rhs)
 
     if obj_class == "Index":
-        sr1 = as_index(sr1)
+        sr1 = Index(sr1)
 
     result1 = cmpop(sr1, rhs)
     result2 = cmpop(rhs, sr1)
@@ -488,8 +487,8 @@ def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype, obj_class):
     sr2 = Series(rhs)
 
     if obj_class == "Index":
-        sr1 = as_index(sr1)
-        sr2 = as_index(sr2)
+        sr1 = Index(sr1)
+        sr2 = Index(sr2)
 
     result = binop(Series(sr1), Series(sr2))
 
@@ -513,8 +512,8 @@ def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype, obj_class):
     sr2 = Series(rhs)
 
     if obj_class == "Index":
-        sr1 = as_index(sr1)
-        sr2 = as_index(sr2)
+        sr1 = Index(sr1)
+        sr2 = Index(sr2)
 
     result = cmpop(Series(sr1), Series(sr2))
 
@@ -538,7 +537,7 @@ def test_series_reflected_ops_scalar(func, dtype, obj_class):
 
     # class typing
     if obj_class == "Index":
-        gs = as_index(gs)
+        gs = Index(gs)
 
     gs_result = func(gs)
 
@@ -588,7 +587,7 @@ def test_series_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
 
     # class typing
     if obj_class == "Index":
-        gs = as_index(gs)
+        gs = Index(gs)
 
     gs_result = gpu_func(gs)
 
