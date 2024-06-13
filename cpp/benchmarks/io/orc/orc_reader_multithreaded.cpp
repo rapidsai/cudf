@@ -43,7 +43,7 @@ std::string get_label(std::string const& test_name, nvbench::state const& state)
   auto const num_cols       = state.get_int64("num_cols");
   size_t const read_size_mb = get_read_size(state) / (1024 * 1024);
   return {test_name + ", " + std::to_string(num_cols) + " columns, " +
-          std::to_string(state.get_int64("num_threads")) + " threads " + " (" +
+          std::to_string(get_num_reads()) + " threads " + " (" +
           std::to_string(read_size_mb) + " MB each)"};
 }
 
