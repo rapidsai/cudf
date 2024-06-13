@@ -18,6 +18,7 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/prefetch.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/polymorphic_allocator.hpp>
@@ -60,6 +61,9 @@ class cuco_allocator_base
   {
   }
 
+  // TODO: If we move forward with prefetching, rather than having to implement
+  // rebinding and override allocation we should just make the underlying
+  // polymorphic_allocator wrap a custom prefetching allocator. That should be simpler.
   template <typename U>
   struct rebind {
     using other = cuco_allocator_base<U>;
@@ -68,16 +72,8 @@ class cuco_allocator_base
   typename base_type::value_type* allocate(std::size_t num)
   {
     auto ptr = base_type::allocate(num);
-
-    char const* prefetch = std::getenv("CUDF_PREFETCH_CUCO_DATA");
-    if (prefetch && std::stoi(prefetch) == 1) {
-      fprintf(stderr, "Prefetching allocated data in cuco_allocator at %p\n", ptr);
-      auto result =
-        cudaMemPrefetchAsync(ptr, num, rmm::get_current_cuda_device().value(), stream_.value());
-      // InvalidValue error is raised when non-managed memory is passed to cudaMemPrefetchAsync
-      // We should treat this as a no-op
-      if (result != cudaErrorInvalidValue && result != cudaSuccess) { CUDF_CUDA_TRY(result); }
-    }
+    cudf::experimental_prefetching::detail::prefetch(
+      "cuco_allocator_base::allocate", ptr, num * sizeof(T));
     return ptr;
   }
 

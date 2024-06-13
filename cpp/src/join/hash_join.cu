@@ -21,6 +21,7 @@
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>
+#include <cudf/utilities/device_uvector.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
@@ -48,32 +49,6 @@
 namespace cudf {
 namespace detail {
 namespace {
-
-template <typename T>
-class device_uvector : public rmm::device_uvector<T> {
- public:
-  using rmm::device_uvector<T>::device_uvector;
-  [[nodiscard]] typename rmm::device_uvector<T>::pointer data() noexcept
-  {
-    char const* prefetch = std::getenv("CUDF_PREFETCH_DEVICE_UVECTOR");
-    auto data            = rmm::device_uvector<T>::data();
-    if (prefetch && std::stoi(prefetch) == 1) {
-      if constexpr (std::is_integral_v<T>) {
-        fprintf(stderr, "Prefetching mutable data in uvector at %p\n", data);
-      }
-      auto result = cudaMemPrefetchAsync(data,
-                                         rmm::device_uvector<T>::size() * sizeof(T),
-                                         rmm::get_current_cuda_device().value(),
-                                         cudf::get_default_stream().value());
-      // InvalidValue error is raised when non-managed memory is passed to cudaMemPrefetchAsync
-      // We should treat this as a no-op
-      if (result != cudaErrorInvalidValue && result != cudaSuccess) { CUDF_CUDA_TRY(result); }
-    }
-    return data;
-  }
-
-  [[nodiscard]] typename rmm::device_uvector<T>::iterator begin() noexcept { return data(); }
-};
 
 /**
  * @brief Calculates the exact size of the join output produced when
@@ -213,8 +188,12 @@ probe_join_hash_table(
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
-  auto left_indices  = std::make_unique<device_uvector<size_type>>(join_size, stream, mr);
-  auto right_indices = std::make_unique<device_uvector<size_type>>(join_size, stream, mr);
+  auto left_indices =
+    std::make_unique<cudf::experimental_prefetching::detail::cudf_device_uvector<size_type>>(
+      join_size, stream, mr);
+  auto right_indices =
+    std::make_unique<cudf::experimental_prefetching::detail::cudf_device_uvector<size_type>>(
+      join_size, stream, mr);
 
   auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
 
