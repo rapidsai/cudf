@@ -552,16 +552,17 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(data)
 
     def _split_by_character(self):
-        result_col = libstrings.character_tokenize(self._column)
+        col = self._column.fillna("")  # sanitize nulls
+        result_col = libstrings.character_tokenize(col)
 
-        offset_col = self._column.children[0]
+        offset_col = col.children[0]
 
         return cudf.core.column.ListColumn(
-            size=len(self._column),
-            dtype=cudf.ListDtype(self._column.dtype),
-            mask=self._column.mask,
+            size=len(col),
+            dtype=cudf.ListDtype(col.dtype),
+            mask=col.mask,
             offset=0,
-            null_count=self._column.null_count,
+            null_count=0,
             children=(offset_col, result_col),
         )
 
@@ -4391,7 +4392,7 @@ class StringMethods(ColumnMethods):
         if isinstance(self._parent, cudf.Series):
             return cudf.Series(new_col, name=self._parent.name)
         elif isinstance(self._parent, cudf.BaseIndex):
-            return cudf.core.index.as_index(new_col, name=self._parent.name)
+            return cudf.Index(new_col, name=self._parent.name)
         else:
             return new_col
 
@@ -4706,7 +4707,7 @@ class StringMethods(ColumnMethods):
             index = self._parent.index.repeat(lengths)
             return cudf.Series(result_col, name=self._parent.name, index=index)
         elif isinstance(self._parent, cudf.BaseIndex):
-            return cudf.core.index.as_index(result_col, name=self._parent.name)
+            return cudf.Index(result_col, name=self._parent.name)
         else:
             return result_col
 
@@ -5783,23 +5784,14 @@ class StringColumn(column.ColumnBase):
     def to_pandas(
         self,
         *,
-        index: Optional[pd.Index] = None,
         nullable: bool = False,
         arrow_type: bool = False,
-    ) -> pd.Series:
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
-        if arrow_type:
-            return pd.Series(
-                pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
-            )
-        elif nullable:
+    ) -> pd.Index:
+        if nullable and not arrow_type:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
-            return pd.Series(pandas_array, copy=False, index=index)
+            return pd.Index(pandas_array, copy=False)
         else:
-            return super().to_pandas(index=index, nullable=nullable)
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         to_dtype = cudf.api.types.dtype(to_dtype)

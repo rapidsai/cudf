@@ -56,12 +56,20 @@ repos:
       - id: clang-format
         types_or: [c, c++, cuda]
         args: ["-fallback-style=none", "-style=file", "-i"]
+        exclude: |
+          (?x)^(
+            ^cpp/src/io/parquet/ipc/Schema_generated.h|
+            ^cpp/src/io/parquet/ipc/Message_generated.h|
+            ^cpp/include/cudf_test/cxxopts.hpp|
+          )
   - repo: https://github.com/sirosen/texthooks
     rev: 0.6.6
     hooks:
       - id: fix-smartquotes
         exclude: |
           (?x)^(
+            ^cpp/src/io/parquet/ipc/Schema_generated.h|
+            ^cpp/src/io/parquet/ipc/Message_generated.h|
             ^cpp/include/cudf_test/cxxopts.hpp|
             ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*|
             ^python/cudf/cudf/tests/text/test_text_methods.py
@@ -134,7 +142,7 @@ repos:
       - id: rapids-dependency-file-generator
         args: ["--clean"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.3
+    rev: v0.4.8
     hooks:
       - id: ruff
         files: python/.*$

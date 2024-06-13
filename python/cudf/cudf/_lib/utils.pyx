@@ -315,6 +315,17 @@ cdef data_from_pylibcudf_table(tbl, column_names, index_names=None):
         index_names
     )
 
+cdef data_from_pylibcudf_io(tbl_with_meta):
+    """
+    Unpacks the TableWithMetadata from libcudf I/O
+    into a dict of columns and an Index (cuDF format)
+    """
+    return _data_from_columns(
+        columns=[Column.from_pylibcudf(plc) for plc in tbl_with_meta.columns],
+        column_names=tbl_with_meta.column_names,
+        index_names=None
+    )
+
 cdef columns_from_table_view(
     table_view tv,
     object owners,

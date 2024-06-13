@@ -21,8 +21,10 @@
  * @file vector_factories.hpp
  */
 
+#include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -380,7 +382,7 @@ thrust::host_vector<T> make_host_vector_async(device_span<T const> v, rmm::cuda_
  * @brief Asynchronously construct a `std::vector` containing a copy of data from a device
  * container
  *
- * @note This function synchronizes `stream`.
+ * @note This function does not synchronize `stream`.
  *
  * @tparam Container The type of the container to copy from
  * @tparam T The type of the data to copy
@@ -437,6 +439,40 @@ thrust::host_vector<typename Container::value_type> make_host_vector_sync(
   Container const& c, rmm::cuda_stream_view stream)
 {
   return make_host_vector_sync(device_span<typename Container::value_type const>{c}, stream);
+}
+
+/**
+ * @brief Asynchronously construct a pinned `cudf::detail::host_vector` of the given size
+ *
+ * @note This function may not synchronize `stream`.
+ *
+ * @tparam T The type of the vector data
+ * @param size The number of elements in the created vector
+ * @param stream The stream on which to allocate memory
+ * @return A host_vector of the given size
+ */
+template <typename T>
+host_vector<T> make_pinned_vector_async(size_t size, rmm::cuda_stream_view stream)
+{
+  return host_vector<T>(size, {cudf::get_pinned_memory_resource(), stream});
+}
+
+/**
+ * @brief Synchronously construct a pinned `cudf::detail::host_vector` of the given size
+ *
+ * @note This function synchronizes `stream`.
+ *
+ * @tparam T The type of the vector data
+ * @param size The number of elements in the created vector
+ * @param stream The stream on which to allocate memory
+ * @return A host_vector of the given size
+ */
+template <typename T>
+host_vector<T> make_pinned_vector_sync(size_t size, rmm::cuda_stream_view stream)
+{
+  auto result = make_pinned_vector_async<T>(size, stream);
+  stream.synchronize();
+  return result;
 }
 
 }  // namespace detail

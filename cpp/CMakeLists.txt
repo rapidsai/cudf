@@ -439,7 +439,6 @@ add_library(
   src/io/utilities/data_sink.cpp
   src/io/utilities/datasource.cpp
   src/io/utilities/file_io_utilities.cpp
-  src/io/utilities/parsing_utils.cu
   src/io/utilities/row_selection.cpp
   src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
@@ -665,6 +664,7 @@ add_library(
   src/utilities/default_stream.cpp
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
+  src/utilities/pinned_memory.cpp
   src/utilities/stacktrace.cpp
   src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
