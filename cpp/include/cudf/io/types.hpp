@@ -258,6 +258,9 @@ struct column_name_info {
 
   /**
    * @brief Compares two column name info structs for equality
+   *
+   * @param rhs column name info struct to compare against
+   * @return boolean indicating if this and rhs are equal
    */
   bool operator==(column_name_info const& rhs) const
   {
