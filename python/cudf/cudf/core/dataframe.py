@@ -8076,9 +8076,7 @@ def from_pandas(obj, nan_as_null=no_default):
         return cudf.IntervalDtype.from_pandas(obj)
     else:
         raise TypeError(
-            "from_pandas only accepts Pandas Dataframes, Series, "
-            "Index, RangeIndex and MultiIndex objects. "
-            "Got %s" % type(obj)
+            f"from_pandas unsupported for object of type {type(obj).__name__}"
         )
 
 
