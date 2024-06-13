@@ -255,6 +255,11 @@ struct column_name_info {
   }
 
   column_name_info() = default;
+
+  bool operator==(column_name_info const& rhs) const
+  {
+    return ((name == rhs.name) && (children == rhs.children));
+  };
 };
 
 /**
