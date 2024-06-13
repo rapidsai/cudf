@@ -38,29 +38,6 @@ cudf::test::TempDirTestEnvironment* const g_temp_env =
 
 struct JsonLargeReaderTest : public cudf::test::StringsLargeTest {};
 
-TEST_F(JsonLargeReaderTest, MultiBatchDatasets)
-{
-  std::string data_path = "/home/coder/datasets/prospector-lm/Books3_shuf/resharded/books3_000";
-  int num_sources       = 22;
-  std::vector<std::string> filepaths;
-  for (int i = 0; i < num_sources; i++) {
-    if (i < 10)
-      filepaths.push_back(data_path + "0" + std::to_string(i) + ".jsonl");
-    else
-      filepaths.push_back(data_path + std::to_string(i) + ".jsonl");
-  }
-  // Initialize parsing options (reading json lines)
-  cudf::io::json_reader_options json_lines_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{filepaths})
-      .lines(true)
-      .compression(cudf::io::compression_type::NONE)
-      .recovery_mode(cudf::io::json_recovery_mode_t::FAIL);
-
-  // Read full test data via existing, nested JSON lines reader
-  cudf::io::table_with_metadata current_reader_table = cudf::io::read_json(json_lines_options);
-  ASSERT_EQ(current_reader_table.tbl->num_rows(), 4476);
-}
-
 TEST_F(JsonLargeReaderTest, MultiBatch)
 {
   std::string json_string   = R"(
