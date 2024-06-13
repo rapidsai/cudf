@@ -200,6 +200,8 @@ cdef class SinkInfo:
         if isinstance(sinks[0], io.StringIO):
             data_sinks.reserve(len(sinks))
             for s in sinks:
+                if not isinstance(s, io.StringIO):
+                    raise ValueError("All sinks must be of the same type!")
                 self.sink_storage.push_back(
                     unique_ptr[data_sink](new iobase_data_sink(s))
                 )
@@ -219,8 +221,10 @@ cdef class SinkInfo:
                     }:
                         raise NotImplementedError(f"Unsupported encoding {s.encoding}")
                     sink = move(unique_ptr[data_sink](new iobase_data_sink(s.buffer)))
-                else:
+                elif isinstance(s, io.BytesIO):
                     sink = move(unique_ptr[data_sink](new iobase_data_sink(s)))
+                else:
+                    raise ValueError("All sinks must be of the same type!")
 
                 self.sink_storage.push_back(
                     move(sink)
@@ -230,7 +234,9 @@ cdef class SinkInfo:
         elif isinstance(sinks[0], (basestring, os.PathLike)):
             paths.reserve(len(sinks))
             for s in sinks:
+                if not isinstance(s, (basestring, os.PathLike)):
+                    raise ValueError("All sinks must be of the same type!")
                 paths.push_back(<string> os.path.expanduser(s).encode())
             self.c_obj = sink_info(move(paths))
         else:
-            raise TypeError("Unrecognized input type: {}".format(type(sinks)))
+            raise TypeError("Unrecognized input type: {}".format(type(sinks[0])))
