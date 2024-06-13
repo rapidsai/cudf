@@ -152,11 +152,11 @@ def extract_element_column(Column col, Column index):
 
 
 @acquire_spill_lock()
-def contains_scalar(Column col, object py_search_key):
+def contains_scalar(Column col, py_search_key):
     return Column.from_pylibcudf(
         pylibcudf.lists.contains(
             col.to_pylibcudf(mode="read"),
-            py_search_key,
+            py_search_key.device_value,
         )
     )
 

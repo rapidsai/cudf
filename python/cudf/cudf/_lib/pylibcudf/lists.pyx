@@ -20,10 +20,6 @@ from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
 from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
-
-from cudf._lib.pylibcudf.libcudf.lists.contains import \
-    duplicate_find_option as DuplicateFindOption  # no-cython-lint
-
 from cudf._lib.scalar cimport DeviceScalar
 
 from .column cimport Column
@@ -107,14 +103,9 @@ cpdef Column concatenate_list_elements(Column input, bool dropna):
 
     return Column.from_libcudf(move(c_result))
 
+
 cpdef Column contains(Column input, ColumnOrScalar search_key):
     """Create a column of bool values based upon the search key.
-
-    ``search_key`` may be a
-    :py:class:`~cudf._lib.pylibcudf.column.Column` or a
-    :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
-
-    For details, see :cpp:func:`contains`.
 
     Parameters
     ----------
@@ -132,18 +123,26 @@ cpdef Column contains(Column input, ColumnOrScalar search_key):
     cdef shared_ptr[lists_column_view] list_view = (
         make_shared[lists_column_view](input.view())
     )
+    cdef const scalar* search_key_value = NULL
+
     if ColumnOrScalar is Column:
         with nogil:
             c_result = move(cpp_contains.contains(
                 list_view.get()[0],
                 search_key.view(),
             ))
-        return Column.from_libcudf(move(c_result))
-    cdef DeviceScalar key = search_key.device_value
-    cdef const scalar* key_value = key.get_raw_ptr()
-    with nogil:
-        c_result = move(cpp_contains.contains(
-            list_view.get()[0],
-            key_value[0],
-        ))
+    elif ColumnOrScalar is DeviceScalar:
+        search_key_value = search_key.get_raw_ptr()
+        with nogil:
+            c_result = move(cpp_contains.contains(
+                list_view.get()[0],
+                search_key_value[0],
+            ))
+    else:
+        search_key_value = search_key.get()
+        with nogil:
+            c_result = move(cpp_contains.contains(
+                list_view.get()[0],
+                search_key_value[0],
+            ))
     return Column.from_libcudf(move(c_result))
