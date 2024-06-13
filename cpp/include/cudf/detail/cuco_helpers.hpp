@@ -72,7 +72,7 @@ class cuco_allocator_base
   typename base_type::value_type* allocate(std::size_t num)
   {
     auto ptr = base_type::allocate(num);
-    cudf::experimental_prefetching::detail::prefetch(
+    cudf::experimental::prefetch::detail::prefetch(
       "cuco_allocator_base::allocate", ptr, num * sizeof(T));
     return ptr;
   }

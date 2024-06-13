@@ -22,7 +22,7 @@
 
 #include <iostream>
 
-namespace cudf::experimental_prefetching {
+namespace cudf::experimental::prefetch {
 
 namespace detail {
 
@@ -61,4 +61,4 @@ void prefetch(std::string_view key, void const* ptr, std::size_t size)
 void enable_prefetching(std::string_view key) { detail::PrefetchConfig::instance().set(key, true); }
 
 void prefetch_debugging(bool enable) { detail::PrefetchConfig::instance().debug = enable; }
-}  // namespace cudf::experimental_prefetching
+}  // namespace cudf::experimental::prefetch

@@ -21,19 +21,19 @@
 #include <rmm/cuda_device.hpp>
 #include <rmm/device_uvector.hpp>
 
-namespace cudf::experimental_prefetching::detail {
+namespace cudf::experimental::detail {
 
 // This class is a wrapper around rmm::device_uvector that provides an additional
 // data() method that prefetches the data to the GPU if enabled.
 template <typename T>
-[[nodiscard]] typename rmm::device_uvector<T>::pointer cudf_device_uvector<T>::data() noexcept
+[[nodiscard]] typename rmm::device_uvector<T>::pointer device_uvector<T>::data() noexcept
 {
   auto data = rmm::device_uvector<T>::data();
   // May not need this
   // if constexpr (std::is_integral_v<T>) {
-  cudf::experimental_prefetching::detail::prefetch(
-    "cudf_device_uvector::data", data, rmm::device_uvector<T>::size() * sizeof(T));
+  cudf::experimental::prefetch::detail::prefetch(
+    "device_uvector::data", data, rmm::device_uvector<T>::size() * sizeof(T));
   return data;
 }
 
-}  // namespace cudf::experimental_prefetching::detail
+}  // namespace cudf::experimental::detail

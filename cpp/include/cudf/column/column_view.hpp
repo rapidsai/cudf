@@ -79,7 +79,7 @@ class column_view_base {
   {
     // Only prefetch numerical types for now
     if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
-      cudf::experimental_prefetching::detail::prefetch(
+      cudf::experimental::prefetch::detail::prefetch(
         "column_view_base::head", _data, size() * sizeof(T));
     }
     return static_cast<T const*>(_data);
@@ -562,7 +562,7 @@ class mutable_column_view : public detail::column_view_base {
   {
     // Only prefetch numerical types for now
     if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
-      cudf::experimental_prefetching::detail::prefetch(
+      cudf::experimental::prefetch::detail::prefetch(
         "mutable_column_view::head", _data, size() * sizeof(T));
     }
     // Reusing the parent head method is preferred and should be reverted to

@@ -20,7 +20,7 @@
 #include <string>
 #include <string_view>
 
-namespace cudf::experimental_prefetching {
+namespace cudf::experimental::prefetch {
 
 namespace detail {
 
@@ -95,4 +95,4 @@ void enable_prefetching(std::string_view key);
  */
 void prefetch_debugging(bool enable);
 
-}  // namespace cudf::experimental_prefetching
+}  // namespace cudf::experimental::prefetch

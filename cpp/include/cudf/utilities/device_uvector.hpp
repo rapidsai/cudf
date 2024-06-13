@@ -18,14 +18,14 @@
 
 #include <rmm/device_uvector.hpp>
 
-namespace cudf::experimental_prefetching::detail {
+namespace cudf::experimental::detail {
 
 /**
  * A wrapper around rmm::device_uvector that provides an additional data()
  * method that prefetches the data to the GPU if enabled.
  */
 template <typename T>
-class cudf_device_uvector : public rmm::device_uvector<T> {
+class device_uvector : public rmm::device_uvector<T> {
  public:
   using rmm::device_uvector<T>::device_uvector;
   /**
@@ -46,4 +46,4 @@ class cudf_device_uvector : public rmm::device_uvector<T> {
   [[nodiscard]] typename rmm::device_uvector<T>::iterator begin() noexcept { return data(); }
 };
 
-}  // namespace cudf::experimental_prefetching::detail
+}  // namespace cudf::experimental::detail
