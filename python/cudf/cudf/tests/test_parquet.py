@@ -2947,14 +2947,18 @@ def test_per_column_options_string_col(tmpdir, encoding):
     assert encoding in fmd.row_group(0).column(0).encodings
 
 
-def test_parquet_bss_round_trip(tmpdir):
+@pytest.mark.parametrize(
+    "num_rows",
+    [200, 10000],
+)
+def test_parquet_bss_round_trip(tmpdir, num_rows):
     def flba(i):
         hasher = hashlib.sha256()
         hasher.update(i.to_bytes(4, "little"))
         return hasher.digest()
 
     # use pyarrow to write table of types that support BYTE_STREAM_SPLIT encoding
-    num_rows = 200
+    rows_per_rowgroup = 5000
     fixed_data = pa.array(
         [flba(i) for i in range(num_rows)], type=pa.binary(32)
     )
@@ -2972,6 +2976,7 @@ def test_parquet_bss_round_trip(tmpdir):
         padf_fname,
         column_encoding="BYTE_STREAM_SPLIT",
         use_dictionary=False,
+        row_group_size=rows_per_rowgroup,
     )
 
     # round trip data with cudf
@@ -2987,6 +2992,7 @@ def test_parquet_bss_round_trip(tmpdir):
             "f32": "BYTE_STREAM_SPLIT",
             "f64": "BYTE_STREAM_SPLIT",
         },
+        row_group_size_rows=rows_per_rowgroup,
     )
 
     # now read back in with pyarrow to test it was written properly by cudf
