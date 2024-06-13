@@ -142,11 +142,11 @@ CUDF_EXPORT rmm::host_device_async_resource_ref& make_default_pinned_mr(
 
       auto const total = rmm::available_device_memory().second;
       // 0.5% of the total device memory, capped at 100MB
-      return std::min(rmm::align_up(total / 200, rmm::CUDA_ALLOCATION_ALIGNMENT), size_t{100} * 1024 * 1024);
+      return std::min(total / 200, size_t{100} * 1024 * 1024);
     }();
 
     // rmm requires the pool size to be a multiple of 256 bytes
-    auto const aligned_size = rmm::align_up(size, rmm::RMM_DEFAULT_HOST_ALIGNMENT);
+    auto const aligned_size = rmm::align_up(size, rmm::CUDA_ALLOCATION_ALIGNMENT);
     CUDF_LOG_INFO("Pinned pool size = {}", aligned_size);
 
     // make the pool with max size equal to the initial size
