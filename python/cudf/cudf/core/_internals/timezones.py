@@ -33,8 +33,6 @@ def get_compatible_timezone(dtype: pd.DatetimeTZDtype) -> pd.DatetimeTZDtype:
     elif (tz_file := getattr(tz, "_filename", None)) is not None:
         # dateutil-like
         key = tz_file.split("zoneinfo/")[-1]
-    elif tz is datetime.timezone.utc:
-        key = "UTC"
     elif isinstance(tz, datetime.tzinfo):
         # Try to get UTC-like tzinfos
         reference = datetime.datetime.now()
