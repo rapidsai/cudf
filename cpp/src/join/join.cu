@@ -36,7 +36,6 @@ inner_join(table_view const& left_input,
            rmm::cuda_stream_view stream,
            rmm::device_async_resource_ref mr)
 {
-  fprintf(stderr, "libcudf inner_join\n");
   // Make sure any dictionary columns have matched key sets.
   // This will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
@@ -45,7 +44,6 @@ inner_join(table_view const& left_input,
     rmm::mr::get_current_device_resource());  // temporary objects returned
 
   // now rebuild the table views with the updated ones
-  fprintf(stderr, "Setup\n");
   auto const left      = matched.second.front();
   auto const right     = matched.second.back();
   auto const has_nulls = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right)
@@ -60,9 +58,7 @@ inner_join(table_view const& left_input,
     auto [right_result, left_result] = hj_obj.inner_join(right, std::nullopt, stream, mr);
     return std::pair(std::move(left_result), std::move(right_result));
   } else {
-    fprintf(stderr, "Create hash join\n");
     cudf::hash_join hj_obj(right, has_nulls, compare_nulls, stream);
-    fprintf(stderr, "Run inner join\n");
     return hj_obj.inner_join(left, std::nullopt, stream, mr);
   }
 }
