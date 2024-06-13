@@ -20,6 +20,57 @@ from utils import (
 from cudf._lib import pylibcudf as plc
 
 
+@pytest.fixture
+def nested_struct_xfail(request):
+    """
+    Fixture that xfails a test if we encounter a nested struct.
+    (as of right now, we are encountering some errors in interop
+    when this happens)
+    """
+    if "target_table" in request.fixturenames:
+        pa_table, _ = request.getfixturevalue("target_table")
+        request.applymarker(
+            pytest.mark.xfail(
+                condition=any(
+                    [is_nested_struct(col.type) for col in pa_table.columns]
+                ),
+                reason="pylibcudf interop fails with nested struct",
+            )
+        )
+    elif (
+        "target_column" in request.fixturenames
+        or "input_column" in request.fixturenames
+    ):
+        # Return value is tuple of (engine, precision)
+        try:
+            pa_col, _ = request.getfixturevalue("target_column")
+        except pytest.FixtureLookupError:
+            pa_col, _ = request.getfixturevalue("input_column")
+        request.applymarker(
+            pytest.mark.xfail(
+                condition=is_nested_struct(pa_col.type),
+                reason="pylibcudf interop fails with nested struct",
+            )
+        )
+
+
+@pytest.fixture
+def nested_list_skip(request):
+    """
+    Fixture that xfails a test if we encounter a nested list.
+    (as of right now, we are encountering some segfaults/memoryerrors
+    in interop)
+    """
+    if "target_table" in request.fixturenames:
+        pa_table, _ = request.getfixturevalue("target_table")
+        if any([is_nested_list(col.type) for col in pa_table.columns]):
+            pytest.skip(reason="pylibcudf interop fails with nested list")
+
+
+xfail_nested_struct = pytest.mark.usefixtures("nested_struct_xfail")
+skip_nested_list = pytest.mark.usefixtures("nested_list_skip")
+
+
 # TODO: consider moving this to conftest and "pairing"
 # it with pa_type, so that they don't get out of sync
 # TODO: Test nullable data
@@ -169,21 +220,11 @@ def mask(target_column):
     return pa_mask, plc.interop.from_arrow(pa_mask)
 
 
-def test_gather(request, target_table, index_column):
+@skip_nested_list
+@xfail_nested_struct
+def test_gather(target_table, index_column):
     pa_target_table, plc_target_table = target_table
     pa_index_column, plc_index_column = index_column
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=any(
-                [is_nested_struct(col.type) for col in pa_target_table.columns]
-            ),
-            reason="pylibcudf interop fails with nested struct",
-        )
-    )
-    if any([is_nested_list(col.type) for col in pa_target_table.columns]):
-        pytest.skip(
-            reason="pylibcudf interop fails with memoryerror/segfault",
-        )
     result = plc.copying.gather(
         plc_target_table,
         plc_index_column,
@@ -236,8 +277,9 @@ def _pyarrow_boolean_mask_scatter_table(source, mask, target_table):
     )
 
 
+@skip_nested_list
+@xfail_nested_struct
 def test_scatter_table(
-    request,
     source_table,
     index_column,
     target_table,
@@ -245,18 +287,6 @@ def test_scatter_table(
     pa_source_table, plc_source_table = source_table
     pa_index_column, plc_index_column = index_column
     pa_target_table, plc_target_table = target_table
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=any(
-                [is_nested_struct(col.type) for col in pa_target_table.columns]
-            ),
-            reason="pylibcudf interop fails with nested struct",
-        )
-    )
-    if any([is_nested_list(col.type) for col in pa_target_table.columns]):
-        pytest.skip(
-            reason="pylibcudf interop fails with memoryerror/segfault",
-        )
     result = plc.copying.scatter(
         plc_source_table,
         plc_index_column,
@@ -371,8 +401,9 @@ def test_scatter_table_type_mismatch(source_table, index_column, target_table):
         )
 
 
+@skip_nested_list
+@xfail_nested_struct
 def test_scatter_scalars(
-    request,
     source_scalar,
     index_column,
     target_table,
@@ -380,18 +411,6 @@ def test_scatter_scalars(
     pa_source_scalar, plc_source_scalar = source_scalar
     pa_index_column, plc_index_column = index_column
     pa_target_table, plc_target_table = target_table
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=any(
-                [is_nested_struct(col.type) for col in pa_target_table.columns]
-            ),
-            reason="pylibcudf interop fails with nested struct",
-        )
-    )
-    if any([is_nested_list(col.type) for col in pa_target_table.columns]):
-        pytest.skip(
-            reason="pylibcudf interop fails with memoryerror/segfault",
-        )
     result = plc.copying.scatter(
         [plc_source_scalar] * plc_target_table.num_columns(),
         plc_index_column,
@@ -661,17 +680,12 @@ def test_shift_type_mismatch(target_column):
         plc.copying.shift(plc_target_column, 2, fill_value)
 
 
-def test_slice_column(request, target_column):
+@xfail_nested_struct
+def test_slice_column(target_column):
     pa_target_column, plc_target_column = target_column
     bounds = list(range(6))
     upper_bounds = bounds[1::2]
     lower_bounds = bounds[::2]
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=is_nested_struct(pa_target_column.type),
-            reason="pylibcudf interop fails with nested struct",
-        )
-    )
     if is_nested_list(pa_target_column.type):
         pytest.skip(
             reason="pylibcudf interop fails with memoryerror/segfault",
@@ -699,20 +713,10 @@ def test_slice_column_out_of_bounds(target_column):
         plc.copying.slice(plc_target_column, list(range(2, 8)))
 
 
-def test_slice_table(request, target_table):
+@skip_nested_list
+@xfail_nested_struct
+def test_slice_table(target_table):
     pa_target_table, plc_target_table = target_table
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=any(
-                [is_nested_struct(col.type) for col in pa_target_table.columns]
-            ),
-            reason="pylibcudf interop fails with nested struct",
-        )
-    )
-    if any([is_nested_list(col.type) for col in pa_target_table.columns]):
-        pytest.skip(
-            reason="pylibcudf interop fails with memoryerror/segfault",
-        )
     bounds = list(range(6))
     upper_bounds = bounds[1::2]
     lower_bounds = bounds[::2]
@@ -721,16 +725,11 @@ def test_slice_table(request, target_table):
         assert_table_eq(pa_target_table[lb:ub], slice_)
 
 
-def test_split_column(request, target_column):
+@xfail_nested_struct
+def test_split_column(target_column):
     upper_bounds = [1, 3, 5]
     lower_bounds = [0] + upper_bounds[:-1]
     pa_target_column, plc_target_column = target_column
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=is_nested_struct(pa_target_column.type),
-            reason="pylibcudf interop fails with nested struct",
-        )
-    )
     if is_nested_list(pa_target_column.type):
         pytest.skip(
             reason="pylibcudf interop fails with memoryerror/segfault",
@@ -752,20 +751,10 @@ def test_split_column_out_of_bounds(target_column):
         plc.copying.split(plc_target_column, list(range(5, 8)))
 
 
-def test_split_table(request, target_table):
+@skip_nested_list
+@xfail_nested_struct
+def test_split_table(target_table):
     pa_target_table, plc_target_table = target_table
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=any(
-                [is_nested_struct(col.type) for col in pa_target_table.columns]
-            ),
-            reason="pylibcudf interop fails with nested struct",
-        )
-    )
-    if any([is_nested_list(col.type) for col in pa_target_table.columns]):
-        pytest.skip(
-            reason="pylibcudf interop fails with memoryerror/segfault",
-        )
 
     upper_bounds = [1, 3, 5]
     lower_bounds = [0] + upper_bounds[:-1]
@@ -774,9 +763,8 @@ def test_split_table(request, target_table):
         assert_table_eq(pa_target_table[lb:ub], split)
 
 
-def test_copy_if_else_column_column(
-    request, target_column, mask, source_scalar
-):
+@xfail_nested_struct
+def test_copy_if_else_column_column(target_column, mask, source_scalar):
     pa_target_column, plc_target_column = target_column
     pa_source_scalar, _ = source_scalar
     pa_mask, plc_mask = mask
@@ -786,12 +774,6 @@ def test_copy_if_else_column_column(
     )
     plc_other_column = plc.interop.from_arrow(pa_other_column)
 
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=is_nested_struct(pa_target_column.type),
-            reason="pylibcudf interop fails with nested struct",
-        )
-    )
     if is_nested_list(pa_target_column.type):
         pytest.skip(
             reason="pylibcudf interop fails with memoryerror/segfault",
@@ -861,9 +843,9 @@ def test_copy_if_else_wrong_size_mask(target_column):
         )
 
 
+@xfail_nested_struct
 @pytest.mark.parametrize("array_left", [True, False])
 def test_copy_if_else_column_scalar(
-    request,
     target_column,
     source_scalar,
     array_left,
@@ -872,13 +854,6 @@ def test_copy_if_else_column_scalar(
     pa_target_column, plc_target_column = target_column
     pa_source_scalar, plc_source_scalar = source_scalar
     pa_mask, plc_mask = mask
-
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=is_nested_struct(pa_target_column.type),
-            reason="pylibcudf interop fails with nested struct",
-        )
-    )
 
     if is_nested_list(pa_target_column.type):
         pytest.skip(
@@ -907,26 +882,15 @@ def test_copy_if_else_column_scalar(
     assert_column_eq(expected, result)
 
 
+@skip_nested_list
+@xfail_nested_struct
 def test_boolean_mask_scatter_from_table(
-    request,
     source_table,
     target_table,
     mask,
 ):
     pa_source_table, plc_source_table = source_table
     pa_target_table, plc_target_table = target_table
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=any(
-                is_nested_struct(col.type) for col in pa_source_table.columns
-            ),
-            reason="pylibcudf interop fails with nested struct",
-        )
-    )
-    if any([is_nested_list(col.type) for col in pa_target_table.columns]):
-        pytest.skip(
-            reason="pylibcudf interop fails with memoryerror/segfault",
-        )
     pa_mask, plc_mask = mask
 
     result = plc.copying.boolean_mask_scatter(
@@ -1037,8 +1001,8 @@ def test_boolean_mask_scatter_from_wrong_mask_type(source_table, target_table):
         )
 
 
+@xfail_nested_struct
 def test_boolean_mask_scatter_from_scalars(
-    request,
     source_scalar,
     target_table,
     mask,
@@ -1046,14 +1010,6 @@ def test_boolean_mask_scatter_from_scalars(
     pa_source_scalar, plc_source_scalar = source_scalar
     pa_target_table, plc_target_table = target_table
     pa_mask, plc_mask = mask
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=any(
-                is_nested_struct(col.type) for col in pa_target_table.columns
-            ),
-            reason="pylibcudf interop fails with nested struct",
-        )
-    )
     if any([is_nested_list(col.type) for col in pa_target_table.columns]):
         pytest.skip(
             reason="pylibcudf interop fails with memoryerror/segfault",
@@ -1073,15 +1029,10 @@ def test_boolean_mask_scatter_from_scalars(
     assert_table_eq(expected, result)
 
 
-def test_get_element(request, input_column):
+@xfail_nested_struct
+def test_get_element(input_column):
     index = 1
     pa_input_column, plc_input_column = input_column
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=is_nested_struct(pa_input_column.type),
-            reason="pylibcudf interop fails with nested struct",
-        )
-    )
     if is_nested_list(pa_input_column.type):
         pytest.skip(
             reason="pylibcudf interop fails with memoryerror/segfault",
