@@ -20,9 +20,9 @@
 
 #include <cudf/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -313,18 +313,20 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   });
 
   size_t const batch_size_ub = std::numeric_limits<int>::max();
-  size_t const chunk_offset = reader_opts.get_byte_range_offset();
-  size_t chunk_size                         = reader_opts.get_byte_range_size();
-  chunk_size = !chunk_size ? sources_size(sources, 0, 0) : chunk_size;
+  size_t const chunk_offset  = reader_opts.get_byte_range_offset();
+  size_t chunk_size          = reader_opts.get_byte_range_size();
+  chunk_size                 = !chunk_size ? sources_size(sources, 0, 0) : chunk_size;
 
   size_t start_source = 0, cur_size = 0;
-  for(size_t sum = 0; start_source < sources.size() && sum <= chunk_offset; sum += sources[start_source]->size(), start_source++);
+  for (size_t sum = 0; start_source < sources.size() && sum <= chunk_offset;
+       sum += sources[start_source]->size(), start_source++)
+    ;
   start_source--;
   std::vector<size_t> batch_positions, batch_sizes;
   batch_positions.push_back(0);
-  for(size_t i = start_source; i < sources.size(); i++) {
+  for (size_t i = start_source; i < sources.size(); i++) {
     cur_size += sources[i]->size();
-    if(cur_size >= batch_size_ub) {
+    if (cur_size >= batch_size_ub) {
       batch_positions.push_back(i);
       batch_sizes.push_back(cur_size - sources[i]->size());
       cur_size = sources[i]->size();
@@ -335,24 +337,28 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
 
   std::vector<cudf::io::table_with_metadata> partial_tables;
   json_reader_options batched_reader_opts{reader_opts};
-  
-  for(size_t i = 0; i < batch_sizes.size(); i++) {
+
+  for (size_t i = 0; i < batch_sizes.size(); i++) {
     batched_reader_opts.set_byte_range_size(std::min(batch_sizes[i], chunk_size));
-    partial_tables.emplace_back(
-      read_batch(host_span<std::unique_ptr<datasource>>(
-                   sources.begin() + batch_positions[i], batch_positions[i + 1] - batch_positions[i]),
-                 batched_reader_opts,
-                 stream,
-                 mr));
-    if(chunk_size <= batch_sizes[i]) break;
+    partial_tables.emplace_back(read_batch(
+      host_span<std::unique_ptr<datasource>>(sources.begin() + batch_positions[i],
+                                             batch_positions[i + 1] - batch_positions[i]),
+      batched_reader_opts,
+      stream,
+      mr));
+    if (chunk_size <= batch_sizes[i]) break;
     chunk_size -= batch_sizes[i];
     batched_reader_opts.set_byte_range_offset(0);
   }
-  
-  auto expects_schema_equality = std::all_of(partial_tables.begin() + 1, partial_tables.end(), [&gt = partial_tables[0].metadata.schema_info](auto &ptbl) {
-      return ptbl.metadata.schema_info == gt;
-      });
-  CUDF_EXPECTS(expects_schema_equality, "Mismatch in JSON schema across batches in multi-source multi-batch reading");
+
+  auto expects_schema_equality =
+    std::all_of(partial_tables.begin() + 1,
+                partial_tables.end(),
+                [&gt = partial_tables[0].metadata.schema_info](auto& ptbl) {
+                  return ptbl.metadata.schema_info == gt;
+                });
+  CUDF_EXPECTS(expects_schema_equality,
+               "Mismatch in JSON schema across batches in multi-source multi-batch reading");
 
   auto partial_table_views = std::vector<cudf::table_view>(partial_tables.size());
   std::transform(
