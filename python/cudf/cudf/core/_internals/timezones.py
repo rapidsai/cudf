@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from cudf.core.column.timedelta import TimeDeltaColumn
 
 
-def get_compatable_timezone(dtype: pd.DatetimeTZDtype) -> pd.DatetimeTZDtype:
+def get_compatible_timezone(dtype: pd.DatetimeTZDtype) -> pd.DatetimeTZDtype:
     """Convert dtype.tz object to zoneinfo object if possible."""
     tz = dtype.tz
     if isinstance(tz, zoneinfo.ZoneInfo):

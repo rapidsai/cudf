@@ -30,7 +30,7 @@ from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals.timezones import (
     check_ambiguous_and_nonexistent,
-    get_compatable_timezone,
+    get_compatible_timezone,
     get_tz_data,
 )
 from cudf.core.buffer import Buffer
@@ -781,7 +781,7 @@ class DatetimeColumn(column.ColumnBase):
         ambiguous, nonexistent = check_ambiguous_and_nonexistent(
             ambiguous, nonexistent
         )
-        dtype = get_compatable_timezone(pd.DatetimeTZDtype(self.time_unit, tz))
+        dtype = get_compatible_timezone(pd.DatetimeTZDtype(self.time_unit, tz))
         tzname = dtype.tz.key
         ambiguous_col, nonexistent_col = self._find_ambiguous_and_nonexistent(
             tzname
@@ -832,7 +832,7 @@ class DatetimeTZColumn(DatetimeColumn):
             offset=offset,
             null_count=null_count,
         )
-        self._dtype = get_compatable_timezone(dtype)
+        self._dtype = get_compatible_timezone(dtype)
 
     def to_pandas(
         self,
