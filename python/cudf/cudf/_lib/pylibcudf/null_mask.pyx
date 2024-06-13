@@ -17,6 +17,21 @@ from .table cimport Table
 
 
 cpdef DeviceBuffer copy_bitmask(Column col):
+    """Copies ``col``'s bitmask into a ``DeviceBuffer``.
+
+    For details, see :cpp:func:`copy_bitmask`.
+
+    Parameters
+    ----------
+    col : Column
+        Column whose bitmask needs to be copied
+
+    Returns
+    -------
+    rmm.DeviceBuffer
+        A ``DeviceBuffer`` containing ``col``'s bitmask, or an empty ``DeviceBuffer``
+        if ``col`` is not nullable
+    """
     cdef device_buffer db
     cdef unique_ptr[device_buffer] up_db
 
@@ -28,6 +43,22 @@ cpdef DeviceBuffer copy_bitmask(Column col):
 
 
 cpdef size_t bitmask_allocation_size_bytes(size_type number_of_bits):
+    """
+    Computes the required bytes necessary to represent the specified number of bits
+    with a 64B padding boundary.
+
+    For details, see :cpp:func:`bitmask_allocation_size_bytes`.
+
+    Parameters
+    ----------
+    number_of_bits : size_type
+        The number of bits that need to be represented
+
+    Returns
+    -------
+    size_t
+        The necessary number of bytes
+    """
     cdef size_t output_size
 
     with nogil:
@@ -40,6 +71,26 @@ cpdef DeviceBuffer create_null_mask(
     size_type size,
     mask_state state = mask_state.UNINITIALIZED
 ):
+    """Creates a ``DeviceBuffer`` for use as a null value indicator bitmask of a
+    ``Column``.
+
+    For details, see :cpp:func:`create_null_mask`.
+
+    Parameters
+    ----------
+    size : size_type
+        The number of elements to be represented by the mask
+    state : mask_state, optional
+        The desired state of the mask. Can be one of { MaskState.UNALLOCATED,
+        MaskState.UNINITIALIZED, MaskState.ALL_VALID, MaskState.ALL_NULL }
+        (default MaskState.UNINITIALIZED)
+
+    Returns
+    -------
+    rmm.DeviceBuffer
+        A ``DeviceBuffer`` for use as a null bitmask satisfying the desired size and
+        state
+    """
     cdef device_buffer db
     cdef unique_ptr[device_buffer] up_db
 
@@ -51,6 +102,20 @@ cpdef DeviceBuffer create_null_mask(
 
 
 cpdef tuple bitmask_and(list columns):
+    """Performs bitwise AND of the bitmasks of a list of columns.
+
+    For details, see :cpp:func:`bitmask_and`.
+
+    Parameters
+    ----------
+    columns : list
+        The list of columns
+
+    Returns
+    -------
+    tuple[DeviceBuffer, size_type]
+        A tuple of the resulting mask and count of unset bits
+    """
     cdef Table c_table = Table(columns)
     cdef pair[device_buffer, size_type] c_result
     cdef unique_ptr[device_buffer] up_db
@@ -65,6 +130,20 @@ cpdef tuple bitmask_and(list columns):
 
 
 cpdef tuple bitmask_or(list columns):
+    """Performs bitwise OR of the bitmasks of a list of columns.
+
+    For details, see :cpp:func:`bitmask_or`.
+
+    Parameters
+    ----------
+    columns : list
+        The list of columns
+
+    Returns
+    -------
+    tuple[DeviceBuffer, size_type]
+        A tuple of the resulting mask and count of unset bits
+    """
     cdef Table c_table = Table(columns)
     cdef pair[device_buffer, size_type] c_result
     cdef unique_ptr[device_buffer] up_db
