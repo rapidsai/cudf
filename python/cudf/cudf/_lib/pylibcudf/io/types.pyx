@@ -214,12 +214,12 @@ cdef class SinkInfo:
                         "ascii",
                     }:
                         raise NotImplementedError(f"Unsupported encoding {s.encoding}")
-                    sink = unique_ptr[data_sink](new iobase_data_sink(s.buffer))
+                    sink = move(unique_ptr[data_sink](new iobase_data_sink(s.buffer)))
                 else:
-                    sink = unique_ptr[data_sink](new iobase_data_sink(s))
+                    sink = move(unique_ptr[data_sink](new iobase_data_sink(s)))
 
                 self.sink_storage.push_back(
-                    sink
+                    move(sink)
                 )
                 data_sinks.push_back(self.sink_storage.back().get())
             self.c_obj = sink_info(data_sinks)
