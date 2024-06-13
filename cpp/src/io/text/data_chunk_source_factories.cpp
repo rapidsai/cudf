@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
+#include "cudf/utilities/default_stream.hpp"
 #include "io/text/device_data_chunks.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/pinned_host_vector.hpp>
+#include <cudf/detail/utilities/host_vector.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -31,8 +33,15 @@ namespace cudf::io::text {
 namespace {
 
 struct host_ticket {
-  cudaEvent_t event;
-  cudf::detail::pinned_host_vector<char> buffer;
+  cudaEvent_t event{};  // tracks the completion of the last device-to-host copy.
+  cudf::detail::host_vector<char> buffer;
+
+  host_ticket() : buffer{cudf::detail::make_pinned_vector_sync<char>(0, cudf::get_default_stream())}
+  {
+    cudaEventCreate(&event);
+  }
+
+  ~host_ticket() { cudaEventDestroy(event); }
 };
 
 /**
@@ -43,20 +52,7 @@ class datasource_chunk_reader : public data_chunk_reader {
   constexpr static int num_tickets = 2;
 
  public:
-  datasource_chunk_reader(datasource* source) : _source(source)
-  {
-    // create an event to track the completion of the last device-to-host copy.
-    for (auto& ticket : _tickets) {
-      CUDF_CUDA_TRY(cudaEventCreate(&(ticket.event)));
-    }
-  }
-
-  ~datasource_chunk_reader() override
-  {
-    for (auto& ticket : _tickets) {
-      CUDF_CUDA_TRY(cudaEventDestroy(ticket.event));
-    }
-  }
+  datasource_chunk_reader(datasource* source) : _source(source) {}
 
   void skip_bytes(std::size_t size) override
   {
@@ -84,7 +80,9 @@ class datasource_chunk_reader : public data_chunk_reader {
       CUDF_CUDA_TRY(cudaEventSynchronize(h_ticket.event));
 
       // resize the host buffer as necessary to contain the requested number of bytes
-      if (h_ticket.buffer.size() < read_size) { h_ticket.buffer.resize(read_size); }
+      if (h_ticket.buffer.size() < read_size) {
+        h_ticket.buffer = cudf::detail::make_pinned_vector_sync<char>(read_size, stream);
+      }
 
       _source->host_read(_offset, read_size, reinterpret_cast<uint8_t*>(h_ticket.buffer.data()));
 
@@ -120,17 +118,6 @@ class istream_data_chunk_reader : public data_chunk_reader {
   istream_data_chunk_reader(std::unique_ptr<std::istream> datastream)
     : _datastream(std::move(datastream))
   {
-    // create an event to track the completion of the last device-to-host copy.
-    for (auto& ticket : _tickets) {
-      CUDF_CUDA_TRY(cudaEventCreate(&(ticket.event)));
-    }
-  }
-
-  ~istream_data_chunk_reader() override
-  {
-    for (auto& ticket : _tickets) {
-      CUDF_CUDA_TRY(cudaEventDestroy(ticket.event));
-    }
   }
 
   void skip_bytes(std::size_t size) override { _datastream->ignore(size); };
@@ -148,7 +135,9 @@ class istream_data_chunk_reader : public data_chunk_reader {
     CUDF_CUDA_TRY(cudaEventSynchronize(h_ticket.event));
 
     // resize the host buffer as necessary to contain the requested number of bytes
-    if (h_ticket.buffer.size() < read_size) { h_ticket.buffer.resize(read_size); }
+    if (h_ticket.buffer.size() < read_size) {
+      h_ticket.buffer = cudf::detail::make_pinned_vector_sync<char>(read_size, stream);
+    }
 
     // read data from the host istream in to the pinned host memory buffer
     _datastream->read(h_ticket.buffer.data(), read_size);

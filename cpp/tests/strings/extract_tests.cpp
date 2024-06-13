@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,7 +98,7 @@ TEST_F(StringsExtractTests, ExtractDomainTest)
                                               "a23-44-13-2.deploy.static.akamaitechnologies.com"});
   auto strings_view = cudf::strings_column_view(strings);
 
-  std::string pattern = "([\\w]+[\\.].*[^/]|[\\-\\w]+[\\.].*[^/])";
+  std::string pattern = R"(([\w]+[\.].*[^/]|[\-\w]+[\.].*[^/]))";
 
   cudf::test::strings_column_wrapper expected1({
     "www.google.com",
@@ -126,11 +126,11 @@ TEST_F(StringsExtractTests, ExtractDomainTest)
 TEST_F(StringsExtractTests, ExtractEventTest)
 {
   std::vector<std::string> patterns({"(^[0-9]+\\.?[0-9]*),",
-                                     "search_name=\"([0-9A-Za-z\\s\\-\\(\\)]+)",
-                                     "message.ip=\"([\\w\\.]+)",
-                                     "message.hostname=\"([\\w\\.]+)",
-                                     "message.user_name=\"([\\w\\.\\@]+)",
-                                     "message\\.description=\"([\\w\\.\\s]+)"});
+                                     R"(search_name="([0-9A-Za-z\s\-\(\)]+))",
+                                     R"(message.ip="([\w\.]+))",
+                                     R"(message.hostname="([\w\.]+))",
+                                     R"(message.user_name="([\w\.\@]+))",
+                                     R"(message\.description="([\w\.\s]+))"});
 
   cudf::test::strings_column_wrapper strings(
     {"15162388.26, search_name=\"Test Search Name\", orig_time=\"1516238826\", "
@@ -164,7 +164,7 @@ TEST_F(StringsExtractTests, MultiLine)
 
   auto pattern = std::string("(^[a-c]+$)");
   cudf::test::strings_column_wrapper expected_multiline({"abc", "abc", "abc", "", "abc", "abc"},
-                                                        {1, 1, 1, 0, 1, 1});
+                                                        {true, true, true, false, true, true});
   auto expected = cudf::table_view{{expected_multiline}};
   auto prog = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::MULTILINE);
   auto results = cudf::strings::extract(view, *prog);
@@ -172,7 +172,7 @@ TEST_F(StringsExtractTests, MultiLine)
 
   pattern = std::string("^([a-c]+)$");
   cudf::test::strings_column_wrapper expected_default({"", "", "abc", "", "abc", ""},
-                                                      {0, 0, 1, 0, 1, 0});
+                                                      {false, false, true, false, true, false});
   expected = cudf::table_view{{expected_default}};
   prog     = cudf::strings::regex_program::create(pattern);
   results  = cudf::strings::extract(view, *prog);
@@ -186,13 +186,14 @@ TEST_F(StringsExtractTests, DotAll)
 
   auto pattern = std::string("(a.*f)");
   cudf::test::strings_column_wrapper expected_dotall({"abc\nfa\nef", "abbc\nfff", "abcdef", ""},
-                                                     {1, 1, 1, 0});
+                                                     {true, true, true, false});
   auto expected = cudf::table_view{{expected_dotall}};
   auto prog     = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::DOTALL);
   auto results  = cudf::strings::extract(view, *prog);
   CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
 
-  cudf::test::strings_column_wrapper expected_default({"", "", "abcdef", ""}, {0, 0, 1, 0});
+  cudf::test::strings_column_wrapper expected_default({"", "", "abcdef", ""},
+                                                      {false, false, true, false});
   expected = cudf::table_view{{expected_default}};
   prog     = cudf::strings::regex_program::create(pattern);
   results  = cudf::strings::extract(view, *prog);
