@@ -9977,7 +9977,7 @@ def test_dataframe_nunique(data):
 def test_nunique_preserve_column_in_index(columns):
     df = cudf.DataFrame([[1, 2]], columns=columns)
     result = df.nunique().index.to_pandas()
-    pd.testing.assert_index_equal(result, columns, exact=True)
+    assert_eq(result, columns, exact=True)
 
 
 @pytest.mark.parametrize(
