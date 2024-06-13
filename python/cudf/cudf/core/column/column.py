@@ -1122,6 +1122,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
+    def __invert__(self):
+        raise TypeError(
+            f"Operation `~` not supported on {self.dtype.type.__name__}"
+        )
+
     def searchsorted(
         self,
         value,

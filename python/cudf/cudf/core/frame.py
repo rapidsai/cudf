@@ -31,7 +31,7 @@ from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
-from cudf.api.types import is_bool_dtype, is_dtype_equal, is_scalar
+from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
@@ -1460,51 +1460,6 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def _is_sorted(self, ascending=None, null_position=None):
-        """
-        Returns a boolean indicating whether the data of the Frame are sorted
-        based on the parameters given. Does not account for the index.
-
-        Parameters
-        ----------
-        self : Frame
-            Frame whose columns are to be checked for sort order
-        ascending : None or list-like of booleans
-            None or list-like of boolean values indicating expected sort order
-            of each column. If list-like, size of list-like must be
-            len(columns). If None, all columns expected sort order is set to
-            ascending. False (0) - ascending, True (1) - descending.
-        null_position : None or list-like of booleans
-            None or list-like of boolean values indicating desired order of
-            nulls compared to other elements. If list-like, size of list-like
-            must be len(columns). If None, null order is set to before. False
-            (0) - before, True (1) - after.
-
-        Returns
-        -------
-        returns : boolean
-            Returns True, if sorted as expected by ``ascending`` and
-            ``null_position``, False otherwise.
-        """
-        if ascending is not None and not cudf.api.types.is_list_like(
-            ascending
-        ):
-            raise TypeError(
-                f"Expected a list-like or None for `ascending`, got "
-                f"{type(ascending)}"
-            )
-        if null_position is not None and not cudf.api.types.is_list_like(
-            null_position
-        ):
-            raise TypeError(
-                f"Expected a list-like or None for `null_position`, got "
-                f"{type(null_position)}"
-            )
-        return libcudf.sort.is_sorted(
-            [*self._columns], ascending=ascending, null_position=null_position
-        )
-
-    @_cudf_nvtx_annotate
     def _split(self, splits):
         """Split a frame with split points in ``splits``. Returns a list of
         Frames of length `len(splits) + 1`.
@@ -1924,7 +1879,7 @@ class Frame(BinaryOperand, Scannable):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
         return self._from_data_like_self(
             self._data._from_columns_like_self(
-                (_apply_inverse_column(col) for col in self._data.columns)
+                (~col for col in self._data.columns)
             )
         )
 
@@ -1974,15 +1929,3 @@ class Frame(BinaryOperand, Scannable):
             str(dict(self._dtypes)),
             normalize_token(self.to_pandas()),
         ]
-
-
-def _apply_inverse_column(col: ColumnBase) -> ColumnBase:
-    """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
-    if np.issubdtype(col.dtype, np.integer):
-        return col.unary_operator("invert")
-    elif is_bool_dtype(col.dtype):
-        return col.unary_operator("not")
-    else:
-        raise TypeError(
-            f"Operation `~` not supported on {col.dtype.type.__name__}"
-        )
