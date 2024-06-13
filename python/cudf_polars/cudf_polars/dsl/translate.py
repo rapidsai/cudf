@@ -122,7 +122,7 @@ def _(
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         exprs = [translate_named_expr(visitor, n=e) for e in node.expr]
-    return ir.Select(schema, inp, exprs)
+    return ir.Select(schema, inp, exprs, node.should_broadcast)
 
 
 @_translate_ir.register
@@ -166,7 +166,7 @@ def _(
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         exprs = [translate_named_expr(visitor, n=e) for e in node.exprs]
-    return ir.HStack(schema, inp, exprs)
+    return ir.HStack(schema, inp, exprs, node.should_broadcast)
 
 
 @_translate_ir.register
