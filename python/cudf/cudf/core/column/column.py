@@ -334,12 +334,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             )
         elif isinstance(array.type, ArrowIntervalType):
             return cudf.core.column.IntervalColumn.from_arrow(array)
-        elif pa.types.is_large_string(array.type):
-            # Pandas-2.2+: Pandas defaults to `large_string` type
-            # instead of `string` without data-introspection.
-            # Temporary workaround until cudf has native
-            # support for `LARGE_STRING` i.e., 64 bit offsets
-            array = array.cast(pa.string())
 
         data = pa.table([array], [None])
 
@@ -1140,6 +1134,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
+
+    def __invert__(self):
+        raise TypeError(
+            f"Operation `~` not supported on {self.dtype.type.__name__}"
+        )
 
     def searchsorted(
         self,

@@ -48,8 +48,9 @@ TEST_F(ReductionTest, ReductionSumScalarInit)
 
 TEST_F(ReductionTest, SegmentedReductionSum)
 {
-  auto const input     = cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3, 1, 0, 3, 1, 0, 0, 0},
-                                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
+  auto const input = cudf::test::fixed_width_column_wrapper<int>{
+    {1, 2, 3, 1, 0, 3, 1, 0, 0, 0},
+    {true, true, true, true, false, true, true, false, false, false}};
   auto const offsets   = std::vector<cudf::size_type>{0, 3, 6, 7, 8, 10, 10};
   auto const d_offsets = cudf::detail::make_device_uvector_async(
     offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
@@ -65,8 +66,9 @@ TEST_F(ReductionTest, SegmentedReductionSum)
 
 TEST_F(ReductionTest, SegmentedReductionSumScalarInit)
 {
-  auto const input     = cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3, 1, 0, 3, 1, 0, 0, 0},
-                                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
+  auto const input = cudf::test::fixed_width_column_wrapper<int>{
+    {1, 2, 3, 1, 0, 3, 1, 0, 0, 0},
+    {true, true, true, true, false, true, true, false, false, false}};
   auto const offsets   = std::vector<cudf::size_type>{0, 3, 6, 7, 8, 10, 10};
   auto const d_offsets = cudf::detail::make_device_uvector_async(
     offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
@@ -84,7 +86,8 @@ TEST_F(ReductionTest, SegmentedReductionSumScalarInit)
 TEST_F(ReductionTest, ScanMin)
 {
   auto const input = cudf::test::fixed_width_column_wrapper<int>{
-    {123, 64, 63, 99, -5, 123, -16, -120, -111}, {1, 0, 1, 1, 1, 1, 0, 0, 1}};
+    {123, 64, 63, 99, -5, 123, -16, -120, -111},
+    {true, false, true, true, true, true, false, false, true}};
 
   cudf::scan(input,
              *cudf::make_min_aggregation<cudf::scan_aggregation>(),
@@ -96,7 +99,8 @@ TEST_F(ReductionTest, ScanMin)
 TEST_F(ReductionTest, MinMax)
 {
   auto const input = cudf::test::fixed_width_column_wrapper<int>{
-    {123, 64, 63, 99, -5, 123, -16, -120, -111}, {1, 0, 1, 1, 1, 1, 0, 0, 1}};
+    {123, 64, 63, 99, -5, 123, -16, -120, -111},
+    {true, false, true, true, true, true, false, false, true}};
 
   cudf::minmax(input, cudf::test::get_default_stream());
 }

@@ -99,7 +99,6 @@ regex = "(?P<value>.*)"
 
 [tool.rapids-build-backend]
 build-backend = "scikit_build_core.build"
-commit-file = "cudf_kafka/GIT_COMMIT"
 dependencies-file = "../../dependencies.yaml"
 requires = [
     "cmake>=3.26.4",

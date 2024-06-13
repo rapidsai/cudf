@@ -119,7 +119,8 @@ TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
   auto input_a = cudf::test::strings_column_wrapper(
     {"C", "B", "A", "A", "D", "B", "D", "B", "D", "C", "C", "C",
      "D", "B", "D", "B", "C", "C", "A", "D", "B", "A", "A", "A"},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+    {true, true, true, true, true, true, true, true, true, true, true, true,
+     true, true, true, true, true, true, true, true, true, true, true, true});
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> input_b(
     {4, 3, 5, 0, 1, 0, 4, 1, 5, 3, 0, 5, 2, 4, 3, 2, 1, 2, 3, 0, 5, 1, 4, 2},
@@ -133,7 +134,8 @@ TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
                                 cudf::sorted::NO,
                                 {cudf::order::ASCENDING, cudf::order::DESCENDING});
 
-  auto expected_a = cudf::test::strings_column_wrapper({"A", "C", "C", "B", "D"}, {1, 1, 1, 1, 1});
+  auto expected_a =
+    cudf::test::strings_column_wrapper({"A", "C", "C", "B", "D"}, {true, true, true, true, true});
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> expected_b({5, 5, 1, 5, 0}, {1, 1, 1, 1, 1});
 
@@ -149,7 +151,8 @@ TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
   auto input_a = cudf::test::strings_column_wrapper(
     {"C", "B", "A", "A", "D", "B", "D", "B", "D", "C", "C", "C",
      "D", "B", "D", "B", "C", "C", "A", "D", "B", "A", "A", "A"},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+    {true, true, true, true, true, true, true, true, true, true, true, true,
+     true, true, true, true, true, true, true, true, true, true, true, true});
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> input_b(
     {4, 3, 5, 0, 1, 0, 4, 1, 5, 3, 0, 5, 2, 4, 3, 2, 1, 2, 3, 0, 5, 1, 4, 2},
@@ -160,7 +163,8 @@ TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
   auto actual = cudf::quantiles(
     input, {0.0f, 0.5f, 0.7f, 0.25f, 1.0f}, cudf::interpolation::NEAREST, cudf::sorted::YES);
 
-  auto expected_a = cudf::test::strings_column_wrapper({"C", "D", "C", "D", "A"}, {1, 1, 1, 1, 1});
+  auto expected_a =
+    cudf::test::strings_column_wrapper({"C", "D", "C", "D", "A"}, {true, true, true, true, true});
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> expected_b({4, 2, 1, 4, 2}, {1, 1, 1, 1, 1});
 
