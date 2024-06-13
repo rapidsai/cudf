@@ -33,7 +33,16 @@ class device_uvector : public rmm::device_uvector<T> {
    *
    * @return A pointer to the underlying device memory.
    */
-  [[nodiscard]] typename rmm::device_uvector<T>::pointer data() noexcept;
+  [[nodiscard]] typename rmm::device_uvector<T>::pointer data() noexcept
+  {
+    auto data = rmm::device_uvector<T>::data();
+    // May not need this
+    // if constexpr (std::is_integral_v<T>) {
+    cudf::experimental::prefetch::detail::prefetch(
+      "device_uvector::data", data, rmm::device_uvector<T>::size() * sizeof(T));
+    return data;
+  }
+
   /**
    * @brief Returns an iterator to the beginning of the allocation.
    *
