@@ -26,6 +26,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/scan.h>
 #include <thrust/transform_scan.h>
 
@@ -157,20 +158,15 @@ rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input,
   rmm::device_uvector<cudf::size_type> output(input.size(), stream);
 
   auto device_view = column_device_view::create(input);
-  auto valid_it    = cudf::detail::make_validity_iterator(*device_view);
+  auto invalid_it  = thrust::make_transform_iterator(
+    cudf::detail::make_validity_iterator(*device_view),
+    cuda::proclaim_return_type<int>([] __device__(int valid) -> int { return not valid; }));
 
-  // Invert the null iterator
-  thrust::transform(rmm::exec_policy(stream),
-                    valid_it,
-                    valid_it + input.size(),
-                    output.begin(),
-                    [] __device__(bool valid) -> bool { return 1 - valid; });
-
-  // null mask {0, 1, 0, 1, 1, 0} leads to output array {0, 0, 1, 0, 0, 2}
+  // null mask {0, 1, 0, 1, 1, 0} leads to output array {0, 0, 1, 0, 1, 2}
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                output.begin(),
-                                std::prev(output.end()),
-                                output.begin(),
+                                invalid_it,
+                                invalid_it + input.size() - 1,
+                                invalid_it,
                                 std::next(output.begin()));
   return output;
 }
