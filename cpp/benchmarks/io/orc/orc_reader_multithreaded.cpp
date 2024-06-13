@@ -30,11 +30,11 @@
 
 #include <vector>
 
-size_t get_num_reads(nvbench::state const& state) { return state.get_int64("num_threads"); }
+size_t get_num_read_threads(nvbench::state const& state) { return state.get_int64("num_threads"); }
 
 size_t get_read_size(nvbench::state const& state)
 {
-  auto const num_reads = get_num_reads(state);
+  auto const num_reads = get_num_read_threads(state);
   return state.get_int64("total_data_size") / num_reads;
 }
 
@@ -53,7 +53,7 @@ std::tuple<std::vector<cuio_source_sink_pair>, size_t, size_t> write_file_data(
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
   cudf::size_type const num_cols    = state.get_int64("num_cols");
-  size_t const num_files            = get_num_reads(state);
+  size_t const num_files            = get_num_read_threads(state);
   size_t const per_file_data_size   = get_read_size(state);
 
   std::vector<cuio_source_sink_pair> source_sink_vector;
