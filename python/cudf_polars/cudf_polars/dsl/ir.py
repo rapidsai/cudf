@@ -165,6 +165,10 @@ class PythonScan(IR):
     predicate: expr.NamedExpr | None
     """Filter to apply to the constructed dataframe before returning it."""
 
+    def __post_init__(self):
+        """Validate preconditions."""
+        raise NotImplementedError("PythonScan not implemented")
+
 
 @dataclasses.dataclass(slots=True)
 class Scan(IR):
@@ -933,10 +937,10 @@ class Union(IR):
     """Optional slice to apply after concatenation."""
 
     def __post_init__(self) -> None:
-        """Validated preconditions."""
+        """Validate preconditions."""
         schema = self.dfs[0].schema
         if not all(s.schema == schema for s in self.dfs[1:]):
-            raise ValueError("Schema mismatch")
+            raise NotImplementedError("Schema mismatch")
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""

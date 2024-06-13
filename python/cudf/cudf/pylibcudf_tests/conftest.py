@@ -58,3 +58,8 @@ def interp_opt(request):
 )
 def sorted_opt(request):
     return request.param
+
+
+@pytest.fixture(scope="session", params=[False, True])
+def has_nulls(request):
+    return request.param
