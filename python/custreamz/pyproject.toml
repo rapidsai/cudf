@@ -48,7 +48,6 @@ Homepage = "https://github.com/rapidsai/cudf"
 
 [tool.rapids-build-backend]
 build-backend = "setuptools.build_meta"
-commit-file = "custreamz/COMMIT_FILE"
 dependencies-file = "../../dependencies.yaml"
 
 [tool.setuptools]

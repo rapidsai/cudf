@@ -1636,9 +1636,54 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def dtype(self):
         return np.dtype("O")
 
+    @_cudf_nvtx_annotate
+    def _is_sorted(self, ascending=None, null_position=None) -> bool:
+        """
+        Returns a boolean indicating whether the data of the MultiIndex are sorted
+        based on the parameters given. Does not account for the index.
+
+        Parameters
+        ----------
+        self : MultiIndex
+            MultiIndex whose columns are to be checked for sort order
+        ascending : None or list-like of booleans
+            None or list-like of boolean values indicating expected sort order
+            of each column. If list-like, size of list-like must be
+            len(columns). If None, all columns expected sort order is set to
+            ascending. False (0) - ascending, True (1) - descending.
+        null_position : None or list-like of booleans
+            None or list-like of boolean values indicating desired order of
+            nulls compared to other elements. If list-like, size of list-like
+            must be len(columns). If None, null order is set to before. False
+            (0) - before, True (1) - after.
+
+        Returns
+        -------
+        returns : boolean
+            Returns True, if sorted as expected by ``ascending`` and
+            ``null_position``, False otherwise.
+        """
+        if ascending is not None and not cudf.api.types.is_list_like(
+            ascending
+        ):
+            raise TypeError(
+                f"Expected a list-like or None for `ascending`, got "
+                f"{type(ascending)}"
+            )
+        if null_position is not None and not cudf.api.types.is_list_like(
+            null_position
+        ):
+            raise TypeError(
+                f"Expected a list-like or None for `null_position`, got "
+                f"{type(null_position)}"
+            )
+        return libcudf.sort.is_sorted(
+            [*self._columns], ascending=ascending, null_position=null_position
+        )
+
     @cached_property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_monotonic_increasing(self):
+    def is_monotonic_increasing(self) -> bool:
         """
         Return if the index is monotonic increasing
         (only equal or increasing) values.
@@ -1647,7 +1692,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @cached_property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_monotonic_decreasing(self):
+    def is_monotonic_decreasing(self) -> bool:
         """
         Return if the index is monotonic decreasing
         (only equal or decreasing) values.

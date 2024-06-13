@@ -171,9 +171,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
   switch (buffer.type.id()) {
     case type_id::STRING:
       if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
-        if (schema_info != nullptr) {
-          schema_info->children.push_back(column_name_info{"offsets"});
-        }
+        if (schema_info != nullptr) { schema_info->children.emplace_back("offsets"); }
 
         // make_strings_column allocates new memory, it does not simply move
         // from the inputs, so we need to pass it the memory resource given to
@@ -199,8 +197,8 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
           data_type{type_id::UINT8}, char_size, std::move(*data), rmm::device_buffer{}, 0);
 
         if (schema_info != nullptr) {
-          schema_info->children.push_back(column_name_info{"offsets"});
-          schema_info->children.push_back(column_name_info{"binary"});
+          schema_info->children.emplace_back("offsets");
+          schema_info->children.emplace_back("binary");
           // cuDF type will be list<UINT8>, but remember it was originally binary data
           schema_info->is_binary = true;
           if (schema.has_value() and schema->get_type_length() > 0) {
@@ -224,8 +222,8 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
 
       column_name_info* child_info = nullptr;
       if (schema_info != nullptr) {
-        schema_info->children.push_back(column_name_info{"offsets"});
-        schema_info->children.push_back(column_name_info{""});
+        schema_info->children.emplace_back("offsets");
+        schema_info->children.emplace_back("");
         child_info = &schema_info->children.back();
       }
 
@@ -256,7 +254,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
       for (size_t i = 0; i < buffer.children.size(); ++i) {
         column_name_info* child_info = nullptr;
         if (schema_info != nullptr) {
-          schema_info->children.push_back(column_name_info{""});
+          schema_info->children.emplace_back("");
           child_info = &schema_info->children.back();
         }
 
@@ -306,8 +304,8 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
 
       column_name_info* child_info = nullptr;
       if (schema_info != nullptr) {
-        schema_info->children.push_back(column_name_info{"offsets"});
-        schema_info->children.push_back(column_name_info{""});
+        schema_info->children.emplace_back("offsets");
+        schema_info->children.emplace_back("");
         child_info = &schema_info->children.back();
       }
 
@@ -330,7 +328,7 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
                      [&](auto& col) {
                        column_name_info* child_info = nullptr;
                        if (schema_info != nullptr) {
-                         schema_info->children.push_back(column_name_info{""});
+                         schema_info->children.emplace_back("");
                          child_info = &schema_info->children.back();
                        }
                        return cudf::io::detail::empty_like<string_policy>(
