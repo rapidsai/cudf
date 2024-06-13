@@ -9,20 +9,15 @@ from utils import assert_column_eq
 import cudf._lib.pylibcudf as plc
 
 
-@pytest.fixture(params=[False, True])
-def nullable(request):
-    return request.param
-
-
 @pytest.fixture
-def column(nullable):
+def column(has_nulls):
     values = [
         datetime.date(1999, 1, 1),
         datetime.date(2024, 10, 12),
         datetime.date(1, 1, 1),
         datetime.date(9999, 1, 1),
     ]
-    if nullable:
+    if has_nulls:
         values[2] = None
     return plc.interop.from_arrow(pa.array(values, type=pa.date32()))
 
