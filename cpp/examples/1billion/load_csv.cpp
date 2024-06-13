@@ -32,6 +32,8 @@
 #include <memory>
 #include <string>
 
+using elapsed_t = std::chrono::duration<double>;
+
 int main(int argc, char const** argv)
 {
   if (argc < 2) {
@@ -57,7 +59,7 @@ int main(int argc, char const** argv)
         .na_filter(false);
     return cudf::io::read_csv(in_opts).tbl;
   }();
-  std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
+  elapsed_t elapsed = std::chrono::steady_clock::now() - start;
   std::cout << "CSV load time: " << elapsed.count() << " seconds\n";
   auto const csv_table = csv_result->view();
   std::cout << "input rows: " << csv_table.num_rows() << std::endl;
@@ -77,10 +79,8 @@ int main(int argc, char const** argv)
   elapsed     = std::chrono::steady_clock::now() - start;
   std::cout << "Process time: " << elapsed.count() << " seconds\n";
 
-  std::cout << result->num_rows() << " rows" << std::endl;
-
   result = cudf::sort_by_key(result->view(), result->view().select({0}));
-  cudf::test::print(result->view().column(3));
+  std::cout << result->num_rows() << " rows" << std::endl;
 
   return 0;
 }
