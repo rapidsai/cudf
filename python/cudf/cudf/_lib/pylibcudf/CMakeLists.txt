@@ -19,6 +19,7 @@ set(cython_sources
     column_factories.pyx
     concatenate.pyx
     copying.pyx
+    datetime.pyx
     filling.pyx
     gpumemoryview.pyx
     groupby.pyx
