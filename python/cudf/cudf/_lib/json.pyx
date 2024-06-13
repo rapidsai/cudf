@@ -227,13 +227,10 @@ cdef data_type _get_cudf_data_type_from_dtype(object dtype) except *:
 
 
 def _dtype_to_names_list(col):
-    cdef list child_names = []
     if isinstance(col.dtype, cudf.StructDtype):
-        for child_col, name in zip(col.children, list(col.dtype.fields)):
-            child_names.append((name, _dtype_to_names_list(child_col)))
+        return [(name, _dtype_to_names_list(child))
+                for name, child in zip(col.dtype.fields, col.children)]
     elif isinstance(col.dtype, cudf.ListDtype):
-        for child_col in col.children:
-            list_child_names = _dtype_to_names_list(child_col)
-            child_names.append(("", list_child_names))
-
-    return child_names
+        return [("", _dtype_to_names_list(child))
+                for child in col.children]
+    return []

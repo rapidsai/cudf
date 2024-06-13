@@ -133,12 +133,32 @@ def is_string(plc_dtype: plc.DataType):
 def is_fixed_width(plc_dtype: plc.DataType):
     return (
         is_integer(plc_dtype)
+        or is_unsigned_integer(plc_dtype)
         or is_floating(plc_dtype)
         or is_boolean(plc_dtype)
     )
 
 
+def is_nested_struct(pa_type: pa.DataType):
+    if isinstance(pa_type, pa.StructType):
+        for i in range(pa_type.num_fields):
+            if isinstance(pa_type[i].type, pa.StructType):
+                return True
+    return False
+
+
+def is_nested_list(pa_type: pa.DataType):
+    if isinstance(pa_type, pa.ListType):
+        return isinstance(pa_type.value_type, pa.ListType)
+    return False
+
+
 def sink_to_str(sink):
+    """
+    Takes a sink (e.g. StringIO/BytesIO, filepath, etc.)
+    and reads in the contents into a string (str not bytes)
+    for comparison
+    """
     if isinstance(sink, (str, os.PathLike)):
         with open(sink, "r") as f:
             str_result = f.read()
@@ -151,8 +171,7 @@ def sink_to_str(sink):
     return str_result
 
 
-# TODO: enable uint64, some failing tests
-NUMERIC_PA_TYPES = [pa.int64(), pa.float64()]  # pa.uint64()]
+NUMERIC_PA_TYPES = [pa.int64(), pa.float64(), pa.uint64()]
 STRING_PA_TYPES = [pa.string()]
 BOOL_PA_TYPES = [pa.bool_()]
 LIST_PA_TYPES = [
@@ -187,10 +206,8 @@ DEFAULT_PA_TYPES = (
     + BOOL_PA_TYPES
     # exclude nested list/struct cases
     # since not all tests work with them yet
-    + LIST_PA_TYPES[:1]
-    + DEFAULT_PA_STRUCT_TESTING_TYPES[:1]
+    + LIST_PA_TYPES  # [:1]
+    + DEFAULT_PA_STRUCT_TESTING_TYPES  # [:1]
 )
 
-ALL_PA_TYPES = (
-    DEFAULT_PA_TYPES + LIST_PA_TYPES[1:] + DEFAULT_PA_STRUCT_TESTING_TYPES[1:]
-)
+ALL_PA_TYPES = DEFAULT_PA_TYPES  # + LIST_PA_TYPES[1:] + DEFAULT_PA_STRUCT_TESTING_TYPES[1:]

@@ -29,9 +29,9 @@ cdef class TableWithMetadata:
 
     Parameters
     ----------
-    tbl: Table
+    tbl : Table
         The input table.
-    column_names: list
+    column_names : list
         A list of tuples each containing the name of each column
         and the names of its child columns (in the same format).
         e.g.
@@ -193,6 +193,10 @@ cdef class SinkInfo:
         cdef unique_ptr[data_sink] sink
 
         cdef vector[string] paths
+
+        if not sinks:
+            raise ValueError("Need to pass at least one sink")
+
         if isinstance(sinks[0], io.StringIO):
             data_sinks.reserve(len(sinks))
             for s in sinks:

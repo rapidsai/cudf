@@ -75,6 +75,7 @@ cdef extern from "cudf/io/types.hpp" \
         vector[column_name_info] children
 
     cdef cppclass table_metadata:
+        table_metadata() except +
 
         vector[string] column_names
         map[string, string] user_data

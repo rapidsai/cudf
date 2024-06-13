@@ -57,6 +57,8 @@ def table_data(request):
     # plc.io.TableWithMetadata
     colnames = []
 
+    np.random.seed(42)
+
     for typ in ALL_PA_TYPES:
         rand_vals = np.random.randint(0, nrows, nrows)
         child_colnames = []

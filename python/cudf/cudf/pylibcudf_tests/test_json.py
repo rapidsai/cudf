@@ -1,7 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import io
 
-import pandas as pd
 import pyarrow as pa
 import pytest
 from utils import sink_to_str
@@ -23,12 +22,7 @@ def test_write_json_basic(table_data, source_or_sink, lines, rows_per_chunk):
         plc.io.SinkInfo([sink]), plc_table_w_meta, lines=lines, **kwargs
     )
 
-    # orient=records (basically what the cudf json writer does,
-    # doesn't preserve colnames when there are zero rows in table)
     exp = pa_table.to_pandas()
-
-    if len(exp) == 0:
-        exp = pd.DataFrame()
 
     # Convert everything to string to make
     # comparisons easier
@@ -61,12 +55,7 @@ def test_write_json_nulls(na_rep, include_nulls):
         include_nulls=include_nulls,
     )
 
-    # orient=records (basically what the cudf json writer does,
-    # doesn't preserve colnames when there are zero rows in table)
     exp = pa_tbl.to_pandas()
-
-    if len(exp) == 0:
-        exp = pd.DataFrame()
 
     # Convert everything to string to make
     # comparisons easier
@@ -111,12 +100,7 @@ def test_write_json_bool_opts(true_value, false_value):
         false_value=false_value,
     )
 
-    # orient=records (basically what the cudf json writer does,
-    # doesn't preserve colnames when there are zero rows in table)
     exp = pa_tbl.to_pandas()
-
-    if len(exp) == 0:
-        exp = pd.DataFrame()
 
     # Convert everything to string to make
     # comparisons easier
