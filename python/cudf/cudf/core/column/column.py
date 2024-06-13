@@ -212,7 +212,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return pd.Index(pa_array.to_pandas())
 
     @property
-    def values_host(self) -> "np.ndarray":
+    def values_host(self) -> np.ndarray:
         """
         Return a numpy representation of the Column.
         """
@@ -226,7 +226,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return self.data_array_view(mode="read").copy_to_host()
 
     @property
-    def values(self) -> "cupy.ndarray":
+    def values(self) -> cupy.ndarray:
         """
         Return a CuPy representation of the Column.
         """
@@ -332,18 +332,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 "yet supported in pyarrow, see: "
                 "https://github.com/apache/arrow/issues/20213"
             )
-        elif pa.types.is_timestamp(array.type) and array.type.tz is not None:
-            raise NotImplementedError(
-                "cuDF does not yet support timezone-aware datetimes"
-            )
         elif isinstance(array.type, ArrowIntervalType):
             return cudf.core.column.IntervalColumn.from_arrow(array)
-        elif pa.types.is_large_string(array.type):
-            # Pandas-2.2+: Pandas defaults to `large_string` type
-            # instead of `string` without data-introspection.
-            # Temporary workaround until cudf has native
-            # support for `LARGE_STRING` i.e., 64 bit offsets
-            array = array.cast(pa.string())
 
         data = pa.table([array], [None])
 
@@ -992,9 +982,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return col
         elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
             return col.as_decimal_column(dtype)
-        elif np.issubdtype(cast(Any, dtype), np.datetime64):
+        elif dtype.kind == "M":
             return col.as_datetime_column(dtype)
-        elif np.issubdtype(cast(Any, dtype), np.timedelta64):
+        elif dtype.kind == "m":
             return col.as_timedelta_column(dtype)
         elif dtype.kind == "O":
             if cudf.get_option("mode.pandas_compatible") and was_object:
@@ -1127,6 +1117,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
+
+    def __invert__(self):
+        raise TypeError(
+            f"Operation `~` not supported on {self.dtype.type.__name__}"
+        )
 
     def searchsorted(
         self,
@@ -1846,21 +1841,11 @@ def as_column(
             and arbitrary.freq is not None
         ):
             raise NotImplementedError("freq is not implemented yet")
-        elif (
-            isinstance(arbitrary.dtype, pd.DatetimeTZDtype)
-            or (
-                isinstance(arbitrary.dtype, pd.IntervalDtype)
-                and isinstance(arbitrary.dtype.subtype, pd.DatetimeTZDtype)
-            )
-            or (
-                isinstance(arbitrary.dtype, pd.CategoricalDtype)
-                and isinstance(
-                    arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
-                )
-            )
+        elif isinstance(arbitrary.dtype, pd.IntervalDtype) and isinstance(
+            arbitrary.dtype.subtype, pd.DatetimeTZDtype
         ):
             raise NotImplementedError(
-                "cuDF does not yet support timezone-aware datetimes"
+                "cuDF does not yet support Intervals with timezone-aware datetimes"
             )
         elif _is_pandas_nullable_extension_dtype(arbitrary.dtype):
             if cudf.get_option("mode.pandas_compatible"):
@@ -1876,7 +1861,8 @@ def as_column(
                 length=length,
             )
         elif isinstance(
-            arbitrary.dtype, (pd.CategoricalDtype, pd.IntervalDtype)
+            arbitrary.dtype,
+            (pd.CategoricalDtype, pd.IntervalDtype, pd.DatetimeTZDtype),
         ):
             return as_column(
                 pa.array(arbitrary, from_pandas=True),

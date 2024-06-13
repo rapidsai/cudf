@@ -18,7 +18,7 @@
 
 #include <cudf_test/file_utilities.hpp>
 
-#include <cudf/detail/utilities/pinned_host_vector.hpp>
+#include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 
@@ -79,7 +79,7 @@ class cuio_source_sink_pair {
 
   io_type const type;
   std::vector<char> h_buffer;
-  cudf::detail::pinned_host_vector<char> pinned_buffer;
+  cudf::detail::host_vector<char> pinned_buffer;
   rmm::device_uvector<std::byte> d_buffer;
   std::string const file_name;
   std::unique_ptr<cudf::io::data_sink> void_sink;
