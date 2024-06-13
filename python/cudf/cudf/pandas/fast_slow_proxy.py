@@ -883,7 +883,7 @@ def _assert_fast_slow_eq(left, right):
 def print_trace(func_name, args, kwargs, path):
     color = (
         "\033[92m" if path == "FAST" else "\033[91m"
-    )  # green for fast, red for slow
+    )  # FAST: green, SLOW: red
     print(
         f"{color}Call to {func_name} with args={list(args)[0]} kwargs={dict(kwargs).keys()} ({path} PATH)\033[0m"
     )
