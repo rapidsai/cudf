@@ -256,6 +256,9 @@ struct column_name_info {
 
   column_name_info() = default;
 
+  /**
+   * @brief Compares two column name info structs for equality
+   */
   bool operator==(column_name_info const& rhs) const
   {
     return ((name == rhs.name) && (children == rhs.children));
