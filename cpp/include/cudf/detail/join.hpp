@@ -16,7 +16,6 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
-#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -40,9 +39,6 @@ class preprocessed_table;
 
 namespace cudf {
 namespace detail {
-
-// Forward declaration
-// class cuco_allocator;
 
 constexpr int DEFAULT_JOIN_CG_SIZE = 2;
 
