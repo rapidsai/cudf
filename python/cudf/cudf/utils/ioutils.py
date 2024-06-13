@@ -27,6 +27,7 @@ except ImportError:
 
 _BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
 _ROW_GROUP_SIZE_BYTES_DEFAULT = 128 * 1024 * 1024
+_READ_AHEAD_DEFAULT = 1024 * 1024
 
 _docstring_remote_sources = """
 - cuDF supports local and remote data stores. See configuration details for
@@ -1597,6 +1598,142 @@ def _set_context(obj, stack):
     if stack is None:
         return obj
     return stack.enter_context(obj)
+
+
+def _get_remote_bytes_parquet(
+    remote_paths,
+    fs,
+    *,
+    columns=None,
+    row_groups=None,
+    bytes_per_thread=None,
+):
+    if fsspec_parquet is None or (columns is None and row_groups is None):
+        return _get_remote_bytes(
+            remote_paths, fs, bytes_per_thread=bytes_per_thread
+        )
+
+    sizes = fs.sizes(remote_paths)
+    data = fsspec_parquet._get_parquet_byte_ranges(
+        remote_paths,
+        fs,
+        columns=columns,
+        row_groups=row_groups,
+        max_block=bytes_per_thread or _BYTES_PER_THREAD_DEFAULT,
+    )
+    buffers = []
+    for size, path in zip(sizes, remote_paths):
+        path_data = data.pop(path)
+        buf = np.zeros(size, dtype="b")
+        for range_offset in list(path_data.keys()):
+            chunk = path_data.pop(range_offset)
+            buf[range_offset[0] : range_offset[1]] = np.frombuffer(
+                chunk, dtype="b"
+            )
+        buffers.append(buf.tobytes())
+    return buffers
+
+
+def _get_remote_bytes_csv(
+    remote_paths,
+    fs,
+    *,
+    byte_range=None,
+    read_ahead=_READ_AHEAD_DEFAULT,
+    bytes_per_thread=None,
+):
+    # CSV reader only supports single file
+    assert len(remote_paths) == 1
+
+    # Use byte_range to set remote_starts and remote_ends
+    remote_starts = None
+    remote_ends = None
+    offset = 0
+    if byte_range:
+        start, stop = byte_range
+        remote_starts = [start]
+        if start:
+            offset = 1
+        if stop:
+            remote_ends = [start + stop]
+
+    # Collect buffers
+    buffers = _get_remote_bytes(
+        remote_paths,
+        fs,
+        remote_starts=remote_starts,
+        remote_ends=remote_ends,
+        read_ahead=read_ahead,
+        bytes_per_thread=bytes_per_thread,
+        use_proxy_files=False,
+        offset=offset,
+    )
+
+    # Adjust byte_range to trim unnecessary bytes.
+    # Note that we keep the byte-range shifted by one
+    # byte so that the libcudf reader still follows the
+    # correct code path
+    if offset:
+        byte_range = (offset, byte_range[1])
+
+    return buffers[0], byte_range
+
+
+def _get_remote_bytes(
+    remote_paths,
+    fs,
+    *,
+    remote_starts=None,
+    remote_ends=None,
+    read_ahead=_READ_AHEAD_DEFAULT,
+    bytes_per_thread=None,
+    use_proxy_files=True,
+    offset=0,
+):
+    if isinstance(remote_paths, str):
+        remote_paths = [remote_paths]
+
+    if remote_starts:
+        assert len(remote_starts) == len(remote_paths)
+    else:
+        remote_starts = [0] * len(remote_paths)
+
+    sizes = fs.sizes(remote_paths)
+    if remote_ends:
+        assert len(remote_ends) == len(remote_paths)
+        for i in range(len(remote_ends)):
+            remote_ends[i] = min(remote_ends[i] + read_ahead, sizes[i])
+    else:
+        remote_ends = sizes
+
+    # Construct list of paths, starts, and stops
+    paths, starts, ends = [], [], []
+    blocksize = bytes_per_thread or _BYTES_PER_THREAD_DEFAULT
+    for i, remote_path in enumerate(remote_paths):
+        for j in range(remote_starts[i], remote_ends[i], blocksize):
+            paths.append(remote_path)
+            starts.append(j)
+            ends.append(min(j + blocksize, remote_ends[i]))
+
+    # Collect the byte ranges
+    chunks = fs.cat_ranges(paths, starts, ends)
+
+    # Construct local byte buffers
+    buffers = []
+    path_counts = np.unique(paths, return_counts=True)[1]
+    for i, remote_path in enumerate(remote_paths):
+        size = (
+            sizes[i] if use_proxy_files else remote_ends[i] - remote_starts[i]
+        )
+        buf = np.zeros(size + offset, dtype="b")
+        for j in range(path_counts[i]):
+            start, end = starts[i + j] + offset, ends[i + j] + offset
+            if not use_proxy_files:
+                start -= remote_starts[i]
+                end -= remote_starts[i]
+            buf[start:end] = np.frombuffer(chunks.pop(0), dtype="b")
+        buffers.append(buf.tobytes())
+    return buffers
 
 
 def _open_remote_files(

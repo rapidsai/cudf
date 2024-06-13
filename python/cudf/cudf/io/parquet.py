@@ -597,7 +597,21 @@ def read_parquet(
             categorical_partitions=categorical_partitions,
             dataset_kwargs=dataset_kwargs,
         )
-    filepath_or_buffer = paths if paths else filepath_or_buffer
+
+    # For remote data, we can transfer the necessary
+    # bytes directly into host memory
+    if paths and not (
+        ioutils._is_local_filesystem(fs) or use_python_file_object
+    ):
+        filepath_or_buffer = ioutils._get_remote_bytes_parquet(
+            paths,
+            fs,
+            bytes_per_thread=bytes_per_thread,
+            columns=columns,
+            row_groups=row_groups,
+        )
+    else:
+        filepath_or_buffer = paths if paths else filepath_or_buffer
 
     filepaths_or_buffers = []
     if use_python_file_object:

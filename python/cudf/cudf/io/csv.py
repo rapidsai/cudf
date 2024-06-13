@@ -81,9 +81,27 @@ def read_csv(
             "`read_csv` does not yet support reading multiple files"
         )
 
+    # Start by trying construct a filesystem object, so we
+    # can check if this is a remote file
+    fs, paths = ioutils._get_filesystem_and_paths(
+        path_or_data=filepath_or_buffer, storage_options=storage_options
+    )
+    # For remote data, we can transfer the necessary
+    # bytes directly into host memory
+    if paths and not (
+        ioutils._is_local_filesystem(fs) or use_python_file_object
+    ):
+        filepath_or_buffer, byte_range = ioutils._get_remote_bytes_csv(
+            paths,
+            fs,
+            byte_range=byte_range,
+            bytes_per_thread=bytes_per_thread,
+        )
+
     filepath_or_buffer, compression = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         compression=compression,
+        fs=fs,
         iotypes=(BytesIO, StringIO, NativeFile),
         use_python_file_object=use_python_file_object,
         storage_options=storage_options,
