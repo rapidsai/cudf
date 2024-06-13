@@ -22,6 +22,7 @@ This page provides API documentation for pylibcudf.
     join
     lists
     merge
+    null_mask
     quantiles
     reduce
     reshape
