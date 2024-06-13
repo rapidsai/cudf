@@ -102,7 +102,7 @@ std::unique_ptr<column> aggregation_based_rolling_window(table_view const& group
                "Ungrouped rolling window not supported in aggregation path.");
 
   auto agg_requests = std::vector<cudf::groupby::aggregation_request>{};
-  agg_requests.push_back(cudf::groupby::aggregation_request());
+  agg_requests.emplace_back();
   agg_requests.front().values = input;
   agg_requests.front().aggregations.push_back(convert_to<cudf::groupby_aggregation>(aggr));
 

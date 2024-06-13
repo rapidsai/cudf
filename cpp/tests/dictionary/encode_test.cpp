@@ -56,8 +56,9 @@ TEST_F(DictionaryEncodeTest, EncodeFloat)
 
 TEST_F(DictionaryEncodeTest, EncodeWithNull)
 {
-  cudf::test::fixed_width_column_wrapper<int64_t> input{{444, 0, 333, 111, 222, 222, 222, 444, 000},
-                                                        {1, 1, 1, 1, 1, 0, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int64_t> input{
+    {444, 0, 333, 111, 222, 222, 222, 444, 000},
+    {true, true, true, true, true, false, true, true, true}};
 
   auto dictionary = cudf::dictionary::encode(input);
   cudf::dictionary_column_view view(dictionary->view());
