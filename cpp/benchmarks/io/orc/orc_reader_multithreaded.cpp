@@ -43,16 +43,16 @@ std::string get_label(std::string const& test_name, nvbench::state const& state)
   auto const num_cols       = state.get_int64("num_cols");
   size_t const read_size_mb = get_read_size(state) / (1024 * 1024);
   return {test_name + ", " + std::to_string(num_cols) + " columns, " +
-          std::to_string(get_num_reads()) + " threads " + " (" +
+          std::to_string(get_num_read_threads(state)) + " threads " + " (" +
           std::to_string(read_size_mb) + " MB each)"};
 }
 
 std::tuple<std::vector<cuio_source_sink_pair>, size_t, size_t> write_file_data(
   nvbench::state& state, std::vector<cudf::type_id> const& d_types)
 {
-  cudf::size_type const cardinality = state.get_int64("cardinality");
-  cudf::size_type const run_length  = state.get_int64("run_length");
-  cudf::size_type const num_cols    = state.get_int64("num_cols");
+  auto const cardinality = state.get_int64("cardinality");
+  auto const run_length  = state.get_int64("run_length");
+  auto const num_cols    = state.get_int64("num_cols");
   size_t const num_files            = get_num_read_threads(state);
   size_t const per_file_data_size   = get_read_size(state);
 
@@ -69,7 +69,7 @@ std::tuple<std::vector<cuio_source_sink_pair>, size_t, size_t> write_file_data(
       data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
     auto const view = tbl->view();
 
-    cudf::io::orc_writer_options write_opts =
+    cudf::io::orc_writer_options const write_opts =
       cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view)
         .compression(cudf::io::compression_type::SNAPPY);
 
@@ -86,7 +86,7 @@ void BM_orc_multithreaded_read_common(nvbench::state& state,
                                       std::vector<cudf::type_id> const& d_types,
                                       std::string const& label)
 {
-  size_t const data_size = state.get_int64("total_data_size");
+  auto const data_size = state.get_int64("total_data_size");
   auto const num_threads = state.get_int64("num_threads");
 
   auto streams = cudf::detail::fork_streams(cudf::get_default_stream(), num_threads);
