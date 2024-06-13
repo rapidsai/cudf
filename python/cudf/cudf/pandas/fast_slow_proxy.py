@@ -880,6 +880,15 @@ def _assert_fast_slow_eq(left, right):
         assert_eq(left, right)
 
 
+def print_trace(func_name, args, kwargs, path):
+    color = (
+        "\033[92m" if path == "FAST" else "\033[91m"
+    )  # green for fast, red for slow
+    print(
+        f"{color}Call to {func_name} with args={list(args)[0]} kwargs={dict(kwargs).keys()} ({path} PATH)\033[0m"
+    )
+
+
 def _fast_slow_function_call(
     func: Callable,
     /,
@@ -896,6 +905,7 @@ def _fast_slow_function_call(
     """
     from .module_accelerator import disable_module_accelerator
 
+    proxy_trace = False
     fast = False
     try:
         with nvtx.annotate(
@@ -909,6 +919,8 @@ def _fast_slow_function_call(
                 # try slow path
                 raise Exception()
             fast = True
+            if proxy_trace:
+                print_trace(func.__name__, fast_args, fast_kwargs, "FAST")
             if _env_get_bool("CUDF_PANDAS_DEBUGGING", False):
                 try:
                     with nvtx.annotate(
@@ -949,6 +961,8 @@ def _fast_slow_function_call(
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
             with disable_module_accelerator():
                 result = func(*slow_args, **slow_kwargs)
+            if proxy_trace:
+                print_trace(func.__name__, slow_args, slow_kwargs, "SLOW")
     return _maybe_wrap_result(result, func, *args, **kwargs), fast
 
 
