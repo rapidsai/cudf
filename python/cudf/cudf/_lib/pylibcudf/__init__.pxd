@@ -48,6 +48,7 @@ __all__ = [
     "concatenate",
     "copying",
     "datetime",
+    "expressions",
     "filling",
     "gpumemoryview",
     "groupby",
