@@ -50,11 +50,34 @@ std::unique_ptr<cudf::table> get_cudf_table()
                                                               {true, false, true, true, true});
   columns.emplace_back(std::move(cudf::dictionary::encode(col4)));
   columns.emplace_back(cudf::test::fixed_width_column_wrapper<bool>(
-                         {true, false, true, false, true}, {true, false, true, true, false})
+                         {true, false, true, false, true}, {true, false, true, true, false}).release());
+  columns.emplace_back(cudf::test::strings_column_wrapper(
+                         {
+                           "",
+                           "abc",
+                           "def",
+                           "1",
+                           "2",
+                         },
+                         {0, 1, 1, 1, 1})
                          .release());
   // columns.emplace_back(cudf::test::lists_column_wrapper<int>({{1, 2}, {3, 4}, {}, {6}, {7, 8,
   // 9}}).release());
   return std::make_unique<cudf::table>(std::move(columns));
+}
+
+std::shared_ptr<arrow::LargeStringArray> get_arrow_large_string_array(
+  std::vector<std::string> const& data, std::vector<uint8_t> const& mask = {})
+{
+  std::shared_ptr<arrow::LargeStringArray> large_string_array;
+  arrow::LargeStringBuilder large_string_builder;
+
+  CUDF_EXPECTS(large_string_builder.AppendValues(data, mask.data()).ok(),
+               "Failed to append values to string builder");
+  CUDF_EXPECTS(large_string_builder.Finish(&large_string_array).ok(),
+               "Failed to create arrow string array");
+
+  return large_string_array;
 }
 
 struct FromArrowTest : public cudf::test::BaseFixture {};
@@ -294,6 +317,15 @@ TEST_F(FromArrowTest, ChunkedArray)
       "ccc",
     },
     {0, 1});
+  auto large_string_array_1 = get_arrow_large_string_array(
+    {
+      "",
+      "abc",
+      "def",
+      "1",
+      "2",
+    },
+    {0, 1, 1, 1, 1});
   auto dict_array1 = get_arrow_dict_array({1, 2, 5, 7}, {0, 1, 2}, {1, 0, 1});
   auto dict_array2 = get_arrow_dict_array({1, 2, 5, 7}, {1, 3});
 
@@ -307,13 +339,16 @@ TEST_F(FromArrowTest, ChunkedArray)
   auto boolean_array =
     get_arrow_array<bool>({true, false, true, false, true}, {true, false, true, true, false});
   auto boolean_chunked_array = std::make_shared<arrow::ChunkedArray>(boolean_array);
+  auto large_string_chunked_array = std::make_shared<arrow::ChunkedArray>(
+    std::vector<std::shared_ptr<arrow::Array>>{large_string_array_1});
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector(
     {arrow::field("a", int32_chunked_array->type()),
      arrow::field("b", int64array->type()),
      arrow::field("c", string_array_1->type()),
      arrow::field("d", dict_chunked_array->type()),
-     arrow::field("e", boolean_chunked_array->type())});
+     arrow::field("e", boolean_chunked_array->type()),
+     arrow::field("f", large_string_array_1->type())});
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
 
   auto arrow_table = arrow::Table::Make(schema,
@@ -321,7 +356,8 @@ TEST_F(FromArrowTest, ChunkedArray)
                                          int64_chunked_array,
                                          string_chunked_array,
                                          dict_chunked_array,
-                                         boolean_chunked_array});
+                                         boolean_chunked_array,
+                                         large_string_chunked_array});
 
   auto expected_cudf_table = get_cudf_table();
 
