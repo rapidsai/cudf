@@ -24,3 +24,4 @@ This page provides a list of all publicly accessible modules, methods and classe
     options
     extension_dtypes
     pylibcudf/index.rst
+    performance_tracking

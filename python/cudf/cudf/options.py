@@ -315,7 +315,7 @@ _register_option(
         """
         If set to `False`, disables memory profiling.
         If set to `True`, enables memory profiling.
-        Read more at: :ref:`copy-on-write-user-doc`
+        Read more at: :ref:`memory-profiling-user-doc`
         \tValid values are True or False. Default is False.
     """
     ),
