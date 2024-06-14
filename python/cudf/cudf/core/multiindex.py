@@ -37,6 +37,8 @@ from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 if TYPE_CHECKING:
     from collections.abc import Generator
 
+    from typing_extensions import Self
+
     from cudf._typing import DataFrameOrSeries
 
 
@@ -2098,7 +2100,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return midx
 
     @_cudf_nvtx_annotate
-    def _copy_type_metadata(self: MultiIndex, other: MultiIndex) -> MultiIndex:
+    def _copy_type_metadata(self: Self, other: Self) -> Self:
         res = super()._copy_type_metadata(other)
         if isinstance(other, MultiIndex):
             res._names = other._names

@@ -72,7 +72,7 @@ from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import _warn_no_dask_cudf, search_range
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Iterator
 
 
 class IndexMeta(type):
@@ -492,6 +492,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
         """
         dtype = np.dtype(np.int64)
         return _maybe_convert_to_default_type(dtype)
+
+    @property
+    def _dtypes(self) -> Iterator:
+        return zip((self.name,), (self.dtype,))
 
     @_cudf_nvtx_annotate
     def to_pandas(
