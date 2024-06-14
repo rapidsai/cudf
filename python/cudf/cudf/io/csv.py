@@ -97,6 +97,8 @@ def read_csv(
             byte_range=byte_range,
             bytes_per_thread=bytes_per_thread,
         )
+        assert len(filepath_or_buffer) == 1
+        filepath_or_buffer = filepath_or_buffer[0]
 
     filepath_or_buffer, compression = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,

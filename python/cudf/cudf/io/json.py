@@ -67,6 +67,28 @@ def read_json(
         if not is_list_like(path_or_buf):
             path_or_buf = [path_or_buf]
 
+        # Start by trying construct a filesystem object, so we
+        # can check if this is remote data
+        fs, paths = ioutils._get_filesystem_and_paths(
+            path_or_data=path_or_buf, storage_options=storage_options
+        )
+        # For remote data, we can transfer the necessary
+        # bytes directly into host memory
+        if paths and not ioutils._is_local_filesystem(fs):
+            expanded_paths = []
+            for path in paths:
+                if ioutils.is_directory(path_or_data=path, fs=fs):
+                    expanded_paths.extend(
+                        fs.glob(fs.sep.join([path, "*.json"]))
+                    )
+                else:
+                    expanded_paths.append(path)
+            path_or_buf, byte_range = ioutils._get_remote_bytes_lines(
+                expanded_paths,
+                fs,
+                byte_range=byte_range,
+            )
+
         filepaths_or_buffers = []
         for source in path_or_buf:
             if ioutils.is_directory(
@@ -83,7 +105,7 @@ def read_json(
             tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
                 path_or_data=source,
                 compression=compression,
-                # use_python_file_object=True,
+                fs=fs,
                 iotypes=(BytesIO, StringIO),
                 allow_raw_text_input=True,
                 storage_options=storage_options,

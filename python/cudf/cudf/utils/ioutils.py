@@ -1538,15 +1538,18 @@ def ensure_single_filepath_or_buffer(path_or_data, storage_options=None):
     return True
 
 
-def is_directory(path_or_data, storage_options=None):
+def is_directory(path_or_data, storage_options=None, fs=None):
     """Returns True if the provided filepath is a directory"""
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
         path_or_data = os.path.expanduser(path_or_data)
         try:
-            fs = get_fs_token_paths(
-                path_or_data, mode="rb", storage_options=storage_options
-            )[0]
+            fs = (
+                fs
+                or get_fs_token_paths(
+                    path_or_data, mode="rb", storage_options=storage_options
+                )[0]
+            )
         except ValueError as e:
             if str(e).startswith("Protocol not known"):
                 return False
@@ -1634,7 +1637,7 @@ def _get_remote_bytes_parquet(
     return buffers
 
 
-def _get_remote_bytes_csv(
+def _get_remote_bytes_lines(
     remote_paths,
     fs,
     *,
@@ -1642,20 +1645,18 @@ def _get_remote_bytes_csv(
     read_ahead=_READ_AHEAD_DEFAULT,
     bytes_per_thread=None,
 ):
-    # CSV reader only supports single file
-    assert len(remote_paths) == 1
-
     # Use byte_range to set remote_starts and remote_ends
     remote_starts = None
     remote_ends = None
     offset = 0
     if byte_range:
+        assert len(remote_paths) == 1
         start, stop = byte_range
-        remote_starts = [start]
+        remote_starts = [start] * len(remote_paths)
         if start:
             offset = 1
         if stop:
-            remote_ends = [start + stop]
+            remote_ends = [start + stop] * len(remote_paths)
 
     # Collect buffers
     buffers = _get_remote_bytes(
@@ -1676,7 +1677,7 @@ def _get_remote_bytes_csv(
     if offset:
         byte_range = (offset, byte_range[1])
 
-    return buffers[0], byte_range
+    return buffers, byte_range
 
 
 def _get_remote_bytes(
