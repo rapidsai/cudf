@@ -79,8 +79,10 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta);
 [[nodiscard]] size_t column_size(column_view const& column, rmm::cuda_stream_view stream);
 
 /**
- * @brief Returns ``true`` if the column is nullable or if the write mode is not
- *        set to write the table all at once instead of chunked
+ * @brief Indicates if the column should be marked as nullable in the output schema
+ *
+ * Returns `true` if the input column is nullable or if the write mode is not set to
+ * write the table all at once instead of chunked.
  *
  * @param column A view of the (linked) column
  * @param column_metadata Metadata of the column
