@@ -19,7 +19,6 @@
 #include "generate_input_tables.cuh"
 
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -67,28 +66,12 @@ template <typename Key,
           typename Join>
 void BM_join(state_type& state, Join JoinFunc)
 {
-  auto const right_size = [&]() {
-    if constexpr (std::is_same_v<state_type, benchmark::State>) {
-      return static_cast<cudf::size_type>(state.range(0));
-    }
-    if constexpr (std::is_same_v<state_type, nvbench::state>) {
-      return static_cast<cudf::size_type>(state.get_int64("right_size"));
-    }
-  }();
-  auto const left_size = [&]() {
-    if constexpr (std::is_same_v<state_type, benchmark::State>) {
-      return static_cast<cudf::size_type>(state.range(1));
-    }
-    if constexpr (std::is_same_v<state_type, nvbench::state>) {
-      return static_cast<cudf::size_type>(state.get_int64("left_size"));
-    }
-  }();
+  auto const right_size = static_cast<cudf::size_type>(state.get_int64("right_size"));
+  auto const left_size  = static_cast<cudf::size_type>(state.get_int64("left_size"));
 
-  if constexpr (std::is_same_v<state_type, nvbench::state>) {
-    if (right_size > left_size) {
-      state.skip("Skip large right table");
-      return;
-    }
+  if (right_size > left_size) {
+    state.skip("Skip large right table");
+    return;
   }
 
   double const selectivity = 0.3;
@@ -165,57 +148,37 @@ void BM_join(state_type& state, Join JoinFunc)
 
   // Setup join parameters and result table
   [[maybe_unused]] std::vector<cudf::size_type> columns_to_join = {0};
-
-  // Benchmark the inner join operation
-  if constexpr (std::is_same_v<state_type, benchmark::State> and
-                (join_type != join_t::CONDITIONAL)) {
-    for (auto _ : state) {
-      cuda_event_timer raii(state, true, cudf::get_default_stream());
-
-      auto result = JoinFunc(left_table.select(columns_to_join),
-                             right_table.select(columns_to_join),
-                             cudf::null_equality::UNEQUAL);
-    }
-  }
-  if constexpr (std::is_same_v<state_type, nvbench::state> and (join_type != join_t::CONDITIONAL)) {
-    state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-    if constexpr (join_type == join_t::MIXED) {
-      auto const col_ref_left_0 = cudf::ast::column_reference(0);
-      auto const col_ref_right_0 =
-        cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-      auto left_zero_eq_right_zero =
-        cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
-      state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-        auto result = JoinFunc(left_table.select(columns_to_join),
-                               right_table.select(columns_to_join),
-                               left_table.select({1}),
-                               right_table.select({1}),
-                               left_zero_eq_right_zero,
-                               cudf::null_equality::UNEQUAL);
-      });
-    }
-    if constexpr (join_type == join_t::HASH) {
-      state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-        auto result = JoinFunc(left_table.select(columns_to_join),
-                               right_table.select(columns_to_join),
-                               cudf::null_equality::UNEQUAL);
-      });
-    }
-  }
-
-  // Benchmark conditional join
-  if constexpr (std::is_same_v<state_type, benchmark::State> and join_type == join_t::CONDITIONAL) {
-    // Common column references.
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  if constexpr (join_type == join_t::CONDITIONAL) {
     auto const col_ref_left_0  = cudf::ast::column_reference(0);
     auto const col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
     auto left_zero_eq_right_zero =
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
-
-    for (auto _ : state) {
-      cuda_event_timer raii(state, true, cudf::get_default_stream());
-
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       auto result =
         JoinFunc(left_table, right_table, left_zero_eq_right_zero, cudf::null_equality::UNEQUAL);
-    }
+      ;
+    });
+  }
+  if constexpr (join_type == join_t::MIXED) {
+    auto const col_ref_left_0  = cudf::ast::column_reference(0);
+    auto const col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+    auto left_zero_eq_right_zero =
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      auto result = JoinFunc(left_table.select(columns_to_join),
+                             right_table.select(columns_to_join),
+                             left_table.select({1}),
+                             right_table.select({1}),
+                             left_zero_eq_right_zero,
+                             cudf::null_equality::UNEQUAL);
+    });
+  }
+  if constexpr (join_type == join_t::HASH) {
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      auto result = JoinFunc(left_table.select(columns_to_join),
+                             right_table.select(columns_to_join),
+                             cudf::null_equality::UNEQUAL);
+    });
   }
 }

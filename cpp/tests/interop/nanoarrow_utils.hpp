@@ -97,7 +97,7 @@ std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>, void> p
   ArrowArrayValidityBitmap(arr)->buffer.size_bytes =
     cudf::bitmask_allocation_size_bytes(view.size());
   ArrowArrayValidityBitmap(arr)->buffer.data =
-    const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view.null_mask()));
+    const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(view.null_mask()));
   NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc));
   ArrowArrayBuffer(arr, 1)->size_bytes = sizeof(T) * view.size();
   ArrowArrayBuffer(arr, 1)->data       = const_cast<uint8_t*>(view.data<uint8_t>());
@@ -117,7 +117,7 @@ std::enable_if_t<std::is_same_v<T, bool>, void> populate_from_col(ArrowArray* ar
   ArrowArrayValidityBitmap(arr)->buffer.size_bytes =
     cudf::bitmask_allocation_size_bytes(view.size());
   ArrowArrayValidityBitmap(arr)->buffer.data =
-    const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view.null_mask()));
+    const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(view.null_mask()));
 
   auto bitmask = cudf::bools_to_mask(view);
   auto ptr     = reinterpret_cast<uint8_t*>(bitmask.first->data());
@@ -147,7 +147,7 @@ std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> populate_from_col(
   ArrowArrayValidityBitmap(arr)->buffer.size_bytes =
     cudf::bitmask_allocation_size_bytes(view.size());
   ArrowArrayValidityBitmap(arr)->buffer.data =
-    const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view.null_mask()));
+    const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(view.null_mask()));
 
   cudf::strings_column_view sview{view};
   if (view.size() > 0) {
@@ -159,7 +159,7 @@ std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> populate_from_col(
     ArrowArrayBuffer(arr, 2)->data       = const_cast<uint8_t*>(view.data<uint8_t>());
   } else {
     auto zero          = rmm::device_scalar<int32_t>(0, cudf::get_default_stream());
-    const uint8_t* ptr = reinterpret_cast<uint8_t*>(zero.data());
+    uint8_t const* ptr = reinterpret_cast<uint8_t*>(zero.data());
     nanoarrow::BufferInitWrapped(ArrowArrayBuffer(arr, 1), std::move(zero), ptr, 4);
   }
 }
@@ -173,7 +173,7 @@ void populate_dict_from_col(ArrowArray* arr, cudf::dictionary_column_view dview)
   ArrowArrayValidityBitmap(arr)->buffer.size_bytes =
     cudf::bitmask_allocation_size_bytes(dview.size());
   ArrowArrayValidityBitmap(arr)->buffer.data =
-    const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(dview.null_mask()));
+    const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(dview.null_mask()));
 
   NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc));
   ArrowArrayBuffer(arr, 1)->size_bytes = sizeof(IND_TYPE) * dview.indices().size();
@@ -225,7 +225,7 @@ get_nanoarrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask
     ArrowBitmap bitmap;
     ArrowBitmapInit(&bitmap);
     NANOARROW_THROW_NOT_OK(ArrowBitmapReserve(&bitmap, mask.size()));
-    ArrowBitmapAppendInt8Unsafe(&bitmap, reinterpret_cast<const int8_t*>(mask.data()), mask.size());
+    ArrowBitmapAppendInt8Unsafe(&bitmap, reinterpret_cast<int8_t const*>(mask.data()), mask.size());
 
     ArrowArraySetValidityBitmap(tmp.get(), &bitmap);
     tmp->null_count =
@@ -343,7 +343,7 @@ nanoarrow::UniqueArray get_nanoarrow_list_array(std::vector<T> const& data,
     ArrowBitmapInit(&bitmap);
     NANOARROW_THROW_NOT_OK(ArrowBitmapReserve(&bitmap, list_validity.size()));
     ArrowBitmapAppendInt8Unsafe(
-      &bitmap, reinterpret_cast<const int8_t*>(list_validity.data()), list_validity.size());
+      &bitmap, reinterpret_cast<int8_t const*>(list_validity.data()), list_validity.size());
 
     ArrowArraySetValidityBitmap(tmp.get(), &bitmap);
     tmp->null_count =

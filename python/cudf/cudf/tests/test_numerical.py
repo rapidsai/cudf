@@ -44,7 +44,7 @@ def test_can_cast_safely_same_kind():
     assert data.can_cast_safely(to_dtype)
 
     data = cudf.Series(
-        [np.finfo("float32").max * 2, 1.0], dtype="float64"
+        [float(np.finfo("float32").max) * 2, 1.0], dtype="float64"
     )._column
     to_dtype = np.dtype("float32")
     assert not data.can_cast_safely(to_dtype)

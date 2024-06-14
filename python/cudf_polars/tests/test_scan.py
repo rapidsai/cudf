@@ -10,17 +10,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
 @pytest.fixture(
-    params=[
-        (None, None),
-        pytest.param(
-            ("row-index", 0),
-            marks=pytest.mark.xfail(reason="Incorrect dtype for row index"),
-        ),
-        pytest.param(
-            ("index", 10),
-            marks=pytest.mark.xfail(reason="Incorrect dtype for row index"),
-        ),
-    ],
+    params=[(None, None), ("row-index", 0), ("index", 10)],
     ids=["no-row-index", "zero-offset-row-index", "offset-row-index"],
 )
 def row_index(request):

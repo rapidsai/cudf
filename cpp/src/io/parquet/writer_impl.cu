@@ -36,7 +36,6 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
-#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -1764,10 +1763,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     // for multiple fragments per page to smooth things out. using 2 was too
     // unbalanced in final page sizes, so using 4 which seems to be a good
     // compromise at smoothing things out without getting fragment sizes too small.
-    auto frag_size_fn = [&](auto const& col, size_type col_size) {
+    auto frag_size_fn = [&](auto const& col, size_t col_size) {
       int const target_frags_per_page = is_col_fixed_width(col) ? 1 : 4;
       auto const avg_len =
-        target_frags_per_page * util::div_rounding_up_safe<size_type>(col_size, input.num_rows());
+        target_frags_per_page * util::div_rounding_up_safe<size_t>(col_size, input.num_rows());
       if (avg_len > 0) {
         auto const frag_size = util::div_rounding_up_safe<size_type>(max_page_size_bytes, avg_len);
         return std::min<size_type>(max_page_fragment_size, frag_size);
@@ -2278,7 +2277,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   }
 
   auto bounce_buffer =
-    cudf::detail::pinned_host_vector<uint8_t>(all_device_write ? 0 : max_write_size);
+    cudf::detail::make_pinned_vector_async<uint8_t>(all_device_write ? 0 : max_write_size, stream);
 
   return std::tuple{std::move(agg_meta),
                     std::move(pages),

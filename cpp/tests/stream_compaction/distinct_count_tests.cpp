@@ -254,7 +254,7 @@ TEST_F(DistinctCount, StringColumnWithNull)
 {
   cudf::test::strings_column_wrapper input_col{
     {"", "this", "is", "this", "This", "a", "column", "of", "the", "strings"},
-    {1, 1, 1, 1, 1, 1, 1, 1, 0, 1}};
+    {true, true, true, true, true, true, true, true, false, true}};
 
   cudf::size_type const expected =
     (std::vector<std::string>{"", "this", "is", "This", "a", "column", "of", "strings"}).size();
@@ -264,10 +264,12 @@ TEST_F(DistinctCount, StringColumnWithNull)
 
 TEST_F(DistinctCount, TableWithNull)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col1{{5, 4, 3, 5, 8, 1, 4, 5, 0, 9, -1},
-                                                       {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0}};
-  cudf::test::fixed_width_column_wrapper<int32_t> col2{{2, 2, 2, -1, 2, 1, 2, 0, 0, 9, -1},
-                                                       {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col1{
+    {5, 4, 3, 5, 8, 1, 4, 5, 0, 9, -1},
+    {true, true, true, true, true, true, true, true, false, true, false}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2{
+    {2, 2, 2, -1, 2, 1, 2, 0, 0, 9, -1},
+    {true, true, true, false, true, true, true, false, false, true, false}};
   cudf::table_view input{{col1, col2}};
 
   EXPECT_EQ(8, cudf::distinct_count(input, null_equality::EQUAL));
@@ -276,7 +278,8 @@ TEST_F(DistinctCount, TableWithNull)
 
 TEST_F(DistinctCount, TableWithSomeNull)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col1{{1, 2, 3, 4, 5, 6}, {1, 0, 1, 0, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col1{{1, 2, 3, 4, 5, 6},
+                                                       {true, false, true, false, true, false}};
   cudf::test::fixed_width_column_wrapper<int32_t> col2{{1, 1, 1, 1, 1, 1}};
   cudf::table_view input{{col1, col2}};
 
@@ -296,12 +299,15 @@ TEST_F(DistinctCount, EmptyColumnedTable)
 
 TEST_F(DistinctCount, TableMixedTypes)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col1{{5, 4, 3, 5, 8, 1, 4, 5, 0, 9, -1},
-                                                       {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0}};
-  cudf::test::fixed_width_column_wrapper<double> col2{{2, 2, 2, -1, 2, 1, 2, 0, 0, 9, -1},
-                                                      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0}};
-  cudf::test::fixed_width_column_wrapper<uint32_t> col3{{2, 2, 2, -1, 2, 1, 2, 0, 0, 9, -1},
-                                                        {1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col1{
+    {5, 4, 3, 5, 8, 1, 4, 5, 0, 9, -1},
+    {true, true, true, true, true, true, true, true, false, true, false}};
+  cudf::test::fixed_width_column_wrapper<double> col2{
+    {2, 2, 2, -1, 2, 1, 2, 0, 0, 9, -1},
+    {true, true, true, false, true, true, true, false, false, true, false}};
+  cudf::test::fixed_width_column_wrapper<uint32_t> col3{
+    {2, 2, 2, -1, 2, 1, 2, 0, 0, 9, -1},
+    {true, true, true, false, true, true, true, true, false, true, false}};
   cudf::table_view input{{col1, col2, col3}};
 
   EXPECT_EQ(9, cudf::distinct_count(input, null_equality::EQUAL));
@@ -310,11 +316,12 @@ TEST_F(DistinctCount, TableMixedTypes)
 
 TEST_F(DistinctCount, TableWithStringColumnWithNull)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col1{{0, 9, 8, 9, 6, 5, 4, 3, 2, 1, 0},
-                                                       {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col1{
+    {0, 9, 8, 9, 6, 5, 4, 3, 2, 1, 0},
+    {true, true, true, true, true, true, true, true, false, true, false}};
   cudf::test::strings_column_wrapper col2{
     {"", "this", "is", "this", "this", "a", "column", "of", "the", "strings", ""},
-    {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0}};
+    {true, true, true, true, true, true, true, true, false, true, false}};
 
   cudf::table_view input{{col1, col2}};
   EXPECT_EQ(9, cudf::distinct_count(input, null_equality::EQUAL));

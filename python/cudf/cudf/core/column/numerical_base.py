@@ -49,7 +49,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-        self = self.nans_to_nulls().dropna()  # type: ignore
+        self = self.nans_to_nulls().dropna()
 
         if len(self) < 4:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
@@ -74,7 +74,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-        self = self.nans_to_nulls().dropna()  # type: ignore
+        self = self.nans_to_nulls().dropna()
 
         if len(self) < 3:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
