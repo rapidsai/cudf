@@ -3,7 +3,16 @@
 from __future__ import annotations
 
 import functools
-from typing import Any, Callable, Optional, Sequence, Tuple, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+    cast,
+)
 
 import cupy as cp
 import numpy as np
@@ -14,13 +23,6 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import pylibcudf
 from cudf._lib.types import size_type_dtype
-from cudf._typing import (
-    ColumnBinaryOperand,
-    ColumnLike,
-    Dtype,
-    DtypeObj,
-    ScalarLike,
-)
 from cudf.api.types import (
     is_bool_dtype,
     is_float_dtype,
@@ -28,7 +30,6 @@ from cudf.api.types import (
     is_integer_dtype,
     is_scalar,
 )
-from cudf.core.buffer import Buffer
 from cudf.core.column import (
     ColumnBase,
     as_column,
@@ -47,6 +48,16 @@ from cudf.utils.dtypes import (
 )
 
 from .numerical_base import NumericalBaseColumn
+
+if TYPE_CHECKING:
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        ColumnLike,
+        Dtype,
+        DtypeObj,
+        ScalarLike,
+    )
+    from cudf.core.buffer import Buffer
 
 _unaryop_map = {
     "ASIN": "ARCSIN",
@@ -193,6 +204,14 @@ class NumericalColumn(NumericalBaseColumn):
         unaryop = _unaryop_map.get(unaryop, unaryop)
         unaryop = pylibcudf.unary.UnaryOperator[unaryop]
         return libcudf.unary.unary_operation(self, unaryop)
+
+    def __invert__(self):
+        if self.dtype.kind in "ui":
+            return self.unary_operator("invert")
+        elif self.dtype.kind == "b":
+            return self.unary_operator("not")
+        else:
+            return super().__invert__()
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         int_float_dtype_mapping = {

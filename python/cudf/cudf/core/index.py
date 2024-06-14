@@ -5,10 +5,10 @@ from __future__ import annotations
 import operator
 import pickle
 import warnings
-from collections.abc import Generator
 from functools import cache, cached_property
 from numbers import Number
 from typing import (
+    TYPE_CHECKING,
     Any,
     List,
     Literal,
@@ -70,6 +70,9 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import _warn_no_dask_cudf, search_range
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 class IndexMeta(type):
@@ -893,7 +896,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @_cudf_nvtx_annotate
-    def nunique(self) -> int:
+    def nunique(self, dropna: bool = True) -> int:
         return len(self)
 
     @_cudf_nvtx_annotate

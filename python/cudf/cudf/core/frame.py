@@ -5,10 +5,10 @@ from __future__ import annotations
 import copy
 import operator
 import pickle
-import types
 import warnings
 from collections import abc
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -30,8 +30,7 @@ from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import Dtype
-from cudf.api.types import is_bool_dtype, is_dtype_equal, is_scalar
+from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
@@ -46,6 +45,11 @@ from cudf.utils import ioutils
 from cudf.utils.dtypes import find_common_type
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+    from cudf._typing import Dtype
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
@@ -131,12 +135,19 @@ class Frame(BinaryOperand, Scannable):
     @classmethod
     @_cudf_nvtx_annotate
     def _from_data(cls, data: MutableMapping) -> Self:
+        """
+        Construct cls from a ColumnAccessor-like mapping.
+        """
         obj = cls.__new__(cls)
         Frame.__init__(obj, data)
         return obj
 
     @_cudf_nvtx_annotate
     def _from_data_like_self(self, data: MutableMapping) -> Self:
+        """
+        Return type(self) from a ColumnAccessor-like mapping but
+        with the external properties, e.g. .index, .name, of self.
+        """
         return self._from_data(data)
 
     @_cudf_nvtx_annotate
@@ -348,12 +359,13 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def _get_columns_by_label(self, labels, *, downcast=False) -> Self:
+    def _get_columns_by_label(self, labels) -> Self:
         """
-        Returns columns of the Frame specified by `labels`
+        Returns columns of the Frame specified by `labels`.
 
+        Akin to cudf.DataFrame(...).loc[:, labels]
         """
-        return self.__class__._from_data(self._data.select_by_label(labels))
+        return self._from_data_like_self(self._data.select_by_label(labels))
 
     @property
     @_cudf_nvtx_annotate
@@ -407,7 +419,7 @@ class Frame(BinaryOperand, Scannable):
     def _to_array(
         self,
         get_array: Callable,
-        module: types.ModuleType,
+        module: ModuleType,
         copy: bool,
         dtype: Union[Dtype, None] = None,
         na_value=None,
@@ -1416,14 +1428,10 @@ class Frame(BinaryOperand, Scannable):
         Get the indices required to sort self according to the columns
         specified in by.
         """
-
-        to_sort = [
-            *(
-                self
-                if by is None
-                else self._get_columns_by_label(list(by), downcast=False)
-            )._columns
-        ]
+        if by is None:
+            to_sort = self._columns
+        else:
+            to_sort = self._get_columns_by_label(list(by))._columns
 
         if is_scalar(ascending):
             ascending_lst = [ascending] * len(to_sort)
@@ -1431,55 +1439,10 @@ class Frame(BinaryOperand, Scannable):
             ascending_lst = list(ascending)
 
         return libcudf.sort.order_by(
-            to_sort,
+            list(to_sort),
             ascending_lst,
             na_position,
             stable=True,
-        )
-
-    @_cudf_nvtx_annotate
-    def _is_sorted(self, ascending=None, null_position=None):
-        """
-        Returns a boolean indicating whether the data of the Frame are sorted
-        based on the parameters given. Does not account for the index.
-
-        Parameters
-        ----------
-        self : Frame
-            Frame whose columns are to be checked for sort order
-        ascending : None or list-like of booleans
-            None or list-like of boolean values indicating expected sort order
-            of each column. If list-like, size of list-like must be
-            len(columns). If None, all columns expected sort order is set to
-            ascending. False (0) - ascending, True (1) - descending.
-        null_position : None or list-like of booleans
-            None or list-like of boolean values indicating desired order of
-            nulls compared to other elements. If list-like, size of list-like
-            must be len(columns). If None, null order is set to before. False
-            (0) - before, True (1) - after.
-
-        Returns
-        -------
-        returns : boolean
-            Returns True, if sorted as expected by ``ascending`` and
-            ``null_position``, False otherwise.
-        """
-        if ascending is not None and not cudf.api.types.is_list_like(
-            ascending
-        ):
-            raise TypeError(
-                f"Expected a list-like or None for `ascending`, got "
-                f"{type(ascending)}"
-            )
-        if null_position is not None and not cudf.api.types.is_list_like(
-            null_position
-        ):
-            raise TypeError(
-                f"Expected a list-like or None for `null_position`, got "
-                f"{type(null_position)}"
-            )
-        return libcudf.sort.is_sorted(
-            [*self._columns], ascending=ascending, null_position=null_position
         )
 
     @_cudf_nvtx_annotate
@@ -1902,7 +1865,7 @@ class Frame(BinaryOperand, Scannable):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
         return self._from_data_like_self(
             self._data._from_columns_like_self(
-                (_apply_inverse_column(col) for col in self._data.columns)
+                (~col for col in self._data.columns)
             )
         )
 
@@ -1922,10 +1885,9 @@ class Frame(BinaryOperand, Scannable):
         dict
             Name and unique value counts of each column in frame.
         """
-        return {
-            name: col.distinct_count(dropna=dropna)
-            for name, col in self._data.items()
-        }
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement nunique"
+        )
 
     @staticmethod
     @_cudf_nvtx_annotate
@@ -1952,15 +1914,3 @@ class Frame(BinaryOperand, Scannable):
             str(dict(self._dtypes)),
             normalize_token(self.to_pandas()),
         ]
-
-
-def _apply_inverse_column(col: ColumnBase) -> ColumnBase:
-    """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
-    if np.issubdtype(col.dtype, np.integer):
-        return col.unary_operator("invert")
-    elif is_bool_dtype(col.dtype):
-        return col.unary_operator("not")
-    else:
-        raise TypeError(
-            f"Operation `~` not supported on {col.dtype.type.__name__}"
-        )

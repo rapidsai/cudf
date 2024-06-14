@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import pickle
 import warnings
-from collections.abc import Generator
 from functools import cached_property
-from typing import Any, Literal, Set, Tuple
+from typing import TYPE_CHECKING, Any, Literal, Set, Tuple
 
 import pandas as pd
 from typing_extensions import Self
@@ -31,11 +30,15 @@ from cudf.api.types import (
 )
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
-from cudf.core.column_accessor import ColumnAccessor
 from cudf.errors import MixedTypeError
 from cudf.utils import ioutils
 from cudf.utils.dtypes import can_convert_to_column, is_mixed_with_object_dtype
 from cudf.utils.utils import _is_same_name
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+    from cudf.core.column_accessor import ColumnAccessor
 
 
 class BaseIndex(Serializable):

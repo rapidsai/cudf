@@ -22,6 +22,7 @@
 
 #include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -536,7 +537,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
     _file_itm_data.selected_stripes.begin() + stripe_start,
     _file_itm_data.selected_stripes.begin() + stripe_start + stripe_count,
     std::size_t{0},
-    [](std::size_t count, const auto& stripe) { return count + stripe.stripe_info->numberOfRows; });
+    [](std::size_t count, auto const& stripe) { return count + stripe.stripe_info->numberOfRows; });
 
   // Decoding range needs to be reset to start from the first position in `decode_stripe_ranges`.
   _chunk_read_data.curr_decode_stripe_range = 0;

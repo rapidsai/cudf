@@ -30,7 +30,7 @@ def sort_order(
 
     Returns
     -------
-    tuple of column_order and null_precendence
+    tuple of column_order and null_precedence
     suitable for passing to sort routines
     """
     # Mimicking polars broadcast handling of descending

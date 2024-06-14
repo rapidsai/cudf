@@ -32,7 +32,7 @@ class DataFrame:
     """A representation of a dataframe."""
 
     columns: list[NamedColumn]
-    table: plc.Table | None
+    table: plc.Table
 
     def __init__(self, columns: Sequence[NamedColumn]) -> None:
         self.columns = list(columns)
@@ -41,7 +41,7 @@ class DataFrame:
 
     def copy(self) -> Self:
         """Return a shallow copy of self."""
-        return type(self)(self.columns)
+        return type(self)([c.copy() for c in self.columns])
 
     def to_polars(self) -> pl.DataFrame:
         """Convert to a polars DataFrame."""
@@ -70,9 +70,7 @@ class DataFrame:
     @cached_property
     def num_rows(self) -> int:
         """Number of rows."""
-        if self.table is None:
-            raise ValueError("Number of rows of frame with scalars makes no sense")
-        return self.table.num_rows()
+        return 0 if len(self.columns) == 0 else self.table.num_rows()
 
     @classmethod
     def from_cudf(cls, df: cudf.DataFrame) -> Self:
@@ -98,7 +96,7 @@ class DataFrame:
 
         Returns
         -------
-        New dataframe sharing  data with the input table.
+        New dataframe sharing data with the input table.
 
         Raises
         ------
@@ -207,15 +205,18 @@ class DataFrame:
 
         Returns
         -------
-        New dataframe (if zlice is not None) other self (if it is)
+        New dataframe (if zlice is not None) otherwise self (if it is)
         """
         if zlice is None:
             return self
         start, length = zlice
         if start < 0:
             start += self.num_rows
-        # Polars slice takes an arbitrary positive integer and slice
-        # to the end of the frame if it is larger.
-        end = min(start + length, self.num_rows)
+        # Polars implementation wraps negative start by num_rows, then
+        # adds length to start to get the end, then clamps both to
+        # [0, num_rows)
+        end = start + length
+        start = max(min(start, self.num_rows), 0)
+        end = max(min(end, self.num_rows), 0)
         (table,) = plc.copying.slice(self.table, [start, end])
         return type(self).from_table(table, self.column_names).sorted_like(self)
