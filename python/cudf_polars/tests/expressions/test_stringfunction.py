@@ -12,14 +12,29 @@ from cudf_polars import execute_with_cudf, translate_ir
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-def test_supported_stringfunction_expression():
-    ldf = pl.LazyFrame(
-        {
-            "a": ["a", "b", "cdefg", "h", "Wıth ünιcοde"],  # noqa: RUF001
-            "b": [0, 3, 1, -1, None],
-        }
-    )
+@pytest.fixture
+def ldf(with_nulls):
+    a = [
+        "AbC",
+        "de",
+        "FGHI",
+        "j",
+        "kLm",
+        "nOPq",
+        "",
+        "RsT",
+        "sada",
+        "uVw",
+        "h",
+        "Wıth ünιcοde",  # noqa: RUF001
+    ]
+    if with_nulls:
+        a[4] = None
+        a[-3] = None
+    return pl.LazyFrame({"a": a, "b": range(len(a))})
 
+
+def test_supported_stringfunction_expression(ldf):
     query = ldf.select(
         pl.col("a").str.starts_with("Z"),
         pl.col("a").str.ends_with("h").alias("endswith_h"),
@@ -29,43 +44,25 @@ def test_supported_stringfunction_expression():
     assert_gpu_result_equal(query)
 
 
-def test_unsupported_stringfunction():
-    ldf = pl.LazyFrame(
-        {
-            "a": ["a", "b", "cdefg", "h", "Wıth ünιcοde"],  # noqa: RUF001
-            "b": [0, 3, 1, -1, None],
-        }
-    )
-
+def test_unsupported_stringfunction(ldf):
     q = ldf.select(pl.col("a").str.count_matches("e", literal=True))
 
     with pytest.raises(NotImplementedError):
         _ = translate_ir(q._ldf.visit())
 
 
-def test_contains_re_non_strict_raises():
-    df = pl.LazyFrame({"a": ["a"]})
-
-    q = df.select(pl.col("a").str.contains(".", strict=False))
+def test_contains_re_non_strict_raises(ldf):
+    q = ldf.select(pl.col("a").str.contains(".", strict=False))
 
     with pytest.raises(NotImplementedError):
         _ = translate_ir(q._ldf.visit())
 
 
-def test_contains_re_non_literal_raises():
-    df = pl.LazyFrame({"a": ["a", "b"], "b": [".", "e"]})
-
-    q = df.select(pl.col("a").str.contains(pl.col("b"), literal=False))
+def test_contains_re_non_literal_raises(ldf):
+    q = ldf.select(pl.col("a").str.contains(pl.col("b"), literal=False))
 
     with pytest.raises(NotImplementedError):
         _ = translate_ir(q._ldf.visit())
-
-
-@pytest.fixture
-def ldf():
-    return pl.DataFrame(
-        {"a": ["AbC", "de", "FGHI", "j", "kLm", "nOPq", None, "RsT", None, "uVw"]}
-    ).lazy()
 
 
 @pytest.mark.parametrize(
@@ -100,9 +97,8 @@ def test_contains_column(ldf):
     assert_gpu_result_equal(query)
 
 
-@pytest.mark.parametrize("pat", ["["])
-def test_contains_invalid(ldf, pat):
-    query = ldf.select(pl.col("a").str.contains(pat))
+def test_contains_invalid(ldf):
+    query = ldf.select(pl.col("a").str.contains("["))
 
     with pytest.raises(pl.exceptions.ComputeError):
         query.collect()
