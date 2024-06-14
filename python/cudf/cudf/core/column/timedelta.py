@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 import functools
-from typing import Optional, Sequence, cast
+from typing import TYPE_CHECKING, Optional, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -12,12 +12,14 @@ import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
 from cudf.api.types import is_scalar, is_timedelta64_dtype
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
 from cudf.utils.utils import _all_bools_with_nulls
+
+if TYPE_CHECKING:
+    from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
 
 _unit_to_nanoseconds_conversion = {
     "ns": 1,

@@ -15,11 +15,9 @@ from typing import (
     overload,
 )
 
-import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba import cuda
 
 import cudf
 import cudf.api.types
@@ -28,7 +26,6 @@ from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import is_integer, is_scalar, is_string_dtype
-from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
@@ -44,6 +41,9 @@ def str_to_boolean(column: StringColumn):
 
 
 if TYPE_CHECKING:
+    import cupy
+    import numba.cuda
+
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
@@ -51,6 +51,7 @@ if TYPE_CHECKING:
         ScalarLike,
         SeriesOrIndex,
     )
+    from cudf.core.buffer import Buffer
 
 
 _str_to_numeric_typecast_functions = {
@@ -5596,7 +5597,7 @@ class StringColumn(column.ColumnBase):
 
     def data_array_view(
         self, *, mode="write"
-    ) -> cuda.devicearray.DeviceNDArray:
+    ) -> numba.cuda.devicearray.DeviceNDArray:
         raise ValueError("Cannot get an array view of a StringColumn")
 
     @property

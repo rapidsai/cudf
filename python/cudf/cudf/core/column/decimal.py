@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import Sequence, Union, cast
+from typing import TYPE_CHECKING, Sequence, Union, cast
 
 import cupy as cp
 import numpy as np
@@ -15,7 +15,6 @@ from cudf import _lib as libcudf
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
-from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import is_integer_dtype, is_scalar
 from cudf.core.buffer import as_buffer
 from cudf.core.column import ColumnBase
@@ -29,6 +28,9 @@ from cudf.core.mixins import BinaryOperand
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 from .numerical_base import NumericalBaseColumn
+
+if TYPE_CHECKING:
+    from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 
 
 class DecimalBaseColumn(NumericalBaseColumn):
