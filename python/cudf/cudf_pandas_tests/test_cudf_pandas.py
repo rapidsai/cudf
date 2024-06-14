@@ -1478,8 +1478,8 @@ def mock_mean_type_error(self, *args, **kwargs):
             CudfPandasResultsDifferentWarning,
             "The results from cudf and pandas were different.",
             "CUDF_PANDAS_DEBUGGING",
-            cudf.Series.mean,
-            "_fsproxy_fast",
+            pd.Series.mean,
+            "_fsproxy_slow",
         ),
         (
             mock_mean_exception,
@@ -1553,11 +1553,7 @@ def test_cudf_pandas_debugging(
         monkeycontext.setenv(env_var, "True")
         s = xpd.Series([1, 2])
         with pytest.warns(warning, match=match_str):
-            assert (
-                s.mean() == 1.0
-                if warning == CudfPandasResultsDifferentWarning
-                else 1.5
-            )
+            assert s.mean() == 1.5
 
     # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
     monkeypatch.setattr(xpd.Series.mean, proxy_attr, original_mean)
