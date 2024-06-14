@@ -6,7 +6,7 @@ This page provides API documentation for pylibcudf.
 
 .. toctree::
     :maxdepth: 1
-    :caption: API Documentation
+    :caption: Top-level modules
 
     aggregation
     binaryop
@@ -14,12 +14,15 @@ This page provides API documentation for pylibcudf.
     column_factories
     concatenate
     copying
+    datetime
     filling
     gpumemoryview
     groupby
+    io/index.rst
     join
     lists
     merge
+    quantiles
     reduce
     reshape
     rolling
@@ -32,3 +35,9 @@ This page provides API documentation for pylibcudf.
     table
     types
     unary
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Subpackages
+
+    strings/index.rst

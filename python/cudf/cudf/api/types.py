@@ -8,7 +8,7 @@ import warnings
 from collections import abc
 from functools import wraps
 from inspect import isclass
-from typing import List, Union
+from typing import List, Union, cast
 
 import cupy as cp
 import numpy as np
@@ -238,7 +238,10 @@ def _union_categoricals(
         raise TypeError("ignore_order is not yet implemented")
 
     result_col = cudf.core.column.CategoricalColumn._concat(
-        [obj._column for obj in to_union]
+        [
+            cast(cudf.core.column.CategoricalColumn, obj._column)
+            for obj in to_union
+        ]
     )
     if sort_categories:
         sorted_categories = result_col.categories.sort_values(ascending=True)

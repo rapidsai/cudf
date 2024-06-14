@@ -15,11 +15,13 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -219,6 +221,28 @@ std::unique_ptr<column> rescale(column_view input,
   }
 };
 
+/**
+ * @brief Check if a floating point value is convertible to fixed point type.
+ *
+ * A floating point value is convertible if it is not null, not `NaN`, and not `inf`.
+ *
+ * Note that convertible input values may be out of the representable range of the target fixed
+ * point type. Values out of the representable range need to be checked separately.
+ */
+template <typename FloatType>
+struct is_convertible_floating_point {
+  column_device_view d_input;
+
+  bool __device__ operator()(size_type idx) const
+  {
+    static_assert(std::is_floating_point_v<FloatType>);
+
+    if (d_input.is_null(idx)) { return false; }
+    auto const value = d_input.element<FloatType>(idx);
+    return std::isfinite(value);
+  }
+};
+
 template <typename _SourceT>
 struct dispatch_unary_cast_to {
   column_view input;
@@ -294,8 +318,8 @@ struct dispatch_unary_cast_to {
       std::make_unique<column>(type,
                                size,
                                rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                               detail::copy_bitmask(input, stream, mr),
-                               input.null_count());
+                               rmm::device_buffer{},
+                               0);
 
     mutable_column_view output_mutable = *output;
 
@@ -307,6 +331,21 @@ struct dispatch_unary_cast_to {
                       input.end<SourceT>(),
                       output_mutable.begin<DeviceT>(),
                       fixed_point_unary_cast<SourceT, TargetT>{scale});
+
+    if constexpr (cudf::is_floating_point<SourceT>()) {
+      // For floating-point values, beside input nulls, we also need to set nulls for the output
+      // rows corresponding to NaN and inf in the input.
+      auto const d_input_ptr = column_device_view::create(input, stream);
+      auto [null_mask, null_count] =
+        cudf::detail::valid_if(thrust::make_counting_iterator(0),
+                               thrust::make_counting_iterator(size),
+                               is_convertible_floating_point<SourceT>{*d_input_ptr},
+                               stream,
+                               mr);
+      if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
+    } else {
+      output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
+    }
 
     return output;
   }

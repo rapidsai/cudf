@@ -19,6 +19,7 @@ set(cython_sources
     column_factories.pyx
     concatenate.pyx
     copying.pyx
+    datetime.pyx
     filling.pyx
     gpumemoryview.pyx
     groupby.pyx
@@ -26,6 +27,7 @@ set(cython_sources
     join.pyx
     lists.pyx
     merge.pyx
+    quantiles.pyx
     reduce.pyx
     replace.pyx
     reshape.pyx
@@ -50,3 +52,4 @@ link_to_pyarrow_headers(pylibcudf_interop)
 
 add_subdirectory(libcudf)
 add_subdirectory(strings)
+add_subdirectory(io)

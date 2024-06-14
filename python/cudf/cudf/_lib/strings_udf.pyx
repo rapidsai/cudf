@@ -22,9 +22,14 @@ from cudf._lib.pylibcudf.libcudf.column.column cimport column, column_view
 from cudf._lib.pylibcudf.libcudf.strings_udf cimport (
     column_from_udf_string_array as cpp_column_from_udf_string_array,
     free_udf_string_array as cpp_free_udf_string_array,
+    get_cuda_build_version as cpp_get_cuda_build_version,
     to_string_view_array as cpp_to_string_view_array,
     udf_string,
 )
+
+
+def get_cuda_build_version():
+    return cpp_get_cuda_build_version()
 
 
 def column_to_string_view_array(Column strings_col):

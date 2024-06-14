@@ -147,10 +147,9 @@ def read_json(
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
         specified_dtypes = {} if dtype is True else dtype
-        df_dtypes = df._dtypes
         unspecified_dtypes = {
-            name: df_dtypes[name]
-            for name in df._column_names
+            name: dtype
+            for name, dtype in df._dtypes
             if name not in specified_dtypes
         }
         default_dtypes = {}
