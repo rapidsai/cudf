@@ -16,6 +16,8 @@
 
 #include "join_common.hpp"
 
+auto const CONDITIONAL_JOIN_SIZE_RANGE = std::vector<nvbench::int64_t>{100'000, 10'000'000};
+
 template <typename Key, bool Nullable>
 void nvbench_conditional_inner_join(nvbench::state& state,
                                     nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
@@ -46,12 +48,12 @@ NVBENCH_BENCH_TYPES(nvbench_conditional_inner_join,
                     NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
   .set_name("conditional_inner_join")
   .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("left_size", CONDITIONAL_JOIN_SIZE_RANGE)
+  .add_int64_axis("right_size", CONDITIONAL_JOIN_SIZE_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_conditional_left_join,
                     NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
   .set_name("conditional_left_join")
   .set_type_axes_names({"Key", "Nullable"})
-  .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("left_size", CONDITIONAL_JOIN_SIZE_RANGE)
+  .add_int64_axis("right_size", CONDITIONAL_JOIN_SIZE_RANGE);
