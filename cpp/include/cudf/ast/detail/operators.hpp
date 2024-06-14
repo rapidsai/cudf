@@ -820,7 +820,7 @@ struct operator_functor<ast_operator::NOT, false> {
 template <typename To>
 struct cast {
   static constexpr auto arity{1};
-  template <typename From, typename cuda::std::enable_if_t<is_fixed_point<From>()>* = nullptr>
+  template <typename From, typename std::enable_if_t<is_fixed_point<From>()>* = nullptr>
   __device__ inline auto operator()(From f) -> To
   {
     if constexpr (cuda::std::is_floating_point_v<To>) {
