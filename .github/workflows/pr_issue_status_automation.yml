@@ -21,7 +21,7 @@ on:
     # Only runs if the PR is open (we don't want to update the status of a closed PR)
     types: [opened, edited, synchronize]
 
-jobs:
+jobs:    
     get-project-id:
       uses: rapidsai/shared-workflows/.github/workflows/project-get-item-id.yaml@branch-24.08
       if: github.event.pull_request.state == 'open'
@@ -35,7 +35,7 @@ jobs:
     update-status:
       # This job sets the PR and its linked issues to "In Progress" status
       uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@branch-24.08
-      if: github.event.pull_request.state == 'open'
+      if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
       needs: get-project-id
       with:
         PROJECT_ID: "PVT_kwDOAp2shc4AiNzl"
@@ -51,7 +51,7 @@ jobs:
     update-sprint:
       # This job sets the PR and its linked issues to the current "Weekly Sprint"
       uses: rapidsai/shared-workflows/.github/workflows/project-get-set-iteration-field.yaml@branch-24.08
-      if: github.event.pull_request.state == 'open'
+      if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
       needs: get-project-id
       with:
         PROJECT_ID: "PVT_kwDOAp2shc4AiNzl"
