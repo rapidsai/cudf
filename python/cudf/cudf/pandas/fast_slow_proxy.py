@@ -226,8 +226,6 @@ def make_final_proxy_type(
             lambda cls, args, kwargs: setattr(
                 self, "_fsproxy_wrapped", cls(*args, **kwargs)
             ),
-            _env_get_bool("CUDF_PANDAS_DEBUGGING", False),
-            _env_get_bool("CUDF_PANDAS_FALLBACK_DEBUGGING", False),
             type(self),
             args,
             kwargs,
@@ -760,8 +758,6 @@ class _CallableProxyMixin:
             # TODO: When Python 3.11 is the minimum supported Python version
             # this can use operator.call
             call_operator,
-            _env_get_bool("CUDF_PANDAS_DEBUGGING", False),
-            _env_get_bool("CUDF_PANDAS_FALLBACK_DEBUGGING", False),
             self,
             args,
             kwargs,
