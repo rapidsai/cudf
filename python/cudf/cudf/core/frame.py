@@ -136,12 +136,19 @@ class Frame(BinaryOperand, Scannable):
     @classmethod
     @_cudf_nvtx_annotate
     def _from_data(cls, data: MutableMapping) -> Self:
+        """
+        Construct cls from a ColumnAccessor-like mapping.
+        """
         obj = cls.__new__(cls)
         Frame.__init__(obj, data)
         return obj
 
     @_cudf_nvtx_annotate
     def _from_data_like_self(self, data: MutableMapping) -> Self:
+        """
+        Return type(self) from a ColumnAccessor-like mapping but
+        with the external properties, e.g. .index, .name, of self.
+        """
         return self._from_data(data)
 
     @_cudf_nvtx_annotate
@@ -355,12 +362,13 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def _get_columns_by_label(self, labels, *, downcast=False) -> Self:
+    def _get_columns_by_label(self, labels) -> Self:
         """
-        Returns columns of the Frame specified by `labels`
+        Returns columns of the Frame specified by `labels`.
 
+        Akin to cudf.DataFrame(...).loc[:, labels]
         """
-        return self.__class__._from_data(self._data.select_by_label(labels))
+        return self._from_data_like_self(self._data.select_by_label(labels))
 
     @property
     @_cudf_nvtx_annotate
@@ -1438,14 +1446,10 @@ class Frame(BinaryOperand, Scannable):
         Get the indices required to sort self according to the columns
         specified in by.
         """
-
-        to_sort = [
-            *(
-                self
-                if by is None
-                else self._get_columns_by_label(list(by), downcast=False)
-            )._columns
-        ]
+        if by is None:
+            to_sort = self._columns
+        else:
+            to_sort = self._get_columns_by_label(list(by))._columns
 
         if is_scalar(ascending):
             ascending_lst = [ascending] * len(to_sort)
@@ -1453,7 +1457,7 @@ class Frame(BinaryOperand, Scannable):
             ascending_lst = list(ascending)
 
         return libcudf.sort.order_by(
-            to_sort,
+            list(to_sort),
             ascending_lst,
             na_position,
             stable=True,

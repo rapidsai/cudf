@@ -686,6 +686,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return out
 
     @_cudf_nvtx_annotate
+    def _from_data_like_self(self, data: MutableMapping):
+        out = super()._from_data_like_self(data)
+        out.name = self.name
+        return out
+
+    @_cudf_nvtx_annotate
     def __contains__(self, item):
         return item in self.index
 
@@ -858,20 +864,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         obj.index = index
 
         return obj
-
-    def _get_columns_by_label(self, labels, *, downcast=False) -> Self:
-        """Return the column specified by `labels`
-
-        For cudf.Series, either the column, or an empty series is returned.
-        Parameter `downcast` does not have effects.
-        """
-        ca = self._data.select_by_label(labels)
-
-        return (
-            self.__class__._from_data(data=ca, index=self.index)
-            if len(ca) > 0
-            else self.__class__(dtype=self.dtype, name=self.name)
-        )
 
     @_cudf_nvtx_annotate
     def drop(

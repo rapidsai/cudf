@@ -1348,7 +1348,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         8  8  8  8
         """
         if _is_scalar_or_zero_d_array(arg) or isinstance(arg, tuple):
-            return self._get_columns_by_label(arg, downcast=True)
+            out = self._get_columns_by_label(arg)
+            if is_scalar(arg):
+                nlevels = 1
+            elif isinstance(arg, tuple):
+                nlevels = len(arg)
+            if self._data.multiindex is False or nlevels == self._data.nlevels:
+                out = self._constructor_sliced._from_data(out._data)
+                out.index = self.index
+                out.name = arg
+            return out
 
         elif isinstance(arg, slice):
             return self._slice(arg)
@@ -1992,31 +2001,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_cudf_nvtx_annotate
     def _repr_latex_(self):
         return self._get_renderable_dataframe().to_pandas()._repr_latex_()
-
-    @_cudf_nvtx_annotate
-    def _get_columns_by_label(
-        self, labels, *, downcast=False
-    ) -> Self | Series:
-        """
-        Return columns of dataframe by `labels`
-
-        If downcast is True, try and downcast from a DataFrame to a Series
-        """
-        ca = self._data.select_by_label(labels)
-        if downcast:
-            if is_scalar(labels):
-                nlevels = 1
-            elif isinstance(labels, tuple):
-                nlevels = len(labels)
-            if self._data.multiindex is False or nlevels == self._data.nlevels:
-                out = self._constructor_sliced._from_data(
-                    ca, index=self.index, name=labels
-                )
-                return out
-        out = self.__class__._from_data(
-            ca, index=self.index, columns=ca.to_pandas_index()
-        )
-        return out
 
     def _make_operands_and_index_for_binop(
         self,
