@@ -111,9 +111,9 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta)
   CUDF_FAIL("Unexpected compound type");
 }
 
-[[nodiscard]] bool is_col_nullable(cudf::detail::LinkedColPtr const& column,
-                                   column_in_metadata const& column_metadata,
-                                   single_write_mode write_mode)
+[[nodiscard]] bool is_output_column_nullable(cudf::detail::LinkedColPtr const& column,
+                                             column_in_metadata const& column_metadata,
+                                             single_write_mode write_mode)
 {
   if (column_metadata.is_nullability_defined()) {
     CUDF_EXPECTS(column_metadata.nullable() or column->null_count() == 0,

@@ -595,7 +595,7 @@ std::vector<schema_tree_node> construct_parquet_schema_tree(
 
   std::function<void(cudf::detail::LinkedColPtr const&, column_in_metadata&, size_t)> add_schema =
     [&](cudf::detail::LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
-      bool const col_nullable = is_col_nullable(col, col_meta, write_mode);
+      bool const col_nullable = is_output_column_nullable(col, col_meta, write_mode);
 
       auto set_field_id = [&schema, parent_idx](schema_tree_node& s,
                                                 column_in_metadata const& col_meta) {
@@ -820,7 +820,7 @@ std::vector<schema_tree_node> construct_parquet_schema_tree(
         right_child_meta.set_name("value");
         // check the repetition type of key is required i.e. the col should be non-nullable
         auto key_col = col->children[lists_column_view::child_column_index]->children[0];
-        CUDF_EXPECTS(!is_col_nullable(key_col, left_child_meta, write_mode),
+        CUDF_EXPECTS(!is_output_column_nullable(key_col, left_child_meta, write_mode),
                      "key column cannot be nullable. For chunked writing, explicitly set the "
                      "nullability to false in metadata");
         // process key

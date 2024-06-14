@@ -321,12 +321,12 @@ FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
   // push to field offsets vector
   return flatbuf::CreateField(
     fbb,
-    fbb.CreateString(column_metadata.get_name()),          // name
-    is_col_nullable(column, column_metadata, write_mode),  // nullable
-    field_type_id,                                         // type id
-    field_offset,                                          // field offset
-    {0},                                                   // DictionaryOffset
-    fbb.CreateVector(children.data(), children.size()));   // children vector
+    fbb.CreateString(column_metadata.get_name()),                    // name
+    is_output_column_nullable(column, column_metadata, write_mode),  // nullable
+    field_type_id,                                                   // type id
+    field_offset,                                                    // field offset
+    {0},                                                             // DictionaryOffset
+    fbb.CreateVector(children.data(), children.size()));             // children vector
 }
 
 }  // namespace

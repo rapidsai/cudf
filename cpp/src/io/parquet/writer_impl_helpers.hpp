@@ -88,9 +88,9 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta);
  *
  * @return Whether the column is nullable.
  */
-[[nodiscard]] bool is_col_nullable(cudf::detail::LinkedColPtr const& column,
-                                   column_in_metadata const& column_metadata,
-                                   ::cudf::io::detail::single_write_mode write_mode);
+[[nodiscard]] bool is_output_column_nullable(cudf::detail::LinkedColPtr const& column,
+                                             column_in_metadata const& column_metadata,
+                                             ::cudf::io::detail::single_write_mode write_mode);
 /**
  * @brief Returns ``true`` if the given column has a fixed size.
  *
