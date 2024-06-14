@@ -33,6 +33,10 @@
 
 namespace cudf::io::parquet::detail {
 
+using namespace cudf::io::detail;
+
+namespace {
+
 // Copied over from arrow source for better code readability
 namespace flatbuf       = cudf::io::parquet::flatbuf;
 using FlatBufferBuilder = flatbuffers::FlatBufferBuilder;
@@ -68,97 +72,97 @@ struct dispatch_to_flatbuf {
   single_write_mode const write_mode;
   bool const utc_timestamps;
   Offset& field_offset;
-  flatbuf::Type& type_type;
+  flatbuf::Type& field_type_id;
   std::vector<FieldOffset>& children;
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, bool>, void> operator()()
   {
-    type_type    = flatbuf::Type_Bool;
-    field_offset = flatbuf::CreateBool(fbb).Union();
+    field_type_id = flatbuf::Type_Bool;
+    field_offset  = flatbuf::CreateBool(fbb).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, int8_t>, void> operator()()
   {
-    type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 8, std::numeric_limits<T>::is_signed).Union();
+    field_type_id = flatbuf::Type_Int;
+    field_offset  = flatbuf::CreateInt(fbb, 8, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, int16_t>, void> operator()()
   {
-    type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 16, std::numeric_limits<T>::is_signed).Union();
+    field_type_id = flatbuf::Type_Int;
+    field_offset  = flatbuf::CreateInt(fbb, 16, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, int32_t>, void> operator()()
   {
-    type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 32, std::numeric_limits<T>::is_signed).Union();
+    field_type_id = flatbuf::Type_Int;
+    field_offset  = flatbuf::CreateInt(fbb, 32, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, int64_t>, void> operator()()
   {
-    type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 64, std::numeric_limits<T>::is_signed).Union();
+    field_type_id = flatbuf::Type_Int;
+    field_offset  = flatbuf::CreateInt(fbb, 64, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, uint8_t>, void> operator()()
   {
-    type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 8, std::numeric_limits<T>::is_signed).Union();
+    field_type_id = flatbuf::Type_Int;
+    field_offset  = flatbuf::CreateInt(fbb, 8, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, uint16_t>, void> operator()()
   {
-    type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 16, std::numeric_limits<T>::is_signed).Union();
+    field_type_id = flatbuf::Type_Int;
+    field_offset  = flatbuf::CreateInt(fbb, 16, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, uint32_t>, void> operator()()
   {
-    type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 32, std::numeric_limits<T>::is_signed).Union();
+    field_type_id = flatbuf::Type_Int;
+    field_offset  = flatbuf::CreateInt(fbb, 32, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, uint64_t>, void> operator()()
   {
-    type_type    = flatbuf::Type_Int;
-    field_offset = flatbuf::CreateInt(fbb, 64, std::numeric_limits<T>::is_signed).Union();
+    field_type_id = flatbuf::Type_Int;
+    field_offset  = flatbuf::CreateInt(fbb, 64, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, float>, void> operator()()
   {
-    type_type    = flatbuf::Type_FloatingPoint;
-    field_offset = flatbuf::CreateFloatingPoint(fbb, flatbuf::Precision::Precision_SINGLE).Union();
+    field_type_id = flatbuf::Type_FloatingPoint;
+    field_offset  = flatbuf::CreateFloatingPoint(fbb, flatbuf::Precision::Precision_SINGLE).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, double>, void> operator()()
   {
-    type_type    = flatbuf::Type_FloatingPoint;
-    field_offset = flatbuf::CreateFloatingPoint(fbb, flatbuf::Precision::Precision_DOUBLE).Union();
+    field_type_id = flatbuf::Type_FloatingPoint;
+    field_offset  = flatbuf::CreateFloatingPoint(fbb, flatbuf::Precision::Precision_DOUBLE).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> operator()()
   {
-    type_type    = flatbuf::Type_Utf8View;
-    field_offset = flatbuf::CreateUtf8View(fbb).Union();
+    field_type_id = flatbuf::Type_Utf8View;
+    field_offset  = flatbuf::CreateUtf8View(fbb).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_D>, void> operator()()
   {
-    type_type = flatbuf::Type_Date;
+    field_type_id = flatbuf::Type_Date;
     // Date type (Set unit type to DAY for arrows's Date32)
     field_offset = flatbuf::CreateDate(fbb, flatbuf::DateUnit_DAY).Union();
   }
@@ -166,7 +170,7 @@ struct dispatch_to_flatbuf {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_s>, void> operator()()
   {
-    type_type = flatbuf::Type_Timestamp;
+    field_type_id = flatbuf::Type_Timestamp;
     // Use one of the strings: "UTC", "Etc/UTC" or "+00:00" to indicate a native UTC timestamp
     field_offset = flatbuf::CreateTimestamp(
                      fbb, flatbuf::TimeUnit_SECOND, (utc_timestamps) ? fbb.CreateString("UTC") : 0)
@@ -176,7 +180,7 @@ struct dispatch_to_flatbuf {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ms>, void> operator()()
   {
-    type_type = flatbuf::Type_Timestamp;
+    field_type_id = flatbuf::Type_Timestamp;
     // Use one of the strings: "UTC", "Etc/UTC" or "+00:00" to indicate a native UTC timestamp
     field_offset =
       flatbuf::CreateTimestamp(
@@ -187,7 +191,7 @@ struct dispatch_to_flatbuf {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_us>, void> operator()()
   {
-    type_type = flatbuf::Type_Timestamp;
+    field_type_id = flatbuf::Type_Timestamp;
     // Use one of the strings: "UTC", "Etc/UTC" or "+00:00" to indicate a native UTC timestamp
     field_offset =
       flatbuf::CreateTimestamp(
@@ -198,7 +202,7 @@ struct dispatch_to_flatbuf {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
   {
-    type_type = flatbuf::Type_Timestamp;
+    field_type_id = flatbuf::Type_Timestamp;
     // Use one of the strings: "UTC", "Etc/UTC" or "+00:00" to indicate a native UTC timestamp
     field_offset =
       flatbuf::CreateTimestamp(
@@ -211,46 +215,46 @@ struct dispatch_to_flatbuf {
   {
     // `duration_D` is written as TimeType as `duration_D` is not a valid arrow type.
     //  This also allows for easy and faithful roundtripping with cudf.
-    type_type    = flatbuf::Type_Time;
-    field_offset = flatbuf::CreateTime(fbb, flatbuf::TimeUnit_MILLISECOND).Union();
+    field_type_id = flatbuf::Type_Time;
+    field_offset  = flatbuf::CreateTime(fbb, flatbuf::TimeUnit_MILLISECOND).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
   {
-    type_type    = flatbuf::Type_Duration;
-    field_offset = flatbuf::CreateDuration(fbb, flatbuf::TimeUnit_SECOND).Union();
+    field_type_id = flatbuf::Type_Duration;
+    field_offset  = flatbuf::CreateDuration(fbb, flatbuf::TimeUnit_SECOND).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
   {
-    type_type    = flatbuf::Type_Duration;
-    field_offset = flatbuf::CreateDuration(fbb, flatbuf::TimeUnit_MILLISECOND).Union();
+    field_type_id = flatbuf::Type_Duration;
+    field_offset  = flatbuf::CreateDuration(fbb, flatbuf::TimeUnit_MILLISECOND).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_us>, void> operator()()
   {
-    type_type    = flatbuf::Type_Duration;
-    field_offset = flatbuf::CreateDuration(fbb, flatbuf::TimeUnit_MICROSECOND).Union();
+    field_type_id = flatbuf::Type_Duration;
+    field_offset  = flatbuf::CreateDuration(fbb, flatbuf::TimeUnit_MICROSECOND).Union();
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ns>, void> operator()()
   {
-    type_type    = flatbuf::Type_Duration;
-    field_offset = flatbuf::CreateDuration(fbb, flatbuf::TimeUnit_NANOSECOND).Union();
+    field_type_id = flatbuf::Type_Duration;
+    field_offset  = flatbuf::CreateDuration(fbb, flatbuf::TimeUnit_NANOSECOND).Union();
   }
 
   template <typename T>
   std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
   {
-    type_type    = flatbuf::Type_Decimal;
-    field_offset = flatbuf::CreateDecimal(fbb,
+    field_type_id = flatbuf::Type_Decimal;
+    field_offset  = flatbuf::CreateDecimal(fbb,
                                           (col_meta.is_decimal_precision_set())
-                                            ? col_meta.get_decimal_precision()
-                                            : MAX_DECIMAL128_PRECISION,
+                                             ? col_meta.get_decimal_precision()
+                                             : MAX_DECIMAL128_PRECISION,
                                           col->type().scale(),
                                           128)
                      .Union();
@@ -266,8 +270,8 @@ struct dispatch_to_flatbuf {
     if constexpr (std::is_same_v<T, cudf::list_view>) {
       children.emplace_back(make_arrow_schema_fields(
         fbb, col->children[1], col_meta.child(1), write_mode, utc_timestamps));
-      type_type    = flatbuf::Type_List;
-      field_offset = flatbuf::CreateList(fbb).Union();
+      field_type_id = flatbuf::Type_List;
+      field_offset  = flatbuf::CreateList(fbb).Union();
     }
 
     // Traverse the struct in DFS manner and process children fields.
@@ -279,8 +283,8 @@ struct dispatch_to_flatbuf {
                        return make_arrow_schema_fields(
                          fbb, col->children[idx], col_meta.child(idx), write_mode, utc_timestamps);
                      });
-      type_type    = flatbuf::Type_Struct_;
-      field_offset = flatbuf::CreateStruct_(fbb).Union();
+      field_type_id = flatbuf::Type_Struct_;
+      field_offset  = flatbuf::CreateStruct_(fbb).Union();
     }
   }
 
@@ -300,25 +304,32 @@ FieldOffset make_arrow_schema_fields(FlatBufferBuilder& fbb,
                                      bool const utc_timestamps)
 {
   // Variables to be set by the dispatch_to_flatbuf functor
-  Offset field_offset     = 0;
-  flatbuf::Type type_type = flatbuf::Type_NONE;
+  Offset field_offset         = 0;
+  flatbuf::Type field_type_id = flatbuf::Type_NONE;
   std::vector<FieldOffset> children;
 
-  cudf::type_dispatcher(
-    column->type(),
-    dispatch_to_flatbuf{
-      fbb, column, column_metadata, write_mode, utc_timestamps, field_offset, type_type, children});
+  cudf::type_dispatcher(column->type(),
+                        dispatch_to_flatbuf{fbb,
+                                            column,
+                                            column_metadata,
+                                            write_mode,
+                                            utc_timestamps,
+                                            field_offset,
+                                            field_type_id,
+                                            children});
 
   // push to field offsets vector
   return flatbuf::CreateField(
     fbb,
     fbb.CreateString(column_metadata.get_name()),          // name
     is_col_nullable(column, column_metadata, write_mode),  // nullable
-    type_type,                                             // type id
+    field_type_id,                                         // type id
     field_offset,                                          // field offset
     {0},                                                   // DictionaryOffset
     fbb.CreateVector(children.data(), children.size()));   // children vector
 }
+
+}  // namespace
 
 std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector const& linked_columns,
                                                table_input_metadata const& metadata,

@@ -29,8 +29,6 @@
 
 namespace cudf::io::parquet::detail {
 
-using namespace cudf::io::detail;
-
 /**
  * @brief Construct and return arrow schema from input parquet schema
  *
@@ -47,9 +45,10 @@ using namespace cudf::io::detail;
  *
  * @return The constructed arrow ipc message string
  */
-std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector const& linked_columns,
-                                               table_input_metadata const& metadata,
-                                               single_write_mode const write_mode,
-                                               bool const utc_timestamps);
+std::string construct_arrow_schema_ipc_message(
+  cudf::detail::LinkedColVector const& linked_columns,
+  table_input_metadata const& metadata,
+  ::cudf::io::detail::single_write_mode const write_mode,
+  bool const utc_timestamps);
 
 }  // namespace cudf::io::parquet::detail

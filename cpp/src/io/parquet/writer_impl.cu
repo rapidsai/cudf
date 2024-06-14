@@ -1577,7 +1577,7 @@ rmm::device_uvector<__int128_t> convert_data_to_decimal128(column_view const& co
 
   rmm::device_uvector<__int128_t> d128_buffer(column.size(), stream);
 
-  thrust::for_each(rmm::exec_policy(stream),
+  thrust::for_each(rmm::exec_policy_nosync(stream),
                    thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(column.size()),
                    [in  = column.begin<DecimalType>(),
@@ -2356,8 +2356,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _dict_policy(options.get_dictionary_policy()),
     _max_dictionary_size(options.get_max_dictionary_size()),
     _max_page_fragment_size(options.get_max_page_fragment_size()),
-    _int96_timestamps(options.is_enabled_int96_timestamps() and
-                      not options.is_enabled_write_arrow_schema()),
+    _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
     _write_arrow_schema(options.is_enabled_write_arrow_schema()),
@@ -2368,10 +2367,6 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _out_sink(std::move(sinks)),
     _compression_statistics{options.get_compression_statistics()}
 {
-  if (options.is_enabled_int96_timestamps() and options.is_enabled_write_arrow_schema()) {
-    CUDF_LOG_WARN("INT96 timestamps are deprecated in arrow schema. Disabling INT96 timestamps.");
-  }
-
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
