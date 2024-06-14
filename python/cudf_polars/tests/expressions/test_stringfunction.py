@@ -52,6 +52,15 @@ def test_contains_re_non_strict_raises():
         _ = translate_ir(q._ldf.visit())
 
 
+def test_contains_re_non_literal_raises():
+    df = pl.LazyFrame({"a": ["a", "b"], "b": [".", "e"]})
+
+    q = df.select(pl.col("a").str.contains(pl.col("b"), literal=False))
+
+    with pytest.raises(NotImplementedError):
+        _ = translate_ir(q._ldf.visit())
+
+
 @pytest.fixture
 def ldf():
     return pl.DataFrame(
