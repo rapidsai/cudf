@@ -385,7 +385,7 @@ TEST_F(ContainsTest, BoolScalarWithNullsInLists)
     std::move(null_mask));
 
   // Search space: [ [x], [1,1], [x,1,1,x], [], x, [1,1,x], [x], [1,1,x,1] ]
-  auto search_key_one = create_scalar_search_key<T>(1);
+  auto search_key_one = create_scalar_search_key<T>(true);
   {
     // CONTAINS
     auto result   = cudf::lists::contains(search_space->view(), *search_key_one);

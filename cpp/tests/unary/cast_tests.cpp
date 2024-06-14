@@ -1036,8 +1036,9 @@ TYPED_TEST(FixedPointTests, Decimal32ToDecimalXXWithLargerScaleAndNullMask)
   using fp_wrapperFrom = cudf::test::fixed_point_column_wrapper<RepTypeFrom>;
   using fp_wrapperTo   = cudf::test::fixed_point_column_wrapper<RepTypeTo>;
 
-  auto const vec      = std::vector{1729, 17290, 172900, 1729000};
-  auto const input    = fp_wrapperFrom{vec.cbegin(), vec.cend(), {1, 1, 1, 0}, scale_type{-3}};
+  auto const vec = std::vector{1729, 17290, 172900, 1729000};
+  auto const input =
+    fp_wrapperFrom{vec.cbegin(), vec.cend(), {true, true, true, false}, scale_type{-3}};
   auto const expected = fp_wrapperTo{{1, 17, 172, 1729000}, {1, 1, 1, 0}, scale_type{0}};
   auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(0));
 
@@ -1053,8 +1054,9 @@ TYPED_TEST(FixedPointTests, Decimal64ToDecimalXXWithLargerScaleAndNullMask)
   using fp_wrapperFrom = cudf::test::fixed_point_column_wrapper<RepTypeFrom>;
   using fp_wrapperTo   = cudf::test::fixed_point_column_wrapper<RepTypeTo>;
 
-  auto const vec      = std::vector{1729, 17290, 172900, 1729000};
-  auto const input    = fp_wrapperFrom{vec.cbegin(), vec.cend(), {1, 1, 1, 0}, scale_type{-3}};
+  auto const vec = std::vector{1729, 17290, 172900, 1729000};
+  auto const input =
+    fp_wrapperFrom{vec.cbegin(), vec.cend(), {true, true, true, false}, scale_type{-3}};
   auto const expected = fp_wrapperTo{{1, 17, 172, 1729000}, {1, 1, 1, 0}, scale_type{0}};
   auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(0));
 
@@ -1070,8 +1072,9 @@ TYPED_TEST(FixedPointTests, Decimal128ToDecimalXXWithLargerScaleAndNullMask)
   using fp_wrapperFrom = cudf::test::fixed_point_column_wrapper<RepTypeFrom>;
   using fp_wrapperTo   = cudf::test::fixed_point_column_wrapper<RepTypeTo>;
 
-  auto const vec      = std::vector{1729, 17290, 172900, 1729000};
-  auto const input    = fp_wrapperFrom{vec.cbegin(), vec.cend(), {1, 1, 1, 0}, scale_type{-3}};
+  auto const vec = std::vector{1729, 17290, 172900, 1729000};
+  auto const input =
+    fp_wrapperFrom{vec.cbegin(), vec.cend(), {true, true, true, false}, scale_type{-3}};
   auto const expected = fp_wrapperTo{{1, 17, 172, 1729000}, {1, 1, 1, 0}, scale_type{0}};
   auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(0));
 
