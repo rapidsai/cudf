@@ -291,9 +291,8 @@ struct dispatch_to_flatbuf {
   template <typename T>
   std::enable_if_t<cudf::is_dictionary<T>(), void> operator()()
   {
-    // TODO: Implementing ``dictionary32`` would need ``DictionaryFieldMapper`` and
-    // ``FieldPosition`` classes from arrow source to keep track of dictionary encoding paths.
-    CUDF_FAIL("Dictionary columns are not supported for writing arrow schema");
+    // `dictionary32` columns are not written to parquet by cudf.
+    CUDF_FAIL("Dictionary columns are not supported for writing");
   }
 };
 
