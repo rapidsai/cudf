@@ -125,7 +125,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
 
     cdef cppclass parquet_writer_options_builder_base[BuilderT, OptionsT]:
-        parquet_writer_options_builder() except +
+        parquet_writer_options_builder_base() except +
 
         BuilderT& metadata(
             cudf_io_types.table_input_metadata m
@@ -169,22 +169,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         BuilderT& dictionary_policy(
             cudf_io_types.dictionary_policy val
         ) except +
-        # FIXME: the following two functions actually belong in
-        # parquet_writer_options_builder, but placing them there yields a
-        # "'parquet_writer_options_builder' is not a type identifier" error.
-        # This is probably a bug in cython since a simpler CRTP example that
-        # has methods returning references to a child class seem to work.
-        # Calling these from the chunked options builder will fail at compile
-        # time, so this should be safe.
-        # NOTE: these two are never actually called from libcudf. Instead these
-        # properties are set in the options after calling build(), so perhaps
-        # they can be removed.
-        BuilderT& partitions(
-            vector[cudf_io_types.partition_info] partitions
-        ) except +
-        BuilderT& column_chunks_file_paths(
-            vector[string] column_chunks_file_paths
-        ) except +
         OptionsT build() except +
 
     cdef cppclass parquet_writer_options_builder(
@@ -194,6 +178,12 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_writer_options_builder(
             cudf_io_types.sink_info sink_,
             cudf_table_view.table_view table_
+        ) except +
+        parquet_writer_options_builder& partitions(
+            vector[cudf_io_types.partition_info] partitions
+        ) except +
+        parquet_writer_options_builder& column_chunks_file_paths(
+            vector[string] column_chunks_file_paths
         ) except +
 
     cdef unique_ptr[vector[uint8_t]] write_parquet(
