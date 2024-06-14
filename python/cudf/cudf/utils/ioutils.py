@@ -1943,17 +1943,20 @@ def get_reader_filepath_or_buffer(
                     **(open_file_options or {}),
                 )
             else:
-                path_or_data = [
-                    BytesIO(
-                        _fsspec_data_transfer(
-                            fpath,
-                            fs=fs,
-                            mode=mode,
-                            bytes_per_thread=bytes_per_thread,
-                        )
-                    )
-                    for fpath in paths
-                ]
+                path_or_data = _get_remote_bytes(
+                    paths, fs, bytes_per_thread=bytes_per_thread
+                )
+                # path_or_data = [
+                #     BytesIO(
+                #         _fsspec_data_transfer(
+                #             fpath,
+                #             fs=fs,
+                #             mode=mode,
+                #             bytes_per_thread=bytes_per_thread,
+                #         )
+                #     )
+                #     for fpath in paths
+                # ]
             if len(path_or_data) == 1:
                 path_or_data = path_or_data[0]
 
