@@ -464,6 +464,9 @@ def test_options_mode():
     assert xpd.options.mode.copy_on_write == pd.options.mode.copy_on_write
 
 
+# Codecov and Profiler interfere with each-other,
+# hence we don't want to run code-cov on this test.
+@pytest.mark.no_cover
 def test_profiler():
     pytest.importorskip("cudf")
 

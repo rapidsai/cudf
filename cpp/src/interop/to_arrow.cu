@@ -292,9 +292,9 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
   auto child_arrays      = fetch_child_array(input_view, {{}, {}}, ar_mr, stream);
   if (child_arrays.empty()) {
     // Empty string will have only one value in offset of 4 bytes
-    auto tmp_offset_buffer               = allocate_arrow_buffer(4, ar_mr);
-    auto tmp_data_buffer                 = allocate_arrow_buffer(0, ar_mr);
-    tmp_offset_buffer->mutable_data()[0] = 0;
+    auto tmp_offset_buffer = allocate_arrow_buffer(sizeof(int32_t), ar_mr);
+    auto tmp_data_buffer   = allocate_arrow_buffer(0, ar_mr);
+    memset(tmp_offset_buffer->mutable_data(), 0, sizeof(int32_t));
 
     return std::make_shared<arrow::StringArray>(
       0, std::move(tmp_offset_buffer), std::move(tmp_data_buffer));
