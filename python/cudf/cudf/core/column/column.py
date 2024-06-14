@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import builtins
 import pickle
 from collections import abc
 from functools import cached_property
 from itertools import chain
 from types import SimpleNamespace
 from typing import (
+    TYPE_CHECKING,
     Any,
     Dict,
     List,
@@ -49,7 +49,6 @@ from cudf._lib.stream_compaction import (
 )
 from cudf._lib.transform import bools_to_mask
 from cudf._lib.types import size_type_dtype
-from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_pandas_nullable_extension_dtype,
@@ -89,6 +88,11 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
 )
 from cudf.utils.utils import _array_ufunc, mask_dtype
+
+if TYPE_CHECKING:
+    import builtins
+
+    from cudf._typing import ColumnLike, Dtype, ScalarLike
 
 if PANDAS_GE_210:
     NumpyExtensionArray = pd.arrays.NumpyExtensionArray

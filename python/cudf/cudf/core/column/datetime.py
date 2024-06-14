@@ -19,13 +19,6 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.labeling import label_bins
 from cudf._lib.search import search_sorted
-from cudf._typing import (
-    ColumnBinaryOperand,
-    DatetimeLikeScalar,
-    Dtype,
-    DtypeObj,
-    ScalarLike,
-)
 from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals.timezones import (
@@ -33,13 +26,20 @@ from cudf.core._internals.timezones import (
     get_compatible_timezone,
     get_tz_data,
 )
-from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
 from cudf.utils.utils import _all_bools_with_nulls
 
 if TYPE_CHECKING:
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        DatetimeLikeScalar,
+        Dtype,
+        DtypeObj,
+        ScalarLike,
+    )
+    from cudf.core.buffer import Buffer
     from cudf.core.column.numerical import NumericalColumn
 
 if PANDAS_GE_220:
