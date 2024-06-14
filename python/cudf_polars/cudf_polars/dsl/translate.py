@@ -11,7 +11,7 @@ from typing import Any
 
 import pyarrow as pa
 
-from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
+from polars.polars import PySeries, _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 import cudf._lib.pylibcudf as plc
 
@@ -376,7 +376,13 @@ def _(node: pl_expr.Window, visitor: NodeTraverser, dtype: plc.DataType) -> expr
 
 @_translate_expr.register
 def _(node: pl_expr.Literal, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
-    value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
+    if isinstance(node.value, PySeries):
+        value = node.value.to_arrow()
+        # TODO: casting from large string to string is not ideal
+        if value.type == pa.large_string():
+            value = value.cast(pa.string())
+    else:
+        value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
     return expr.Literal(dtype, value)
 
 

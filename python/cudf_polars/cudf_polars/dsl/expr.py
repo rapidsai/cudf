@@ -348,7 +348,7 @@ class NamedExpr:
 class Literal(Expr):
     __slots__ = ("value",)
     _non_child = ("dtype", "value")
-    value: pa.Scalar[Any]
+    value: pa.Scalar[Any] | pa.Array[Any]
     children: tuple[()]
 
     def __init__(self, dtype: plc.DataType, value: pa.Scalar[Any]) -> None:
@@ -365,7 +365,10 @@ class Literal(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         # datatype of pyarrow scalar is correct by construction.
-        return Column(plc.Column.from_scalar(plc.interop.from_arrow(self.value), 1))
+        plc_val = plc.interop.from_arrow(self.value)
+        if isinstance(plc_val, plc.Scalar):
+            plc_val = plc.Column.from_scalar(plc_val, 1)
+        return Column(plc_val)
 
 
 class Col(Expr):
@@ -653,6 +656,8 @@ class StringFunction(Expr):
             pl_expr.StringFunction.EndsWith,
             pl_expr.StringFunction.StartsWith,
             pl_expr.StringFunction.Contains,
+            pl_expr.StringFunction.Replace,
+            pl_expr.StringFunction.ReplaceMany,
         ):
             raise NotImplementedError(f"String function {self.name}")
         if self.name == pl_expr.StringFunction.Contains:
@@ -666,6 +671,16 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         "Regex contains only supports a scalar pattern"
                     )
+        elif self.name == pl_expr.StringFunction.Replace:
+            _, literal = self.options
+            if not literal:
+                raise NotImplementedError("literal=False is not supported for replace")
+        elif self.name == pl_expr.StringFunction.ReplaceMany:
+            (ascii_case_insensitive,) = self.options
+            if ascii_case_insensitive:
+                raise NotImplementedError(
+                    "ascii_case_insensitive not implemented for replace_many"
+                )
 
     def do_evaluate(
         self,
@@ -724,6 +739,30 @@ class StringFunction(Expr):
                     if column.obj.size() != prefix.obj.size() and prefix.is_scalar
                     else prefix.obj,
                 )
+            )
+        elif self.name == pl_expr.StringFunction.Replace:
+            column, target, repl = columns
+            n, literal = self.options
+            if target.is_scalar and repl.is_scalar:
+                return Column(
+                    plc.strings.replace.replace(
+                        column.obj, target.obj_scalar, repl.obj_scalar, maxrepl=n
+                    )
+                )
+            raise NotImplementedError("replace")
+        elif self.name == pl_expr.StringFunction.ReplaceMany:
+            column, target, repl = columns
+            if repl.is_scalar:
+                # Try broadcasting repl scalar to column
+                # to support many-to-one replace
+                repl = Column(
+                    plc.Column.from_scalar(repl.obj_scalar, target.obj.size()),
+                    is_sorted=plc.types.Sorted.YES,
+                    order=plc.types.Order.ASCENDING,
+                    null_order=plc.types.NullOrder.BEFORE,
+                )
+            return Column(
+                plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj)
             )
         else:
             columns = [
