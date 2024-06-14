@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from io import BytesIO, StringIO
 
@@ -24,9 +24,23 @@ def read_text(
     if delimiter is None:
         raise ValueError("delimiter needs to be provided")
 
+    # Check if this is a remote file
+    fs, paths = ioutils._get_filesystem_and_paths(
+        path_or_data=filepath_or_buffer, storage_options=storage_options
+    )
+    if paths and not ioutils._is_local_filesystem(fs):
+        filepath_or_buffer, byte_range = ioutils._get_remote_bytes_lines(
+            paths,
+            fs,
+            byte_range=byte_range,
+        )
+        assert len(filepath_or_buffer) == 1
+        filepath_or_buffer = filepath_or_buffer[0]
+
     filepath_or_buffer, _ = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         compression=None,
+        fs=fs,
         iotypes=(BytesIO, StringIO),
         storage_options=storage_options,
     )

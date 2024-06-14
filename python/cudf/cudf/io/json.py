@@ -67,13 +67,10 @@ def read_json(
         if not is_list_like(path_or_buf):
             path_or_buf = [path_or_buf]
 
-        # Start by trying construct a filesystem object, so we
-        # can check if this is remote data
+        # Check if this is remote data
         fs, paths = ioutils._get_filesystem_and_paths(
             path_or_data=path_or_buf, storage_options=storage_options
         )
-        # For remote data, we can transfer the necessary
-        # bytes directly into host memory
         if paths and not ioutils._is_local_filesystem(fs):
             expanded_paths = []
             for path in paths:
