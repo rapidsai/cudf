@@ -21,7 +21,7 @@ on:
     # Only runs if the PR is open (we don't want to update the status of a closed PR)
     types: [opened, edited, synchronize]
 
-jobs:    
+jobs:
     get-project-id:
       uses: rapidsai/shared-workflows/.github/workflows/project-get-item-id.yaml@branch-24.08
       if: github.event.pull_request.state == 'open'
