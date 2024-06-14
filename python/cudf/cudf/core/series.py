@@ -10,6 +10,7 @@ import warnings
 from collections import abc
 from shutil import get_terminal_size
 from typing import (
+    TYPE_CHECKING,
     Any,
     Dict,
     Literal,
@@ -27,12 +28,6 @@ from typing_extensions import Self, assert_never
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import (
-    ColumnLike,
-    DataFrameOrSeries,
-    NotImplementedType,
-    ScalarLike,
-)
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -84,6 +79,14 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+
+if TYPE_CHECKING:
+    from cudf._typing import (
+        ColumnLike,
+        DataFrameOrSeries,
+        NotImplementedType,
+        ScalarLike,
+    )
 
 
 def _format_percentile_names(percentiles):
@@ -683,6 +686,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return out
 
     @_cudf_nvtx_annotate
+    def _from_data_like_self(self, data: MutableMapping):
+        out = super()._from_data_like_self(data)
+        out.name = self.name
+        return out
+
+    @_cudf_nvtx_annotate
     def __contains__(self, item):
         return item in self.index
 
@@ -855,20 +864,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         obj.index = index
 
         return obj
-
-    def _get_columns_by_label(self, labels, *, downcast=False) -> Self:
-        """Return the column specified by `labels`
-
-        For cudf.Series, either the column, or an empty series is returned.
-        Parameter `downcast` does not have effects.
-        """
-        ca = self._data.select_by_label(labels)
-
-        return (
-            self.__class__._from_data(data=ca, index=self.index)
-            if len(ca) > 0
-            else self.__class__(dtype=self.dtype, name=self.name)
-        )
 
     @_cudf_nvtx_annotate
     def drop(

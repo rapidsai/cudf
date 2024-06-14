@@ -3,16 +3,18 @@
 
 from __future__ import annotations
 
-from typing import Optional, cast
+from typing import TYPE_CHECKING, Optional, cast
 
 import numpy as np
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import ScalarLike
 from cudf.core.column import ColumnBase
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
+
+if TYPE_CHECKING:
+    from cudf._typing import ScalarLike
 
 
 class NumericalBaseColumn(ColumnBase, Scannable):
