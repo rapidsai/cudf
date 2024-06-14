@@ -468,7 +468,6 @@ def test_options_mode():
 # hence we don't want to run code-cov on this test.
 @pytest.mark.no_cover
 def test_profiler():
-    # pragma: no cover
     pytest.importorskip("cudf")
 
     # test that the profiler correctly reports
