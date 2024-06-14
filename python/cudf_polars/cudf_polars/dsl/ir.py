@@ -29,7 +29,7 @@ import cudf._lib.pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import DataFrame, NamedColumn
-from cudf_polars.utils import sorting
+from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -292,15 +292,10 @@ class DataFrameScan(IR):
         table = pdf.to_arrow()
         schema = table.schema
         for i, field in enumerate(schema):
-            # TODO: Nested types
-            if field.type == pa.large_string():
-                # TODO: goes away when libcudf supports large strings
-                schema = schema.set(i, pa.field(field.name, pa.string()))
-            elif isinstance(field.type, pa.LargeListType):
-                # TODO: goes away when libcudf supports large lists
-                schema = schema.set(
-                    i, pa.field(field.name, pa.list_(field.type.field(0)))
-                )
+            schema = schema.set(
+                i, pa.field(field.name, dtypes.downcast_arrow_lists(field.type))
+            )
+        # No-op if the schema is unchanged.
         table = table.cast(schema)
         df = DataFrame.from_table(
             plc.interop.from_arrow(table), list(self.schema.keys())

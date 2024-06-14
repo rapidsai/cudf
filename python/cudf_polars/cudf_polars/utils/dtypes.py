@@ -7,13 +7,42 @@ from __future__ import annotations
 
 from functools import cache
 
+import pyarrow as pa
 from typing_extensions import assert_never
 
 import polars as pl
 
 import cudf._lib.pylibcudf as plc
 
-__all__ = ["from_polars"]
+__all__ = ["from_polars", "downcast_arrow_lists"]
+
+
+def downcast_arrow_lists(typ: pa.DataType) -> pa.DataType:
+    """
+    Sanitize an arrow datatype from polars.
+
+    Parameters
+    ----------
+    typ
+        Arrow type to sanitize
+
+    Returns
+    -------
+    Sanitized arrow type
+
+    Notes
+    -----
+    As well as arrow ``ListType``s, polars can produce
+    ``LargeListType``s and ``FixedSizeListType``s, these are not
+    currently handled by libcudf, so we attempt to cast them all into
+    normal ``ListType``s on the arrow side before consuming the arrow
+    data.
+    """
+    if isinstance(typ, pa.LargeListType):
+        return pa.list_(downcast_arrow_lists(typ.value_type))
+    # We don't have to worry about diving into struct types for now
+    # since those are always NotImplemented before we get here.
+    return typ
 
 
 @cache
