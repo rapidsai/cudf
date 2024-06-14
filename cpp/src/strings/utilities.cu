@@ -158,8 +158,13 @@ int64_t get_offset64_threshold()
 
 bool is_large_strings_enabled()
 {
+  // default depends on compile-time switch but can be overridden by the environment variable
   auto const env = std::getenv("LIBCUDF_LARGE_STRINGS_ENABLED");
+#ifdef CUDF_LARGE_STRINGS_ENABLED
+  return env == nullptr || std::string(env) == "1";
+#else
   return env != nullptr && std::string(env) == "1";
+#endif
 }
 
 int64_t get_offset_value(cudf::column_view const& offsets,

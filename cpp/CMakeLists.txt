@@ -780,6 +780,11 @@ if(NOT USE_NVTX)
   target_compile_definitions(cudf PUBLIC NVTX_DISABLE)
 endif()
 
+# Enable large strings support
+if(CUDF_LARGE_STRINGS_ENABLED)
+  target_compile_definitions(cudf PRIVATE CUDF_LARGE_STRINGS_ENABLED)
+endif()
+
 # Define RMM logging level
 target_compile_definitions(cudf PRIVATE "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL")
 
