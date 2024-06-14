@@ -2164,7 +2164,7 @@ def test_multi_index_contains_hashable():
     )
 
 
-@pytest.mark.parametrize("array", [[1, 2], [1, None], [None] * 2])
+@pytest.mark.parametrize("array", [[1, 2], [1, None], [None, None]])
 @pytest.mark.parametrize("dropna", [True, False])
 def test_nunique(array, dropna):
     arrays = [array, [3, 4]]
