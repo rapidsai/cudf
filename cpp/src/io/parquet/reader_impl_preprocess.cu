@@ -452,9 +452,9 @@ std::string encoding_to_string(Encoding encoding)
 [[nodiscard]] std::string list_unsupported_encodings(device_span<PageInfo const> pages,
                                                      rmm::cuda_stream_view stream)
 {
-  auto const to_mask = [] __device__(auto const& page) {
+  auto const to_mask = cuda::proclaim_return_type<uint32_t>([] __device__(auto const& page) {
     return is_supported_encoding(page.encoding) ? 0U : encoding_to_mask(page.encoding);
-  };
+  });
   uint32_t const unsupported = thrust::transform_reduce(
     rmm::exec_policy(stream), pages.begin(), pages.end(), to_mask, 0U, thrust::bit_or<uint32_t>());
   return encoding_bitmask_to_str(unsupported);
@@ -647,7 +647,7 @@ constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
 
 struct set_str_dict_index_count {
   device_span<size_t> str_dict_index_count;
-  device_span<const ColumnChunkDesc> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
   __device__ void operator()(PageInfo const& page)
   {
@@ -662,7 +662,7 @@ struct set_str_dict_index_count {
 
 struct set_str_dict_index_ptr {
   string_index_pair* const base;
-  device_span<const size_t> str_dict_index_offsets;
+  device_span<size_t const> str_dict_index_offsets;
   device_span<ColumnChunkDesc> chunks;
 
   __device__ void operator()(size_t i)
@@ -679,7 +679,7 @@ struct set_str_dict_index_ptr {
  *
  */
 struct set_list_row_count_estimate {
-  device_span<const ColumnChunkDesc> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
   __device__ void operator()(PageInfo& page)
   {
@@ -708,7 +708,7 @@ struct set_list_row_count_estimate {
  */
 struct set_final_row_count {
   device_span<PageInfo> pages;
-  device_span<const ColumnChunkDesc> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
   __device__ void operator()(size_t i)
   {

@@ -1,6 +1,4 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
-from typing import Optional
-
 import pandas as pd
 import pyarrow as pa
 
@@ -109,28 +107,21 @@ class IntervalColumn(StructColumn):
     def to_pandas(
         self,
         *,
-        index: Optional[pd.Index] = None,
         nullable: bool = False,
         arrow_type: bool = False,
-    ) -> pd.Series:
+    ) -> pd.Index:
         # Note: This does not handle null values in the interval column.
         # However, this exact sequence (calling __from_arrow__ on the output of
         # self.to_arrow) is currently the best known way to convert interval
         # types into pandas (trying to convert the underlying numerical columns
         # directly is problematic), so we're stuck with this for now.
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
         if nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
 
         pd_type = self.dtype.to_pandas()
-        return pd.Series(
-            pd_type.__from_arrow__(self.to_arrow()), index=index, dtype=pd_type
-        )
+        return pd.Index(pd_type.__from_arrow__(self.to_arrow()), dtype=pd_type)
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)

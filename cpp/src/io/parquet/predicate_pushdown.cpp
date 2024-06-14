@@ -474,9 +474,9 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
     return std::nullopt;
   }
   size_type is_required_idx = 0;
-  for (size_t src_idx = 0; src_idx < input_row_group_indices.size(); ++src_idx) {
+  for (auto const& input_row_group_index : input_row_group_indices) {
     std::vector<size_type> filtered_row_groups;
-    for (auto const rg_idx : input_row_group_indices[src_idx]) {
+    for (auto const rg_idx : input_row_group_index) {
       if ((!validity_it[is_required_idx]) || is_row_group_required[is_required_idx]) {
         filtered_row_groups.push_back(rg_idx);
       }

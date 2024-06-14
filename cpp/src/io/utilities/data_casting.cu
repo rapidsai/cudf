@@ -22,6 +22,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -34,6 +35,7 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/functional.h>
 #include <thrust/transform_reduce.h>
@@ -416,6 +418,7 @@ struct bitfield_block {
  * @param null_mask Null mask
  * @param null_count_data pointer to store null count
  * @param options Settings for controlling string processing behavior
+ * @param d_sizes Output size of each row
  * @param d_offsets Offsets to identify where to store the results for each string
  * @param d_chars Character array to store the characters of strings
  */
@@ -426,7 +429,8 @@ CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
                                           bitmask_type* null_mask,
                                           size_type* null_count_data,
                                           cudf::io::parse_options_view const options,
-                                          size_type* d_offsets,
+                                          size_type* d_sizes,
+                                          cudf::detail::input_offsetalator d_offsets,
                                           char* d_chars)
 {
   constexpr auto BLOCK_SIZE =
@@ -454,7 +458,7 @@ CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
        istring           = get_next_string()) {
     // skip nulls
     if (null_mask != nullptr && not bit_is_set(null_mask, istring)) {
-      if (!d_chars && lane == 0) d_offsets[istring] = 0;
+      if (!d_chars && lane == 0) { d_sizes[istring] = 0; }
       continue;  // gride-stride return;
     }
 
@@ -475,7 +479,7 @@ CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
         if (lane == 0) {
           clear_bit(null_mask, istring);
           atomicAdd(null_count_data, 1);
-          if (!d_chars) d_offsets[istring] = 0;
+          if (!d_chars) { d_sizes[istring] = 0; }
         }
         continue;  // gride-stride return;
       }
@@ -490,7 +494,7 @@ CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
     // Copy literal/numeric value
     if (not is_string_value) {
       if (!d_chars) {
-        if (lane == 0) { d_offsets[istring] = in_end - in_begin; }
+        if (lane == 0) { d_sizes[istring] = in_end - in_begin; }
       } else {
         for (thread_index_type char_index = lane; char_index < (in_end - in_begin);
              char_index += BLOCK_SIZE) {
@@ -620,8 +624,8 @@ CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
             clear_bit(null_mask, istring);
             atomicAdd(null_count_data, 1);
           }
-          last_offset        = 0;
-          d_offsets[istring] = 0;
+          last_offset      = 0;
+          d_sizes[istring] = 0;
         }
         if constexpr (!is_warp) { __syncthreads(); }
         break;  // gride-stride return;
@@ -728,7 +732,7 @@ CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
         }
       }
     }  // char for-loop
-    if (!d_chars && lane == 0) { d_offsets[istring] = last_offset; }
+    if (!d_chars && lane == 0) { d_sizes[istring] = last_offset; }
   }  // grid-stride for-loop
 }
 
@@ -738,13 +742,14 @@ struct string_parse {
   bitmask_type* null_mask;
   size_type* null_count_data;
   cudf::io::parse_options_view const options;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
+  cudf::detail::input_offsetalator d_offsets;
   char* d_chars{};
 
   __device__ void operator()(size_type idx)
   {
     if (null_mask != nullptr && not bit_is_set(null_mask, idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     auto const in_begin     = str_tuples[idx].first;
@@ -760,7 +765,7 @@ struct string_parse {
       if (is_null_literal && null_mask != nullptr) {
         clear_bit(null_mask, idx);
         atomicAdd(null_count_data, 1);
-        if (!d_chars) d_offsets[idx] = 0;
+        if (!d_chars) { d_sizes[idx] = 0; }
         return;
       }
     }
@@ -772,9 +777,9 @@ struct string_parse {
         clear_bit(null_mask, idx);
         atomicAdd(null_count_data, 1);
       }
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
     } else {
-      if (!d_chars) d_offsets[idx] = str_process_info.bytes;
+      if (!d_chars) { d_sizes[idx] = str_process_info.bytes; }
     }
   }
 };
@@ -783,7 +788,8 @@ template <typename SymbolT>
 struct to_string_view_pair {
   SymbolT const* data;
   to_string_view_pair(SymbolT const* _data) : data(_data) {}
-  __device__ auto operator()(thrust::tuple<size_type, size_type> ip)
+  __device__ thrust::pair<char const*, std::size_t> operator()(
+    thrust::tuple<size_type, size_type> ip)
   {
     return thrust::pair<char const*, std::size_t>{data + thrust::get<0>(ip),
                                                   static_cast<std::size_t>(thrust::get<1>(ip))};
@@ -805,17 +811,16 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
     rmm::exec_policy(stream),
     str_tuples,
     str_tuples + col_size,
-    [] __device__(auto t) { return t.second; },
+    cuda::proclaim_return_type<std::size_t>([] __device__(auto t) { return t.second; }),
     size_type{0},
     thrust::maximum<size_type>{});
 
-  auto offsets = cudf::make_numeric_column(
-    data_type{type_to_id<size_type>()}, col_size + 1, cudf::mask_state::UNALLOCATED, stream, mr);
-  auto d_offsets       = offsets->mutable_view().data<size_type>();
+  auto sizes           = rmm::device_uvector<size_type>(col_size, stream);
+  auto d_sizes         = sizes.data();
   auto null_count_data = d_null_count.data();
 
   auto single_thread_fn = string_parse<decltype(str_tuples)>{
-    str_tuples, static_cast<bitmask_type*>(null_mask.data()), null_count_data, options, d_offsets};
+    str_tuples, static_cast<bitmask_type*>(null_mask.data()), null_count_data, options, d_sizes};
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      col_size,
@@ -836,7 +841,8 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
         static_cast<bitmask_type*>(null_mask.data()),
         null_count_data,
         options,
-        d_offsets,
+        d_sizes,
+        cudf::detail::input_offsetalator{},
         nullptr);
   }
 
@@ -851,20 +857,22 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
         static_cast<bitmask_type*>(null_mask.data()),
         null_count_data,
         options,
-        d_offsets,
+        d_sizes,
+        cudf::detail::input_offsetalator{},
         nullptr);
   }
-  auto const bytes =
-    cudf::detail::sizes_to_offsets(d_offsets, d_offsets + col_size + 1, d_offsets, stream);
-  CUDF_EXPECTS(bytes <= std::numeric_limits<size_type>::max(),
-               "Size of output exceeds the column size limit",
-               std::overflow_error);
+
+  auto [offsets, bytes] =
+    cudf::strings::detail::make_offsets_child_column(sizes.begin(), sizes.end(), stream, mr);
+  auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
   // CHARS column
   rmm::device_uvector<char> chars(bytes, stream, mr);
   auto d_chars = chars.data();
 
-  single_thread_fn.d_chars = d_chars;
+  single_thread_fn.d_chars   = d_chars;
+  single_thread_fn.d_offsets = d_offsets;
+
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      col_size,
@@ -880,6 +888,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
         static_cast<bitmask_type*>(null_mask.data()),
         null_count_data,
         options,
+        d_sizes,
         d_offsets,
         d_chars);
   }
@@ -895,6 +904,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
         static_cast<bitmask_type*>(null_mask.data()),
         null_count_data,
         options,
+        d_sizes,
         d_offsets,
         d_chars);
   }
@@ -907,8 +917,8 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
 }
 
 std::unique_ptr<column> parse_data(
-  const char* data,
-  thrust::zip_iterator<thrust::tuple<const size_type*, const size_type*>> offset_length_begin,
+  char const* data,
+  thrust::zip_iterator<thrust::tuple<size_type const*, size_type const*>> offset_length_begin,
   size_type col_size,
   data_type col_type,
   rmm::device_buffer&& null_mask,

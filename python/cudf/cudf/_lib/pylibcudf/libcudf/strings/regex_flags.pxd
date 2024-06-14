@@ -1,9 +1,12 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+
+from libc.stdint cimport int32_t
+
 
 cdef extern from "cudf/strings/regex/flags.hpp" \
         namespace "cudf::strings" nogil:
 
-    ctypedef enum regex_flags:
-        DEFAULT 'cudf::strings::regex_flags::DEFAULT'
-        MULTILINE  'cudf::strings::regex_flags::MULTILINE'
-        DOTALL 'cudf::strings::regex_flags::DOTALL'
+    cpdef enum class regex_flags(int32_t):
+        DEFAULT
+        MULTILINE
+        DOTALL

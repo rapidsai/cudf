@@ -9,6 +9,7 @@ import inspect
 import operator
 import pickle
 import types
+import warnings
 from collections.abc import Iterator
 from enum import IntEnum
 from typing import (
@@ -23,6 +24,10 @@ from typing import (
     Type,
 )
 
+import numpy as np
+
+from ..options import _env_get_bool
+from ..testing._utils import assert_eq
 from .annotation import nvtx
 
 
@@ -106,19 +111,6 @@ class _PickleConstructor:
 _DELETE = object()
 
 
-def create_composite_metaclass(base_meta, additional_meta):
-    """
-    Dynamically creates a composite metaclass that inherits from both provided metaclasses.
-    This ensures that the metaclass behaviors of both base_meta and additional_meta are preserved.
-    """
-
-    class CompositeMeta(base_meta, additional_meta):
-        def __new__(cls, name, bases, namespace):
-            return super().__new__(cls, name, bases, namespace)
-
-    return CompositeMeta
-
-
 def make_final_proxy_type(
     name: str,
     fast_type: type,
@@ -130,7 +122,7 @@ def make_final_proxy_type(
     additional_attributes: Mapping[str, Any] | None = None,
     postprocess: Callable[[_FinalProxy, Any, Any], Any] | None = None,
     bases: Tuple = (),
-    meta_class=None,
+    metaclasses: Tuple = (),
 ) -> Type[_FinalProxy]:
     """
     Defines a fast-slow proxy type for a pair of "final" fast and slow
@@ -161,6 +153,8 @@ def make_final_proxy_type(
         construct said unwrapped object. See also `_maybe_wrap_result`.
     bases
         Optional tuple of base classes to insert into the mro.
+    metaclasses
+        Optional tuple of metaclasses to unify with the base proxy metaclass.
 
     Notes
     -----
@@ -241,15 +235,18 @@ def make_final_proxy_type(
             cls_dict[slow_name] = _FastSlowAttribute(
                 slow_name, private=slow_name.startswith("_")
             )
-    if meta_class is None:
-        meta_class = _FastSlowProxyMeta
-    else:
-        meta_class = create_composite_metaclass(_FastSlowProxyMeta, meta_class)
 
+    metaclass = _FastSlowProxyMeta
+    if metaclasses:
+        metaclass = types.new_class(  # type: ignore
+            f"{name}_Meta",
+            metaclasses + (_FastSlowProxyMeta,),
+            {},
+        )
     cls = types.new_class(
         name,
         (*bases, _FinalProxy),
-        {"metaclass": meta_class},
+        {"metaclass": metaclass},
         lambda ns: ns.update(cls_dict),
     )
     functools.update_wrapper(
@@ -816,7 +813,9 @@ class _FastSlowAttribute:
             else:
                 # for anything else, use a fast-slow attribute:
                 self._attr, _ = _fast_slow_function_call(
-                    getattr, owner, self._name
+                    getattr,
+                    owner,
+                    self._name,
                 )
 
                 if isinstance(
@@ -837,9 +836,11 @@ class _FastSlowAttribute:
                         getattr(instance._fsproxy_slow, self._name),
                         None,  # type: ignore
                     )
-                return _fast_slow_function_call(getattr, instance, self._name)[
-                    0
-                ]
+                return _fast_slow_function_call(
+                    getattr,
+                    instance,
+                    self._name,
+                )[0]
         return self._attr
 
 
@@ -874,7 +875,17 @@ class _MethodProxy(_FunctionProxy):
         setattr(self._fsproxy_slow, "__name__", value)
 
 
-def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
+def _assert_fast_slow_eq(left, right):
+    if _is_final_type(type(left)) or type(left) in NUMPY_TYPES:
+        assert_eq(left, right)
+
+
+def _fast_slow_function_call(
+    func: Callable,
+    /,
+    *args,
+    **kwargs,
+) -> Any:
     """
     Call `func` with all `args` and `kwargs` converted to their
     respective fast type. If that fails, call `func` with all
@@ -898,6 +909,37 @@ def _fast_slow_function_call(func: Callable, /, *args, **kwargs) -> Any:
                 # try slow path
                 raise Exception()
             fast = True
+            if _env_get_bool("CUDF_PANDAS_DEBUGGING", False):
+                try:
+                    with nvtx.annotate(
+                        "EXECUTE_SLOW_DEBUG",
+                        color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
+                        domain="cudf_pandas",
+                    ):
+                        slow_args, slow_kwargs = (
+                            _slow_arg(args),
+                            _slow_arg(kwargs),
+                        )
+                        with disable_module_accelerator():
+                            slow_result = func(*slow_args, **slow_kwargs)
+                except Exception as e:
+                    warnings.warn(
+                        "The result from pandas could not be computed. "
+                        f"The exception was {e}."
+                    )
+                else:
+                    try:
+                        _assert_fast_slow_eq(result, slow_result)
+                    except AssertionError as e:
+                        warnings.warn(
+                            "The results from cudf and pandas were different. "
+                            f"The exception was {e}."
+                        )
+                    except Exception as e:
+                        warnings.warn(
+                            "Pandas debugging mode failed. "
+                            f"The exception was {e}."
+                        )
     except Exception:
         with nvtx.annotate(
             "EXECUTE_SLOW",
@@ -1141,6 +1183,23 @@ def _replace_closurevars(
         f,
         assigned=functools.WRAPPER_ASSIGNMENTS + ("__kwdefaults__",),
     )
+
+
+def is_proxy_object(obj: Any) -> bool:
+    """Determine if an object is proxy object
+
+    Parameters
+    ----------
+    obj : object
+        Any python object.
+
+    """
+    if _FastSlowProxyMeta in type(type(obj)).__mro__:
+        return True
+    return False
+
+
+NUMPY_TYPES: Set[str] = set(np.sctypeDict.values())
 
 
 _SPECIAL_METHODS: Set[str] = {

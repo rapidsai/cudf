@@ -33,7 +33,7 @@ std::filesystem::path get_user_home_cache_dir()
   if (home_dir != nullptr) {
     return std::filesystem::path(home_dir) / ".cudf";
   } else {
-    return std::filesystem::path();
+    return {};
   }
 }
 
@@ -90,7 +90,7 @@ std::filesystem::path get_cache_dir()
       std::filesystem::create_directories(kernel_cache_path);
     } catch (std::exception const& e) {
       // if directory creation fails for any reason, return empty path
-      return std::filesystem::path();
+      return {};
     }
   }
   return kernel_cache_path;

@@ -30,7 +30,6 @@ from cudf.core.index import (
     BaseIndex,
     _get_indexer_basic,
     _lexsorted_equal_range,
-    as_index,
 )
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.utils.dtypes import is_column_like
@@ -527,7 +526,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_cudf_nvtx_annotate
     def nlevels(self):
         """Integer number of levels in this MultiIndex."""
-        return len(self._data)
+        return self._num_columns
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -824,7 +823,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # it into an Index and name the final index values according
             # to that column's name.
             *_, last_column = index._data.columns
-            out_index = as_index(last_column)
+            out_index = cudf.Index(last_column)
             out_index.name = index.names[-1]
             index = out_index
         elif out_index._num_columns > 1:
@@ -1082,7 +1081,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 raise KeyError(f"Level not found: '{level}'")
         else:
             level_idx = colnames.index(level)
-        level_values = as_index(self._data[level], name=self.names[level_idx])
+        level_values = cudf.Index(
+            self._data[level], name=self.names[level_idx]
+        )
         return level_values
 
     def _is_numeric(self):
@@ -1635,9 +1636,54 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def dtype(self):
         return np.dtype("O")
 
+    @_cudf_nvtx_annotate
+    def _is_sorted(self, ascending=None, null_position=None) -> bool:
+        """
+        Returns a boolean indicating whether the data of the MultiIndex are sorted
+        based on the parameters given. Does not account for the index.
+
+        Parameters
+        ----------
+        self : MultiIndex
+            MultiIndex whose columns are to be checked for sort order
+        ascending : None or list-like of booleans
+            None or list-like of boolean values indicating expected sort order
+            of each column. If list-like, size of list-like must be
+            len(columns). If None, all columns expected sort order is set to
+            ascending. False (0) - ascending, True (1) - descending.
+        null_position : None or list-like of booleans
+            None or list-like of boolean values indicating desired order of
+            nulls compared to other elements. If list-like, size of list-like
+            must be len(columns). If None, null order is set to before. False
+            (0) - before, True (1) - after.
+
+        Returns
+        -------
+        returns : boolean
+            Returns True, if sorted as expected by ``ascending`` and
+            ``null_position``, False otherwise.
+        """
+        if ascending is not None and not cudf.api.types.is_list_like(
+            ascending
+        ):
+            raise TypeError(
+                f"Expected a list-like or None for `ascending`, got "
+                f"{type(ascending)}"
+            )
+        if null_position is not None and not cudf.api.types.is_list_like(
+            null_position
+        ):
+            raise TypeError(
+                f"Expected a list-like or None for `null_position`, got "
+                f"{type(null_position)}"
+            )
+        return libcudf.sort.is_sorted(
+            [*self._columns], ascending=ascending, null_position=null_position
+        )
+
     @cached_property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_monotonic_increasing(self):
+    def is_monotonic_increasing(self) -> bool:
         """
         Return if the index is monotonic increasing
         (only equal or increasing) values.
@@ -1646,7 +1692,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @cached_property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_monotonic_decreasing(self):
+    def is_monotonic_decreasing(self) -> bool:
         """
         Return if the index is monotonic decreasing
         (only equal or decreasing) values.
