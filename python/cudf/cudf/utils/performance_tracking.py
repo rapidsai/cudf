@@ -51,6 +51,11 @@ def _performance_tracking(func, domain="cudf_python"):
     return wrapper
 
 
+_dask_cudf_performance_tracking = functools.partial(
+    _performance_tracking, domain="dask_cudf_python"
+)
+
+
 def get_memory_records() -> (
     Dict[str, rmm.statistics.ProfilerRecords.MemoryRecord]
 ):
