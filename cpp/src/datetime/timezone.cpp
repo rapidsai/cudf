@@ -221,7 +221,7 @@ class posix_parser {
   /**
    * @brief Returns the remaining number of characters in the input.
    */
-  auto remaining_char_cnt() const { return end - cur; }
+  [[nodiscard]] auto remaining_char_cnt() const { return end - cur; }
 
   /**
    * @brief Returns the next character in the input.

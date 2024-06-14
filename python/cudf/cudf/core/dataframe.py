@@ -2688,6 +2688,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self._data = ColumnAccessor(
             data=dict(zip(other.names, self._data.columns)),
             multiindex=other.multiindex,
+            rangeindex=other.rangeindex,
             level_names=other.level_names,
             label_dtype=other.label_dtype,
             verify=False,
@@ -7534,7 +7535,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
-        column_names: abc.Iterable[str],
+        column_names: Optional[abc.Iterable[str]] = None,
         index_names: Optional[List[str]] = None,
         *,
         override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
@@ -8071,11 +8072,11 @@ def from_pandas(obj, nan_as_null=no_default):
         return cudf.Index.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.CategoricalDtype):
         return cudf.CategoricalDtype.from_pandas(obj)
+    elif isinstance(obj, pd.IntervalDtype):
+        return cudf.IntervalDtype.from_pandas(obj)
     else:
         raise TypeError(
-            "from_pandas only accepts Pandas Dataframes, Series, "
-            "Index, RangeIndex and MultiIndex objects. "
-            "Got %s" % type(obj)
+            f"from_pandas unsupported for object of type {type(obj).__name__}"
         )
 
 

@@ -30,8 +30,10 @@ struct RowOperatorTestForNAN : public cudf::test::BaseFixture {};
 
 TEST_F(RowOperatorTestForNAN, NANEquality)
 {
-  cudf::test::fixed_width_column_wrapper<double> col1{{1., double(NAN), 3., 4.}, {1, 1, 0, 1}};
-  cudf::test::fixed_width_column_wrapper<double> col2{{1., double(NAN), 3., 4.}, {1, 1, 0, 1}};
+  cudf::test::fixed_width_column_wrapper<double> col1{{1., double(NAN), 3., 4.},
+                                                      {true, true, false, true}};
+  cudf::test::fixed_width_column_wrapper<double> col2{{1., double(NAN), 3., 4.},
+                                                      {true, true, false, true}};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col1, col2);
 }
@@ -47,7 +49,7 @@ TEST_F(RowOperatorTestForNAN, NANSorting)
      std::numeric_limits<double>::infinity(),
      1.,
      -1 * std::numeric_limits<double>::infinity()},
-    {1, 1, 1, 0, 1, 1, 1, 1}};
+    {true, true, true, false, true, true, true, true}};
   cudf::test::fixed_width_column_wrapper<int32_t> expected1{{3, 6, 2, 0, 5, 4, 1}};
   std::vector<cudf::order> column_order{cudf::order::ASCENDING};
   std::vector<cudf::null_order> null_precedence_1{cudf::null_order::BEFORE};
