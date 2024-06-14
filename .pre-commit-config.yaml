@@ -60,7 +60,7 @@ repos:
           (?x)^(
             ^cpp/src/io/parquet/ipc/Schema_generated.h|
             ^cpp/src/io/parquet/ipc/Message_generated.h|
-            ^cpp/include/cudf_test/cxxopts.hpp|
+            ^cpp/include/cudf_test/cxxopts.hpp
           )
   - repo: https://github.com/sirosen/texthooks
     rev: 0.6.6

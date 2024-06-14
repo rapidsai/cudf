@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import builtins
 import pickle
 from collections import abc
 from functools import cached_property
 from itertools import chain
 from types import SimpleNamespace
 from typing import (
+    TYPE_CHECKING,
     Any,
     Dict,
     List,
@@ -49,7 +49,6 @@ from cudf._lib.stream_compaction import (
 )
 from cudf._lib.transform import bools_to_mask
 from cudf._lib.types import size_type_dtype
-from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_pandas_nullable_extension_dtype,
@@ -88,6 +87,11 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
 )
 from cudf.utils.utils import _array_ufunc, mask_dtype
+
+if TYPE_CHECKING:
+    import builtins
+
+    from cudf._typing import ColumnLike, Dtype, ScalarLike
 
 if PANDAS_GE_210:
     NumpyExtensionArray = pd.arrays.NumpyExtensionArray
@@ -334,12 +338,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             )
         elif isinstance(array.type, ArrowIntervalType):
             return cudf.core.column.IntervalColumn.from_arrow(array)
-        elif pa.types.is_large_string(array.type):
-            # Pandas-2.2+: Pandas defaults to `large_string` type
-            # instead of `string` without data-introspection.
-            # Temporary workaround until cudf has native
-            # support for `LARGE_STRING` i.e., 64 bit offsets
-            array = array.cast(pa.string())
 
         data = pa.table([array], [None])
 
@@ -1123,6 +1121,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
+
+    def __invert__(self):
+        raise TypeError(
+            f"Operation `~` not supported on {self.dtype.type.__name__}"
+        )
 
     def searchsorted(
         self,
