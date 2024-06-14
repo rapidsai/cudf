@@ -70,7 +70,7 @@ class DataFrame:
     @cached_property
     def num_rows(self) -> int:
         """Number of rows."""
-        return self.table.num_rows()
+        return 0 if len(self.columns) == 0 else self.table.num_rows()
 
     @classmethod
     def from_cudf(cls, df: cudf.DataFrame) -> Self:
