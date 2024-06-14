@@ -71,7 +71,7 @@ def read_json(
         fs, paths = ioutils._get_filesystem_and_paths(
             path_or_data=path_or_buf, storage_options=storage_options
         )
-        if paths and not ioutils._is_local_filesystem(fs):
+        if fs and paths and not ioutils._is_local_filesystem(fs):
             expanded_paths = []
             for path in paths:
                 if ioutils.is_directory(path_or_data=path, fs=fs):

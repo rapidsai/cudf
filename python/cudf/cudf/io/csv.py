@@ -50,7 +50,7 @@ def read_csv(
     comment=None,
     delim_whitespace=False,
     byte_range=None,
-    use_python_file_object=True,
+    use_python_file_object=False,
     storage_options=None,
     bytes_per_thread=None,
 ):
@@ -85,8 +85,10 @@ def read_csv(
     fs, paths = ioutils._get_filesystem_and_paths(
         path_or_data=filepath_or_buffer, storage_options=storage_options
     )
-    if paths and not (
-        ioutils._is_local_filesystem(fs) or use_python_file_object
+    if (
+        fs
+        and paths
+        and not (ioutils._is_local_filesystem(fs) or use_python_file_object)
     ):
         filepath_or_buffer, byte_range = ioutils._get_remote_bytes_lines(
             paths,

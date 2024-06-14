@@ -27,7 +27,7 @@ except ImportError:
 
 _BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
 _ROW_GROUP_SIZE_BYTES_DEFAULT = 128 * 1024 * 1024
-_READ_AHEAD_DEFAULT = 1024 * 1024
+_OVER_READ_DEFAULT = 1024 * 1024
 
 _docstring_remote_sources = """
 - cuDF supports local and remote data stores. See configuration details for
@@ -1642,7 +1642,7 @@ def _get_remote_bytes_lines(
     fs,
     *,
     byte_range=None,
-    read_ahead=_READ_AHEAD_DEFAULT,
+    over_read=_OVER_READ_DEFAULT,
     bytes_per_thread=None,
 ):
     # Use byte_range to set remote_starts and remote_ends
@@ -1664,7 +1664,7 @@ def _get_remote_bytes_lines(
         fs,
         remote_starts=remote_starts,
         remote_ends=remote_ends,
-        read_ahead=read_ahead,
+        over_read=over_read,
         bytes_per_thread=bytes_per_thread,
         use_proxy_files=False,
         offset=offset,
@@ -1686,7 +1686,7 @@ def _get_remote_bytes(
     *,
     remote_starts=None,
     remote_ends=None,
-    read_ahead=_READ_AHEAD_DEFAULT,
+    over_read=_OVER_READ_DEFAULT,
     bytes_per_thread=None,
     use_proxy_files=True,
     offset=0,
@@ -1703,7 +1703,7 @@ def _get_remote_bytes(
     if remote_ends:
         assert len(remote_ends) == len(remote_paths)
         for i in range(len(remote_ends)):
-            remote_ends[i] = min(remote_ends[i] + read_ahead, sizes[i])
+            remote_ends[i] = min(remote_ends[i] + over_read, sizes[i])
     else:
         remote_ends = sizes
 
@@ -1850,6 +1850,13 @@ def get_reader_filepath_or_buffer(
 ):
     """{docstring}"""
 
+    if use_python_file_object:
+        warnings.warn(
+            "The 'use_python_file_object' parameter is deprecated and "
+            "will be removed in a future version of cudf.",
+            FutureWarning,
+        )
+
     path_or_data = stringify_pathlike(path_or_data)
 
     if isinstance(path_or_data, str):
@@ -1946,17 +1953,6 @@ def get_reader_filepath_or_buffer(
                 path_or_data = _get_remote_bytes(
                     paths, fs, bytes_per_thread=bytes_per_thread
                 )
-                # path_or_data = [
-                #     BytesIO(
-                #         _fsspec_data_transfer(
-                #             fpath,
-                #             fs=fs,
-                #             mode=mode,
-                #             bytes_per_thread=bytes_per_thread,
-                #         )
-                #     )
-                #     for fpath in paths
-                # ]
             if len(path_or_data) == 1:
                 path_or_data = path_or_data[0]
 
@@ -1966,11 +1962,8 @@ def get_reader_filepath_or_buffer(
         if use_python_file_object:
             path_or_data = ArrowPythonFile(path_or_data)
         else:
-            path_or_data = BytesIO(
-                _fsspec_data_transfer(
-                    path_or_data, mode=mode, bytes_per_thread=bytes_per_thread
-                )
-            )
+            # Remote file is already open - Just read it
+            path_or_data = BytesIO(path_or_data.read())
 
     return path_or_data, compression
 
@@ -2261,27 +2254,6 @@ def _fsspec_data_transfer(
     )
 
     return buf.tobytes()
-
-
-def _merge_ranges(byte_ranges, max_block=256_000_000, max_gap=64_000):
-    # Simple utility to merge small/adjacent byte ranges
-    new_ranges = []
-    if not byte_ranges:
-        # Early return
-        return new_ranges
-
-    offset, size = byte_ranges[0]
-    for new_offset, new_size in byte_ranges[1:]:
-        gap = new_offset - (offset + size)
-        if gap > max_gap or (size + new_size + gap) > max_block:
-            # Gap is too large or total read is too large
-            new_ranges.append((offset, size))
-            offset = new_offset
-            size = new_size
-            continue
-        size += new_size + gap
-    new_ranges.append((offset, size))
-    return new_ranges
 
 
 def _assign_block(fs, path_or_fob, local_buffer, offset, nbytes):

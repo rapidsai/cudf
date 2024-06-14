@@ -28,7 +28,7 @@ def read_text(
     fs, paths = ioutils._get_filesystem_and_paths(
         path_or_data=filepath_or_buffer, storage_options=storage_options
     )
-    if paths and not ioutils._is_local_filesystem(fs):
+    if fs and paths and not ioutils._is_local_filesystem(fs):
         filepath_or_buffer, byte_range = ioutils._get_remote_bytes_lines(
             paths,
             fs,
