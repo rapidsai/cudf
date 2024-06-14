@@ -1748,10 +1748,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @_cudf_nvtx_annotate
     def nunique(self, dropna: bool = True) -> int:
-        if dropna:
-            mi = self.dropna(how="all")
-        else:
-            mi = self
+        mi = self.dropna(how="all") if dropna else self
         return len(mi.unique())
 
     def _clean_nulls_from_index(self):
