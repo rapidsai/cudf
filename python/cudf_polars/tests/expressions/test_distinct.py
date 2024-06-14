@@ -9,11 +9,6 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-@pytest.fixture(params=[False, True], ids=["no-nulls", "nulls"])
-def nullable(request):
-    return request.param
-
-
 @pytest.fixture(
     params=["is_first_distinct", "is_last_distinct", "is_unique", "is_duplicated"]
 )
@@ -22,9 +17,9 @@ def op(request):
 
 
 @pytest.fixture
-def df(nullable):
+def df(with_nulls):
     values: list[int | None] = [1, 2, 3, 1, 1, 7, 3, 2, 7, 8, 1]
-    if nullable:
+    if with_nulls:
         values[1] = None
         values[4] = None
     return pl.LazyFrame({"a": values})
