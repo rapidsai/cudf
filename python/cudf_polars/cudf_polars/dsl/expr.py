@@ -44,6 +44,7 @@ __all__ = [
     "Col",
     "BooleanFunction",
     "StringFunction",
+    "TemporalFunction",
     "Sort",
     "SortBy",
     "Gather",
@@ -777,6 +778,45 @@ class StringFunction(Expr):
         raise NotImplementedError(
             f"StringFunction {self.name}"
         )  # pragma: no cover; handled by init raising
+
+
+class TemporalFunction(Expr):
+    __slots__ = ("name", "options", "children")
+    _non_child = ("dtype", "name", "options")
+    children: tuple[Expr, ...]
+
+    def __init__(
+        self,
+        dtype: plc.DataType,
+        name: pl_expr.TemporalFunction,
+        options: tuple[Any, ...],
+        *children: Expr,
+    ) -> None:
+        super().__init__(dtype)
+        self.options = options
+        self.name = name
+        self.children = children
+        if self.name != pl_expr.TemporalFunction.Year:
+            raise NotImplementedError(f"String function {self.name}")
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        columns = [
+            child.evaluate(df, context=context, mapping=mapping)
+            for child in self.children
+        ]
+        if self.name == pl_expr.TemporalFunction.Year:
+            (column,) = columns
+            return Column(plc.datetime.extract_year(column.obj))
+        raise NotImplementedError(
+            f"TemporalFunction {self.name}"
+        )  # pragma: no cover; init trips first
 
 
 class Sort(Expr):

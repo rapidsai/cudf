@@ -361,6 +361,13 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
             options,
             *(translate_expr(visitor, n=n) for n in node.input),
         )
+    elif isinstance(name, pl_expr.TemporalFunction):
+        return expr.TemporalFunction(
+            dtype,
+            name,
+            options,
+            *(translate_expr(visitor, n=n) for n in node.input),
+        )
     else:
         raise NotImplementedError(f"No handler for Expr function node with {name=}")
 
