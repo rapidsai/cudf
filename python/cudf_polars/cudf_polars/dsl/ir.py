@@ -431,7 +431,7 @@ class GroupBy(IR):
         NotImplementedError
             For unsupported expression nodes.
         """
-        if isinstance(agg, (expr.BinOp, expr.Cast)):
+        if isinstance(agg, (expr.BinOp, expr.Cast, expr.UnaryFunction)):
             return max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, expr.Agg):
             return 1 + max(GroupBy.check_agg(child) for child in agg.children)
