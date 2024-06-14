@@ -5199,7 +5199,7 @@ class IndexedFrame(Frame):
 
         column_index = self._column_names.index(explode_column)
         if not ignore_index:
-            idx_cols = self.index._data.columns
+            idx_cols = self.index._columns
         else:
             idx_cols = ()
 
@@ -5209,7 +5209,7 @@ class IndexedFrame(Frame):
         )
         # We must copy inner datatype of the exploded list column to
         # maintain struct dtype key names
-        exploded_dtype = cast(
+        element_type = cast(
             ListDtype, self._columns[column_index].dtype
         ).element_type
         casted_cols = []
@@ -5217,9 +5217,9 @@ class IndexedFrame(Frame):
             zip(exploded[len(idx_cols) :], self._dtypes)
         ):
             if i == column_index:
-                casted = explode._with_type_metadata(dtype)
+                casted = explode._with_type_metadata(element_type)
             else:
-                casted = explode._with_type_metadata(exploded_dtype)
+                casted = explode._with_type_metadata(dtype)
             casted_cols.append(casted)
 
         exploded = exploded[: len(idx_cols)] + casted_cols
