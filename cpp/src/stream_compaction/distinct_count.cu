@@ -189,7 +189,9 @@ cudf::size_type distinct_count(column_view const& input,
 {
   if (0 == input.size()) { return 0; }
 
-  if (input.null_count() == input.size()) { return static_cast<size_type>(null_handling == null_policy::INCLUDE); }
+  if (input.null_count() == input.size()) {
+    return static_cast<size_type>(null_handling == null_policy::INCLUDE);
+  }
 
   auto count = detail::distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
 
