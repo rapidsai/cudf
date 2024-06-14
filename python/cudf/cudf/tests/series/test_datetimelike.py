@@ -251,7 +251,7 @@ def test_from_pandas_obj_tz_aware_unsupported(klass):
     tz = datetime.timezone(datetime.timedelta(hours=1))
     tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
     pandas_obj = getattr(pd, klass)(tz_aware_data)
-    with pytest.raises(zoneinfo.ZoneInfoNotFoundError):
+    with pytest.raises(NotImplementedError):
         cudf.from_pandas(pandas_obj)
 
 
