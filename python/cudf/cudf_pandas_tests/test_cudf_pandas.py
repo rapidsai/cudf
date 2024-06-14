@@ -21,7 +21,18 @@ from pytz import utc
 from rmm import RMMError
 
 from cudf.pandas import LOADED, Profiler
-from cudf.pandas.fast_slow_proxy import CudfPandasDebugWarning, _Unusable
+from cudf.pandas.fast_slow_proxy import (
+    CudfPandasDebugAttributeErrorWarning,
+    CudfPandasDebuggingFailedWarning,
+    CudfPandasDebugNotImplementedErrorWarning,
+    CudfPandasDebugOOMWarning,
+    CudfPandasDebugTypeErrorWarning,
+    CudfPandasDebugWarning,
+    CudfPandasPandasErrorWarning,
+    CudfPandasResultsDifferentWarning,
+    _Unusable,
+    is_proxy_object,
+)
 
 if not LOADED:
     raise ImportError("These tests must be run with cudf.pandas loaded")
@@ -1426,79 +1437,126 @@ def test_holidays_within_dates(holiday, start, expected):
     ) == [utc.localize(dt) for dt in expected]
 
 
-def test_cudf_pandas_debugging_different_results(monkeypatch):
-    cudf_mean = cudf.Series.mean
+def mock_mean_one(self, *args, **kwargs):
+    return np.float64(1.0)
 
-    def mock_mean_one(self, *args, **kwargs):
-        return np.float64(1.0)
 
+def mock_mean_exception(self, *args, **kwargs):
+    raise Exception()
+
+
+def mock_mean_none(self, *args, **kwargs):
+    return None
+
+
+def mock_mean_memory_error(self, *args, **kwargs):
+    raise MemoryError()
+
+
+def mock_mean_rmm_error(self, *args, **kwargs):
+    raise RMMError(1, "error")
+
+
+def mock_mean_not_impl_error(self, *args, **kwargs):
+    raise NotImplementedError()
+
+
+def mock_mean_attr_error(self, *args, **kwargs):
+    raise AttributeError()
+
+
+def mock_mean_type_error(self, *args, **kwargs):
+    raise TypeError()
+
+
+@pytest.mark.parametrize(
+    "mock_mean, warning, match_str, env_var, original_mean, proxy_attr",
+    [
+        (
+            mock_mean_one,
+            CudfPandasResultsDifferentWarning,
+            "The results from cudf and pandas were different.",
+            "CUDF_PANDAS_DEBUGGING",
+            cudf.Series.mean,
+            "_fsproxy_fast",
+        ),
+        (
+            mock_mean_exception,
+            CudfPandasPandasErrorWarning,
+            "The result from pandas could not be computed.",
+            "CUDF_PANDAS_DEBUGGING",
+            pd.Series.mean,
+            "_fsproxy_slow",
+        ),
+        (
+            mock_mean_none,
+            CudfPandasDebuggingFailedWarning,
+            "cuDF-Pandas debugging failed.",
+            "CUDF_PANDAS_DEBUGGING",
+            pd.Series.mean,
+            "_fsproxy_slow",
+        ),
+        (
+            mock_mean_memory_error,
+            CudfPandasDebugOOMWarning,
+            "Out of Memory Error.",
+            "CUDF_PANDAS_FALLBACK_DEBUGGING",
+            cudf.Series.mean,
+            "_fsproxy_fast",
+        ),
+        (
+            mock_mean_rmm_error,
+            CudfPandasDebugOOMWarning,
+            "Out of Memory Error.",
+            "CUDF_PANDAS_FALLBACK_DEBUGGING",
+            cudf.Series.mean,
+            "_fsproxy_fast",
+        ),
+        (
+            mock_mean_not_impl_error,
+            CudfPandasDebugNotImplementedErrorWarning,
+            "NotImplementedError.",
+            "CUDF_PANDAS_FALLBACK_DEBUGGING",
+            cudf.Series.mean,
+            "_fsproxy_fast",
+        ),
+        (
+            mock_mean_attr_error,
+            CudfPandasDebugAttributeErrorWarning,
+            "AttributeError.",
+            "CUDF_PANDAS_FALLBACK_DEBUGGING",
+            cudf.Series.mean,
+            "_fsproxy_fast",
+        ),
+        (
+            mock_mean_type_error,
+            CudfPandasDebugTypeErrorWarning,
+            "TypeError.",
+            "CUDF_PANDAS_FALLBACK_DEBUGGING",
+            cudf.Series.mean,
+            "_fsproxy_fast",
+        ),
+    ],
+)
+def test_cudf_pandas_debugging(
+    monkeypatch,
+    mock_mean,
+    warning,
+    match_str,
+    env_var,
+    original_mean,
+    proxy_attr,
+):
     with monkeypatch.context() as monkeycontext:
-        monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", mock_mean_one)
-        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
+        monkeypatch.setattr(xpd.Series.mean, proxy_attr, mock_mean)
+        monkeycontext.setenv(env_var, "True")
         s = xpd.Series([1, 2])
-        with pytest.warns(
-            CudfPandasDebugWarning,
-            match="The results from cudf and pandas were different.",
-        ):
-            assert s.mean() == 1.0
-    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", cudf_mean)
+        with pytest.warns(warning, match=match_str):
+            assert (
+                s.mean() == 1.0
+                if warning == CudfPandasResultsDifferentWarning
+                else 1.5
+            )
 
-
-def test_cudf_pandas_debugging_pandas_error(monkeypatch):
-    pd_mean = pd.Series.mean
-
-    def mock_mean_exception(self, *args, **kwargs):
-        raise Exception()
-
-    with monkeypatch.context() as monkeycontext:
-        monkeycontext.setattr(
-            xpd.Series.mean, "_fsproxy_slow", mock_mean_exception
-        )
-        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
-        s = xpd.Series([1, 2])
-        with pytest.warns(
-            CudfPandasDebugWarning,
-            match="The result from pandas could not be computed.",
-        ):
-            s = xpd.Series([1, 2])
-            assert s.mean() == 1.5
-    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
-
-
-def test_cudf_pandas_debugging_failed(monkeypatch):
-    pd_mean = pd.Series.mean
-
-    def mock_mean_none(self, *args, **kwargs):
-        return None
-
-    with monkeypatch.context() as monkeycontext:
-        monkeycontext.setattr(xpd.Series.mean, "_fsproxy_slow", mock_mean_none)
-        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
-        s = xpd.Series([1, 2])
-        with pytest.warns(
-            CudfPandasDebugWarning,
-            match="Pandas debugging mode failed.",
-        ):
-            s = xpd.Series([1, 2])
-            assert s.mean() == 1.5
-    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
-
-
-def test_cudf_pandas_debug_oom_fallback(monkeypatch):
-    cudf_mean = cudf.Series.mean
-
-    def mock_mean_rmm_error(self, *args, **kwargs):
-        raise RMMError
-
-    with monkeypatch.context() as monkeycontext:
-        monkeypatch.setattr(
-            xpd.Series.mean, "_fsproxy_fast", mock_mean_rmm_error
-        )
-        monkeycontext.setenv("CUDF_PANDAS_FALLBACK_DEBUGGING", "True")
-        s = xpd.Series([1, 2])
-        with pytest.warns(
-            CudfPandasDebugWarning,
-            match="Out of Memory Error.",
-        ):
-            assert s.mean() == 1.5
-    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", cudf_mean)
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
+    monkeypatch.setattr(xpd.Series.mean, proxy_attr, original_mean)
