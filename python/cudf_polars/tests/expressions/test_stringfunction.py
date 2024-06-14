@@ -39,3 +39,12 @@ def test_unsupported_stringfunction():
 
     with pytest.raises(NotImplementedError):
         _ = translate_ir(q._ldf.visit())
+
+
+def test_contains_re_non_strict_raises():
+    df = pl.LazyFrame({"a": ["a"]})
+
+    q = df.select(pl.col("a").str.contains(".", strict=False))
+
+    with pytest.raises(NotImplementedError):
+        _ = translate_ir(q._ldf.visit())
