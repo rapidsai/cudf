@@ -16,7 +16,7 @@
 
 #include "join_common.hpp"
 
-auto const CONDITIONAL_JOIN_SIZE_RANGE = std::vector<nvbench::int64_t>{100'000, 10'000'000};
+auto const CONDITIONAL_JOIN_SIZE_RANGE = std::vector<nvbench::int64_t>{1000, 100'000};
 
 template <typename Key, bool Nullable>
 void nvbench_conditional_inner_join(nvbench::state& state,
