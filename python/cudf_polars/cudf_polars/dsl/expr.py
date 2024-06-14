@@ -644,13 +644,28 @@ class StringFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
+        self._validate_input()
+
+    def _validate_input(self):
         if self.name not in (
             pl_expr.StringFunction.Lowercase,
             pl_expr.StringFunction.Uppercase,
             pl_expr.StringFunction.EndsWith,
             pl_expr.StringFunction.StartsWith,
+            pl_expr.StringFunction.Contains,
         ):
             raise NotImplementedError(f"String function {self.name}")
+        if self.name == pl_expr.StringFunction.Contains:
+            literal, strict = self.options
+            if not literal:
+                if not strict:
+                    raise NotImplementedError(
+                        "f{strict=} is not supported for regex contains"
+                    )
+                if not isinstance(self.children[1], Literal):
+                    raise NotImplementedError(
+                        "Regex contains only supports a scalar pattern"
+                    )
 
     def do_evaluate(
         self,
@@ -660,6 +675,26 @@ class StringFunction(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
+        if self.name == pl_expr.StringFunction.Contains:
+            child, arg = self.children
+            column = child.evaluate(df, context=context, mapping=mapping)
+
+            literal, _ = self.options
+            if literal:
+                pat = arg.evaluate(df, context=context, mapping=mapping)
+                pattern = (
+                    pat.obj_scalar
+                    if pat.is_scalar and pat.obj.size() != column.obj.size()
+                    else pat.obj
+                )
+                return Column(plc.strings.find.contains(column.obj, pattern))
+            else:
+                assert isinstance(arg, Literal)
+                prog = plc.strings.regex_program.RegexProgram.create(
+                    arg.value.as_py(),
+                    flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
+                )
+                return Column(plc.strings.contains.contains_re(column.obj, prog))
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
@@ -691,6 +726,22 @@ class StringFunction(Expr):
                 )
             )
         else:
+            columns = [
+                child.evaluate(df, context=context, mapping=mapping)
+                for child in self.children
+            ]
+            if self.name == pl_expr.StringFunction.Lowercase:
+                (column,) = columns
+                return Column(plc.strings.case.to_lower(column.obj))
+            elif self.name == pl_expr.StringFunction.Uppercase:
+                (column,) = columns
+                return Column(plc.strings.case.to_upper(column.obj))
+            elif self.name == pl_expr.StringFunction.EndsWith:
+                column, suffix = columns
+                return Column(plc.strings.find.ends_with(column.obj, suffix.obj))
+            elif self.name == pl_expr.StringFunction.StartsWith:
+                column, suffix = columns
+                return Column(plc.strings.find.starts_with(column.obj, suffix.obj))
             raise NotImplementedError(
                 f"StringFunction {self.name}"
             )  # pragma: no cover; handled by init raising

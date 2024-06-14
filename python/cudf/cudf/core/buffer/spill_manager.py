@@ -13,14 +13,16 @@ from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import partial
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import rmm.mr
 
-from cudf.core.buffer.spillable_buffer import SpillableBufferOwner
 from cudf.options import get_option
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.string import format_bytes
+
+if TYPE_CHECKING:
+    from cudf.core.buffer.spillable_buffer import SpillableBufferOwner
 
 _spill_cudf_nvtx_annotate = partial(
     _cudf_nvtx_annotate, domain="cudf_python-spill"
