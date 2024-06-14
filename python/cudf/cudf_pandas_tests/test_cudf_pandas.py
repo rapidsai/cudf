@@ -6,8 +6,10 @@ import collections
 import copy
 import datetime
 import operator
+import os
 import pathlib
 import pickle
+import subprocess
 import tempfile
 import types
 from io import BytesIO, StringIO
@@ -27,7 +29,6 @@ from cudf.pandas.fast_slow_proxy import (
     CudfPandasDebugNotImplementedErrorWarning,
     CudfPandasDebugOOMWarning,
     CudfPandasDebugTypeErrorWarning,
-    CudfPandasDebugWarning,
     CudfPandasPandasErrorWarning,
     CudfPandasResultsDifferentWarning,
     _Unusable,
@@ -1560,3 +1561,48 @@ def test_cudf_pandas_debugging(
 
     # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
     monkeypatch.setattr(xpd.Series.mean, proxy_attr, original_mean)
+
+
+@pytest.mark.parametrize(
+    "env_value",
+    ["", "cuda", "pool", "async", "managed", "managed_pool", "abc"],
+)
+def test_rmm_option_on_import(env_value):
+    data_directory = os.path.dirname(os.path.abspath(__file__))
+    # Create a copy of the current environment variables
+    env = os.environ.copy()
+    env["CUDF_PANDAS_RMM_MODE"] = env_value
+
+    sp_completed = subprocess.run(
+        [
+            "python",
+            "-m",
+            "cudf.pandas",
+            data_directory + "/data/profile_basic.py",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    if env_value in {"cuda", "pool", "async", "managed", "managed_pool"}:
+        assert sp_completed.returncode == 0
+    else:
+        assert sp_completed.returncode == 1
+
+
+def test_excelwriter_pathlike():
+    assert isinstance(pd.ExcelWriter("foo.xlsx"), os.PathLike)
+
+
+def test_is_proxy_object():
+    np_arr = np.array([1])
+
+    s1 = xpd.Series([1])
+    s2 = pd.Series([1])
+
+    np_arr_proxy = s1.to_numpy()
+
+    assert not is_proxy_object(np_arr)
+    assert is_proxy_object(np_arr_proxy)
+    assert is_proxy_object(s1)
+    assert not is_proxy_object(s2)

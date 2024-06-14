@@ -223,3 +223,16 @@ def test_contains_tz_aware(item, expected):
 def test_tz_convert_naive_typeerror():
     with pytest.raises(TypeError):
         cudf.date_range("2020", periods=2, freq="D").tz_convert(None)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_from_pandas_obj_tz_aware(klass):
+    tz_aware_data = [
+        pd.Timestamp("2020-01-01", tz="UTC").tz_convert("US/Pacific")
+    ]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    result = cudf.from_pandas(pandas_obj)
+    expected = getattr(cudf, klass)(tz_aware_data)
+    assert_eq(result, expected)

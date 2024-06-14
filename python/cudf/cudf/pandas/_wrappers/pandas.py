@@ -1,8 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+import abc
 import copyreg
 import importlib
+import os
 import pickle
 import sys
 
@@ -128,8 +130,6 @@ def Timestamp_Timedelta__new__(cls, *args, **kwargs):
     # hence this method is needed.
     self, _ = _fast_slow_function_call(
         lambda cls, args, kwargs: cls(*args, **kwargs),
-        cudf.options._env_get_bool("CUDF_PANDAS_DEBUGGING", False),
-        cudf.options._env_get_bool("CUDF_PANDAS_FALLBACK_DEBUGGING", False),
         cls,
         args,
         kwargs,
@@ -253,8 +253,6 @@ def Index__new__(cls, *args, **kwargs):
     # make_final_proxy_type provides.
     self, _ = _fast_slow_function_call(
         lambda cls, args, kwargs: cls(*args, **kwargs),
-        cudf.options._env_get_bool("CUDF_PANDAS_DEBUGGING", False),
-        cudf.options._env_get_bool("CUDF_PANDAS_FALLBACK_DEBUGGING", False),
         cls,
         args,
         kwargs,
@@ -861,7 +859,12 @@ ExcelWriter = make_final_proxy_type(
     pd.ExcelWriter,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "__fspath__": _FastSlowAttribute("__fspath__"),
+    },
+    bases=(os.PathLike,),
+    metaclasses=(abc.ABCMeta,),
 )
 
 try:
@@ -1036,7 +1039,7 @@ AbstractHolidayCalendar = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
-    meta_class=pd_HolidayCalendarMetaClass,
+    metaclasses=(pd_HolidayCalendarMetaClass,),
 )
 
 Holiday = make_final_proxy_type(

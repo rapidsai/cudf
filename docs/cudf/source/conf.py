@@ -617,6 +617,8 @@ def linkcode_resolve(domain, info) -> str | None:
         f"branch-{version}/python/cudf/cudf/{fn}{linespec}"
     )
 
+# Needed for avoid build warning for PandasCompat extension
+suppress_warnings = ["myst.domains"]
 
 def setup(app):
     app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")
