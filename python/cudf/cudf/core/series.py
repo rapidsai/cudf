@@ -10,6 +10,7 @@ import warnings
 from collections import abc
 from shutil import get_terminal_size
 from typing import (
+    TYPE_CHECKING,
     Any,
     Dict,
     Literal,
@@ -27,12 +28,6 @@ from typing_extensions import Self, assert_never
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import (
-    ColumnLike,
-    DataFrameOrSeries,
-    NotImplementedType,
-    ScalarLike,
-)
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -84,6 +79,14 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+
+if TYPE_CHECKING:
+    from cudf._typing import (
+        ColumnLike,
+        DataFrameOrSeries,
+        NotImplementedType,
+        ScalarLike,
+    )
 
 
 def _format_percentile_names(percentiles):

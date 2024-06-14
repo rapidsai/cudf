@@ -9,6 +9,7 @@ import textwrap
 import warnings
 from collections import Counter, abc
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -31,12 +32,6 @@ from typing_extensions import Self
 
 import cudf
 import cudf._lib as libcudf
-from cudf._typing import (
-    ColumnLike,
-    DataFrameOrSeries,
-    Dtype,
-    NotImplementedType,
-)
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -69,6 +64,14 @@ from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import _warn_no_dask_cudf
+
+if TYPE_CHECKING:
+    from cudf._typing import (
+        ColumnLike,
+        DataFrameOrSeries,
+        Dtype,
+        NotImplementedType,
+    )
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.

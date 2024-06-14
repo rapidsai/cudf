@@ -3,21 +3,17 @@
 from __future__ import annotations
 
 import warnings
-from collections import abc
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba import cuda
 from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
-from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
-from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
@@ -29,7 +25,19 @@ from cudf.utils.dtypes import (
 )
 
 if TYPE_CHECKING:
-    from cudf._typing import SeriesOrIndex, SeriesOrSingleColumnIndex
+    from collections import abc
+
+    import numba.cuda
+
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        ColumnLike,
+        Dtype,
+        ScalarLike,
+        SeriesOrIndex,
+        SeriesOrSingleColumnIndex,
+    )
+    from cudf.core.buffer import Buffer
     from cudf.core.column import (
         ColumnBase,
         DatetimeColumn,
@@ -868,7 +876,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def data_array_view(
         self, *, mode="write"
-    ) -> cuda.devicearray.DeviceNDArray:
+    ) -> numba.cuda.devicearray.DeviceNDArray:
         return self.codes.data_array_view(mode=mode)
 
     def unique(self) -> CategoricalColumn:
