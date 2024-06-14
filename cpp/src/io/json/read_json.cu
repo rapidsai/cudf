@@ -372,7 +372,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
       concatenated_table_schema_info.insert(
         concatenated_table_schema_info.end(), ptbl_schema.begin(), ptbl_schema.end());
     });
-  return table_with_metadata{cudf::concatenate(partial_table_views),
+  return table_with_metadata{cudf::concatenate(partial_table_views, stream, mr),
                              {partial_tables[0].metadata.schema_info}};
 }
 
