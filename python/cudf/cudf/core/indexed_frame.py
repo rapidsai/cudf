@@ -337,21 +337,24 @@ class IndexedFrame(Frame):
             index = _index_from_data(
                 dict(enumerate(columns[:n_index_columns]))
             )
+            index = index._copy_type_metadata(self.index)
+            # TODO: Should this if statement be handled in Index._copy_type_metadata?
+            if (
+                isinstance(self.index, cudf.CategoricalIndex)
+                and not isinstance(index, cudf.CategoricalIndex)
+            ) or (
+                isinstance(self.index, cudf.MultiIndex)
+                and not isinstance(index, cudf.MultiIndex)
+            ):
+                index = type(self.index)._from_data(index._data)
             if isinstance(index, cudf.MultiIndex):
                 index.names = index_names
             else:
                 index.name = index_names[0]
 
         data = dict(zip(column_names, data_columns))
-        frame = self.__class__._from_data(data)
-
-        if index is not None:
-            # TODO: triage why using the setter here breaks dask_cuda.ProxifyHostFile
-            frame._index = index
-        return frame._copy_type_metadata(
-            self,
-            include_index=bool(index_names),
-        )
+        frame = type(self)._from_data(data, index)
+        return frame._copy_type_metadata(self)
 
     def __round__(self, digits=0):
         # Shouldn't be added to BinaryOperand
@@ -1911,41 +1914,6 @@ class IndexedFrame(Frame):
         return self._from_data_like_self(
             self._data._from_columns_like_self(result)
         )
-
-    def _copy_type_metadata(
-        self: Self, other: Self, include_index: bool = True
-    ) -> Self:
-        """
-        Copy type metadata from each column of `other` to the corresponding
-        column of `self`.
-        See `ColumnBase._with_type_metadata` for more information.
-        """
-        super()._copy_type_metadata(other)
-        if (
-            include_index
-            and self.index is not None
-            and other.index is not None
-        ):
-            self.index._copy_type_metadata(other.index)
-            # When other.index is a CategoricalIndex, the current index
-            # will be a NumericalIndex with an underlying CategoricalColumn
-            # (the above _copy_type_metadata call will have converted the
-            # column). Calling cudf.Index on that column generates the
-            # appropriate index.
-            if isinstance(
-                other.index, cudf.core.index.CategoricalIndex
-            ) and not isinstance(self.index, cudf.core.index.CategoricalIndex):
-                self.index = cudf.Index(
-                    cast("cudf.Index", self.index)._column,
-                    name=self.index.name,
-                )
-            elif isinstance(other.index, cudf.MultiIndex) and not isinstance(
-                self.index, cudf.MultiIndex
-            ):
-                self.index = cudf.MultiIndex._from_data(
-                    self.index._data, name=self.index.name
-                )
-        return self
 
     @_cudf_nvtx_annotate
     def interpolate(
