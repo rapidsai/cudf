@@ -14,21 +14,18 @@ from libcpp.vector cimport vector
 import datetime
 from collections import OrderedDict
 
-cimport pylibcudf.libcudf.lists.lists_column_view as cpp_lists_column_view
-
 try:
     import ujson as json
 except ImportError:
     import json
 
+cimport pylibcudf.libcudf.lists.lists_column_view as cpp_lists_column_view
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.orc cimport (
     chunked_orc_writer_options,
     orc_chunked_writer,
-    orc_reader_options,
     orc_writer_options,
-    read_orc as libcudf_read_orc,
     write_orc as libcudf_write_orc,
 )
 from pylibcudf.libcudf.io.orc_metadata cimport (
@@ -50,9 +47,7 @@ from pylibcudf.libcudf.io.types cimport (
     column_in_metadata,
     compression_type,
     sink_info,
-    source_info,
     table_input_metadata,
-    table_with_metadata,
 )
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport data_type, size_type, type_id
@@ -62,13 +57,12 @@ from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport (
     make_sink_info,
     make_source_info,
-    update_column_struct_field_names,
+    update_col_struct_field_names,
 )
+from cudf._lib.types import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
+from cudf._lib.utils cimport data_from_pylibcudf_io, table_view_from_table
 
-from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
-
-from cudf._lib.types cimport underlying_type_t_type_id
-from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
+import pylibcudf as plc
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
@@ -236,35 +230,28 @@ cpdef read_orc(object filepaths_or_buffers,
     --------
     cudf.read_orc
     """
-    cdef orc_reader_options c_orc_reader_options = make_orc_reader_options(
-        filepaths_or_buffers,
+
+    if columns is not None:
+        columns = [str(col) for col in columns]
+
+    tbl_w_meta = plc.io.orc.read_orc(
+        plc.io.SourceInfo(filepaths_or_buffers),
         columns,
-        stripes or [],
+        stripes,
         get_skiprows_arg(skip_rows),
         get_num_rows_arg(num_rows),
-        (
-            type_id.EMPTY
-            if timestamp_type is None else
-            <type_id>(
-                <underlying_type_t_type_id> (
-                    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[
-                        cudf.dtype(timestamp_type)
-                    ]
-                )
-            )
-        ),
         use_index,
+        plc.types.DataType(
+            SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[
+                cudf.dtype(timestamp_type)
+            ]
+        )
     )
 
-    cdef table_with_metadata c_result
-    cdef size_type nrows
+    names = tbl_w_meta.column_names
 
-    with nogil:
-        c_result = move(libcudf_read_orc(c_orc_reader_options))
-
-    names = [info.name.decode() for info in c_result.metadata.schema_info]
     actual_index_names, col_names, is_range_index, reset_index_name, \
-        range_idx = _get_index_from_metadata(c_result.metadata.user_data,
+        range_idx = _get_index_from_metadata(tbl_w_meta.per_file_user_data,
                                              names,
                                              skip_rows,
                                              num_rows)
@@ -272,11 +259,11 @@ cpdef read_orc(object filepaths_or_buffers,
     if columns is not None and (isinstance(columns, list) and len(columns) == 0):
         # When `columns=[]`, index needs to be
         # established, but not the columns.
-        nrows = c_result.tbl.get()[0].view().num_rows()
+        nrows = tbl_w_meta.tbl.num_rows()
         return {}, cudf.RangeIndex(nrows)
 
-    data, index = data_from_unique_ptr(
-        move(c_result.tbl),
+    data, index = data_from_pylibcudf_io(
+        tbl_w_meta,
         col_names if columns is None else names,
         actual_index_names
     )
@@ -286,11 +273,13 @@ cpdef read_orc(object filepaths_or_buffers,
     elif reset_index_name:
         index.names = [None] * len(index.names)
 
+    child_name_values = tbl_w_meta.child_names.values()
+
     data = {
-        name: update_column_struct_field_names(
-            col, c_result.metadata.schema_info[i]
+        name: update_col_struct_field_names(
+            col, child_names
         )
-        for i, (name, col) in enumerate(data.items())
+        for (name, col), child_names in zip(data.items(), child_name_values)
     }
 
     return data, index
@@ -313,32 +302,38 @@ cdef compression_type _get_comp_type(object compression):
         raise ValueError(f"Unsupported `compression` type {compression}")
 
 cdef tuple _get_index_from_metadata(
-        map[string, string] user_data,
+        vector[map[string, string]] user_data,
         object names,
         object skip_rows,
         object num_rows):
-    json_str = user_data[b'pandas'].decode('utf-8')
+
+    # TODO: consider metadata from more than the first file?
+    # Note: This code used to use the deprecated user_data member on
+    # table_metadata (which only considers the first file)
     meta = None
     index_col = None
     is_range_index = False
     reset_index_name = False
     range_idx = None
-    if json_str != "":
-        meta = json.loads(json_str)
-        if 'index_columns' in meta and len(meta['index_columns']) > 0:
-            index_col = meta['index_columns']
-            if isinstance(index_col[0], dict) and \
-                    index_col[0]['kind'] == 'range':
-                is_range_index = True
-            else:
-                index_col_names = OrderedDict()
-                for idx_col in index_col:
-                    for c in meta['columns']:
-                        if c['field_name'] == idx_col:
-                            index_col_names[idx_col] = \
-                                c['name'] or c['field_name']
-                            if c['name'] is None:
-                                reset_index_name = True
+
+    if user_data.size() > 0:
+        json_str = user_data[0][b'pandas'].decode('utf-8')
+        if json_str != "":
+            meta = json.loads(json_str)
+            if 'index_columns' in meta and len(meta['index_columns']) > 0:
+                index_col = meta['index_columns']
+                if isinstance(index_col[0], dict) and \
+                        index_col[0]['kind'] == 'range':
+                    is_range_index = True
+                else:
+                    index_col_names = OrderedDict()
+                    for idx_col in index_col:
+                        for c in meta['columns']:
+                            if c['field_name'] == idx_col:
+                                index_col_names[idx_col] = \
+                                    c['name'] or c['field_name']
+                                if c['name'] is None:
+                                    reset_index_name = True
 
     actual_index_names = None
     if index_col is not None and len(index_col) > 0:
@@ -471,41 +466,6 @@ cdef int64_t get_num_rows_arg(object arg) except*:
     if not isinstance(arg, int) or arg < -1:
         raise TypeError("num_rows must be an int >= -1")
     return <int64_t> arg
-
-
-cdef orc_reader_options make_orc_reader_options(
-    object filepaths_or_buffers,
-    object column_names,
-    object stripes,
-    int64_t skip_rows,
-    int64_t num_rows,
-    type_id timestamp_type,
-    bool use_index
-) except*:
-
-    cdef vector[vector[size_type]] strps = stripes
-    cdef orc_reader_options opts
-    cdef source_info src = make_source_info(filepaths_or_buffers)
-    opts = move(
-        orc_reader_options.builder(src)
-        .stripes(strps)
-        .skip_rows(skip_rows)
-        .timestamp_type(data_type(timestamp_type))
-        .use_index(use_index)
-        .build()
-    )
-    if num_rows >= 0:
-        opts.set_num_rows(num_rows)
-
-    cdef vector[string] c_column_names
-    if column_names is not None:
-        c_column_names.reserve(len(column_names))
-        for col in column_names:
-            c_column_names.push_back(str(col).encode())
-        if len(column_names) > 0:
-            opts.set_columns(c_column_names)
-
-    return opts
 
 
 cdef class ORCWriter:
