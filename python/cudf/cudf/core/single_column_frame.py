@@ -338,8 +338,6 @@ class SingleColumnFrame(Frame, NotIterable):
         int
             Number of unique values in the column.
         """
-        if self._column.null_count == len(self):
-            return 0
         return self._column.distinct_count(dropna=dropna)
 
     def _get_elements_from_column(self, arg) -> Union[ScalarLike, ColumnBase]:

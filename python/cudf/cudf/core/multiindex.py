@@ -1749,6 +1749,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def unique(self):
         return self.drop_duplicates(keep="first")
 
+    @_cudf_nvtx_annotate
+    def nunique(self, dropna: bool = True) -> int:
+        mi = self.dropna(how="all") if dropna else self
+        return len(mi.unique())
+
     def _clean_nulls_from_index(self):
         """
         Convert all na values(if any) in MultiIndex object
