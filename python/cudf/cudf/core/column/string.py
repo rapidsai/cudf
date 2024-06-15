@@ -622,7 +622,7 @@ class StringMethods(ColumnMethods):
         dtype: object
 
         .. pandas-compat::
-            **StringMethods.extract**
+            :meth:`pandas.Series.str.extract`
 
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
@@ -748,7 +748,7 @@ class StringMethods(ColumnMethods):
         dtype: bool
 
         .. pandas-compat::
-            **StringMethods.contains**
+            :meth:`pandas.Series.str.contains`
 
             The parameters `case` and `na` are not yet supported and will
             raise a NotImplementedError if anything other than the default
@@ -984,7 +984,7 @@ class StringMethods(ColumnMethods):
         dtype: object
 
         .. pandas-compat::
-            **StringMethods.replace**
+            :meth:`pandas.Series.str.replace`
 
             The parameters `case` and `flags` are not yet supported and will
             raise a `NotImplementedError` if anything other than the default
@@ -2815,7 +2815,7 @@ class StringMethods(ColumnMethods):
                    )
 
         .. pandas-compat::
-            **StringMethods.partition**
+            :meth:`pandas.Series.str.partition`
 
             The parameter `expand` is not yet supported and will raise a
             `NotImplementedError` if anything other than the default
@@ -3539,7 +3539,7 @@ class StringMethods(ColumnMethods):
         Index([0, 0, 2, 1], dtype='int64')
 
         .. pandas-compat::
-            **StringMethods.count**
+            :meth:`pandas.Series.str.count`
 
             -   `flags` parameter currently only supports re.DOTALL
                 and re.MULTILINE.
@@ -3619,7 +3619,7 @@ class StringMethods(ColumnMethods):
         dtype: list
 
         .. pandas-compat::
-            **StringMethods.findall**
+            :meth:`pandas.Series.str.findall`
 
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
@@ -3823,7 +3823,7 @@ class StringMethods(ColumnMethods):
         dtype: bool
 
         .. pandas-compat::
-            **StringMethods.endswith**
+            :meth:`pandas.Series.str.endswith`
 
             `na` parameter is not yet supported, as cudf uses
             native strings instead of Python objects.
@@ -4276,7 +4276,7 @@ class StringMethods(ColumnMethods):
         dtype: bool
 
         .. pandas-compat::
-            **StringMethods.match**
+            :meth:`pandas.Series.str.match`
 
             Parameters `case` and `na` are currently not supported.
             The `flags` parameter currently only supports re.DOTALL and
