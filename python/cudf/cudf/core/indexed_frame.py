@@ -5162,7 +5162,7 @@ class IndexedFrame(Frame):
         if not isinstance(self._data[explode_column].dtype, ListDtype):
             result = self.copy()
             if ignore_index:
-                result.index = RangeIndex(len(self))
+                result.index = RangeIndex(len(result))
             return result
 
         column_index = self._column_names.index(explode_column)
