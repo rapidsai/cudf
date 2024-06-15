@@ -627,7 +627,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def fillna(
         self,
-        value: None | ScalarLike | abc.Mapping | cudf.Series = None,
+        value: None | ScalarLike | cudf.Series = None,
         method: Optional[Literal["ffill", "bfill", "pad", "backfill"]] = None,
         axis=None,
         inplace: bool = False,
