@@ -316,7 +316,7 @@ class CudfEngine(ArrowDatasetEngine):
 
             if index and (index[0] in df.columns):
                 df = df.set_index(index[0])
-            elif index is False and df.index.names != (None,):
+            elif index is False and df.index.names != [None]:
                 # If index=False, we shouldn't have a named index
                 df.reset_index(inplace=True)
 
