@@ -3,15 +3,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
 
-import cupy
-import numpy
-import pyarrow as pa
 from typing_extensions import Self
 
 import cudf
-from cudf._typing import NotImplementedType, ScalarLike
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
@@ -24,6 +20,13 @@ from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import NotIterable
+
+if TYPE_CHECKING:
+    import cupy
+    import numpy
+    import pyarrow as pa
+
+    from cudf._typing import NotImplementedType, ScalarLike
 
 
 class SingleColumnFrame(Frame, NotIterable):
