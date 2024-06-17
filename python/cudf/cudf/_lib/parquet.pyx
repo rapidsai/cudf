@@ -915,8 +915,7 @@ cdef class ParquetReader:
                     )
                 )
 
-        df = dfs
-        df = _process_metadata(df, self.result_meta, self.names, self.row_groups,
+        df = _process_metadata(dfs, self.result_meta, self.names, self.row_groups,
                                self.filepaths_or_buffers, self.pa_buffers,
                                self.allow_range_index, self.cpp_use_pandas_metadata)
         return df
