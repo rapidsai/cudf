@@ -84,3 +84,8 @@ def test_source_info_ctor_mixing_invalid(sources, tmp_path):
             sources[i] = str(file)
     with pytest.raises(ValueError):
         plc.io.SourceInfo(sources)
+
+
+def test_source_info_invalid():
+    with pytest.raises(ValueError):
+        plc.io.SourceInfo([123])
