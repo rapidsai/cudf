@@ -268,6 +268,11 @@ ConfigureNVBench(PARQUET_MULTITHREAD_READER_NVBENCH io/parquet/parquet_reader_mu
 ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp io/orc/orc_reader_options.cpp)
 
 # ##################################################################################################
+# * orc multithreaded benchmark
+# --------------------------------------------------------------------------
+ConfigureNVBench(ORC_MULTITHREADED_NVBENCH io/orc/orc_reader_multithreaded.cpp)
+
+# ##################################################################################################
 # * csv reader benchmark --------------------------------------------------------------------------
 ConfigureNVBench(CSV_READER_NVBENCH io/csv/csv_reader_input.cpp io/csv/csv_reader_options.cpp)
 
