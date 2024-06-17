@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
@@ -83,10 +84,10 @@ using hash_set_type =
  * @return A device_uvector containing the output indices
  */
 template <typename RowHasher>
-rmm::device_uvector<size_type> process_keep_option(hash_set_type<RowHasher>& set,
-                                                   size_type set_size,
-                                                   size_type num_rows,
-                                                   duplicate_keep_option keep,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr);
+rmm::device_uvector<size_type> reduce_by_row(hash_set_type<RowHasher>& set,
+                                             size_type set_size,
+                                             size_type num_rows,
+                                             duplicate_keep_option keep,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr);
 }  // namespace cudf::detail

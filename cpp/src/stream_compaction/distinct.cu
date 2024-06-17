@@ -47,7 +47,7 @@ namespace cudf {
 namespace detail {
 namespace {
 /**
- * @brief Invokes the given `func` with desired the row equality and probing method
+ * @brief Invokes the given `func` with desired the row equality
  *
  * @tparam HasNested Flag indicating whether there are nested columns in the input
  * @tparam Func Type of the helper function doing `distinct` check
@@ -59,7 +59,7 @@ namespace {
  * @param func The input functor to invoke
  */
 template <bool HasNested, typename Func>
-rmm::device_uvector<cudf::size_type> dispatch_hash_set(
+rmm::device_uvector<cudf::size_type> dipatch_row_equal(
   null_equality compare_nulls,
   nan_equality compare_nans,
   bool has_nulls,
@@ -100,9 +100,7 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
   auto const has_nulls          = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
   auto const has_nested_columns = cudf::detail::has_nested_columns(input);
 
-  auto const row_hash = cudf::experimental::row::hash::row_hasher(preprocessed_input);
-  auto const d_hash   = row_hash.device_hasher(has_nulls);
-
+  auto const row_hash  = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const row_equal = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
   auto const helper_func = [&](auto const& d_equal) {
@@ -111,20 +109,20 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
                                                0.5,  // desired load factor
                                                cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
                                                d_equal,
-                                               {d_hash},
+                                               {row_hash.device_hasher(has_nulls)},
                                                {},
                                                {},
                                                cudf::detail::cuco_allocator{stream},
                                                stream.value()};
     auto const iter = thrust::counting_iterator<cudf::size_type>{0};
     auto const size = set.insert(iter, iter + num_rows, stream.value());
-    return detail::process_keep_option(set, size, num_rows, keep, stream, mr);
+    return detail::reduce_by_row(set, size, num_rows, keep, stream, mr);
   };
 
   if (cudf::detail::has_nested_columns(input)) {
-    return dispatch_hash_set<true>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);
+    return dipatch_row_equal<true>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);
   } else {
-    return dispatch_hash_set<false>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);
+    return dipatch_row_equal<false>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);
   }
 }
 
