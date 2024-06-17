@@ -32,17 +32,19 @@ struct JsonLargeReaderTest : public cudf::test::StringsLargeTest {};
 
 TEST_F(JsonLargeReaderTest, MultiBatch)
 {
-  std::string json_string   = R"(
+  std::string json_string             = R"(
     { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
     { "a": { "y" : 6}, "b" : [4, 5   ], "c": 12 }
     { "a": { "y" : 6}, "b" : [6      ], "c": 13 }
     { "a": { "y" : 6}, "b" : [7      ], "c": 14 })";
-  size_t expected_file_size = std::numeric_limits<int>::max() / 2;
+  constexpr size_t expected_file_size = std::numeric_limits<int>::max() / 2;
   std::size_t const log_repetitions =
     static_cast<std::size_t>(std::ceil(std::log2(expected_file_size / json_string.size())));
+
+  json_string.reserve(json_string.size() * (1UL << log_repetitions));
   std::size_t numrows = 4;
   for (std::size_t i = 0; i < log_repetitions; i++) {
-    json_string = json_string + "\n" + json_string;
+    json_string += json_string;
     numrows <<= 1;
   }
 

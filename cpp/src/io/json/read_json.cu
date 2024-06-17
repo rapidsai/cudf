@@ -87,7 +87,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                                   sources.end(),
                                   prefsum_source_sizes.begin(),
                                   std::plus<size_t>{},
-                                  [](const std::unique_ptr<datasource>& s) { return s->size(); });
+                                  [](std::unique_ptr<datasource> const& s) { return s->size(); });
     auto upper =
       std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
     size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
@@ -312,10 +312,10 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                  "The size of each source file must be less than INT_MAX bytes");
   });
 
-  size_t const batch_size_ub = std::numeric_limits<int>::max();
-  size_t const chunk_offset  = reader_opts.get_byte_range_offset();
-  size_t chunk_size          = reader_opts.get_byte_range_size();
-  chunk_size                 = !chunk_size ? sources_size(sources, 0, 0) : chunk_size;
+  constexpr size_t batch_size_ub = std::numeric_limits<int>::max();
+  size_t const chunk_offset      = reader_opts.get_byte_range_offset();
+  size_t chunk_size              = reader_opts.get_byte_range_size();
+  chunk_size                     = !chunk_size ? sources_size(sources, 0, 0) : chunk_size;
 
   // Identify the position of starting source file from which to begin batching based on
   // byte range offset. If the offset is larger than the sum of all source
@@ -380,17 +380,10 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                "Mismatch in JSON schema across batches in multi-source multi-batch reading");
 
   auto partial_table_views = std::vector<cudf::table_view>(partial_tables.size());
-  std::transform(
-    partial_tables.begin(), partial_tables.end(), partial_table_views.begin(), [](auto& table) {
-      return table.tbl->view();
-    });
-  std::vector<column_name_info> concatenated_table_schema_info;
-  std::for_each(
-    partial_tables.begin(), partial_tables.end(), [&concatenated_table_schema_info](auto& ptbl) {
-      auto const& ptbl_schema = ptbl.metadata.schema_info;
-      concatenated_table_schema_info.insert(
-        concatenated_table_schema_info.end(), ptbl_schema.begin(), ptbl_schema.end());
-    });
+  std::transform(partial_tables.begin(),
+                 partial_tables.end(),
+                 partial_table_views.begin(),
+                 [](auto const& table) { return table.tbl->view(); });
   return table_with_metadata{cudf::concatenate(partial_table_views, stream, mr),
                              {partial_tables[0].metadata.schema_info}};
 }

@@ -265,7 +265,9 @@ struct column_name_info {
    */
   bool operator==(column_name_info const& rhs) const
   {
-    return ((name == rhs.name) && (children == rhs.children));
+    return ((name == rhs.name) && (is_nullable == rhs.is_nullable) &&
+            (is_binary == rhs.is_binary) && (type_length == rhs.type_length) &&
+            (children == rhs.children));
   };
 };
 
