@@ -5,19 +5,9 @@ from __future__ import annotations
 import operator
 import pickle
 import warnings
-from collections.abc import Generator
 from functools import cache, cached_property
 from numbers import Number
-from typing import (
-    Any,
-    List,
-    Literal,
-    MutableMapping,
-    Optional,
-    Tuple,
-    Union,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, Literal, MutableMapping, cast
 
 import cupy
 import numpy as np
@@ -71,6 +61,9 @@ from cudf.utils.dtypes import (
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import _warn_no_dask_cudf, search_range
 
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
 
 class IndexMeta(type):
     """Custom metaclass for Index that overrides instance/subclass tests."""
@@ -98,10 +91,10 @@ class IndexMeta(type):
 
 
 def _lexsorted_equal_range(
-    idx: Union[Index, cudf.MultiIndex],
+    idx: Index | cudf.MultiIndex,
     key_as_table: Frame,
     is_sorted: bool,
-) -> Tuple[int, int, Optional[ColumnBase]]:
+) -> tuple[int, int, ColumnBase | None]:
     """Get equal range for key in lexicographically sorted index. If index
     is not sorted when called, a sort will take place and `sort_inds` is
     returned. Otherwise `None` is returned in that position.
@@ -895,7 +888,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @_cudf_nvtx_annotate
-    def nunique(self) -> int:
+    def nunique(self, dropna: bool = True) -> int:
         return len(self)
 
     @_cudf_nvtx_annotate
@@ -2861,7 +2854,7 @@ class IntervalIndex(Index):
     def __init__(
         self,
         data,
-        closed: Optional[Literal["left", "right", "neither", "both"]] = None,
+        closed: Literal["left", "right", "neither", "both"] | None = None,
         dtype=None,
         copy: bool = False,
         name=None,
@@ -2920,9 +2913,7 @@ class IntervalIndex(Index):
     def from_breaks(
         cls,
         breaks,
-        closed: Optional[
-            Literal["left", "right", "neither", "both"]
-        ] = "right",
+        closed: Literal["left", "right", "neither", "both"] | None = "right",
         name=None,
         copy: bool = False,
         dtype=None,
@@ -3109,7 +3100,7 @@ def _getdefault_name(values, name):
 
 
 @_cudf_nvtx_annotate
-def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
+def _concat_range_index(indexes: list[RangeIndex]) -> BaseIndex:
     """
     An internal Utility function to concat RangeIndex objects.
     """
@@ -3150,7 +3141,7 @@ def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
 
 
 @_cudf_nvtx_annotate
-def _extended_gcd(a: int, b: int) -> Tuple[int, int, int]:
+def _extended_gcd(a: int, b: int) -> tuple[int, int, int]:
     """
     Extended Euclidean algorithms to solve Bezout's identity:
        a*x + b*y = gcd(x, y)
@@ -3200,7 +3191,7 @@ def _get_nearest_indexer(
     index: Index,
     positions: cudf.Series,
     target_col: cudf.core.column.ColumnBase,
-    tolerance: Union[int, float],
+    tolerance: int | float,
 ):
     """
     Get the indexer for the nearest index labels; requires an index with

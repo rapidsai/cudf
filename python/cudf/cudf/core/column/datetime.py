@@ -8,7 +8,7 @@ import functools
 import locale
 import re
 from locale import nl_langinfo
-from typing import TYPE_CHECKING, Any, Literal, Optional, Sequence, Tuple, cast
+from typing import TYPE_CHECKING, Any, Literal, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -19,22 +19,22 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.labeling import label_bins
 from cudf._lib.search import search_sorted
-from cudf._typing import (
-    ColumnBinaryOperand,
-    DatetimeLikeScalar,
-    Dtype,
-    DtypeObj,
-    ScalarLike,
-)
 from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
 from cudf.core._compat import PANDAS_GE_220
-from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
 from cudf.utils.utils import _all_bools_with_nulls
 
 if TYPE_CHECKING:
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        DatetimeLikeScalar,
+        Dtype,
+        DtypeObj,
+        ScalarLike,
+    )
+    from cudf.core.buffer import Buffer
     from cudf.core.column.numerical import NumericalColumn
 
 if PANDAS_GE_220:
@@ -242,10 +242,10 @@ class DatetimeColumn(column.ColumnBase):
         self,
         data: Buffer,
         dtype: DtypeObj,
-        mask: Optional[Buffer] = None,
-        size: Optional[int] = None,  # TODO: make non-optional
+        mask: Buffer | None = None,
+        size: int | None = None,  # TODO: make non-optional
         offset: int = 0,
-        null_count: Optional[int] = None,
+        null_count: int | None = None,
     ):
         dtype = cudf.dtype(dtype)
         if dtype.kind != "M":
@@ -509,7 +509,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def std(
         self,
-        skipna: Optional[bool] = None,
+        skipna: bool | None = None,
         min_count: int = 0,
         dtype: Dtype = np.float64,
         ddof: int = 1,
@@ -521,7 +521,7 @@ class DatetimeColumn(column.ColumnBase):
             * _unit_to_nanoseconds_conversion[self.time_unit],
         ).as_unit(self.time_unit)
 
-    def median(self, skipna: Optional[bool] = None) -> pd.Timestamp:
+    def median(self, skipna: bool | None = None) -> pd.Timestamp:
         return pd.Timestamp(
             self.as_numerical_column("int64").median(skipna=skipna),
             unit=self.time_unit,
@@ -641,7 +641,7 @@ class DatetimeColumn(column.ColumnBase):
     def fillna(
         self,
         fill_value: Any = None,
-        method: Optional[str] = None,
+        method: str | None = None,
     ) -> Self:
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
@@ -713,7 +713,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def _find_ambiguous_and_nonexistent(
         self, zone_name: str
-    ) -> Tuple[NumericalColumn, NumericalColumn] | Tuple[bool, bool]:
+    ) -> tuple[NumericalColumn, NumericalColumn] | tuple[bool, bool]:
         """
         Recognize ambiguous and nonexistent timestamps for the given timezone.
 
@@ -832,10 +832,10 @@ class DatetimeTZColumn(DatetimeColumn):
         self,
         data: Buffer,
         dtype: pd.DatetimeTZDtype,
-        mask: Optional[Buffer] = None,
-        size: Optional[int] = None,
+        mask: Buffer | None = None,
+        size: int | None = None,
         offset: int = 0,
-        null_count: Optional[int] = None,
+        null_count: int | None = None,
     ):
         super().__init__(
             data=data,
