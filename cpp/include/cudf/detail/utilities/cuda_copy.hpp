@@ -43,7 +43,6 @@ enum class copy_kind { PINNED_TO_DEVICE, DEVICE_TO_PINNED, PAGEABLE_TO_DEVICE, D
  * @param kind Direction of the copy and type of host memory
  * @param stream CUDA stream used for the copy
  */
-
 template <typename T>
 void cuda_memcpy_async(
   T* dst, T const* src, size_t size, copy_kind kind, rmm::cuda_stream_view stream)
