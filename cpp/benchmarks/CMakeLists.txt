@@ -163,8 +163,10 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
-ConfigureBench(JOIN_BENCH join/left_join.cu join/conditional_join.cu)
-ConfigureNVBench(JOIN_NVBENCH join/join.cu join/mixed_join.cu join/distinct_join.cu)
+ConfigureNVBench(
+  JOIN_NVBENCH join/left_join.cu join/conditional_join.cu join/join.cu join/mixed_join.cu
+  join/distinct_join.cu
+)
 
 # ##################################################################################################
 # * iterator benchmark ----------------------------------------------------------------------------
@@ -264,6 +266,11 @@ ConfigureNVBench(PARQUET_MULTITHREAD_READER_NVBENCH io/parquet/parquet_reader_mu
 # ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------
 ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp io/orc/orc_reader_options.cpp)
+
+# ##################################################################################################
+# * orc multithreaded benchmark
+# --------------------------------------------------------------------------
+ConfigureNVBench(ORC_MULTITHREADED_NVBENCH io/orc/orc_reader_multithreaded.cpp)
 
 # ##################################################################################################
 # * csv reader benchmark --------------------------------------------------------------------------

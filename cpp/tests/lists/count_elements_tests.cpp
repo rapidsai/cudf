@@ -43,7 +43,8 @@ TYPED_TEST(ListsElementsNumericsTest, CountElements)
   LCW input({LCW{3, 2, 1}, LCW{}, LCW{30, 20, 10, 50}, LCW{100, 120}, LCW{0}}, validity);
 
   auto result = cudf::lists::count_elements(cudf::lists_column_view(input));
-  cudf::test::fixed_width_column_wrapper<int32_t> expected({3, 0, 4, 2, 1}, {1, 0, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> expected({3, 0, 4, 2, 1},
+                                                           {true, false, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
@@ -57,7 +58,8 @@ TEST_F(ListsElementsTest, CountElementsStrings)
     validity);
 
   auto result = cudf::lists::count_elements(cudf::lists_column_view(input));
-  cudf::test::fixed_width_column_wrapper<int32_t> expected({3, 0, 4, 2, 1}, {1, 0, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> expected({3, 0, 4, 2, 1},
+                                                           {true, false, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
@@ -72,7 +74,7 @@ TEST_F(ListsElementsTest, CountElementsSliced)
 
   auto sliced = cudf::slice(input, {1, 4}).front();
   auto result = cudf::lists::count_elements(cudf::lists_column_view(sliced));
-  cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 4, 2}, {0, 1, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 4, 2}, {false, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
@@ -87,7 +89,7 @@ TYPED_TEST(ListsElementsNumericsTest, CountElementsNestedLists)
            validity.begin());
 
   auto result = cudf::lists::count_elements(cudf::lists_column_view(list));
-  cudf::test::fixed_width_column_wrapper<int32_t> expected({2, 1, 3, 5}, {1, 0, 1, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> expected({2, 1, 3, 5}, {true, false, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 

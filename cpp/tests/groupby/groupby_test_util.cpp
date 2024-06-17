@@ -58,7 +58,7 @@ void test_single_agg(cudf::column_view const& keys,
   }();
 
   std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
+  requests.emplace_back();
   requests[0].values = values;
 
   requests[0].aggregations.push_back(std::move(agg));
@@ -126,7 +126,7 @@ void test_single_scan(cudf::column_view const& keys,
                       std::vector<cudf::null_order> const& null_precedence)
 {
   std::vector<cudf::groupby::scan_request> requests;
-  requests.emplace_back(cudf::groupby::scan_request());
+  requests.emplace_back();
   requests[0].values = values;
 
   requests[0].aggregations.push_back(std::move(agg));
