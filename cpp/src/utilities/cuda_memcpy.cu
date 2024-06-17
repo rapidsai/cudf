@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/utilities/cuda_copy.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
 

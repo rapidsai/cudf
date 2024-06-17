@@ -18,7 +18,7 @@
 
 #include "hostdevice_span.hpp"
 
-#include <cudf/detail/utilities/cuda_copy.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
