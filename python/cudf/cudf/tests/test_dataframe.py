@@ -8332,6 +8332,9 @@ def test_dataframe_init_with_columns(data, columns):
         pd.Index(["abc"], name="custom_name"),
     ],
 )
+@pytest.mark.filterwarnings(
+    "ignore:No codes are cached because compilation:UserWarning"
+)
 def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
     gd_data = [cudf.from_pandas(obj) for obj in data]
 
@@ -8430,6 +8433,9 @@ def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
 )
 @pytest.mark.parametrize(
     "columns", [None, ["0"], [0], ["abc"], [144, 13], [2, 1, 0]]
+)
+@pytest.mark.filterwarnings(
+    "ignore:No codes are cached because compilation:UserWarning"
 )
 def test_dataframe_init_from_series_list_with_index(
     data,

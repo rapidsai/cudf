@@ -1280,6 +1280,9 @@ def test_concat_join_empty_dataframes(
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
 @pytest.mark.parametrize("axis", [1])
+@pytest.mark.filterwarnings(
+    "ignore:No codes are cached because compilation:UserWarning"
+)
 def test_concat_join_empty_dataframes_axis_1(
     df, other, ignore_index, axis, join, sort
 ):

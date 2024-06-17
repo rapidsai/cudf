@@ -23,6 +23,10 @@ def _generic_function(a):
     ],
 )
 def test_apply_python_lambda(dtype, udf, testfunc):
+    # TODO: Remove again when NumPy is fixed:
+    np_ver = np.lib.NumpyVersion(np.__version__)
+    if dtype == "uint64" and (np_ver == "2.0.0rc1" or np_ver == "2.0.0rc2"):
+        pytest.skip("test fails due to a NumPy bug on 2.0 rc versions")
     size = 500
 
     lhs_arr = np.random.random(size).astype(dtype)
