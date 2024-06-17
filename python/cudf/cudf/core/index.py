@@ -526,7 +526,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     def unique(self) -> Self:
         # RangeIndex always has unique values
-        return self
+        return self.copy()
 
     @_cudf_nvtx_annotate
     def __mul__(self, other):
