@@ -2,8 +2,10 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-
+import os
 import warnings
+
+import rmm.mr
 
 from .fast_slow_proxy import is_proxy_object
 from .magics import load_ipython_extension
@@ -22,12 +24,8 @@ def install():
     loader = ModuleAccelerator.install("pandas", "cudf", "pandas")
     global LOADED
     LOADED = loader is not None
-    import os
 
     if (rmm_mode := os.getenv("CUDF_PANDAS_RMM_MODE", None)) is not None:
-        import rmm.mr
-        from rmm.mr import available_device_memory
-
         # Check if a non-default memory resource is set
         current_mr = rmm.mr.get_current_device_resource()
         if not isinstance(current_mr, rmm.mr.CudaMemoryResource):
@@ -35,7 +33,7 @@ def install():
                 f"cudf.pandas detected an already configured memory resource, ignoring 'CUDF_PANDAS_RMM_MODE'={str(rmm_mode)}",
                 UserWarning,
             )
-        free_memory, _ = available_device_memory()
+        free_memory, _ = rmm.mr.available_device_memory()
         free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
 
         if rmm_mode == "cuda":
@@ -55,13 +53,13 @@ def install():
             mr = rmm.mr.ManagedMemoryResource()
             rmm.mr.set_current_device_resource(mr)
         elif rmm_mode == "managed_pool":
-            rmm.reinitialize(
-                managed_memory=True,
-                pool_allocator=True,
+            mr = rmm.mr.PoolMemoryResource(
+                rmm.mr.ManagedMemoryResource(),
                 initial_pool_size=free_memory,
             )
+            rmm.mr.set_current_device_resource(mr)
         else:
-            raise TypeError(f"Unsupported rmm mode: {rmm_mode}")
+            raise ValueError(f"Unsupported rmm mode: {rmm_mode}")
 
 
 def pytest_load_initial_conftests(early_config, parser, args):

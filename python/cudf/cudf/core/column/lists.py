@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -26,12 +26,14 @@ from cudf._lib.lists import (
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
 from cudf._lib.types import size_type_dtype
-from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
+
+if TYPE_CHECKING:
+    from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 
 
 class ListColumn(ColumnBase):
