@@ -307,7 +307,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                  "Multiple inputs are supported only for JSON Lines format");
   }
 
-  std::for_each(sources.begin(), sources.end(), [](auto const &source) {
+  std::for_each(sources.begin(), sources.end(), [](auto const& source) {
     CUDF_EXPECTS(source->size() < std::numeric_limits<int>::max(),
                  "The size of each source file must be less than INT_MAX bytes");
   });
@@ -323,15 +323,15 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   size_t const start_source = [&]() {
     size_t sum = 0;
     for (size_t src_idx = 0; src_idx < sources.size(); ++src_idx) {
-       if (sum + sources[src_idx]->size() > chunk_offset) return src_idx;
-       sum += sources[src_idx]->size();
+      if (sum + sources[src_idx]->size() > chunk_offset) return src_idx;
+      sum += sources[src_idx]->size();
     }
     return sources.size();
   }();
 
-  // Construct batches of source files, with starting position of batches indicated by batch_positions.
-  // The size of each batch i.e. the sum of sizes of the source files in the batch is capped at
-  // INT_MAX bytes.
+  // Construct batches of source files, with starting position of batches indicated by
+  // batch_positions. The size of each batch i.e. the sum of sizes of the source files in the batch
+  // is capped at INT_MAX bytes.
   size_t cur_size = 0;
   std::vector<size_t> batch_positions;
   std::vector<size_t> batch_sizes;
@@ -349,7 +349,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
 
   // If there is a single batch, then we can directly return the table without the
   // unnecessary concatenate
-  if(batch_sizes.size() == 1) return read_batch(sources, reader_opts, stream, mr);
+  if (batch_sizes.size() == 1) return read_batch(sources, reader_opts, stream, mr);
 
   std::vector<cudf::io::table_with_metadata> partial_tables;
   json_reader_options batched_reader_opts{reader_opts};
