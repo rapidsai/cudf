@@ -364,7 +364,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                                              batch_positions[i + 1] - batch_positions[i]),
       batched_reader_opts,
       stream,
-      mr));
+      rmm::mr::get_current_device_resource()));
     if (chunk_size <= batch_sizes[i]) break;
     chunk_size -= batch_sizes[i];
     batched_reader_opts.set_byte_range_offset(0);
