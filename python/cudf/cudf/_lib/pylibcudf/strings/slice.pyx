@@ -65,15 +65,15 @@ cpdef Column slice_strings(
 
     elif ColumnOrScalar is Scalar:
         if start is None:
-            delimiters = Scalar.from_libcudf(
+            start = Scalar.from_libcudf(
                 cpp_make_fixed_width_scalar(0)
             )
         if stop is None:
-            delimiters = Scalar.from_libcudf(
+            stop = Scalar.from_libcudf(
                 cpp_make_fixed_width_scalar(0)
             )
         if step is None:
-            delimiters = Scalar.from_libcudf(
+            step = Scalar.from_libcudf(
                 cpp_make_fixed_width_scalar(1)
             )
 

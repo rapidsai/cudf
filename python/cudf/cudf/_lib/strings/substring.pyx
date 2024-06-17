@@ -2,22 +2,12 @@
 
 import numpy as np
 
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-
 from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.strings.substring cimport (
-    slice_strings as cpp_slice_strings,
-)
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.scalar import as_device_scalar
 
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport numeric_scalar
 from cudf._lib.scalar cimport DeviceScalar
 
 import cudf._lib.pylibcudf as plc
@@ -74,8 +64,7 @@ def get(Column source_strings,
     character from each input string. The index of
     characters required can be controlled by passing `index`.
     """
-    cdef unique_ptr[column] c_result
-    cdef column_view source_view = source_strings.view()
+
     if index < 0:
         next_index = index - 1
         step = -1
@@ -86,20 +75,11 @@ def get(Column source_strings,
     cdef DeviceScalar end_scalar = as_device_scalar(next_index, np.int32)
     cdef DeviceScalar step_scalar = as_device_scalar(step, np.int32)
 
-    cdef numeric_scalar[size_type]* start_numeric_scalar = \
-        <numeric_scalar[size_type]*>(
-            start_scalar.get_raw_ptr())
-    cdef numeric_scalar[size_type]* end_numeric_scalar = \
-        <numeric_scalar[size_type]*>(end_scalar.get_raw_ptr())
-    cdef numeric_scalar[size_type]* step_numeric_scalar = \
-        <numeric_scalar[size_type]*>(step_scalar.get_raw_ptr())
-
-    with nogil:
-        c_result = move(cpp_slice_strings(
-            source_view,
-            start_numeric_scalar[0],
-            end_numeric_scalar[0],
-            step_numeric_scalar[0]
-        ))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        plc.strings.slice.slice_strings(
+            source_strings.to_pylibcudf(mode="read"),
+            start_scalar.c_value,
+            end_scalar.c_value,
+            step_scalar.c_value
+        )
+    )
