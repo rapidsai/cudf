@@ -48,7 +48,7 @@ except ImportError:
         return False
 else:
 
-    def _slow_attr(name: str):
+    def _slow_method(name: str):
         def f(x):
             return getattr(x._fsproxy_slow, name)()
 
@@ -61,8 +61,9 @@ else:
         fast_to_slow=lambda fast: fast.compute(),
         slow_to_fast=_Unusable(),
         additional_attributes={
-            "__str__": _slow_attr("__str__"),
-            "__repr__": _slow_attr("__repr__"),
+            "__str__": _slow_method("__str__"),
+            "__repr__": _slow_method("__repr__"),
+            "to_pandas": _slow_method("to_pandas"),
         },
     )
     cudf.DataFrame.register(DataFrame)
@@ -74,8 +75,9 @@ else:
         fast_to_slow=lambda fast: fast.compute(),
         slow_to_fast=_Unusable(),
         additional_attributes={
-            "__str__": _slow_attr("__str__"),
-            "__repr__": _slow_attr("__repr__"),
+            "__str__": _slow_method("__str__"),
+            "__repr__": _slow_method("__repr__"),
+            "to_pandas": _slow_method("to_pandas"),
         },
     )
     cudf.Series.register(Series)
