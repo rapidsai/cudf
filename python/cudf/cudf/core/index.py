@@ -2157,7 +2157,7 @@ class DatetimeIndex(Index):
         return Index._from_data({self.name: month_names})
 
     @_cudf_nvtx_annotate
-    def isocalendar(self):
+    def isocalendar(self) -> cudf.DataFrame:
         """
         Returns a DataFrame with the year, week, and day
         calculated according to the ISO 8601 standard.
@@ -2176,7 +2176,10 @@ class DatetimeIndex(Index):
         2020-05-31 08:00:00  2020    22    7
         1999-12-31 18:40:00  1999    52    5
         """
-        return cudf.core.tools.datetimes._to_iso_calendar(self)
+        ca = cudf.core.column_accessor.ColumnAccessor(
+            self._column.isocalendar(), verify=False
+        )
+        return cudf.DataFrame._from_data(ca, index=self)
 
     @_cudf_nvtx_annotate
     def to_pandas(
@@ -2546,7 +2549,10 @@ class TimedeltaIndex(Index):
         Return a dataframe of the components (days, hours, minutes,
         seconds, milliseconds, microseconds, nanoseconds) of the Timedeltas.
         """
-        return self._values.components()
+        ca = cudf.core.column_accessor.ColumnAccessor(
+            self._column.components(), verify=False
+        )
+        return cudf.DataFrame._from_data(ca)
 
     @property
     def inferred_freq(self):

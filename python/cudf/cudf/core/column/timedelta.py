@@ -392,7 +392,7 @@ class TimeDeltaColumn(ColumnBase):
             other.as_numerical_column("int64")
         )
 
-    def components(self, index=None) -> "cudf.DataFrame":
+    def components(self) -> dict[str, ColumnBase]:
         """
         Return a Dataframe of the components of the Timedeltas.
 
@@ -484,11 +484,7 @@ class TimeDeltaColumn(ColumnBase):
             if self.nullable:
                 res_col = res_col.set_mask(self.mask)
             data[name] = res_col
-
-        return cudf.DataFrame(
-            data=data,
-            index=index,
-        )
+        return data
 
     @property
     def days(self) -> "cudf.core.column.NumericalColumn":
