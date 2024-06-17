@@ -29,11 +29,6 @@ def rtype(request):
     return request.param
 
 
-@pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"])
-def with_nulls(request):
-    return request.param
-
-
 @pytest.fixture(
     params=[
         pl.Expr.eq,

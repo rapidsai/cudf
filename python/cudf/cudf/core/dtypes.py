@@ -6,7 +6,7 @@ import pickle
 import textwrap
 import warnings
 from functools import cached_property
-from typing import Any, Callable, Dict, List, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple, Type, Union
 
 import numpy as np
 import pandas as pd
@@ -19,8 +19,10 @@ import cudf
 from cudf._typing import Dtype
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer
 from cudf.utils.docutils import doc_apply
+
+if TYPE_CHECKING:
+    from cudf.core.buffer import Buffer
 
 
 def dtype(arbitrary):
