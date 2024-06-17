@@ -344,7 +344,7 @@ class BaseIndex(Serializable):
         """
         Returns a tuple containing the name of the Index.
         """
-        return (self.name,)
+        return pd.core.indexes.frozen.FrozenList([self.name])
 
     @names.setter
     def names(self, values):
