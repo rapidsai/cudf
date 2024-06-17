@@ -23,7 +23,7 @@ launch of the Python interpreter:
 
 ## Get profiling result
 
-To get the result of the profiling, use the {py:mod}`cudf.utils.performance_tracking` module. In the following, we enable profiling, do some work, and then print the profiling results:
+To get the result of the profiling, use {py:func}`cudf.utils.performance_tracking.print_memory_report`. In the following, we enable profiling, do some work, and then print the profiling results:
 
 ```python
 >>> import cudf
@@ -51,4 +51,4 @@ ncalls memory_peak memory_total filename:lineno(function)
      6           0            0 cudf/core/index.py:424(RangeIndex.__len__)
 ```
 
-It is also possible to access the raw profiling data through {py:func}`cudf.utils.performance_tracking.get_memory_records()`.
+It is also possible to access the raw profiling data through {py:func}`cudf.utils.performance_tracking.get_memory_records`.
