@@ -239,6 +239,9 @@ cdef dtype_from_column_view(column_view cv):
         ]
 
 cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
+    # Note: This function is to be phased out in favor of
+    # dtype_to_pylibcudf_type which will return a pylibcudf
+    # DataType object
     cdef libcudf_types.type_id tid
     if isinstance(dtype, cudf.ListDtype):
         tid = libcudf_types.type_id.LIST
