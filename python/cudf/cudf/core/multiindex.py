@@ -8,10 +8,9 @@ import operator
 import pickle
 import warnings
 from collections import abc
-from collections.abc import Generator
 from functools import cached_property
 from numbers import Integral
-from typing import Any, List, MutableMapping, Tuple, Union
+from typing import TYPE_CHECKING, Any, List, MutableMapping, Tuple, Union
 
 import cupy as cp
 import numpy as np
@@ -20,7 +19,6 @@ import pandas as pd
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.types import size_type_dtype
-from cudf._typing import DataFrameOrSeries
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
 from cudf.core import column
@@ -35,6 +33,11 @@ from cudf.core.join._join_helpers import _match_join_keys
 from cudf.utils.dtypes import is_column_like
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+    from cudf._typing import DataFrameOrSeries
 
 
 def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
@@ -1745,6 +1748,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_cudf_nvtx_annotate
     def unique(self):
         return self.drop_duplicates(keep="first")
+
+    @_cudf_nvtx_annotate
+    def nunique(self, dropna: bool = True) -> int:
+        mi = self.dropna(how="all") if dropna else self
+        return len(mi.unique())
 
     def _clean_nulls_from_index(self):
         """

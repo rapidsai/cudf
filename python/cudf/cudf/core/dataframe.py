@@ -15,6 +15,7 @@ import warnings
 from collections import abc, defaultdict
 from collections.abc import Iterator
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -41,7 +42,6 @@ from typing_extensions import Self, assert_never
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
-from cudf._typing import ColumnLike, Dtype, NotImplementedType
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
@@ -98,6 +98,9 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import GetAttrGetItemMixin, _external_only_api
+
+if TYPE_CHECKING:
+    from cudf._typing import ColumnLike, Dtype, NotImplementedType
 
 _cupy_nan_methods_map = {
     "min": "nanmin",
@@ -1345,7 +1348,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         8  8  8  8
         """
         if _is_scalar_or_zero_d_array(arg) or isinstance(arg, tuple):
-            return self._get_columns_by_label(arg, downcast=True)
+            out = self._get_columns_by_label(arg)
+            if is_scalar(arg):
+                nlevels = 1
+            elif isinstance(arg, tuple):
+                nlevels = len(arg)
+            if self._data.multiindex is False or nlevels == self._data.nlevels:
+                out = self._constructor_sliced._from_data(out._data)
+                out.index = self.index
+                out.name = arg
+            return out
 
         elif isinstance(arg, slice):
             return self._slice(arg)
@@ -1989,31 +2001,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_cudf_nvtx_annotate
     def _repr_latex_(self):
         return self._get_renderable_dataframe().to_pandas()._repr_latex_()
-
-    @_cudf_nvtx_annotate
-    def _get_columns_by_label(
-        self, labels, *, downcast=False
-    ) -> Self | Series:
-        """
-        Return columns of dataframe by `labels`
-
-        If downcast is True, try and downcast from a DataFrame to a Series
-        """
-        ca = self._data.select_by_label(labels)
-        if downcast:
-            if is_scalar(labels):
-                nlevels = 1
-            elif isinstance(labels, tuple):
-                nlevels = len(labels)
-            if self._data.multiindex is False or nlevels == self._data.nlevels:
-                out = self._constructor_sliced._from_data(
-                    ca, index=self.index, name=labels
-                )
-                return out
-        out = self.__class__._from_data(
-            ca, index=self.index, columns=ca.to_pandas_index()
-        )
-        return out
 
     def _make_operands_and_index_for_binop(
         self,
@@ -7475,7 +7462,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self, nan_as_null=nan_as_null, allow_copy=allow_copy
         )
 
-    def nunique(self, axis=0, dropna=True):
+    def nunique(self, axis=0, dropna: bool = True) -> Series:
         """
         Count number of distinct elements in specified axis.
         Return Series with number of distinct elements. Can ignore NaN values.
@@ -7503,8 +7490,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         if axis != 0:
             raise NotImplementedError("axis parameter is not supported yet.")
-
-        return cudf.Series(super().nunique(dropna=dropna))
+        counts = [col.distinct_count(dropna=dropna) for col in self._columns]
+        return self._constructor_sliced(
+            counts, index=self._data.to_pandas_index()
+        )
 
     def _sample_axis_1(
         self,
