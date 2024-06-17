@@ -181,11 +181,6 @@ def read_orc_statistics(
             parsed_stripes_statistics,
         ) = liborc.read_parsed_orc_statistics(path_or_buf)
 
-        # Parse column names
-        column_names = [
-            column_name.decode("utf-8") for column_name in column_names
-        ]
-
         # Parse file statistics
         file_statistics = {
             column_name: column_stats
@@ -248,9 +243,9 @@ def _filter_stripes(
         num_rows_scanned = 0
         for i, stripe_statistics in enumerate(stripes_statistics):
             num_rows_before_stripe = num_rows_scanned
-            num_rows_scanned += next(iter(stripe_statistics.values()))[
-                "number_of_values"
-            ]
+            num_rows_scanned += next(
+                iter(stripe_statistics.values())
+            ).number_of_values
             if stripes is not None and i not in stripes:
                 continue
             if skip_rows is not None and num_rows_scanned <= skip_rows:

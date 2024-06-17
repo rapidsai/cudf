@@ -184,25 +184,27 @@ def test_orc_read_statistics(datadir):
         pytest.skip(".orc file is not found: %s" % e)
 
     # Check numberOfValues
-    assert_eq(file_statistics[0]["int1"]["number_of_values"], 11_000)
+    # assert_eq(file_statistics[0]["int1"]["number_of_values"], 11_000)
+    print(file_statistics[0])
+    assert_eq(file_statistics[0]["int1"].number_of_values, 11_000)
     assert_eq(
-        file_statistics[0]["int1"]["number_of_values"],
+        file_statistics[0]["int1"].number_of_values,
         sum(
             [
-                stripes_statistics[0]["int1"]["number_of_values"],
-                stripes_statistics[1]["int1"]["number_of_values"],
-                stripes_statistics[2]["int1"]["number_of_values"],
+                stripes_statistics[0]["int1"].number_of_values,
+                stripes_statistics[1]["int1"].number_of_values,
+                stripes_statistics[2]["int1"].number_of_values,
             ]
         ),
     )
     assert_eq(
-        stripes_statistics[1]["int1"]["number_of_values"],
-        stripes_statistics[1]["string1"]["number_of_values"],
+        stripes_statistics[1]["int1"].number_of_values,
+        stripes_statistics[1]["string1"].number_of_values,
     )
-    assert_eq(stripes_statistics[2]["string1"]["number_of_values"], 1_000)
+    assert_eq(stripes_statistics[2]["string1"].number_of_values, 1_000)
 
     # Check other statistics
-    assert_eq(stripes_statistics[2]["string1"]["has_null"], False)
+    assert_eq(stripes_statistics[2]["string1"].has_null, False)
     assert_eq(
         file_statistics[0]["int1"]["minimum"],
         min(
@@ -1538,8 +1540,8 @@ def test_empty_statistics():
     for stats in got:
         # Similar expected stats for the first 6 columns in this case
         for col_name in ascii_lowercase[:6]:
-            assert stats[0][col_name].get("number_of_values") == 0
-            assert stats[0][col_name].get("has_null") is True
+            assert stats[0][col_name].number_of_values == 0
+            assert stats[0][col_name].has_null is True
             assert stats[0][col_name].get("minimum") is None
             assert stats[0][col_name].get("maximum") is None
         for col_name in ascii_lowercase[:3]:
@@ -1547,17 +1549,17 @@ def test_empty_statistics():
         # Sum for decimal column is a string
         assert stats[0]["d"].get("sum") == "0"
 
-        assert stats[0]["g"].get("number_of_values") == 0
-        assert stats[0]["g"].get("has_null") is True
+        assert stats[0]["g"].number_of_values == 0
+        assert stats[0]["g"].has_null is True
         assert stats[0]["g"].get("true_count") == 0
         assert stats[0]["g"].get("false_count") == 0
 
-        assert stats[0]["h"].get("number_of_values") == 0
-        assert stats[0]["h"].get("has_null") is True
+        assert stats[0]["h"].number_of_values == 0
+        assert stats[0]["h"].has_null is True
         assert stats[0]["h"].get("sum") == 0
 
-        assert stats[0]["i"].get("number_of_values") == 1
-        assert stats[0]["i"].get("has_null") is False
+        assert stats[0]["i"].number_of_values == 1
+        assert stats[0]["i"].has_null is False
         assert stats[0]["i"].get("minimum") == 1
         assert stats[0]["i"].get("maximum") == 1
         assert stats[0]["i"].get("sum") == 1

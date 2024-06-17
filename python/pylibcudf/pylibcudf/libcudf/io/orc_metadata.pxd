@@ -6,6 +6,8 @@ from libcpp cimport bool
 from libcpp.optional cimport optional
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+
+from pylibcudf.libcudf.io cimport types as cudf_io_types
 from pylibcudf.variant cimport monostate, variant
 
 
