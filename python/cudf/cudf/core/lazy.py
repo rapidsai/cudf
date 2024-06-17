@@ -6,7 +6,11 @@ from typing import Optional
 import cudf
 import cudf.core.groupby.groupby
 from cudf.options import get_option
-from cudf.pandas.fast_slow_proxy import _Unusable, make_final_proxy_type
+from cudf.pandas.fast_slow_proxy import (
+    _Unusable,
+    make_final_proxy_type,
+    make_intermediate_proxy_type,
+)
 from cudf.utils import docutils
 
 _parse_lazy_argument_docstring = """
@@ -76,28 +80,16 @@ else:
     )
     cudf.Series.register(Series)
 
-    DataFrameGroupBy = make_final_proxy_type(
+    DataFrameGroupBy = make_intermediate_proxy_type(
         "DataFrameGroupBy",
         dask_cudf.expr._groupby.GroupBy,
         cudf.core.groupby.groupby.DataFrameGroupBy,
-        fast_to_slow=lambda fast: fast.compute(),
-        slow_to_fast=_Unusable(),
-        additional_attributes={
-            "__str__": _slow_attr("__str__"),
-            "__repr__": _slow_attr("__repr__"),
-        },
     )
 
-    SeriesGroupBy = make_final_proxy_type(
+    SeriesGroupBy = make_intermediate_proxy_type(
         "SeriesGroupBy",
         dask_cudf.expr._groupby.SeriesGroupBy,
         cudf.core.groupby.groupby.SeriesGroupBy,
-        fast_to_slow=lambda fast: fast.compute(),
-        slow_to_fast=_Unusable(),
-        additional_attributes={
-            "__str__": _slow_attr("__str__"),
-            "__repr__": _slow_attr("__repr__"),
-        },
     )
 
     @docutils.doc_apply(_parse_lazy_argument_docstring)
