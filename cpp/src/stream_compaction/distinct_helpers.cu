@@ -16,8 +16,6 @@
 
 #include "distinct_helpers.hpp"
 
-#include <rmm/resource_ref.hpp>
-
 namespace cudf::detail {
 
 template <typename RowHasher>
