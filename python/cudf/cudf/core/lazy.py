@@ -48,6 +48,11 @@ except ImportError:
         return False
 else:
 
+    def _fast_to_slow(
+        df: dask_cudf.expr._collection.DataFrame,
+    ) -> cudf.DataFrame:
+        return df.compute()
+
     def _slow_method(name: str):
         def f(x):
             return getattr(x._fsproxy_slow, name)()
@@ -58,7 +63,7 @@ else:
         "DataFrame",
         dask_cudf.expr._collection.DataFrame,
         cudf.DataFrame,
-        fast_to_slow=lambda fast: fast.compute(),
+        fast_to_slow=_fast_to_slow,
         slow_to_fast=_Unusable(),
         additional_attributes={
             "__str__": _slow_method("__str__"),
@@ -72,7 +77,7 @@ else:
         "Series",
         dask_cudf.expr._collection.Series,
         cudf.Series,
-        fast_to_slow=lambda fast: fast.compute(),
+        fast_to_slow=_fast_to_slow,
         slow_to_fast=_Unusable(),
         additional_attributes={
             "__str__": _slow_method("__str__"),
