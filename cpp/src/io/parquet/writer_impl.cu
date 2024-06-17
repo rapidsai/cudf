@@ -296,19 +296,6 @@ size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
   CUDF_FAIL("Unexpected compound type");
 }
 
-// checks to see if the given column has a fixed size.  This doesn't
-// check every row, so assumes string and list columns are not fixed, even
-// if each row is the same width.
-// TODO: update this if FIXED_LEN_BYTE_ARRAY is ever supported for writes.
-bool is_col_fixed_width(column_view const& column)
-{
-  if (column.type().id() == type_id::STRUCT) {
-    return std::all_of(column.child_begin(), column.child_end(), is_col_fixed_width);
-  }
-
-  return is_fixed_width(column.type());
-}
-
 /**
  * @brief Extends SchemaElement to add members required in constructing parquet_column_view
  *
@@ -944,6 +931,15 @@ struct parquet_column_view {
   [[nodiscard]] ConvertedType converted_type() const
   {
     return schema_node.converted_type.value_or(UNKNOWN);
+  }
+
+  // Checks to see if the given column has a fixed-width data type. This doesn't
+  // check every value, so it assumes string and list columns are not fixed-width, even
+  // if each value has the same size.
+  [[nodiscard]] bool is_fixed_width() const
+  {
+    // lists and strings are not fixed width
+    return (max_rep_level() == 0 and physical_type() != Type::BYTE_ARRAY);
   }
 
   std::vector<std::string> const& get_path_in_schema() { return path_in_schema; }
@@ -1764,7 +1760,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     // unbalanced in final page sizes, so using 4 which seems to be a good
     // compromise at smoothing things out without getting fragment sizes too small.
     auto frag_size_fn = [&](auto const& col, size_t col_size) {
-      int const target_frags_per_page = is_col_fixed_width(col) ? 1 : 4;
+      int const target_frags_per_page = col.is_fixed_width() ? 1 : 4;
       auto const avg_len =
         target_frags_per_page * util::div_rounding_up_safe<size_t>(col_size, input.num_rows());
       if (avg_len > 0) {
@@ -1775,8 +1771,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       }
     };
 
-    std::transform(single_streams_table.begin(),
-                   single_streams_table.end(),
+    std::transform(parquet_columns.begin(),
+                   parquet_columns.end(),
                    column_sizes.begin(),
                    column_frag_size.begin(),
                    frag_size_fn);
