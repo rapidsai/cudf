@@ -9,17 +9,12 @@ import textwrap
 import warnings
 from collections import Counter, abc
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
-    Dict,
-    List,
     Literal,
     MutableMapping,
-    Optional,
-    Tuple,
-    Type,
     TypeVar,
-    Union,
     cast,
 )
 from uuid import uuid4
@@ -31,12 +26,6 @@ from typing_extensions import Self
 
 import cudf
 import cudf._lib as libcudf
-from cudf._typing import (
-    ColumnLike,
-    DataFrameOrSeries,
-    Dtype,
-    NotImplementedType,
-)
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -69,6 +58,14 @@ from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import _warn_no_dask_cudf
+
+if TYPE_CHECKING:
+    from cudf._typing import (
+        ColumnLike,
+        DataFrameOrSeries,
+        Dtype,
+        NotImplementedType,
+    )
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
@@ -255,8 +252,8 @@ class IndexedFrame(Frame):
     """
 
     # mypy can't handle bound type variables as class members
-    _loc_indexer_type: Type[_LocIndexerClass]  # type: ignore
-    _iloc_indexer_type: Type[_IlocIndexerClass]  # type: ignore
+    _loc_indexer_type: type[_LocIndexerClass]  # type: ignore
+    _iloc_indexer_type: type[_IlocIndexerClass]  # type: ignore
     _index: cudf.core.index.BaseIndex
     _groupby = GroupBy
     _resampler = _Resampler
@@ -291,14 +288,14 @@ class IndexedFrame(Frame):
         return len(self.index)
 
     @property
-    def _index_names(self) -> Tuple[Any, ...]:  # TODO: Tuple[str]?
+    def _index_names(self) -> tuple[Any, ...]:  # TODO: Tuple[str]?
         return self.index._data.names
 
     @classmethod
     def _from_data(
         cls,
         data: MutableMapping,
-        index: Optional[BaseIndex] = None,
+        index: BaseIndex | None = None,
     ):
         out = super()._from_data(data)
         out._index = RangeIndex(out._data.nrows) if index is None else index
@@ -306,18 +303,18 @@ class IndexedFrame(Frame):
 
     @_cudf_nvtx_annotate
     def _from_data_like_self(self, data: MutableMapping):
-        out = self._from_data(data, self.index)
-        out._data._level_names = self._data._level_names
+        out = super()._from_data_like_self(data)
+        out.index = self.index
         return out
 
     @_cudf_nvtx_annotate
     def _from_columns_like_self(
         self,
-        columns: List[ColumnBase],
-        column_names: Optional[abc.Iterable[str]] = None,
-        index_names: Optional[List[str]] = None,
+        columns: list[ColumnBase],
+        column_names: abc.Iterable[str] | None = None,
+        index_names: list[str] | None = None,
         *,
-        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
+        override_dtypes: abc.Iterable[Dtype | None] | None = None,
     ) -> Self:
         """Construct a `Frame` from a list of columns with metadata from self.
 
@@ -365,7 +362,7 @@ class IndexedFrame(Frame):
 
     def _mimic_inplace(
         self, result: Self, inplace: bool = False
-    ) -> Optional[Self]:
+    ) -> Self | None:
         if inplace:
             self._index = result.index
         return super()._mimic_inplace(result, inplace)
@@ -1785,7 +1782,7 @@ class IndexedFrame(Frame):
         )
 
     @_cudf_nvtx_annotate
-    def mask(self, cond, other=None, inplace: bool = False) -> Optional[Self]:
+    def mask(self, cond, other=None, inplace: bool = False) -> Self | None:
         """
         Replace values where the condition is True.
 
@@ -1921,7 +1918,7 @@ class IndexedFrame(Frame):
         other: Self,
         include_index: bool = True,
         *,
-        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
+        override_dtypes: abc.Iterable[Dtype | None] | None = None,
     ) -> Self:
         """
         Copy type metadata from each column of `other` to the corresponding
@@ -4667,9 +4664,9 @@ class IndexedFrame(Frame):
     def _sample_axis_0(
         self,
         n: int,
-        weights: Optional[ColumnLike],
+        weights: ColumnLike | None,
         replace: bool,
-        random_state: Union[np.random.RandomState, cp.random.RandomState],
+        random_state: np.random.RandomState | cp.random.RandomState,
         ignore_index: bool,
     ):
         try:
@@ -4692,7 +4689,7 @@ class IndexedFrame(Frame):
     def _sample_axis_1(
         self,
         n: int,
-        weights: Optional[ColumnLike],
+        weights: ColumnLike | None,
         replace: bool,
         random_state: np.random.RandomState,
         ignore_index: bool,
@@ -4739,12 +4736,10 @@ class IndexedFrame(Frame):
         fill_value: Any = None,
         reflect: bool = False,
         can_reindex: bool = False,
-    ) -> Tuple[
-        Union[
-            Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            NotImplementedType,
-        ],
-        Optional[cudf.BaseIndex],
+    ) -> tuple[
+        dict[str | None, tuple[ColumnBase, Any, bool, Any]]
+        | NotImplementedType,
+        cudf.BaseIndex | None,
         bool,
     ]:
         raise NotImplementedError(
@@ -6329,8 +6324,8 @@ def _check_duplicate_level_names(specified, level_names):
 
 @_cudf_nvtx_annotate
 def _get_replacement_values_for_columns(
-    to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]
-) -> Tuple[Dict[Any, bool], Dict[Any, Any], Dict[Any, Any]]:
+    to_replace: Any, value: Any, columns_dtype_map: dict[Any, Any]
+) -> tuple[dict[Any, bool], dict[Any, Any], dict[Any, Any]]:
     """
     Returns a per column mapping for the values to be replaced, new
     values to be replaced with and if all the values are empty.
@@ -6355,9 +6350,9 @@ def _get_replacement_values_for_columns(
         A dict mapping of all columns and the corresponding values
         to be replaced with.
     """
-    to_replace_columns: Dict[Any, Any] = {}
-    values_columns: Dict[Any, Any] = {}
-    all_na_columns: Dict[Any, Any] = {}
+    to_replace_columns: dict[Any, Any] = {}
+    values_columns: dict[Any, Any] = {}
+    all_na_columns: dict[Any, Any] = {}
 
     if is_scalar(to_replace) and is_scalar(value):
         to_replace_columns = {col: [to_replace] for col in columns_dtype_map}
@@ -6497,8 +6492,8 @@ def _is_series(obj):
 @_cudf_nvtx_annotate
 def _drop_rows_by_labels(
     obj: DataFrameOrSeries,
-    labels: Union[ColumnLike, abc.Iterable, str],
-    level: Union[int, str],
+    labels: ColumnLike | abc.Iterable | str,
+    level: int | str,
     errors: str,
 ) -> DataFrameOrSeries:
     """Remove rows specified by `labels`.

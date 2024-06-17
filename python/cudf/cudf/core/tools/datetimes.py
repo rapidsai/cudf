@@ -1,9 +1,10 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import math
 import re
 import warnings
-from typing import Literal, Optional, Sequence, Union
+from typing import Literal, Sequence
 
 import cupy as cp
 import numpy as np
@@ -61,7 +62,7 @@ def to_datetime(
     dayfirst: bool = False,
     yearfirst: bool = False,
     utc: bool = False,
-    format: Optional[str] = None,
+    format: str | None = None,
     exact: bool = True,
     unit: str = "ns",
     infer_datetime_format: bool = True,
@@ -313,7 +314,7 @@ def _process_col(
     unit: str,
     dayfirst: bool,
     infer_datetime_format: bool,
-    format: Optional[str],
+    format: str | None,
     utc: bool,
 ):
     if col.dtype.kind == "f":
@@ -707,7 +708,7 @@ class DateOffset:
     @classmethod
     def _from_pandas_ticks_or_weeks(
         cls,
-        tick: Union[pd.tseries.offsets.Tick, pd.tseries.offsets.Week],
+        tick: pd.tseries.offsets.Tick | pd.tseries.offsets.Week,
     ) -> Self:
         return cls(**{cls._TICK_OR_WEEK_TO_UNITS[type(tick)]: tick.n})
 
@@ -725,7 +726,7 @@ class DateOffset:
 
 
 def _isin_datetimelike(
-    lhs: Union[column.TimeDeltaColumn, column.DatetimeColumn], values: Sequence
+    lhs: column.TimeDeltaColumn | column.DatetimeColumn, values: Sequence
 ) -> column.ColumnBase:
     """
     Check whether values are contained in the
@@ -784,7 +785,7 @@ def date_range(
     name=None,
     closed: Literal["left", "right", "both", "neither"] = "both",
     *,
-    unit: Optional[str] = None,
+    unit: str | None = None,
 ):
     """Return a fixed frequency DatetimeIndex.
 
