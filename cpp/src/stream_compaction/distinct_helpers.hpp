@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/hash_reduce_by_row.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
@@ -22,6 +23,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/resource_ref.hpp>
+
+#include <cuco/static_set.cuh>
 
 namespace cudf::detail {
 
@@ -41,13 +44,28 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
   }
 }
 
+template <typename RowHasher>
+using hash_set_type =
+  cuco::static_set<size_type,
+                   size_type,
+                   cuda::thread_scope_device,
+                   RowHasher,
+                   cuco::linear_probing<1,
+                                        cudf::experimental::row::hash::device_row_hasher<
+                                          cudf::hashing::detail::default_hash,
+                                          cudf::nullate::DYNAMIC>>,
+                   cudf::detail::cuco_allocator,
+                   cuco::storage<1>>;
+
 /**
- * @brief Perform a reduction on groups of rows that are compared equal.
+ * @brief Perform a reduction on groups of rows that are compared equal and returns output indices
+ * of the occurrences of the distinct elements based on `keep` parameter.
  *
  * This is essentially a reduce-by-key operation with keys are non-contiguous rows and are compared
- * equal. A hash table is used to find groups of equal rows.
+ * equal. A hash set is used to find groups of equal rows.
  *
  * Depending on the `keep` parameter, the reduction operation for each row group is:
+ * - If `keep == KEEP_ANY` : order does not matter.
  * - If `keep == KEEP_FIRST`: min of row indices in the group.
  * - If `keep == KEEP_LAST`: max of row indices in the group.
  * - If `keep == KEEP_NONE`: count of equivalent rows (group size).
@@ -58,30 +76,19 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
  * the `reduction_init_value()` function. Then, the reduction result for each row group is written
  * into the output array at the index of an unspecified row in the group.
  *
- * @param map The auxiliary map to perform reduction
- * @param preprocessed_input The preprocessed of the input rows for computing row hashing and row
- *        comparisons
+ * @param set The auxiliary set to perform reduction
+ * @param set_size The number of elements in set
  * @param num_rows The number of all input rows
- * @param has_nulls Indicate whether the input rows has any nulls at any nested levels
- * @param has_nested_columns Indicates whether the input table has any nested columns
  * @param keep The parameter to determine what type of reduction to perform
- * @param nulls_equal Flag to specify whether null elements should be considered as equal
- * @param nans_equal Flag to specify whether NaN values in floating point column should be
- *        considered equal.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned vector
- * @return A device_uvector containing the reduction results
+ * @return A device_uvector containing the output indices
  */
-rmm::device_uvector<size_type> reduce_by_row(
-  hash_map_type const& map,
-  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
-  size_type num_rows,
-  cudf::nullate::DYNAMIC has_nulls,
-  bool has_nested_columns,
-  duplicate_keep_option keep,
-  null_equality nulls_equal,
-  nan_equality nans_equal,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
-
+template <typename RowHasher>
+rmm::device_uvector<size_type> process_keep_option(hash_set_type<RowHasher>& set,
+                                                   size_type set_size,
+                                                   size_type num_rows,
+                                                   duplicate_keep_option keep,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr);
 }  // namespace cudf::detail
