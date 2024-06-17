@@ -1,5 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from __future__ import annotations
+
 import io
 import os
 from typing import Optional, Union
@@ -12,7 +14,7 @@ from cudf._lib import pylibcudf as plc
 
 def metadata_from_arrow_array(
     pa_array: pa.Array,
-) -> Optional[plc.interop.ColumnMetadata]:
+) -> plc.interop.ColumnMetadata | None:
     metadata = None
     if pa.types.is_list(dtype := pa_array.type) or pa.types.is_struct(dtype):
         metadata = plc.interop.ColumnMetadata(
@@ -27,7 +29,7 @@ def metadata_from_arrow_array(
 
 
 def assert_column_eq(
-    lhs: Union[pa.Array, plc.Column], rhs: Union[pa.Array, plc.Column]
+    lhs: pa.Array | plc.Column, rhs: pa.Array | plc.Column
 ) -> None:
     """Verify that a pylibcudf array and PyArrow array are equal."""
     # Nested types require children metadata to be passed to the conversion function.
