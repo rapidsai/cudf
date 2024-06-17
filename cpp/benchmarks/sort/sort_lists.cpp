@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,7 @@ void sort_multiple_lists(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    cudf::detail::sorted_order(
-      *input_table, {}, {}, stream, rmm::mr::get_current_device_resource());
+    cudf::sorted_order(*input_table, {}, {}, stream, rmm::mr::get_current_device_resource());
   });
 }
 
@@ -76,7 +75,7 @@ void sort_lists_of_structs(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
-    cudf::detail::sorted_order(input_table, {}, {}, stream, rmm::mr::get_current_device_resource());
+    cudf::sorted_order(input_table, {}, {}, stream, rmm::mr::get_current_device_resource());
   });
 }
 
