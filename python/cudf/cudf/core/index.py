@@ -898,7 +898,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @_cudf_nvtx_annotate
-    def nunique(self) -> int:
+    def nunique(self, dropna: bool = True) -> int:
         return len(self)
 
     @_cudf_nvtx_annotate

@@ -1903,10 +1903,9 @@ class Frame(BinaryOperand, Scannable):
         dict
             Name and unique value counts of each column in frame.
         """
-        return {
-            name: col.distinct_count(dropna=dropna)
-            for name, col in self._data.items()
-        }
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement nunique"
+        )
 
     @staticmethod
     @_cudf_nvtx_annotate
