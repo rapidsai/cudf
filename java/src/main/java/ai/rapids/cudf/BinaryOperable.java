@@ -547,6 +547,20 @@ public interface BinaryOperable {
   }
 
   /**
+   * like notEqualTo but NULL != NULL is TRUE and NULL != not NULL is FALSE
+   */
+  default ColumnVector notEqualToNullAware(BinaryOperable rhs, DType outType) {
+    return binaryOp(BinaryOp.NULL_NOT_EQUALS, rhs, outType);
+  }
+
+  /**
+   * like notEqualTo but NULL != NULL is TRUE and NULL != not NULL is FALSE
+   */
+  default ColumnVector notEqualToNullAware(BinaryOperable rhs) {
+    return notEqualToNullAware(rhs, DType.BOOL8);
+  }
+
+  /**
    * Returns the max non null value.
    */
   default ColumnVector maxNullAware(BinaryOperable rhs, DType outType) {

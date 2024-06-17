@@ -128,9 +128,9 @@ public final class PinnedMemoryPool implements AutoCloseable {
    *
    * @param poolSize size of the pool to initialize.
    * @param gpuId    gpu id to set to get memory pool from, -1 means to use default
-   * @param setCuioHostMemoryResource true if this pinned pool should be used by cuIO for host memory
+   * @param setCudfPinnedPoolMemoryResource true if this pinned pool should be used by cuDF for pinned memory
    */
-  public static synchronized void initialize(long poolSize, int gpuId, boolean setCuioHostMemoryResource) {
+  public static synchronized void initialize(long poolSize, int gpuId, boolean setCudfPinnedPoolMemoryResource) {
     if (isInitialized()) {
       throw new IllegalStateException("Can only initialize the pool once.");
     }
@@ -139,7 +139,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
       t.setDaemon(true);
       return t;
     });
-    initFuture = initService.submit(() -> new PinnedMemoryPool(poolSize, gpuId, setCuioHostMemoryResource));
+    initFuture = initService.submit(() -> new PinnedMemoryPool(poolSize, gpuId, setCudfPinnedPoolMemoryResource));
     initService.shutdown();
   }
 
@@ -216,15 +216,15 @@ public final class PinnedMemoryPool implements AutoCloseable {
     return 0;
   }
 
-  private PinnedMemoryPool(long poolSize, int gpuId, boolean setCuioHostMemoryResource) {
+  private PinnedMemoryPool(long poolSize, int gpuId, boolean setCudfPinnedPoolMemoryResource) {
     if (gpuId > -1) {
       // set the gpu device to use
       Cuda.setDevice(gpuId);
       Cuda.freeZero();
     }
     this.poolHandle = Rmm.newPinnedPoolMemoryResource(poolSize, poolSize);
-    if (setCuioHostMemoryResource) {
-      Rmm.setCuioPinnedPoolMemoryResource(this.poolHandle);
+    if (setCudfPinnedPoolMemoryResource) {
+      Rmm.setCudfPinnedPoolMemoryResource(this.poolHandle);
     }
     this.poolSize = poolSize;
   }
@@ -252,4 +252,20 @@ public final class PinnedMemoryPool implements AutoCloseable {
   private synchronized void free(long address, long size) {
     Rmm.freeFromPinnedPool(this.poolHandle, address, size);
   }
+
+  /**
+   * Sets the size of the cuDF default pinned pool.
+   *
+   * @note This has to be called before cuDF functions are executed.
+   *
+   * @param size initial and maximum size for the cuDF default pinned pool.
+   *        Pass size=0 to disable the default pool.
+   *
+   * @return true if we were able to setup the default resource, false if there was
+   *         a resource already set.
+   */
+  public static synchronized boolean configureDefaultCudfPinnedPoolSize(long size) {
+    return Rmm.configureDefaultCudfPinnedPoolSize(size);
+  }
+
 }

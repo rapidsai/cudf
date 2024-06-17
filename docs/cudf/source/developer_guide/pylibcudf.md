@@ -96,6 +96,72 @@ There are a couple of notable points from the snippet above:
 - The object returned from libcudf is immediately converted to a pylibcudf type.
 - `cudf::gather` accepts a `cudf::out_of_bounds_policy` enum parameter. `OutOfBoundsPolicy` is an alias for this type in pylibcudf that matches our Python naming conventions (CapsCase instead of snake\_case).
 
+## Testing
+
+When writing pylibcudf tests, it is important to remember that all the APIs should be tested in the C++ layer in libcudf already.
+The primary purpose of pylibcudf tests is to ensure the correctness of the _bindings_; the correctness of the underlying implementation should generally be validated in libcudf.
+If pylibcudf tests uncover a libcudf bug, a suitable libcudf test should be added to cover this case rather than relying solely on pylibcudf testing.
+
+pylibcudf's ``conftest.py`` contains some standard parametrized dtype fixture lists that may in turn be used to parametrize other fixtures.
+Fixtures allocating data should leverage these dtype lists wherever possible to simplify testing across the matrix of important types.
+Where appropriate, new fixture lists may be added.
+
+To run tests as efficiently as possible, the test suite should make generous use of fixtures.
+The simplest general structure to follow is for pyarrow array/table/scalar fixtures to be parametrized by one of the dtype list.
+Then, a corresponding pylibcudf fixture may be created using a simple `from_arrow` call.
+This approach ensures consistent global coverage across types for various tests.
+
+In general, pylibcudf tests should prefer validating against a corresponding pyarrow implementation rather than hardcoding data.
+This approach is more resilient to changes to input data, particularly given the fixture strategy outlined above.
+Standard tools for comparing between pylibcudf and pyarrow types are provided in the utils module.
+
+Here is an example demonstrating the above points:
+
+```python
+import pyarrow as pa
+import pyarrow.compute as pc
+import pytest
+from cudf._lib import pylibcudf as plc
+from utils import assert_column_eq
+
+# The pa_dtype fixture is defined in conftest.py.
+@pytest.fixture(scope="module")
+def pa_column(pa_dtype):
+    pa.array([1, 2, 3])
+
+
+@pytest.fixture(scope="module")
+def column(pa_column):
+    return plc.interop.from_arrow(pa_column)
+
+
+def test_foo(pa_column, column):
+    index = 1
+    result = plc.foo(column)
+    expected = pa.foo(pa_column)
+
+    assert_column_eq(result, expected)
+```
+
+Some guidelines on what should be tested:
+- Tests SHOULD comprehensively cover the API, including all possible combinations of arguments required to ensure good test coverage.
+- pylibcudf SHOULD NOT attempt to stress test large data sizes, and SHOULD instead defer to libcudf tests.
+  - Exception: In special cases where constructing suitable large tests is difficult in C++ (such as creating suitable input data for I/O testing), tests may be added to pylibcudf instead.
+- Nullable data should always be tested.
+- Expected exceptions should be tested. Tests should be written from the user's perspective in mind, and if the API is not currently throwing the appropriate exception it should be updated.
+  - Important note: If the exception should be produced by libcudf, the underlying libcudf API should be updated to throw the desired exception in C++. Such changes may require consultation with libcudf devs in nontrivial cases. [This issue](https://github.com/rapidsai/cudf/issues/12885) provides an overview and an indication of acceptable exception types that should cover most use cases. In rare cases a new C++ exception may need to be introduced in [`error.hpp`](https://github.com/rapidsai/cudf/blob/branch-24.04/cpp/include/cudf/utilities/error.hpp). If so, this exception will also need to be mapped to a suitable Python exception in [`exception_handler.pxd`](https://github.com/rapidsai/cudf/blob/branch-24.04/python/cudf/cudf/_lib/exception_handler.pxd).
+
+Some guidelines on how best to use pytests.
+- By default, fixtures producing device data containers should be of module scope and treated as immutable by tests. Allocating data on the GPU is expensive and slows tests. Almost all pylibcudf operations are out of place operations, so module-scoped fixtures should not typically be problematic to work with. Session-scoped fixtures would also work, but they are harder to reason about since they live in a different module, and if they need to change for any reason they could affect an arbitrarily large number of tests. Module scope is a good balance.
+- Where necessary, mutable fixtures should be named as such (e.g. `mutable_col`) and be of function scope. If possible, they can be implemented as simply making a copy of a corresponding module-scope immutable fixture to avoid duplicating the generation logic.
+
+Tests should be organized corresponding to pylibcudf modules, i.e. one test module for each pylibcudf module.
+
+The following sections of the cuDF Python testing guide also generally apply to pylibcudf unless superseded by any statements above:
+- [](#test_parametrization)
+- [](#xfailing_tests)
+- [](#testing_warnings)
+
 ## Miscellaneous Notes
 
 ### Cython Scoped Enums

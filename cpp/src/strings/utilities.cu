@@ -22,14 +22,19 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
+
+#include <cstdlib>
+#include <string>
 
 namespace cudf {
 namespace strings {
@@ -41,7 +46,7 @@ namespace detail {
 rmm::device_uvector<string_view> create_string_vector_from_column(
   cudf::strings_column_view const input,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto d_strings = column_device_view::create(input.parent(), stream);
 
@@ -63,6 +68,27 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
                     });
 
   return strings_vector;
+}
+
+/**
+ * @copydoc cudf::strings::detail::create_offsets_child_column
+ */
+std::unique_ptr<column> create_offsets_child_column(int64_t chars_bytes,
+                                                    size_type count,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::device_async_resource_ref mr)
+{
+  auto const threshold = get_offset64_threshold();
+  if (!is_large_strings_enabled()) {
+    CUDF_EXPECTS(
+      chars_bytes < threshold, "Size of output exceeds the column size limit", std::overflow_error);
+  }
+  return make_numeric_column(
+    chars_bytes < threshold ? data_type{type_id::INT32} : data_type{type_id::INT64},
+    count,
+    mask_state::UNALLOCATED,
+    stream,
+    mr);
 }
 
 namespace {
@@ -123,11 +149,17 @@ special_case_mapping const* get_special_case_mapping_table()
 
 int64_t get_offset64_threshold()
 {
-  auto const threshold  = std::getenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
-  std::size_t const rtn = threshold != nullptr ? std::atol(threshold) : 0;
+  auto const threshold = std::getenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
+  int64_t const rtn    = threshold != nullptr ? std::atol(threshold) : 0L;
   return (rtn > 0 && rtn < std::numeric_limits<int32_t>::max())
            ? rtn
            : std::numeric_limits<int32_t>::max();
+}
+
+bool is_large_strings_enabled()
+{
+  auto const env = std::getenv("LIBCUDF_LARGE_STRINGS_ENABLED");
+  return env != nullptr && std::string(env) == "1";
 }
 
 int64_t get_offset_value(cudf::column_view const& offsets,

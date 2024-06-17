@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace detail {
@@ -33,7 +34,7 @@ namespace detail {
 std::vector<packed_table> contiguous_split(cudf::table_view const& input,
                                            std::vector<size_type> const& splits,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr);
+                                           rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::pack
@@ -42,7 +43,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
  **/
 packed_columns pack(cudf::table_view const& input,
                     rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr);
+                    rmm::device_async_resource_ref mr);
 
 // opaque implementation of `metadata_builder` since it needs to use
 // `serialized_column`, which is only defined in pack.cpp
@@ -103,7 +104,7 @@ class metadata_builder {
    *
    * @returns A vector containing the serialized column metadata
    */
-  std::vector<uint8_t> build() const;
+  [[nodiscard]] std::vector<uint8_t> build() const;
 
   /**
    * @brief Clear the internal buffer containing all added metadata.

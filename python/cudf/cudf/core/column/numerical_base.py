@@ -1,18 +1,20 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 """Define an interface for columns that can perform numerical operations."""
 
 from __future__ import annotations
 
-from typing import Optional, cast
+from typing import TYPE_CHECKING, Optional, cast
 
 import numpy as np
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import ScalarLike
 from cudf.core.column import ColumnBase
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
+
+if TYPE_CHECKING:
+    from cudf._typing import ScalarLike
 
 
 class NumericalBaseColumn(ColumnBase, Scannable):
@@ -49,7 +51,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-        self = self.nans_to_nulls().dropna()  # type: ignore
+        self = self.nans_to_nulls().dropna()
 
         if len(self) < 4:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
@@ -74,7 +76,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-        self = self.nans_to_nulls().dropna()  # type: ignore
+        self = self.nans_to_nulls().dropna()
 
         if len(self) < 3:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
@@ -112,7 +114,13 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 ),
             )
         else:
-            result = self._numeric_quantile(q, interpolation, exact)
+            # get sorted indices and exclude nulls
+            indices = libcudf.sort.order_by(
+                [self], [True], "first", stable=True
+            ).slice(self.null_count, len(self))
+            result = libcudf.quantiles.quantile(
+                self, q, interpolation, indices, exact
+            )
         if return_scalar:
             scalar_result = result.element_indexing(0)
             if interpolation in {"lower", "higher", "nearest"}:
@@ -176,18 +184,6 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             interpolation="linear",
             exact=True,
             return_scalar=True,
-        )
-
-    def _numeric_quantile(
-        self, q: np.ndarray, interpolation: str, exact: bool
-    ) -> NumericalBaseColumn:
-        # get sorted indices and exclude nulls
-        indices = libcudf.sort.order_by(
-            [self], [True], "first", stable=True
-        ).slice(self.null_count, len(self))
-
-        return libcudf.quantiles.quantile(
-            self, q, interpolation, indices, exact
         )
 
     def cov(self, other: NumericalBaseColumn) -> float:

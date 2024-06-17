@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,13 +73,18 @@ class cuda_stream_pool {
    *
    * @return the number of stream objects in the pool
    */
-  virtual std::size_t get_stream_pool_size() const = 0;
+  [[nodiscard]] virtual std::size_t get_stream_pool_size() const = 0;
 };
 
 /**
  * @brief Initialize global stream pool.
  */
 cuda_stream_pool* create_global_cuda_stream_pool();
+
+/**
+ * @brief Get the global stream pool.
+ */
+cuda_stream_pool& global_cuda_stream_pool();
 
 /**
  * @brief Acquire a set of `cuda_stream_view` objects and synchronize them to an event on another

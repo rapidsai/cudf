@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_210
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing._utils import (
     assert_eq,
     assert_exceptions_equal,
@@ -282,6 +282,10 @@ def test_series_slice_setitem_struct():
     assert_eq(actual, expected)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize("dtype", [np.int32, np.int64, np.float32, np.float64])
 @pytest.mark.parametrize("indices", [0, [1, 2]])
 def test_series_setitem_upcasting(dtype, indices):
@@ -293,7 +297,7 @@ def test_series_setitem_upcasting(dtype, indices):
     # column dtype.
     new_value = np.float64(np.pi)
     col_ref = cr._column
-    with expect_warning_if(PANDAS_GE_210 and dtype != np.float64):
+    with expect_warning_if(dtype != np.float64):
         sr[indices] = new_value
     with expect_warning_if(dtype != np.float64):
         cr[indices] = new_value

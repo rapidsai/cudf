@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import operator
 from functools import partial
@@ -249,7 +249,7 @@ def replace_impl(context, builder, sig, args):
     replacement_ptr = builder.alloca(args[2].type)
 
     builder.store(args[0], src_ptr)
-    builder.store(args[1], to_replace_ptr),
+    builder.store(args[1], to_replace_ptr)
     builder.store(args[2], replacement_ptr)
 
     udf_str_ptr = builder.alloca(default_manager[udf_string].get_value_type())

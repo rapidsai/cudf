@@ -25,16 +25,23 @@ def test_is_categorical_dispatch():
 
 
 @pytest.mark.parametrize("preserve_index", [True, False])
-def test_pyarrow_conversion_dispatch(preserve_index):
+@pytest.mark.parametrize("index", [None, cudf.RangeIndex(10, name="foo")])
+def test_pyarrow_conversion_dispatch(preserve_index, index):
     from dask.dataframe.dispatch import (
         from_pyarrow_table_dispatch,
         to_pyarrow_table_dispatch,
     )
 
-    df1 = cudf.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    df1 = cudf.DataFrame(
+        np.random.randn(10, 3), columns=list("abc"), index=index
+    )
     df2 = from_pyarrow_table_dispatch(
         df1, to_pyarrow_table_dispatch(df1, preserve_index=preserve_index)
     )
+
+    # preserve_index=False doesn't retain index metadata
+    if not preserve_index and index is not None:
+        df1.index.name = None
 
     assert type(df1) == type(df2)
     assert_eq(df1, df2)

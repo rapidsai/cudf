@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 
@@ -206,8 +207,8 @@ class output_builder {
   output_builder(size_type max_write_size,
                  size_type max_growth,
                  rmm::cuda_stream_view stream,
-                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : _size{0}, _max_write_size{max_write_size}, _max_growth{max_growth}
+                 rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+    : _max_write_size{max_write_size}, _max_growth{max_growth}
   {
     CUDF_EXPECTS(max_write_size > 0, "Internal error");
     _chunks.emplace_back(0, stream, mr);
@@ -307,7 +308,7 @@ class output_builder {
    * @return The output vector.
    */
   rmm::device_uvector<T> gather(rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr) const
+                                rmm::device_async_resource_ref mr) const
   {
     rmm::device_uvector<T> output{size(), stream, mr};
     auto output_it = output.begin();
@@ -348,7 +349,7 @@ class output_builder {
     return device_span<T>{vector.data() + vector.size(), vector.capacity() - vector.size()};
   }
 
-  size_type _size;
+  size_type _size{0};
   size_type _max_write_size;
   size_type _max_growth;
   std::vector<rmm::device_uvector<T>> _chunks;

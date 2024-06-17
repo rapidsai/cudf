@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 
 class StructMethods:
@@ -9,14 +9,17 @@ class StructMethods:
         """
         Extract children of the specified struct column
         in the Series
+
         Parameters
         ----------
         key: int or str
             index/position or field name of the respective
             struct column
+
         Returns
         -------
         Series
+
         Examples
         --------
         >>> s = cudf.Series([{'a': 1, 'b': 2}, {'a': 3, 'b': 4}])

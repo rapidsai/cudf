@@ -1,6 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.binaryop cimport binary_operator
+from cudf._lib.pylibcudf.libcudf.binaryop cimport binary_operator
 
 from .column cimport Column
 from .scalar cimport Scalar

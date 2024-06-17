@@ -5,7 +5,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_220
 from cudf.testing._utils import assert_eq
 
 
@@ -31,7 +30,7 @@ def test_series_downsample_simple(ts_resolution):
     assert_resample_results_equal(
         psr.resample("3min").sum(),
         gsr.resample("3min").sum(),
-        check_index=not PANDAS_GE_220,
+        check_index=False,
     )
 
 
@@ -44,7 +43,7 @@ def test_series_upsample_simple():
     assert_resample_results_equal(
         psr.resample("3min").sum(),
         gsr.resample("3min").sum(),
-        check_index=not PANDAS_GE_220,
+        check_index=False,
     )
 
 
@@ -163,3 +162,17 @@ def test_resampling_frequency_conversion(in_freq, sampling_freq, out_freq):
     assert_resample_results_equal(expect, got)
 
     assert got.index.dtype == np.dtype(f"datetime64[{out_freq}]")
+
+
+def test_resampling_downsampling_ms():
+    pdf = pd.DataFrame(
+        {
+            "time": pd.date_range("2020-01-01", periods=5, freq="1ns"),
+            "sign": range(5),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expected = pdf.resample("10ms", on="time").mean()
+    result = gdf.resample("10ms", on="time").mean()
+    result.index = result.index.astype("datetime64[ns]")
+    assert_eq(result, expected, check_freq=False)

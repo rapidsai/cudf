@@ -33,6 +33,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
@@ -102,7 +103,7 @@ namespace detail {
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(input_table.num_rows() == count.size(), "in and count must have equal size");
   CUDF_EXPECTS(not count.has_nulls(), "count cannot contain nulls");
@@ -131,7 +132,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 std::unique_ptr<table> repeat(table_view const& input_table,
                               size_type count,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   if ((input_table.num_rows() == 0) || (count == 0)) { return cudf::empty_like(input_table); }
 
@@ -154,7 +155,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::repeat(input_table, count, stream, mr);
@@ -163,7 +164,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 std::unique_ptr<table> repeat(table_view const& input_table,
                               size_type count,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::repeat(input_table, count, stream, mr);

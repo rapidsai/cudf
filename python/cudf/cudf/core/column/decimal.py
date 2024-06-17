@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import Any, Optional, Sequence, Union, cast
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Union, cast
 
 import cupy as cp
 import numpy as np
@@ -16,7 +16,6 @@ from cudf import _lib as libcudf
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
-from cudf._typing import ColumnBinaryOperand, Dtype
 from cudf.api.types import is_integer_dtype, is_scalar
 from cudf.core.buffer import as_buffer
 from cudf.core.column import ColumnBase
@@ -31,12 +30,21 @@ from cudf.utils.utils import pa_mask_buffer_to_mask
 
 from .numerical_base import NumericalBaseColumn
 
+if TYPE_CHECKING:
+    from cudf._typing import ColumnBinaryOperand, Dtype
+
 
 class DecimalBaseColumn(NumericalBaseColumn):
     """Base column for decimal32, decimal64 or decimal128 columns"""
 
     dtype: DecimalDtype
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
+
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            "Decimals are not yet supported via `__cuda_array_interface__`"
+        )
 
     def as_decimal_column(
         self,
@@ -340,12 +348,6 @@ class Decimal64Column(DecimalBaseColumn):
             offset=self._offset,
             length=self.size,
             buffers=[mask_buf, data_buf],
-        )
-
-    @property
-    def __cuda_array_interface__(self):
-        raise NotImplementedError(
-            "Decimals are not yet supported via `__cuda_array_interface__`"
         )
 
     def _with_type_metadata(

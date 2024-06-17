@@ -80,7 +80,7 @@ std::unique_ptr<cudf::column> build_input_column(cudf::size_type n_rows,
 }
 
 // longer pattern lengths demand more working memory per string
-std::string patterns[] = {"^\\d+ [a-z]+", "[A-Z ]+\\d+ +\\d+[A-Z]+\\d+$"};
+std::string patterns[] = {"^\\d+ [a-z]+", "[A-Z ]+\\d+ +\\d+[A-Z]+\\d+$", "5W43"};
 
 static void bench_contains(nvbench::state& state)
 {
@@ -114,4 +114,4 @@ NVBENCH_BENCH(bench_contains)
   .add_int64_axis("row_width", {32, 64, 128, 256, 512})
   .add_int64_axis("num_rows", {32768, 262144, 2097152, 16777216})
   .add_int64_axis("hit_rate", {50, 100})  // percentage
-  .add_int64_axis("pattern", {0, 1});
+  .add_int64_axis("pattern", {0, 1, 2});

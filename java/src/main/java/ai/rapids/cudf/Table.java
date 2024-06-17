@@ -732,31 +732,13 @@ public final class Table implements AutoCloseable {
                                                        long leftConditionTable, long rightConditionTable,
                                                        long condition, boolean compareNullsEqual);
 
-  private static native long[] mixedLeftSemiJoinSize(long leftKeysTable, long rightKeysTable,
-                                                     long leftConditionTable, long rightConditionTable,
-                                                     long condition, boolean compareNullsEqual);
-
   private static native long[] mixedLeftSemiJoinGatherMap(long leftKeysTable, long rightKeysTable,
                                                           long leftConditionTable, long rightConditionTable,
                                                           long condition, boolean compareNullsEqual);
 
-  private static native long[] mixedLeftSemiJoinGatherMapWithSize(long leftKeysTable, long rightKeysTable,
-                                                                  long leftConditionTable, long rightConditionTable,
-                                                                  long condition, boolean compareNullsEqual,
-                                                                  long outputRowCount, long matchesColumnView);
-
-  private static native long[] mixedLeftAntiJoinSize(long leftKeysTable, long rightKeysTable,
-                                                     long leftConditionTable, long rightConditionTable,
-                                                     long condition, boolean compareNullsEqual);
-
   private static native long[] mixedLeftAntiJoinGatherMap(long leftKeysTable, long rightKeysTable,
                                                           long leftConditionTable, long rightConditionTable,
                                                           long condition, boolean compareNullsEqual);
-
-  private static native long[] mixedLeftAntiJoinGatherMapWithSize(long leftKeysTable, long rightKeysTable,
-                                                                  long leftConditionTable, long rightConditionTable,
-                                                                  long condition, boolean compareNullsEqual,
-                                                                  long outputRowCount, long matchesColumnView);
 
   private static native long[] crossJoin(long leftTable, long rightTable) throws CudfException;
 
@@ -1203,7 +1185,7 @@ public final class Table implements AutoCloseable {
     }
   }
 
-  private static Table gatherJSONColumns(Schema schema, TableWithMeta twm) {
+  private static Table gatherJSONColumns(Schema schema, TableWithMeta twm, int emptyRowCount) {
     String[] neededColumns = schema.getColumnNames();
     if (neededColumns == null || neededColumns.length == 0) {
       return twm.releaseTable();
@@ -1217,6 +1199,11 @@ public final class Table implements AutoCloseable {
       DType[] types = schema.getChildTypes();
       ColumnVector[] columns = new ColumnVector[neededColumns.length];
       try (Table tbl = twm.releaseTable()) {
+        int rowCount = tbl == null ? emptyRowCount : (int)tbl.getRowCount();
+        if (rowCount < 0) {
+          throw new IllegalStateException(
+              "No empty row count provided and the table read has no row count or columns");
+        }
         for (int i = 0; i < columns.length; i++) {
           String neededColumnName = neededColumns[i];
           Integer index = indices.get(neededColumnName);
@@ -1233,8 +1220,26 @@ public final class Table implements AutoCloseable {
               columns[i] = tbl.getColumn(index).incRefCount();
             }
           } else {
-            try (Scalar s = Scalar.fromNull(types[i])) {
-              columns[i] = ColumnVector.fromScalar(s, (int)tbl.getRowCount());
+            if (types[i] == DType.LIST) {
+              Schema listSchema = schema.getChild(i);
+              Schema elementSchema = listSchema.getChild(0);
+              try (Scalar s = Scalar.listFromNull(elementSchema.asHostDataType())) {
+                columns[i] = ColumnVector.fromScalar(s, rowCount);
+              }
+            } else if (types[i] == DType.STRUCT) {
+              Schema structSchema = schema.getChild(i);
+              int numStructChildren = structSchema.getNumChildren();
+              DataType[] structChildrenTypes = new DataType[numStructChildren];
+              for (int j = 0; j < numStructChildren; j++) {
+                structChildrenTypes[j] = structSchema.getChild(j).asHostDataType();
+              }
+              try (Scalar s = Scalar.structFromNull(structChildrenTypes)) {
+                columns[i] = ColumnVector.fromScalar(s, rowCount);
+              }
+            } else {
+              try (Scalar s = Scalar.fromNull(types[i])) {
+                columns[i] = ColumnVector.fromScalar(s, rowCount);
+              }
             }
           }
         }
@@ -1268,7 +1273,7 @@ public final class Table implements AutoCloseable {
                     opts.isMixedTypesAsStrings(),
                 opts.keepStringQuotes()))) {
 
-      return gatherJSONColumns(schema, twm);
+      return gatherJSONColumns(schema, twm, -1);
     }
   }
 
@@ -1284,6 +1289,23 @@ public final class Table implements AutoCloseable {
    */
   public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
                                long len, HostMemoryAllocator hostMemoryAllocator) {
+    return readJSON(schema, opts, buffer, offset, len, hostMemoryAllocator, -1);
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
+   * @param emptyRowCount the number of rows to return if no columns were read.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
+                               long len, HostMemoryAllocator hostMemoryAllocator,
+                               int emptyRowCount) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
@@ -1292,8 +1314,14 @@ public final class Table implements AutoCloseable {
     assert offset >= 0 && offset < buffer.length;
     try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
-      return readJSON(schema, opts, newBuf, 0, len);
+      return readJSON(schema, opts, newBuf, 0, len, emptyRowCount);
     }
+  }
+
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
+                               long len, int emptyRowCount) {
+    return readJSON(schema, opts, buffer, offset, len, DefaultHostMemoryAllocator.get(),
+        emptyRowCount);
   }
 
   public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
@@ -1357,6 +1385,21 @@ public final class Table implements AutoCloseable {
    */
   public static Table readJSON(Schema schema, JSONOptions opts, HostMemoryBuffer buffer,
                               long offset, long len) {
+    return readJSON(schema, opts, buffer, offset, len, -1);
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @param emptyRowCount the number of rows to use if no columns were found.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, HostMemoryBuffer buffer,
+                               long offset, long len, int emptyRowCount) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
@@ -1370,7 +1413,7 @@ public final class Table implements AutoCloseable {
             opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
             opts.isNormalizeWhitespace(),
             opts.isMixedTypesAsStrings(), opts.keepStringQuotes()))) {
-      return gatherJSONColumns(schema, twm);
+      return gatherJSONColumns(schema, twm, emptyRowCount);
     }
   }
 
@@ -1382,13 +1425,25 @@ public final class Table implements AutoCloseable {
    * @return the data parsed as a table on the GPU.
    */
   public static Table readJSON(Schema schema, JSONOptions opts, DataSource ds) {
+    return readJSON(schema, opts, ds, -1);
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param ds the DataSource to read from.
+   * @param emtpyRowCount the number of rows to return if no columns were read.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, DataSource ds, int emtpyRowCount) {
     long dsHandle = DataSourceHelper.createWrapperDataSource(ds);
     try (TableWithMeta twm = new TableWithMeta(readJSONFromDataSource(schema.getFlattenedNumChildren(),
         schema.getFlattenedColumnNames(), schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(), opts.isDayFirst(),
         opts.isLines(), opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
         opts.isNormalizeWhitespace(),
         opts.isMixedTypesAsStrings(), opts.keepStringQuotes(), dsHandle))) {
-      return gatherJSONColumns(schema, twm);
+      return gatherJSONColumns(schema, twm, emtpyRowCount);
     } finally {
       DataSourceHelper.destroyWrapperDataSource(dsHandle);
     }
@@ -3693,34 +3748,6 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Computes output size information for a left semi join between two tables using a mix of
-   * equality and inequality conditions. The entire join condition is assumed to be a logical AND
-   * of the equality condition and inequality condition.
-   * NOTE: It is the responsibility of the caller to close the resulting size information object
-   * or native resources can be leaked!
-   * @param leftKeys the left table's key columns for the equality condition
-   * @param rightKeys the right table's key columns for the equality condition
-   * @param leftConditional the left table's columns needed to evaluate the inequality condition
-   * @param rightConditional the right table's columns needed to evaluate the inequality condition
-   * @param condition the inequality condition of the join
-   * @param nullEquality whether nulls should compare as equal
-   * @return size information for the join
-   */
-  public static MixedJoinSize mixedLeftSemiJoinSize(Table leftKeys, Table rightKeys,
-                                                    Table leftConditional, Table rightConditional,
-                                                    CompiledExpression condition,
-                                                    NullEquality nullEquality) {
-    long[] mixedSizeInfo = mixedLeftSemiJoinSize(
-        leftKeys.getNativeView(), rightKeys.getNativeView(),
-        leftConditional.getNativeView(), rightConditional.getNativeView(),
-        condition.getNativeHandle(), nullEquality == NullEquality.EQUAL);
-    assert mixedSizeInfo.length == 2;
-    long outputRowCount = mixedSizeInfo[0];
-    long matchesColumnHandle = mixedSizeInfo[1];
-    return new MixedJoinSize(outputRowCount, new ColumnVector(matchesColumnHandle));
-  }
-
-  /**
    * Computes the gather map that can be used to manifest the result of a left semi join between
    * two tables using a mix of equality and inequality conditions. The entire join condition is
    * assumed to be a logical AND of the equality condition and inequality condition.
@@ -3746,42 +3773,6 @@ public final class Table implements AutoCloseable {
         leftConditional.getNativeView(), rightConditional.getNativeView(),
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL);
-    return buildSingleJoinGatherMap(gatherMapData);
-  }
-
-  /**
-   * Computes the gather map that can be used to manifest the result of a left semi join between
-   * two tables using a mix of equality and inequality conditions. The entire join condition is
-   * assumed to be a logical AND of the equality condition and inequality condition.
-   * A {@link GatherMap} instance will be returned that can be used to gather
-   * the left table to produce the result of the left semi join.
-   *
-   * It is the responsibility of the caller to close the resulting gather map instances.
-   *
-   * This interface allows passing the size result from
-   * {@link #mixedLeftSemiJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
-   * when the output size was computed previously.
-   *
-   * @param leftKeys the left table's key columns for the equality condition
-   * @param rightKeys the right table's key columns for the equality condition
-   * @param leftConditional the left table's columns needed to evaluate the inequality condition
-   * @param rightConditional the right table's columns needed to evaluate the inequality condition
-   * @param condition the inequality condition of the join
-   * @param nullEquality whether nulls should compare as equal
-   * @param joinSize mixed join size result
-   * @return left and right table gather maps
-   */
-  public static GatherMap mixedLeftSemiJoinGatherMap(Table leftKeys, Table rightKeys,
-                                                     Table leftConditional, Table rightConditional,
-                                                     CompiledExpression condition,
-                                                     NullEquality nullEquality,
-                                                     MixedJoinSize joinSize) {
-    long[] gatherMapData = mixedLeftSemiJoinGatherMapWithSize(
-        leftKeys.getNativeView(), rightKeys.getNativeView(),
-        leftConditional.getNativeView(), rightConditional.getNativeView(),
-        condition.getNativeHandle(),
-        nullEquality == NullEquality.EQUAL,
-        joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
     return buildSingleJoinGatherMap(gatherMapData);
   }
 
@@ -3865,34 +3856,6 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Computes output size information for a left anti join between two tables using a mix of
-   * equality and inequality conditions. The entire join condition is assumed to be a logical AND
-   * of the equality condition and inequality condition.
-   * NOTE: It is the responsibility of the caller to close the resulting size information object
-   * or native resources can be leaked!
-   * @param leftKeys the left table's key columns for the equality condition
-   * @param rightKeys the right table's key columns for the equality condition
-   * @param leftConditional the left table's columns needed to evaluate the inequality condition
-   * @param rightConditional the right table's columns needed to evaluate the inequality condition
-   * @param condition the inequality condition of the join
-   * @param nullEquality whether nulls should compare as equal
-   * @return size information for the join
-   */
-  public static MixedJoinSize mixedLeftAntiJoinSize(Table leftKeys, Table rightKeys,
-                                                    Table leftConditional, Table rightConditional,
-                                                    CompiledExpression condition,
-                                                    NullEquality nullEquality) {
-    long[] mixedSizeInfo = mixedLeftAntiJoinSize(
-        leftKeys.getNativeView(), rightKeys.getNativeView(),
-        leftConditional.getNativeView(), rightConditional.getNativeView(),
-        condition.getNativeHandle(), nullEquality == NullEquality.EQUAL);
-    assert mixedSizeInfo.length == 2;
-    long outputRowCount = mixedSizeInfo[0];
-    long matchesColumnHandle = mixedSizeInfo[1];
-    return new MixedJoinSize(outputRowCount, new ColumnVector(matchesColumnHandle));
-  }
-
-  /**
    * Computes the gather map that can be used to manifest the result of a left anti join between
    * two tables using a mix of equality and inequality conditions. The entire join condition is
    * assumed to be a logical AND of the equality condition and inequality condition.
@@ -3918,42 +3881,6 @@ public final class Table implements AutoCloseable {
         leftConditional.getNativeView(), rightConditional.getNativeView(),
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL);
-    return buildSingleJoinGatherMap(gatherMapData);
-  }
-
-  /**
-   * Computes the gather map that can be used to manifest the result of a left anti join between
-   * two tables using a mix of equality and inequality conditions. The entire join condition is
-   * assumed to be a logical AND of the equality condition and inequality condition.
-   * A {@link GatherMap} instance will be returned that can be used to gather
-   * the left table to produce the result of the left anti join.
-   *
-   * It is the responsibility of the caller to close the resulting gather map instances.
-   *
-   * This interface allows passing the size result from
-   * {@link #mixedLeftAntiJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
-   * when the output size was computed previously.
-   *
-   * @param leftKeys the left table's key columns for the equality condition
-   * @param rightKeys the right table's key columns for the equality condition
-   * @param leftConditional the left table's columns needed to evaluate the inequality condition
-   * @param rightConditional the right table's columns needed to evaluate the inequality condition
-   * @param condition the inequality condition of the join
-   * @param nullEquality whether nulls should compare as equal
-   * @param joinSize mixed join size result
-   * @return left and right table gather maps
-   */
-  public static GatherMap mixedLeftAntiJoinGatherMap(Table leftKeys, Table rightKeys,
-                                                     Table leftConditional, Table rightConditional,
-                                                     CompiledExpression condition,
-                                                     NullEquality nullEquality,
-                                                     MixedJoinSize joinSize) {
-    long[] gatherMapData = mixedLeftAntiJoinGatherMapWithSize(
-        leftKeys.getNativeView(), rightKeys.getNativeView(),
-        leftConditional.getNativeView(), rightConditional.getNativeView(),
-        condition.getNativeHandle(),
-        nullEquality == NullEquality.EQUAL,
-        joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
     return buildSingleJoinGatherMap(gatherMapData);
   }
 

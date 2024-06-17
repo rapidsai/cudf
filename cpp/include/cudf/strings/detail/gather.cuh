@@ -19,22 +19,19 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
-#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
-#include <thrust/advance.h>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
@@ -225,9 +222,9 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
                                        MapIterator map_begin,
                                        MapIterator map_end,
                                        cudf::detail::input_offsetalator const offsets,
-                                       size_type chars_bytes,
+                                       int64_t chars_bytes,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   auto const output_count = std::distance(map_begin, map_end);
   if (output_count == 0) return rmm::device_uvector<char>(0, stream, mr);
@@ -238,9 +235,9 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
   constexpr int warps_per_threadblock = 4;
   // String parallel strategy will be used if average string length is above this threshold.
   // Otherwise, char parallel strategy will be used.
-  constexpr size_type string_parallel_threshold = 32;
+  constexpr int64_t string_parallel_threshold = 32;
 
-  size_type average_string_length = chars_bytes / output_count;
+  int64_t const average_string_length = chars_bytes / output_count;
 
   if (average_string_length > string_parallel_threshold) {
     constexpr int max_threadblocks = 65536;
@@ -290,7 +287,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
                                      MapIterator begin,
                                      MapIterator end,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   auto const output_count = std::distance(begin, end);
   if (output_count == 0) return make_empty_column(type_id::STRING);
@@ -301,7 +298,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
     strings.is_empty() ? make_empty_column(type_id::INT32)->view() : strings.offsets(),
     strings.offset());
 
-  auto offsets_itr = thrust::make_transform_iterator(
+  auto sizes_itr = thrust::make_transform_iterator(
     begin,
     cuda::proclaim_return_type<size_type>(
       [d_strings = *d_strings, d_in_offsets] __device__(size_type idx) {
@@ -309,8 +306,8 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
         if (not d_strings.is_valid(idx)) { return 0; }
         return static_cast<size_type>(d_in_offsets[idx + 1] - d_in_offsets[idx]);
       }));
-  auto [out_offsets_column, total_bytes] =
-    cudf::detail::make_offsets_child_column(offsets_itr, offsets_itr + output_count, stream, mr);
+  auto [out_offsets_column, total_bytes] = cudf::strings::detail::make_offsets_child_column(
+    sizes_itr, sizes_itr + output_count, stream, mr);
 
   // build chars column
   auto const offsets_view =
@@ -354,7 +351,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
                                      MapIterator end,
                                      bool nullify_out_of_bounds,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   if (nullify_out_of_bounds) return gather<true>(strings, begin, end, stream, mr);
   return gather<false>(strings, begin, end, stream, mr);

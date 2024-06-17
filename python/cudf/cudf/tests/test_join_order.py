@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_220
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing._utils import assert_eq
 
 
@@ -45,7 +45,8 @@ def expected(left, right, sort, *, how):
 def test_join_ordering_pandas_compat(request, left, right, sort, how):
     request.applymarker(
         pytest.mark.xfail(
-            PANDAS_GE_220 and how == "right",
+            PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
+            and how == "right",
             reason="TODO: Result ording of suffix'ed columns is incorrect",
         )
     )

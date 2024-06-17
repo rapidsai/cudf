@@ -41,9 +41,7 @@ from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import initfunc
 
 # Maximum size of a string column is 2 GiB
-_STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get(
-    "STRINGS_UDF_HEAP_SIZE", 2**31
-)
+_STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get("STRINGS_UDF_HEAP_SIZE", 2**31)
 _heap_size = 0
 _cudf_str_dtype = dtype(str)
 

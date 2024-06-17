@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any, Optional, Sequence, cast
+import functools
+from typing import TYPE_CHECKING, Any, Optional, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -12,19 +13,14 @@ from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
 from cudf.api.types import is_scalar, is_timedelta64_dtype
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
 from cudf.utils.utils import _all_bools_with_nulls
 
-_dtype_to_format_conversion = {
-    "timedelta64[ns]": "%D days %H:%M:%S",
-    "timedelta64[us]": "%D days %H:%M:%S",
-    "timedelta64[ms]": "%D days %H:%M:%S",
-    "timedelta64[s]": "%D days %H:%M:%S",
-}
+if TYPE_CHECKING:
+    from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
 
 _unit_to_nanoseconds_conversion = {
     "ns": 1,
@@ -87,6 +83,8 @@ class TimeDeltaColumn(ColumnBase):
         null_count: Optional[int] = None,
     ):
         dtype = cudf.dtype(dtype)
+        if dtype.kind != "m":
+            raise TypeError(f"{self.dtype} is not a supported duration type")
 
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
@@ -102,14 +100,9 @@ class TimeDeltaColumn(ColumnBase):
             null_count=null_count,
         )
 
-        if self.dtype.type is not np.timedelta64:
-            raise TypeError(f"{self.dtype} is not a supported duration type")
-
-        self._time_unit, _ = np.datetime_data(self.dtype)
-
     def __contains__(self, item: DatetimeLikeScalar) -> bool:
         try:
-            item = np.timedelta64(item, self._time_unit)
+            item = np.timedelta64(item, self.time_unit)
         except ValueError:
             # If item cannot be converted to duration type
             # np.timedelta64 raises ValueError, hence `item`
@@ -125,6 +118,12 @@ class TimeDeltaColumn(ColumnBase):
         raise NotImplementedError(
             "TimeDelta Arrays is not yet implemented in cudf"
         )
+
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        if cudf.get_option("mode.pandas_compatible"):
+            return pd.Timedelta(result)
+        return result
 
     @acquire_spill_lock()
     def to_arrow(self) -> pa.Array:
@@ -166,6 +165,7 @@ class TimeDeltaColumn(ColumnBase):
                 "__le__",
                 "__ge__",
                 "NULL_EQUALS",
+                "NULL_NOT_EQUALS",
             }:
                 out_dtype = cudf.dtype(np.bool_)
             elif op == "__mod__":
@@ -188,15 +188,18 @@ class TimeDeltaColumn(ColumnBase):
         elif other.dtype.kind in {"f", "i", "u"}:
             if op in {"__mul__", "__mod__", "__truediv__", "__floordiv__"}:
                 out_dtype = self.dtype
-            elif op in {"__eq__", "NULL_EQUALS", "__ne__"}:
+            elif op in {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}:
                 if isinstance(other, ColumnBase) and not isinstance(
                     other, TimeDeltaColumn
                 ):
+                    fill_value = op in ("__ne__", "NULL_NOT_EQUALS")
                     result = _all_bools_with_nulls(
-                        self, other, bool_fill_value=op == "__ne__"
+                        self,
+                        other,
+                        bool_fill_value=fill_value,
                     )
                     if cudf.get_option("mode.pandas_compatible"):
-                        result = result.fillna(op == "__ne__")
+                        result = result.fillna(fill_value)
                     return result
 
         if out_dtype is None:
@@ -219,16 +222,12 @@ class TimeDeltaColumn(ColumnBase):
             "Cannot perform binary operation on timezone-naive columns"
             " and timezone-aware timestamps."
         )
-        if isinstance(other, pd.Timestamp):
-            if other.tz is not None:
+        if isinstance(other, datetime.datetime):
+            if other.tzinfo is not None:
                 raise NotImplementedError(tz_error_msg)
-            other = other.to_datetime64()
-        elif isinstance(other, pd.Timedelta):
-            other = other.to_timedelta64()
+            other = pd.Timestamp(other).to_datetime64()
         elif isinstance(other, datetime.timedelta):
-            other = np.timedelta64(other)
-        elif isinstance(other, datetime.datetime) and other.tzinfo is not None:
-            raise NotImplementedError(tz_error_msg)
+            other = pd.Timedelta(other).to_timedelta64()
 
         if isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
@@ -245,13 +244,13 @@ class TimeDeltaColumn(ColumnBase):
             else:
                 common_dtype = determine_out_dtype(self.dtype, other.dtype)
             return cudf.Scalar(other.astype(common_dtype))
-        elif np.isscalar(other):
+        elif is_scalar(other):
             return cudf.Scalar(other)
         return NotImplemented
 
-    @property
+    @functools.cached_property
     def time_unit(self) -> str:
-        return self._time_unit
+        return np.datetime_data(self.dtype)[0]
 
     def fillna(
         self,
@@ -292,9 +291,7 @@ class TimeDeltaColumn(ColumnBase):
         self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         if format is None:
-            format = _dtype_to_format_conversion.get(
-                self.dtype.name, "%D days %H:%M:%S"
-            )
+            format = "%D days %H:%M:%S"
         if len(self) > 0:
             return string._timedelta_to_str_typecast_functions[
                 cudf.dtype(self.dtype)
@@ -479,7 +476,7 @@ class TimeDeltaColumn(ColumnBase):
                     _unit_to_nanoseconds_conversion[value[1]], "ns"
                 ).astype(self.dtype)
             )
-            if self._time_unit == value[1]:
+            if self.time_unit == value[1]:
                 break
 
         for name in keys_list:
@@ -571,7 +568,7 @@ class TimeDeltaColumn(ColumnBase):
         # performing division operation to extract the number
         # of nanoseconds.
 
-        if self._time_unit != "ns":
+        if self.time_unit != "ns":
             res_col = column.as_column(0, length=len(self), dtype="int64")
             if self.nullable:
                 res_col = res_col.set_mask(self.mask)

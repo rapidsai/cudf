@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@
 #include <cudf/types.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
+
+#include <stdexcept>
 
 using namespace cudf::test::iterators;
 
@@ -77,8 +79,8 @@ TYPED_TEST(FixedWidthGetValueTest, IndexOutOfBounds)
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> col({9, 8, 7, 6}, {0, 1, 0, 1});
 
   // Test for out of bounds indexes in both directions.
-  EXPECT_THROW(cudf::get_element(col, -1), cudf::logic_error);
-  EXPECT_THROW(cudf::get_element(col, 4), cudf::logic_error);
+  EXPECT_THROW(cudf::get_element(col, -1), std::out_of_range);
+  EXPECT_THROW(cudf::get_element(col, 4), std::out_of_range);
 }
 
 struct StringGetValueTest : public cudf::test::BaseFixture {};
@@ -107,7 +109,7 @@ TEST_F(StringGetValueTest, GetEmpty)
 
 TEST_F(StringGetValueTest, GetFromNullable)
 {
-  cudf::test::strings_column_wrapper col({"this", "is", "a", "test"}, {0, 1, 0, 1});
+  cudf::test::strings_column_wrapper col({"this", "is", "a", "test"}, {false, true, false, true});
   auto s = cudf::get_element(col, 1);
 
   auto typed_s = static_cast<cudf::string_scalar const*>(s.get());
@@ -118,7 +120,7 @@ TEST_F(StringGetValueTest, GetFromNullable)
 
 TEST_F(StringGetValueTest, GetNull)
 {
-  cudf::test::strings_column_wrapper col({"this", "is", "a", "test"}, {0, 1, 0, 1});
+  cudf::test::strings_column_wrapper col({"this", "is", "a", "test"}, {false, true, false, true});
   auto s = cudf::get_element(col, 2);
 
   EXPECT_FALSE(s->is_valid());
@@ -147,8 +149,8 @@ TYPED_TEST(DictionaryGetValueTest, BasicGet)
 TYPED_TEST(DictionaryGetValueTest, GetFromNullable)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> keys({6, 7, 8, 9});
-  cudf::test::fixed_width_column_wrapper<uint32_t> indices({0, 0, 1, 2, 1, 3, 3, 2},
-                                                           {0, 1, 0, 1, 1, 1, 0, 0});
+  cudf::test::fixed_width_column_wrapper<uint32_t> indices(
+    {0, 0, 1, 2, 1, 3, 3, 2}, {false, true, false, true, true, true, false, false});
   auto col = cudf::make_dictionary_column(keys, indices);
 
   auto s = cudf::get_element(*col, 3);
@@ -163,8 +165,8 @@ TYPED_TEST(DictionaryGetValueTest, GetFromNullable)
 TYPED_TEST(DictionaryGetValueTest, GetNull)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> keys({6, 7, 8, 9});
-  cudf::test::fixed_width_column_wrapper<uint32_t> indices({0, 0, 1, 2, 1, 3, 3, 2},
-                                                           {0, 1, 0, 1, 1, 1, 0, 0});
+  cudf::test::fixed_width_column_wrapper<uint32_t> indices(
+    {0, 0, 1, 2, 1, 3, 3, 2}, {false, true, false, true, true, true, false, false});
   auto col = cudf::make_dictionary_column(keys, indices);
 
   auto s = cudf::get_element(*col, 2);
@@ -541,11 +543,6 @@ struct ListGetStructValueTest : public cudf::test::BaseFixture {
   }
 
   /**
-   * @brief Create a 0-length structs column
-   */
-  SCW zero_length_struct() { return SCW{}; }
-
-  /**
    * @brief Concatenate structs columns, allow specifying inputs in `initializer_list`
    */
   std::unique_ptr<cudf::column> concat(std::initializer_list<SCW> rows)
@@ -651,7 +648,7 @@ TYPED_TEST(ListGetStructValueTest, NonNestedGetNonNullEmpty)
   cudf::size_type index = 2;
   // For well-formed list column, an empty list still holds the complete structure of
   // a 0-length structs column
-  auto expected_data = this->zero_length_struct();
+  auto expected_data = this->make_test_structs_column({}, {}, {}, no_nulls());
 
   auto s       = cudf::get_element(list_column->view(), index);
   auto typed_s = static_cast<cudf::list_scalar const*>(s.get());
@@ -755,8 +752,8 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNonNullEmpty)
   auto list_column_nested =
     this->make_test_lists_column(3, {0, 1, 1, 2}, std::move(list_column), {1, 1, 1});
 
-  auto expected_data =
-    this->make_test_lists_column(0, {0}, this->zero_length_struct().release(), {});
+  auto expected_data = this->make_test_lists_column(
+    0, {0}, this->make_test_structs_column({}, {}, {}, no_nulls()).release(), {});
 
   cudf::size_type index = 1;
   auto s                = cudf::get_element(list_column_nested->view(), index);

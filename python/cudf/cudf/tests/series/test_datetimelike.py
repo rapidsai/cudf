@@ -203,3 +203,36 @@ def test_tz_aware_attributes_local():
     result = dti.hour
     expected = cudf.Index([9, 9, 9], dtype="int16")
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "item, expected",
+    [
+        ["2020-01-01", False],
+        ["2020-01-01T00:00:00+00:00", True],
+        ["2020-01-01T00:00:00-08:00", False],
+        ["2019-12-31T16:00:00-08:00", True],
+    ],
+)
+def test_contains_tz_aware(item, expected):
+    dti = cudf.date_range("2020", periods=2, freq="D").tz_localize("UTC")
+    result = item in dti
+    assert result == expected
+
+
+def test_tz_convert_naive_typeerror():
+    with pytest.raises(TypeError):
+        cudf.date_range("2020", periods=2, freq="D").tz_convert(None)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_from_pandas_obj_tz_aware(klass):
+    tz_aware_data = [
+        pd.Timestamp("2020-01-01", tz="UTC").tz_convert("US/Pacific")
+    ]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    result = cudf.from_pandas(pandas_obj)
+    expected = getattr(cudf, klass)(tz_aware_data)
+    assert_eq(result, expected)

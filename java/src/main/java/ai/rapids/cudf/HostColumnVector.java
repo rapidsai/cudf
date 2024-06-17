@@ -150,17 +150,20 @@ public final class HostColumnVector extends HostColumnVectorCore {
   public synchronized void close() {
     refCount--;
     offHeap.delRef();
-    if (eventHandler != null) {
-      eventHandler.onClosed(this, refCount);
-    }
-    if (refCount == 0) {
-      offHeap.clean(false);
-      for( HostColumnVectorCore child : children) {
-        child.close();
+    try {
+      if (refCount == 0) {
+        offHeap.clean(false);
+        for (HostColumnVectorCore child : children) {
+          child.close();
+        }
+      } else if (refCount < 0) {
+        offHeap.logRefCountDebug("double free " + this);
+        throw new IllegalStateException("Close called too many times " + this);
       }
-    } else if (refCount < 0) {
-      offHeap.logRefCountDebug("double free " + this);
-      throw new IllegalStateException("Close called too many times " + this);
+    } finally {
+      if (eventHandler != null) {
+        eventHandler.onClosed(this, refCount);
+      }
     }
   }
 

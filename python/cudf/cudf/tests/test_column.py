@@ -81,7 +81,7 @@ def test_column_offset_and_size(pandas_input, offset, size):
         children=col.base_children,
     )
 
-    if cudf.api.types._is_categorical_dtype(col.dtype):
+    if isinstance(col.dtype, cudf.CategoricalDtype):
         assert col.size == col.codes.size
         assert col.size == (col.codes.data.size / col.codes.dtype.itemsize)
     elif cudf.api.types.is_string_dtype(col.dtype):
@@ -120,7 +120,7 @@ def column_slicing_test(col, offset, size, cast_to_float=False):
     else:
         pd_series = series.to_pandas()
 
-    if cudf.api.types._is_categorical_dtype(col.dtype):
+    if isinstance(col.dtype, cudf.CategoricalDtype):
         # The cudf.Series is constructed from an already sliced column, whereas
         # the pandas.Series is constructed from the unsliced series and then
         # sliced, so the indexes should be different and we must ignore it.
@@ -176,8 +176,8 @@ def test_column_series_multi_dim(data):
 @pytest.mark.parametrize(
     ("data", "error"),
     [
-        ([1, "1.0", "2", -3], pa.lib.ArrowInvalid),
-        ([np.nan, 0, "null", cp.nan], pa.lib.ArrowInvalid),
+        ([1, "1.0", "2", -3], cudf.errors.MixedTypeError),
+        ([np.nan, 0, "null", cp.nan], cudf.errors.MixedTypeError),
         (
             [np.int32(4), np.float64(1.5), np.float32(1.290994), np.int8(0)],
             None,

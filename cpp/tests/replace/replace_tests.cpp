@@ -30,6 +30,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -63,7 +64,7 @@ TEST_F(ReplaceErrorTest, TypeMismatch)
 
   EXPECT_THROW(
     cudf::find_and_replace_all(input_column, values_to_replace_column, replacement_values_column),
-    cudf::logic_error);
+    cudf::data_type_error);
 }
 
 // Error: nulls in old-values
@@ -97,9 +98,7 @@ TEST_F(ReplaceStringsTest, Strings)
   ASSERT_NO_THROW(result = cudf::find_and_replace_all(
                     input_wrapper, values_to_replace_wrapper, replacement_wrapper));
   std::vector<std::string> expected{"z", "b", "c", "d", "e", "f", "g", "h"};
-  std::vector<cudf::valid_type> ex_valid{1, 1, 1, 1, 1, 1, 1, 1};
-  cudf::test::strings_column_wrapper expected_wrapper{
-    expected.begin(), expected.end(), ex_valid.begin()};
+  cudf::test::strings_column_wrapper expected_wrapper{expected.begin(), expected.end()};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_wrapper);
 }
@@ -160,7 +159,6 @@ TEST_F(ReplaceStringsTest, StringsResultAllEmpty)
   std::vector<std::string> replacement{"a", ""};
   std::vector<cudf::valid_type> replacement_valid{1, 1};
   std::vector<std::string> expected{"", "", "", "", "", "", "", ""};
-  std::vector<cudf::valid_type> ex_valid{1, 1, 1, 1, 1, 1, 1, 1};
   cudf::test::strings_column_wrapper input_wrapper{input.begin(), input.end()};
   cudf::test::strings_column_wrapper values_to_replace_wrapper{values_to_replace.begin(),
                                                                values_to_replace.end()};
@@ -170,8 +168,7 @@ TEST_F(ReplaceStringsTest, StringsResultAllEmpty)
   std::unique_ptr<cudf::column> result;
   ASSERT_NO_THROW(result = cudf::find_and_replace_all(
                     input_wrapper, values_to_replace_wrapper, replacement_wrapper));
-  cudf::test::strings_column_wrapper expected_wrapper{
-    expected.begin(), expected.end(), ex_valid.begin()};
+  cudf::test::strings_column_wrapper expected_wrapper{expected.begin(), expected.end()};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_wrapper);
 }

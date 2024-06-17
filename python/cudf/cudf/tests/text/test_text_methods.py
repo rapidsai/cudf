@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import random
 import string
@@ -330,9 +330,8 @@ def test_ngrams(n, separator, expected_values):
                 "he",
                 "er",
                 "re",
-                cudf.NA,
             ],
-            [1, 1, 1, 2, 3, 4, 4, 4, 5, 5, 5, 6],
+            [1, 1, 1, 2, 3, 4, 4, 4, 5, 5, 5],
             False,
         ),
         (
@@ -340,15 +339,12 @@ def test_ngrams(n, separator, expected_values):
             [
                 "thi",
                 "his",
-                cudf.NA,
-                cudf.NA,
                 "boo",
                 "ook",
                 "her",
                 "ere",
-                cudf.NA,
             ],
-            [1, 1, 2, 3, 4, 4, 5, 5, 6],
+            [1, 1, 4, 4, 5, 5],
             False,
         ),
         (
@@ -430,7 +426,6 @@ def test_character_tokenize_series():
         [
             "hello world",
             "sdf",
-            None,
             (
                 "goodbye, one-two:three~four+five_six@sev"
                 "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ"
@@ -543,18 +538,17 @@ def test_character_tokenize_series():
 
 
 def test_character_tokenize_index():
-    sr = cudf.core.index.as_index(
+    sr = cudf.Index(
         [
             "hello world",
             "sdf",
-            None,
             (
                 "goodbye, one-two:three~four+five_six@sev"
                 "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ"
             ),
         ]
     )
-    expected = cudf.core.index.as_index(
+    expected = cudf.Index(
         [
             "h",
             "e",
@@ -652,8 +646,8 @@ def test_character_tokenize_index():
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)
 
-    sr = cudf.core.index.as_index(["a"])
-    expected = cudf.core.index.as_index(["a"])
+    sr = cudf.Index(["a"])
+    expected = cudf.Index(["a"])
 
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)

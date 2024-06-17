@@ -4,18 +4,18 @@ from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 
-from cudf._lib.cpp.aggregation cimport (
+from cudf._lib.pylibcudf.libcudf.aggregation cimport (
     aggregation,
     groupby_aggregation,
     groupby_scan_aggregation,
 )
-from cudf._lib.cpp.groupby cimport (
+from cudf._lib.pylibcudf.libcudf.groupby cimport (
     aggregation_request,
     aggregation_result,
     groupby,
     scan_request,
 )
-from cudf._lib.cpp.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
 
 from .column cimport Column
 from .table cimport Table

@@ -23,12 +23,11 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
-#include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
 
@@ -191,8 +190,9 @@ struct from_durations_fn {
   column_device_view d_durations;
   format_item const* d_format_items;
   size_type items_count;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ int8_t format_length(char format_char, duration_component const* const timeparts) const
   {
@@ -377,14 +377,14 @@ struct from_durations_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_durations.is_null(idx)) {
-      if (d_chars == nullptr) { d_offsets[idx] = 0; }
+      if (d_chars == nullptr) { d_sizes[idx] = 0; }
       return;
     }
 
     if (d_chars != nullptr) {
       set_chars(idx);
     } else {
-      d_offsets[idx] = string_size(d_durations.template element<T>(idx));
+      d_sizes[idx] = string_size(d_durations.template element<T>(idx));
     }
   }
 };
@@ -400,7 +400,7 @@ struct dispatch_from_durations_fn {
   std::unique_ptr<column> operator()(column_view const& durations,
                                      std::string_view format,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+                                     rmm::device_async_resource_ref mr) const
   {
     CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
 
@@ -681,7 +681,7 @@ struct dispatch_to_durations_fn {
 std::unique_ptr<column> from_durations(column_view const& durations,
                                        std::string_view format,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   size_type strings_count = durations.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);
@@ -694,7 +694,7 @@ std::unique_ptr<column> to_durations(strings_column_view const& input,
                                      data_type duration_type,
                                      std::string_view format,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
@@ -724,7 +724,7 @@ std::unique_ptr<column> to_durations(strings_column_view const& input,
 std::unique_ptr<column> from_durations(column_view const& durations,
                                        std::string_view format,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::from_durations(durations, format, stream, mr);
@@ -734,7 +734,7 @@ std::unique_ptr<column> to_durations(strings_column_view const& input,
                                      data_type duration_type,
                                      std::string_view format,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::to_durations(input, duration_type, format, stream, mr);

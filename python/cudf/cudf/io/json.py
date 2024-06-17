@@ -26,6 +26,8 @@ def read_json(
     keep_quotes=False,
     storage_options=None,
     mixed_types_as_string=False,
+    prune_columns=False,
+    on_bad_lines="error",
     *args,
     **kwargs,
 ):
@@ -38,25 +40,6 @@ def read_json(
             f"or a bool, or None. Got {type(dtype)}"
         )
 
-    if engine == "cudf_experimental":
-        raise ValueError(
-            "engine='cudf_experimental' support has been removed, "
-            "use `engine='cudf'`"
-        )
-
-    if engine == "cudf_legacy":
-        # TODO: Deprecated in 23.02, please
-        # give some time until(more than couple of
-        # releases from now) `cudf_legacy`
-        # support can be removed completely.
-        warnings.warn(
-            "engine='cudf_legacy' is a deprecated engine."
-            "This will be removed in a future release."
-            "Please switch to using engine='cudf'.",
-            FutureWarning,
-        )
-    if engine == "cudf_legacy" and not lines:
-        raise ValueError(f"{engine} engine only supports JSON Lines format")
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
     if engine != "cudf" and keep_quotes:
@@ -64,7 +47,7 @@ def read_json(
             "keep_quotes='True' is supported only with engine='cudf'"
         )
 
-    if engine == "cudf_legacy" or engine == "cudf":
+    if engine == "cudf":
         if dtype is None:
             dtype = True
 
@@ -112,14 +95,15 @@ def read_json(
                 filepaths_or_buffers.append(tmp_source)
 
         df = libjson.read_json(
-            filepaths_or_buffers,
-            dtype,
-            lines,
-            compression,
-            byte_range,
-            engine == "cudf_legacy",
-            keep_quotes,
-            mixed_types_as_string,
+            filepaths_or_buffers=filepaths_or_buffers,
+            dtype=dtype,
+            lines=lines,
+            compression=compression,
+            byte_range=byte_range,
+            keep_quotes=keep_quotes,
+            mixed_types_as_string=mixed_types_as_string,
+            prune_columns=prune_columns,
+            on_bad_lines=on_bad_lines,
         )
     else:
         warnings.warn(
@@ -163,10 +147,9 @@ def read_json(
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
         specified_dtypes = {} if dtype is True else dtype
-        df_dtypes = df._dtypes
         unspecified_dtypes = {
-            name: df_dtypes[name]
-            for name in df._column_names
+            name: dtype
+            for name, dtype in df._dtypes
             if name not in specified_dtypes
         }
         default_dtypes = {}

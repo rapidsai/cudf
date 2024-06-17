@@ -23,6 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
 
@@ -103,8 +104,11 @@ struct TransduceToNormalizedQuotes {
     // SQS   | {'}             -> {"}
     // SQS   | {"}             -> {\"}
     // SQS   | {\}             -> <nop>
+    // DQS   | {\}             -> <nop>
     // SEC   | {'}             -> {'}
     // SEC   | Sigma\{'}       -> {\*}
+    // DEC   | {'}             -> {'}
+    // DEC   | Sigma\{'}       -> {\*}
 
     // Whether this transition translates to the escape sequence: \"
     bool const outputs_escape_sequence =
@@ -119,20 +123,23 @@ struct TransduceToNormalizedQuotes {
       return '"';
     }
     // Case when the read symbol is an escape character - the actual translation for \<s> for some
-    // symbol <s> is handled by transitions from SEC. For now, there is no output for this
-    // transition
-    if ((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::ESCAPE_CHAR)) &&
-        ((state_id == static_cast<StateT>(dfa_states::TT_SQS)))) {
+    // symbol <s> is handled by transitions from SEC. The same logic applies for the transition from
+    // DEC. For now, there is no output for this transition
+    if (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::ESCAPE_CHAR) &&
+        (state_id == static_cast<StateT>(dfa_states::TT_SQS) ||
+         state_id == static_cast<StateT>(dfa_states::TT_DQS))) {
       return 0;
     }
-    // Case when an escaped single quote in an input single-quoted string needs to be replaced by an
-    // unescaped single quote
-    if ((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR)) &&
-        ((state_id == static_cast<StateT>(dfa_states::TT_SEC)))) {
+    // Case when an escaped single quote in an input single-quoted or double-quoted string needs
+    // to be replaced by an unescaped single quote
+    if (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR) &&
+        (state_id == static_cast<StateT>(dfa_states::TT_SEC) ||
+         state_id == static_cast<StateT>(dfa_states::TT_DEC))) {
       return '\'';
     }
     // Case when an escaped symbol <s> that is not a single-quote needs to be replaced with \<s>
-    if (state_id == static_cast<StateT>(dfa_states::TT_SEC)) {
+    if (state_id == static_cast<StateT>(dfa_states::TT_SEC) ||
+        state_id == static_cast<StateT>(dfa_states::TT_DEC)) {
       return (relative_offset == 0) ? '\\' : read_symbol;
     }
     // In all other cases we simply output the input symbol
@@ -156,18 +163,23 @@ struct TransduceToNormalizedQuotes {
       (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DOUBLE_QUOTE_CHAR));
     // Number of characters to output on this transition
     if (sqs_outputs_escape_sequence) { return 2; }
+
     // Whether this transition translates to the escape sequence \<s> or unescaped '
-    bool const sec_outputs_escape_sequence =
-      (state_id == static_cast<StateT>(dfa_states::TT_SEC)) &&
+    bool const sec_dec_outputs_escape_sequence =
+      (state_id == static_cast<StateT>(dfa_states::TT_SEC) ||
+       state_id == static_cast<StateT>(dfa_states::TT_DEC)) &&
       (match_id != static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR));
     // Number of characters to output on this transition
-    if (sec_outputs_escape_sequence) { return 2; }
+    if (sec_dec_outputs_escape_sequence) { return 2; }
+
     // Whether this transition translates to no output <nop>
-    bool const sqs_outputs_nop =
-      (state_id == static_cast<StateT>(dfa_states::TT_SQS)) &&
+    bool const sqs_dqs_outputs_nop =
+      (state_id == static_cast<StateT>(dfa_states::TT_SQS) ||
+       state_id == static_cast<StateT>(dfa_states::TT_DQS)) &&
       (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::ESCAPE_CHAR));
     // Number of characters to output on this transition
-    if (sqs_outputs_nop) { return 0; }
+    if (sqs_dqs_outputs_nop) { return 0; }
+
     return 1;
   }
 };
@@ -286,9 +298,9 @@ struct TransduceToNormalizedWS {
 
 namespace detail {
 
-rmm::device_uvector<SymbolT> normalize_single_quotes(rmm::device_uvector<SymbolT>&& inbuf,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource* mr)
+void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<SymbolT>>& indata,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr)
 {
   auto parser = fst::detail::make_fst(
     fst::detail::make_symbol_group_lut(normalize_quotes::qna_sgs),
@@ -296,10 +308,10 @@ rmm::device_uvector<SymbolT> normalize_single_quotes(rmm::device_uvector<SymbolT
     fst::detail::make_translation_functor(normalize_quotes::TransduceToNormalizedQuotes{}),
     stream);
 
-  rmm::device_uvector<SymbolT> outbuf(inbuf.size() * 2, stream, mr);
+  rmm::device_uvector<SymbolT> outbuf(indata.size() * 2, stream, mr);
   rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
-  parser.Transduce(inbuf.data(),
-                   static_cast<SymbolOffsetT>(inbuf.size()),
+  parser.Transduce(indata.data(),
+                   static_cast<SymbolOffsetT>(indata.size()),
                    outbuf.data(),
                    thrust::make_discard_iterator(),
                    outbuf_size.data(),
@@ -307,12 +319,13 @@ rmm::device_uvector<SymbolT> normalize_single_quotes(rmm::device_uvector<SymbolT
                    stream);
 
   outbuf.resize(outbuf_size.value(stream), stream);
-  return outbuf;
+  datasource::owning_buffer<rmm::device_uvector<SymbolT>> outdata(std::move(outbuf));
+  std::swap(indata, outdata);
 }
 
-rmm::device_uvector<SymbolT> normalize_whitespace(rmm::device_uvector<SymbolT>&& inbuf,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+void normalize_whitespace(datasource::owning_buffer<rmm::device_uvector<SymbolT>>& indata,
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr)
 {
   auto parser = fst::detail::make_fst(
     fst::detail::make_symbol_group_lut(normalize_whitespace::wna_sgs),
@@ -320,10 +333,10 @@ rmm::device_uvector<SymbolT> normalize_whitespace(rmm::device_uvector<SymbolT>&&
     fst::detail::make_translation_functor(normalize_whitespace::TransduceToNormalizedWS{}),
     stream);
 
-  rmm::device_uvector<SymbolT> outbuf(inbuf.size(), stream, mr);
+  rmm::device_uvector<SymbolT> outbuf(indata.size(), stream, mr);
   rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
-  parser.Transduce(inbuf.data(),
-                   static_cast<SymbolOffsetT>(inbuf.size()),
+  parser.Transduce(indata.data(),
+                   static_cast<SymbolOffsetT>(indata.size()),
                    outbuf.data(),
                    thrust::make_discard_iterator(),
                    outbuf_size.data(),
@@ -331,7 +344,8 @@ rmm::device_uvector<SymbolT> normalize_whitespace(rmm::device_uvector<SymbolT>&&
                    stream);
 
   outbuf.resize(outbuf_size.value(stream), stream);
-  return outbuf;
+  datasource::owning_buffer<rmm::device_uvector<SymbolT>> outdata(std::move(outbuf));
+  std::swap(indata, outdata);
 }
 
 }  // namespace detail

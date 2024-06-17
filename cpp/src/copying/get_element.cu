@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,9 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <stdexcept>
 
 namespace cudf {
 namespace detail {
@@ -40,7 +43,7 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      size_type index,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     auto s = make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
 
@@ -63,7 +66,7 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      size_type index,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     auto device_col = column_device_view::create(input, stream);
 
@@ -87,7 +90,7 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      size_type index,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     auto dict_view    = dictionary_column_view(input);
     auto indices_iter = detail::indexalator_factory::make_input_iterator(dict_view.indices());
@@ -122,7 +125,7 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      size_type index,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     bool valid               = is_element_valid_sync(input, index, stream);
     auto const child_col_idx = lists_column_view::child_column_index;
@@ -146,7 +149,7 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      size_type index,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     using Type = typename T::rep;
 
@@ -176,7 +179,7 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      size_type index,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     bool valid = is_element_valid_sync(input, index, stream);
     auto row_contents =
@@ -191,9 +194,9 @@ struct get_element_functor {
 std::unique_ptr<scalar> get_element(column_view const& input,
                                     size_type index,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(index >= 0 and index < input.size(), "Index out of bounds");
+  CUDF_EXPECTS(index >= 0 and index < input.size(), "Index out of bounds", std::out_of_range);
   return type_dispatcher(input.type(), get_element_functor{}, input, index, stream, mr);
 }
 
@@ -202,7 +205,7 @@ std::unique_ptr<scalar> get_element(column_view const& input,
 std::unique_ptr<scalar> get_element(column_view const& input,
                                     size_type index,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::get_element(input, index, stream, mr);

@@ -99,9 +99,9 @@ def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
                     low=1, high=10
                 )
             else:
-                meta[
-                    "max_types_at_each_level"
-                ] = obj._max_struct_types_at_each_level
+                meta["max_types_at_each_level"] = (
+                    obj._max_struct_types_at_each_level
+                )
 
         elif dtype == "decimal64":
             meta["max_precision"] = cudf.Decimal64Dtype.MAX_PRECISION

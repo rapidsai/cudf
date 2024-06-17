@@ -3,6 +3,7 @@
 """
 Helper functions for parameterized docstring
 """
+
 import functools
 import re
 import string
@@ -209,12 +210,11 @@ doc_describe = docfmt_partial(
 
         Describing a timestamp ``Series``.
 
-        >>> import numpy as np
         >>> s = cudf.Series([
-        ...   np.datetime64("2000-01-01"),
-        ...   np.datetime64("2010-01-01"),
-        ...   np.datetime64("2010-01-01")
-        ... ])
+        ...   "2000-01-01",
+        ...   "2010-01-01",
+        ...   "2010-01-01"
+        ... ], dtype="datetime64[s]")
         >>> s
         0   2000-01-01
         1   2010-01-01

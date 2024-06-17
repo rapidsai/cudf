@@ -30,6 +30,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/copy.h>
@@ -83,7 +84,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
   cudf::size_type num_partitions,
   cudf::size_type start_partition,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto nrows = input.num_rows();
 
@@ -157,7 +158,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
   cudf::size_type num_partitions,
   cudf::size_type start_partition,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto nrows = input.num_rows();
 
@@ -270,8 +271,8 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
 std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robin_partition(
   table_view const& input,
   cudf::size_type num_partitions,
-  cudf::size_type start_partition     = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  cudf::size_type start_partition   = 0,
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
 {
   CUDF_FUNC_RANGE();
   return detail::round_robin_partition(

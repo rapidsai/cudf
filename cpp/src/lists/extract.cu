@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/fill.h>
@@ -118,7 +119,7 @@ template <typename index_t>
 std::unique_ptr<column> extract_list_element_impl(lists_column_view lists_column,
                                                   index_t const& index,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::device_async_resource_ref mr)
 {
   auto const num_lists = lists_column.size();
   if (num_lists == 0) { return empty_like(lists_column.child()); }
@@ -174,7 +175,7 @@ std::unique_ptr<column> extract_list_element_impl(lists_column_view lists_column
 std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              size_type const index,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   return detail::extract_list_element_impl(lists_column, index, stream, mr);
 }
@@ -182,7 +183,7 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
 std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              column_view const& indices,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   return detail::extract_list_element_impl(lists_column, indices, stream, mr);
 }
@@ -192,12 +193,12 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
 /**
  * @copydoc cudf::lists::extract_list_element(lists_column_view const&,
  *                                            size_type,
- *                                            rmm::mr::device_memory_resource*)
+ *                                            rmm::device_async_resource_ref)
  */
 std::unique_ptr<column> extract_list_element(lists_column_view const& lists_column,
                                              size_type index,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::extract_list_element(lists_column, index, stream, mr);
@@ -206,12 +207,12 @@ std::unique_ptr<column> extract_list_element(lists_column_view const& lists_colu
 /**
  * @copydoc cudf::lists::extract_list_element(lists_column_view const&,
  *                                            column_view const&,
- *                                            rmm::mr::device_memory_resource*)
+ *                                            rmm::device_async_resource_ref)
  */
 std::unique_ptr<column> extract_list_element(lists_column_view const& lists_column,
                                              column_view const& indices,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(indices.size() == lists_column.size(),

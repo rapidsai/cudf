@@ -31,6 +31,7 @@
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -238,11 +239,6 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
 
 template <bool check_exact_equality>
 struct column_property_comparator {
-  bool types_equivalent(cudf::data_type const& lhs, cudf::data_type const& rhs)
-  {
-    return is_fixed_point(lhs) ? lhs.id() == rhs.id() : lhs == rhs;
-  }
-
   bool compare_common(cudf::column_view const& lhs,
                       cudf::column_view const& rhs,
                       cudf::column_view const& lhs_row_indices,
@@ -252,9 +248,9 @@ struct column_property_comparator {
     bool result = true;
 
     if (check_exact_equality) {
-      PROP_EXPECT_EQ(lhs.type(), rhs.type());
+      PROP_EXPECT_EQ(cudf::have_same_types(lhs, rhs), true);
     } else {
-      PROP_EXPECT_EQ(types_equivalent(lhs.type(), rhs.type()), true);
+      PROP_EXPECT_EQ(cudf::column_types_equivalent(lhs, rhs), true);
     }
 
     auto const lhs_size = check_exact_equality ? lhs.size() : lhs_row_indices.size();
@@ -781,7 +777,7 @@ struct column_comparator {
 
 void check_non_empty_nulls(column_view const& lhs, column_view const& rhs)
 {
-  auto check_column_nulls = [](column_view const& col, const char* col_name) {
+  auto check_column_nulls = [](column_view const& col, char const* col_name) {
     if (cudf::detail::has_nonempty_nulls(col, cudf::get_default_stream())) {
       throw std::invalid_argument(col_name + std::string(" column has non-empty nulls"));
     }
@@ -906,20 +902,18 @@ void expect_column_empty(cudf::column_view const& col)
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
 {
   if (c.nullable()) {
-    auto num_bitmasks = num_bitmask_words(c.size());
-    std::vector<bitmask_type> host_bitmask(num_bitmasks);
-    if (c.offset() == 0) {
-      CUDF_CUDA_TRY(cudaMemcpy(host_bitmask.data(),
-                               c.null_mask(),
-                               num_bitmasks * sizeof(bitmask_type),
-                               cudaMemcpyDefault));
-    } else {
+    auto num_bitmasks      = num_bitmask_words(c.size());
+    auto [bitmask_span, _] = [&] {
+      if (c.offset() == 0) {
+        return std::pair{cudf::device_span<bitmask_type const>(c.null_mask(), num_bitmasks),
+                         rmm::device_buffer{}};
+      }
       auto mask = copy_bitmask(c.null_mask(), c.offset(), c.offset() + c.size());
-      CUDF_CUDA_TRY(cudaMemcpy(
-        host_bitmask.data(), mask.data(), num_bitmasks * sizeof(bitmask_type), cudaMemcpyDefault));
-    }
-
-    return host_bitmask;
+      return std::pair{cudf::device_span<bitmask_type const>(
+                         static_cast<bitmask_type*>(mask.data()), num_bitmasks),
+                       std::move(mask)};
+    }();
+    return cudf::detail::make_std_vector_sync(bitmask_span, cudf::get_default_stream());
   } else {
     return std::vector<bitmask_type>{};
   }
@@ -946,16 +940,14 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
   using namespace numeric;
   using Rep = typename T::rep;
 
-  auto host_rep_types = thrust::host_vector<Rep>(c.size());
-
-  CUDF_CUDA_TRY(
-    cudaMemcpy(host_rep_types.data(), c.begin<Rep>(), c.size() * sizeof(Rep), cudaMemcpyDefault));
+  auto col_span       = cudf::device_span<Rep const>(c.begin<Rep>(), c.size());
+  auto host_rep_types = cudf::detail::make_host_vector_sync(col_span, cudf::get_default_stream());
 
   auto to_fp = [&](Rep val) { return T{scaled_integer<Rep>{val, scale_type{c.type().scale()}}}; };
   auto begin = thrust::make_transform_iterator(std::cbegin(host_rep_types), to_fp);
   auto const host_fixed_points = thrust::host_vector<T>(begin, begin + c.size());
 
-  return {host_fixed_points, bitmask_to_host(c)};
+  return {std::move(host_fixed_points), bitmask_to_host(c)};
 }
 
 template std::pair<thrust::host_vector<numeric::decimal32>, std::vector<bitmask_type>> to_host(
@@ -1014,6 +1006,17 @@ std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(c
   }
   return {std::move(host_data), bitmask_to_host(c)};
 }
+
+large_strings_enabler::large_strings_enabler(bool default_enable)
+{
+  default_enable ? enable() : disable();
+}
+
+large_strings_enabler::~large_strings_enabler() { disable(); }
+
+void large_strings_enabler::enable() { setenv("LIBCUDF_LARGE_STRINGS_ENABLED", "1", 1); }
+
+void large_strings_enabler::disable() { setenv("LIBCUDF_LARGE_STRINGS_ENABLED", "0", 1); }
 
 }  // namespace test
 }  // namespace cudf

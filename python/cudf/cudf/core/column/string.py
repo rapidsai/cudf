@@ -16,11 +16,9 @@ from typing import (
     overload,
 )
 
-import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba import cuda
 from typing_extensions import Self
 
 import cudf
@@ -30,7 +28,6 @@ from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import is_integer, is_scalar, is_string_dtype
-from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
@@ -46,6 +43,9 @@ def str_to_boolean(column: StringColumn):
 
 
 if TYPE_CHECKING:
+    import cupy
+    import numba.cuda
+
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
@@ -53,6 +53,7 @@ if TYPE_CHECKING:
         ScalarLike,
         SeriesOrIndex,
     )
+    from cudf.core.buffer import Buffer
 
 
 _str_to_numeric_typecast_functions = {
@@ -257,14 +258,12 @@ class StringMethods(ColumnMethods):
     @overload
     def cat(
         self, sep: Optional[str] = None, na_rep: Optional[str] = None
-    ) -> str:
-        ...
+    ) -> str: ...
 
     @overload
     def cat(
         self, others, sep: Optional[str] = None, na_rep: Optional[str] = None
-    ) -> Union[SeriesOrIndex, "cudf.core.column.string.StringColumn"]:
-        ...
+    ) -> Union[SeriesOrIndex, "cudf.core.column.string.StringColumn"]: ...
 
     def cat(self, others=None, sep=None, na_rep=None):
         """
@@ -554,16 +553,17 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(data)
 
     def _split_by_character(self):
-        result_col = libstrings.character_tokenize(self._column)
+        col = self._column.fillna("")  # sanitize nulls
+        result_col = libstrings.character_tokenize(col)
 
-        offset_col = self._column.children[0]
+        offset_col = col.children[0]
 
         return cudf.core.column.ListColumn(
-            size=len(self._column),
-            dtype=cudf.ListDtype(self._column.dtype),
-            mask=self._column.mask,
+            size=len(col),
+            dtype=cudf.ListDtype(col.dtype),
+            mask=col.mask,
             offset=0,
-            null_count=self._column.null_count,
+            null_count=0,
             children=(offset_col, result_col),
         )
 
@@ -694,7 +694,7 @@ class StringMethods(ColumnMethods):
 
         Returning an Index of booleans using only a literal pattern.
 
-        >>> data = ['Mouse', 'dog', 'house and parrot', '23.0', np.NaN]
+        >>> data = ['Mouse', 'dog', 'house and parrot', '23.0', np.nan]
         >>> idx = cudf.Index(data)
         >>> idx
         Index(['Mouse', 'dog', 'house and parrot', '23.0', None], dtype='object')
@@ -4393,7 +4393,7 @@ class StringMethods(ColumnMethods):
         if isinstance(self._parent, cudf.Series):
             return cudf.Series(new_col, name=self._parent.name)
         elif isinstance(self._parent, cudf.BaseIndex):
-            return cudf.core.index.as_index(new_col, name=self._parent.name)
+            return cudf.Index(new_col, name=self._parent.name)
         else:
             return new_col
 
@@ -4708,7 +4708,7 @@ class StringMethods(ColumnMethods):
             index = self._parent.index.repeat(lengths)
             return cudf.Series(result_col, name=self._parent.name, index=index)
         elif isinstance(self._parent, cudf.BaseIndex):
-            return cudf.core.index.as_index(result_col, name=self._parent.name)
+            return cudf.Index(result_col, name=self._parent.name)
         else:
             return result_col
 
@@ -4832,27 +4832,14 @@ class StringMethods(ColumnMethods):
         2         [xyz]
         dtype: list
         """
-        ngrams = libstrings.generate_character_ngrams(self._column, n)
-
-        # convert the output to a list by just generating the
-        # offsets for the output list column
-        sn = (self.len() - (n - 1)).clip(0, None).fillna(0)  # type: ignore
-        sizes = libcudf.concat.concat_columns(
-            [column.as_column(0, dtype=np.int32, length=1), sn._column]
+        result = self._return_or_inplace(
+            libstrings.generate_character_ngrams(self._column, n),
+            retain_index=True,
         )
-        oc = libcudf.reduce.scan("cumsum", sizes, True)
-        lc = cudf.core.column.ListColumn(
-            size=self._column.size,
-            dtype=cudf.ListDtype(self._column.dtype),
-            mask=self._column.mask,
-            offset=0,
-            null_count=self._column.null_count,
-            children=(oc, ngrams),
-        )
-        result = self._return_or_inplace(lc, retain_index=True)
-
         if isinstance(result, cudf.Series) and not as_list:
-            return result.explode()
+            # before exploding, removes those lists which have 0 length
+            result = result[result.list.len() > 0]
+            return result.explode()  # type: ignore
         return result
 
     def hash_character_ngrams(
@@ -5612,8 +5599,15 @@ class StringColumn(column.ColumnBase):
 
     def data_array_view(
         self, *, mode="write"
-    ) -> cuda.devicearray.DeviceNDArray:
+    ) -> numba.cuda.devicearray.DeviceNDArray:
         raise ValueError("Cannot get an array view of a StringColumn")
+
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            f"dtype {self.dtype} is not yet supported via "
+            "`__cuda_array_interface__`"
+        )
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -5791,23 +5785,14 @@ class StringColumn(column.ColumnBase):
     def to_pandas(
         self,
         *,
-        index: Optional[pd.Index] = None,
         nullable: bool = False,
         arrow_type: bool = False,
-    ) -> pd.Series:
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
-        if arrow_type:
-            return pd.Series(
-                pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
-            )
-        elif nullable:
+    ) -> pd.Index:
+        if nullable and not arrow_type:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
-            return pd.Series(pandas_array, copy=False, index=index)
+            return pd.Index(pandas_array, copy=False)
         else:
-            return super().to_pandas(index=index, nullable=nullable)
+            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         to_dtype = cudf.api.types.dtype(to_dtype)
@@ -5965,6 +5950,7 @@ class StringColumn(column.ColumnBase):
                 "__ge__",
                 "__le__",
                 "NULL_EQUALS",
+                "NULL_NOT_EQUALS",
             }:
                 lhs, rhs = (other, self) if reflect else (self, other)
                 return libcudf.binaryop.binaryop(

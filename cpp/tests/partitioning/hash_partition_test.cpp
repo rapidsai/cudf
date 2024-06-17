@@ -140,7 +140,7 @@ TEST_F(HashPartition, MixedColumnTypes)
 
 TEST_F(HashPartition, NullableStrings)
 {
-  strings_column_wrapper strings({"a", "bb", "ccc", "d"}, {1, 1, 1, 1});
+  strings_column_wrapper strings({"a", "bb", "ccc", "d"}, {true, true, true, true});
   cudf::table_view input({strings});
 
   std::vector<cudf::size_type> const columns_to_hash({0});
@@ -190,21 +190,6 @@ TEST_F(HashPartition, IdentityHashFailure)
   cudf::size_type const num_partitions = 3;
   EXPECT_THROW(
     cudf::hash_partition(input, columns_to_hash, num_partitions, cudf::hash_id::HASH_IDENTITY),
-    cudf::logic_error);
-}
-
-TEST_F(HashPartition, UnsupportedHashFunction)
-{
-  fixed_width_column_wrapper<float> floats({1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
-  fixed_width_column_wrapper<int16_t> integers({1, 2, 3, 4, 5, 6, 7, 8});
-  strings_column_wrapper strings({"a", "bb", "ccc", "d", "ee", "fff", "gg", "h"});
-  auto input = cudf::table_view({floats, integers, strings});
-
-  auto columns_to_hash = std::vector<cudf::size_type>({2});
-
-  cudf::size_type const num_partitions = 3;
-  EXPECT_THROW(
-    cudf::hash_partition(input, columns_to_hash, num_partitions, cudf::hash_id::HASH_MD5),
     cudf::logic_error);
 }
 

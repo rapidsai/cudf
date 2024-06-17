@@ -97,7 +97,8 @@ TEST(DebugAssertDeathTest, cudf_assert_false)
   testing::FLAGS_gtest_death_test_style = "threadsafe";
 
   auto call_kernel = []() {
-    assert_false_kernel<<<1, 1>>>();
+    auto const stream = cudf::get_default_stream().value();
+    assert_false_kernel<<<1, 1, 0, stream>>>();
 
     // Kernel should fail with `cudaErrorAssert`
     // This error invalidates the current device context, so we need to kill
@@ -114,7 +115,8 @@ TEST(DebugAssertDeathTest, cudf_assert_false)
 
 TEST(DebugAssert, cudf_assert_true)
 {
-  assert_true_kernel<<<1, 1>>>();
+  auto const stream = cudf::get_default_stream().value();
+  assert_true_kernel<<<1, 1, 0, stream>>>();
   ASSERT_EQ(cudaSuccess, cudaDeviceSynchronize());
 }
 
@@ -126,16 +128,7 @@ TEST(DebugAssert, cudf_assert_true)
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
-  auto const cmd_opts    = parse_cudf_test_opts(argc, argv);
-  auto const stream_mode = cmd_opts["stream_mode"].as<std::string>();
-  if ((stream_mode == "new_cudf_default") || (stream_mode == "new_testing_default")) {
-    auto resource                      = rmm::mr::get_current_device_resource();
-    auto const stream_error_mode       = cmd_opts["stream_error_mode"].as<std::string>();
-    auto const error_on_invalid_stream = (stream_error_mode == "error");
-    auto const check_default_stream    = (stream_mode == "new_cudf_default");
-    auto adaptor                       = make_stream_checking_resource_adaptor(
-      resource, error_on_invalid_stream, check_default_stream);
-    rmm::mr::set_current_device_resource(&adaptor);
-  }
+  auto const cmd_opts = parse_cudf_test_opts(argc, argv);
+  auto adaptor        = make_stream_mode_adaptor(cmd_opts);
   return RUN_ALL_TESTS();
 }

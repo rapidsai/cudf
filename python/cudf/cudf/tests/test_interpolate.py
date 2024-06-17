@@ -3,7 +3,7 @@
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_210
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing._utils import (
     assert_eq,
     assert_exceptions_equal,
@@ -35,6 +35,10 @@ def test_interpolate_dataframe(data, method, axis):
     assert_eq(expect, got)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -54,9 +58,10 @@ def test_interpolate_series(data, method, axis):
     gsr = cudf.Series(data)
     psr = gsr.to_pandas()
 
-    with expect_warning_if(PANDAS_GE_210 and psr.dtype == "object"):
+    is_str_dtype = psr.dtype == "object"
+    with expect_warning_if(is_str_dtype):
         expect = psr.interpolate(method=method, axis=axis)
-    with expect_warning_if(gsr.dtype == "object"):
+    with expect_warning_if(is_str_dtype):
         got = gsr.interpolate(method=method, axis=axis)
 
     assert_eq(expect, got, check_dtype=psr.dtype != "object")
@@ -75,6 +80,10 @@ def test_interpolate_series_unsorted_index(data, index):
     assert_eq(expect, got)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -94,9 +103,10 @@ def test_interpolate_series_values_or_index(data, index, method):
     gsr = cudf.Series(data, index=index)
     psr = gsr.to_pandas()
 
-    with expect_warning_if(PANDAS_GE_210 and gsr.dtype == "object"):
+    is_str_dtype = gsr.dtype == "object"
+    with expect_warning_if(is_str_dtype):
         expect = psr.interpolate(method=method)
-    with expect_warning_if(gsr.dtype == "object"):
+    with expect_warning_if(is_str_dtype):
         got = gsr.interpolate(method=method)
 
     assert_eq(expect, got, check_dtype=psr.dtype != "object")

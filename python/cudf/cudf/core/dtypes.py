@@ -6,7 +6,7 @@ import pickle
 import textwrap
 import warnings
 from functools import cached_property
-from typing import Any, Callable, Dict, List, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple, Type, Union
 
 import numpy as np
 import pandas as pd
@@ -19,8 +19,10 @@ import cudf
 from cudf._typing import Dtype
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer
 from cudf.utils.docutils import doc_apply
+
+if TYPE_CHECKING:
+    from cudf.core.buffer import Buffer
 
 
 def dtype(arbitrary):
@@ -50,6 +52,11 @@ def dtype(arbitrary):
         elif np_dtype not in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
+
+    if isinstance(arbitrary, str) and arbitrary in {"hex", "hex32", "hex64"}:
+        # read_csv only accepts "hex"
+        # e.g. test_csv_reader_hexadecimals, test_csv_reader_hexadecimal_overflow
+        return arbitrary
 
     # use `pandas_dtype` to try and interpret
     # `arbitrary` as a Pandas extension type.
@@ -181,10 +188,10 @@ class CategoricalDtype(_BaseDtype):
         Index(['b', 'a'], dtype='object')
         """
         if self._categories is None:
-            return cudf.core.index.as_index(
+            return cudf.Index(
                 cudf.core.column.column_empty(0, dtype="object", masked=False)
             )
-        return cudf.core.index.as_index(self._categories, copy=False)
+        return cudf.Index(self._categories, copy=False)
 
     @property
     def type(self):
@@ -204,10 +211,6 @@ class CategoricalDtype(_BaseDtype):
         Whether the categories have an ordered relationship.
         """
         return self._ordered
-
-    @ordered.setter
-    def ordered(self, value) -> None:
-        self._ordered = value
 
     @classmethod
     def from_pandas(cls, dtype: pd.CategoricalDtype) -> "CategoricalDtype":
@@ -1003,7 +1006,10 @@ def _is_categorical_dtype(obj):
             pd.Series,
         ),
     ):
-        return _is_categorical_dtype(obj.dtype)
+        try:
+            return isinstance(cudf.dtype(obj.dtype), cudf.CategoricalDtype)
+        except TypeError:
+            return False
     if hasattr(obj, "type"):
         if obj.type is pd.CategoricalDtype.type:
             return True

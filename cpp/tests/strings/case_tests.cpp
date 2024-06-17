@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,28 +99,28 @@ TEST_F(StringsCaseTest, Capitalize)
 {
   cudf::test::strings_column_wrapper strings(
     {"SȺȺnich xyZ", "Examples aBc", "thesé", "", "ARE\tTHE", "tést\tstrings", ""},
-    {1, 1, 1, 0, 1, 1, 1});
+    {true, true, true, false, true, true, true});
   auto strings_view = cudf::strings_column_view(strings);
 
   {
     auto results = cudf::strings::capitalize(strings_view);
     cudf::test::strings_column_wrapper expected(
       {"Sⱥⱥnich xyz", "Examples abc", "Thesé", "", "Are\tthe", "Tést\tstrings", ""},
-      {1, 1, 1, 0, 1, 1, 1});
+      {true, true, true, false, true, true, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = cudf::strings::capitalize(strings_view, std::string(" "));
     cudf::test::strings_column_wrapper expected(
       {"Sⱥⱥnich Xyz", "Examples Abc", "Thesé", "", "Are\tthe", "Tést\tstrings", ""},
-      {1, 1, 1, 0, 1, 1, 1});
+      {true, true, true, false, true, true, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = cudf::strings::capitalize(strings_view, std::string(" \t"));
     cudf::test::strings_column_wrapper expected(
       {"Sⱥⱥnich Xyz", "Examples Abc", "Thesé", "", "Are\tThe", "Tést\tStrings", ""},
-      {1, 1, 1, 0, 1, 1, 1});
+      {true, true, true, false, true, true, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
@@ -129,47 +129,49 @@ TEST_F(StringsCaseTest, Title)
 {
   cudf::test::strings_column_wrapper input(
     {"SȺȺnich", "Examples aBc", "thesé", "", "ARE THE", "tést strings", "", "n2viDIA corp"},
-    {1, 1, 1, 0, 1, 1, 1, 1});
+    {true, true, true, false, true, true, true, true});
   auto strings_view = cudf::strings_column_view(input);
 
   auto results = cudf::strings::title(strings_view);
 
   cudf::test::strings_column_wrapper expected(
     {"Sⱥⱥnich", "Examples Abc", "Thesé", "", "Are The", "Tést Strings", "", "N2Vidia Corp"},
-    {1, 1, 1, 0, 1, 1, 1, 1});
+    {true, true, true, false, true, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results = cudf::strings::title(strings_view, cudf::strings::string_character_types::ALPHANUM);
 
   cudf::test::strings_column_wrapper expected2(
     {"Sⱥⱥnich", "Examples Abc", "Thesé", "", "Are The", "Tést Strings", "", "N2vidia Corp"},
-    {1, 1, 1, 0, 1, 1, 1, 1});
+    {true, true, true, false, true, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
 }
 
 TEST_F(StringsCaseTest, IsTitle)
 {
-  cudf::test::strings_column_wrapper input({"Sⱥⱥnich",
-                                            "Examples Abc",
-                                            "Thesé Strings",
-                                            "",
-                                            "Are The",
-                                            "Tést strings",
-                                            "",
-                                            "N2Vidia Corp",
-                                            "SNAKE",
-                                            "!Abc",
-                                            " Eagle",
-                                            "A Test",
-                                            "12345",
-                                            "Alpha Not Upper Or Lower: ƻC",
-                                            "one More"},
-                                           {1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::strings_column_wrapper input(
+    {"Sⱥⱥnich",
+     "Examples Abc",
+     "Thesé Strings",
+     "",
+     "Are The",
+     "Tést strings",
+     "",
+     "N2Vidia Corp",
+     "SNAKE",
+     "!Abc",
+     " Eagle",
+     "A Test",
+     "12345",
+     "Alpha Not Upper Or Lower: ƻC",
+     "one More"},
+    {true, true, true, false, true, true, true, true, true, true, true, true, true, true, true});
 
   auto results = cudf::strings::is_title(cudf::strings_column_view(input));
 
   cudf::test::fixed_width_column_wrapper<bool> expected(
-    {1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0}, {1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+    {1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0},
+    {true, true, true, false, true, true, true, true, true, true, true, true, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -235,7 +237,7 @@ TEST_F(StringsCaseTest, LongStrings)
 {
   // average string length >= AVG_CHAR_BYTES_THRESHOLD as defined in case.cu
   cudf::test::strings_column_wrapper input{
-    "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+    "abcdéfghijklmnopqrstuvwxyzABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
     "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
     "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
     "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
@@ -256,7 +258,8 @@ TEST_F(StringsCaseTest, LongStrings)
   results = cudf::strings::to_upper(view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
-  results = cudf::strings::to_upper(cudf::strings_column_view(cudf::slice(input, {1, 3}).front()));
+  view    = cudf::strings_column_view(cudf::slice(input, {1, 3}).front());
+  results = cudf::strings::to_upper(view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, cudf::slice(expected, {1, 3}).front());
 }
 

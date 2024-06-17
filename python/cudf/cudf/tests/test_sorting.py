@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_220
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.column import NumericalColumn
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -49,7 +49,11 @@ def test_dataframe_sort_values(nelem, dtype):
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("index", ["a", "b", ["a", "b"]])
 def test_dataframe_sort_values_ignore_index(index, ignore_index):
-    if PANDAS_GE_220 and isinstance(index, list) and not ignore_index:
+    if (
+        PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
+        and isinstance(index, list)
+        and not ignore_index
+    ):
         pytest.skip(
             reason="Unstable sorting by pandas(numpy): https://github.com/pandas-dev/pandas/issues/57531"
         )
@@ -103,7 +107,8 @@ def test_series_argsort(nelem, dtype, asc):
     if asc:
         expected = np.argsort(sr.to_numpy(), kind="mergesort")
     else:
-        expected = np.argsort(sr.to_numpy() * -1, kind="mergesort")
+        # -1 multiply works around missing desc sort (may promote to float64)
+        expected = np.argsort(sr.to_numpy() * np.int8(-1), kind="mergesort")
     np.testing.assert_array_equal(expected, res.to_numpy())
 
 

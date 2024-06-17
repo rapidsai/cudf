@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,13 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <utility>
 
 namespace cudf {
 namespace reduction {
@@ -38,15 +43,15 @@ struct reduce_dispatch_functor {
   column_view const col;
   data_type output_dtype;
   std::optional<std::reference_wrapper<scalar const>> init;
-  rmm::mr::device_memory_resource* mr;
+  rmm::device_async_resource_ref mr;
   rmm::cuda_stream_view stream;
 
-  reduce_dispatch_functor(column_view const& col,
+  reduce_dispatch_functor(column_view col,
                           data_type output_dtype,
                           std::optional<std::reference_wrapper<scalar const>> init,
                           rmm::cuda_stream_view stream,
-                          rmm::mr::device_memory_resource* mr)
-    : col(col), output_dtype(output_dtype), init(init), mr(mr), stream(stream)
+                          rmm::device_async_resource_ref mr)
+    : col(std::move(col)), output_dtype(output_dtype), init(init), mr(mr), stream(stream)
   {
   }
 
@@ -151,10 +156,11 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                data_type output_dtype,
                                std::optional<std::reference_wrapper<scalar const>> init,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(!init.has_value() || col.type() == init.value().get().type(),
-               "column and initial value must be the same type");
+  CUDF_EXPECTS(!init.has_value() || cudf::have_same_types(col, init.value().get()),
+               "column and initial value must be the same type",
+               cudf::data_type_error);
   if (init.has_value() && !(agg.kind == aggregation::SUM || agg.kind == aggregation::PRODUCT ||
                             agg.kind == aggregation::MIN || agg.kind == aggregation::MAX ||
                             agg.kind == aggregation::ANY || agg.kind == aggregation::ALL)) {
@@ -177,15 +183,14 @@ std::unique_ptr<scalar> reduce(column_view const& col,
         std::move(*reduction::detail::make_empty_histogram_like(col.child(0))), true, stream, mr);
     }
 
-    if (output_dtype.id() == type_id::LIST) {
-      if (col.type() == output_dtype) { return make_empty_scalar_like(col, stream, mr); }
-      // Under some circumstance, the output type will become the List of input type,
-      // such as: collect_list or collect_set. So, we have to handcraft the default scalar.
+    if (agg.kind == aggregation::COLLECT_LIST || agg.kind == aggregation::COLLECT_SET) {
       auto scalar = make_list_scalar(empty_like(col)->view(), stream, mr);
       scalar->set_valid_async(false, stream);
       return scalar;
     }
-    if (output_dtype.id() == type_id::STRUCT) { return make_empty_scalar_like(col, stream, mr); }
+
+    // `make_default_constructed_scalar` does not support nested type.
+    if (cudf::is_nested(output_dtype)) { return make_empty_scalar_like(col, stream, mr); }
 
     auto result = make_default_constructed_scalar(output_dtype, stream, mr);
     if (agg.kind == aggregation::ANY || agg.kind == aggregation::ALL) {
@@ -205,20 +210,21 @@ std::unique_ptr<scalar> reduce(column_view const& col,
 std::unique_ptr<scalar> reduce(column_view const& col,
                                reduce_aggregation const& agg,
                                data_type output_dtype,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return reduction::detail::reduce(
-    col, agg, output_dtype, std::nullopt, cudf::get_default_stream(), mr);
+  return reduction::detail::reduce(col, agg, output_dtype, std::nullopt, stream, mr);
 }
 
 std::unique_ptr<scalar> reduce(column_view const& col,
                                reduce_aggregation const& agg,
                                data_type output_dtype,
                                std::optional<std::reference_wrapper<scalar const>> init,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return reduction::detail::reduce(col, agg, output_dtype, init, cudf::get_default_stream(), mr);
+  return reduction::detail::reduce(col, agg, output_dtype, init, stream, mr);
 }
 }  // namespace cudf

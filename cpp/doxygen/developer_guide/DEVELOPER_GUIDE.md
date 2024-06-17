@@ -1,4 +1,4 @@
-# libcudf C++ Developer Guide {#DEVELOPER_GUIDE}
+# libcudf C++ Developer Guide
 
 This document serves as a guide for contributors to libcudf C++ code. Developers should also refer
 to these additional files for further documentation of libcudf best practices.
@@ -84,7 +84,7 @@ prefixed with an underscore.
 
 ```c++
 template <typename IteratorType>
-void algorithm_function(int x, rmm::cuda_stream_view s, rmm::device_memory_resource* mr)
+void algorithm_function(int x, rmm::cuda_stream_view s, rmm::device_async_resource_ref mr)
 {
   ...
 }
@@ -194,9 +194,10 @@ and produce `unique_ptr`s to owning objects as output. For example,
 std::unique_ptr<table> sort(table_view const& input);
 ```
 
-## rmm::device_memory_resource
+## Memory Resources
 
-libcudf allocates all device memory via RMM memory resources (MR). See the
+libcudf allocates all device memory via RMM memory resources (MR) or CUDA MRs. Either type
+can be passed to libcudf functions via `rmm::device_async_resource_ref` parameters. See the
 [RMM documentation](https://github.com/rapidsai/rmm/blob/main/README.md) for details.
 
 ### Current Device Memory Resource
@@ -205,6 +206,27 @@ RMM provides a "default" memory resource for each device that can be accessed an
 `rmm::mr::get_current_device_resource()` and `rmm::mr::set_current_device_resource(...)` functions,
 respectively. All memory resource parameters should be defaulted to use the return value of
 `rmm::mr::get_current_device_resource()`.
+
+### Resource Refs
+
+Memory resources are passed via resource ref parameters. A resource ref is a memory resource wrapper
+that enables consumers to specify properties of resources that they expect. These are defined
+in the `cuda::mr` namespace of libcu++, but RMM provides some convenience wrappers in
+`rmm/resource_ref.hpp`:
+ - `rmm::device_resource_ref` accepts a memory resource that provides synchronous allocation
+    of device-accessible memory.
+ - `rmm::device_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
+    of device-accessible memory.
+ - `rmm::host_resource_ref` accepts a memory resource that provides synchronous allocation of host-
+    accessible memory.
+ - `rmm::host_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
+    of host-accessible memory.
+ - `rmm::host_device_resource_ref` accepts a memory resource that provides synchronous allocation of
+    host- and device-accessible memory.
+ - `rmm::host_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
+    of host- and device-accessible memory.
+
+See the libcu++ [docs on `resource_ref`](https://nvidia.github.io/cccl/libcudacxx/extended_api/memory_resource/resource_ref.html) for more information.
 
 ## cudf::column
 
@@ -519,23 +541,23 @@ how device memory is allocated.
 
 ### Output Memory
 
-Any libcudf API that allocates memory that is *returned* to a user must accept a pointer to a
-`device_memory_resource` as the last parameter. Inside the API, this memory resource must be used
-to allocate any memory for returned objects. It should therefore be passed into functions whose
-outputs will be returned. Example:
+Any libcudf API that allocates memory that is *returned* to a user must accept a
+`rmm::device_async_resource_ref` as the last parameter. Inside the API, this memory resource must
+be used to allocate any memory for returned objects. It should therefore be passed into functions
+whose outputs will be returned. Example:
 
 ```c++
 // Returned `column` contains newly allocated memory,
 // therefore the API must accept a memory resource pointer
 std::unique_ptr<column> returns_output_memory(
-  ..., rmm::device_memory_resource * mr = rmm::mr::get_current_device_resource());
+  ..., rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 // This API does not allocate any new *output* memory, therefore
 // a memory resource is unnecessary
 void does_not_allocate_output_memory(...);
 ```
 
-This rule automatically applies to all detail APIs that allocates memory. Any detail API may be
+This rule automatically applies to all detail APIs that allocate memory. Any detail API may be
 called by any public API, and therefore could be allocating memory that is returned to the user.
 To support such uses cases, all detail APIs allocating memory resources should accept an `mr`
 parameter. Callers are responsible for either passing through a provided `mr` or
@@ -549,7 +571,7 @@ obtained from `rmm::mr::get_current_device_resource()` for temporary memory allo
 
 ```c++
 rmm::device_buffer some_function(
-  ..., rmm::mr::device_memory_resource mr * = rmm::mr::get_current_device_resource()) {
+  ..., rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) {
     rmm::device_buffer returned_buffer(..., mr); // Returned buffer uses the passed in MR
     ...
     rmm::device_buffer temporary_buffer(...); // Temporary buffer uses default MR
@@ -561,11 +583,11 @@ rmm::device_buffer some_function(
 ### Memory Management
 
 libcudf code generally eschews raw pointers and direct memory allocation. Use RMM classes built to
-use `device_memory_resource`s for device memory allocation with automated lifetime management.
+use memory resources for device memory allocation with automated lifetime management.
 
 #### rmm::device_buffer
 Allocates a specified number of bytes of untyped, uninitialized device memory using a
-`device_memory_resource`. If no resource is explicitly provided, uses
+memory resource. If no `rmm::device_async_resource_ref` is explicitly provided, it uses
 `rmm::mr::get_current_device_resource()`.
 
 `rmm::device_buffer` is movable and copyable on a stream. A copy performs a deep copy of the
@@ -806,7 +828,7 @@ This iterator returns the validity of the underlying element (`true` or `false`)
 
 The proliferation of data types supported by libcudf can result in long compile times. One area
 where compile time was a problem is in types used to store indices, which can be any integer type.
-The "Indexalator", or index-normalizing iterator (`include/cudf/detail/indexalator.cuh`), can be
+The "indexalator", or index-normalizing iterator (`include/cudf/detail/indexalator.cuh`), can be
 used for index types (integers) without requiring a type-specific instance. It can be used for any
 iterator interface for reading an array of integer values of type `int8`, `int16`, `int32`,
 `int64`, `uint8`, `uint16`, `uint32`, or `uint64`. Reading specific elements always returns a
@@ -832,6 +854,41 @@ thrust::lower_bound(rmm::exec_policy(stream),
                     values->end<Element>(),
                     result_itr,
                     thrust::less<Element>());
+```
+
+### Offset-normalizing iterators
+
+Like the [indexalator](#index-normalizing-iterators),
+the "offsetalator", or offset-normalizing iterator (`include/cudf/detail/offsetalator.cuh`), can be
+used for offset column types (`INT32` or `INT64` only) without requiring a type-specific instance.
+This is helpful when reading or building [strings columns](#strings-columns).
+The normalized type is `int64` which means an `input_offsetsalator` will return `int64` type values
+for both `INT32` and `INT64` offsets columns.
+Likewise, an `output_offselator` can accept `int64` type values to store into either an
+`INT32` or `INT64` output offsets column created appropriately.
+
+Use the `cudf::detail::offsetalator_factory` to create an appropriate input or output iterator from an offsets column_view.
+Example input iterator usage:
+
+```c++
+  // convert the sizes to offsets
+  auto [offsets, char_bytes] = cudf::strings::detail::make_offsets_child_column(
+    output_sizes.begin(), output_sizes.end(), stream, mr);
+  auto d_offsets =
+    cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
+  // use d_offsets to address the output row bytes
+```
+
+Example output iterator usage:
+
+```c++
+    // create offsets column as either INT32 or INT64 depending on the number of bytes
+    auto offsets_column = cudf::strings::detail::create_offsets_child_column(total_bytes,
+                                                                             offsets_count,
+                                                                             stream, mr);
+    auto d_offsets =
+      cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
+    // write appropriate offset values to d_offsets
 ```
 
 ## Namespaces
@@ -921,13 +978,14 @@ Use the `CUDF_EXPECTS` macro to enforce runtime conditions necessary for correct
 Example usage:
 
 ```c++
-CUDF_EXPECTS(lhs.type() == rhs.type(), "Column type mismatch");
+CUDF_EXPECTS(cudf::have_same_types(lhs, rhs), "Type mismatch", cudf::data_type_error);
 ```
 
 The first argument is the conditional expression expected to resolve to `true` under normal
-conditions. If the conditional evaluates to `false`, then an error has occurred and an instance of
-`cudf::logic_error` is thrown. The second argument to `CUDF_EXPECTS` is a short description of the
-error that has occurred and is used for the exception's `what()` message.
+conditions. The second argument to `CUDF_EXPECTS` is a short description of the error that has
+occurred and is used for the exception's `what()` message. If the conditional evaluates to
+`false`, then an error has occurred and an instance of the exception class in the third argument
+(or the default, `cudf::logic_error`) is thrown.
 
 There are times where a particular code path, if reached, should indicate an error no matter what.
 For example, often the `default` case of a `switch` statement represents an invalid alternative.
@@ -1025,6 +1083,12 @@ types such as numeric types and timestamps/durations, adding support for nested 
 
 Enabling an algorithm differently for different types uses either template specialization or SFINAE,
 as discussed in [Specializing Type-Dispatched Code Paths](#specializing-type-dispatched-code-paths).
+
+## Comparing Data Types
+
+When comparing the data types of two columns or scalars, do not directly compare
+`a.type() == b.type()`. Nested types such as lists of structs of integers will not be handled
+properly if only the top level type is compared. Instead, use the `cudf::have_same_types` function.
 
 # Type Dispatcher
 
@@ -1212,17 +1276,19 @@ This is related to [Arrow's "Variable-Size List" memory layout](https://arrow.ap
 
 Strings are represented as a column with a data device buffer and a child offsets column.
 The parent column's type is `STRING` and its data holds all the characters across all the strings packed together
-but its size represents the number of strings in the column, and its null mask represents the
-validity of each string. To summarize, the strings column children are:
+but its size represents the number of strings in the column and its null mask represents the
+validity of each string.
 
-1. A non-nullable column of [`size_type`](#cudfsize_type) elements that indicates the offset to the beginning of each
-   string in a dense data buffer of all characters.
-
-With this representation, `data[offsets[i]]` is the first character of string `i`, and the
-size of string `i` is given by `offsets[i+1] - offsets[i]`. The following image shows an example of
-this compound column representation of strings.
+The strings column contains a single, non-nullable child column
+of offset elements that indicates the byte position offset to the beginning of each
+string in the dense data buffer of all characters. With this representation, `data[offsets[i]]` is the
+first character of string `i`, and the size of string `i` is given by `offsets[i+1] - offsets[i]`.
+The following image shows an example of this compound column representation of strings.
 
 ![strings](strings.png)
+
+The type of the offsets column is either `INT32` or `INT64` depending on the number of bytes in the data buffer.
+See [`cudf::strings_view`](#cudfstrings_column_view-and-cudfstring_view) for more information on processing individual string rows.
 
 ## Structs columns
 
@@ -1266,7 +1332,7 @@ struct column's layout is as follows. (Note that null masks should be read from 
 }
 ```
 
-The last struct row (index 3) is not null, but has a null value in the INT32 field. Also, row 2 of
+The last struct row (index 3) is not null, but has a null value in the `INT32` field. Also, row 2 of
 the struct column is null, making its corresponding fields also null. Therefore, bit 2 is unset in
 the null masks of both struct fields.
 
@@ -1322,18 +1388,27 @@ libcudf provides view types for nested column types as well as for the data elem
 
 ### cudf::strings_column_view and cudf::string_view
 
-`cudf::strings_column_view` is a view of a strings column, like `cudf::column_view` is a view of
-any `cudf::column`. `cudf::string_view` is a view of a single string, and therefore
-`cudf::string_view` is the data type of a `cudf::column` of type `STRING` just like `int32_t` is the
-data type for a `cudf::column` of type [`size_type`](#cudfsize_type). As its name implies, this is a
-read-only object instance that points to device memory inside the strings column. It's lifespan is
-the same (or less) as the column it views.
+A `cudf::strings_column_view` wraps a strings column and contains a parent
+`cudf::column_view` as a view of the strings column and an offsets `cudf::column_view`
+which is a child of the parent.
+The parent view contains the offset, size, and validity mask for the strings column.
+The offsets view is non-nullable with `offset()==0` and its own size.
+Since the offset column type can be either `INT32` or `INT64` it is useful to use the
+offset normalizing iterators [offsetalator](#offset-normalizing-iterators) to access individual offset values.
+
+A `cudf::string_view` is a view of a single string and therefore
+is the data type of a `cudf::column` of type `STRING` just like `int32_t` is the
+data type for a `cudf::column` of type `INT32`. As its name implies, this is a
+read-only object instance that points to device memory inside the strings column.
+Its lifespan is the same (or less) as the column it views.
+An individual strings column row and a `cudf::string_view` is limited to [`size_type`](#cudfsize_type) bytes.
 
 Use the `column_device_view::element` method to access an individual row element. Like any other
 column, do not call `element()` on a row that is null.
 
 ```c++
-   cudf::column_device_view d_strings;
+   cudf::strings_column_view scv;
+   auto d_strings = cudf::column_device_view::create(scv.parent(), stream);
    ...
    if( d_strings.is_valid(row_index) ) {
       string_view d_str = d_strings.element<string_view>(row_index);
@@ -1341,27 +1416,27 @@ column, do not call `element()` on a row that is null.
    }
 ```
 
-A null string is not the same as an empty string. Use the `string_scalar` class if you need an
+A null string is not the same as an empty string. Use the `cudf::string_scalar` class if you need an
 instance of a class object to represent a null string.
 
-The `string_view` contains comparison operators `<,>,==,<=,>=` that can be used in many cudf
-functions like `sort` without string-specific code. The data for a `string_view` instance is
+The `cudf::string_view` contains comparison operators `<,>,==,<=,>=` that can be used in many cudf
+functions like `sort` without string-specific code. The data for a `cudf::string_view` instance is
 required to be [UTF-8](#utf-8) and all operators and methods expect this encoding. Unless documented
 otherwise, position and length parameters are specified in characters and not bytes. The class also
-includes a `string_view::const_iterator` which can be used to navigate through individual characters
+includes a `cudf::string_view::const_iterator` which can be used to navigate through individual characters
 within the string.
 
-`cudf::type_dispatcher` dispatches to the `string_view` data type when invoked on a `STRING` column.
+`cudf::type_dispatcher` dispatches to the `cudf::string_view` data type when invoked on a `STRING` column.
 
 #### UTF-8
 
 The libcudf strings column only supports UTF-8 encoding for strings data.
 [UTF-8](https://en.wikipedia.org/wiki/UTF-8) is a variable-length character encoding wherein each
 character can be 1-4 bytes. This means the length of a string is not the same as its size in bytes.
-For this reason, it is recommended to use the `string_view` class to access these characters for
+For this reason, it is recommended to use the `cudf::string_view` class to access these characters for
 most operations.
 
-The `string_view.cuh` header also includes some utility methods for reading and writing
+The `cudf/strings/detail/utf8.hpp` header also includes some utility methods for reading and writing
 (`to_char_utf8/from_char_utf8`) individual UTF-8 characters to/from byte arrays.
 
 ### cudf::lists_column_view and cudf::lists_view
@@ -1384,3 +1459,25 @@ cuIO is a component of libcudf that provides GPU-accelerated reading and writing
 formats commonly used in data analytics, including CSV, Parquet, ORC, Avro, and JSON_Lines.
 
 // TODO: add more detail and move to a separate file.
+
+# Debugging Tips
+
+Here are some tools that can help with debugging libcudf (besides printf of course):
+1. `cuda-gdb`\
+   Follow the instructions in the [Contributor to cuDF guide](../../../CONTRIBUTING.md#debugging-cudf) to build
+   and run libcudf with debug symbols.
+2. `compute-sanitizer`\
+   The [CUDA Compute Sanitizer](https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html)
+   tool can be used to locate many CUDA reported errors by providing a call stack
+   close to where the error occurs even with a non-debug build. The sanitizer includes various
+   tools including `memcheck`, `racecheck`, and `initcheck` as well as others.
+   The `racecheck` and `initcheck` have been known to produce false positives.
+3. `cudf::test::print()`\
+   The `print()` utility can be called within a gtest to output the data in a `cudf::column_view`.
+   More information is available in the [Testing Guide](TESTING.md#printing-and-accessing-column-data)
+4. GCC Address Sanitizer\
+   The GCC ASAN can also be used by adding the `-fsanitize=address` compiler flag.
+   There is a compatibility issue with the CUDA runtime that can be worked around by setting
+   environment variable `ASAN_OPTIONS=protect_shadow_gap=0` before running the executable.
+   Note that the CUDA `compute-sanitizer` can also be used with GCC ASAN by setting the
+   environment variable `ASAN_OPTIONS=protect_shadow_gap=0,alloc_dealloc_mismatch=0`.

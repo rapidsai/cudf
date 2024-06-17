@@ -43,6 +43,7 @@ class file_source : public datasource {
  public:
   explicit file_source(char const* filepath) : _file(filepath, O_RDONLY)
   {
+    detail::force_init_cuda_context();
     if (detail::cufile_integration::is_kvikio_enabled()) {
       _kvikio_file = kvikio::FileHandle(filepath);
       CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode {}.",
@@ -52,7 +53,7 @@ class file_source : public datasource {
     }
   }
 
-  virtual ~file_source() = default;
+  ~file_source() override = default;
 
   [[nodiscard]] bool supports_device_read() const override
   {

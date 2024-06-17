@@ -5,7 +5,7 @@ from __future__ import annotations
 import pickle
 import warnings
 from functools import cached_property
-from typing import Any, Literal, Set, Tuple
+from typing import TYPE_CHECKING, Any, Literal, Set, Tuple
 
 import pandas as pd
 from typing_extensions import Self
@@ -30,11 +30,15 @@ from cudf.api.types import (
 )
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
-from cudf.core.column_accessor import ColumnAccessor
 from cudf.errors import MixedTypeError
 from cudf.utils import ioutils
 from cudf.utils.dtypes import can_convert_to_column, is_mixed_with_object_dtype
 from cudf.utils.utils import _is_same_name
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+    from cudf.core.column_accessor import ColumnAccessor
 
 
 class BaseIndex(Serializable):
@@ -144,11 +148,11 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     @property  # type: ignore
-    def ndim(self):  # noqa: D401
+    def ndim(self) -> int:  # noqa: D401
         """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
-    def equals(self, other):
+    def equals(self, other) -> bool:
         """
         Determine if two Index objects contain the same elements.
 
@@ -275,6 +279,7 @@ class BaseIndex(Serializable):
         raise NotImplementedError()
 
     def __contains__(self, item):
+        hash(item)
         return item in self._values
 
     def _copy_type_metadata(
@@ -337,9 +342,9 @@ class BaseIndex(Serializable):
     @property
     def names(self):
         """
-        Returns a tuple containing the name of the Index.
+        Returns a FrozenList containing the name of the Index.
         """
-        return (self.name,)
+        return pd.core.indexes.frozen.FrozenList([self.name])
 
     @names.setter
     def names(self, values):
@@ -517,7 +522,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def factorize(self, sort=False, na_sentinel=None, use_na_sentinel=None):
+    def factorize(self, sort: bool = False, use_na_sentinel: bool = True):
         raise NotImplementedError
 
     def union(self, other, sort=None):
@@ -2061,15 +2066,16 @@ class BaseIndex(Serializable):
             one null value. "all" drops only rows containing
             *all* null values.
         """
-
+        if how not in {"any", "all"}:
+            raise ValueError(f"{how=} must be 'any' or 'all'")
+        try:
+            if not self.hasnans:
+                return self.copy()
+        except NotImplementedError:
+            pass
         # This is to be consistent with IndexedFrame.dropna to handle nans
         # as nulls by default
-        data_columns = [
-            col.nans_to_nulls()
-            if isinstance(col, cudf.core.column.NumericalColumn)
-            else col
-            for col in self._columns
-        ]
+        data_columns = [col.nans_to_nulls() for col in self._columns]
 
         return self._from_columns_like_self(
             drop_nulls(
@@ -2183,14 +2189,20 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def _split_columns_by_levels(self, levels):
-        if isinstance(levels, int) and levels > 0:
-            raise ValueError(f"Out of bound level: {levels}")
-        return (
-            [self._data[self.name]],
-            [],
-            ["index" if self.name is None else self.name],
-            [],
+    def _new_index_for_reset_index(
+        self, levels: tuple | None, name
+    ) -> None | BaseIndex:
+        """Return the new index after .reset_index"""
+        # None is caught later to return RangeIndex
+        return None
+
+    def _columns_for_reset_index(
+        self, levels: tuple | None
+    ) -> Generator[tuple[Any, ColumnBase], None, None]:
+        """Return the columns and column names for .reset_index"""
+        yield (
+            "index" if self.name is None else self.name,
+            next(iter(self._columns)),
         )
 
     def _split(self, splits):
@@ -2199,3 +2211,9 @@ class BaseIndex(Serializable):
 
 def _get_result_name(left_name, right_name):
     return left_name if _is_same_name(left_name, right_name) else None
+
+
+def _return_get_indexer_result(result):
+    if cudf.get_option("mode.pandas_compatible"):
+        return result.astype("int64")
+    return result

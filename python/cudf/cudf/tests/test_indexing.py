@@ -1,5 +1,6 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
+import weakref
 from datetime import datetime
 from itertools import combinations
 
@@ -9,7 +10,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_210
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import _utils as utils
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -132,6 +133,10 @@ def test_series_indexing(i1, i2, i3):
             assert series[i] == a1[i]
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "arg",
     [
@@ -153,9 +158,10 @@ def test_series_get_item_iloc_defer(arg):
     ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
     gs = cudf.from_pandas(ps)
 
-    with expect_warning_if(PANDAS_GE_210 and not isinstance(arg, str)):
+    arg_not_str = not isinstance(arg, str)
+    with expect_warning_if(arg_not_str):
         expect = ps[arg]
-    with expect_warning_if(not isinstance(arg, str)):
+    with expect_warning_if(arg_not_str):
         got = gs[arg]
 
     assert_eq(expect, got)
@@ -907,6 +913,10 @@ def test_dataframe_boolean_mask(mask_fn):
     assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "key, value",
     [
@@ -931,10 +941,7 @@ def test_series_setitem_basics(key, value, nulls):
         psr[:] = None
     gsr = cudf.from_pandas(psr)
     with expect_warning_if(
-        PANDAS_GE_210
-        and isinstance(value, list)
-        and len(value) == 0
-        and nulls == "none"
+        isinstance(value, list) and len(value) == 0 and nulls == "none"
     ):
         psr[key] = value
     with expect_warning_if(
@@ -960,6 +967,10 @@ def test_series_setitem_null():
     assert_eq(expect, got)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "key, value",
     [
@@ -984,10 +995,7 @@ def test_series_setitem_iloc(key, value, nulls):
         psr[:] = None
     gsr = cudf.from_pandas(psr)
     with expect_warning_if(
-        PANDAS_GE_210
-        and isinstance(value, list)
-        and len(value) == 0
-        and nulls == "none"
+        isinstance(value, list) and len(value) == 0 and nulls == "none"
     ):
         psr.iloc[key] = value
     with expect_warning_if(
@@ -2247,4 +2255,110 @@ def test_scalar_loc_row_categoricalindex():
     )
     result = df.loc["a"]
     expected = df.to_pandas().loc["a"]
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("klass", [cudf.DataFrame, cudf.Series])
+@pytest.mark.parametrize("indexer", ["iloc", "loc"])
+def test_iloc_loc_no_circular_reference(klass, indexer):
+    obj = klass([0])
+    ref = weakref.ref(obj)
+    getattr(obj, indexer)[0]
+    del obj
+    assert ref() is None
+
+
+def test_loc_setitem_empty_dataframe():
+    pdf = pd.DataFrame(index=["index_1", "index_2", "index_3"])
+    gdf = cudf.from_pandas(pdf)
+    pdf.loc[["index_1"], "new_col"] = "A"
+    gdf.loc[["index_1"], "new_col"] = "A"
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [15, 14, 12, 10, 1],
+        [1, 10, 12, 14, 15],
+    ],
+)
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        10,
+        15,
+        14,
+        0,
+        2,
+    ],
+)
+def test_loc_datetime_monotonic_with_ts(data, scalar):
+    gdf = cudf.DataFrame(
+        {"a": [1, 1, 1, 2, 2], "b": [1, 2, 3, 4, 5]},
+        index=cudf.Index(data, dtype="datetime64[ns]"),
+    )
+    pdf = gdf.to_pandas()
+
+    i = pd.Timestamp(scalar)
+
+    actual = gdf.loc[i:]
+    expected = pdf.loc[i:]
+
+    assert_eq(actual, expected)
+
+    actual = gdf.loc[:i]
+    expected = pdf.loc[:i]
+
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("data", [[15, 14, 3, 10, 1]])
+@pytest.mark.parametrize("scalar", [1, 10, 15, 14, 0, 2])
+def test_loc_datetime_random_with_ts(data, scalar):
+    gdf = cudf.DataFrame(
+        {"a": [1, 1, 1, 2, 2], "b": [1, 2, 3, 4, 5]},
+        index=cudf.Index(data, dtype="datetime64[ns]"),
+    )
+    pdf = gdf.to_pandas()
+
+    i = pd.Timestamp(scalar)
+
+    if i not in pdf.index:
+        assert_exceptions_equal(
+            lambda: pdf.loc[i:],
+            lambda: gdf.loc[i:],
+            lfunc_args_and_kwargs=([],),
+            rfunc_args_and_kwargs=([],),
+        )
+        assert_exceptions_equal(
+            lambda: pdf.loc[:i],
+            lambda: gdf.loc[:i],
+            lfunc_args_and_kwargs=([],),
+            rfunc_args_and_kwargs=([],),
+        )
+    else:
+        actual = gdf.loc[i:]
+        expected = pdf.loc[i:]
+
+        assert_eq(actual, expected)
+
+        actual = gdf.loc[:i]
+        expected = pdf.loc[:i]
+
+        assert_eq(actual, expected)
+
+
+def test_sliced_categorical_as_ordered():
+    df = cudf.DataFrame({"a": list("caba"), "b": list(range(4))})
+    df["a"] = df["a"].astype("category")
+    df = df.iloc[:2]
+    result = df["a"].cat.as_ordered()
+    expected = cudf.Series(
+        ["c", "a"],
+        dtype=cudf.CategoricalDtype(list("abc"), ordered=True),
+        name="a",
+    )
     assert_eq(result, expected)

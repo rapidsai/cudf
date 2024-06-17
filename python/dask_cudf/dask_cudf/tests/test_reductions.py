@@ -84,3 +84,13 @@ def test_rowwise_reductions(data, op):
             check_exact=False,
             check_dtype=op not in ("var", "std"),
         )
+
+
+@pytest.mark.parametrize("skipna", [True, False])
+def test_var_nulls(skipna):
+    # Copied from 10min example notebook
+    # See: https://github.com/rapidsai/cudf/pull/15347
+    s = cudf.Series([1, 2, 3, None, 4])
+    ds = dask_cudf.from_cudf(s, npartitions=2)
+    dd.assert_eq(s.var(skipna=skipna), ds.var(skipna=skipna))
+    dd.assert_eq(s.std(skipna=skipna), ds.std(skipna=skipna))

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 # cuDF build script
 
@@ -70,7 +70,7 @@ BUILD_PER_THREAD_DEFAULT_STREAM=OFF
 BUILD_REPORT_METRICS=OFF
 BUILD_REPORT_INCL_CACHE_STATS=OFF
 USE_PROPRIETARY_NVCOMP=ON
-PYTHON_ARGS_FOR_INSTALL="-m pip install --no-build-isolation --no-deps"
+PYTHON_ARGS_FOR_INSTALL="-m pip install --no-build-isolation --no-deps --config-settings rapidsai.disable-cuda=true"
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -109,8 +109,8 @@ function buildAll {
 }
 
 function buildLibCudfJniInDocker {
-    local cudaVersion="11.5.0"
-    local imageName="cudf-build:${cudaVersion}-devel-centos7"
+    local cudaVersion="11.8.0"
+    local imageName="cudf-build:${cudaVersion}-devel-rocky8"
     local CMAKE_GENERATOR="${CMAKE_GENERATOR:-Ninja}"
     local workspaceDir="/rapids"
     local localMavenRepo=${LOCAL_MAVEN_REPO:-"$HOME/.m2/repository"}
@@ -120,7 +120,7 @@ function buildLibCudfJniInDocker {
     mkdir -p "$CUDF_JAR_JAVA_BUILD_DIR/libcudf-cmake-build"
     mkdir -p "$HOME/.ccache" "$HOME/.m2"
     nvidia-docker build \
-        -f java/ci/Dockerfile.centos7 \
+        -f java/ci/Dockerfile.rocky \
         --build-arg CUDA_VERSION=${cudaVersion} \
         -t $imageName .
     nvidia-docker run -it -u $(id -u):$(id -g) --rm \

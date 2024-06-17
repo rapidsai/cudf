@@ -8,11 +8,7 @@ import pandas as pd
 
 import cudf
 from cudf._lib.unary import is_nan
-from cudf.api.types import (
-    _is_categorical_dtype,
-    is_numeric_dtype,
-    is_string_dtype,
-)
+from cudf.api.types import is_numeric_dtype, is_string_dtype
 from cudf.core.missing import NA, NaT
 
 
@@ -86,7 +82,7 @@ def _check_types(
     if (
         exact
         and not isinstance(left, cudf.MultiIndex)
-        and _is_categorical_dtype(left)
+        and isinstance(left.dtype, cudf.CategoricalDtype)
     ):
         if left.dtype != right.dtype:
             raise_assert_detail(
@@ -144,8 +140,8 @@ def assert_column_equal(
     """
     if check_dtype is True:
         if (
-            _is_categorical_dtype(left)
-            and _is_categorical_dtype(right)
+            isinstance(left.dtype, cudf.CategoricalDtype)
+            and isinstance(right.dtype, cudf.CategoricalDtype)
             and not check_categorical
         ):
             pass
@@ -173,7 +169,9 @@ def assert_column_equal(
             return
 
     if check_exact and check_categorical:
-        if _is_categorical_dtype(left) and _is_categorical_dtype(right):
+        if isinstance(left.dtype, cudf.CategoricalDtype) and isinstance(
+            right.dtype, cudf.CategoricalDtype
+        ):
             left_cat = left.categories
             right_cat = right.categories
 
@@ -207,8 +205,8 @@ def assert_column_equal(
 
     if (
         not check_dtype
-        and _is_categorical_dtype(left)
-        and _is_categorical_dtype(right)
+        and isinstance(left.dtype, cudf.CategoricalDtype)
+        and isinstance(right.dtype, cudf.CategoricalDtype)
     ):
         left = left.astype(left.categories.dtype)
         right = right.astype(right.categories.dtype)
@@ -258,7 +256,9 @@ def assert_column_equal(
                 raise e
             else:
                 columns_equal = False
-            if _is_categorical_dtype(left) and _is_categorical_dtype(right):
+            if isinstance(left.dtype, cudf.CategoricalDtype) and isinstance(
+                right.dtype, cudf.CategoricalDtype
+            ):
                 left = left.astype(left.categories.dtype)
                 right = right.astype(right.categories.dtype)
     if not columns_equal:

@@ -37,12 +37,12 @@ CUDF_KERNEL void gpu_atomic_test(T* result, T* data, size_t size)
   size_t step = blockDim.x * gridDim.x;
 
   for (; id < size; id += step) {
-    atomicAdd(&result[0], data[id]);
-    atomicMin(&result[1], data[id]);
-    atomicMax(&result[2], data[id]);
-    cudf::genericAtomicOperation(&result[3], data[id], cudf::DeviceSum{});
-    cudf::genericAtomicOperation(&result[4], data[id], cudf::DeviceMin{});
-    cudf::genericAtomicOperation(&result[5], data[id], cudf::DeviceMax{});
+    cudf::detail::atomic_add(&result[0], data[id]);
+    cudf::detail::atomic_min(&result[1], data[id]);
+    cudf::detail::atomic_max(&result[2], data[id]);
+    cudf::detail::genericAtomicOperation(&result[3], data[id], cudf::DeviceSum{});
+    cudf::detail::genericAtomicOperation(&result[4], data[id], cudf::DeviceMin{});
+    cudf::detail::genericAtomicOperation(&result[5], data[id], cudf::DeviceMax{});
   }
 }
 
@@ -72,7 +72,7 @@ __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
     assumed     = old_value;
     T new_value = op(old_value, value);
 
-    old_value = atomicCAS(addr, assumed, new_value);
+    old_value = cudf::detail::atomic_cas(addr, assumed, new_value);
   } while (assumed != old_value);
 
   return old_value;

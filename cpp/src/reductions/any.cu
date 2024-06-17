@@ -19,6 +19,8 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/reduction/detail/reduction_functions.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <cuda/atomic>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -55,7 +57,7 @@ struct any_fn {
   template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     auto const d_dict = cudf::column_device_view::create(input, stream);
     auto const iter   = [&] {
@@ -74,7 +76,7 @@ struct any_fn {
   template <typename T, std::enable_if_t<!std::is_arithmetic_v<T>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,
                                      rmm::cuda_stream_view,
-                                     rmm::mr::device_memory_resource*)
+                                     rmm::device_async_resource_ref)
   {
     CUDF_FAIL("Unexpected key type for dictionary in reduction any()");
   }
@@ -86,7 +88,7 @@ std::unique_ptr<cudf::scalar> any(column_view const& col,
                                   cudf::data_type const output_dtype,
                                   std::optional<std::reference_wrapper<scalar const>> init,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "any() operation can be applied with output type `bool8` only");

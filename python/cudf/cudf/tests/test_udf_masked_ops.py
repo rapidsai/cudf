@@ -7,7 +7,7 @@ import pytest
 from numba import cuda
 
 import cudf
-from cudf.core._compat import PANDAS_GE_220
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.missing import NA
 from cudf.core.udf._ops import (
     arith_ops,
@@ -484,7 +484,8 @@ def test_series_apply_basic(data, name):
 
 
 @pytest.mark.xfail(
-    PANDAS_GE_220, reason="https://github.com/pandas-dev/pandas/issues/57390"
+    PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="https://github.com/pandas-dev/pandas/issues/57390",
 )
 def test_series_apply_null_conditional():
     def func(x):
@@ -511,7 +512,8 @@ def test_series_arith_masked_vs_masked(op):
 
 
 @pytest.mark.xfail(
-    PANDAS_GE_220, reason="https://github.com/pandas-dev/pandas/issues/57390"
+    PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="https://github.com/pandas-dev/pandas/issues/57390",
 )
 @pytest.mark.parametrize("op", comparison_ops)
 def test_series_compare_masked_vs_masked(op):
@@ -570,7 +572,8 @@ def test_series_arith_masked_vs_constant_reflected(request, op, constant):
 
 
 @pytest.mark.xfail(
-    PANDAS_GE_220, reason="https://github.com/pandas-dev/pandas/issues/57390"
+    PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="https://github.com/pandas-dev/pandas/issues/57390",
 )
 def test_series_masked_is_null_conditional():
     def func(x):
@@ -756,7 +759,9 @@ def test_masked_udf_scalar_args_binops_multiple_series(request, data, op):
     data = cudf.Series(data)
     request.applymarker(
         pytest.mark.xfail(
-            op in comparison_ops and PANDAS_GE_220 and data.dtype.kind != "b",
+            op in comparison_ops
+            and PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
+            and data.dtype.kind != "b",
             reason="https://github.com/pandas-dev/pandas/issues/57390",
         )
     )

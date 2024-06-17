@@ -62,6 +62,7 @@ Indexing, iteration
    DataFrame.pop
    DataFrame.tail
    DataFrame.isin
+   DataFrame.squeeze
    DataFrame.where
    DataFrame.mask
    DataFrame.query

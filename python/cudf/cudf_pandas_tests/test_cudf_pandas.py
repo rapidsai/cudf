@@ -6,8 +6,10 @@ import collections
 import copy
 import datetime
 import operator
+import os
 import pathlib
 import pickle
+import subprocess
 import tempfile
 import types
 from io import BytesIO, StringIO
@@ -16,18 +18,33 @@ import numpy as np
 import pyarrow as pa
 import pytest
 from numba import NumbaDeprecationWarning
+from pytz import utc
 
 from cudf.pandas import LOADED, Profiler
-from cudf.pandas.fast_slow_proxy import _Unusable
+from cudf.pandas.fast_slow_proxy import _Unusable, is_proxy_object
 
 if not LOADED:
     raise ImportError("These tests must be run with cudf.pandas loaded")
 
 import pandas as xpd
 import pandas._testing as tm
+from pandas.tseries.holiday import (
+    AbstractHolidayCalendar,
+    EasterMonday,
+    GoodFriday,
+    Holiday,
+    USColumbusDay,
+    USLaborDay,
+    USMartinLutherKingJr,
+    USMemorialDay,
+    USPresidentsDay,
+    USThanksgivingDay,
+    get_calendar,
+)
 
-# Accelerated pandas has the real pandas module as an attribute
+# Accelerated pandas has the real pandas and cudf modules as attributes
 pd = xpd._fsproxy_slow
+cudf = xpd._fsproxy_fast
 
 
 @pytest.fixture
@@ -365,6 +382,8 @@ def test_pickle_round_trip(dataframe):
 
 
 def test_excel_round_trip(dataframe):
+    pytest.importorskip("openpyxl")
+
     pdf, df = dataframe
     excel_pdf = BytesIO()
     excel_cudf_pandas = BytesIO()
@@ -445,6 +464,9 @@ def test_options_mode():
     assert xpd.options.mode.copy_on_write == pd.options.mode.copy_on_write
 
 
+# Codecov and Profiler interfere with each-other,
+# hence we don't want to run code-cov on this test.
+@pytest.mark.no_cover
 def test_profiler():
     pytest.importorskip("cudf")
 
@@ -1197,6 +1219,24 @@ def test_func_namespace():
     assert xpd.concat is xpd.core.reshape.concat.concat
 
 
+def test_register_accessor():
+    @xpd.api.extensions.register_dataframe_accessor("xyz")
+    class XYZ:
+        def __init__(self, obj):
+            self._obj = obj
+
+        @property
+        def foo(self):
+            return "spam"
+
+    # the accessor must be registered with the proxy type,
+    # not the underlying fast or slow type
+    assert "xyz" in xpd.DataFrame.__dict__
+
+    df = xpd.DataFrame()
+    assert df.xyz.foo == "spam"
+
+
 def test_pickle_groupby(dataframe):
     pdf, df = dataframe
     pgb = pdf.groupby("a")
@@ -1205,6 +1245,291 @@ def test_pickle_groupby(dataframe):
     tm.assert_equal(pgb.sum(), gb.sum())
 
 
+def test_numpy_extension_array():
+    np_array = np.array([0, 1, 2, 3])
+    try:
+        xarray = xpd.arrays.NumpyExtensionArray(np_array)
+        array = pd.arrays.NumpyExtensionArray(np_array)
+    except AttributeError:
+        xarray = xpd.arrays.PandasArray(np_array)
+        array = pd.arrays.PandasArray(np_array)
+
+    tm.assert_equal(xarray, array)
+
+
 def test_isinstance_base_offset():
     offset = xpd.tseries.frequencies.to_offset("1s")
     assert isinstance(offset, xpd.tseries.offsets.BaseOffset)
+
+
+def test_super_attribute_lookup():
+    # test that we can use super() to access attributes
+    # of the base class when subclassing proxy types
+
+    class Foo(xpd.Series):
+        def max_times_two(self):
+            return super().max() * 2
+
+    s = Foo([1, 2, 3])
+    assert s.max_times_two() == 6
+
+
+def test_floordiv_array_vs_df():
+    xarray = xpd.Series([1, 2, 3], dtype="datetime64[ns]").array
+    parray = pd.Series([1, 2, 3], dtype="datetime64[ns]").array
+
+    xdf = xpd.DataFrame(xarray)
+    pdf = pd.DataFrame(parray)
+
+    actual = xarray.__floordiv__(xdf)
+    expected = parray.__floordiv__(pdf)
+
+    tm.assert_equal(actual, expected)
+
+
+def test_apply_slow_path_udf_references_global_module():
+    def my_apply(df, unused):
+        # `datetime` Raised `KeyError: __import__`
+        datetime.datetime.strptime(df["Minute"], "%H:%M:%S")
+        return pd.to_numeric(1)
+
+    df = xpd.DataFrame({"Minute": ["09:00:00"]})
+    result = df.apply(my_apply, axis=1, unused=True)
+    expected = xpd.Series([1])
+    tm.assert_series_equal(result, expected)
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        "__iadd__",
+        "__iand__",
+        "__ifloordiv__",
+        "__imod__",
+        "__imul__",
+        "__ior__",
+        "__ipow__",
+        "__isub__",
+        "__itruediv__",
+        "__ixor__",
+    ],
+)
+def test_inplace_ops(op):
+    xdf1 = xpd.DataFrame({"a": [10, 11, 12]})
+    xdf2 = xpd.DataFrame({"a": [1, 2, 3]})
+
+    df1 = pd.DataFrame({"a": [10, 11, 12]})
+    df2 = pd.DataFrame({"a": [1, 2, 3]})
+
+    actual = getattr(xdf1, op)(xdf2)
+    expected = getattr(df1, op)(df2)
+
+    tm.assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        "__iadd__",
+        "__iand__",
+        "__ifloordiv__",
+        "__imod__",
+        "__imul__",
+        "__ior__",
+        "__ipow__",
+        "__isub__",
+        "__itruediv__",
+        "__ixor__",
+    ],
+)
+def test_inplace_ops_series(op):
+    xser1 = xpd.Series([10, 11, 12])
+    xser2 = xpd.Series([1, 2, 3])
+
+    ser1 = pd.Series([10, 11, 12])
+    ser2 = pd.Series([1, 2, 3])
+
+    actual = getattr(xser1, op)(xser2)
+    expected = getattr(ser1, op)(ser2)
+
+    tm.assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
+def test_timestamp(data):
+    xtimestamp = xpd.Timestamp(data)
+    timestamp = pd.Timestamp(data)
+    tm.assert_equal(xtimestamp, timestamp)
+
+
+@pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
+def test_timedelta(data):
+    xtimedelta = xpd.Timedelta(data)
+    timedelta = pd.Timedelta(data)
+    tm.assert_equal(xtimedelta, timedelta)
+
+
+def test_abstract_holiday_calendar():
+    class TestCalendar(AbstractHolidayCalendar):
+        def __init__(self, name=None, rules=None) -> None:
+            super().__init__(name=name, rules=rules)
+
+    jan1 = TestCalendar(rules=[Holiday("jan1", year=2015, month=1, day=1)])
+    jan2 = TestCalendar(rules=[Holiday("jan2", year=2015, month=1, day=2)])
+
+    # Getting holidays for Jan 1 should not alter results for Jan 2.
+    expected = xpd.DatetimeIndex(["01-Jan-2015"]).as_unit("ns")
+    tm.assert_index_equal(jan1.holidays(), expected)
+
+    expected2 = xpd.DatetimeIndex(["02-Jan-2015"]).as_unit("ns")
+    tm.assert_index_equal(jan2.holidays(), expected2)
+
+
+@pytest.mark.parametrize(
+    "holiday,start,expected",
+    [
+        (USMemorialDay, datetime.datetime(2015, 7, 1), []),
+        (USLaborDay, "2015-09-07", [xpd.Timestamp("2015-09-07")]),
+        (USColumbusDay, "2015-10-12", [xpd.Timestamp("2015-10-12")]),
+        (USThanksgivingDay, "2015-11-26", [xpd.Timestamp("2015-11-26")]),
+        (USMartinLutherKingJr, "2015-01-19", [xpd.Timestamp("2015-01-19")]),
+        (USPresidentsDay, datetime.datetime(2015, 7, 1), []),
+        (GoodFriday, datetime.datetime(2015, 7, 1), []),
+        (EasterMonday, "2015-04-06", [xpd.Timestamp("2015-04-06")]),
+        ("New Year's Day", "2010-12-31", [xpd.Timestamp("2010-12-31")]),
+        ("Independence Day", "2015-07-03", [xpd.Timestamp("2015-07-03")]),
+        ("Veterans Day", "2012-11-11", []),
+        ("Christmas Day", "2011-12-26", [xpd.Timestamp("2011-12-26")]),
+        (
+            "Juneteenth National Independence Day",
+            "2021-06-18",
+            [xpd.Timestamp("2021-06-18")],
+        ),
+        ("Juneteenth National Independence Day", "2022-06-19", []),
+        (
+            "Juneteenth National Independence Day",
+            "2022-06-20",
+            [xpd.Timestamp("2022-06-20")],
+        ),
+    ],
+)
+def test_holidays_within_dates(holiday, start, expected):
+    if isinstance(holiday, str):
+        calendar = get_calendar("USFederalHolidayCalendar")
+        holiday = calendar.rule_from_name(holiday)
+
+    assert list(holiday.dates(start, start)) == expected
+
+    # Verify that timezone info is preserved.
+    assert list(
+        holiday.dates(
+            utc.localize(xpd.Timestamp(start)),
+            utc.localize(xpd.Timestamp(start)),
+        )
+    ) == [utc.localize(dt) for dt in expected]
+
+
+@pytest.mark.parametrize(
+    "env_value",
+    ["", "cuda", "pool", "async", "managed", "managed_pool", "abc"],
+)
+def test_rmm_option_on_import(env_value):
+    data_directory = os.path.dirname(os.path.abspath(__file__))
+    # Create a copy of the current environment variables
+    env = os.environ.copy()
+    env["CUDF_PANDAS_RMM_MODE"] = env_value
+
+    sp_completed = subprocess.run(
+        [
+            "python",
+            "-m",
+            "cudf.pandas",
+            data_directory + "/data/profile_basic.py",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    if env_value in {"cuda", "pool", "async", "managed", "managed_pool"}:
+        assert sp_completed.returncode == 0
+    else:
+        assert sp_completed.returncode == 1
+
+
+def test_cudf_pandas_debugging_different_results(monkeypatch):
+    cudf_mean = cudf.Series.mean
+
+    def mock_mean_one(self, *args, **kwargs):
+        return np.float64(1.0)
+
+    with monkeypatch.context() as monkeycontext:
+        monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", mock_mean_one)
+        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
+        s = xpd.Series([1, 2])
+        with pytest.warns(
+            UserWarning,
+            match="The results from cudf and pandas were different.",
+        ):
+            assert s.mean() == 1.0
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", cudf_mean)
+
+
+def test_cudf_pandas_debugging_pandas_error(monkeypatch):
+    pd_mean = pd.Series.mean
+
+    def mock_mean_exception(self, *args, **kwargs):
+        raise Exception()
+
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setattr(
+            xpd.Series.mean, "_fsproxy_slow", mock_mean_exception
+        )
+        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
+        s = xpd.Series([1, 2])
+        with pytest.warns(
+            UserWarning,
+            match="The result from pandas could not be computed.",
+        ):
+            s = xpd.Series([1, 2])
+            assert s.mean() == 1.5
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
+
+
+def test_cudf_pandas_debugging_failed(monkeypatch):
+    pd_mean = pd.Series.mean
+
+    def mock_mean_none(self, *args, **kwargs):
+        return None
+
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setattr(xpd.Series.mean, "_fsproxy_slow", mock_mean_none)
+        monkeycontext.setenv("CUDF_PANDAS_DEBUGGING", "True")
+        s = xpd.Series([1, 2])
+        with pytest.warns(
+            UserWarning,
+            match="Pandas debugging mode failed.",
+        ):
+            s = xpd.Series([1, 2])
+            assert s.mean() == 1.5
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
+
+
+def test_excelwriter_pathlike():
+    assert isinstance(pd.ExcelWriter("foo.xlsx"), os.PathLike)
+
+
+def test_is_proxy_object():
+    np_arr = np.array([1])
+
+    s1 = xpd.Series([1])
+    s2 = pd.Series([1])
+
+    np_arr_proxy = s1.to_numpy()
+
+    assert not is_proxy_object(np_arr)
+    assert is_proxy_object(np_arr_proxy)
+    assert is_proxy_object(s1)
+    assert not is_proxy_object(s2)

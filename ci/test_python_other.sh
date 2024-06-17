@@ -19,8 +19,8 @@ EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
 
-rapids-logger "pytest dask_cudf"
-./ci/run_dask_cudf_pytests.sh \
+rapids-logger "pytest dask_cudf (dask-expr)"
+DASK_DATAFRAME__QUERY_PLANNING=True ./ci/run_dask_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=8 \
   --dist=worksteal \
@@ -29,13 +29,16 @@ rapids-logger "pytest dask_cudf"
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/dask-cudf-coverage.xml" \
   --cov-report=term
 
-# Run tests in dask_cudf/tests and dask_cudf/io/tests with dask-expr
-rapids-logger "pytest dask_cudf + dask_expr"
-DASK_DATAFRAME__QUERY_PLANNING=True ./ci/run_dask_cudf_pytests.sh \
-  --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf-expr.xml" \
+rapids-logger "pytest dask_cudf (legacy)"
+DASK_DATAFRAME__QUERY_PLANNING=False ./ci/run_dask_cudf_pytests.sh \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf-legacy.xml" \
   --numprocesses=8 \
   --dist=loadscope \
   .
+
+rapids-logger "pytest cudf_kafka"
+./ci/run_cudf_kafka_pytests.sh \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-kafka.xml"
 
 rapids-logger "pytest custreamz"
 ./ci/run_custreamz_pytests.sh \

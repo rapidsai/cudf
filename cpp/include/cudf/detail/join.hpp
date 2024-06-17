@@ -24,6 +24,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuco/static_multimap.cuh>
 
@@ -105,7 +106,7 @@ struct hash_join {
   inner_join(cudf::table_view const& probe,
              std::optional<std::size_t> output_size,
              rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr) const;
+             rmm::device_async_resource_ref mr) const;
 
   /**
    * @copydoc cudf::hash_join::left_join
@@ -115,7 +116,7 @@ struct hash_join {
   left_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size,
             rmm::cuda_stream_view stream,
-            rmm::mr::device_memory_resource* mr) const;
+            rmm::device_async_resource_ref mr) const;
 
   /**
    * @copydoc cudf::hash_join::full_join
@@ -125,7 +126,7 @@ struct hash_join {
   full_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size,
             rmm::cuda_stream_view stream,
-            rmm::mr::device_memory_resource* mr) const;
+            rmm::device_async_resource_ref mr) const;
 
   /**
    * @copydoc cudf::hash_join::inner_join_size
@@ -144,7 +145,7 @@ struct hash_join {
    */
   std::size_t full_join_size(cudf::table_view const& probe,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr) const;
+                             rmm::device_async_resource_ref mr) const;
 
  private:
   /**
@@ -169,7 +170,7 @@ struct hash_join {
                      join_kind join,
                      std::optional<std::size_t> output_size,
                      rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr) const;
+                     rmm::device_async_resource_ref mr) const;
 
   /**
    * @copydoc cudf::detail::hash_join::probe_join_indices
@@ -184,7 +185,7 @@ struct hash_join {
                     join_kind join,
                     std::optional<std::size_t> output_size,
                     rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr) const;
+                    rmm::device_async_resource_ref mr) const;
 };
 }  // namespace detail
 }  // namespace cudf

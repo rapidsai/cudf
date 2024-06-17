@@ -26,8 +26,7 @@ class ColumnMethods(NotIterable):
         inplace: Literal[True],
         expand: bool = False,
         retain_index: bool = True,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     @overload
     def _return_or_inplace(
@@ -36,8 +35,7 @@ class ColumnMethods(NotIterable):
         inplace: Literal[False],
         expand: bool = False,
         retain_index: bool = True,
-    ) -> ParentType:
-        ...
+    ) -> ParentType: ...
 
     @overload
     def _return_or_inplace(
@@ -45,8 +43,7 @@ class ColumnMethods(NotIterable):
         new_col,
         expand: bool = False,
         retain_index: bool = True,
-    ) -> ParentType:
-        ...
+    ) -> ParentType: ...
 
     @overload
     def _return_or_inplace(
@@ -55,8 +52,7 @@ class ColumnMethods(NotIterable):
         inplace: bool = False,
         expand: bool = False,
         retain_index: bool = True,
-    ) -> Optional[ParentType]:
-        ...
+    ) -> Optional[ParentType]: ...
 
     def _return_or_inplace(
         self, new_col, inplace=False, expand=False, retain_index=True
@@ -97,8 +93,6 @@ class ColumnMethods(NotIterable):
                 else:
                     return cudf.Series(new_col, name=self._parent.name)
             elif isinstance(self._parent, cudf.BaseIndex):
-                return cudf.core.index.as_index(
-                    new_col, name=self._parent.name
-                )
+                return cudf.Index(new_col, name=self._parent.name)
             else:
                 return self._parent._mimic_inplace(new_col, inplace=False)

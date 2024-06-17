@@ -11,10 +11,10 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column, column_view
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.column.column cimport column, column_view
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 try:
     import ujson as json
@@ -59,7 +59,7 @@ cpdef generate_pandas_metadata(table, index):
     types = []
     index_levels = []
     index_descriptors = []
-
+    columns_to_convert = list(table._columns)
     # Columns
     for name, col in table._data.items():
         if cudf.get_option("mode.pandas_compatible"):
@@ -90,6 +90,7 @@ cpdef generate_pandas_metadata(table, index):
                 types.append(np_to_pa_dtype(col.dtype))
 
     # Indexes
+    materialize_index = False
     if index is not False:
         for level, name in enumerate(table._index.names):
             if isinstance(table._index, cudf.core.multiindex.MultiIndex):
@@ -107,22 +108,26 @@ cpdef generate_pandas_metadata(table, index):
                         "step": table.index.step,
                     }
                 else:
+                    materialize_index = True
                     # When `index=True`, RangeIndex needs to be materialized.
                     materialized_idx = cudf.Index(idx._values, name=idx.name)
-                    descr = \
-                        _index_level_name(
-                            index_name=materialized_idx.name,
-                            level=level,
-                            column_names=col_names
-                        )
-                    index_levels.append(materialized_idx)
-            else:
-                descr = \
-                    _index_level_name(
-                        index_name=idx.name,
+                    descr = _index_level_name(
+                        index_name=materialized_idx.name,
                         level=level,
                         column_names=col_names
                     )
+                    index_levels.append(materialized_idx)
+                    columns_to_convert.append(materialized_idx._values)
+                    col_names.append(descr)
+                    types.append(np_to_pa_dtype(materialized_idx.dtype))
+            else:
+                descr = _index_level_name(
+                    index_name=idx.name,
+                    level=level,
+                    column_names=col_names
+                )
+                columns_to_convert.append(idx._values)
+                col_names.append(descr)
                 if isinstance(idx.dtype, cudf.CategoricalDtype):
                     raise ValueError(
                         "'category' column dtypes are currently not "
@@ -141,17 +146,16 @@ cpdef generate_pandas_metadata(table, index):
                         types.append(np_to_pa_dtype(idx.dtype))
 
                 index_levels.append(idx)
-            col_names.append(name)
             index_descriptors.append(descr)
 
+    df_meta = table.head(0)
+    if materialize_index:
+        df_meta.index = df_meta.index._as_int_index()
     metadata = pa.pandas_compat.construct_metadata(
-        columns_to_convert=[
-            col
-            for col in table._columns
-        ],
+        columns_to_convert=columns_to_convert,
         # It is OKAY to do `.head(0).to_pandas()` because
         # this method will extract `.columns` metadata only
-        df=table.head(0).to_pandas(),
+        df=df_meta.to_pandas(),
         column_names=col_names,
         index_levels=index_levels,
         index_descriptors=index_descriptors,
@@ -309,6 +313,17 @@ cdef data_from_pylibcudf_table(tbl, column_names, index_names=None):
         columns_from_pylibcudf_table(tbl),
         column_names,
         index_names
+    )
+
+cdef data_from_pylibcudf_io(tbl_with_meta):
+    """
+    Unpacks the TableWithMetadata from libcudf I/O
+    into a dict of columns and an Index (cuDF format)
+    """
+    return _data_from_columns(
+        columns=[Column.from_pylibcudf(plc) for plc in tbl_with_meta.columns],
+        column_names=tbl_with_meta.column_names,
+        index_names=None
     )
 
 cdef columns_from_table_view(

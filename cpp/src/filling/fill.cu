@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,9 +33,11 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -107,9 +109,9 @@ struct out_of_place_fill_range_dispatch {
   std::unique_ptr<cudf::column> operator()(cudf::size_type begin,
                                            cudf::size_type end,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
   {
-    CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
+    CUDF_EXPECTS(cudf::have_same_types(input, value), "Data type mismatch.", cudf::data_type_error);
     auto p_ret = std::make_unique<cudf::column>(input, stream, mr);
 
     if (end != begin) {  // otherwise no fill
@@ -134,9 +136,9 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
   cudf::size_type begin,
   cudf::size_type end,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
+  CUDF_EXPECTS(cudf::have_same_types(input, value), "Data type mismatch.", cudf::data_type_error);
   using ScalarType = cudf::scalar_type_t<cudf::string_view>;
   auto p_scalar    = static_cast<ScalarType const*>(&value);
   return cudf::strings::detail::fill(
@@ -148,11 +150,12 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
   cudf::size_type begin,
   cudf::size_type end,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) return std::make_unique<cudf::column>(input, stream, mr);
   cudf::dictionary_column_view const target(input);
-  CUDF_EXPECTS(target.keys().type() == value.type(), "Data type mismatch.");
+  CUDF_EXPECTS(
+    cudf::have_same_types(target.parent(), value), "Data type mismatch.", cudf::data_type_error);
 
   // if the scalar is invalid, then just copy the column and fill the null mask
   if (!value.is_valid(stream)) {
@@ -218,7 +221,8 @@ void fill_in_place(mutable_column_view& destination,
                "Range is out of bounds.");
   CUDF_EXPECTS(destination.nullable() || value.is_valid(stream),
                "destination should be nullable or value should be non-null.");
-  CUDF_EXPECTS(destination.type() == value.type(), "Data type mismatch.");
+  CUDF_EXPECTS(
+    cudf::have_same_types(destination, value), "Data type mismatch.", cudf::data_type_error);
 
   if (end != begin) {  // otherwise no-op
     cudf::type_dispatcher(
@@ -233,7 +237,7 @@ std::unique_ptr<column> fill(column_view const& input,
                              size_type end,
                              scalar const& value,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS((begin >= 0) && (end <= input.size()) && (begin <= end), "Range is out of bounds.");
 
@@ -258,7 +262,7 @@ std::unique_ptr<column> fill(column_view const& input,
                              size_type end,
                              scalar const& value,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::fill(input, begin, end, value, stream, mr);

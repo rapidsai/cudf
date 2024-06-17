@@ -39,17 +39,18 @@ from cudf._lib.types cimport (
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf._lib.types import dtype_from_pylibcudf_column
 
-cimport cudf._lib.cpp.copying as cpp_copying
-cimport cudf._lib.cpp.types as libcudf_types
-cimport cudf._lib.cpp.unary as libcudf_unary
-from cudf._lib.cpp.column.column cimport column, column_contents
-from cudf._lib.cpp.column.column_factories cimport (
+
+cimport cudf._lib.pylibcudf.libcudf.copying as cpp_copying
+cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
+cimport cudf._lib.pylibcudf.libcudf.unary as libcudf_unary
+from cudf._lib.pylibcudf.libcudf.column.column cimport column, column_contents
+from cudf._lib.pylibcudf.libcudf.column.column_factories cimport (
     make_column_from_scalar as cpp_make_column_from_scalar,
     make_numeric_column,
 )
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.null_mask cimport null_count as cpp_null_count
-from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
+from cudf._lib.pylibcudf.libcudf.null_mask cimport null_count as cpp_null_count
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
 
 
@@ -618,6 +619,19 @@ cdef class Column:
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
+        if col.type().id() == pylibcudf.TypeId.TIMESTAMP_DAYS:
+            col = pylibcudf.unary.cast(
+                col, pylibcudf.DataType(pylibcudf.TypeId.TIMESTAMP_SECONDS)
+            )
+        elif col.type().id() == pylibcudf.TypeId.EMPTY:
+            new_dtype = pylibcudf.DataType(pylibcudf.TypeId.INT8)
+
+            col = pylibcudf.column_factories.make_numeric_column(
+                new_dtype,
+                col.size(),
+                pylibcudf.column_factories.MaskState.ALL_NULL
+            )
+
         dtype = dtype_from_pylibcudf_column(col)
 
         return cudf.core.column.build_column(

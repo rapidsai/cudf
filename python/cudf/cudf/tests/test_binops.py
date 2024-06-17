@@ -12,10 +12,9 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf import Series
-from cudf.core._compat import PANDAS_GE_220
+from cudf import Index, Series
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
-from cudf.core.index import as_index
 from cudf.testing import _utils as utils
 from cudf.utils.dtypes import (
     BOOL_TYPES,
@@ -186,8 +185,8 @@ def test_series_binop(binop, obj_class):
     sr2 = Series(arr2)
 
     if obj_class == "Index":
-        sr1 = as_index(sr1)
-        sr2 = as_index(sr2)
+        sr1 = Index(sr1)
+        sr2 = Index(sr2)
 
     result = binop(sr1, sr2)
     expect = binop(pd.Series(arr1), pd.Series(arr2))
@@ -225,7 +224,7 @@ def test_series_binop_scalar(nelem, binop, obj_class, use_cudf_scalar):
 
     sr = Series(arr)
     if obj_class == "Index":
-        sr = as_index(sr)
+        sr = Index(sr)
 
     if use_cudf_scalar:
         result = binop(sr, rhs)
@@ -251,8 +250,8 @@ def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
     sr2 = Series(arr2)
 
     if obj_class == "Index":
-        sr1 = as_index(sr1)
-        sr2 = as_index(sr2)
+        sr1 = Index(sr1)
+        sr2 = Index(sr2)
 
     result = binop(sr1, sr2)
 
@@ -274,8 +273,8 @@ def test_series_compare(cmpop, obj_class, dtype):
     sr2 = Series(arr2)
 
     if obj_class == "Index":
-        sr1 = as_index(sr1)
-        sr2 = as_index(sr2)
+        sr1 = Index(sr1)
+        sr2 = Index(sr2)
 
     result1 = cmpop(sr1, sr1)
     result2 = cmpop(sr2, sr2)
@@ -402,7 +401,7 @@ def test_series_compare_scalar(
         rhs = cudf.Scalar(rhs)
 
     if obj_class == "Index":
-        sr1 = as_index(sr1)
+        sr1 = Index(sr1)
 
     result1 = cmpop(sr1, rhs)
     result2 = cmpop(rhs, sr1)
@@ -488,8 +487,8 @@ def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype, obj_class):
     sr2 = Series(rhs)
 
     if obj_class == "Index":
-        sr1 = as_index(sr1)
-        sr2 = as_index(sr2)
+        sr1 = Index(sr1)
+        sr2 = Index(sr2)
 
     result = binop(Series(sr1), Series(sr2))
 
@@ -513,8 +512,8 @@ def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype, obj_class):
     sr2 = Series(rhs)
 
     if obj_class == "Index":
-        sr1 = as_index(sr1)
-        sr2 = as_index(sr2)
+        sr1 = Index(sr1)
+        sr2 = Index(sr2)
 
     result = cmpop(Series(sr1), Series(sr2))
 
@@ -538,7 +537,7 @@ def test_series_reflected_ops_scalar(func, dtype, obj_class):
 
     # class typing
     if obj_class == "Index":
-        gs = as_index(gs)
+        gs = Index(gs)
 
     gs_result = func(gs)
 
@@ -588,7 +587,7 @@ def test_series_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
 
     # class typing
     if obj_class == "Index":
-        gs = as_index(gs)
+        gs = Index(gs)
 
     gs_result = gpu_func(gs)
 
@@ -829,7 +828,7 @@ def test_operator_func_series_and_scalar_logical(
 ):
     request.applymarker(
         pytest.mark.xfail(
-            PANDAS_GE_220
+            PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
             and fill_value == 1.0
             and scalar is np.nan
             and (has_nulls or (not has_nulls and func not in {"eq", "ne"})),
@@ -1710,16 +1709,21 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
     ],
 )
 @pytest.mark.parametrize(
-    "dtype",
-    ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
+    "dtype, components",
+    [
+        ["datetime64[ns]", "00.012345678"],
+        ["datetime64[us]", "00.012345"],
+        ["datetime64[ms]", "00.012"],
+        ["datetime64[s]", "00"],
+    ],
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
 def test_datetime_dateoffset_binaryop(
-    request, n_periods, frequency, dtype, op
+    request, n_periods, frequency, dtype, components, op
 ):
     request.applymarker(
         pytest.mark.xfail(
-            PANDAS_GE_220
+            PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
             and dtype in {"datetime64[ms]", "datetime64[s]"}
             and frequency == "microseconds"
             and n_periods == 0,
@@ -1728,9 +1732,9 @@ def test_datetime_dateoffset_binaryop(
     )
 
     date_col = [
-        "2000-01-01 00:00:00.012345678",
-        "2000-01-31 00:00:00.012345678",
-        "2000-02-29 00:00:00.012345678",
+        f"2000-01-01 00:00:{components}",
+        f"2000-01-31 00:00:{components}",
+        f"2000-02-29 00:00:{components}",
     ]
     gsr = cudf.Series(date_col, dtype=dtype)
     psr = gsr.to_pandas()
@@ -1807,14 +1811,21 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
     ],
 )
 @pytest.mark.parametrize(
-    "dtype",
-    ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
+    "dtype, components",
+    [
+        ["datetime64[ns]", "00.012345678"],
+        ["datetime64[us]", "00.012345"],
+        ["datetime64[ms]", "00.012"],
+        ["datetime64[s]", "00"],
+    ],
 )
-def test_datetime_dateoffset_binaryop_reflected(n_periods, frequency, dtype):
+def test_datetime_dateoffset_binaryop_reflected(
+    n_periods, frequency, dtype, components
+):
     date_col = [
-        "2000-01-01 00:00:00.012345678",
-        "2000-01-31 00:00:00.012345678",
-        "2000-02-29 00:00:00.012345678",
+        f"2000-01-01 00:00:{components}",
+        f"2000-01-31 00:00:{components}",
+        f"2000-02-29 00:00:{components}",
     ]
     gsr = cudf.Series(date_col, dtype=dtype)
     psr = gsr.to_pandas()  # converts to nanos
@@ -1829,7 +1840,7 @@ def test_datetime_dateoffset_binaryop_reflected(n_periods, frequency, dtype):
 
     # TODO: Remove check_dtype once we get some clarity on:
     # https://github.com/pandas-dev/pandas/issues/57448
-    utils.assert_eq(expect, got, check_dtype=not PANDAS_GE_220)
+    utils.assert_eq(expect, got, check_dtype=False)
 
     with pytest.raises(TypeError):
         poffset - psr

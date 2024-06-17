@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@
 #include <cudf/reduction/detail/segmented_reduction.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/adjacent_difference.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -54,7 +56,7 @@ std::unique_ptr<column> compound_segmented_reduction(column_view const& col,
                                                      null_policy null_handling,
                                                      size_type ddof,
                                                      rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource* mr)
+                                                     rmm::device_async_resource_ref mr)
 {
   auto d_col              = cudf::column_device_view::create(col, stream);
   auto compound_op        = Op{};
@@ -109,7 +111,7 @@ struct compound_float_output_dispatcher {
                                      null_policy null_handling,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return compound_segmented_reduction<ElementType, ResultType, Op>(
       col, offsets, null_handling, ddof, stream, mr);
@@ -121,7 +123,7 @@ struct compound_float_output_dispatcher {
                                      null_policy,
                                      size_type,
                                      rmm::cuda_stream_view,
-                                     rmm::mr::device_memory_resource*)
+                                     rmm::device_async_resource_ref)
   {
     CUDF_FAIL("Unsupported output data type");
   }
@@ -144,7 +146,7 @@ struct compound_segmented_dispatcher {
                                      null_policy null_handling,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return cudf::type_dispatcher(output_dtype,
                                  compound_float_output_dispatcher<ElementType, Op>(),
@@ -163,7 +165,7 @@ struct compound_segmented_dispatcher {
                                      null_policy,
                                      size_type,
                                      rmm::cuda_stream_view,
-                                     rmm::mr::device_memory_resource*)
+                                     rmm::device_async_resource_ref)
   {
     CUDF_FAIL("Compound operators are not supported for non-arithmetic types");
   }

@@ -27,12 +27,14 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
 namespace cudf {
@@ -43,7 +45,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
                                  std::vector<double> const& q,
                                  interpolation interp,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   auto quantile_idx_lookup = cuda::proclaim_return_type<size_type>(
     [sortmap, interp, size = input.num_rows()] __device__(double q) {
@@ -71,13 +73,14 @@ std::unique_ptr<table> quantiles(table_view const& input,
                                  std::vector<order> const& column_order,
                                  std::vector<null_order> const& null_precedence,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   if (q.empty()) { return empty_like(input); }
 
   CUDF_EXPECTS(interp == interpolation::HIGHER || interp == interpolation::LOWER ||
                  interp == interpolation::NEAREST,
-               "multi-column quantiles require a non-arithmetic interpolation strategy.");
+               "multi-column quantiles require a non-arithmetic interpolation strategy.",
+               std::invalid_argument);
 
   CUDF_EXPECTS(input.num_rows() > 0, "multi-column quantiles require at least one input row.");
 
@@ -99,7 +102,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
                                  cudf::sorted is_input_sorted,
                                  std::vector<order> const& column_order,
                                  std::vector<null_order> const& null_precedence,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::quantiles(input,

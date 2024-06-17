@@ -32,6 +32,30 @@ def test_from_dict_backend_dispatch():
     dd.assert_eq(expect, ddf)
 
 
+def test_to_dask_dataframe_deprecated():
+    gdf = cudf.DataFrame({"a": range(100)})
+    ddf = dd.from_pandas(gdf, npartitions=2)
+    assert isinstance(ddf._meta, cudf.DataFrame)
+
+    with pytest.warns(FutureWarning, match="API is now deprecated"):
+        assert isinstance(
+            ddf.to_dask_dataframe()._meta,
+            pd.DataFrame,
+        )
+
+
+def test_from_dask_dataframe_deprecated():
+    gdf = pd.DataFrame({"a": range(100)})
+    ddf = dd.from_pandas(gdf, npartitions=2)
+    assert isinstance(ddf._meta, pd.DataFrame)
+
+    with pytest.warns(FutureWarning, match="API is now deprecated"):
+        assert isinstance(
+            dask_cudf.from_dask_dataframe(ddf)._meta,
+            cudf.DataFrame,
+        )
+
+
 def test_to_backend():
     np.random.seed(0)
     data = {
@@ -207,7 +231,6 @@ def test_set_index(nelem):
         dd.assert_eq(expect, got, check_index=False, check_divisions=False)
 
 
-@xfail_dask_expr("missing support for divisions='quantile'")
 @pytest.mark.parametrize("by", ["a", "b"])
 @pytest.mark.parametrize("nelem", [10, 500])
 @pytest.mark.parametrize("nparts", [1, 10])
@@ -217,7 +240,8 @@ def test_set_index_quantile(nelem, nparts, by):
     df["b"] = np.random.choice(cudf.datasets.names, size=nelem)
     ddf = dd.from_pandas(df, npartitions=nparts)
 
-    got = ddf.set_index(by, divisions="quantile")
+    with pytest.warns(FutureWarning, match="deprecated"):
+        got = ddf.set_index(by, divisions="quantile")
     expect = df.sort_values(by=by).set_index(by)
     dd.assert_eq(got, expect)
 
@@ -776,7 +800,7 @@ def test_dataframe_set_index():
         assert_eq(ddf.compute(), pddf.compute())
 
 
-@xfail_dask_expr("Insufficient describe support in dask-expr")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 def test_series_describe():
     random.seed(0)
     sr = cudf.datasets.randomdata(20)["x"]
@@ -792,7 +816,7 @@ def test_series_describe():
     )
 
 
-@xfail_dask_expr("Insufficient describe support in dask-expr")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 def test_dataframe_describe():
     random.seed(0)
     df = cudf.datasets.randomdata(20)
@@ -806,7 +830,7 @@ def test_dataframe_describe():
     )
 
 
-@xfail_dask_expr("Insufficient describe support in dask-expr")
+@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 def test_zero_std_describe():
     num = 84886781
     df = cudf.DataFrame(
@@ -913,3 +937,59 @@ def test_categorical_dtype_round_trip():
     actual = ds.compute()
     expected = pds.compute()
     assert actual.dtype.ordered == expected.dtype.ordered
+
+
+def test_implicit_array_conversion_cupy():
+    s = cudf.Series(range(10))
+    ds = dask_cudf.from_cudf(s, npartitions=2)
+
+    def func(x):
+        return x.values
+
+    # Need to compute the dask collection for now.
+    # See: https://github.com/dask/dask/issues/11017
+    result = ds.map_partitions(func, meta=s.values).compute()
+    expect = func(s)
+
+    dask.array.assert_eq(result, expect)
+
+
+def test_implicit_array_conversion_cupy_sparse():
+    cupyx = pytest.importorskip("cupyx")
+
+    s = cudf.Series(range(10), dtype="float32")
+    ds = dask_cudf.from_cudf(s, npartitions=2)
+
+    def func(x):
+        return cupyx.scipy.sparse.csr_matrix(x.values)
+
+    # Need to compute the dask collection for now.
+    # See: https://github.com/dask/dask/issues/11017
+    result = ds.map_partitions(func, meta=s.values).compute()
+    expect = func(s)
+
+    # NOTE: The calculation here doesn't need to make sense.
+    # We just need to make sure we get the right type back.
+    assert type(result) == type(expect)
+
+
+@pytest.mark.parametrize("data", [[1, 2, 3], [1.1, 2.3, 4.5]])
+@pytest.mark.parametrize("values", [[1, 5], [1.1, 2.4, 2.3]])
+def test_series_isin(data, values):
+    ser = cudf.Series(data)
+    pddf = dd.from_pandas(ser.to_pandas(), 1)
+    ddf = dask_cudf.from_cudf(ser, 1)
+
+    actual = ddf.isin(values)
+    expected = pddf.isin(values)
+
+    dd.assert_eq(actual, expected)
+
+
+def test_series_isin_error():
+    ser = cudf.Series([1, 2, 3])
+    ddf = dask_cudf.from_cudf(ser, 1)
+    with pytest.raises(TypeError):
+        ser.isin([1, 5, "a"])
+    with pytest.raises(TypeError):
+        ddf.isin([1, 5, "a"]).compute()

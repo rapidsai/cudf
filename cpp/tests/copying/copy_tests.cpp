@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
+#include <stdexcept>
+
 template <typename T>
 struct CopyTest : public cudf::test::BaseFixture {};
 
@@ -55,7 +57,8 @@ TYPED_TEST(CopyTest, CopyIfElseTestManyNulls)
 {
   using T = TypeParam;
 
-  cudf::test::fixed_width_column_wrapper<bool> mask_w{{1, 0, 0, 0, 0, 0, 1}, {1, 1, 1, 1, 1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<bool> mask_w{{1, 0, 0, 0, 0, 0, 1},
+                                                      {true, true, true, true, true, true, false}};
 
   wrapper<T, int32_t> lhs_w({5, 5, 5, 5, 5, 5, 5}, {1, 1, 1, 1, 1, 1, 1});
   wrapper<T, int32_t> rhs_w({6, 6, 6, 6, 6, 6, 6}, {1, 0, 0, 0, 0, 0, 1});
@@ -122,7 +125,7 @@ TYPED_TEST(CopyTest, CopyIfElseTestMultipleBlocks)
   std::vector<int32_t> h_rhs(num, 6);
   std::vector<bool> h_mask(num, false);
   std::vector<bool> h_validity(num, true);
-  h_validity[0] = 0;
+  h_validity[0] = false;
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> lhs_w(
     h_lhs.begin(), h_lhs.end(), h_validity.begin());
@@ -215,7 +218,7 @@ TYPED_TEST(CopyTest, CopyIfElseBadInputLength)
     wrapper<T, int32_t> lhs_w({5, 5, 5, 5});
     wrapper<T, int32_t> rhs_w({6, 6, 6, 6});
 
-    EXPECT_THROW(cudf::copy_if_else(lhs_w, rhs_w, mask_w), cudf::logic_error);
+    EXPECT_THROW(cudf::copy_if_else(lhs_w, rhs_w, mask_w), std::invalid_argument);
   }
 
   // column length mismatch
@@ -225,7 +228,7 @@ TYPED_TEST(CopyTest, CopyIfElseBadInputLength)
     wrapper<T, int32_t> lhs_w({5, 5, 5});
     wrapper<T, int32_t> rhs_w({6, 6, 6, 6});
 
-    EXPECT_THROW(cudf::copy_if_else(lhs_w, rhs_w, mask_w), cudf::logic_error);
+    EXPECT_THROW(cudf::copy_if_else(lhs_w, rhs_w, mask_w), std::invalid_argument);
   }
 }
 
@@ -465,7 +468,7 @@ TEST_F(CopyTestUntyped, CopyIfElseTypeMismatch)
   wrapper<float> lhs_w{5, 5, 5, 5};
   wrapper<int32_t> rhs_w{6, 6, 6, 6};
 
-  EXPECT_THROW(cudf::copy_if_else(lhs_w, rhs_w, mask_w), cudf::logic_error);
+  EXPECT_THROW(cudf::copy_if_else(lhs_w, rhs_w, mask_w), cudf::data_type_error);
 }
 
 struct StringsCopyIfElseTest : public cudf::test::BaseFixture {};
@@ -634,7 +637,7 @@ TYPED_TEST(FixedPointTypes, FixedPointScaleMismatch)
   auto const a    = fp_wrapper{{110, 220, 330, 440, 550, 660}, scale_type{-2}};
   auto const b    = fp_wrapper{{0, 0, 0, 0, 0, 0}, scale_type{-1}};
 
-  EXPECT_THROW(cudf::copy_if_else(a, b, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::copy_if_else(a, b, mask), cudf::data_type_error);
 }
 
 struct DictionaryCopyIfElseTest : public cudf::test::BaseFixture {};
@@ -710,10 +713,10 @@ TEST_F(DictionaryCopyIfElseTest, TypeMismatch)
   cudf::test::dictionary_column_wrapper<double> input2({1.0, 1.0, 1.0, 1.0});
   cudf::test::fixed_width_column_wrapper<bool> mask({1, 0, 0, 1});
 
-  EXPECT_THROW(cudf::copy_if_else(input1, input2, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::copy_if_else(input1, input2, mask), cudf::data_type_error);
 
   cudf::string_scalar input3{"1"};
-  EXPECT_THROW(cudf::copy_if_else(input1, input3, mask), cudf::logic_error);
-  EXPECT_THROW(cudf::copy_if_else(input3, input2, mask), cudf::logic_error);
-  EXPECT_THROW(cudf::copy_if_else(input2, input3, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::copy_if_else(input1, input3, mask), cudf::data_type_error);
+  EXPECT_THROW(cudf::copy_if_else(input3, input2, mask), cudf::data_type_error);
+  EXPECT_THROW(cudf::copy_if_else(input2, input3, mask), cudf::data_type_error);
 }

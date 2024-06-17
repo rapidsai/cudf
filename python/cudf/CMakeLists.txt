@@ -96,9 +96,6 @@ include(cmake/Modules/LinkPyarrowHeaders.cmake)
 add_subdirectory(cudf/_lib)
 add_subdirectory(udf_cpp)
 
-include(cmake/Modules/ProtobufHelpers.cmake)
-codegen_protoc(cudf/utils/metadata/orc_column_statistics.proto)
-
 if(DEFINED cython_lib_dir)
   rapids_cython_add_rpath_entries(TARGET cudf PATHS "${cython_lib_dir}")
 endif()

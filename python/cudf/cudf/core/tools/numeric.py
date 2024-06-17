@@ -97,9 +97,9 @@ def to_numeric(arg, errors="raise", downcast=None):
         raise ValueError("invalid error value specified")
     elif errors == "ignore":
         warnings.warn(
-            "errors='ignore' is deprecated and will raise in a future version. "
-            "Use to_numeric without passing `errors` and catch exceptions "
-            "explicitly instead",
+            "errors='ignore' is deprecated and will raise in "
+            "a future version. Use to_numeric without passing `errors` "
+            "and catch exceptions explicitly instead",
             FutureWarning,
         )
 

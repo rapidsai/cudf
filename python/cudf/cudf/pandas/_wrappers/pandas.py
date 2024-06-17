@@ -1,12 +1,29 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+import abc
 import copyreg
 import importlib
+import os
 import pickle
 import sys
 
 import pandas as pd
+from pandas.tseries.holiday import (
+    AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
+    EasterMonday as pd_EasterMonday,
+    GoodFriday as pd_GoodFriday,
+    Holiday as pd_Holiday,
+    HolidayCalendarFactory as pd_HolidayCalendarFactory,
+    HolidayCalendarMetaClass as pd_HolidayCalendarMetaClass,
+    USColumbusDay as pd_USColumbusDay,
+    USFederalHolidayCalendar as pd_USFederalHolidayCalendar,
+    USLaborDay as pd_USLaborDay,
+    USMartinLutherKingJr as pd_USMartinLutherKingJr,
+    USMemorialDay as pd_USMemorialDay,
+    USPresidentsDay as pd_USPresidentsDay,
+    USThanksgivingDay as pd_USThanksgivingDay,
+)
 
 import cudf
 
@@ -36,7 +53,6 @@ from pandas.io.sas.sas7bdat import (  # isort: skip
 from pandas.io.sas.sas_xport import (  # isort: skip
     XportReader as pd_XportReader,
 )
-
 
 # TODO(pandas2.1): Can import from pandas.api.typing
 from pandas.core.resample import (  # isort: skip
@@ -93,15 +109,60 @@ class _AccessorAttr:
     """
 
     def __init__(self, typ):
-        self.__typ = typ
+        self._typ = typ
+
+    def __set_name__(self, owner, name):
+        self._name = name
 
     def __get__(self, obj, cls=None):
         if obj is None:
-            return self.__typ
+            return self._typ
         else:
-            # allow __getattr__ to handle this
-            raise AttributeError()
+            return _FastSlowAttribute(self._name).__get__(obj, type(obj))
 
+
+def Timestamp_Timedelta__new__(cls, *args, **kwargs):
+    # Call fast/slow constructor
+    # This takes care of running __init__ as well, but must be paired
+    # with a removal of the defaulted __init__ that
+    # make_final_proxy_type provides.
+    # Timestamp & Timedelta don't always return same types as self,
+    # hence this method is needed.
+    self, _ = _fast_slow_function_call(
+        lambda cls, args, kwargs: cls(*args, **kwargs),
+        cls,
+        args,
+        kwargs,
+    )
+    return self
+
+
+Timedelta = make_final_proxy_type(
+    "Timedelta",
+    _Unusable,
+    pd.Timedelta,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "__new__": Timestamp_Timedelta__new__,
+        "__init__": _DELETE,
+    },
+)
+
+
+Timestamp = make_final_proxy_type(
+    "Timestamp",
+    _Unusable,
+    pd.Timestamp,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "__new__": Timestamp_Timedelta__new__,
+        "__init__": _DELETE,
+    },
+)
 
 DatetimeProperties = make_intermediate_proxy_type(
     "DatetimeProperties",
@@ -157,6 +218,7 @@ DataFrame = make_final_proxy_type(
         "__dir__": _DataFrame__dir__,
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
+        "_accessors": set(),
     },
 )
 
@@ -174,11 +236,12 @@ Series = make_final_proxy_type(
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
         "__iter__": custom_iter,
-        "dt": _AccessorAttr(DatetimeProperties),
+        "dt": _AccessorAttr(CombinedDatetimelikeProperties),
         "str": _AccessorAttr(StringMethods),
         "cat": _AccessorAttr(_CategoricalAccessor),
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
+        "_accessors": set(),
     },
 )
 
@@ -208,7 +271,7 @@ Index = make_final_proxy_type(
         "__array_function__": array_function_method,
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
-        "dt": _AccessorAttr(DatetimeProperties),
+        "dt": _AccessorAttr(CombinedDatetimelikeProperties),
         "str": _AccessorAttr(StringMethods),
         "cat": _AccessorAttr(_CategoricalAccessor),
         "__iter__": custom_iter,
@@ -216,6 +279,9 @@ Index = make_final_proxy_type(
         "__new__": Index__new__,
         "_constructor": _FastSlowAttribute("_constructor"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "_accessors": set(),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -280,7 +346,11 @@ DatetimeIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+    },
 )
 
 DatetimeArray = make_final_proxy_type(
@@ -289,6 +359,10 @@ DatetimeArray = make_final_proxy_type(
     pd.arrays.DatetimeArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+    },
 )
 
 DatetimeTZDtype = make_final_proxy_type(
@@ -307,8 +381,42 @@ TimedeltaIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+    },
 )
+
+try:
+    from pandas.arrays import NumpyExtensionArray as pd_NumpyExtensionArray
+
+    NumpyExtensionArray = make_final_proxy_type(
+        "NumpyExtensionArray",
+        _Unusable,
+        pd_NumpyExtensionArray,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+        additional_attributes={
+            "_ndarray": _FastSlowAttribute("_ndarray"),
+            "_dtype": _FastSlowAttribute("_dtype"),
+        },
+    )
+
+except ImportError:
+    from pandas.arrays import PandasArray as pd_PandasArray
+
+    PandasArray = make_final_proxy_type(
+        "PandasArray",
+        _Unusable,
+        pd_PandasArray,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+        additional_attributes={
+            "_ndarray": _FastSlowAttribute("_ndarray"),
+            "_dtype": _FastSlowAttribute("_dtype"),
+        },
+    )
 
 TimedeltaArray = make_final_proxy_type(
     "TimedeltaArray",
@@ -316,6 +424,10 @@ TimedeltaArray = make_final_proxy_type(
     pd.arrays.TimedeltaArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+    },
 )
 
 PeriodIndex = make_final_proxy_type(
@@ -325,7 +437,11 @@ PeriodIndex = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+    },
 )
 
 PeriodArray = make_final_proxy_type(
@@ -334,6 +450,11 @@ PeriodArray = make_final_proxy_type(
     pd.arrays.PeriodArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+    },
 )
 
 PeriodDtype = make_final_proxy_type(
@@ -395,6 +516,10 @@ StringArray = make_final_proxy_type(
     pd.arrays.StringArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+    },
 )
 
 StringDtype = make_final_proxy_type(
@@ -403,7 +528,10 @@ StringDtype = make_final_proxy_type(
     pd.StringDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "storage": _FastSlowAttribute("storage"),
+    },
 )
 
 BooleanArray = make_final_proxy_type(
@@ -413,7 +541,9 @@ BooleanArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
 
@@ -433,7 +563,9 @@ IntegerArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -517,7 +649,11 @@ IntervalIndex = make_final_proxy_type(
     fast_to_slow=lambda fast: fast.to_pandas(),
     slow_to_fast=cudf.from_pandas,
     bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
+    additional_attributes={
+        "__init__": _DELETE,
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+    },
 )
 
 IntervalArray = make_final_proxy_type(
@@ -526,6 +662,10 @@ IntervalArray = make_final_proxy_type(
     pd.arrays.IntervalArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
+    },
 )
 
 IntervalDtype = make_final_proxy_type(
@@ -553,7 +693,9 @@ FloatingArray = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
-        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "_data": _FastSlowAttribute("_data", private=True),
+        "_mask": _FastSlowAttribute("_mask", private=True),
     },
 )
 
@@ -717,7 +859,12 @@ ExcelWriter = make_final_proxy_type(
     pd.ExcelWriter,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "__fspath__": _FastSlowAttribute("__fspath__"),
+    },
+    bases=(os.PathLike,),
+    metaclasses=(abc.ABCMeta,),
 )
 
 try:
@@ -729,6 +876,14 @@ try:
         pd_Styler,
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
+        additional_attributes={
+            "css": _FastSlowAttribute("css"),
+            "ctx": _FastSlowAttribute("ctx"),
+            "index": _FastSlowAttribute("ctx"),
+            "data": _FastSlowAttribute("data"),
+            "_display_funcs": _FastSlowAttribute("_display_funcs"),
+            "table_styles": _FastSlowAttribute("table_styles"),
+        },
     )
 except ImportError:
     # Styler requires Jinja to be installed
@@ -744,7 +899,7 @@ def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
     return local_dict, global_dict
 
 
-@register_proxy_func(pd.eval)
+@register_proxy_func(pd.core.computation.eval.eval)
 @nvtx.annotate(
     "CUDF_PANDAS_EVAL",
     color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
@@ -774,6 +929,24 @@ def _eval(
     )
 
 
+_orig_df_eval_method = DataFrame.eval
+
+
+@register_proxy_func(pd.core.accessor.register_dataframe_accessor)
+def _register_dataframe_accessor(name):
+    return pd.core.accessor._register_accessor(name, DataFrame)
+
+
+@register_proxy_func(pd.core.accessor.register_series_accessor)
+def _register_series_accessor(name):
+    return pd.core.accessor._register_accessor(name, Series)
+
+
+@register_proxy_func(pd.core.accessor.register_index_accessor)
+def _register_index_accessor(name):
+    return pd.core.accessor._register_accessor(name, Index)
+
+
 @nvtx.annotate(
     "CUDF_PANDAS_DATAFRAME_EVAL",
     color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
@@ -784,9 +957,12 @@ def _df_eval_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     local_dict, global_dict = _get_eval_locals_and_globals(
         level, local_dict, global_dict
     )
-    return super(type(self), self).__getattr__("eval")(
-        *args, local_dict=local_dict, global_dict=global_dict, **kwargs
+    return _orig_df_eval_method(
+        self, *args, local_dict=local_dict, global_dict=global_dict, **kwargs
     )
+
+
+_orig_query_eval_method = DataFrame.query
 
 
 @nvtx.annotate(
@@ -801,8 +977,8 @@ def _df_query_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     local_dict, global_dict = _get_eval_locals_and_globals(
         level, local_dict, global_dict
     )
-    return super(type(self), self).__getattr__("query")(
-        *args, local_dict=local_dict, global_dict=global_dict, **kwargs
+    return _orig_query_eval_method(
+        self, *args, local_dict=local_dict, global_dict=global_dict, **kwargs
     )
 
 
@@ -827,6 +1003,125 @@ _SAS7BDATReader = make_intermediate_proxy_type(
     "_SAS7BDATReader", _Unusable, pd_SAS7BDATReader
 )
 
+USFederalHolidayCalendar = make_final_proxy_type(
+    "USFederalHolidayCalendar",
+    _Unusable,
+    pd_USFederalHolidayCalendar,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+HolidayCalendarMetaClass = make_final_proxy_type(
+    "HolidayCalendarMetaClass",
+    _Unusable,
+    pd_HolidayCalendarMetaClass,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+
+@register_proxy_func(pd_HolidayCalendarFactory)
+def holiday_calendar_factory_wrapper(*args, **kwargs):
+    # Call the original HolidayCalendarFactory
+    result = _FunctionProxy(_Unusable(), pd_HolidayCalendarFactory)(
+        *args, **kwargs
+    )
+    # Return the slow proxy of the result
+    return result._fsproxy_slow
+
+
+AbstractHolidayCalendar = make_final_proxy_type(
+    "AbstractHolidayCalendar",
+    _Unusable,
+    pd_AbstractHolidayCalendar,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    metaclasses=(pd_HolidayCalendarMetaClass,),
+)
+
+Holiday = make_final_proxy_type(
+    "Holiday",
+    _Unusable,
+    pd_Holiday,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+USThanksgivingDay = make_final_proxy_type(
+    "USThanksgivingDay",
+    _Unusable,
+    pd_USThanksgivingDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+USColumbusDay = make_final_proxy_type(
+    "USColumbusDay",
+    _Unusable,
+    pd_USColumbusDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+USLaborDay = make_final_proxy_type(
+    "USLaborDay",
+    _Unusable,
+    pd_USLaborDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+USMemorialDay = make_final_proxy_type(
+    "USMemorialDay",
+    _Unusable,
+    pd_USMemorialDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+USMartinLutherKingJr = make_final_proxy_type(
+    "USMartinLutherKingJr",
+    _Unusable,
+    pd_USMartinLutherKingJr,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+USPresidentsDay = make_final_proxy_type(
+    "USPresidentsDay",
+    _Unusable,
+    pd_USPresidentsDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+
+GoodFriday = make_final_proxy_type(
+    "GoodFriday",
+    _Unusable,
+    pd_GoodFriday,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
+EasterMonday = make_final_proxy_type(
+    "EasterMonday",
+    _Unusable,
+    pd_EasterMonday,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
 
 FY5253 = make_final_proxy_type(
     "FY5253",
@@ -1088,6 +1383,7 @@ Minute = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
+
 
 MonthBegin = make_final_proxy_type(
     "MonthBegin",

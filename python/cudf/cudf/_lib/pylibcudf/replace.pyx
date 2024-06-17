@@ -7,10 +7,10 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp cimport replace as cpp_replace
-from cudf._lib.cpp.column.column cimport column
+from cudf._lib.pylibcudf.libcudf cimport replace as cpp_replace
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
 
-from cudf._lib.cpp.replace import \
+from cudf._lib.pylibcudf.libcudf.replace import \
     replace_policy as ReplacePolicy  # no-cython-lint
 
 from .column cimport Column

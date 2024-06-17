@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,43 +105,51 @@ struct LogicalType {
   LogicalType(TimestampType&& tst) : type(TIMESTAMP), timestamp_type(tst) {}
   LogicalType(IntType&& it) : type(INTEGER), int_type(it) {}
 
-  constexpr bool is_time_millis() const
+  [[nodiscard]] constexpr bool is_time_millis() const
   {
     return type == TIME and time_type->unit.type == TimeUnit::MILLIS;
   }
 
-  constexpr bool is_time_micros() const
+  [[nodiscard]] constexpr bool is_time_micros() const
   {
     return type == TIME and time_type->unit.type == TimeUnit::MICROS;
   }
 
-  constexpr bool is_time_nanos() const
+  [[nodiscard]] constexpr bool is_time_nanos() const
   {
     return type == TIME and time_type->unit.type == TimeUnit::NANOS;
   }
 
-  constexpr bool is_timestamp_millis() const
+  [[nodiscard]] constexpr bool is_timestamp_millis() const
   {
     return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::MILLIS;
   }
 
-  constexpr bool is_timestamp_micros() const
+  [[nodiscard]] constexpr bool is_timestamp_micros() const
   {
     return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::MICROS;
   }
 
-  constexpr bool is_timestamp_nanos() const
+  [[nodiscard]] constexpr bool is_timestamp_nanos() const
   {
     return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::NANOS;
   }
+  [[nodiscard]] constexpr int8_t bit_width() const
+  {
+    return type == INTEGER ? int_type->bitWidth : -1;
+  }
 
-  constexpr int8_t bit_width() const { return type == INTEGER ? int_type->bitWidth : -1; }
+  [[nodiscard]] constexpr bool is_signed() const { return type == INTEGER and int_type->isSigned; }
 
-  constexpr bool is_signed() const { return type == INTEGER and int_type->isSigned; }
+  [[nodiscard]] constexpr int32_t scale() const
+  {
+    return type == DECIMAL ? decimal_type->scale : -1;
+  }
 
-  constexpr int32_t scale() const { return type == DECIMAL ? decimal_type->scale : -1; }
-
-  constexpr int32_t precision() const { return type == DECIMAL ? decimal_type->precision : -1; }
+  [[nodiscard]] constexpr int32_t precision() const
+  {
+    return type == DECIMAL ? decimal_type->precision : -1;
+  }
 };
 
 /**
@@ -182,6 +190,9 @@ struct SchemaElement {
 
   // extra cudf specific fields
   bool output_as_byte_array = false;
+
+  // cudf type determined from arrow:schema
+  thrust::optional<type_id> arrow_type;
 
   // The following fields are filled in later during schema initialization
   int max_definition_level = 0;
@@ -259,6 +270,10 @@ struct Statistics {
   thrust::optional<std::vector<uint8_t>> max_value;
   // min value for column determined by ColumnOrder
   thrust::optional<std::vector<uint8_t>> min_value;
+  // If true, max_value is the actual maximum value for a column
+  thrust::optional<bool> is_max_value_exact;
+  // If true, min_value is the actual minimum value for a column
+  thrust::optional<bool> is_min_value_exact;
 };
 
 /**
@@ -323,24 +338,57 @@ struct ColumnIndex {
 };
 
 /**
+ * @brief Thrift-derived struct describing page encoding statistics
+ */
+struct PageEncodingStats {
+  PageType page_type;  // The page type (data/dic/...)
+  Encoding encoding;   // Encoding of the page
+  int32_t count;       // Number of pages of this type with this encoding
+};
+
+/**
+ * @brief Thrift-derived struct describing column sort order
+ */
+struct SortingColumn {
+  int32_t column_idx;  // The column index (in this row group)
+  bool descending;     // If true, indicates this column is sorted in descending order
+  bool nulls_first;    // If true, nulls will come before non-null values
+};
+
+/**
  * @brief Thrift-derived struct describing a column chunk
  */
 struct ColumnChunkMetaData {
+  // Type of this column
   Type type = BOOLEAN;
+  // Set of all encodings used for this column. The purpose is to validate
+  // whether we can decode those pages.
   std::vector<Encoding> encodings;
+  // Path in schema
   std::vector<std::string> path_in_schema;
-  Compression codec  = UNCOMPRESSED;
+  // Compression codec
+  Compression codec = UNCOMPRESSED;
+  // Number of values in this column
   int64_t num_values = 0;
-  int64_t total_uncompressed_size =
-    0;  // total byte size of all uncompressed pages in this column chunk (including the headers)
-  int64_t total_compressed_size =
-    0;  // total byte size of all compressed pages in this column chunk (including the headers)
-  int64_t data_page_offset  = 0;  // Byte offset from beginning of file to first data page
-  int64_t index_page_offset = 0;  // Byte offset from beginning of file to root index page
-  int64_t dictionary_page_offset =
-    0;                    // Byte offset from the beginning of file to first (only) dictionary page
-  Statistics statistics;  // Encoded chunk-level statistics
-  thrust::optional<SizeStatistics> size_statistics;  // Size statistics for the chunk
+  // Total byte size of all uncompressed pages in this column chunk (including the headers)
+  int64_t total_uncompressed_size = 0;
+  // Total byte size of all compressed pages in this column chunk (including the headers)
+  int64_t total_compressed_size = 0;
+  // Byte offset from beginning of file to first data page
+  int64_t data_page_offset = 0;
+  // Byte offset from beginning of file to root index page
+  int64_t index_page_offset = 0;
+  // Byte offset from the beginning of file to first (only) dictionary page
+  int64_t dictionary_page_offset = 0;
+  // Optional statistics for this column chunk
+  Statistics statistics;
+  // Set of all encodings used for pages in this column chunk. This information can be used to
+  // determine if all data pages are dictionary encoded for example.
+  thrust::optional<std::vector<PageEncodingStats>> encoding_stats;
+  // Optional statistics to help estimate total memory when converted to in-memory representations.
+  // The histograms contained in these statistics can also be useful in some cases for more
+  // fine-grained nullability/list length filter pushdown.
+  thrust::optional<SizeStatistics> size_statistics;
 };
 
 /**
@@ -374,9 +422,21 @@ struct ColumnChunk {
  * consisting of a column chunk for each column.
  */
 struct RowGroup {
-  int64_t total_byte_size = 0;
+  // Metadata for each column chunk in this row group.
   std::vector<ColumnChunk> columns;
+  // Total byte size of all the uncompressed column data in this row group
+  int64_t total_byte_size = 0;
+  // Number of rows in this row group
   int64_t num_rows = 0;
+  // If set, specifies a sort ordering of the rows in this RowGroup.
+  // The sorting columns can be a subset of all the columns.
+  thrust::optional<std::vector<SortingColumn>> sorting_columns;
+  // Byte offset from beginning of file to first page (data or dictionary) in this row group
+  thrust::optional<int64_t> file_offset;
+  // Total byte size of all compressed (and potentially encrypted) column data in this row group
+  thrust::optional<int64_t> total_compressed_size;
+  // Row group ordinal in the file
+  thrust::optional<int16_t> ordinal;
 };
 
 /**

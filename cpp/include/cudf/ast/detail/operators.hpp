@@ -17,6 +17,7 @@
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/types.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -819,7 +820,17 @@ struct operator_functor<ast_operator::NOT, false> {
 template <typename To>
 struct cast {
   static constexpr auto arity{1};
-  template <typename From>
+  template <typename From, typename std::enable_if_t<is_fixed_point<From>()>* = nullptr>
+  __device__ inline auto operator()(From f) -> To
+  {
+    if constexpr (cuda::std::is_floating_point_v<To>) {
+      return convert_fixed_to_floating<To>(f);
+    } else {
+      return static_cast<To>(f);
+    }
+  }
+
+  template <typename From, typename cuda::std::enable_if_t<!is_fixed_point<From>()>* = nullptr>
   __device__ inline auto operator()(From f) -> decltype(static_cast<To>(f))
   {
     return static_cast<To>(f);

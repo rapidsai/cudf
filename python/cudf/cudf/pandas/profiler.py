@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -124,15 +124,10 @@ class Profiler:
             _MethodProxy,
             type[_FinalProxy],
             type[_IntermediateProxy],
-        ]
+        ],
     ):
         if isinstance(func_obj, _MethodProxy):
-            # Extract classname from method object
-            type_name = type(func_obj._fsproxy_wrapped.__self__).__name__
-            # Explicitly ask for __name__ on _fsproxy_wrapped to avoid
-            # getting a private attribute and forcing a slow-path copy
-            func_name = func_obj._fsproxy_wrapped.__name__
-            return ".".join([type_name, func_name])
+            return func_obj._fsproxy_slow.__qualname__
         elif isinstance(func_obj, _FunctionProxy) or issubclass(
             func_obj, (_FinalProxy, _IntermediateProxy)
         ):
@@ -177,17 +172,15 @@ class Profiler:
             if self._currkey is not None and arg is not None:
                 if arg[1]:  # fast
                     run_time = time.perf_counter() - self._timer[self._currkey]
-                    self._results[self._currkey][
-                        "gpu_time"
-                    ] = run_time + self._results[self._currkey].get(
-                        "gpu_time", 0
+                    self._results[self._currkey]["gpu_time"] = (
+                        run_time
+                        + self._results[self._currkey].get("gpu_time", 0)
                     )
                 else:
                     run_time = time.perf_counter() - self._timer[self._currkey]
-                    self._results[self._currkey][
-                        "cpu_time"
-                    ] = run_time + self._results[self._currkey].get(
-                        "cpu_time", 0
+                    self._results[self._currkey]["cpu_time"] = (
+                        run_time
+                        + self._results[self._currkey].get("cpu_time", 0)
                     )
 
             frame_locals = inspect.getargvalues(frame).locals

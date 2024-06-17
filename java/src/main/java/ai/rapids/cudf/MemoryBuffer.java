@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -240,15 +240,18 @@ abstract public class MemoryBuffer implements AutoCloseable {
     if (cleaner != null) {
       refCount--;
       cleaner.delRef();
-      if (eventHandler != null) {
-        eventHandler.onClosed(refCount);
-      }
-      if (refCount == 0) {
-        cleaner.clean(false);
-        closed = true;
-      } else if (refCount < 0) {
-        cleaner.logRefCountDebug("double free " + this);
-        throw new IllegalStateException("Close called too many times " + this);
+      try {
+        if (refCount == 0) {
+          cleaner.clean(false);
+          closed = true;
+        } else if (refCount < 0) {
+          cleaner.logRefCountDebug("double free " + this);
+          throw new IllegalStateException("Close called too many times " + this);
+        }
+      } finally {
+        if (eventHandler != null) {
+          eventHandler.onClosed(refCount);
+        }
       }
     }
   }
