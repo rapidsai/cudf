@@ -13,7 +13,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import partial
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING
 
 import rmm.mr
 
@@ -39,7 +39,7 @@ def get_traceback() -> str:
 
 def get_rmm_memory_resource_stack(
     mr: rmm.mr.DeviceMemoryResource,
-) -> List[rmm.mr.DeviceMemoryResource]:
+) -> list[rmm.mr.DeviceMemoryResource]:
     """Get the RMM resource stack
 
     Parameters
@@ -99,14 +99,14 @@ class SpillStatistics:
         total_nbytes: int = 0
         spilled_nbytes: int = 0
 
-    spill_totals: Dict[Tuple[str, str], Tuple[int, float]]
+    spill_totals: dict[tuple[str, str], tuple[int, float]]
 
     def __init__(self, level) -> None:
         self.lock = threading.Lock()
         self.level = level
         self.spill_totals = defaultdict(lambda: (0, 0))
         # Maps each traceback to a Expose
-        self.exposes: Dict[str, SpillStatistics.Expose] = {}
+        self.exposes: dict[str, SpillStatistics.Expose] = {}
 
     def log_spill(self, src: str, dst: str, nbytes: int, time: float) -> None:
         """Log a (un-)spilling event
@@ -227,7 +227,7 @@ class SpillManager:
     def __init__(
         self,
         *,
-        device_memory_limit: Optional[int] = None,
+        device_memory_limit: int | None = None,
         statistic_level: int = 0,
     ) -> None:
         self._lock = threading.Lock()
@@ -298,7 +298,7 @@ class SpillManager:
 
     def buffers(
         self, order_by_access_time: bool = False
-    ) -> Tuple[SpillableBufferOwner, ...]:
+    ) -> tuple[SpillableBufferOwner, ...]:
         """Get all managed buffers
 
         Parameters
@@ -347,7 +347,7 @@ class SpillManager:
                     buf.lock.release()
         return spilled
 
-    def spill_to_device_limit(self, device_limit: Optional[int] = None) -> int:
+    def spill_to_device_limit(self, device_limit: int | None = None) -> int:
         """Try to spill device memory until device limit
 
         Notice, by default this is a no-op.
@@ -402,10 +402,10 @@ class SpillManager:
 #   - Initialized to None (spilling disabled)
 #   - Initialized to a SpillManager instance (spilling enabled)
 _global_manager_uninitialized: bool = True
-_global_manager: Optional[SpillManager] = None
+_global_manager: SpillManager | None = None
 
 
-def set_global_manager(manager: Optional[SpillManager]) -> None:
+def set_global_manager(manager: SpillManager | None) -> None:
     """Set the global manager, which if None disables spilling"""
 
     global _global_manager, _global_manager_uninitialized
@@ -419,7 +419,7 @@ def set_global_manager(manager: Optional[SpillManager]) -> None:
     _global_manager_uninitialized = False
 
 
-def get_global_manager() -> Optional[SpillManager]:
+def get_global_manager() -> SpillManager | None:
     """Get the global manager or None if spilling is disabled"""
     global _global_manager_uninitialized
     if _global_manager_uninitialized:

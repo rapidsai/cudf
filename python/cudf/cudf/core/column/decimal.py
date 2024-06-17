@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Union, cast
+from typing import TYPE_CHECKING, Any, Sequence, cast
 
 import cupy as cp
 import numpy as np
@@ -49,7 +49,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def as_decimal_column(
         self,
         dtype: Dtype,
-    ) -> Union["DecimalBaseColumn"]:
+    ) -> "DecimalBaseColumn":
         if (
             isinstance(dtype, cudf.core.dtypes.DecimalDtype)
             and dtype.scale < self.dtype.scale
@@ -138,7 +138,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def fillna(
         self,
         fill_value: Any = None,
-        method: Optional[str] = None,
+        method: str | None = None,
     ) -> Self:
         """Fill null values with ``value``.
 
@@ -199,7 +199,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return NotImplemented
 
     def _decimal_quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self, q: float | Sequence[float], interpolation: str, exact: bool
     ) -> ColumnBase:
         quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls

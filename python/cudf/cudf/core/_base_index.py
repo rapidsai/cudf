@@ -5,7 +5,7 @@ from __future__ import annotations
 import pickle
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Literal, Set, Tuple
+from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 from typing_extensions import Self
@@ -44,11 +44,11 @@ if TYPE_CHECKING:
 class BaseIndex(Serializable):
     """Base class for all cudf Index types."""
 
-    _accessors: Set[Any] = set()
+    _accessors: set[Any] = set()
     _data: ColumnAccessor
 
     @property
-    def _columns(self) -> Tuple[Any, ...]:
+    def _columns(self) -> tuple[Any, ...]:
         raise NotImplementedError
 
     @cached_property
@@ -342,9 +342,9 @@ class BaseIndex(Serializable):
     @property
     def names(self):
         """
-        Returns a tuple containing the name of the Index.
+        Returns a FrozenList containing the name of the Index.
         """
-        return (self.name,)
+        return pd.core.indexes.frozen.FrozenList([self.name])
 
     @names.setter
     def names(self, values):
