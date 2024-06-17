@@ -307,7 +307,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                  "Multiple inputs are supported only for JSON Lines format");
   }
 
-  std::for_each(sources.begin(), sources.end(), [](const auto& source) {
+  std::for_each(sources.begin(), sources.end(), [](auto const &source) {
     CUDF_EXPECTS(source->size() < std::numeric_limits<int>::max(),
                  "The size of each source file must be less than INT_MAX bytes");
   });
@@ -317,12 +317,24 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   size_t chunk_size          = reader_opts.get_byte_range_size();
   chunk_size                 = !chunk_size ? sources_size(sources, 0, 0) : chunk_size;
 
-  size_t start_source = 0, cur_size = 0;
-  for (size_t sum = 0; start_source < sources.size() && sum <= chunk_offset;
-       sum += sources[start_source]->size(), start_source++)
-    ;
-  start_source--;
-  std::vector<size_t> batch_positions, batch_sizes;
+  // Identify the position of starting source file from which to begin batching based on
+  // byte range offset. If the offset is larger than the sum of all source
+  // sizes, then start_source is total number of source files i.e. no file is read
+  size_t const start_source = [&]() {
+    size_t sum = 0;
+    for (size_t src_idx = 0; src_idx < sources.size(); ++src_idx) {
+       if (sum + sources[src_idx]->size() > chunk_offset) return src_idx;
+       sum += sources[src_idx]->size();
+    }
+    return sources.size();
+  }();
+
+  // Construct batches of source files, with starting position of batches indicated by batch_positions.
+  // The size of each batch i.e. the sum of sizes of the source files in the batch is capped at
+  // INT_MAX bytes.
+  size_t cur_size = 0;
+  std::vector<size_t> batch_positions;
+  std::vector<size_t> batch_sizes;
   batch_positions.push_back(0);
   for (size_t i = start_source; i < sources.size(); i++) {
     cur_size += sources[i]->size();
@@ -335,9 +347,16 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   batch_positions.push_back(sources.size());
   batch_sizes.push_back(cur_size);
 
+  // If there is a single batch, then we can directly return the table without the
+  // unnecessary concatenate
+  if(batch_sizes.size() == 1) return read_batch(sources, reader_opts, stream, mr);
+
   std::vector<cudf::io::table_with_metadata> partial_tables;
   json_reader_options batched_reader_opts{reader_opts};
 
+  // Dispatch individual batches to read_batch and push the resulting table into
+  // partial_tables array. Note that the reader options need to be updated for each
+  // batch to adjust byte range offset and byte range size.
   for (size_t i = 0; i < batch_sizes.size(); i++) {
     batched_reader_opts.set_byte_range_size(std::min(batch_sizes[i], chunk_size));
     partial_tables.emplace_back(read_batch(
