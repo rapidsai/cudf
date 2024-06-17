@@ -5172,25 +5172,16 @@ class IndexedFrame(Frame):
         element_type = cast(
             ListDtype, self._columns[column_index].dtype
         ).element_type
-        casted_cols = []
-        # TODO: Can possibly simplify to
-        # https://github.com/rapidsai/cudf/pull/16043#discussion_r1642427466
-        # if MultiIndex._from_columns_like_self preserves names
-        for i, (explode, (_, dtype)) in enumerate(
-            zip(exploded[len(idx_cols) :], self._dtypes)
-        ):
-            if i == column_index:
-                casted = explode._with_type_metadata(element_type)
-            else:
-                casted = explode._with_type_metadata(dtype)
-            casted_cols.append(casted)
-
-        exploded = exploded[: len(idx_cols)] + casted_cols
-
+        exploded = [
+            column._with_type_metadata(element_type)
+            if i == column_index
+            else column
+            for i, column in enumerate(exploded, start=-len(idx_cols))
+        ]
         return self._from_columns_like_self(
             exploded,
             self._column_names,
-            self._index_names if not ignore_index else None,
+            self.index.names if not ignore_index else None,
         )
 
     @_cudf_nvtx_annotate

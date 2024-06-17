@@ -1117,11 +1117,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             return ret.values
         return ret
 
-    # # Override just to make mypy happy.
-    # @_cudf_nvtx_annotate
-    # def _copy_type_metadata(self: Self, other: Self) -> Self:
-    #     return super()._copy_type_metadata(other)
-
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def _values(self):
