@@ -1,8 +1,9 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import itertools
 import warnings
-from typing import Dict, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -10,12 +11,14 @@ import pandas as pd
 import cudf
 from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
-from cudf._typing import Dtype
 from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.utils.dtypes import min_unsigned_type
+
+if TYPE_CHECKING:
+    from cudf._typing import Dtype
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -1217,10 +1220,10 @@ def _get_unique(column, dummy_na):
 def _one_hot_encode_column(
     column: ColumnBase,
     categories: ColumnBase,
-    prefix: Optional[str],
-    prefix_sep: Optional[str],
-    dtype: Optional[Dtype],
-) -> Dict[str, ColumnBase]:
+    prefix: str | None,
+    prefix_sep: str | None,
+    dtype: Dtype | None,
+) -> dict[str, ColumnBase]:
     """Encode a single column with one hot encoding. The return dictionary
     contains pairs of (category, encodings). The keys may be prefixed with
     `prefix`, separated with category name with `prefix_sep`. The encoding
