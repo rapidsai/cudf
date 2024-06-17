@@ -1,10 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-
 from __future__ import annotations
 
 import io
 import os
-from typing import Optional, Union
 
 import pyarrow as pa
 import pytest
