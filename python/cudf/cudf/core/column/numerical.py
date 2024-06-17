@@ -3,16 +3,7 @@
 from __future__ import annotations
 
 import functools
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, Callable, Sequence, cast
 
 import cupy as cp
 import numpy as np
@@ -85,10 +76,10 @@ class NumericalColumn(NumericalBaseColumn):
         self,
         data: Buffer,
         dtype: DtypeObj,
-        mask: Optional[Buffer] = None,
-        size: Optional[int] = None,  # TODO: make this non-optional
+        mask: Buffer | None = None,
+        size: int | None = None,  # TODO: make this non-optional
         offset: int = 0,
-        null_count: Optional[int] = None,
+        null_count: int | None = None,
     ):
         dtype = cudf.dtype(dtype)
 
@@ -179,7 +170,7 @@ class NumericalColumn(NumericalBaseColumn):
         else:
             device_value = device_value.astype(self.dtype)
 
-        out: Optional[ColumnBase]  # If None, no need to perform mimic inplace.
+        out: ColumnBase | None  # If None, no need to perform mimic inplace.
         if isinstance(key, slice):
             out = self._scatter_by_slice(key, device_value)
         else:
@@ -196,7 +187,7 @@ class NumericalColumn(NumericalBaseColumn):
         if out:
             self._mimic_inplace(out, inplace=True)
 
-    def unary_operator(self, unaryop: Union[str, Callable]) -> ColumnBase:
+    def unary_operator(self, unaryop: str | Callable) -> ColumnBase:
         if callable(unaryop):
             return libcudf.transform.transform(self, unaryop)
 
@@ -302,7 +293,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def normalize_binop_value(
         self, other: ScalarLike
-    ) -> Union[ColumnBase, cudf.Scalar]:
+    ) -> ColumnBase | cudf.Scalar:
         if isinstance(other, ColumnBase):
             if not isinstance(other, NumericalColumn):
                 return NotImplemented
@@ -422,7 +413,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _process_values_for_isin(
         self, values: Sequence
-    ) -> Tuple[ColumnBase, ColumnBase]:
+    ) -> tuple[ColumnBase, ColumnBase]:
         lhs = cast("cudf.core.column.ColumnBase", self)
         try:
             rhs = as_column(values, nan_as_null=False)
@@ -456,12 +447,12 @@ class NumericalColumn(NumericalBaseColumn):
 
         return lhs, rhs
 
-    def _can_return_nan(self, skipna: Optional[bool] = None) -> bool:
+    def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls(include_nan=True)
 
     def _process_for_reduction(
-        self, skipna: Optional[bool] = None, min_count: int = 0
-    ) -> Union[NumericalColumn, ScalarLike]:
+        self, skipna: bool | None = None, min_count: int = 0
+    ) -> NumericalColumn | ScalarLike:
         skipna = True if skipna is None else skipna
 
         if self._can_return_nan(skipna=skipna):
@@ -699,7 +690,7 @@ class NumericalColumn(NumericalBaseColumn):
 
 
 def _normalize_find_and_replace_input(
-    input_column_dtype: DtypeObj, col_to_normalize: Union[ColumnBase, list]
+    input_column_dtype: DtypeObj, col_to_normalize: ColumnBase | list
 ) -> ColumnBase:
     normalized_column = column.as_column(
         col_to_normalize,

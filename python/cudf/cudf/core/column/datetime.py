@@ -8,7 +8,7 @@ import functools
 import locale
 import re
 from locale import nl_langinfo
-from typing import TYPE_CHECKING, Literal, Optional, Sequence, Tuple, cast
+from typing import TYPE_CHECKING, Literal, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -241,10 +241,10 @@ class DatetimeColumn(column.ColumnBase):
         self,
         data: Buffer,
         dtype: DtypeObj,
-        mask: Optional[Buffer] = None,
-        size: Optional[int] = None,  # TODO: make non-optional
+        mask: Buffer | None = None,
+        size: int | None = None,  # TODO: make non-optional
         offset: int = 0,
-        null_count: Optional[int] = None,
+        null_count: int | None = None,
     ):
         dtype = cudf.dtype(dtype)
         if dtype.kind != "M":
@@ -498,7 +498,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def std(
         self,
-        skipna: Optional[bool] = None,
+        skipna: bool | None = None,
         min_count: int = 0,
         dtype: Dtype = np.float64,
         ddof: int = 1,
@@ -510,7 +510,7 @@ class DatetimeColumn(column.ColumnBase):
             * _unit_to_nanoseconds_conversion[self.time_unit],
         ).as_unit(self.time_unit)
 
-    def median(self, skipna: Optional[bool] = None) -> pd.Timestamp:
+    def median(self, skipna: bool | None = None) -> pd.Timestamp:
         return pd.Timestamp(
             self.as_numerical_column("int64").median(skipna=skipna),
             unit=self.time_unit,
@@ -686,7 +686,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def _find_ambiguous_and_nonexistent(
         self, zone_name: str
-    ) -> Tuple[NumericalColumn, NumericalColumn] | Tuple[bool, bool]:
+    ) -> tuple[NumericalColumn, NumericalColumn] | tuple[bool, bool]:
         """
         Recognize ambiguous and nonexistent timestamps for the given timezone.
 
@@ -805,10 +805,10 @@ class DatetimeTZColumn(DatetimeColumn):
         self,
         data: Buffer,
         dtype: pd.DatetimeTZDtype,
-        mask: Optional[Buffer] = None,
-        size: Optional[int] = None,
+        mask: Buffer | None = None,
+        size: int | None = None,
         offset: int = 0,
-        null_count: Optional[int] = None,
+        null_count: int | None = None,
     ):
         super().__init__(
             data=data,

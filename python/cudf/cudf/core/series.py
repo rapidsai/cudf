@@ -9,17 +9,7 @@ import textwrap
 import warnings
 from collections import abc
 from shutil import get_terminal_size
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    Literal,
-    MutableMapping,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Literal, MutableMapping
 
 import cupy
 import numpy as np
@@ -285,7 +275,7 @@ class _SeriesLocIndexer(_FrameIndexer):
     """
 
     @_cudf_nvtx_annotate
-    def __getitem__(self, arg: Any) -> Union[ScalarLike, DataFrameOrSeries]:
+    def __getitem__(self, arg: Any) -> ScalarLike | DataFrameOrSeries:
         if isinstance(arg, pd.MultiIndex):
             arg = cudf.from_pandas(arg)
 
@@ -464,7 +454,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         If ``False``, leaves ``np.nan`` values as is.
     """
 
-    _accessors: Set[Any] = set()
+    _accessors: set[Any] = set()
     _loc_indexer_type = _SeriesLocIndexer
     _iloc_indexer_type = _SeriesIlocIndexer
     _groupby = SeriesGroupBy
@@ -677,7 +667,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def _from_data(
         cls,
         data: MutableMapping,
-        index: Optional[BaseIndex] = None,
+        index: BaseIndex | None = None,
         name: Any = no_default,
     ) -> Series:
         out = super()._from_data(data=data, index=index)
@@ -1311,7 +1301,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def _getitem_preprocessed(
         self,
         spec: indexing_utils.IndexingSpec,
-    ) -> Union[Self, ScalarLike]:
+    ) -> Self | ScalarLike:
         """Get subset of entries given structured data
 
         Parameters
@@ -1473,12 +1463,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         fill_value: Any = None,
         reflect: bool = False,
         can_reindex: bool = False,
-    ) -> Tuple[
-        Union[
-            Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            NotImplementedType,
-        ],
-        Optional[BaseIndex],
+    ) -> tuple[
+        dict[str | None, tuple[ColumnBase, Any, bool, Any]]
+        | NotImplementedType,
+        BaseIndex | None,
         bool,
     ]:
         # Specialize binops to align indices.
