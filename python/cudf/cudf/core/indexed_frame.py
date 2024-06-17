@@ -5173,6 +5173,9 @@ class IndexedFrame(Frame):
             ListDtype, self._columns[column_index].dtype
         ).element_type
         casted_cols = []
+        # TODO: Can possibly simplify to
+        # https://github.com/rapidsai/cudf/pull/16043#discussion_r1642427466
+        # if MultiIndex._from_columns_like_self preserves names
         for i, (explode, (_, dtype)) in enumerate(
             zip(exploded[len(idx_cols) :], self._dtypes)
         ):

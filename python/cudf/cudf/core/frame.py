@@ -79,7 +79,7 @@ class Frame(BinaryOperand, Scannable):
         return self._data.columns
 
     @property
-    def _dtypes(self) -> abc.Iterator:
+    def _dtypes(self) -> abc.Iterable:
         return zip(self._data.names, (col.dtype for col in self._data.columns))
 
     @property
