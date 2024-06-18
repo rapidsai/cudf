@@ -282,9 +282,7 @@ class BaseIndex(Serializable):
         hash(item)
         return item in self._values
 
-    def _copy_type_metadata(
-        self, other: Self, *, override_dtypes=None
-    ) -> Self:
+    def _copy_type_metadata(self: Self, other: Self) -> Self:
         raise NotImplementedError
 
     def get_level_values(self, level):
@@ -1122,7 +1120,7 @@ class BaseIndex(Serializable):
         res_name = _get_result_name(self.name, other.name)
 
         if is_mixed_with_object_dtype(self, other) or len(other) == 0:
-            difference = self.copy().unique()
+            difference = self.unique()
             difference.name = res_name
             if sort is True:
                 return difference.sort_values()
@@ -1746,7 +1744,7 @@ class BaseIndex(Serializable):
             self.name = name
             return None
         else:
-            out = self.copy(deep=True)
+            out = self.copy(deep=False)
             out.name = name
             return out
 
@@ -2070,7 +2068,7 @@ class BaseIndex(Serializable):
             raise ValueError(f"{how=} must be 'any' or 'all'")
         try:
             if not self.hasnans:
-                return self.copy()
+                return self.copy(deep=False)
         except NotImplementedError:
             pass
         # This is to be consistent with IndexedFrame.dropna to handle nans

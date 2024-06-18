@@ -7387,9 +7387,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3     4  44
         3     5  44
         """
-        if column not in self._column_names:
-            raise KeyError(column)
-
         return super()._explode(column, ignore_index)
 
     def pct_change(
@@ -7537,14 +7534,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         columns: list[ColumnBase],
         column_names: abc.Iterable[str] | None = None,
         index_names: list[str] | None = None,
-        *,
-        override_dtypes: abc.Iterable[Dtype | None] | None = None,
     ) -> DataFrame:
         result = super()._from_columns_like_self(
             columns,
             column_names,
             index_names,
-            override_dtypes=override_dtypes,
         )
         result._set_columns_like(self._data)
         return result

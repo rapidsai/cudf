@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import itertools
 import operator
 import pickle
 import warnings
@@ -80,7 +79,7 @@ class Frame(BinaryOperand, Scannable):
         return self._data.columns
 
     @property
-    def _dtypes(self) -> abc.Iterator:
+    def _dtypes(self) -> abc.Iterable:
         return zip(self._data.names, (col.dtype for col in self._data.columns))
 
     @property
@@ -145,8 +144,6 @@ class Frame(BinaryOperand, Scannable):
         self,
         columns: list[ColumnBase],
         column_names: abc.Iterable[str] | None = None,
-        *,
-        override_dtypes: abc.Iterable[Dtype | None] | None = None,
     ):
         """Construct a Frame from a list of columns with metadata from self.
 
@@ -156,7 +153,7 @@ class Frame(BinaryOperand, Scannable):
             column_names = self._column_names
         data = dict(zip(column_names, columns))
         frame = self.__class__._from_data(data)
-        return frame._copy_type_metadata(self, override_dtypes=override_dtypes)
+        return frame._copy_type_metadata(self)
 
     @_cudf_nvtx_annotate
     def _mimic_inplace(
@@ -1009,29 +1006,14 @@ class Frame(BinaryOperand, Scannable):
         ]
 
     @_cudf_nvtx_annotate
-    def _copy_type_metadata(
-        self,
-        other: Self,
-        *,
-        override_dtypes: abc.Iterable[Dtype | None] | None = None,
-    ) -> Self:
+    def _copy_type_metadata(self: Self, other: Self) -> Self:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
 
-        If override_dtypes is provided, any non-None entry
-        will be used in preference to the relevant column of other to
-        provide the new dtype.
-
         See `ColumnBase._with_type_metadata` for more information.
         """
-        if override_dtypes is None:
-            override_dtypes = itertools.repeat(None)
-        dtypes = (
-            dtype if dtype is not None else col.dtype
-            for (dtype, col) in zip(override_dtypes, other._data.values())
-        )
-        for (name, col), dtype in zip(self._data.items(), dtypes):
+        for (name, col), (_, dtype) in zip(self._data.items(), other._dtypes):
             self._data.set_by_label(
                 name, col._with_type_metadata(dtype), validate=False
             )

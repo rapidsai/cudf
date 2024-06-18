@@ -313,17 +313,11 @@ class IndexedFrame(Frame):
         columns: list[ColumnBase],
         column_names: abc.Iterable[str] | None = None,
         index_names: list[str] | None = None,
-        *,
-        override_dtypes: abc.Iterable[Dtype | None] | None = None,
     ) -> Self:
         """Construct a `Frame` from a list of columns with metadata from self.
 
         If `index_names` is set, the first `len(index_names)` columns are
         used to construct the index of the frame.
-
-        If override_dtypes is provided then any non-None entry will be
-        used for the dtype of the matching column in preference to the
-        dtype of the column in self.
         """
         if column_names is None:
             column_names = self._column_names
@@ -337,22 +331,24 @@ class IndexedFrame(Frame):
             index = _index_from_data(
                 dict(enumerate(columns[:n_index_columns]))
             )
+            index = index._copy_type_metadata(self.index)
+            # TODO: Should this if statement be handled in Index._copy_type_metadata?
+            if (
+                isinstance(self.index, cudf.CategoricalIndex)
+                and not isinstance(index, cudf.CategoricalIndex)
+            ) or (
+                isinstance(self.index, cudf.MultiIndex)
+                and not isinstance(index, cudf.MultiIndex)
+            ):
+                index = type(self.index)._from_data(index._data)
             if isinstance(index, cudf.MultiIndex):
                 index.names = index_names
             else:
                 index.name = index_names[0]
 
         data = dict(zip(column_names, data_columns))
-        frame = self.__class__._from_data(data)
-
-        if index is not None:
-            # TODO: triage why using the setter here breaks dask_cuda.ProxifyHostFile
-            frame._index = index
-        return frame._copy_type_metadata(
-            self,
-            include_index=bool(index_names),
-            override_dtypes=override_dtypes,
-        )
+        frame = type(self)._from_data(data, index)
+        return frame._copy_type_metadata(self)
 
     def __round__(self, digits=0):
         # Shouldn't be added to BinaryOperand
@@ -1912,45 +1908,6 @@ class IndexedFrame(Frame):
         return self._from_data_like_self(
             self._data._from_columns_like_self(result)
         )
-
-    def _copy_type_metadata(
-        self,
-        other: Self,
-        include_index: bool = True,
-        *,
-        override_dtypes: abc.Iterable[Dtype | None] | None = None,
-    ) -> Self:
-        """
-        Copy type metadata from each column of `other` to the corresponding
-        column of `self`.
-        See `ColumnBase._with_type_metadata` for more information.
-        """
-        super()._copy_type_metadata(other, override_dtypes=override_dtypes)
-        if (
-            include_index
-            and self.index is not None
-            and other.index is not None
-        ):
-            self.index._copy_type_metadata(other.index)
-            # When other.index is a CategoricalIndex, the current index
-            # will be a NumericalIndex with an underlying CategoricalColumn
-            # (the above _copy_type_metadata call will have converted the
-            # column). Calling cudf.Index on that column generates the
-            # appropriate index.
-            if isinstance(
-                other.index, cudf.core.index.CategoricalIndex
-            ) and not isinstance(self.index, cudf.core.index.CategoricalIndex):
-                self.index = cudf.Index(
-                    cast("cudf.Index", self.index)._column,
-                    name=self.index.name,
-                )
-            elif isinstance(other.index, cudf.MultiIndex) and not isinstance(
-                self.index, cudf.MultiIndex
-            ):
-                self.index = cudf.MultiIndex._from_data(
-                    self.index._data, name=self.index.name
-                )
-        return self
 
     @_cudf_nvtx_annotate
     def interpolate(
@@ -5172,36 +5129,36 @@ class IndexedFrame(Frame):
         # duplicated. If ignore_index is set, the original index is not
         # exploded and will be replaced with a `RangeIndex`.
         if not isinstance(self._data[explode_column].dtype, ListDtype):
-            data = self._data.copy(deep=True)
-            idx = None if ignore_index else self.index.copy(deep=True)
-            return self.__class__._from_data(data, index=idx)
+            result = self.copy()
+            if ignore_index:
+                result.index = RangeIndex(len(result))
+            return result
 
         column_index = self._column_names.index(explode_column)
-        if not ignore_index and self.index is not None:
-            index_offset = self.index.nlevels
+        if not ignore_index:
+            idx_cols = self.index._columns
         else:
-            index_offset = 0
+            idx_cols = ()
 
         exploded = libcudf.lists.explode_outer(
-            [
-                *(self.index._data.columns if not ignore_index else ()),
-                *self._columns,
-            ],
-            column_index + index_offset,
+            [*idx_cols, *self._columns],
+            column_index + len(idx_cols),
         )
         # We must copy inner datatype of the exploded list column to
         # maintain struct dtype key names
-        exploded_dtype = cast(
+        element_type = cast(
             ListDtype, self._columns[column_index].dtype
         ).element_type
+        exploded = [
+            column._with_type_metadata(element_type)
+            if i == column_index
+            else column
+            for i, column in enumerate(exploded, start=-len(idx_cols))
+        ]
         return self._from_columns_like_self(
             exploded,
             self._column_names,
-            self._index_names if not ignore_index else None,
-            override_dtypes=(
-                exploded_dtype if i == column_index else None
-                for i in range(len(self._columns))
-            ),
+            self.index.names if not ignore_index else None,
         )
 
     @_cudf_nvtx_annotate

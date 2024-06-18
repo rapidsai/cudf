@@ -1048,22 +1048,3 @@ def _offset_to_nanoseconds_lower_bound(offset: DateOffset) -> int:
         + kwds.get("microseconds", 0) * 10**3
         + kwds.get("nanoseconds", 0)
     )
-
-
-def _to_iso_calendar(arg):
-    formats = ["%G", "%V", "%u"]
-    if not isinstance(arg, (cudf.Index, cudf.core.series.DatetimeProperties)):
-        raise AttributeError(
-            "Can only use .isocalendar accessor with series or index"
-        )
-    if isinstance(arg, cudf.Index):
-        iso_params = [
-            arg._column.as_string_column(arg.dtype, fmt) for fmt in formats
-        ]
-        index = arg._column
-    elif isinstance(arg.series, cudf.Series):
-        iso_params = [arg.strftime(fmt) for fmt in formats]
-        index = arg.series.index
-
-    data = dict(zip(["year", "week", "day"], iso_params))
-    return cudf.DataFrame(data, index=index, dtype=np.int32)
