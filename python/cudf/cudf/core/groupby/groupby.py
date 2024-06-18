@@ -1308,7 +1308,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         To get the difference between each groups maximum and minimum value
         in one pass, you can do
 
-        >>> df.groupby('A').pipe(lambda x: x.max() - x.min())
+        >>> df.groupby('A', sort=True).pipe(lambda x: x.max() - x.min())
            B
         A
         a  2
