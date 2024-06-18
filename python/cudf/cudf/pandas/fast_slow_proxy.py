@@ -12,17 +12,7 @@ import types
 import warnings
 from collections.abc import Iterator
 from enum import IntEnum
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Literal,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
-    Type,
-)
+from typing import Any, Callable, Literal, Mapping
 
 import numpy as np
 
@@ -176,12 +166,12 @@ def make_final_proxy_type(
     *,
     fast_to_slow: Callable,
     slow_to_fast: Callable,
-    module: Optional[str] = None,
+    module: str | None = None,
     additional_attributes: Mapping[str, Any] | None = None,
     postprocess: Callable[[_FinalProxy, Any, Any], Any] | None = None,
-    bases: Tuple = (),
-    metaclasses: Tuple = (),
-) -> Type[_FinalProxy]:
+    bases: tuple = (),
+    metaclasses: tuple = (),
+) -> type[_FinalProxy]:
     """
     Defines a fast-slow proxy type for a pair of "final" fast and slow
     types. Final types are types for which known operations exist for
@@ -328,8 +318,8 @@ def make_intermediate_proxy_type(
     fast_type: type,
     slow_type: type,
     *,
-    module: Optional[str] = None,
-) -> Type[_IntermediateProxy]:
+    module: str | None = None,
+) -> type[_IntermediateProxy]:
     """
     Defines a proxy type for a pair of "intermediate" fast and slow
     types. Intermediate types are the types of the results of
@@ -671,13 +661,13 @@ class _IntermediateProxy(_FastSlowProxy):
     `make_intermediate_proxy_type` to create subtypes.
     """
 
-    _method_chain: Tuple[Callable, Tuple, Dict]
+    _method_chain: tuple[Callable, tuple, dict]
 
     @classmethod
     def _fsproxy_wrap(
         cls,
         obj: Any,
-        method_chain: Tuple[Callable, Tuple, Dict],
+        method_chain: tuple[Callable, tuple, dict],
     ):
         """
         Parameters
@@ -1041,7 +1031,7 @@ def _fast_slow_function_call(
 def _transform_arg(
     arg: Any,
     attribute_name: Literal["_fsproxy_slow", "_fsproxy_fast"],
-    seen: Set[int],
+    seen: set[int],
 ) -> Any:
     """
     Transform "arg" into its corresponding slow (or fast) type.
@@ -1138,7 +1128,7 @@ def _fast_arg(arg: Any) -> Any:
     """
     Transform "arg" into its corresponding fast type.
     """
-    seen: Set[int] = set()
+    seen: set[int] = set()
     return _transform_arg(arg, "_fsproxy_fast", seen)
 
 
@@ -1146,7 +1136,7 @@ def _slow_arg(arg: Any) -> Any:
     """
     Transform "arg" into its corresponding slow type.
     """
-    seen: Set[int] = set()
+    seen: set[int] = set()
     return _transform_arg(arg, "_fsproxy_slow", seen)
 
 
@@ -1223,7 +1213,7 @@ def _is_function_or_method(obj: Any) -> bool:
 def _replace_closurevars(
     f: types.FunctionType,
     attribute_name: Literal["_fsproxy_slow", "_fsproxy_fast"],
-    seen: Set[int],
+    seen: set[int],
 ) -> Callable[..., Any]:
     """
     Return a copy of `f` with its closure variables replaced with
@@ -1285,10 +1275,10 @@ def is_proxy_object(obj: Any) -> bool:
     return False
 
 
-NUMPY_TYPES: Set[str] = set(np.sctypeDict.values())
+NUMPY_TYPES: set[str] = set(np.sctypeDict.values())
 
 
-_SPECIAL_METHODS: Set[str] = {
+_SPECIAL_METHODS: set[str] = {
     "__abs__",
     "__add__",
     "__and__",
