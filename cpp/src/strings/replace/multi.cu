@@ -283,7 +283,7 @@ CUDF_KERNEL void count_targets(replace_multi_parallel_fn fn, int64_t chars_bytes
   auto const total = block_reduce(temp_storage).Reduce(count, cub::Sum());
 
   if ((lane_idx == 0) && (total > 0)) {
-    cuda::atomic_ref<int64_t, cuda::thread_scope_block> ref{*d_output};
+    cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref{*d_output};
     ref.fetch_add(total, cuda::std::memory_order_relaxed);
   }
 }
