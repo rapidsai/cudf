@@ -55,17 +55,11 @@ class recurrence_functor {
 template <typename T>
 struct ewma_functor_base {
   T beta;
-  ewma_functor_base(T beta) : beta{std::move(beta)} {}
   const pair_type<T> IDENTITY{1.0, 0.0};
 };
 
-template <typename T, bool has_nulls, bool is_numerator>
-struct ewma_adjust_functor : public ewma_functor_base<T> {
-  using ewma_functor_base<T>::ewma_functor_base;
-};
-
 template <typename T, bool is_numerator>
-struct ewma_adjust_functor<T, true, is_numerator> : public ewma_functor_base<T> {
+struct ewma_adjust_nulls_functor : public ewma_functor_base<T> {
   __device__ pair_type<T> operator()(thrust::tuple<bool, int, T> const data)
   {
     // Not const to allow for updating the input value
@@ -75,12 +69,13 @@ struct ewma_adjust_functor<T, true, is_numerator> : public ewma_functor_base<T> 
 
     // The value is non-null, but nulls preceding it
     // must adjust the second element of the pair
-    return {this->beta * ((exp != 0) ? pow(this->beta, exp) : 1), input};
+    T const beta = this->beta;
+    return {beta * ((exp != 0) ? pow(beta, exp) : 1), input};
   }
 };
 
 template <typename T, bool is_numerator>
-struct ewma_adjust_functor<T, false, is_numerator> : public ewma_functor_base<T> {
+struct ewma_adjust_no_nulls_functor : public ewma_functor_base<T> {
   __device__ pair_type<T> operator()(T const data)
   {
     T const beta = this->beta;
@@ -92,13 +87,8 @@ struct ewma_adjust_functor<T, false, is_numerator> : public ewma_functor_base<T>
   }
 };
 
-template <typename T, bool has_nulls>
-struct ewma_noadjust_functor : public ewma_functor_base<T> {
-  using ewma_functor_base<T>::ewma_functor_base;
-};
-
 template <typename T>
-struct ewma_noadjust_functor<T, true> : public ewma_functor_base<T> {
+struct ewma_noadjust_nulls_functor : public ewma_functor_base<T> {
   /*
     In the null case, a denominator actually has to be computed. The formula is
     y_{i+1} = (1 - alpha)x_{i-1} + alpha x_i, but really there is a "denominator"
@@ -130,7 +120,7 @@ struct ewma_noadjust_functor<T, true> : public ewma_functor_base<T> {
 };
 
 template <typename T>
-struct ewma_noadjust_functor<T, false> : public ewma_functor_base<T> {
+struct ewma_noadjust_no_nulls_functor : public ewma_functor_base<T> {
   __device__ pair_type<T> operator()(thrust::tuple<T, size_type> const data)
   {
     T const beta              = this->beta;
@@ -188,20 +178,19 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
-                                     ewma_adjust_functor<T, true, true>{beta},
+                                     ewma_adjust_nulls_functor<T, true>{beta},
                                      recurrence_functor<T>{});
-    // copy the second elements to the output for now
     thrust::transform(rmm::exec_policy(stream),
                       pairs.begin(),
                       pairs.end(),
                       output.begin(),
-                      [=] __device__(pair_type<T> pair) -> T { return pair.second; });
+                      [] __device__(pair_type<T> pair) -> T { return pair.second; });
 
     thrust::transform_inclusive_scan(rmm::exec_policy(stream),
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
-                                     ewma_adjust_functor<T, true, false>{beta},
+                                     ewma_adjust_nulls_functor<T, false>{beta},
                                      recurrence_functor<T>{});
 
   } else {
@@ -209,21 +198,20 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                      input.begin<T>(),
                                      input.end<T>(),
                                      pairs.begin(),
-                                     ewma_adjust_functor<T, false, true>{beta},
+                                     ewma_adjust_no_nulls_functor<T, true>{beta},
                                      recurrence_functor<T>{});
-    // copy the second elements to the output for now
     thrust::transform(rmm::exec_policy(stream),
                       pairs.begin(),
                       pairs.end(),
                       output.begin(),
-                      [=] __device__(pair_type<T> pair) -> T { return pair.second; });
+                      [] __device__(pair_type<T> pair) -> T { return pair.second; });
     auto itr = thrust::make_counting_iterator<size_type>(0);
 
     thrust::transform_inclusive_scan(rmm::exec_policy(stream),
                                      itr,
                                      itr + input.size(),
                                      pairs.begin(),
-                                     ewma_adjust_functor<T, false, false>{beta},
+                                     ewma_adjust_no_nulls_functor<T, false>{beta},
                                      recurrence_functor<T>{});
   }
 
@@ -264,7 +252,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
-                                     ewma_noadjust_functor<T, false>{beta},
+                                     ewma_noadjust_no_nulls_functor<T>{beta},
                                      recurrence_functor<T>{});
 
   } else {
@@ -278,7 +266,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
-                                     ewma_noadjust_functor<T, true>{beta},
+                                     ewma_noadjust_nulls_functor<T>{beta},
                                      recurrence_functor<T>());
   }
 
