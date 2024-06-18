@@ -17,7 +17,7 @@ import dataclasses
 import itertools
 import types
 from functools import cache
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, NoReturn
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import pyarrow as pa
 from typing_extensions import assert_never
@@ -56,7 +56,6 @@ __all__ = [
     "MapFunction",
     "Union",
     "HConcat",
-    "ExtContext",
 ]
 
 
@@ -153,7 +152,9 @@ class IR:
             since the translation phase should pick up things that we
             cannot handle.
         """
-        raise NotImplementedError
+        raise NotImplementedError(
+            f"Evaluation of plan {type(self).__name__}"
+        )  # pragma: no cover
 
 
 @dataclasses.dataclass(slots=True)
@@ -346,7 +347,9 @@ class Reduce(IR):
     expr: list[expr.NamedExpr]
     """List of expressions to evaluate to form the new dataframe."""
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame]
+    ) -> DataFrame:  # pragma: no cover; polars doesn't emit this node yet
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         columns = broadcast(*(e.evaluate(df) for e in self.expr))
@@ -937,24 +940,4 @@ class HConcat(IR):
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
         return DataFrame(
             list(itertools.chain.from_iterable(df.columns for df in dfs)),
-        )
-
-
-@dataclasses.dataclass(slots=True)
-class ExtContext(IR):
-    """
-    Concatenate dataframes horizontally.
-
-    Prefer HConcat, since this is going to be deprecated on the polars side.
-    """
-
-    df: IR
-    """Input."""
-    extra: list[IR]
-    """List of extra inputs."""
-
-    def __post_init__(self) -> NoReturn:
-        """Validate preconditions."""
-        raise NotImplementedError(
-            "ExtContext will be deprecated, use horizontal concat instead."
         )
