@@ -1,6 +1,6 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
-from typing import Union
+from __future__ import annotations
 
 import numpy as np
 
@@ -94,15 +94,15 @@ class ExponentialMovingWindow(_RollingBase):
     def __init__(
         self,
         obj,
-        com: Union[float, None] = None,
-        span: Union[float, None] = None,
-        halflife: Union[float, None] = None,
-        alpha: Union[float, None] = None,
-        min_periods: Union[int, None] = 0,
+        com: float | None = None,
+        span: float | None = None,
+        halflife: float | None = None,
+        alpha: float | None = None,
+        min_periods: int | None = 0,
         adjust: bool = True,
         ignore_na: bool = False,
         axis: int = 0,
-        times: Union[str, np.ndarray, None] = None,
+        times: str | np.ndarray | None = None,
     ):
         if (min_periods, ignore_na, axis, times) != (0, False, 0, None):
             raise NotImplementedError(
