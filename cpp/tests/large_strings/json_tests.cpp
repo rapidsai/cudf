@@ -17,6 +17,7 @@
 #include "large_strings_fixture.hpp"
 
 #include <cudf/io/json.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <fstream>
 
@@ -52,12 +53,15 @@ TEST_F(JsonLargeReaderTest, MultiBatch)
   std::ofstream outfile(filename, std::ofstream::out);
   outfile << json_string;
 
-  constexpr int num_sources = 10;
-  std::vector<std::string> filepaths(num_sources, filename);
+  constexpr int num_sources = 2;
+  std::vector<cudf::host_span<char>> hostbufs(
+    num_sources, cudf::host_span<char>(json_string.data(), json_string.size()));
 
   // Initialize parsing options (reading json lines)
   cudf::io::json_reader_options json_lines_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{filepaths})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{
+        cudf::host_span<cudf::host_span<char>>(hostbufs.data(), hostbufs.size())})
       .lines(true)
       .compression(cudf::io::compression_type::NONE)
       .recovery_mode(cudf::io::json_recovery_mode_t::FAIL);
