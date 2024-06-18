@@ -1,6 +1,6 @@
-=======
-copying
-=======
+===========
+expressions
+===========
 
-.. automodule:: cudf._lib.pylibcudf.datetime
+.. automodule:: cudf._lib.pylibcudf.expressions
    :members:
