@@ -58,19 +58,19 @@ class ewma_functor_base {
   T beta;
   ewma_functor_base(T beta) : beta{beta} {}
 
-  pair_type<T> IDENTITY = {1.0, 0.0};
+  pair_type<T> IDENTITY{1.0, 0.0};
 };
 
-template <typename T, bool nulls, bool is_numerator>
+template <typename T, bool has_nulls, bool is_numerator>
 class ewma_adjust_functor : public ewma_functor_base<T> {
   using ewma_functor_base<T>::ewma_functor_base;
 
  public:
-  using tupletype = std::conditional_t<nulls, thrust::tuple<bool, int, T>, T>;
+  using tupletype = std::conditional_t<has_nulls, thrust::tuple<bool, int, T>, T>;
 
   __device__ pair_type<T> operator()(tupletype const data)
   {
-    if constexpr (nulls) {
+    if constexpr (has_nulls) {
       bool const valid = thrust::get<0>(data);
       int const exp    = thrust::get<1>(data);
       T const input    = thrust::get<2>(data);
@@ -103,21 +103,35 @@ class ewma_adjust_functor : public ewma_functor_base<T> {
   }
 };
 
-template <typename T, bool nulls>
+template <typename T, bool has_nulls>
 class ewma_noadjust_functor : public ewma_functor_base<T> {
   using ewma_functor_base<T>::ewma_functor_base;
 
  public:
-  using tupletype = std::
-    conditional_t<nulls, thrust::tuple<T, size_type, bool, size_type>, thrust::tuple<T, size_type>>;
+  using tupletype = std::conditional_t<has_nulls,
+                                       thrust::tuple<T, size_type, bool, size_type>,
+                                       thrust::tuple<T, size_type>>;
 
+  /*
+    In the null case, a denominator actually has to be computed. The formula is
+    y_{i+1} = (1 - alpha)x_{i-1} + alpha x_i, but really there is a "denominator"
+    which is the sum of the weights: alpha + (1 - alpha) == 1. If a null is
+    encountered, that means that the "previous" value is downweighted by a
+    factor (for each missing value). For example with a single null:
+    data = {x_0, NULL, x_1},
+    y_2 = (1 - alpha)**2 x_0 + alpha * x_2 / (alpha + (1-alpha)**2)
+
+    As such, the pairs must be updated before summing like the adjusted case to
+    properly downweight the previous values. But now but we also need to compute
+    the normalization factors and divide the results into them at the end.
+  */
   __device__ pair_type<T> operator()(tupletype const data)
   {
     T const beta          = this->beta;
     size_type const index = thrust::get<1>(data);
     T const input         = thrust::get<0>(data);
 
-    if constexpr (!nulls) {
+    if constexpr (!has_nulls) {
       if (index == 0) {
         return {beta, input};
       } else {
@@ -162,7 +176,7 @@ rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input,
     cudf::detail::make_validity_iterator(*device_view),
     cuda::proclaim_return_type<int>([] __device__(int valid) -> int { return 1 - valid; }));
 
-  // null mask {0, 1, 0, 1, 1, 0} leads to output array {0, 0, 1, 0, 1, 2}
+  // valid mask {1, 0, 1, 0, 0, 1} leads to output array {0, 0, 1, 0, 1, 2}
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 invalid_it,
                                 invalid_it + input.size() - 1,
@@ -182,8 +196,8 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
 
   if (input.has_nulls()) {
     rmm::device_uvector<cudf::size_type> nullcnt = null_roll_up(input, stream);
-    auto device_view = column_device_view::create(input);
-    auto valid_it    = cudf::detail::make_validity_iterator(*device_view);
+    auto device_view                             = column_device_view::create(input);
+    auto valid_it = cudf::detail::make_validity_iterator(*device_view);
     auto data =
       thrust::make_zip_iterator(thrust::make_tuple(valid_it, nullcnt.begin(), input.begin<T>()));
 
@@ -199,7 +213,6 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                       pairs.end(),
                       output.begin(),
                       [=] __device__(pair_type<T> pair) -> T { return pair.second; });
-
 
     thrust::transform_inclusive_scan(rmm::exec_policy(stream),
                                      data,
@@ -230,7 +243,6 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                      ewma_adjust_functor<T, false, false>{beta},
                                      recurrence_functor<T>{});
   }
-
 
   thrust::transform(
     rmm::exec_policy(stream),
@@ -273,19 +285,6 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                                      recurrence_functor<T>{});
 
   } else {
-    /*
-    In this case, a denominator actually has to be computed. The formula is
-    y_{i+1} = (1 - alpha)x_{i-1} + alpha x_i, but really there is a "denominator"
-    which is the sum of the weights: alpha + (1 - alpha) == 1. If a null is
-    encountered, that means that the "previous" value is downweighted by a
-    factor (for each missing value). For example this would y_2 be for one null:
-    data = {x_0, NULL, x_1},
-    y_2 = (1 - alpha)**2 x_0 + alpha * x_2 / (alpha + (1-alpha)**2)
-
-    As such, the pairs must be updated before summing like the adjusted case to
-    properly downweight the previous values. But now but we also need to compute
-    the normalization factors and divide the results into them at the end.
-    */
     auto device_view = column_device_view::create(input);
     auto valid_it    = detail::make_validity_iterator(*device_view);
 
@@ -309,56 +308,43 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
   return output;
 }
 
-template <typename T>
-std::unique_ptr<column> ewma(scan_aggregation const& agg,
-                             column_view const& input,
-                             rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
-{
-  auto ewma_agg = (dynamic_cast<ewma_aggregation const*>(&agg));
-  if (ewma_agg == NULL) { CUDF_FAIL("Expected an EWMA aggregation."); }
-  CUDF_EXPECTS(cudf::is_floating_point(input.type()), "Column must be floating point type");
-
-  cudf::ewm_history const history = ewma_agg->history;
-  T const center_of_mass          = ewma_agg->center_of_mass;
-
-  // center of mass is easier for the user, but the recurrences are
-  // better expressed in terms of the derived parameter `beta`
-  T const beta = center_of_mass / (center_of_mass + 1.0);
-
-  auto result = [&]() {
-    if (history == cudf::ewm_history::INFINITE) {
-      return compute_ewma_adjust(input, beta, stream, mr).release();
-    } else {
-      return compute_ewma_noadjust(input, beta, stream, mr).release();
-    }
-  }();
-  return std::make_unique<column>(cudf::data_type(cudf::type_to_id<T>()),
-                                  input.size(),
-                                  std::move(result),
-                                  rmm::device_buffer{},
-                                  0);
-}
-
 struct ewma_functor {
   template <typename T, CUDF_ENABLE_IF(!std::is_floating_point<T>::value)>
-  std::unique_ptr<column> operator()(
-    scan_aggregation const& agg,
-    column_view const& input,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(scan_aggregation const& agg,
+                                     column_view const& input,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
   {
     CUDF_FAIL("Unsupported type for EWMA.");
   }
 
   template <typename T, CUDF_ENABLE_IF(std::is_floating_point<T>::value)>
-  std::unique_ptr<column> operator()(
-    scan_aggregation const& agg,
-    column_view const& input,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(scan_aggregation const& agg,
+                                     column_view const& input,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
   {
-    return ewma<T>(agg, input, stream, mr);
+    auto ewma_agg = (dynamic_cast<ewma_aggregation const*>(&agg));
+
+    cudf::ewm_history const history = ewma_agg->history;
+    T const center_of_mass          = ewma_agg->center_of_mass;
+
+    // center of mass is easier for the user, but the recurrences are
+    // better expressed in terms of the derived parameter `beta`
+    T const beta = center_of_mass / (center_of_mass + 1.0);
+
+    auto result = [&]() {
+      if (history == cudf::ewm_history::INFINITE) {
+        return compute_ewma_adjust(input, beta, stream, mr);
+      } else {
+        return compute_ewma_noadjust(input, beta, stream, mr);
+      }
+    }();
+    return std::make_unique<column>(cudf::data_type(cudf::type_to_id<T>()),
+                                    input.size(),
+                                    result.release(),
+                                    rmm::device_buffer{},
+                                    0);
   }
 };
 

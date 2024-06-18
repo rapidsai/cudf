@@ -23,19 +23,14 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/reduction.hpp>
 
-using aggregation = cudf::aggregation;
-using cudf::null_policy;
-using cudf::scan_type;
-using namespace cudf::test::iterators;
-
 template <typename T>
 struct TypedEwmScanTest : BaseScanTest<T> {
   inline void test_ungrouped_ewma_scan(cudf::column_view const& input,
                                        cudf::column_view const& expect_vals,
                                        cudf::scan_aggregation const& agg,
-                                       null_policy null_handling)
+                                       cudf::null_policy null_handling)
   {
-    auto col_out = cudf::scan(input, agg, scan_type::INCLUSIVE, null_handling);
+    auto col_out = cudf::scan(input, agg, cudf::scan_type::INCLUSIVE, null_handling);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, col_out->view());
   }
 };
@@ -61,12 +56,12 @@ TYPED_TEST(TypedEwmScanTest, Ewm)
     *col,
     expected_ewma_vals_adjust,
     *cudf::make_ewma_aggregation<cudf::scan_aggregation>(0.5, cudf::ewm_history::INFINITE),
-    null_policy::INCLUDE);
+    cudf::null_policy::INCLUDE);
   this->test_ungrouped_ewma_scan(
     *col,
     expected_ewma_vals_noadjust,
     *cudf::make_ewma_aggregation<cudf::scan_aggregation>(0.5, cudf::ewm_history::FINITE),
-    null_policy::INCLUDE);
+    cudf::null_policy::INCLUDE);
 }
 
 TYPED_TEST(TypedEwmScanTest, EwmWithNulls)
@@ -97,10 +92,10 @@ TYPED_TEST(TypedEwmScanTest, EwmWithNulls)
     *col,
     expected_ewma_vals_adjust,
     *cudf::make_ewma_aggregation<cudf::scan_aggregation>(0.5, cudf::ewm_history::INFINITE),
-    null_policy::INCLUDE);
+    cudf::null_policy::INCLUDE);
   this->test_ungrouped_ewma_scan(
     *col,
     expected_ewma_vals_noadjust,
     *cudf::make_ewma_aggregation<cudf::scan_aggregation>(0.5, cudf::ewm_history::FINITE),
-    null_policy::INCLUDE);
+    cudf::null_policy::INCLUDE);
 }
