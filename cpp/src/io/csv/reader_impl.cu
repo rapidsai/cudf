@@ -120,47 +120,42 @@ string removeQuotes(string str, char quotechar)
 }
 
 /**
- * @brief Parse the first row to set the column names in the raw_csv parameter.
- * The first row can be either the header row, or the first data row
+ * @brief Parse a row of input to get the column names. The row can either be the header, or the
+ * first data row. If the header is not used, column names are generated automatically.
  */
-std::vector<std::string> get_column_names(std::vector<char> const& header,
+std::vector<std::string> get_column_names(std::vector<char> const& row,
                                           parse_options_view const& parse_opts,
                                           int header_row,
                                           std::string prefix)
 {
   std::vector<std::string> col_names;
 
-  // If there is only a single character then it would be the terminator
-  if (header.empty() or (header.size() == 1 and header[0] == '\n')) { return col_names; }
-
-  std::vector<char> first_row = header;
+  // Empty row, return empty column names vector
+  if (row.empty() or (row.size() == 1 and row[0] == '\n')) { return col_names; }
 
   bool quotation = false;
-  for (size_t pos = 0, prev = 0; pos < first_row.size(); ++pos) {
+  for (size_t pos = 0, prev = 0; pos < row.size(); ++pos) {
     // Flip the quotation flag if current character is a quotechar
-    if (first_row[pos] == parse_opts.quotechar) {
-      quotation = !quotation;
-    }
+    if (row[pos] == parse_opts.quotechar) { quotation = !quotation; }
     // Check if end of a column/row
-    if (pos == first_row.size() - 1 ||
-             (!quotation && first_row[pos] == parse_opts.terminator) ||
-             (!quotation && first_row[pos] == parse_opts.delimiter)) {
+    if (pos == row.size() - 1 || (!quotation && row[pos] == parse_opts.terminator) ||
+        (!quotation && row[pos] == parse_opts.delimiter)) {
       // This is the header, add the column name
       if (header_row >= 0) {
         // Include the current character, in case the line is not terminated
         int col_name_len = pos - prev + 1;
         // Exclude the delimiter/terminator is present
-        if (first_row[pos] == parse_opts.delimiter || first_row[pos] == parse_opts.terminator) {
+        if (row[pos] == parse_opts.delimiter || row[pos] == parse_opts.terminator) {
           --col_name_len;
         }
         // Also exclude '\r' character at the end of the column name if it's
         // part of the terminator
-        if (col_name_len > 0 && parse_opts.terminator == '\n' && first_row[pos] == '\n' &&
-            first_row[pos - 1] == '\r') {
+        if (col_name_len > 0 && parse_opts.terminator == '\n' && row[pos] == '\n' &&
+            row[pos - 1] == '\r') {
           --col_name_len;
         }
 
-        string const new_col_name(first_row.data() + prev, col_name_len);
+        string const new_col_name(row.data() + prev, col_name_len);
         col_names.push_back(removeQuotes(new_col_name, parse_opts.quotechar));
       } else {
         // This is the first data row, add the automatically generated name
@@ -168,20 +163,20 @@ std::vector<std::string> get_column_names(std::vector<char> const& header,
       }
 
       // Stop parsing when we hit the line terminator; relevant when there is
-      // a blank line following the header. In this case, first_row includes
+      // a blank line following the header. In this case, row includes
       // multiple line terminators at the end, as the new recStart belongs to
       // a line that comes after the blank line(s)
-      if (!quotation && first_row[pos] == parse_opts.terminator) { break; }
+      if (!quotation && row[pos] == parse_opts.terminator) { break; }
 
       // Skip adjacent delimiters if delim_whitespace is set
-      while (parse_opts.multi_delimiter && pos < first_row.size() &&
-             first_row[pos] == parse_opts.delimiter && first_row[pos + 1] == parse_opts.delimiter) {
+      while (parse_opts.multi_delimiter && pos < row.size() && row[pos] == parse_opts.delimiter &&
+             row[pos + 1] == parse_opts.delimiter) {
         ++pos;
       }
       prev = pos + 1;
     }
   }
-  
+
   return col_names;
 }
 
