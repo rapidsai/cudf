@@ -282,9 +282,7 @@ class BaseIndex(Serializable):
         hash(item)
         return item in self._values
 
-    def _copy_type_metadata(
-        self, other: Self, *, override_dtypes=None
-    ) -> Self:
+    def _copy_type_metadata(self: Self, other: Self) -> Self:
         raise NotImplementedError
 
     def get_level_values(self, level):
