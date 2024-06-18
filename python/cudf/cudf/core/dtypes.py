@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import decimal
 import operator
@@ -6,7 +7,7 @@ import pickle
 import textwrap
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -16,12 +17,12 @@ from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import cudf
-from cudf._typing import Dtype
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.utils.docutils import doc_apply
 
 if TYPE_CHECKING:
+    from cudf._typing import Dtype
     from cudf.core.buffer import Buffer
 
 
@@ -84,11 +85,11 @@ def dtype(arbitrary):
 
 
 def _decode_type(
-    cls: Type,
+    cls: type,
     header: dict,
     frames: list,
-    is_valid_class: Callable[[Type, Type], bool] = operator.is_,
-) -> Tuple[dict, list, Type]:
+    is_valid_class: Callable[[type, type], bool] = operator.is_,
+) -> tuple[dict, list, type]:
     """Decode metadata-encoded type and check validity
 
     Parameters
@@ -481,8 +482,8 @@ class ListDtype(_BaseDtype):
     def __hash__(self):
         return hash(self._typ)
 
-    def serialize(self) -> Tuple[dict, list]:
-        header: Dict[str, Dtype] = {}
+    def serialize(self) -> tuple[dict, list]:
+        header: dict[str, Dtype] = {}
         header["type-serialized"] = pickle.dumps(type(self))
 
         frames = []
@@ -627,13 +628,13 @@ class StructDtype(_BaseDtype):
     def __hash__(self):
         return hash(self._typ)
 
-    def serialize(self) -> Tuple[dict, list]:
-        header: Dict[str, Any] = {}
+    def serialize(self) -> tuple[dict, list]:
+        header: dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
 
-        frames: List[Buffer] = []
+        frames: list[Buffer] = []
 
-        fields: Dict[str, Union[bytes, Tuple[Any, Tuple[int, int]]]] = {}
+        fields: dict[str, bytes | tuple[Any, tuple[int, int]]] = {}
 
         for k, dtype in self.fields.items():
             if isinstance(dtype, _BaseDtype):
@@ -823,7 +824,7 @@ class DecimalDtype(_BaseDtype):
         precision = max(len(metadata.digits), -metadata.exponent)
         return cls(precision, -metadata.exponent)
 
-    def serialize(self) -> Tuple[dict, list]:
+    def serialize(self) -> tuple[dict, list]:
         return (
             {
                 "type-serialized": pickle.dumps(type(self)),
@@ -946,7 +947,7 @@ class IntervalDtype(StructDtype):
     def __hash__(self):
         return hash((self.subtype, self.closed))
 
-    def serialize(self) -> Tuple[dict, list]:
+    def serialize(self) -> tuple[dict, list]:
         header = {
             "type-serialized": pickle.dumps(type(self)),
             "fields": pickle.dumps((self.subtype, self.closed)),

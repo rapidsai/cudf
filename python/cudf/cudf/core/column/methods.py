@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union, overload
+from typing import Union, overload
 
 from typing_extensions import Literal
 
@@ -52,7 +52,7 @@ class ColumnMethods(NotIterable):
         inplace: bool = False,
         expand: bool = False,
         retain_index: bool = True,
-    ) -> Optional[ParentType]: ...
+    ) -> ParentType | None: ...
 
     def _return_or_inplace(
         self, new_col, inplace=False, expand=False, retain_index=True
