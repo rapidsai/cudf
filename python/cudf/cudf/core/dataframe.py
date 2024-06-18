@@ -1121,8 +1121,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @staticmethod
     @_cudf_nvtx_annotate
     def _align_input_series_indices(data, index):
-        data = data.copy()
-
         input_series = [
             Series(val)
             for val in data.values()
@@ -1142,6 +1140,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 index = aligned_input_series[0].index
 
+            data = data.copy()
             for name, val in data.items():
                 if isinstance(val, (pd.Series, Series, dict)):
                     data[name] = aligned_input_series.pop(0)
@@ -3590,7 +3589,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def add_prefix(self, prefix):
-        out = self.copy(deep=True)
+        out = self.copy(deep=False)
         out.columns = [
             prefix + col_name for col_name in list(self._data.keys())
         ]
@@ -3598,7 +3597,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def add_suffix(self, suffix):
-        out = self.copy(deep=True)
+        out = self.copy(deep=False)
         out.columns = [
             col_name + suffix for col_name in list(self._data.keys())
         ]
@@ -3930,7 +3929,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                            weight    1.0    0.8
                            length    0.3    0.2
         """
-        result = self.copy()
+        result = self.copy(deep=False)
 
         # To get axis number
         axis = self._get_axis_from_axis_arg(axis)
@@ -4001,7 +4000,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Set the old column names as the new index
         result = self.__class__._from_data(
-            {i: col for i, col in enumerate(result_columns)},
+            ColumnAccessor(dict(enumerate(result_columns)), verify=False),
             index=as_index(index),
         )
         # Set the old index as the new column names
@@ -5502,7 +5501,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         b: [[4,5,6]]
         """
 
-        data = self.copy(deep=False)
+        data = self
         index_descr = []
         write_index = preserve_index is not False
         keep_range_index = write_index and preserve_index is None
@@ -5530,6 +5529,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     index_descr = (
                         index.names if index.name is not None else ("index",)
                     )
+                data = data.copy(deep=False)
                 for gen_name, col_name in zip(index_descr, index._data.names):
                     data._insert(
                         data.shape[1],

@@ -472,7 +472,7 @@ class ColumnAccessor(abc.MutableMapping):
             new_keys[n][i], new_keys[n][j] = row[j], row[i]
             new_dict.update({row: tuple(new_keys[n])})
 
-        new_data = {new_dict[k]: v.copy(deep=True) for k, v in self.items()}
+        new_data = {new_dict[k]: v.copy(deep=False) for k, v in self.items()}
 
         # swap level_names for i and j
         new_names = list(self.level_names)
