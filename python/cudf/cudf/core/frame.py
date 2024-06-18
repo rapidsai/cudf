@@ -3,23 +3,11 @@
 from __future__ import annotations
 
 import copy
-import itertools
 import operator
 import pickle
 import warnings
 from collections import abc
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    List,
-    Literal,
-    MutableMapping,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping
 
 # TODO: The `numpy` import is needed for typing purposes during doc builds
 # only, need to figure out why the `np` alias is insufficient then remove.
@@ -83,15 +71,15 @@ class Frame(BinaryOperand, Scannable):
         return self._data.nrows
 
     @property
-    def _column_names(self) -> Tuple[Any, ...]:
+    def _column_names(self) -> tuple[Any, ...]:
         return self._data.names
 
     @property
-    def _columns(self) -> Tuple[ColumnBase, ...]:
+    def _columns(self) -> tuple[ColumnBase, ...]:
         return self._data.columns
 
     @property
-    def _dtypes(self) -> abc.Iterator:
+    def _dtypes(self) -> abc.Iterable:
         return zip(self._data.names, (col.dtype for col in self._data.columns))
 
     @property
@@ -154,10 +142,8 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def _from_columns_like_self(
         self,
-        columns: List[ColumnBase],
-        column_names: Optional[abc.Iterable[str]] = None,
-        *,
-        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
+        columns: list[ColumnBase],
+        column_names: abc.Iterable[str] | None = None,
     ):
         """Construct a Frame from a list of columns with metadata from self.
 
@@ -167,12 +153,12 @@ class Frame(BinaryOperand, Scannable):
             column_names = self._column_names
         data = dict(zip(column_names, columns))
         frame = self.__class__._from_data(data)
-        return frame._copy_type_metadata(self, override_dtypes=override_dtypes)
+        return frame._copy_type_metadata(self)
 
     @_cudf_nvtx_annotate
     def _mimic_inplace(
         self, result: Self, inplace: bool = False
-    ) -> Optional[Self]:
+    ) -> Self | None:
         if inplace:
             for col in self._data:
                 if col in result._data:
@@ -424,15 +410,15 @@ class Frame(BinaryOperand, Scannable):
         get_array: Callable,
         module: ModuleType,
         copy: bool,
-        dtype: Union[Dtype, None] = None,
+        dtype: Dtype | None = None,
         na_value=None,
-    ) -> Union[cupy.ndarray, numpy.ndarray]:
+    ) -> cupy.ndarray | numpy.ndarray:
         # Internal function to implement to_cupy and to_numpy, which are nearly
         # identical except for the attribute they access to generate values.
 
         def to_array(
             col: ColumnBase, dtype: np.dtype
-        ) -> Union[cupy.ndarray, numpy.ndarray]:
+        ) -> cupy.ndarray | numpy.ndarray:
             if na_value is not None:
                 col = col.fillna(na_value)
             array = get_array(col)
@@ -485,7 +471,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def to_cupy(
         self,
-        dtype: Union[Dtype, None] = None,
+        dtype: Dtype | None = None,
         copy: bool = False,
         na_value=None,
     ) -> cupy.ndarray:
@@ -519,7 +505,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def to_numpy(
         self,
-        dtype: Union[Dtype, None] = None,
+        dtype: Dtype | None = None,
         copy: bool = True,
         na_value=None,
     ) -> numpy.ndarray:
@@ -552,7 +538,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def where(self, cond, other=None, inplace: bool = False) -> Optional[Self]:
+    def where(self, cond, other=None, inplace: bool = False) -> Self | None:
         """
         Replace values where the condition is False.
 
@@ -628,11 +614,11 @@ class Frame(BinaryOperand, Scannable):
     def fillna(
         self,
         value=None,
-        method: Optional[Literal["ffill", "bfill", "pad", "backfill"]] = None,
+        method: Literal["ffill", "bfill", "pad", "backfill"] | None = None,
         axis=None,
         inplace: bool = False,
         limit=None,
-    ) -> Optional[Self]:
+    ) -> Self | None:
         """Fill null values with ``value`` or specified ``method``.
 
         Parameters
@@ -1043,29 +1029,14 @@ class Frame(BinaryOperand, Scannable):
         ]
 
     @_cudf_nvtx_annotate
-    def _copy_type_metadata(
-        self,
-        other: Self,
-        *,
-        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
-    ) -> Self:
+    def _copy_type_metadata(self: Self, other: Self) -> Self:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
 
-        If override_dtypes is provided, any non-None entry
-        will be used in preference to the relevant column of other to
-        provide the new dtype.
-
         See `ColumnBase._with_type_metadata` for more information.
         """
-        if override_dtypes is None:
-            override_dtypes = itertools.repeat(None)
-        dtypes = (
-            dtype if dtype is not None else col.dtype
-            for (dtype, col) in zip(override_dtypes, other._data.values())
-        )
-        for (name, col), dtype in zip(self._data.items(), dtypes):
+        for (name, col), (_, dtype) in zip(self._data.items(), other._dtypes):
             self._data.set_by_label(
                 name, col._with_type_metadata(dtype), validate=False
             )
@@ -1495,7 +1466,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def _colwise_binop(
         cls,
-        operands: Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
+        operands: dict[str | None, tuple[ColumnBase, Any, bool, Any]],
         fn: str,
     ):
         """Implement binary ops between two frame-like objects.
@@ -1910,8 +1881,8 @@ class Frame(BinaryOperand, Scannable):
     @staticmethod
     @_cudf_nvtx_annotate
     def _repeat(
-        columns: List[ColumnBase], repeats, axis=None
-    ) -> List[ColumnBase]:
+        columns: list[ColumnBase], repeats, axis=None
+    ) -> list[ColumnBase]:
         if axis is not None:
             raise NotImplementedError(
                 "Only axis=`None` supported at this time."
