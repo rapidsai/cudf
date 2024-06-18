@@ -669,10 +669,11 @@ class ColumnAccessor(abc.MutableMapping):
                 raise ValueError("Duplicate column names are not allowed")
 
         data = dict(zip(new_col_names, self.values()))
-        return self.__class__(
+        return type(self)(
             data=data,
             level_names=self.level_names,
             multiindex=self.multiindex,
+            label_dtype=self.label_dtype,
             verify=False,
         )
 

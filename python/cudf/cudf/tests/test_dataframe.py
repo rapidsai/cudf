@@ -10020,6 +10020,14 @@ def test_dataframe_rename_duplicate_column():
         gdf.rename(columns={"a": "b"}, inplace=True)
 
 
+def test_dataframe_rename_columns_keep_type():
+    gdf = cudf.DataFrame([[1, 2, 3]])
+    gdf.columns = cudf.Index([4, 5, 6], dtype=np.int8)
+    result = gdf.rename({4: 50}, axis="columns").columns
+    expected = pd.Index([50, 5, 6], dtype=np.int8)
+    assert_eq(result, expected)
+
+
 @pytest_unmark_spilling
 @pytest.mark.skipif(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,

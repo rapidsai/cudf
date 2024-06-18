@@ -2968,7 +2968,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             idx = MultiIndex._from_data(dict(enumerate(data_to_add)))
             idx.names = names
 
-        df = self if inplace else self.copy(deep=True)
+        df = self if inplace else self.copy(deep=False)
 
         if verify_integrity and not idx.is_unique:
             raise ValueError(f"Values in Index are not unique: {idx}")
@@ -3538,6 +3538,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             mapper if columns is None and axis in (1, "columns") else columns
         )
 
+        result = self if inplace else self.copy(deep=copy)
+
+        out_index = None
         if index:
             if (
                 any(isinstance(item, str) for item in index.values())
@@ -3559,33 +3562,32 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 out_index._data[level] = column.as_column(level_values)
                 out_index._compute_levels_and_codes()
-                out = DataFrame(index=out_index)
             else:
                 to_replace = list(index.keys())
                 vals = list(index.values())
                 is_all_na = vals.count(None) == len(vals)
 
                 try:
-                    index_data = {
-                        name: col.find_and_replace(to_replace, vals, is_all_na)
-                        for name, col in self.index._data.items()
-                    }
+                    out_index = _index_from_data(
+                        {
+                            name: col.find_and_replace(
+                                to_replace, vals, is_all_na
+                            )
+                            for name, col in self.index._data.items()
+                        }
+                    )
                 except OverflowError:
-                    index_data = self.index._data.copy(deep=True)
+                    pass
 
-                out = DataFrame(index=_index_from_data(index_data))
-        else:
-            out = DataFrame(index=self.index)
+        if out_index is not None:
+            result.index = out_index
 
         if columns:
-            out._data = self._data.rename_levels(mapper=columns, level=level)
-        else:
-            out._data = self._data.copy(deep=copy)
+            result._data = result._data.rename_levels(
+                mapper=columns, level=level
+            )
 
-        if inplace:
-            self._data = out._data
-        else:
-            return out.copy(deep=copy)
+        return result
 
     @_cudf_nvtx_annotate
     def add_prefix(self, prefix):
