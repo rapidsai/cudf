@@ -135,12 +135,12 @@ class hostdevice_vector {
 
   void device_to_host_async(rmm::cuda_stream_view stream)
   {
-    cuda_memcpy_async(device_ptr(), host_ptr(), size(), copy_kind::DEVICE_TO_PINNED, stream);
+    cuda_memcpy_async(host_ptr(), device_ptr(), size(), copy_kind::DEVICE_TO_PINNED, stream);
   }
 
   void device_to_host_sync(rmm::cuda_stream_view stream)
   {
-    cuda_memcpy(device_ptr(), host_ptr(), size(), copy_kind::DEVICE_TO_PINNED, stream);
+    cuda_memcpy(host_ptr(), device_ptr(), size(), copy_kind::DEVICE_TO_PINNED, stream);
   }
 
   /**
