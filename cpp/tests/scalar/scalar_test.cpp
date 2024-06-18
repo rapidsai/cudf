@@ -248,7 +248,7 @@ TEST_F(StructScalarTest, BasicNulls)
   src_columns.push_back(std::make_unique<cudf::column>(src_children[0]));
   src_columns.push_back(std::make_unique<cudf::column>(src_children[1]));
   src_columns.push_back(std::make_unique<cudf::column>(src_children[2]));
-  cudf::test::structs_column_wrapper valid_struct_col(std::move(src_columns), {1});
+  cudf::test::structs_column_wrapper valid_struct_col(std::move(src_columns), {true});
   cudf::column_view vcv = static_cast<cudf::column_view>(valid_struct_col);
   std::vector<cudf::column_view> valid_children(vcv.child_begin(), vcv.child_end());
 
@@ -256,7 +256,7 @@ TEST_F(StructScalarTest, BasicNulls)
   src_columns.push_back(std::make_unique<cudf::column>(src_children[0]));
   src_columns.push_back(std::make_unique<cudf::column>(src_children[1]));
   src_columns.push_back(std::make_unique<cudf::column>(src_children[2]));
-  cudf::test::structs_column_wrapper invalid_struct_col(std::move(src_columns), {0});
+  cudf::test::structs_column_wrapper invalid_struct_col(std::move(src_columns), {false});
   cudf::column_view icv = static_cast<cudf::column_view>(invalid_struct_col);
   std::vector<cudf::column_view> invalid_children(icv.child_begin(), icv.child_end());
 

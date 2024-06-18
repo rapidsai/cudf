@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 from functools import wraps
-from typing import Set
 
 import numpy as np
 import pandas as pd
@@ -695,7 +695,7 @@ def _aggs_optimized(arg, supported: set):
     """Check that aggregations in `arg` are a subset of `supported`"""
     if isinstance(arg, (list, dict)):
         if isinstance(arg, dict):
-            _global_set: Set[str] = set()
+            _global_set: set[str] = set()
             for col in arg:
                 if isinstance(arg[col], list):
                     _global_set = _global_set.union(set(arg[col]))

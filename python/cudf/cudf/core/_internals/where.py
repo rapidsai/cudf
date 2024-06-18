@@ -1,18 +1,17 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import warnings
-from typing import Tuple, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 import cudf
-from cudf._typing import ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_bool_dtype,
     is_scalar,
 )
-from cudf.core.column import ColumnBase
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
     _can_cast,
@@ -20,6 +19,10 @@ from cudf.utils.dtypes import (
     find_common_type,
     is_mixed_with_object_dtype,
 )
+
+if TYPE_CHECKING:
+    from cudf._typing import ScalarLike
+    from cudf.core.column import ColumnBase
 
 
 def _normalize_categorical(input_col, other):
@@ -41,9 +44,9 @@ def _normalize_categorical(input_col, other):
 
 def _check_and_cast_columns_with_other(
     source_col: ColumnBase,
-    other: Union[ScalarLike, ColumnBase],
+    other: ScalarLike | ColumnBase,
     inplace: bool,
-) -> Tuple[ColumnBase, Union[ScalarLike, ColumnBase]]:
+) -> tuple[ColumnBase, ScalarLike | ColumnBase]:
     # Returns type-casted `source_col` & `other` based on `inplace`.
     source_dtype = source_col.dtype
     if isinstance(source_dtype, CategoricalDtype):

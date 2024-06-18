@@ -3,16 +3,18 @@
 
 from __future__ import annotations
 
-from typing import Optional, cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import ScalarLike
 from cudf.core.column import ColumnBase
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
+
+if TYPE_CHECKING:
+    from cudf._typing import ScalarLike
 
 
 class NumericalBaseColumn(ColumnBase, Scannable):
@@ -40,10 +42,10 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         "cummax",
     }
 
-    def _can_return_nan(self, skipna: Optional[bool] = None) -> bool:
+    def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls()
 
-    def kurtosis(self, skipna: Optional[bool] = None) -> float:
+    def kurtosis(self, skipna: bool | None = None) -> float:
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
@@ -68,7 +70,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
 
-    def skew(self, skipna: Optional[bool] = None) -> ScalarLike:
+    def skew(self, skipna: bool | None = None) -> ScalarLike:
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
@@ -140,7 +142,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
     def mean(
         self,
-        skipna: Optional[bool] = None,
+        skipna: bool | None = None,
         min_count: int = 0,
         dtype=np.float64,
     ):
@@ -150,7 +152,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
     def var(
         self,
-        skipna: Optional[bool] = None,
+        skipna: bool | None = None,
         min_count: int = 0,
         dtype=np.float64,
         ddof=1,
@@ -161,7 +163,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
     def std(
         self,
-        skipna: Optional[bool] = None,
+        skipna: bool | None = None,
         min_count: int = 0,
         dtype=np.float64,
         ddof=1,
@@ -170,7 +172,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             "std", skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
         )
 
-    def median(self, skipna: Optional[bool] = None) -> NumericalBaseColumn:
+    def median(self, skipna: bool | None = None) -> NumericalBaseColumn:
         skipna = True if skipna is None else skipna
 
         if self._can_return_nan(skipna=skipna):

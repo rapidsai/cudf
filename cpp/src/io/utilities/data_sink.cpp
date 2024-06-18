@@ -49,7 +49,7 @@ class file_sink : public data_sink {
     }
   }
 
-  virtual ~file_sink() { flush(); }
+  ~file_sink() override { flush(); }
 
   void host_write(void const* data, size_t size) override
   {
@@ -113,7 +113,7 @@ class host_buffer_sink : public data_sink {
  public:
   explicit host_buffer_sink(std::vector<char>* buffer) : buffer_(buffer) {}
 
-  virtual ~host_buffer_sink() { flush(); }
+  ~host_buffer_sink() override { flush(); }
 
   void host_write(void const* data, size_t size) override
   {
@@ -136,7 +136,7 @@ class void_sink : public data_sink {
  public:
   explicit void_sink() {}
 
-  virtual ~void_sink() {}
+  ~void_sink() override {}
 
   void host_write(void const* data, size_t size) override { _bytes_written += size; }
 
@@ -169,7 +169,7 @@ class user_sink_wrapper : public data_sink {
  public:
   explicit user_sink_wrapper(cudf::io::data_sink* const user_sink_) : user_sink(user_sink_) {}
 
-  virtual ~user_sink_wrapper() {}
+  ~user_sink_wrapper() override {}
 
   void host_write(void const* data, size_t size) override { user_sink->host_write(data, size); }
 

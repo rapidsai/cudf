@@ -148,12 +148,12 @@ TEST_F(DistinctJoinTest, InnerJoinNoNulls)
 TEST_F(DistinctJoinTest, InnerJoinWithNulls)
 {
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
-  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
+  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
   column_wrapper<int32_t> col0_2{{1, 1, 2, 4, 1}};
 
   column_wrapper<int32_t> col1_0{{1, 2, 0, 2, 3}};
   strcol_wrapper col1_1({"s1", "s0", "s1", "s0", "s1"});
-  column_wrapper<int32_t> col1_2{{1, 1, 1, 1, 1}, {0, 1, 1, 0, 1}};
+  column_wrapper<int32_t> col1_2{{1, 1, 1, 1, 1}, {false, true, true, false, true}};
 
   CVector cols0, cols1;
   cols0.push_back(col0_0.release());
@@ -170,10 +170,10 @@ TEST_F(DistinctJoinTest, InnerJoinWithNulls)
   auto result        = distinct_join.inner_join();
 
   column_wrapper<int32_t> col_gold_0{{3, 2}};
-  strcol_wrapper col_gold_1({"s1", "s0"}, {1, 1});
+  strcol_wrapper col_gold_1({"s1", "s0"}, {true, true});
   column_wrapper<int32_t> col_gold_2{{1, 1}};
   column_wrapper<int32_t> col_gold_3{{3, 2}};
-  strcol_wrapper col_gold_4({"s1", "s0"}, {1, 1});
+  strcol_wrapper col_gold_4({"s1", "s0"}, {true, true});
   column_wrapper<int32_t> col_gold_5{{1, 1}};
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
@@ -190,21 +190,22 @@ TEST_F(DistinctJoinTest, InnerJoinWithNulls)
 TEST_F(DistinctJoinTest, InnerJoinWithStructsAndNulls)
 {
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
-  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
-  column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 4}, {1, 1, 1, 1, 0}};
+  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
+  column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 4}, {true, true, true, true, false}};
   std::initializer_list<std::string> col0_names = {
     "Samuel Vimes", "Carrot Ironfoundersson", "Detritus", "Samuel Vimes", "Angua von Überwald"};
   auto col0_names_col = strcol_wrapper{col0_names.begin(), col0_names.end()};
   auto col0_ages_col  = column_wrapper<int32_t>{{48, 27, 351, 31, 25}};
 
-  auto col0_is_human_col = column_wrapper<bool>{{true, true, false, false, false}, {1, 1, 0, 1, 0}};
+  auto col0_is_human_col =
+    column_wrapper<bool>{{true, true, false, false, false}, {true, true, false, true, false}};
 
   auto col0_3 =
     cudf::test::structs_column_wrapper{{col0_names_col, col0_ages_col, col0_is_human_col}};
 
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
   strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});
-  column_wrapper<int32_t> col1_2{{1, 1, 1, 2, 0}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col1_2{{1, 1, 1, 2, 0}, {true, false, true, true, true}};
   std::initializer_list<std::string> col1_names = {"Carrot Ironfoundersson",
                                                    "Angua von Überwald",
                                                    "Detritus",
@@ -213,7 +214,8 @@ TEST_F(DistinctJoinTest, InnerJoinWithStructsAndNulls)
   auto col1_names_col = strcol_wrapper{col1_names.begin(), col1_names.end()};
   auto col1_ages_col  = column_wrapper<int32_t>{{31, 25, 351, 27, 48}};
 
-  auto col1_is_human_col = column_wrapper<bool>{{true, false, false, false, true}, {1, 0, 0, 1, 1}};
+  auto col1_is_human_col =
+    column_wrapper<bool>{{true, false, false, false, true}, {true, false, false, true, true}};
 
   auto col1_3 =
     cudf::test::structs_column_wrapper{{col1_names_col, col1_ages_col, col1_is_human_col}};
@@ -235,23 +237,23 @@ TEST_F(DistinctJoinTest, InnerJoinWithStructsAndNulls)
   auto result        = distinct_join.inner_join();
 
   column_wrapper<int32_t> col_gold_0{{3, 2}};
-  strcol_wrapper col_gold_1({"s1", "s0"}, {1, 1});
-  column_wrapper<int32_t> col_gold_2{{0, 4}, {1, 0}};
+  strcol_wrapper col_gold_1({"s1", "s0"}, {true, true});
+  column_wrapper<int32_t> col_gold_2{{0, 4}, {true, false}};
   auto col_gold_3_names_col = strcol_wrapper{"Samuel Vimes", "Angua von Überwald"};
   auto col_gold_3_ages_col  = column_wrapper<int32_t>{{48, 25}};
 
-  auto col_gold_3_is_human_col = column_wrapper<bool>{{true, false}, {1, 0}};
+  auto col_gold_3_is_human_col = column_wrapper<bool>{{true, false}, {true, false}};
 
   auto col_gold_3 = cudf::test::structs_column_wrapper{
     {col_gold_3_names_col, col_gold_3_ages_col, col_gold_3_is_human_col}};
 
   column_wrapper<int32_t> col_gold_4{{3, 2}};
-  strcol_wrapper col_gold_5({"s1", "s0"}, {1, 1});
-  column_wrapper<int32_t> col_gold_6{{0, -1}, {1, 0}};
+  strcol_wrapper col_gold_5({"s1", "s0"}, {true, true});
+  column_wrapper<int32_t> col_gold_6{{0, -1}, {true, false}};
   auto col_gold_7_names_col = strcol_wrapper{"Samuel Vimes", "Angua von Überwald"};
   auto col_gold_7_ages_col  = column_wrapper<int32_t>{{48, 25}};
 
-  auto col_gold_7_is_human_col = column_wrapper<bool>{{true, false}, {1, 0}};
+  auto col_gold_7_is_human_col = column_wrapper<bool>{{true, false}, {true, false}};
 
   auto col_gold_7 = cudf::test::structs_column_wrapper{
     {col_gold_7_names_col, col_gold_7_ages_col, col_gold_7_is_human_col}};
@@ -275,7 +277,7 @@ TEST_F(DistinctJoinTest, EmptyBuildTableInnerJoin)
   column_wrapper<int32_t> col0_1;
 
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
-  column_wrapper<int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col1_1{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
 
   CVector cols0, cols1;
   cols0.push_back(col0_0.release());
@@ -298,7 +300,7 @@ TEST_F(DistinctJoinTest, EmptyBuildTableLeftJoin)
   column_wrapper<int32_t> col0_1;
 
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
-  column_wrapper<int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col1_1{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
 
   CVector cols0, cols1;
   cols0.push_back(col0_0.release());
@@ -320,7 +322,7 @@ TEST_F(DistinctJoinTest, EmptyBuildTableLeftJoin)
 TEST_F(DistinctJoinTest, EmptyProbeTableInnerJoin)
 {
   column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}};
-  column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
 
   column_wrapper<int32_t> col1_0;
   column_wrapper<int32_t> col1_1;
@@ -343,7 +345,7 @@ TEST_F(DistinctJoinTest, EmptyProbeTableInnerJoin)
 TEST_F(DistinctJoinTest, EmptyProbeTableLeftJoin)
 {
   column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}};
-  column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
 
   column_wrapper<int32_t> col1_0;
   column_wrapper<int32_t> col1_1;
@@ -384,8 +386,8 @@ TEST_F(DistinctJoinTest, LeftJoinNoNulls)
 
   column_wrapper<int32_t> col_gold_0({3, 1, 2, 0, 3});
   strcol_wrapper col_gold_1({"s0", "s1", "s2", "s4", "s1"});
-  column_wrapper<int32_t> col_gold_2{{-1, -1, -1, -1, 3}, {0, 0, 0, 0, 1}};
-  strcol_wrapper col_gold_3{{"", "", "", "", "s1"}, {0, 0, 0, 0, 1}};
+  column_wrapper<int32_t> col_gold_2{{-1, -1, -1, -1, 3}, {false, false, false, false, true}};
+  strcol_wrapper col_gold_3{{"", "", "", "", "s1"}, {false, false, false, false, true}};
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
@@ -404,7 +406,7 @@ TEST_F(DistinctJoinTest, LeftJoinNoNulls)
 TEST_F(DistinctJoinTest, LeftJoinWithNulls)
 {
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
-  strcol_wrapper col0_1({"s1", "s1", "", "s4", "s0"}, {1, 1, 0, 1, 1});
+  strcol_wrapper col0_1({"s1", "s1", "", "s4", "s0"}, {true, true, false, true, true});
 
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
   strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});
@@ -422,10 +424,10 @@ TEST_F(DistinctJoinTest, LeftJoinWithNulls)
   auto result        = distinct_join.left_join();
   auto gather_map    = std::pair{std::move(result), std::move(get_left_indices(result->size()))};
 
-  column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 2}, {1, 1, 1, 1, 1}};
-  strcol_wrapper col_gold_1({"s1", "s1", "", "s4", "s0"}, {1, 1, 0, 1, 1});
-  column_wrapper<int32_t> col_gold_2{{3, -1, -1, -1, 2}, {1, 0, 0, 0, 1}};
-  strcol_wrapper col_gold_3{{"s1", "", "", "", "s0"}, {1, 0, 0, 0, 1}};
+  column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 2}, {true, true, true, true, true}};
+  strcol_wrapper col_gold_1({"s1", "s1", "", "s4", "s0"}, {true, true, false, true, true});
+  column_wrapper<int32_t> col_gold_2{{3, -1, -1, -1, 2}, {true, false, false, false, true}};
+  strcol_wrapper col_gold_3{{"s1", "", "", "", "s0"}, {true, false, false, false, true}};
 
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
@@ -442,15 +444,17 @@ TEST_F(DistinctJoinTest, LeftJoinWithStructsAndNulls)
 {
   auto col0_names_col = strcol_wrapper{
     "Samuel Vimes", "Carrot Ironfoundersson", "Detritus", "Samuel Vimes", "Angua von Überwald"};
-  auto col0_ages_col     = column_wrapper<int32_t>{{48, 27, 351, 31, 25}};
-  auto col0_is_human_col = column_wrapper<bool>{{true, true, false, false, false}, {1, 1, 0, 1, 0}};
+  auto col0_ages_col = column_wrapper<int32_t>{{48, 27, 351, 31, 25}};
+  auto col0_is_human_col =
+    column_wrapper<bool>{{true, true, false, false, false}, {true, true, false, true, false}};
   auto col0 =
     cudf::test::structs_column_wrapper{{col0_names_col, col0_ages_col, col0_is_human_col}};
 
   auto col1_names_col = strcol_wrapper{
     "Samuel Vimes", "Detritus", "Detritus", "Carrot Ironfoundersson", "Angua von Überwald"};
-  auto col1_ages_col     = column_wrapper<int32_t>{{48, 35, 351, 22, 25}};
-  auto col1_is_human_col = column_wrapper<bool>{{true, true, false, false, true}, {1, 1, 0, 1, 1}};
+  auto col1_ages_col = column_wrapper<int32_t>{{48, 35, 351, 22, 25}};
+  auto col1_is_human_col =
+    column_wrapper<bool>{{true, true, false, false, true}, {true, true, false, true, true}};
   auto col1 =
     cudf::test::structs_column_wrapper{{col1_names_col, col1_ages_col, col1_is_human_col}};
 
@@ -469,7 +473,7 @@ TEST_F(DistinctJoinTest, LeftJoinWithStructsAndNulls)
     "Samuel Vimes", "Detritus", "Carrot Ironfoundersson", "Samuel Vimes", "Angua von Überwald"};
   auto col0_gold_ages_col = column_wrapper<int32_t>{{48, 351, 27, 31, 25}};
   auto col0_gold_is_human_col =
-    column_wrapper<bool>{{true, false, true, false, false}, {1, 0, 1, 1, 0}};
+    column_wrapper<bool>{{true, false, true, false, false}, {true, false, true, true, false}};
   auto col0_gold = cudf::test::structs_column_wrapper{
     {col0_gold_names_col, col0_gold_ages_col, col0_gold_is_human_col}};
 
@@ -480,12 +484,14 @@ TEST_F(DistinctJoinTest, LeftJoinWithStructsAndNulls)
                                               "",
                                               "",
                                             },
-                                            {1, 1, 0, 0, 0}};
-  auto col1_gold_ages_col  = column_wrapper<int32_t>{{48, 351, -1, -1, -1}, {1, 1, 0, 0, 0}};
+                                            {true, true, false, false, false}};
+  auto col1_gold_ages_col =
+    column_wrapper<int32_t>{{48, 351, -1, -1, -1}, {true, true, false, false, false}};
   auto col1_gold_is_human_col =
-    column_wrapper<bool>{{true, false, false, false, false}, {1, 0, 0, 0, 0}};
+    column_wrapper<bool>{{true, false, false, false, false}, {true, false, false, false, false}};
   auto col1_gold = cudf::test::structs_column_wrapper{
-    {col1_gold_names_col, col1_gold_ages_col, col1_gold_is_human_col}, {1, 1, 0, 0, 0}};
+    {col1_gold_names_col, col1_gold_ages_col, col1_gold_is_human_col},
+    {true, true, false, false, false}};
 
   CVector cols_gold;
   cols_gold.push_back(col0_gold.release());

@@ -56,18 +56,22 @@ struct range_window_bounds {
    * @brief Factory method to construct a bounded window boundary.
    *
    * @param boundary Finite window boundary
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @return A bounded window boundary object
    */
-  static range_window_bounds get(scalar const& boundary);
+  static range_window_bounds get(scalar const& boundary,
+                                 rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Factory method to construct a window boundary
    *  limited to the value of the current row
    *
    * @param type The datatype of the window boundary
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @return  A "current row" window boundary object
    */
-  static range_window_bounds current_row(data_type type);
+  static range_window_bounds current_row(data_type type,
+                                         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Whether or not the window is bounded to the current row
@@ -81,9 +85,11 @@ struct range_window_bounds {
    * @brief Factory method to construct an unbounded window boundary.
    *
    * @param type The datatype of the window boundary
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @return  An unbounded window boundary object
    */
-  static range_window_bounds unbounded(data_type type);
+  static range_window_bounds unbounded(data_type type,
+                                       rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Whether or not the window is unbounded
@@ -107,7 +113,9 @@ struct range_window_bounds {
   extent_type _extent{extent_type::UNBOUNDED};
   std::shared_ptr<scalar> _range_scalar{nullptr};  // To enable copy construction/assignment.
 
-  range_window_bounds(extent_type extent_, std::unique_ptr<scalar> range_scalar_);
+  range_window_bounds(extent_type extent_,
+                      std::unique_ptr<scalar> range_scalar_,
+                      rmm::cuda_stream_view = cudf::get_default_stream());
 };
 
 /** @} */  // end of group
