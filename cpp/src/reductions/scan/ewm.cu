@@ -53,65 +53,52 @@ class recurrence_functor {
 };
 
 template <typename T>
-class ewma_functor_base {
- public:
+struct ewma_functor_base {
   T beta;
-  ewma_functor_base(T beta) : beta{beta} {}
-
-  pair_type<T> IDENTITY{1.0, 0.0};
+  ewma_functor_base(T beta) : beta{std::move(beta)} {}
+  const pair_type<T> IDENTITY{1.0, 0.0};
 };
 
 template <typename T, bool has_nulls, bool is_numerator>
-class ewma_adjust_functor : public ewma_functor_base<T> {
+struct ewma_adjust_functor : public ewma_functor_base<T> {
   using ewma_functor_base<T>::ewma_functor_base;
+};
 
- public:
-  using tupletype = std::conditional_t<has_nulls, thrust::tuple<bool, int, T>, T>;
-
-  __device__ pair_type<T> operator()(tupletype const data)
+template <typename T, bool is_numerator>
+struct ewma_adjust_functor<T, true, is_numerator> : public ewma_functor_base<T> {
+  __device__ pair_type<T> operator()(thrust::tuple<bool, int, T> const data)
   {
-    if constexpr (has_nulls) {
-      bool const valid = thrust::get<0>(data);
-      int const exp    = thrust::get<1>(data);
-      T const input    = thrust::get<2>(data);
-      T const beta     = this->beta;
+    // Not const to allow for updating the input value
+    auto [valid, exp, input] = data;
+    if (!valid) { return this->IDENTITY; }
+    if constexpr (not is_numerator) { input = 1; }
 
-      if (!valid) { return this->IDENTITY; }
+    // The value is non-null, but nulls preceding it
+    // must adjust the second element of the pair
+    return {this->beta * ((exp != 0) ? pow(this->beta, exp) : 1), input};
+  }
+};
 
-      T const second = [=]() {
-        if constexpr (is_numerator) {
-          return input;
-        } else {
-          return 1;
-        }
-      }();
-      if (valid and (exp != 0)) {
-        // The value is non-null, but nulls preceding it
-        // must adjust the second element of the pair
-
-        return {beta * (pow(beta, exp)), second};
-      } else {
-        return {beta, second};
-      }
+template <typename T, bool is_numerator>
+struct ewma_adjust_functor<T, false, is_numerator> : public ewma_functor_base<T> {
+  __device__ pair_type<T> operator()(T const data)
+  {
+    T const beta = this->beta;
+    if constexpr (is_numerator) {
+      return {beta, data};
     } else {
-      if constexpr (is_numerator) {
-        return {this->beta, data};
-      } else {
-        return {this->beta, 1.0};
-      }
+      return {beta, 1.0};
     }
   }
 };
 
 template <typename T, bool has_nulls>
-class ewma_noadjust_functor : public ewma_functor_base<T> {
+struct ewma_noadjust_functor : public ewma_functor_base<T> {
   using ewma_functor_base<T>::ewma_functor_base;
+};
 
- public:
-  using tupletype = std::conditional_t<has_nulls,
-                                       thrust::tuple<T, size_type, bool, size_type>,
-                                       thrust::tuple<T, size_type>>;
-
+template <typename T>
+struct ewma_noadjust_functor<T, true> : public ewma_functor_base<T> {
   /*
     In the null case, a denominator actually has to be computed. The formula is
     y_{i+1} = (1 - alpha)x_{i-1} + alpha x_i, but really there is a "denominator"
@@ -125,37 +112,33 @@ class ewma_noadjust_functor : public ewma_functor_base<T> {
     properly downweight the previous values. But now but we also need to compute
     the normalization factors and divide the results into them at the end.
   */
-  __device__ pair_type<T> operator()(tupletype const data)
+  __device__ pair_type<T> operator()(thrust::tuple<T, size_type, bool, size_type> const data)
   {
-    T const beta          = this->beta;
-    size_type const index = thrust::get<1>(data);
-    T const input         = thrust::get<0>(data);
-
-    if constexpr (!has_nulls) {
-      if (index == 0) {
-        return {beta, input};
-      } else {
-        return {beta, (1.0 - beta) * input};
-      }
+    T const beta                              = this->beta;
+    auto const [input, index, valid, nullcnt] = data;
+    if (index == 0) {
+      return {beta, input};
     } else {
-      bool const is_valid     = thrust::get<2>(data);
-      size_type const nullcnt = thrust::get<3>(data);
+      if (!valid) { return this->IDENTITY; }
+      // preceding value is valid, return normal pair
+      if (nullcnt == 0) { return {beta, (1.0 - beta) * input}; }
+      // one or more preceding values is null, adjust by how many
+      T const factor = (1.0 - beta) + pow(beta, nullcnt + 1);
+      return {(beta * (pow(beta, nullcnt)) / factor), ((1.0 - beta) * input) / factor};
+    }
+  }
+};
 
-      if (index == 0) {
-        return {beta, input};
-      } else {
-        if (is_valid and nullcnt == 0) {
-          // preceding value is valid, return normal pair
-          return {beta, (1.0 - beta) * input};
-        } else if (is_valid and nullcnt != 0) {
-          // one or more preceding values is null, adjust by how many
-          T const factor = (1.0 - beta) + pow(beta, nullcnt + 1);
-          return {(beta * (pow(beta, nullcnt)) / factor), ((1.0 - beta) * input) / factor};
-        } else {
-          // value is not valid
-          return this->IDENTITY;
-        }
-      }
+template <typename T>
+struct ewma_noadjust_functor<T, false> : public ewma_functor_base<T> {
+  __device__ pair_type<T> operator()(thrust::tuple<T, size_type> const data)
+  {
+    T const beta              = this->beta;
+    auto const [input, index] = data;
+    if (index == 0) {
+      return {beta, input};
+    } else {
+      return {beta, (1.0 - beta) * input};
     }
   }
 };
