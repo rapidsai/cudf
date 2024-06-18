@@ -256,6 +256,19 @@ struct column_name_info {
   }
 
   column_name_info() = default;
+
+  /**
+   * @brief Compares two column name info structs for equality
+   *
+   * @param rhs column name info struct to compare against
+   * @return boolean indicating if this and rhs are equal
+   */
+  bool operator==(column_name_info const& rhs) const
+  {
+    return ((name == rhs.name) && (is_nullable == rhs.is_nullable) &&
+            (is_binary == rhs.is_binary) && (type_length == rhs.type_length) &&
+            (children == rhs.children));
+  };
 };
 
 /**
