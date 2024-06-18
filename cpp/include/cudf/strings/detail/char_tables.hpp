@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 #pragma once
+
+#include <cudf/utilities/export.hpp>
 
 #include <cstdint>
 
@@ -33,6 +35,7 @@ using character_flags_table_type = std::uint8_t;
  *
  * @return Device memory pointer to character flags table.
  */
+CUDF_EXPORT
 character_flags_table_type const* get_character_flags_table();
 
 // utilities to dissect a character-table flag
@@ -61,6 +64,7 @@ using character_cases_table_type = uint16_t;
  *
  * @return Device memory pointer to character cases table.
  */
+CUDF_EXPORT
 character_cases_table_type const* get_character_cases_table();
 
 /**
@@ -88,6 +92,7 @@ struct special_case_mapping {
  *
  * @return Device memory pointer to the special case mapping table
  */
+CUDF_EXPORT
 const struct special_case_mapping* get_special_case_mapping_table();
 
 /**
