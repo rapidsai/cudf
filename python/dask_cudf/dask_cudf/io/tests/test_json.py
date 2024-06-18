@@ -106,9 +106,9 @@ def test_read_json_aggregate_files(tmp_path):
     json_path = str(tmp_path / "data-*.json")
     df1.to_json(json_path)
 
-    # df2 = dask_cudf.read_json(json_path, aggregate_files=2)
-    # assert df2.npartitions * 2 == df1.npartitions
-    # dd.assert_eq(df1, df2, check_index=False)
+    df2 = dask_cudf.read_json(json_path, aggregate_files=2)
+    assert df2.npartitions * 2 == df1.npartitions
+    dd.assert_eq(df1, df2, check_index=False)
 
     df2 = dask_cudf.read_json(
         json_path, aggregate_files=True, blocksize="1GiB"
