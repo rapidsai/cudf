@@ -6,8 +6,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars import translate_ir
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.fixture(
@@ -94,5 +96,4 @@ def test_scan_unsupported_raises(tmp_path):
 
     df.write_ndjson(tmp_path / "df.json")
     q = pl.scan_ndjson(tmp_path / "df.json")
-    with pytest.raises(NotImplementedError):
-        _ = translate_ir(q._ldf.visit())
+    assert_ir_translation_raises(q, NotImplementedError)
