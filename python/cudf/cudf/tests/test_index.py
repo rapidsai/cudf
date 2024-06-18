@@ -252,10 +252,10 @@ def test_index_rename_inplace():
     pds = pd.Index([1, 2, 3], name="asdf")
     gds = Index(pds)
 
-    # inplace=False should yield a deep copy
+    # inplace=False should yield a shallow copy
     gds_renamed_deep = gds.rename("new_name", inplace=False)
 
-    assert gds_renamed_deep._values.data_ptr != gds._values.data_ptr
+    assert gds_renamed_deep._values.data_ptr == gds._values.data_ptr
 
     # inplace=True returns none
     expected_ptr = gds._values.data_ptr
