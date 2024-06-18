@@ -62,7 +62,7 @@ from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import _warn_no_dask_cudf, search_range
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Iterable
 
 
 class IndexMeta(type):
@@ -232,9 +232,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
                     raise ValueError("Step must not be zero.") from err
                 raise
 
-    def _copy_type_metadata(
-        self, other: RangeIndex, *, override_dtypes=None
-    ) -> Self:
+    def _copy_type_metadata(self: Self, other: Self) -> Self:
         # There is no metadata to be copied for RangeIndex since it does not
         # have an underlying column.
         return self
@@ -484,6 +482,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
         """
         dtype = np.dtype(np.int64)
         return _maybe_convert_to_default_type(dtype)
+
+    @property
+    def _dtypes(self) -> Iterable:
+        return [(self.name, self.dtype)]
 
     @_cudf_nvtx_annotate
     def to_pandas(
@@ -1114,15 +1116,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
             return ret.values
         return ret
-
-    # Override just to make mypy happy.
-    @_cudf_nvtx_annotate
-    def _copy_type_metadata(
-        self, other: Self, *, override_dtypes=None
-    ) -> Self:
-        return super()._copy_type_metadata(
-            other, override_dtypes=override_dtypes
-        )
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -1769,10 +1762,8 @@ class DatetimeIndex(Index):
                 raise ValueError("No unique frequency found")
 
     @_cudf_nvtx_annotate
-    def _copy_type_metadata(
-        self: DatetimeIndex, other: DatetimeIndex, *, override_dtypes=None
-    ) -> Index:
-        super()._copy_type_metadata(other, override_dtypes=override_dtypes)
+    def _copy_type_metadata(self: Self, other: Self) -> Self:
+        super()._copy_type_metadata(other)
         self._freq = _validate_freq(other._freq)
         return self
 
