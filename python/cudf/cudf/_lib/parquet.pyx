@@ -36,13 +36,13 @@ cimport cudf._lib.pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
 cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
 cimport cudf._lib.pylibcudf.libcudf.types as cudf_types
 from cudf._lib.column cimport Column
-from cudf._lib.io.datasource cimport NativeFileDatasource
+from cudf._lib.pylibcudf.expressions cimport Expression
+from cudf._lib.pylibcudf.io.datasource cimport NativeFileDatasource
 from cudf._lib.io.utils cimport (
     make_sinks_info,
     make_source_info,
     update_struct_field_names,
 )
-from cudf._lib.pylibcudf.expressions cimport Expression
 from cudf._lib.pylibcudf.libcudf.expressions cimport expression
 from cudf._lib.pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_reader as cpp_chunked_parquet_reader,
