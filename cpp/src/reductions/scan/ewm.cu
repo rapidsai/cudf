@@ -295,10 +295,9 @@ struct ewma_functor {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
   {
-    auto ewma_agg = (dynamic_cast<ewma_aggregation const*>(&agg));
-
-    cudf::ewm_history const history = ewma_agg->history;
-    T const center_of_mass          = ewma_agg->center_of_mass;
+    auto const ewma_agg       = dynamic_cast<ewma_aggregation const*>(&agg);
+    auto const history        = ewma_agg->history;
+    auto const center_of_mass = ewma_agg->center_of_mass;
 
     // center of mass is easier for the user, but the recurrences are
     // better expressed in terms of the derived parameter `beta`
