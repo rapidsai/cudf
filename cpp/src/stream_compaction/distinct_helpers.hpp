@@ -46,7 +46,7 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
 template <typename RowHasher>
 using hash_set_type =
   cuco::static_set<size_type,
-                   size_type,
+                   cuco::extent<int64_t>,
                    cuda::thread_scope_device,
                    RowHasher,
                    cuco::linear_probing<1,
