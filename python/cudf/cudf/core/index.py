@@ -528,7 +528,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     def unique(self) -> Self:
         # RangeIndex always has unique values
-        return self
+        return self.copy()
 
     @_cudf_nvtx_annotate
     def __mul__(self, other):
@@ -3197,7 +3197,8 @@ def _get_nearest_indexer(
     )
     right_indexer = _get_indexer_basic(
         index=index,
-        positions=positions.copy(deep=True),
+        # positions no longer used so don't copy
+        positions=positions,
         method="backfill",
         target_col=target_col,
         tolerance=tolerance,
