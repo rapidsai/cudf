@@ -20,11 +20,6 @@ def dtype(request):
     return request.param
 
 
-@pytest.fixture(params=[False, True], ids=["no-nulls", "with-nulls"])
-def with_nulls(request):
-    return request.param
-
-
 @pytest.fixture(
     params=[
         False,

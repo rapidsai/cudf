@@ -14,19 +14,7 @@ import textwrap
 import warnings
 from collections import abc, defaultdict
 from collections.abc import Iterator
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    List,
-    Literal,
-    MutableMapping,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping, cast
 
 import cupy
 import numba
@@ -41,7 +29,6 @@ from typing_extensions import Self, assert_never
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
-from cudf._typing import ColumnLike, Dtype, NotImplementedType
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
@@ -98,6 +85,9 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import GetAttrGetItemMixin, _external_only_api
+
+if TYPE_CHECKING:
+    from cudf._typing import ColumnLike, Dtype, NotImplementedType
 
 _cupy_nan_methods_map = {
     "min": "nanmin",
@@ -681,7 +671,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     """
 
     _PROTECTED_KEYS = frozenset(("_data", "_index"))
-    _accessors: Set[Any] = set()
+    _accessors: set[Any] = set()
     _loc_indexer_type = _DataFrameLocIndexer
     _iloc_indexer_type = _DataFrameIlocIndexer
     _groupby = DataFrameGroupBy
@@ -1120,7 +1110,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _from_data(
         cls,
         data: MutableMapping,
-        index: Optional[BaseIndex] = None,
+        index: BaseIndex | None = None,
         columns: Any = None,
     ) -> DataFrame:
         out = super()._from_data(data=data, index=index)
@@ -1345,7 +1335,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         8  8  8  8
         """
         if _is_scalar_or_zero_d_array(arg) or isinstance(arg, tuple):
-            return self._get_columns_by_label(arg, downcast=True)
+            out = self._get_columns_by_label(arg)
+            if is_scalar(arg):
+                nlevels = 1
+            elif isinstance(arg, tuple):
+                nlevels = len(arg)
+            if self._data.multiindex is False or nlevels == self._data.nlevels:
+                out = self._constructor_sliced._from_data(out._data)
+                out.index = self.index
+                out.name = arg
+            return out
 
         elif isinstance(arg, slice):
             return self._slice(arg)
@@ -1541,7 +1540,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self[columns]
 
     @_cudf_nvtx_annotate
-    def assign(self, **kwargs: Union[Callable[[Self], Any], Any]):
+    def assign(self, **kwargs: Callable[[Self], Any] | Any):
         """
         Assign columns to DataFrame from keyword arguments.
 
@@ -1990,31 +1989,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _repr_latex_(self):
         return self._get_renderable_dataframe().to_pandas()._repr_latex_()
 
-    @_cudf_nvtx_annotate
-    def _get_columns_by_label(
-        self, labels, *, downcast=False
-    ) -> Self | Series:
-        """
-        Return columns of dataframe by `labels`
-
-        If downcast is True, try and downcast from a DataFrame to a Series
-        """
-        ca = self._data.select_by_label(labels)
-        if downcast:
-            if is_scalar(labels):
-                nlevels = 1
-            elif isinstance(labels, tuple):
-                nlevels = len(labels)
-            if self._data.multiindex is False or nlevels == self._data.nlevels:
-                out = self._constructor_sliced._from_data(
-                    ca, index=self.index, name=labels
-                )
-                return out
-        out = self.__class__._from_data(
-            ca, index=self.index, columns=ca.to_pandas_index()
-        )
-        return out
-
     def _make_operands_and_index_for_binop(
         self,
         other: Any,
@@ -2022,12 +1996,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         fill_value: Any = None,
         reflect: bool = False,
         can_reindex: bool = False,
-    ) -> Tuple[
-        Union[
-            Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            NotImplementedType,
-        ],
-        Optional[BaseIndex],
+    ) -> tuple[
+        dict[str | None, tuple[ColumnBase, Any, bool, Any]]
+        | NotImplementedType,
+        BaseIndex | None,
         bool,
     ]:
         lhs, rhs = self._data, other
@@ -2132,8 +2104,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         cls,
         data: dict,
         orient: str = "columns",
-        dtype: Optional[Dtype] = None,
-        columns: Optional[list] = None,
+        dtype: Dtype | None = None,
+        columns: list | None = None,
     ) -> DataFrame:
         """
         Construct DataFrame from dict of array-like or dicts.
@@ -4597,7 +4569,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def applymap(
         self,
         func: Callable[[Any], Any],
-        na_action: Union[str, None] = None,
+        na_action: str | None = None,
         **kwargs,
     ) -> DataFrame:
         """
@@ -4630,7 +4602,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def map(
         self,
         func: Callable[[Any], Any],
-        na_action: Union[str, None] = None,
+        na_action: str | None = None,
         **kwargs,
     ) -> DataFrame:
         """
@@ -7389,9 +7361,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3     4  44
         3     5  44
         """
-        if column not in self._column_names:
-            raise KeyError(column)
-
         return super()._explode(column, ignore_index)
 
     def pct_change(
@@ -7475,7 +7444,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self, nan_as_null=nan_as_null, allow_copy=allow_copy
         )
 
-    def nunique(self, axis=0, dropna=True):
+    def nunique(self, axis=0, dropna: bool = True) -> Series:
         """
         Count number of distinct elements in specified axis.
         Return Series with number of distinct elements. Can ignore NaN values.
@@ -7503,13 +7472,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         if axis != 0:
             raise NotImplementedError("axis parameter is not supported yet.")
-
-        return cudf.Series(super().nunique(dropna=dropna))
+        counts = [col.distinct_count(dropna=dropna) for col in self._columns]
+        return self._constructor_sliced(
+            counts, index=self._data.to_pandas_index()
+        )
 
     def _sample_axis_1(
         self,
         n: int,
-        weights: Optional[ColumnLike],
+        weights: ColumnLike | None,
         replace: bool,
         random_state: np.random.RandomState,
         ignore_index: bool,
@@ -7534,17 +7505,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     def _from_columns_like_self(
         self,
-        columns: List[ColumnBase],
-        column_names: Optional[abc.Iterable[str]] = None,
-        index_names: Optional[List[str]] = None,
-        *,
-        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
+        columns: list[ColumnBase],
+        column_names: abc.Iterable[str] | None = None,
+        index_names: list[str] | None = None,
     ) -> DataFrame:
         result = super()._from_columns_like_self(
             columns,
             column_names,
             index_names,
-            override_dtypes=override_dtypes,
         )
         result._set_columns_like(self._data)
         return result
@@ -8139,7 +8107,7 @@ def _setitem_with_dataframe(
     input_df: DataFrame,
     replace_df: DataFrame,
     input_cols: Any = None,
-    mask: Optional[ColumnBase] = None,
+    mask: ColumnBase | None = None,
     ignore_index: bool = False,
 ):
     """
