@@ -19,16 +19,6 @@
 #include <cudf/io/json.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <fstream>
-
-namespace {
-
-cudf::test::TempDirTestEnvironment* const g_temp_env =
-  static_cast<cudf::test::TempDirTestEnvironment*>(
-    ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
-
-}  // namespace
-
 struct JsonLargeReaderTest : public cudf::test::StringsLargeTest {};
 
 TEST_F(JsonLargeReaderTest, MultiBatch)
@@ -48,10 +38,6 @@ TEST_F(JsonLargeReaderTest, MultiBatch)
     json_string += json_string;
     numrows <<= 1;
   }
-
-  auto filename = g_temp_env->get_temp_dir() + "LargeishJSONFile.json";
-  std::ofstream outfile(filename, std::ofstream::out);
-  outfile << json_string;
 
   constexpr int num_sources = 2;
   std::vector<cudf::host_span<char>> hostbufs(
