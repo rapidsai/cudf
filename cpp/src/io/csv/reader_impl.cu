@@ -131,7 +131,7 @@ std::vector<std::string> get_column_names(std::vector<char> const& header,
   std::vector<std::string> col_names;
 
   // If there is only a single character then it would be the terminator
-  if (header.size() <= 1) { return col_names; }
+  if (header.empty() or (header.size() == 1 and header[0] == '\n')) { return col_names; }
 
   std::vector<char> first_row = header;
 
@@ -142,7 +142,7 @@ std::vector<std::string> get_column_names(std::vector<char> const& header,
       quotation = !quotation;
     }
     // Check if end of a column/row
-    else if (pos == first_row.size() - 1 ||
+    if (pos == first_row.size() - 1 ||
              (!quotation && first_row[pos] == parse_opts.terminator) ||
              (!quotation && first_row[pos] == parse_opts.delimiter)) {
       // This is the header, add the column name
@@ -181,7 +181,7 @@ std::vector<std::string> get_column_names(std::vector<char> const& header,
       prev = pos + 1;
     }
   }
-
+  
   return col_names;
 }
 
