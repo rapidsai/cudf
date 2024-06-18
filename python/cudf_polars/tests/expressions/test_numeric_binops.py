@@ -99,3 +99,15 @@ def test_numeric_binop(df, binop):
     q = df.select(binop(left, right))
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("left_scalar", [False, True])
+@pytest.mark.parametrize("right_scalar", [False, True])
+def test_binop_with_scalar(left_scalar, right_scalar):
+    df = pl.LazyFrame({"a": [1, 2, 3], "b": [5, 6, 7]})
+
+    lop = pl.lit(2) if left_scalar else pl.col("a")
+    rop = pl.lit(6) if right_scalar else pl.col("b")
+    q = df.select(lop / rop)
+
+    assert_gpu_result_equal(q)
