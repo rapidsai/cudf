@@ -2278,7 +2278,8 @@ def test_read_header_none_pandas_compat_column_type():
     expected = pd.read_csv(StringIO(data), header=None).columns
     pd.testing.assert_index_equal(result, expected, exact=True)
 
-@pytest.mark.parametrize("buffer", ['1', '"one"'])
+
+@pytest.mark.parametrize("buffer", ["1", '"one"'])
 def test_read_single_unterminated_row(buffer):
     gdf = cudf.read_csv(StringIO(buffer), header=None)
     assert_eq(gdf.shape, (1, 1))
