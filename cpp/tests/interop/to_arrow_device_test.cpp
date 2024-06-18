@@ -352,11 +352,15 @@ TEST_F(ToArrowDeviceTest, EmptyTable)
   auto got_arrow_device = cudf::to_arrow_device(table->view());
   EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_device->device_id);
   EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_device->device_type);
+  ASSERT_CUDA_SUCCEEDED(
+    cudaEventQuery(*reinterpret_cast<cudaEvent_t*>(got_arrow_device->sync_event)));
   compare_arrays(schema.get(), arr.get(), &got_arrow_device->array);
 
   got_arrow_device = cudf::to_arrow_device(std::move(*table));
   EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_device->device_id);
   EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_device->device_type);
+  ASSERT_CUDA_SUCCEEDED(
+    cudaEventQuery(*reinterpret_cast<cudaEvent_t*>(got_arrow_device->sync_event)));
   compare_arrays(schema.get(), arr.get(), &got_arrow_device->array);
 }
 
