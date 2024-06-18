@@ -423,8 +423,8 @@ std::unique_ptr<table> from_arrow_host(
  *
  * @throws std::invalid_argument if input is NULL
  *
- * The conversion will not call release on the input ArrayArrayStream or its
- * constituent arrays or schema.
+ * The conversion WILL release the input ArrayArrayStream and its constituent
+ * arrays or schema since Arrow streams are not suitable for multiple reads.
  *
  * @param input `ArrowArrayStream` pointer to object that will produce ArrowArray data
  * @param stream CUDA stream used for device memory operations and kernel launches

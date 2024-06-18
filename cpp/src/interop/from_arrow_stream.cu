@@ -97,11 +97,15 @@ std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
     NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetNext(input, &chunk, nullptr));
     if (chunk.release == nullptr) { break; }
     chunks.push_back(from_arrow(&schema, &chunk, stream, mr));
+    chunk.release(&chunk);
   }
   input->release(input);
 
   if (chunks.empty()) {
-    if (schema.n_children == 0) { return std::make_unique<cudf::table>(); }
+    if (schema.n_children == 0) {
+      schema.release(&schema);
+      return std::make_unique<cudf::table>();
+    }
 
     // If there are no chunks but the schema has children, we need to construct a suitable empty
     // table.
@@ -112,8 +116,11 @@ std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
       schema.children + schema.n_children,
       std::back_inserter(columns),
       [&](auto const& child) { return make_empty_column_from_schema(child, stream, mr); });
+    schema.release(&schema);
     return std::make_unique<cudf::table>(std::move(columns));
   }
+
+  schema.release(&schema);
 
   auto chunk_views = std::vector<table_view>{};
   chunk_views.reserve(chunks.size());
