@@ -227,6 +227,7 @@ rmm::device_buffer copy_bitmask(column_view const& view,
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
+CUDF_EXPORT
 std::pair<rmm::device_buffer, size_type> bitmask_and(host_span<bitmask_type const* const> masks,
                                                      host_span<size_type const> masks_begin_bits,
                                                      size_type mask_size_bits,
