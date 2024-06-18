@@ -17,6 +17,7 @@
 #include "distinct_helpers.hpp"
 
 #include <cuda/functional>
+#include <cuda/std/atomic>
 
 namespace cudf::detail {
 
