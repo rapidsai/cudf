@@ -2202,9 +2202,9 @@ TEST_F(JsonReaderTest, ValueValidation)
 
     EXPECT_EQ(result.tbl->num_columns(), 4);
     EXPECT_EQ(result.tbl->num_rows(), 8);
-    auto b_a_col  = int64_wrapper({0, 0, 3, 0, 0, 0, 0, 0});
-    auto a_column = int64_wrapper{{-2, 0, 0, 1, 4, 5, 6, 0},
-                                  {true, false, false, true, true, true, true, false}};
+    auto b_a_col = int64_wrapper({0, 0, 3, 0, 0, 0, 0, 0});
+    auto a_column =
+      int64_wrapper{{-2, 0, 0, 1, 4, 5, 6, 0}, {true, false, false, true, true, true, true, false}};
     auto b_column = cudf::test::structs_column_wrapper(
       {b_a_col}, {false, false, true, false, false, false, false, false});
     auto c_column = float64_wrapper({0.0, 0.0, 0.0, 0.0, 1.23, 0.0, 0.0, 0.0},
@@ -2225,14 +2225,14 @@ TEST_F(JsonReaderTest, ValueValidation)
 
     EXPECT_EQ(result.tbl->num_columns(), 4);
     EXPECT_EQ(result.tbl->num_rows(), 8);
-    EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::INT8); // empty column
+    EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::INT8);  // empty column
     auto b_a_col  = int64_wrapper({0, 0, 3, 0, 0, 0, 0, 0});
     auto a_column = int64_wrapper{{-2, 0, 0, 1, 4, 5, 6, 0},
                                   {true, false, false, true, false, true, false, false}};
     auto b_column = cudf::test::structs_column_wrapper(
       {b_a_col}, {false, false, true, false, false, false, false, false});
     auto c_column = int8_wrapper({0, 0, 0, 0, 0, 0, 0, 0},
-                                    {false, false, false, false, false, false, false, false});
+                                 {false, false, false, false, false, false, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), a_column);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), b_column);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2), c_column);

@@ -2082,7 +2082,7 @@ cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& opt
   parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
   std::vector<std::string> na_values{"", "null"};
   na_values.insert(na_values.end(), options.get_na_values().begin(), options.get_na_values().end());
-  parse_opts.trie_na    = cudf::detail::create_serialized_trie(na_values, stream);
+  parse_opts.trie_na = cudf::detail::create_serialized_trie(na_values, stream);
   return parse_opts;
 }
 

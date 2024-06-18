@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,8 +46,7 @@ class output_writer_iterator_proxy {
 // type_traits to enable its use with algorithms.
 template <class BinaryFunction, class Iterator>
 struct is_proxy_reference<output_writer_iterator_proxy<BinaryFunction, Iterator>>
-  : public thrust::detail::true_type {
-};
+  : public thrust::detail::true_type {};
 
 }  // namespace detail
 

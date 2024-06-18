@@ -311,7 +311,10 @@ class json_reader_options {
    *
    * @return true if leading zeros are allowed in numeric values
    */
-  [[nodiscard]] bool is_allowed_numeric_leading_zeros() const { return _allow_numeric_leading_zeros; }
+  [[nodiscard]] bool is_allowed_numeric_leading_zeros() const
+  {
+    return _allow_numeric_leading_zeros;
+  }
 
   /**
    * @brief Returns additional values to recognize as null values.
@@ -678,6 +681,7 @@ class json_reader_options_builder {
    * @brief Set Whether leading zeros are allowed in numeric values.
    *
    * @param val Boolean value to indicate whether leading zeros are allowed in numeric values
+   * @return this for chaining
    */
   json_reader_options_builder& numeric_leading_zeros(bool val)
   {
