@@ -1,8 +1,9 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import ast
 import datetime
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 from numba import cuda
@@ -114,7 +115,7 @@ def _check_error(tree):
         raise QuerySyntaxError("too many expressions")
 
 
-_cache: Dict[Any, Any] = {}
+_cache: dict[Any, Any] = {}
 
 
 def query_compile(expr):

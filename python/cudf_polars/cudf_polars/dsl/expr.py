@@ -512,13 +512,17 @@ class BooleanFunction(Expr):
         ]
         if self.name == pl_expr.BooleanFunction.Any:
             (column,) = columns
-            return plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, plc.aggregation.any(), self.dtype), 1
+            return Column(
+                plc.Column.from_scalar(
+                    plc.reduce.reduce(column.obj, plc.aggregation.any(), self.dtype), 1
+                )
             )
         elif self.name == pl_expr.BooleanFunction.All:
             (column,) = columns
-            return plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, plc.aggregation.all(), self.dtype), 1
+            return Column(
+                plc.Column.from_scalar(
+                    plc.reduce.reduce(column.obj, plc.aggregation.all(), self.dtype), 1
+                )
             )
         if self.name == pl_expr.BooleanFunction.IsNull:
             (column,) = columns
@@ -612,20 +616,32 @@ class BooleanFunction(Expr):
             column, lo, hi = columns
             (closed,) = self.options
             lop, rop = self._BETWEEN_OPS[closed]
+            lo_obj = (
+                lo.obj_scalar
+                if lo.is_scalar and lo.obj.size() != column.obj.size()
+                else lo.obj
+            )
+            hi_obj = (
+                hi.obj_scalar
+                if hi.is_scalar and hi.obj.size() != column.obj.size()
+                else hi.obj
+            )
             return Column(
                 plc.binaryop.binary_operation(
                     plc.binaryop.binary_operation(
-                        column.obj, lo.obj, lop, output_type=self.dtype
+                        column.obj, lo_obj, lop, output_type=self.dtype
                     ),
                     plc.binaryop.binary_operation(
-                        column.obj, hi.obj, rop, output_type=self.dtype
+                        column.obj, hi_obj, rop, output_type=self.dtype
                     ),
                     plc.binaryop.BinaryOperator.LOGICAL_AND,
                     self.dtype,
                 )
             )
         else:
-            raise NotImplementedError(f"BooleanFunction {self.name}")
+            raise NotImplementedError(
+                f"BooleanFunction {self.name}"
+            )  # pragma: no cover; handled by init raising
 
 
 class StringFunction(Expr):
@@ -644,13 +660,28 @@ class StringFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
+        self._validate_input()
+
+    def _validate_input(self):
         if self.name not in (
             pl_expr.StringFunction.Lowercase,
             pl_expr.StringFunction.Uppercase,
             pl_expr.StringFunction.EndsWith,
             pl_expr.StringFunction.StartsWith,
+            pl_expr.StringFunction.Contains,
         ):
             raise NotImplementedError(f"String function {self.name}")
+        if self.name == pl_expr.StringFunction.Contains:
+            literal, strict = self.options
+            if not literal:
+                if not strict:
+                    raise NotImplementedError(
+                        "f{strict=} is not supported for regex contains"
+                    )
+                if not isinstance(self.children[1], Literal):
+                    raise NotImplementedError(
+                        "Regex contains only supports a scalar pattern"
+                    )
 
     def do_evaluate(
         self,
@@ -660,6 +691,25 @@ class StringFunction(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
+        if self.name == pl_expr.StringFunction.Contains:
+            child, arg = self.children
+            column = child.evaluate(df, context=context, mapping=mapping)
+
+            literal, _ = self.options
+            if literal:
+                pat = arg.evaluate(df, context=context, mapping=mapping)
+                pattern = (
+                    pat.obj_scalar
+                    if pat.is_scalar and pat.obj.size() != column.obj.size()
+                    else pat.obj
+                )
+                return Column(plc.strings.find.contains(column.obj, pattern))
+            assert isinstance(arg, Literal)
+            prog = plc.strings.regex_program.RegexProgram.create(
+                arg.value.as_py(),
+                flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
+            )
+            return Column(plc.strings.contains.contains_re(column.obj, prog))
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
@@ -690,8 +740,9 @@ class StringFunction(Expr):
                     else prefix.obj,
                 )
             )
-        else:
-            raise NotImplementedError(f"StringFunction {self.name}")
+        raise NotImplementedError(
+            f"StringFunction {self.name}"
+        )  # pragma: no cover; handled by init raising
 
 
 class Sort(Expr):

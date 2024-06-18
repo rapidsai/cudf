@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+from __future__ import annotations
 
 import inspect
 import operator
@@ -8,7 +9,6 @@ import pickle
 import sys
 import time
 from collections import defaultdict
-from typing import Union
 
 from rich.console import Console
 from rich.syntax import Syntax
@@ -119,12 +119,10 @@ class Profiler:
 
     @staticmethod
     def get_namespaced_function_name(
-        func_obj: Union[
-            _FunctionProxy,
-            _MethodProxy,
-            type[_FinalProxy],
-            type[_IntermediateProxy],
-        ],
+        func_obj: _FunctionProxy
+        | _MethodProxy
+        | type[_FinalProxy]
+        | type[_IntermediateProxy],
     ):
         if isinstance(func_obj, _MethodProxy):
             return func_obj._fsproxy_slow.__qualname__
