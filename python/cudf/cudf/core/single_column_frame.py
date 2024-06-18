@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any
 
 from typing_extensions import Self
 
@@ -274,10 +274,10 @@ class SingleColumnFrame(Frame, NotIterable):
         other: Any,
         fill_value: Any = None,
         reflect: bool = False,
-    ) -> Union[
-        Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-        NotImplementedType,
-    ]:
+    ) -> (
+        dict[str | None, tuple[ColumnBase, Any, bool, Any]]
+        | NotImplementedType
+    ):
         """Generate the dictionary of operands used for a binary operation.
 
         Parameters
@@ -338,11 +338,9 @@ class SingleColumnFrame(Frame, NotIterable):
         int
             Number of unique values in the column.
         """
-        if self._column.null_count == len(self):
-            return 0
         return self._column.distinct_count(dropna=dropna)
 
-    def _get_elements_from_column(self, arg) -> Union[ScalarLike, ColumnBase]:
+    def _get_elements_from_column(self, arg) -> ScalarLike | ColumnBase:
         # A generic method for getting elements from a column that supports a
         # wide range of different inputs. This method should only used where
         # _absolutely_ necessary, since in almost all cases a more specific
