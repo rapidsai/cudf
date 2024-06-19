@@ -2701,11 +2701,24 @@ class IndexedFrame(Frame):
             if ignore_index:
                 out = out.reset_index(drop=True)
         else:
-            labels = sorted(self._data.names, reverse=not ascending)
-            out = self[labels]
+            labels = sorted(self._column_names, reverse=not ascending)
+            result_columns = (self._data[label] for label in labels)
             if ignore_index:
-                out._data.rangeindex = True
-                out._data.names = list(range(self._num_columns))
+                ca = ColumnAccessor(
+                    dict(enumerate(result_columns)),
+                    rangeindex=True,
+                    verify=False,
+                )
+            else:
+                ca = ColumnAccessor(
+                    dict(zip(labels, result_columns)),
+                    rangeindex=self.rangeindex,
+                    multiindex=self.multiindex,
+                    level_names=self.level_names,
+                    label_dtype=self.label_dtype,
+                    verify=False,
+                )
+            out = self._from_data_like_self(ca)
 
         return self._mimic_inplace(out, inplace=inplace)
 
