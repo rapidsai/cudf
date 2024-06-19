@@ -45,4 +45,5 @@ python -m pytest -p cudf.pandas \
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
     --cov-report=term \
-    ./python/cudf/cudf_pandas_tests/
+    ./python/cudf/cudf_pandas_tests/ \
+    ./python/cudf/cudf/tests/test_lazy.py
