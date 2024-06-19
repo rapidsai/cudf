@@ -3,8 +3,12 @@
 
 from typing import Optional
 
+import pandas
+import pandas.core.groupby
+
 import cudf
 import cudf.core.groupby.groupby
+import cudf.pandas
 from cudf.options import get_option
 from cudf.pandas.fast_slow_proxy import (
     _Unusable,
@@ -47,6 +51,18 @@ except ImportError:
             raise ValueError("Using the 'lazy' option requires dask_cudf")
         return False
 else:
+    # When cudf.pandas acceleration mode, we get the slow "fall back"
+    # classes from the accelerated Pandas module.
+    if cudf.pandas.LOADED:
+        slow_DataFrame = pandas.DataFrame
+        slow_Series = pandas.Series
+        slow_DataFrameGroupBy = pandas.core.groupby.DataFrameGroupBy
+        slow_SeriesGroupBy = pandas.core.groupby.SeriesGroupBy
+    else:
+        slow_DataFrame = cudf.DataFrame
+        slow_Series = cudf.Series
+        slow_DataFrameGroupBy = cudf.core.groupby.groupby.DataFrameGroupBy
+        slow_SeriesGroupBy = cudf.core.groupby.groupby.SeriesGroupBy
 
     def _fast_to_slow(
         df: dask_cudf.expr._collection.DataFrame,
@@ -62,7 +78,7 @@ else:
     DataFrame = make_final_proxy_type(
         "DataFrame",
         dask_cudf.expr._collection.DataFrame,
-        cudf.DataFrame,
+        slow_DataFrame,
         fast_to_slow=_fast_to_slow,
         slow_to_fast=_Unusable(),
         additional_attributes={
@@ -76,7 +92,7 @@ else:
     Series = make_final_proxy_type(
         "Series",
         dask_cudf.expr._collection.Series,
-        cudf.Series,
+        slow_Series,
         fast_to_slow=_fast_to_slow,
         slow_to_fast=_Unusable(),
         additional_attributes={
@@ -90,13 +106,13 @@ else:
     DataFrameGroupBy = make_intermediate_proxy_type(
         "DataFrameGroupBy",
         dask_cudf.expr._groupby.GroupBy,
-        cudf.core.groupby.groupby.DataFrameGroupBy,
+        slow_DataFrameGroupBy,
     )
 
     SeriesGroupBy = make_intermediate_proxy_type(
         "SeriesGroupBy",
         dask_cudf.expr._groupby.SeriesGroupBy,
-        cudf.core.groupby.groupby.SeriesGroupBy,
+        slow_SeriesGroupBy,
     )
 
     @docutils.doc_apply(_parse_lazy_argument_docstring)
