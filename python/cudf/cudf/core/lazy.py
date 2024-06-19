@@ -39,7 +39,7 @@ The boolean answer. If True, dask_cudf is guaranteed to be available.
 """
 
 try:
-    import dask_cudf
+    import dask_cudf.core
     import dask_cudf.expr._collection
     import dask_cudf.expr._groupby
 
@@ -54,7 +54,7 @@ except ImportError:
     @docutils.doc_apply(_parse_lazy_argument_docstring)
     def parse_lazy_argument(arg: Optional[bool]) -> bool:
         if arg is True:
-            raise ValueError("Using the 'lazy' option requires dask_cudf")
+            raise ValueError("lazy-mode requires dask_cudf")
         return False
 else:
     # When cudf.pandas acceleration mode, we get the slow "fall back"
@@ -123,15 +123,19 @@ else:
 
     @docutils.doc_apply(_parse_lazy_argument_docstring)
     def parse_lazy_argument(arg: Optional[bool]) -> bool:
+        if arg is True and not dask_cudf.expr.QUERY_PLANNING_ON:
+            raise ValueError(
+                "lazy-mode requires Dask's `dataframe.query-planning` option to be enabled"
+            )
         if arg is None:
             arg = get_option("lazy")
-        return arg
+        return arg and dask_cudf.expr.QUERY_PLANNING_ON
 
     def lazy_wrap_dataframe(
-        df: cudf.DataFrame | dask_cudf.DataFrame,
+        df: cudf.DataFrame | dask_cudf.expr._collection.DataFrame,
         *,
         noop_on_error: bool = False,
-    ) -> cudf.DataFrame | dask_cudf.DataFrame:
+    ) -> cudf.DataFrame | dask_cudf.expr._collection.DataFrame:
         """Wrap a datafrane in a lazy proxy.
 
         Parameters
@@ -147,8 +151,8 @@ else:
         The wrapped dataframe or possible `df` as-is if noop_on_error is True.
         """
         try:
-            if not isinstance(df, dask_cudf.DataFrame):
-                df = dask_cudf.from_cudf(df, npartitions=1)
+            if not isinstance(df, dask_cudf.expr._collection.DataFrame):
+                df = dask_cudf.core.from_cudf(df, npartitions=1)
             return DataFrame._fsproxy_wrap(df, func=None)
         except (NotImplementedError, ValueError):
             if noop_on_error:
@@ -156,8 +160,10 @@ else:
             raise
 
     def lazy_wrap_series(
-        ser: cudf.Series | dask_cudf.Series, *, noop_on_error: bool = False
-    ) -> cudf.Series | dask_cudf.Series:
+        ser: cudf.Series | dask_cudf.expr._collection.Series,
+        *,
+        noop_on_error: bool = False,
+    ) -> cudf.Series | dask_cudf.expr._collection.Series:
         """Wrap a Series in a lazy proxy.
 
         Parameters
@@ -173,8 +179,8 @@ else:
         The wrapped series or possible `ser` as-is if noop_on_error is True.
         """
         try:
-            if not isinstance(ser, dask_cudf.Series):
-                ser = dask_cudf.from_cudf(ser, npartitions=1)
+            if not isinstance(ser, dask_cudf.expr._collection.Series):
+                ser = dask_cudf.core.from_cudf(ser, npartitions=1)
             return Series._fsproxy_wrap(ser, func=None)
         except (NotImplementedError, ValueError):
             if noop_on_error:
