@@ -1,7 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-
-
-from typing import Optional
+from __future__ import annotations
 
 import pandas
 import pandas.core.groupby
@@ -52,7 +50,7 @@ except ImportError:
     lazy_wrap_series = not_implemented
 
     @docutils.doc_apply(_parse_lazy_argument_docstring)
-    def parse_lazy_argument(arg: Optional[bool]) -> bool:
+    def parse_lazy_argument(arg: bool | None) -> bool:
         if arg is True:
             raise ValueError("lazy-mode requires dask_cudf")
         return False
@@ -122,7 +120,7 @@ else:
     )
 
     @docutils.doc_apply(_parse_lazy_argument_docstring)
-    def parse_lazy_argument(arg: Optional[bool]) -> bool:
+    def parse_lazy_argument(arg: bool | None) -> bool:
         if arg is True and not dask_cudf.expr.QUERY_PLANNING_ON:
             raise ValueError(
                 "lazy-mode requires Dask's `dataframe.query-planning` option to be enabled"
