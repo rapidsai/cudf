@@ -54,7 +54,7 @@ TYPED_TEST(StringsFixedPointConvertTest, ToFixedPoint)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_scaled);
 
   cudf::test::strings_column_wrapper strings_nulls(
-    {"1234", "-876", "543", "900000", "25E5", "", ""}, {1, 1, 1, 1, 1, 1, 0});
+    {"1234", "-876", "543", "900000", "25E5", "", ""}, {true, true, true, true, true, true, false});
   results = cudf::strings::to_fixed_point(cudf::strings_column_view(strings_nulls),
                                           cudf::data_type{cudf::type_to_id<DecimalType>()});
   auto const expected_nulls = fp_wrapper{
@@ -205,14 +205,14 @@ TYPED_TEST(StringsFixedPointConvertTest, FromFixedPoint)
     fp_wrapper({110, -222, 3330, 4, -550, 0}, {1, 1, 1, 1, 1, 0}, numeric::scale_type{2});
   results = cudf::strings::from_fixed_point(positive_scale);
   cudf::test::strings_column_wrapper positive_expected(
-    {"11000", "-22200", "333000", "400", "-55000", ""}, {1, 1, 1, 1, 1, 0});
+    {"11000", "-22200", "333000", "400", "-55000", ""}, {true, true, true, true, true, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, positive_expected);
 
   auto const zero_scale =
     fp_wrapper({0, -222, 3330, 4, -550, 0}, {0, 1, 1, 1, 1, 1}, numeric::scale_type{0});
   results = cudf::strings::from_fixed_point(zero_scale);
   cudf::test::strings_column_wrapper zero_expected({"", "-222", "3330", "4", "-550", "0"},
-                                                   {0, 1, 1, 1, 1, 1});
+                                                   {false, true, true, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, zero_expected);
 }
 

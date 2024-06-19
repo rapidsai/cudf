@@ -20,9 +20,9 @@
 #include <benchmarks/io/nvbench_helpers.hpp>
 
 #include <cudf/detail/utilities/stream_pool.hpp>
-#include <cudf/io/memory_resource.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 #include <cudf/utilities/thread_pool.hpp>
 
 #include <nvtx3/nvtx3.hpp>
@@ -62,7 +62,7 @@ std::tuple<std::vector<cuio_source_sink_pair>, size_t, size_t> write_file_data(
   size_t total_file_size = 0;
 
   for (size_t i = 0; i < num_files; ++i) {
-    cuio_source_sink_pair source_sink{cudf::io::io_type::HOST_BUFFER};
+    cuio_source_sink_pair source_sink{io_type::HOST_BUFFER};
 
     auto const tbl = create_random_table(
       cycle_dtypes(d_types, num_cols),
@@ -96,6 +96,11 @@ void BM_parquet_multithreaded_read_common(nvbench::state& state,
   cudf::detail::thread_pool threads(num_threads);
 
   auto [source_sink_vector, total_file_size, num_files] = write_file_data(state, d_types);
+  std::vector<cudf::io::source_info> source_info_vector;
+  std::transform(source_sink_vector.begin(),
+                 source_sink_vector.end(),
+                 std::back_inserter(source_info_vector),
+                 [](auto& source_sink) { return source_sink.make_source_info(); });
 
   auto mem_stats_logger = cudf::memory_stats_logger();
 
@@ -104,9 +109,8 @@ void BM_parquet_multithreaded_read_common(nvbench::state& state,
              [&](nvbench::launch& launch, auto& timer) {
                auto read_func = [&](int index) {
                  auto const stream = streams[index % num_threads];
-                 auto& source_sink = source_sink_vector[index];
                  cudf::io::parquet_reader_options read_opts =
-                   cudf::io::parquet_reader_options::builder(source_sink.make_source_info());
+                   cudf::io::parquet_reader_options::builder(source_info_vector[index]);
                  cudf::io::read_parquet(read_opts, stream, rmm::mr::get_current_device_resource());
                };
 
@@ -174,6 +178,11 @@ void BM_parquet_multithreaded_read_chunked_common(nvbench::state& state,
   auto streams = cudf::detail::fork_streams(cudf::get_default_stream(), num_threads);
   cudf::detail::thread_pool threads(num_threads);
   auto [source_sink_vector, total_file_size, num_files] = write_file_data(state, d_types);
+  std::vector<cudf::io::source_info> source_info_vector;
+  std::transform(source_sink_vector.begin(),
+                 source_sink_vector.end(),
+                 std::back_inserter(source_info_vector),
+                 [](auto& source_sink) { return source_sink.make_source_info(); });
 
   auto mem_stats_logger = cudf::memory_stats_logger();
 
@@ -183,9 +192,8 @@ void BM_parquet_multithreaded_read_chunked_common(nvbench::state& state,
              [&](nvbench::launch& launch, auto& timer) {
                auto read_func = [&](int index) {
                  auto const stream = streams[index % num_threads];
-                 auto& source_sink = source_sink_vector[index];
                  cudf::io::parquet_reader_options read_opts =
-                   cudf::io::parquet_reader_options::builder(source_sink.make_source_info());
+                   cudf::io::parquet_reader_options::builder(source_info_vector[index]);
                  // divide chunk limits by number of threads so the number of chunks produced is the
                  // same for all cases. this seems better than the alternative, which is to keep the
                  // limits the same. if we do that, as the number of threads goes up, the number of

@@ -13,24 +13,53 @@ import cudf._lib.pylibcudf as plc
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-__all__: list[str] = ["Column"]
+__all__: list[str] = ["Column", "NamedColumn"]
 
 
 class Column:
-    """A column, a name, and sortedness."""
+    """An immutable column with sortedness metadata."""
 
     obj: plc.Column
-    name: str
     is_sorted: plc.types.Sorted
     order: plc.types.Order
     null_order: plc.types.NullOrder
+    is_scalar: bool
 
-    def __init__(self, column: plc.Column, name: str):
+    def __init__(
+        self,
+        column: plc.Column,
+        *,
+        is_sorted: plc.types.Sorted = plc.types.Sorted.NO,
+        order: plc.types.Order = plc.types.Order.ASCENDING,
+        null_order: plc.types.NullOrder = plc.types.NullOrder.BEFORE,
+    ):
         self.obj = column
-        self.name = name
-        self.is_sorted = plc.types.Sorted.NO
-        self.order = plc.types.Order.ASCENDING
-        self.null_order = plc.types.NullOrder.BEFORE
+        self.is_scalar = self.obj.size() == 1
+        if self.obj.size() <= 1:
+            is_sorted = plc.types.Sorted.YES
+        self.is_sorted = is_sorted
+        self.order = order
+        self.null_order = null_order
+
+    @functools.cached_property
+    def obj_scalar(self) -> plc.Scalar:
+        """
+        A copy of the column object as a pylibcudf Scalar.
+
+        Returns
+        -------
+        pylibcudf Scalar object.
+
+        Raises
+        ------
+        ValueError
+            If the column is not length-1.
+        """
+        if not self.is_scalar:
+            raise ValueError(
+                f"Cannot convert a column of length {self.obj.size()} to scalar"
+            )
+        return plc.copying.get_element(self.obj, 0)
 
     def sorted_like(self, like: Column, /) -> Self:
         """
@@ -76,32 +105,32 @@ class Column:
         -------
         Self with metadata set.
         """
+        if self.obj.size() <= 1:
+            is_sorted = plc.types.Sorted.YES
         self.is_sorted = is_sorted
         self.order = order
         self.null_order = null_order
         return self
 
-    def copy(self, *, new_name: str | None = None) -> Self:
+    def copy(self) -> Self:
         """
-        Return a shallow copy of the column.
-
-        Parameters
-        ----------
-        new_name
-            Optional new name for the copied column.
+        A shallow copy of the column.
 
         Returns
         -------
         New column sharing data with self.
         """
         return type(self)(
-            self.obj, self.name if new_name is None else new_name
-        ).sorted_like(self)
+            self.obj,
+            is_sorted=self.is_sorted,
+            order=self.order,
+            null_order=self.null_order,
+        )
 
     def mask_nans(self) -> Self:
         """Return a copy of self with nans masked out."""
         if self.nan_count > 0:
-            raise NotImplementedError
+            raise NotImplementedError("Need to port transform.hpp to pylibcudf")
         return self.copy()
 
     @functools.cached_property
@@ -117,3 +146,44 @@ class Column:
                 plc.DataType(plc.TypeId.INT32),
             )
         ).as_py()
+
+
+class NamedColumn(Column):
+    """A column with a name."""
+
+    name: str
+
+    def __init__(
+        self,
+        column: plc.Column,
+        name: str,
+        *,
+        is_sorted: plc.types.Sorted = plc.types.Sorted.NO,
+        order: plc.types.Order = plc.types.Order.ASCENDING,
+        null_order: plc.types.NullOrder = plc.types.NullOrder.BEFORE,
+    ) -> None:
+        super().__init__(
+            column, is_sorted=is_sorted, order=order, null_order=null_order
+        )
+        self.name = name
+
+    def copy(self, *, new_name: str | None = None) -> Self:
+        """
+        A shallow copy of the column.
+
+        Parameters
+        ----------
+        new_name
+            Optional new name for the copied column.
+
+        Returns
+        -------
+        New column sharing data with self.
+        """
+        return type(self)(
+            self.obj,
+            self.name if new_name is None else new_name,
+            is_sorted=self.is_sorted,
+            order=self.order,
+            null_order=self.null_order,
+        )

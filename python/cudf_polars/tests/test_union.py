@@ -6,10 +6,10 @@ import pytest
 
 import polars as pl
 
+from cudf_polars import translate_ir
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-@pytest.mark.xfail(reason="Need handling of null scalars that are cast")
 def test_union():
     ldf = pl.DataFrame(
         {
@@ -19,9 +19,20 @@ def test_union():
     ).lazy()
     ldf2 = ldf.select((pl.col("a") + pl.col("b")).alias("c"), pl.col("a"))
     query = pl.concat([ldf, ldf2], how="diagonal")
-    # Plan for this produces a `None`.astype(Int64) which we don't
-    # handle correctly right now
     assert_gpu_result_equal(query)
+
+
+def test_union_schema_mismatch_raises():
+    ldf = pl.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5, 6, 7],
+            "b": [1, 1, 1, 1, 1, 1, 1],
+        }
+    ).lazy()
+    ldf2 = ldf.select(pl.col("a").cast(pl.Float32))
+    query = pl.concat([ldf, ldf2], how="diagonal")
+    with pytest.raises(NotImplementedError):
+        _ = translate_ir(query._ldf.visit())
 
 
 def test_concat_vertical():

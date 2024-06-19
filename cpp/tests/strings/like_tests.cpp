@@ -26,12 +26,13 @@ struct StringsLikeTests : public cudf::test::BaseFixture {};
 TEST_F(StringsLikeTests, Basic)
 {
   cudf::test::strings_column_wrapper input({"abc", "a bc", "ABC", "abcd", " abc", "", "", "áéêú"},
-                                           {1, 1, 1, 1, 1, 1, 0, 1});
+                                           {true, true, true, true, true, true, false, true});
   auto const sv      = cudf::strings_column_view(input);
   auto const pattern = std::string("abc");
   auto const results = cudf::strings::like(sv, pattern);
   cudf::test::fixed_width_column_wrapper<bool> expected(
-    {true, false, false, false, false, false, false, false}, {1, 1, 1, 1, 1, 1, 0, 1});
+    {true, false, false, false, false, false, false, false},
+    {true, true, true, true, true, true, false, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
@@ -201,7 +202,7 @@ TEST_F(StringsLikeTests, Errors)
   EXPECT_THROW(cudf::strings::like(sv, invalid_str), cudf::logic_error);
   EXPECT_THROW(cudf::strings::like(sv, std::string("3"), invalid_str), cudf::logic_error);
 
-  auto patterns          = cudf::test::strings_column_wrapper({"3", ""}, {1, 0});
+  auto patterns          = cudf::test::strings_column_wrapper({"3", ""}, {true, false});
   auto const sv_patterns = cudf::strings_column_view(patterns);
   EXPECT_THROW(cudf::strings::like(sv, sv_patterns), cudf::logic_error);
   EXPECT_THROW(cudf::strings::like(sv, sv, invalid_str), cudf::logic_error);

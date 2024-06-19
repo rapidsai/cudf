@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,13 @@
 namespace cudf {
 namespace strings {
 namespace udf {
+
+/**
+ * @brief Get the CUDA version used at build time.
+ *
+ * @return The CUDA version as an integer, parsed as major * 1000 + minor * 10.
+ */
+int get_cuda_build_version();
 
 class udf_string;
 
