@@ -45,6 +45,12 @@ try:
 
 except ImportError:
 
+    def not_implemented(*args, **kwargs):
+        raise NotImplementedError("please install dask_cudf")
+
+    lazy_wrap_dataframe = not_implemented
+    lazy_wrap_series = not_implemented
+
     @docutils.doc_apply(_parse_lazy_argument_docstring)
     def parse_lazy_argument(arg: Optional[bool]) -> bool:
         if arg is True:
