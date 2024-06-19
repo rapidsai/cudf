@@ -3,11 +3,11 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp cimport unary as cpp_unary
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.unary cimport unary_operator
+from cudf._lib.pylibcudf.libcudf cimport unary as cpp_unary
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.unary cimport unary_operator
 
-from cudf._lib.cpp.unary import \
+from cudf._lib.pylibcudf.libcudf.unary import \
     unary_operator as UnaryOperator  # no-cython-lint
 
 from .column cimport Column

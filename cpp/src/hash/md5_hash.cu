@@ -309,7 +309,7 @@ std::unique_ptr<column> md5(table_view const& input,
   // Result column allocation and creation
   auto begin = thrust::make_constant_iterator(digest_size);
   auto [offsets_column, bytes] =
-    cudf::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
+    cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
 
   rmm::device_uvector<char> chars(bytes, stream, mr);
   auto d_chars = chars.data();
@@ -322,7 +322,7 @@ std::unique_ptr<column> md5(table_view const& input,
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(input.num_rows()),
     [d_chars, device_input = *device_input] __device__(auto row_index) {
-      MD5Hasher hasher(d_chars + (row_index * digest_size));
+      MD5Hasher hasher(d_chars + (static_cast<int64_t>(row_index) * digest_size));
       for (auto const& col : device_input) {
         if (col.is_valid(row_index)) {
           if (col.type().id() == type_id::LIST) {

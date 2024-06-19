@@ -4,15 +4,15 @@ from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.filling cimport (
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.filling cimport (
     fill as cpp_fill,
     fill_in_place as cpp_fill_in_place,
     repeat as cpp_repeat,
     sequence as cpp_sequence,
 )
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 from .column cimport Column
 from .scalar cimport Scalar

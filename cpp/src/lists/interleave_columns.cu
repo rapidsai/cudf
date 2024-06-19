@@ -22,7 +22,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -128,12 +128,20 @@ std::unique_ptr<column> concatenate_and_gather_lists(host_span<column_view const
   return std::move(result->release()[0]);
 }
 
+// Error case when no other overload or specialization is available
+template <typename T, typename Enable = void>
+struct interleave_list_entries_impl {
+  template <typename... Args>
+  std::unique_ptr<column> operator()(Args&&...)
+  {
+    CUDF_FAIL("Called `interleave_list_entries_fn()` on non-supported types.");
+  }
+};
+
 /**
- * @brief Compute string sizes, string validities, and interleave string lists functor.
+ * @brief Interleave array of string_index_pair objects for a list of strings
  *
- * This functor is executed twice. In the first pass, the sizes and validities of the output strings
- * will be computed. In the second pass, this will interleave the lists of strings of the given
- * table containing those lists.
+ * Each thread processes the strings for the corresponding list row
  */
 struct compute_string_sizes_and_interleave_lists_fn {
   table_device_view const table_dv;
@@ -141,19 +149,10 @@ struct compute_string_sizes_and_interleave_lists_fn {
   // Store list offsets of the output lists column.
   size_type const* const dst_list_offsets;
 
-  // Flag to specify whether to compute string validities.
-  bool const has_null_mask;
+  using string_index_pair = cudf::strings::detail::string_index_pair;
+  string_index_pair* indices;  // output
 
-  // Store offsets of the strings.
-  size_type* d_offsets{nullptr};
-
-  // If d_chars == nullptr: only compute sizes and validities of the output strings.
-  // If d_chars != nullptr: only interleave lists of strings.
-  char* d_chars{nullptr};
-
-  // We need to set `1` or `0` for the validities of the strings in the child column.
-  int8_t* d_validities{nullptr};
-
+  // thread per list row per column
   __device__ void operator()(size_type const idx)
   {
     auto const num_cols = table_dv.num_columns();
@@ -161,14 +160,12 @@ struct compute_string_sizes_and_interleave_lists_fn {
     auto const list_id  = idx / num_cols;
 
     auto const& lists_col = table_dv.column(col_id);
-    if (has_null_mask and lists_col.is_null(list_id)) { return; }
+    if (lists_col.is_null(list_id)) { return; }
 
     auto const list_offsets =
       lists_col.child(lists_column_view::offsets_column_index).template data<size_type>() +
       lists_col.offset();
     auto const& str_col = lists_col.child(lists_column_view::child_column_index);
-    auto const str_offsets =
-      str_col.child(strings_column_view::offsets_column_index).template data<size_type>();
 
     // The range of indices of the strings within the source list.
     auto const start_str_idx = list_offsets[list_id];
@@ -181,33 +178,15 @@ struct compute_string_sizes_and_interleave_lists_fn {
     // read_idx and write_idx are indices of string elements.
     size_type write_idx = dst_list_offsets[idx];
 
-    if (not d_chars) {  // just compute sizes and validities of strings within a list
-      for (auto read_idx = start_str_idx; read_idx < end_str_idx; ++read_idx, ++write_idx) {
-        if (has_null_mask) {
-          d_validities[write_idx] = static_cast<int8_t>(str_col.is_valid(read_idx));
-        }
-        d_offsets[write_idx] = str_offsets[read_idx + 1] - str_offsets[read_idx];
+    for (auto read_idx = start_str_idx; read_idx < end_str_idx; ++read_idx, ++write_idx) {
+      if (str_col.is_null(read_idx)) {
+        indices[write_idx] = string_index_pair{nullptr, 0};
+        continue;
       }
-    } else {  // just copy the entire memory region containing all strings in the list
-      // start_byte and end_byte are indices of character of the string elements.
-      auto const start_byte = str_offsets[start_str_idx];
-      auto const end_byte   = str_offsets[end_str_idx];
-      if (start_byte < end_byte) {
-        auto const input_ptr  = str_col.template head<char>() + start_byte;
-        auto const output_ptr = d_chars + d_offsets[write_idx];
-        thrust::copy(thrust::seq, input_ptr, input_ptr + end_byte - start_byte, output_ptr);
-      }
+      auto const d_str   = str_col.element<string_view>(read_idx);
+      indices[write_idx] = d_str.empty() ? string_index_pair{"", 0}
+                                         : string_index_pair{d_str.data(), d_str.size_bytes()};
     }
-  }
-};
-
-// Error case when no other overload or specialization is available
-template <typename T, typename Enable = void>
-struct interleave_list_entries_impl {
-  template <typename... Args>
-  std::unique_ptr<column> operator()(Args&&...)
-  {
-    CUDF_FAIL("Called `interleave_list_entries_fn()` on non-supported types.");
   }
 };
 
@@ -217,29 +196,22 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
                                      column_view const& output_list_offsets,
                                      size_type num_output_lists,
                                      size_type num_output_entries,
-                                     bool data_has_null_mask,
+                                     bool,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const noexcept
   {
-    auto const table_dv_ptr = table_device_view::create(input, stream);
-    auto comp_fn            = compute_string_sizes_and_interleave_lists_fn{
-      *table_dv_ptr, output_list_offsets.template begin<size_type>(), data_has_null_mask};
+    auto const table_dv_ptr   = table_device_view::create(input, stream);
+    auto const d_list_offsets = output_list_offsets.template begin<size_type>();
 
-    auto validities =
-      rmm::device_uvector<int8_t>(data_has_null_mask ? num_output_entries : 0, stream);
-    comp_fn.d_validities = validities.data();
-
-    auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
-      comp_fn, num_output_lists, num_output_entries, stream, mr);
-
-    auto [null_mask, null_count] =
-      cudf::detail::valid_if(validities.begin(), validities.end(), thrust::identity{}, stream, mr);
-
-    return make_strings_column(num_output_entries,
-                               std::move(offsets_column),
-                               chars.release(),
-                               null_count,
-                               std::move(null_mask));
+    rmm::device_uvector<cudf::strings::detail::string_index_pair> indices(num_output_entries,
+                                                                          stream);
+    auto comp_fn =
+      compute_string_sizes_and_interleave_lists_fn{*table_dv_ptr, d_list_offsets, indices.data()};
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                       thrust::counting_iterator<size_type>(0),
+                       num_output_lists,
+                       comp_fn);
+    return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, mr);
   }
 };
 

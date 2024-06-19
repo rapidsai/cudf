@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import Any, Optional, Sequence, Union, cast
+from typing import TYPE_CHECKING, Any, Sequence, cast
 
 import cupy as cp
 import numpy as np
@@ -16,7 +16,6 @@ from cudf import _lib as libcudf
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
-from cudf._typing import ColumnBinaryOperand, Dtype
 from cudf.api.types import is_integer_dtype, is_scalar
 from cudf.core.buffer import as_buffer
 from cudf.core.column import ColumnBase
@@ -31,6 +30,9 @@ from cudf.utils.utils import pa_mask_buffer_to_mask
 
 from .numerical_base import NumericalBaseColumn
 
+if TYPE_CHECKING:
+    from cudf._typing import ColumnBinaryOperand, Dtype
+
 
 class DecimalBaseColumn(NumericalBaseColumn):
     """Base column for decimal32, decimal64 or decimal128 columns"""
@@ -38,10 +40,16 @@ class DecimalBaseColumn(NumericalBaseColumn):
     dtype: DecimalDtype
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            "Decimals are not yet supported via `__cuda_array_interface__`"
+        )
+
     def as_decimal_column(
         self,
         dtype: Dtype,
-    ) -> Union["DecimalBaseColumn"]:
+    ) -> "DecimalBaseColumn":
         if (
             isinstance(dtype, cudf.core.dtypes.DecimalDtype)
             and dtype.scale < self.dtype.scale
@@ -130,7 +138,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def fillna(
         self,
         fill_value: Any = None,
-        method: Optional[str] = None,
+        method: str | None = None,
     ) -> Self:
         """Fill null values with ``value``.
 
@@ -191,7 +199,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return NotImplemented
 
     def _decimal_quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self, q: float | Sequence[float], interpolation: str, exact: bool
     ) -> ColumnBase:
         quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls
@@ -340,12 +348,6 @@ class Decimal64Column(DecimalBaseColumn):
             offset=self._offset,
             length=self.size,
             buffers=[mask_buf, data_buf],
-        )
-
-    @property
-    def __cuda_array_interface__(self):
-        raise NotImplementedError(
-            "Decimals are not yet supported via `__cuda_array_interface__`"
         )
 
     def _with_type_metadata(

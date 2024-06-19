@@ -124,13 +124,14 @@ namespace {
  */
 struct integers_to_ipv4_fn {
   column_device_view const d_column;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type idx)
   {
     if (d_column.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -151,7 +152,7 @@ struct integers_to_ipv4_fn {
       shift_bits -= 8;
     }
 
-    if (!d_chars) { d_offsets[idx] = bytes; }
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 
@@ -166,9 +167,9 @@ std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
 
   CUDF_EXPECTS(integers.type().id() == type_id::INT64, "Input column must be type_id::INT64 type");
 
-  auto d_column                = column_device_view::create(integers, stream);
-  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
-    integers_to_ipv4_fn{*d_column}, integers.size(), stream, mr);
+  auto d_column = column_device_view::create(integers, stream);
+  auto [offsets_column, chars] =
+    make_strings_children(integers_to_ipv4_fn{*d_column}, integers.size(), stream, mr);
 
   return make_strings_column(integers.size(),
                              std::move(offsets_column),

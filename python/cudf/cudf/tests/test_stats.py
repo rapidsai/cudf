@@ -507,7 +507,7 @@ def test_df_corr(method):
 @pytest.mark.parametrize(
     "data",
     [
-        [0.0, 1, 3, 6, np.NaN, 7, 5.0, np.nan, 5, 2, 3, -100],
+        [0.0, 1, 3, 6, np.nan, 7, 5.0, np.nan, 5, 2, 3, -100],
         [np.nan] * 3,
         [1, 5, 3],
         [],
@@ -555,7 +555,7 @@ def test_nans_stats(data, ops, skipna):
 @pytest.mark.parametrize(
     "data",
     [
-        [0.0, 1, 3, 6, np.NaN, 7, 5.0, np.nan, 5, 2, 3, -100],
+        [0.0, 1, 3, 6, np.nan, 7, 5.0, np.nan, 5, 2, 3, -100],
         [np.nan] * 3,
         [1, 5, 3],
     ],

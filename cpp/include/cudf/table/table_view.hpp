@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -123,7 +123,7 @@ class table_view_base {
    * @param column_index The index of the desired column
    * @return A reference to the desired column
    */
-  ColumnView const& column(size_type column_index) const;
+  [[nodiscard]] ColumnView const& column(size_type column_index) const;
 
   /**
    * @brief Returns the number of columns
@@ -224,7 +224,7 @@ class table_view : public detail::table_view_base<column_view> {
    * specified by the elements of `column_indices`
    */
   template <typename InputIterator>
-  table_view select(InputIterator begin, InputIterator end) const
+  [[nodiscard]] table_view select(InputIterator begin, InputIterator end) const
   {
     std::vector<column_view> columns(std::distance(begin, end));
     std::transform(begin, end, columns.begin(), [this](auto index) { return this->column(index); });
@@ -338,15 +338,6 @@ bool has_nested_nullable_columns(table_view const& input);
  * @return A vector containing all nullable columns in the input table
  */
 std::vector<column_view> get_nullable_columns(table_view const& table);
-
-/**
- * @brief Checks if two `table_view`s have columns of same types
- *
- * @param lhs left-side table_view operand
- * @param rhs right-side table_view operand
- * @return boolean comparison result
- */
-bool have_same_types(table_view const& lhs, table_view const& rhs);
 
 /**
  * @brief Copy column_views from a table_view into another table_view according to

@@ -91,6 +91,10 @@ STRING_TYPES = {"object"}
 BOOL_TYPES = {"bool"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 
+# The NumPy scalar types are a bit of a mess as they align with the C types
+# so for now we use the `sctypes` dict (although it was made private in 2.0)
+_NUMPY_SCTYPES = np.sctypes if hasattr(np, "sctypes") else np._core.sctypes
+
 
 def np_to_pa_dtype(dtype):
     """Util to convert numpy dtype to PyArrow dtype."""
@@ -335,7 +339,7 @@ def min_signed_type(x, min_size=8):
     Return the smallest *signed* integer dtype
     that can represent the integer ``x``
     """
-    for int_dtype in np.sctypes["int"]:
+    for int_dtype in _NUMPY_SCTYPES["int"]:
         if (cudf.dtype(int_dtype).itemsize * 8) >= min_size:
             if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
                 return int_dtype
@@ -348,7 +352,7 @@ def min_unsigned_type(x, min_size=8):
     Return the smallest *unsigned* integer dtype
     that can represent the integer ``x``
     """
-    for int_dtype in np.sctypes["uint"]:
+    for int_dtype in _NUMPY_SCTYPES["uint"]:
         if (cudf.dtype(int_dtype).itemsize * 8) >= min_size:
             if 0 <= x <= np.iinfo(int_dtype).max:
                 return int_dtype

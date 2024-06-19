@@ -8,7 +8,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf import melt as cudf_melt
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing._utils import (
@@ -71,15 +70,10 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
 
     gdf = cudf.from_pandas(pdf)
 
-    got = cudf_melt(frame=gdf, id_vars=id_vars, value_vars=value_vars)
+    got = cudf.melt(frame=gdf, id_vars=id_vars, value_vars=value_vars)
     got_from_melt_method = gdf.melt(id_vars=id_vars, value_vars=value_vars)
 
     expect = pd.melt(frame=pdf, id_vars=id_vars, value_vars=value_vars)
-    # pandas' melt makes the 'variable' column of 'object' type (string)
-    # cuDF's melt makes it Categorical because it doesn't support strings
-    expect["variable"] = expect["variable"].astype(
-        got["variable"].dtype.to_pandas()
-    )
 
     assert_eq(expect, got)
 
@@ -98,9 +92,26 @@ def test_melt_many_columns():
     grid_df_d = cudf.melt(
         df_d, id_vars=["id"], var_name="d", value_name="sales"
     )
-    grid_df_d["d"] = grid_df_d["d"].astype("str")
+    grid_df_d["d"] = grid_df_d["d"]
 
     assert_eq(grid_df, grid_df_d)
+
+
+def test_melt_str_scalar_id_var():
+    data = {"index": [1, 2], "id": [1, 2], "d0": [10, 20], "d1": [30, 40]}
+    result = cudf.melt(
+        cudf.DataFrame(data),
+        id_vars="index",
+        var_name="column",
+        value_name="value",
+    )
+    expected = pd.melt(
+        pd.DataFrame(data),
+        id_vars="index",
+        var_name="column",
+        value_name="value",
+    )
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize("num_cols", [1, 2, 10])

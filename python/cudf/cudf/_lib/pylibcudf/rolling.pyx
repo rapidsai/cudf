@@ -4,10 +4,10 @@ from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp cimport rolling as cpp_rolling
-from cudf._lib.cpp.aggregation cimport rolling_aggregation
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf cimport rolling as cpp_rolling
+from cudf._lib.pylibcudf.libcudf.aggregation cimport rolling_aggregation
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 from .aggregation cimport Aggregation
 from .column cimport Column

@@ -151,15 +151,3 @@ for testing or benchmarking purposes. To do so, set the
 ```bash
 CUDF_PANDAS_FALLBACK_MODE=1 python -m cudf.pandas some_script.py
 ```
-
-## Slow tab completion in IPython?
-
-You may experience slow tab completion when inspecting the
-methods/attributes of large dataframes. We expect this issue to be
-resolved in an upcoming release. In the mean time, you may execute the
-following command in IPython before loading `cudf.pandas` to work
-around the issue:
-
-```
-%config IPCompleter.jedi_compute_type_timeout=0
-```

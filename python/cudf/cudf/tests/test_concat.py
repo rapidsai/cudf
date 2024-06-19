@@ -218,7 +218,8 @@ def test_concat_columns(axis):
     assert_eq(expect, got, check_index_type=True)
 
 
-def test_concat_multiindex_dataframe():
+@pytest.mark.parametrize("axis", [0, 1])
+def test_concat_multiindex_dataframe(axis):
     gdf = cudf.DataFrame(
         {
             "w": np.arange(4),
@@ -233,14 +234,11 @@ def test_concat_multiindex_dataframe():
     pdg2 = pdg.iloc[:, 1:]
     gdg1 = cudf.from_pandas(pdg1)
     gdg2 = cudf.from_pandas(pdg2)
+    expected = pd.concat([pdg1, pdg2], axis=axis)
+    result = cudf.concat([gdg1, gdg2], axis=axis)
     assert_eq(
-        cudf.concat([gdg1, gdg2]).astype("float64"),
-        pd.concat([pdg1, pdg2]),
-        check_index_type=True,
-    )
-    assert_eq(
-        cudf.concat([gdg1, gdg2], axis=1),
-        pd.concat([pdg1, pdg2], axis=1),
+        expected,
+        result,
         check_index_type=True,
     )
 
@@ -1865,3 +1863,137 @@ def test_concat_mixed_list_types_error(s1, s2):
 
     with pytest.raises(NotImplementedError):
         cudf.concat([s1, s2], ignore_index=True)
+
+
+@pytest.mark.parametrize(
+    "axis",
+    [
+        pytest.param(
+            0,
+            marks=pytest.mark.xfail(
+                reason="concat dictionaries with axis=0 not implemented"
+            ),
+        ),
+        1,
+        "columns",
+    ],
+)
+@pytest.mark.parametrize(
+    "d",
+    [
+        {"first": (cudf.DataFrame, {"data": {"A": [1, 2], "B": [3, 4]}})},
+        {
+            "first": (cudf.DataFrame, {"data": {"A": [1, 2], "B": [3, 4]}}),
+            "second": (cudf.DataFrame, {"data": {"A": [5, 6], "B": [7, 8]}}),
+            "third": (cudf.DataFrame, {"data": {"C": [1, 2, 3]}}),
+        },
+        {
+            "first": (cudf.DataFrame, {"data": {"A": [1, 2], "B": [3, 4]}}),
+            "second": (cudf.DataFrame, {"data": {"C": [1, 2, 3]}}),
+            "third": (cudf.DataFrame, {"data": {"A": [5, 6], "B": [7, 8]}}),
+        },
+        {
+            "first": (cudf.DataFrame, {"data": {"A": [1, 2], "B": [3, 4]}}),
+            "second": (cudf.DataFrame, {"data": {"C": [1, 2, 3]}}),
+            "third": (cudf.DataFrame, {"data": {"A": [5, 6], "C": [7, 8]}}),
+            "fourth": (cudf.DataFrame, {"data": {"B": [9, 10]}}),
+        },
+        pytest.param(
+            {
+                "first": (cudf.DataFrame, {"data": {2.0: [1, 1]}}),
+                "second": (cudf.DataFrame, {"data": {"test": ["abc", "def"]}}),
+            },
+            marks=pytest.mark.xfail(
+                reason=(
+                    "Cannot construct a MultiIndex column with multiple "
+                    "label types in cuDF at this time. You must convert "
+                    "the labels to the same type."
+                )
+            ),
+        ),
+        {
+            "first": (cudf.Series, {"data": [1, 2, 3]}),
+            "second": (cudf.Series, {"data": [4, 5, 6]}),
+        },
+        {
+            "first": (cudf.DataFrame, {"data": {"A": [1, 2], "B": [3, 4]}}),
+            "second": (cudf.Series, {"data": [5, 6], "name": "C"}),
+        },
+        pytest.param(
+            {
+                "first": (
+                    cudf.DataFrame,
+                    {"data": {("A", "B"): [1, 2], "C": [3, 4]}},
+                ),
+                "second": (
+                    cudf.DataFrame,
+                    {"data": {"D": [5, 6], ("A", "B"): [7, 8]}},
+                ),
+            },
+            marks=pytest.mark.xfail(
+                reason=(
+                    "Cannot construct a MultiIndex column with multiple "
+                    "label types in cuDF at this time. You must convert "
+                    "the labels to the same type."
+                )
+            ),
+        ),
+        pytest.param(
+            {
+                "first": (
+                    cudf.DataFrame,
+                    {"data": {("A", "B"): [3, 4], 2.0: [1, 1]}},
+                ),
+                "second": (
+                    cudf.DataFrame,
+                    {"data": {("C", "D"): [3, 4], 3.0: [5, 6]}},
+                ),
+            },
+            marks=pytest.mark.xfail(
+                reason=(
+                    "Cannot construct a MultiIndex column with multiple "
+                    "label types in cuDF at this time. You must convert "
+                    "the labels to the same type."
+                )
+            ),
+        ),
+        {
+            "first": (
+                cudf.DataFrame,
+                {"data": {(1, 2): [1, 2], (3, 4): [3, 4]}},
+            ),
+            "second": (
+                cudf.DataFrame,
+                {"data": {(1, 2): [5, 6], (5, 6): [7, 8]}},
+            ),
+        },
+    ],
+)
+def test_concat_dictionary(d, axis):
+    _dict = {k: c(**v) for k, (c, v) in d.items()}
+    result = cudf.concat(_dict, axis=axis)
+    expected = cudf.from_pandas(
+        pd.concat({k: df.to_pandas() for k, df in _dict.items()}, axis=axis)
+    )
+    assert_eq(expected, result)
+
+
+@pytest.mark.parametrize(
+    "d",
+    [
+        {"first": cudf.Index([1, 2, 3])},
+        {
+            "first": cudf.MultiIndex(
+                levels=[[1, 2], ["blue", "red"]],
+                codes=[[0, 0, 1, 1], [1, 0, 1, 0]],
+            )
+        },
+        {"first": cudf.CategoricalIndex([1, 2, 3])},
+    ],
+)
+def test_concat_dict_incorrect_type_index(d):
+    with pytest.raises(
+        TypeError,
+        match="cannot concatenate a dictionary containing indices",
+    ):
+        cudf.concat(d, axis=1)

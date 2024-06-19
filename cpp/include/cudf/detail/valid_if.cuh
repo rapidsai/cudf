@@ -50,8 +50,8 @@ CUDF_KERNEL void valid_if_kernel(
 {
   constexpr size_type leader_lane{0};
   auto const lane_id{threadIdx.x % warp_size};
-  auto i            = cudf::detail::grid_1d::global_thread_id();
-  auto const stride = cudf::detail::grid_1d::grid_stride();
+  auto i            = cudf::detail::grid_1d::global_thread_id<block_size>();
+  auto const stride = cudf::detail::grid_1d::grid_stride<block_size>();
   size_type warp_valid_count{0};
 
   auto active_mask = __ballot_sync(0xFFFF'FFFFu, i < size);

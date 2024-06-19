@@ -26,6 +26,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -208,8 +209,10 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE()
-  CUDF_EXPECTS((input.type() == left_edges.type()) && (input.type() == right_edges.type()),
-               "The input and edge columns must have the same types.");
+  CUDF_EXPECTS(
+    cudf::have_same_types(input, left_edges) && cudf::have_same_types(input, right_edges),
+    "The input and edge columns must have the same types.",
+    cudf::data_type_error);
   CUDF_EXPECTS(left_edges.size() == right_edges.size(),
                "The left and right edge columns must be of the same length.");
   CUDF_EXPECTS(!left_edges.has_nulls() && !right_edges.has_nulls(),

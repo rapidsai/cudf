@@ -109,6 +109,7 @@ struct ops_wrapper {
         type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs, is_rhs_scalar);
       auto result = [&]() {
         if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      std::is_same_v<BinaryOperator, ops::NullNotEquals> or
                       std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
                       std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
                       std::is_same_v<BinaryOperator, ops::NullMax> or

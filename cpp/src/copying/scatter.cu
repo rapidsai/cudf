@@ -32,6 +32,8 @@
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
@@ -112,7 +114,7 @@ struct column_scalar_scatterer_impl {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
   {
-    CUDF_EXPECTS(source.get().type() == target.type(),
+    CUDF_EXPECTS(cudf::have_same_types(target, source.get()),
                  "scalar and column types must match",
                  cudf::data_type_error);
 
@@ -145,7 +147,7 @@ struct column_scalar_scatterer_impl<string_view, MapIterator> {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
   {
-    CUDF_EXPECTS(source.get().type() == target.type(),
+    CUDF_EXPECTS(cudf::have_same_types(target, source.get()),
                  "scalar and column types must match",
                  cudf::data_type_error);
 
@@ -315,12 +317,7 @@ std::unique_ptr<table> scatter(table_view const& source,
   CUDF_EXPECTS(scatter_map.size() <= source.num_rows(),
                "Size of scatter map must be equal to or less than source rows",
                std::invalid_argument);
-  CUDF_EXPECTS(std::equal(source.begin(),
-                          source.end(),
-                          target.begin(),
-                          [](auto const& col1, auto const& col2) {
-                            return col1.type().id() == col2.type().id();
-                          }),
+  CUDF_EXPECTS(cudf::have_same_types(source, target),
                "Column types do not match between source and target",
                cudf::data_type_error);
   CUDF_EXPECTS(not scatter_map.has_nulls(), "Scatter map contains nulls", std::invalid_argument);
@@ -452,14 +449,9 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                "Mask must be of Boolean type",
                cudf::data_type_error);
   // Count valid pair of input and columns as per type at each column index i
-  CUDF_EXPECTS(
-    std::all_of(thrust::counting_iterator<size_type>(0),
-                thrust::counting_iterator<size_type>(target.num_columns()),
-                [&input, &target](auto index) {
-                  return ((input.column(index).type().id()) == (target.column(index).type().id()));
-                }),
-    "Type mismatch in input column and target column",
-    cudf::data_type_error);
+  CUDF_EXPECTS(cudf::have_same_types(input, target),
+               "Type mismatch in input column and target column",
+               cudf::data_type_error);
 
   if (target.num_rows() != 0) {
     std::vector<std::unique_ptr<column>> out_columns(target.num_columns());
@@ -496,14 +488,13 @@ std::unique_ptr<table> boolean_mask_scatter(
                cudf::data_type_error);
 
   // Count valid pair of input and columns as per type at each column/scalar index i
-  CUDF_EXPECTS(
-    std::all_of(thrust::counting_iterator<size_type>(0),
-                thrust::counting_iterator<size_type>(target.num_columns()),
-                [&input, &target](auto index) {
-                  return (input[index].get().type().id() == target.column(index).type().id());
-                }),
-    "Type mismatch in input scalar and target column",
-    cudf::data_type_error);
+  CUDF_EXPECTS(std::all_of(thrust::counting_iterator<size_type>(0),
+                           thrust::counting_iterator<size_type>(target.num_columns()),
+                           [&input, &target](auto index) {
+                             return cudf::have_same_types(target.column(index), input[index].get());
+                           }),
+               "Type mismatch in input scalar and target column",
+               cudf::data_type_error);
 
   if (target.num_rows() != 0) {
     std::vector<std::unique_ptr<column>> out_columns(target.num_columns());

@@ -68,9 +68,6 @@ target_link_libraries(strings_udf PUBLIC cudf_strings_udf)
 set(targets_using_arrow_headers interop avro csv orc json parquet)
 link_to_pyarrow_headers("${targets_using_arrow_headers}")
 
-target_include_directories(interop PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
-
-add_subdirectory(cpp)
 add_subdirectory(io)
 add_subdirectory(nvtext)
 add_subdirectory(pylibcudf)

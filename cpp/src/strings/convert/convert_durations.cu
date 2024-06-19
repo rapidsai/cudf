@@ -26,10 +26,8 @@
 #include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
-#include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
 
@@ -192,8 +190,9 @@ struct from_durations_fn {
   column_device_view d_durations;
   format_item const* d_format_items;
   size_type items_count;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ int8_t format_length(char format_char, duration_component const* const timeparts) const
   {
@@ -378,14 +377,14 @@ struct from_durations_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_durations.is_null(idx)) {
-      if (d_chars == nullptr) { d_offsets[idx] = 0; }
+      if (d_chars == nullptr) { d_sizes[idx] = 0; }
       return;
     }
 
     if (d_chars != nullptr) {
       set_chars(idx);
     } else {
-      d_offsets[idx] = string_size(d_durations.template element<T>(idx));
+      d_sizes[idx] = string_size(d_durations.template element<T>(idx));
     }
   }
 };

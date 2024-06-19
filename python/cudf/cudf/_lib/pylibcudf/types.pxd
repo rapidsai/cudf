@@ -3,7 +3,7 @@
 from libc.stdint cimport int32_t
 from libcpp cimport bool as cbool
 
-from cudf._lib.cpp.types cimport (
+from cudf._lib.pylibcudf.libcudf.types cimport (
     data_type,
     interpolation,
     mask_state,
@@ -13,6 +13,7 @@ from cudf._lib.cpp.types cimport (
     null_order,
     null_policy,
     order,
+    size_type,
     sorted,
     type_id,
 )

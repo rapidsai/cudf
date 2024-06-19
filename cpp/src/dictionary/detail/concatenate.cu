@@ -26,6 +26,8 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -82,13 +84,13 @@ struct compute_children_offsets_fn {
   }
 
   /**
-   * @brief Return the first keys().type of the dictionary columns.
+   * @brief Return the first keys() of the dictionary columns.
    */
-  data_type get_keys_type()
+  column_view get_keys()
   {
     auto const view(*std::find_if(
       columns_ptrs.begin(), columns_ptrs.end(), [](auto pcv) { return pcv->size() > 0; }));
-    return dictionary_column_view(*view).keys().type();
+    return dictionary_column_view(*view).keys();
   }
 
   /**
@@ -214,14 +216,16 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
 
   // concatenate the keys (and check the keys match)
   compute_children_offsets_fn child_offsets_fn{columns};
-  auto keys_type = child_offsets_fn.get_keys_type();
+  auto expected_keys = child_offsets_fn.get_keys();
   std::vector<column_view> keys_views(columns.size());
-  std::transform(columns.begin(), columns.end(), keys_views.begin(), [keys_type](auto cv) {
+  std::transform(columns.begin(), columns.end(), keys_views.begin(), [expected_keys](auto cv) {
     auto dict_view = dictionary_column_view(cv);
     // empty column may not have keys so we create an empty column_view place-holder
-    if (dict_view.is_empty()) return column_view{keys_type, 0, nullptr, nullptr, 0};
+    if (dict_view.is_empty()) return column_view{expected_keys.type(), 0, nullptr, nullptr, 0};
     auto keys = dict_view.keys();
-    CUDF_EXPECTS(keys.type() == keys_type, "key types of all dictionary columns must match");
+    CUDF_EXPECTS(cudf::have_same_types(keys, expected_keys),
+                 "key types of all dictionary columns must match",
+                 cudf::data_type_error);
     return keys;
   });
   auto all_keys =
@@ -275,7 +279,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
 
   // now recompute the indices values for the new keys_column;
   // the keys offsets (pair.first) are for mapping to the input keys
-  auto indices_column = type_dispatcher(keys_type,
+  auto indices_column = type_dispatcher(expected_keys.type(),
                                         dispatch_compute_indices{},
                                         all_keys->view(),     // old keys
                                         all_indices->view(),  // old indices

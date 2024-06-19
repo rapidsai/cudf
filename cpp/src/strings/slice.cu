@@ -26,6 +26,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
@@ -79,19 +81,20 @@ struct substring_fn {
   numeric_scalar_device_view<size_type> const d_start;
   numeric_scalar_device_view<size_type> const d_stop;
   numeric_scalar_device_view<size_type> const d_step;
-  int32_t* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type idx)
   {
     if (d_column.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     auto const d_str  = d_column.template element<string_view>(idx);
     auto const length = d_str.length();
     if (length == 0) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     size_type const step = d_step.is_valid() ? d_step.value() : 1;
@@ -131,7 +134,7 @@ struct substring_fn {
       }
       itr += step;
     }
-    if (!d_chars) d_offsets[idx] = bytes;
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 
@@ -227,13 +230,17 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                "Parameter starts must have the same number of rows as strings.");
   CUDF_EXPECTS(stops_column.size() == strings_count,
                "Parameter stops must have the same number of rows as strings.");
-  CUDF_EXPECTS(starts_column.type() == stops_column.type(),
-               "Parameters starts and stops must be of the same type.");
+  CUDF_EXPECTS(cudf::have_same_types(starts_column, stops_column),
+               "Parameters starts and stops must be of the same type.",
+               cudf::data_type_error);
   CUDF_EXPECTS(starts_column.null_count() == 0, "Parameter starts must not contain nulls.");
   CUDF_EXPECTS(stops_column.null_count() == 0, "Parameter stops must not contain nulls.");
   CUDF_EXPECTS(starts_column.type().id() != data_type{type_id::BOOL8}.id(),
-               "Positions values must not be bool type.");
-  CUDF_EXPECTS(is_fixed_width(starts_column.type()), "Positions values must be fixed width type.");
+               "Positions values must not be bool type.",
+               cudf::data_type_error);
+  CUDF_EXPECTS(is_fixed_width(starts_column.type()),
+               "Positions values must be fixed width type.",
+               cudf::data_type_error);
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto starts_iter    = cudf::detail::indexalator_factory::make_input_iterator(starts_column);

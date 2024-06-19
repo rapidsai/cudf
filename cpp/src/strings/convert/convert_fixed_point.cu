@@ -37,10 +37,7 @@
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 #include <thrust/execution_policy.h>
-#include <thrust/for_each.h>
-#include <thrust/generate.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/optional.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -198,8 +195,9 @@ namespace {
 template <typename DecimalType>
 struct from_fixed_point_fn {
   column_device_view d_decimals;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   /**
    * @brief Converts a decimal element into a string.
@@ -219,13 +217,13 @@ struct from_fixed_point_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_decimals.is_null(idx)) {
-      if (d_chars == nullptr) { d_offsets[idx] = 0; }
+      if (d_chars == nullptr) { d_sizes[idx] = 0; }
       return;
     }
     if (d_chars != nullptr) {
       fixed_point_element_to_string(idx);
     } else {
-      d_offsets[idx] =
+      d_sizes[idx] =
         fixed_point_string_size(d_decimals.element<DecimalType>(idx), d_decimals.type().scale());
     }
   }

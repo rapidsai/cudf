@@ -6,7 +6,7 @@ import math
 import pickle
 import weakref
 from types import SimpleNamespace
-from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple
+from typing import Any, Literal, Mapping
 
 import numpy
 from typing_extensions import Self
@@ -42,7 +42,7 @@ def host_memory_allocation(nbytes: int) -> memoryview:
 def cuda_array_interface_wrapper(
     ptr: int,
     size: int,
-    owner: Optional[object] = None,
+    owner: object | None = None,
     readonly=False,
     typestr="|u1",
     version=0,
@@ -191,7 +191,7 @@ class BufferOwner(Serializable):
         """Create an owner from a buffer or array like object
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
-        be convertible to a buffer object using `numpy.array()`
+        be convertible to a buffer object using `numpy.asanyarray()`
 
         The host memory is copied to a new device allocation.
 
@@ -209,7 +209,7 @@ class BufferOwner(Serializable):
         """
 
         # Convert to numpy array, this will not copy data in most cases.
-        ary = numpy.array(data, copy=False, subok=True)
+        ary = numpy.asanyarray(data)
         # Extract pointer and size
         ptr, size = get_ptr_and_size(ary.__array_interface__)
         # Copy to device memory
@@ -278,7 +278,7 @@ class BufferOwner(Serializable):
         return self._ptr
 
     def memoryview(
-        self, *, offset: int = 0, size: Optional[int] = None
+        self, *, offset: int = 0, size: int | None = None
     ) -> memoryview:
         """Read-only access to the buffer through host memory."""
         size = self._size if size is None else size
@@ -319,7 +319,7 @@ class Buffer(Serializable):
         *,
         owner: BufferOwner,
         offset: int = 0,
-        size: Optional[int] = None,
+        size: int | None = None,
     ) -> None:
         size = owner.size if size is None else size
         if size < 0:
@@ -414,7 +414,7 @@ class Buffer(Serializable):
             "version": 0,
         }
 
-    def serialize(self) -> Tuple[dict, list]:
+    def serialize(self) -> tuple[dict, list]:
         """Serialize the buffer into header and frames.
 
         The frames can be a mixture of memoryview, Buffer, and BufferOwner
@@ -427,7 +427,7 @@ class Buffer(Serializable):
             serializable metadata required to reconstruct the object. The
             second element is a list containing single frame.
         """
-        header: Dict[str, Any] = {}
+        header: dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
         header["owner-type-serialized"] = pickle.dumps(type(self._owner))
         header["frame_count"] = 1
@@ -480,37 +480,7 @@ class Buffer(Serializable):
         )
 
 
-def is_c_contiguous(
-    shape: Sequence[int], strides: Sequence[int], itemsize: int
-) -> bool:
-    """Determine if shape and strides are C-contiguous
-
-    Parameters
-    ----------
-    shape : Sequence[int]
-        Number of elements in each dimension.
-    strides : Sequence[int]
-        The stride of each dimension in bytes.
-    itemsize : int
-        Size of an element in bytes.
-
-    Return
-    ------
-    bool
-        The boolean answer.
-    """
-
-    if any(dim == 0 for dim in shape):
-        return True
-    cumulative_stride = itemsize
-    for dim, stride in zip(reversed(shape), reversed(strides)):
-        if dim > 1 and stride != cumulative_stride:
-            return False
-        cumulative_stride *= dim
-    return True
-
-
-def get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
+def get_ptr_and_size(array_interface: Mapping) -> tuple[int, int]:
     """Retrieve the pointer and size from an array interface.
 
     Raises ValueError if array isn't C-contiguous.
@@ -531,7 +501,9 @@ def get_ptr_and_size(array_interface: Mapping) -> Tuple[int, int]:
     shape = array_interface["shape"] or (1,)
     strides = array_interface["strides"]
     itemsize = cudf.dtype(array_interface["typestr"]).itemsize
-    if strides is None or is_c_contiguous(shape, strides, itemsize):
+    if strides is None or cudf._lib.pylibcudf.column.is_c_contiguous(
+        shape, strides, itemsize
+    ):
         nelem = math.prod(shape)
         ptr = array_interface["data"][0] or 0
         return ptr, nelem * itemsize

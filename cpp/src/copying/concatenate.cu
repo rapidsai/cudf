@@ -30,6 +30,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -119,8 +121,8 @@ CUDF_KERNEL void concatenate_masks_kernel(column_device_view const* views,
                                           size_type number_of_mask_bits,
                                           size_type* out_valid_count)
 {
-  auto tidx         = cudf::detail::grid_1d::global_thread_id();
-  auto const stride = cudf::detail::grid_1d::grid_stride();
+  auto tidx         = cudf::detail::grid_1d::global_thread_id<block_size>();
+  auto const stride = cudf::detail::grid_1d::grid_stride<block_size>();
   auto active_mask  = __ballot_sync(0xFFFF'FFFFu, tidx < number_of_mask_bits);
 
   size_type warp_valid_count = 0;
@@ -461,12 +463,9 @@ void traverse_children::operator()<cudf::list_view>(host_span<column_view const>
  */
 void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(std::all_of(cols.begin(),
-                           cols.end(),
-                           [expected_type = cols.front().type()](auto const& c) {
-                             return c.type() == expected_type;
-                           }),
-               "Type mismatch in columns to concatenate.");
+  CUDF_EXPECTS(cudf::all_have_same_types(cols.begin(), cols.end()),
+               "Type mismatch in columns to concatenate.",
+               cudf::data_type_error);
 
   // total size of all concatenated rows
   size_t const total_row_count =

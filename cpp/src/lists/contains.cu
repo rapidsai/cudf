@@ -27,6 +27,7 @@
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -194,7 +195,7 @@ std::unique_ptr<column> dispatch_index_of(lists_column_view const& lists,
   // comparisons.
   auto const child = lists.child();
 
-  CUDF_EXPECTS(child.type() == search_keys.type(),
+  CUDF_EXPECTS(cudf::have_same_types(child, search_keys),
                "Type/Scale of search key does not match list column element type.",
                cudf::data_type_error);
   CUDF_EXPECTS(search_keys.type().id() != type_id::EMPTY, "Type cannot be empty.");

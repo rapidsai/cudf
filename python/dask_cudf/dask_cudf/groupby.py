@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 from functools import wraps
-from typing import Set
 
 import numpy as np
 import pandas as pd
@@ -15,6 +15,7 @@ from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
 from dask.utils import funcname
 
 import cudf
+from cudf.core.groupby.groupby import _deprecate_collect
 from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
 
 from dask_cudf.sorting import _deprecate_shuffle_kwarg
@@ -28,7 +29,7 @@ OPTIMIZED_AGGS = (
     "sum",
     "min",
     "max",
-    "collect",
+    list,
     "first",
     "last",
 )
@@ -164,9 +165,10 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     @_dask_cudf_nvtx_annotate
     @_check_groupby_optimized
     def collect(self, split_every=None, split_out=1):
+        _deprecate_collect()
         return _make_groupby_agg_call(
             self,
-            self._make_groupby_method_aggs("collect"),
+            self._make_groupby_method_aggs(list),
             split_every,
             split_out,
         )
@@ -308,9 +310,10 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     @_dask_cudf_nvtx_annotate
     @_check_groupby_optimized
     def collect(self, split_every=None, split_out=1):
+        _deprecate_collect()
         return _make_groupby_agg_call(
             self,
-            {self._slice: "collect"},
+            {self._slice: list},
             split_every,
             split_out,
         )[self._slice]
@@ -472,7 +475,7 @@ def groupby_agg(
 
     This aggregation algorithm only supports the following options
 
-    * "collect"
+    * "list"
     * "count"
     * "first"
     * "last"
@@ -667,8 +670,8 @@ def _redirect_aggs(arg):
         sum: "sum",
         max: "max",
         min: "min",
-        list: "collect",
-        "list": "collect",
+        "collect": list,
+        "list": list,
     }
     if isinstance(arg, dict):
         new_arg = dict()
@@ -692,7 +695,7 @@ def _aggs_optimized(arg, supported: set):
     """Check that aggregations in `arg` are a subset of `supported`"""
     if isinstance(arg, (list, dict)):
         if isinstance(arg, dict):
-            _global_set: Set[str] = set()
+            _global_set: set[str] = set()
             for col in arg:
                 if isinstance(arg[col], list):
                     _global_set = _global_set.union(set(arg[col]))
@@ -704,7 +707,7 @@ def _aggs_optimized(arg, supported: set):
             _global_set = set(arg)
 
         return bool(_global_set.issubset(supported))
-    elif isinstance(arg, str):
+    elif isinstance(arg, (str, type)):
         return arg in supported
     return False
 
@@ -783,6 +786,8 @@ def _tree_node_agg(df, gb_cols, dropna, sort, sep):
         agg = col.split(sep)[-1]
         if agg in ("count", "sum"):
             agg_dict[col] = ["sum"]
+        elif agg == "list":
+            agg_dict[col] = [list]
         elif agg in OPTIMIZED_AGGS:
             agg_dict[col] = [agg]
         else:
@@ -873,8 +878,8 @@ def _finalize_gb_agg(
                 gb.drop(columns=[sum_name], inplace=True)
             if "count" not in agg_list:
                 gb.drop(columns=[count_name], inplace=True)
-        if "collect" in agg_list:
-            collect_name = _make_name((col, "collect"), sep=sep)
+        if list in agg_list:
+            collect_name = _make_name((col, "list"), sep=sep)
             gb[collect_name] = gb[collect_name].list.concat()
 
     # Ensure sorted keys if `sort=True`

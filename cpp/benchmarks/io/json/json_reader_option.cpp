@@ -173,15 +173,62 @@ void BM_jsonlines_read_options(nvbench::state& state,
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
+NVBENCH_BENCH_TYPES(BM_jsonlines_read_options,
+                    NVBENCH_TYPE_AXES(nvbench::enum_type_list<row_selection::ALL>,
+                                      nvbench::enum_type_list<normalize_single_quotes::NO,
+                                                              normalize_single_quotes::YES>,
+                                      nvbench::enum_type_list<normalize_whitespace::NO>,
+                                      nvbench::enum_type_list<mixed_types_as_string::NO>,
+                                      nvbench::enum_type_list<recovery_mode::FAIL>))
+  .set_name("jsonlines_reader_normalize_single_quotes")
+  .set_type_axes_names({"row_selection",
+                        "normalize_single_quotes",
+                        "normalize_whitespace",
+                        "mixed_types_as_string",
+                        "recovery_mode"})
+  .set_min_samples(6)
+  .add_int64_axis("num_chunks", nvbench::range(1, 1, 1));
+
 NVBENCH_BENCH_TYPES(
   BM_jsonlines_read_options,
-  NVBENCH_TYPE_AXES(
-    nvbench::enum_type_list<row_selection::ALL, row_selection::BYTE_RANGE>,
-    nvbench::enum_type_list<normalize_single_quotes::NO, normalize_single_quotes::YES>,
-    nvbench::enum_type_list<normalize_whitespace::NO, normalize_whitespace::YES>,
-    nvbench::enum_type_list<mixed_types_as_string::NO, mixed_types_as_string::YES>,
-    nvbench::enum_type_list<recovery_mode::RECOVER_WITH_NULL, recovery_mode::FAIL>))
-  .set_name("jsonlines_reader")
+  NVBENCH_TYPE_AXES(nvbench::enum_type_list<row_selection::ALL>,
+                    nvbench::enum_type_list<normalize_single_quotes::NO>,
+                    nvbench::enum_type_list<normalize_whitespace::NO, normalize_whitespace::YES>,
+                    nvbench::enum_type_list<mixed_types_as_string::NO>,
+                    nvbench::enum_type_list<recovery_mode::FAIL>))
+  .set_name("jsonlines_reader_normalize_whitespace")
+  .set_type_axes_names({"row_selection",
+                        "normalize_single_quotes",
+                        "normalize_whitespace",
+                        "mixed_types_as_string",
+                        "recovery_mode"})
+  .set_min_samples(6)
+  .add_int64_axis("num_chunks", nvbench::range(1, 1, 1));
+
+NVBENCH_BENCH_TYPES(
+  BM_jsonlines_read_options,
+  NVBENCH_TYPE_AXES(nvbench::enum_type_list<row_selection::ALL>,
+                    nvbench::enum_type_list<normalize_single_quotes::NO>,
+                    nvbench::enum_type_list<normalize_whitespace::NO>,
+                    nvbench::enum_type_list<mixed_types_as_string::NO, mixed_types_as_string::YES>,
+                    nvbench::enum_type_list<recovery_mode::RECOVER_WITH_NULL, recovery_mode::FAIL>))
+  .set_name("jsonlines_reader_mixed_types_as_string")
+  .set_type_axes_names({"row_selection",
+                        "normalize_single_quotes",
+                        "normalize_whitespace",
+                        "mixed_types_as_string",
+                        "recovery_mode"})
+  .set_min_samples(6)
+  .add_int64_axis("num_chunks", nvbench::range(1, 1, 1));
+
+NVBENCH_BENCH_TYPES(
+  BM_jsonlines_read_options,
+  NVBENCH_TYPE_AXES(nvbench::enum_type_list<row_selection::ALL, row_selection::BYTE_RANGE>,
+                    nvbench::enum_type_list<normalize_single_quotes::NO>,
+                    nvbench::enum_type_list<normalize_whitespace::NO>,
+                    nvbench::enum_type_list<mixed_types_as_string::NO>,
+                    nvbench::enum_type_list<recovery_mode::FAIL>))
+  .set_name("jsonlines_reader_row_selection")
   .set_type_axes_names({"row_selection",
                         "normalize_single_quotes",
                         "normalize_whitespace",

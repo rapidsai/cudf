@@ -1220,8 +1220,26 @@ public final class Table implements AutoCloseable {
               columns[i] = tbl.getColumn(index).incRefCount();
             }
           } else {
-            try (Scalar s = Scalar.fromNull(types[i])) {
-              columns[i] = ColumnVector.fromScalar(s, rowCount);
+            if (types[i] == DType.LIST) {
+              Schema listSchema = schema.getChild(i);
+              Schema elementSchema = listSchema.getChild(0);
+              try (Scalar s = Scalar.listFromNull(elementSchema.asHostDataType())) {
+                columns[i] = ColumnVector.fromScalar(s, rowCount);
+              }
+            } else if (types[i] == DType.STRUCT) {
+              Schema structSchema = schema.getChild(i);
+              int numStructChildren = structSchema.getNumChildren();
+              DataType[] structChildrenTypes = new DataType[numStructChildren];
+              for (int j = 0; j < numStructChildren; j++) {
+                structChildrenTypes[j] = structSchema.getChild(j).asHostDataType();
+              }
+              try (Scalar s = Scalar.structFromNull(structChildrenTypes)) {
+                columns[i] = ColumnVector.fromScalar(s, rowCount);
+              }
+            } else {
+              try (Scalar s = Scalar.fromNull(types[i])) {
+                columns[i] = ColumnVector.fromScalar(s, rowCount);
+              }
             }
           }
         }

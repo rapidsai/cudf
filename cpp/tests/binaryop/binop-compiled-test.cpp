@@ -700,6 +700,40 @@ using BinaryOperationCompiledTest_NullOpsString =
   BinaryOperationCompiledTest_NullOps<cudf::test::Types<std::string, std::string, std::string>>;
 TEST_F(BinaryOperationCompiledTest_NullOpsString, NullEquals_Vector_Vector)
 {
+  using TypeOut         = bool;
+  using TypeLhs         = std::string;
+  using TypeRhs         = std::string;
+  using NULL_NOT_EQUALS = cudf::library::operation::NullNotEquals<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs            = lhs_random_column<TypeLhs>(col_size);
+  auto rhs            = rhs_random_column<TypeRhs>(col_size);
+  auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs, NULL_NOT_EQUALS>(lhs, rhs);
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::NULL_NOT_EQUALS, cudf::data_type(cudf::type_to_id<TypeOut>()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_NullOps, NullNotEquals_Vector_Vector)
+{
+  using TypeOut         = bool;
+  using TypeLhs         = typename TestFixture::TypeLhs;
+  using TypeRhs         = typename TestFixture::TypeRhs;
+  using NULL_NOT_EQUALS = cudf::library::operation::NullNotEquals<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs            = lhs_random_column<TypeLhs>(col_size);
+  auto rhs            = rhs_random_column<TypeRhs>(col_size);
+  auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs, NULL_NOT_EQUALS>(lhs, rhs);
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::NULL_NOT_EQUALS, cudf::data_type(cudf::type_to_id<TypeOut>()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+using BinaryOperationCompiledTest_NullOpsString =
+  BinaryOperationCompiledTest_NullOps<cudf::test::Types<std::string, std::string, std::string>>;
+TEST_F(BinaryOperationCompiledTest_NullOpsString, NullNotEquals_Vector_Vector)
+{
   using TypeOut     = bool;
   using TypeLhs     = std::string;
   using TypeRhs     = std::string;

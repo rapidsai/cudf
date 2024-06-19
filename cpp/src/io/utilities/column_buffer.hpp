@@ -115,6 +115,13 @@ class column_buffer_base {
   // preprocessing steps such as in the Parquet reader
   void create(size_type _size, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
+  // like create(), but also takes a `cudf::mask_state` to allow initializing the null mask as
+  // something other than `ALL_NULL`
+  void create_with_mask(size_type _size,
+                        cudf::mask_state null_mask_state,
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr);
+
   // Create a new column_buffer that has empty data but with the same basic information as the
   // input column, including same type, nullability, name, and user_data.
   static string_policy empty_like(string_policy const& input);
@@ -130,8 +137,11 @@ class column_buffer_base {
   auto& null_count() { return _null_count; }
 
   auto data() { return static_cast<string_policy*>(this)->data_impl(); }
-  auto data() const { return static_cast<string_policy const*>(this)->data_impl(); }
-  auto data_size() const { return static_cast<string_policy const*>(this)->data_size_impl(); }
+  [[nodiscard]] auto data() const { return static_cast<string_policy const*>(this)->data_impl(); }
+  [[nodiscard]] auto data_size() const
+  {
+    return static_cast<string_policy const*>(this)->data_size_impl();
+  }
 
   std::unique_ptr<column> make_string_column(rmm::cuda_stream_view stream)
   {
@@ -184,9 +194,9 @@ class gather_column_buffer : public column_buffer_base<gather_column_buffer> {
 
   void allocate_strings_data(rmm::cuda_stream_view stream);
 
-  void* data_impl() { return _strings ? _strings->data() : _data.data(); }
-  void const* data_impl() const { return _strings ? _strings->data() : _data.data(); }
-  size_t data_size_impl() const { return _strings ? _strings->size() : _data.size(); }
+  [[nodiscard]] void* data_impl() { return _strings ? _strings->data() : _data.data(); }
+  [[nodiscard]] void const* data_impl() const { return _strings ? _strings->data() : _data.data(); }
+  [[nodiscard]] size_t data_size_impl() const { return _strings ? _strings->size() : _data.size(); }
 
   std::unique_ptr<column> make_string_column_impl(rmm::cuda_stream_view stream);
 
@@ -219,14 +229,14 @@ class inline_column_buffer : public column_buffer_base<inline_column_buffer> {
   void allocate_strings_data(rmm::cuda_stream_view stream);
 
   void* data_impl() { return _data.data(); }
-  void const* data_impl() const { return _data.data(); }
-  size_t data_size_impl() const { return _data.size(); }
+  [[nodiscard]] void const* data_impl() const { return _data.data(); }
+  [[nodiscard]] size_t data_size_impl() const { return _data.size(); }
   std::unique_ptr<column> make_string_column_impl(rmm::cuda_stream_view stream);
 
   void create_string_data(size_t num_bytes, rmm::cuda_stream_view stream);
   void* string_data() { return _string_data.data(); }
-  void const* string_data() const { return _string_data.data(); }
-  size_t string_size() const { return _string_data.size(); }
+  [[nodiscard]] void const* string_data() const { return _string_data.data(); }
+  [[nodiscard]] size_t string_size() const { return _string_data.size(); }
 
  private:
   rmm::device_buffer _string_data{};

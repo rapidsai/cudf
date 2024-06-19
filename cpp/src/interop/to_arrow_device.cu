@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "to_arrow_utilities.hpp"
+#include "arrow_utilities.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
@@ -48,9 +48,6 @@
 namespace cudf {
 namespace detail {
 namespace {
-
-static constexpr int validity_buffer_idx         = 0;
-static constexpr int fixed_width_data_buffer_idx = 1;
 
 template <typename T>
 void device_buffer_finalize(ArrowBufferAllocator* allocator, uint8_t*, int64_t)

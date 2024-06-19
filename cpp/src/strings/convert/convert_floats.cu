@@ -32,9 +32,7 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
 
-#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
 #include <cmath>
@@ -356,8 +354,9 @@ struct ftos_converter {
 template <typename FloatType>
 struct from_floats_fn {
   column_device_view d_floats;
-  size_type* d_offsets;
+  size_type* d_sizes;
   char* d_chars;
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ size_type compute_output_size(FloatType value)
   {
@@ -375,13 +374,13 @@ struct from_floats_fn {
   __device__ void operator()(size_type idx)
   {
     if (d_floats.is_null(idx)) {
-      if (d_chars == nullptr) { d_offsets[idx] = 0; }
+      if (d_chars == nullptr) { d_sizes[idx] = 0; }
       return;
     }
     if (d_chars != nullptr) {
       float_to_string(idx);
     } else {
-      d_offsets[idx] = compute_output_size(d_floats.element<FloatType>(idx));
+      d_sizes[idx] = compute_output_size(d_floats.element<FloatType>(idx));
     }
   }
 };

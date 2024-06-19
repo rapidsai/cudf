@@ -30,6 +30,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace cudf {
@@ -113,6 +114,7 @@ enum class column_encoding {
                             ///< valid for BYTE_ARRAY columns)
   DELTA_BYTE_ARRAY,         ///< Use DELTA_BYTE_ARRAY encoding (only valid for
                             ///< BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY columns)
+  BYTE_STREAM_SPLIT,        ///< Use BYTE_STREAM_SPLIT encoding (valid for all fixed width types)
   // ORC encodings:
   DIRECT,         ///< Use DIRECT encoding
   DIRECT_V2,      ///< Use DIRECT_V2 encoding
@@ -235,6 +237,8 @@ enum dictionary_policy {
 struct column_name_info {
   std::string name;                        ///< Column name
   std::optional<bool> is_nullable;         ///< Column nullability
+  std::optional<bool> is_binary;           ///< Column is binary (i.e. not a list)
+  std::optional<int32_t> type_length;      ///< Byte width of data (for fixed length data)
   std::vector<column_name_info> children;  ///< Child column names
 
   /**
@@ -242,13 +246,29 @@ struct column_name_info {
    *
    * @param _name Column name
    * @param _is_nullable True if column is nullable
+   * @param _is_binary True if column is binary data
    */
-  column_name_info(std::string const& _name, std::optional<bool> _is_nullable = std::nullopt)
-    : name(_name), is_nullable(_is_nullable)
+  column_name_info(std::string _name,
+                   std::optional<bool> _is_nullable = std::nullopt,
+                   std::optional<bool> _is_binary   = std::nullopt)
+    : name(std::move(_name)), is_nullable(_is_nullable), is_binary(_is_binary)
   {
   }
 
   column_name_info() = default;
+
+  /**
+   * @brief Compares two column name info structs for equality
+   *
+   * @param rhs column name info struct to compare against
+   * @return boolean indicating if this and rhs are equal
+   */
+  bool operator==(column_name_info const& rhs) const
+  {
+    return ((name == rhs.name) && (is_nullable == rhs.is_nullable) &&
+            (is_binary == rhs.is_binary) && (type_length == rhs.type_length) &&
+            (children == rhs.children));
+  };
 };
 
 /**
@@ -605,6 +625,7 @@ class column_in_metadata {
   bool _skip_compression    = false;
   std::optional<uint8_t> _decimal_precision;
   std::optional<int32_t> _parquet_field_id;
+  std::optional<int32_t> _type_length;
   std::vector<column_in_metadata> children;
   column_encoding _encoding = column_encoding::USE_DEFAULT;
 
@@ -689,6 +710,19 @@ class column_in_metadata {
   column_in_metadata& set_decimal_precision(uint8_t precision) noexcept
   {
     _decimal_precision = precision;
+    return *this;
+  }
+
+  /**
+   * @brief Set the data length of the column. Only valid if this column is a
+   * fixed-length byte array.
+   *
+   * @param length The data length to set for this column
+   * @return this for chaining
+   */
+  column_in_metadata& set_type_length(int32_t length) noexcept
+  {
+    _type_length = length;
     return *this;
   }
 
@@ -826,6 +860,22 @@ class column_in_metadata {
   [[nodiscard]] uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
 
   /**
+   * @brief Get whether type length has been set for this column
+   *
+   * @return Boolean indicating whether type length has been set for this column
+   */
+  [[nodiscard]] bool is_type_length_set() const noexcept { return _type_length.has_value(); }
+
+  /**
+   * @brief Get the type length that was set for this column.
+   *
+   * @throws std::bad_optional_access If type length was not set for this
+   *         column. Check using `is_type_length_set()` first.
+   * @return The decimal precision that was set for this column
+   */
+  [[nodiscard]] uint8_t get_type_length() const { return _type_length.value(); }
+
+  /**
    * @brief Get whether parquet field id has been set for this column.
    *
    * @return Boolean indicating whether parquet field id has been set for this column
@@ -931,6 +981,7 @@ struct partition_info {
 class reader_column_schema {
   // Whether to read binary data as a string column
   bool _convert_binary_to_strings{true};
+  int32_t _type_length{0};
 
   std::vector<reader_column_schema> children;
 
@@ -997,6 +1048,18 @@ class reader_column_schema {
   }
 
   /**
+   * @brief Sets the length of fixed length data.
+   *
+   * @param type_length Size of the data type in bytes
+   * @return this for chaining
+   */
+  reader_column_schema& set_type_length(int32_t type_length)
+  {
+    _type_length = type_length;
+    return *this;
+  }
+
+  /**
    * @brief Get whether to encode this column as binary or string data
    *
    * @return Boolean indicating whether to encode this column as binary data
@@ -1005,6 +1068,13 @@ class reader_column_schema {
   {
     return _convert_binary_to_strings;
   }
+
+  /**
+   * @brief Get the length in bytes of this fixed length data.
+   *
+   * @return The length in bytes of the data type
+   */
+  [[nodiscard]] int32_t get_type_length() const { return _type_length; }
 
   /**
    * @brief Get the number of child objects

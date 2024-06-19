@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,6 +120,8 @@ class CompactProtocolReader {
   void read(ColumnIndex* c);
   void read(Statistics* s);
   void read(ColumnOrder* c);
+  void read(PageEncodingStats* s);
+  void read(SortingColumn* s);
 
  public:
   static int NumRequiredBits(uint32_t max_level) noexcept

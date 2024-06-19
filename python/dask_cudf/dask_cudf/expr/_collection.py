@@ -1,5 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+import warnings
 from functools import cached_property
 
 from dask_expr import (
@@ -17,14 +18,39 @@ from dask.dataframe.core import is_dataframe_like
 
 import cudf
 
+_LEGACY_WORKAROUND = (
+    "To enable the 'legacy' dask-cudf API, set the "
+    "global 'dataframe.query-planning' config to "
+    "`False` before dask is imported. This can also "
+    "be done by setting an environment variable: "
+    "`DASK_DATAFRAME__QUERY_PLANNING=False` "
+)
+
+
 ##
 ## Custom collection classes
 ##
 
 
-# VarMixin can be removed if cudf#15179 is addressed.
-# See: https://github.com/rapidsai/cudf/issues/15179
-class VarMixin:
+class CudfFrameBase(FrameBase):
+    def to_dask_dataframe(self, **kwargs):
+        """Create a dask.dataframe object from a dask_cudf object
+
+        WARNING: This API is deprecated, and may not work properly.
+        Please use `*.to_backend("pandas")` to convert the
+        underlying data to pandas.
+        """
+
+        warnings.warn(
+            "The `to_dask_dataframe` API is now deprecated. "
+            "Please use `*.to_backend('pandas')` instead.",
+            FutureWarning,
+        )
+
+        return self.to_backend("pandas", **kwargs)
+
+    # var can be removed if cudf#15179 is addressed.
+    # See: https://github.com/rapidsai/cudf/issues/15179
     def var(
         self,
         axis=0,
@@ -49,11 +75,29 @@ class VarMixin:
         )
 
 
-class DataFrame(VarMixin, DXDataFrame):
+class DataFrame(DXDataFrame, CudfFrameBase):
     @classmethod
     def from_dict(cls, *args, **kwargs):
         with config.set({"dataframe.backend": "cudf"}):
             return DXDataFrame.from_dict(*args, **kwargs)
+
+    def set_index(
+        self,
+        *args,
+        divisions=None,
+        **kwargs,
+    ):
+        if divisions == "quantile":
+            divisions = None
+            warnings.warn(
+                "Ignoring divisions='quantile'. This option is now "
+                "deprecated. Please use the legacy API and raise an "
+                "issue on github if this feature is necessary."
+                f"\n{_LEGACY_WORKAROUND}",
+                FutureWarning,
+            )
+
+        return super().set_index(*args, divisions=divisions, **kwargs)
 
     def groupby(
         self,
@@ -70,6 +114,21 @@ class DataFrame(VarMixin, DXDataFrame):
             raise ValueError(
                 f"`by` must be a column name or list of columns, got {by}."
             )
+
+        if "as_index" in kwargs:
+            msg = (
+                "The `as_index` argument is now deprecated. All groupby "
+                "results will be consistent with `as_index=True`."
+            )
+
+            if kwargs.pop("as_index") is not True:
+                raise NotImplementedError(
+                    f"{msg} Please reset the index after aggregating, or "
+                    "use the legacy API if `as_index=False` is required.\n"
+                    f"{_LEGACY_WORKAROUND}"
+                )
+            else:
+                warnings.warn(msg, FutureWarning)
 
         return GroupBy(
             self,
@@ -94,7 +153,7 @@ class DataFrame(VarMixin, DXDataFrame):
         return from_legacy_dataframe(ddf)
 
 
-class Series(VarMixin, DXSeries):
+class Series(DXSeries, CudfFrameBase):
     def groupby(self, by, **kwargs):
         from dask_cudf.expr._groupby import SeriesGroupBy
 
@@ -113,7 +172,7 @@ class Series(VarMixin, DXSeries):
         return StructMethods(self)
 
 
-class Index(DXIndex):
+class Index(DXIndex, CudfFrameBase):
     pass  # Same as pandas (for now)
 
 

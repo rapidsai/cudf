@@ -22,6 +22,8 @@
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
+#include "io/parquet/parquet.hpp"
+#include "io/parquet/parquet_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "io/utilities/column_utils.cuh"
 #include "io/utilities/config_utils.hpp"
@@ -34,10 +36,10 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
-#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -51,6 +53,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iterator>
 #include <numeric>
 #include <utility>
 
@@ -214,6 +217,53 @@ void update_chunk_encodings(std::vector<Encoding>& encodings, uint32_t enc_mask)
 }
 
 /**
+ * @brief Update the encoding_stats field in the column chunk metadata.
+ *
+ * @param chunk_meta The `ColumnChunkMetaData` struct for the column chunk
+ * @param ck The column chunk to summarize stats for
+ * @param is_v2 True if V2 page headers are used
+ */
+void update_chunk_encoding_stats(ColumnChunkMetaData& chunk_meta,
+                                 EncColumnChunk const& ck,
+                                 bool is_v2)
+{
+  // don't set encoding stats if there are no pages
+  if (ck.num_pages == 0) { return; }
+
+  // NOTE: since cudf doesn't use mixed encodings for a chunk, we really only need to account
+  // for the dictionary page (if there is one), and the encoding used for the data pages. We can
+  // examine the chunk's encodings field to figure out the encodings without having to examine
+  // the page data.
+  auto const num_data_pages = static_cast<int32_t>(ck.num_data_pages());
+  auto const data_page_type = is_v2 ? PageType::DATA_PAGE_V2 : PageType::DATA_PAGE;
+
+  std::vector<PageEncodingStats> result;
+  if (ck.use_dictionary) {
+    // For dictionary encoding, if V1 then both data and dictionary use PLAIN_DICTIONARY. For V2
+    // the dictionary uses PLAIN and the data RLE_DICTIONARY.
+    auto const dict_enc = is_v2 ? Encoding::PLAIN : Encoding::PLAIN_DICTIONARY;
+    auto const data_enc = is_v2 ? Encoding::RLE_DICTIONARY : Encoding::PLAIN_DICTIONARY;
+    result.push_back({PageType::DICTIONARY_PAGE, dict_enc, 1});
+    if (num_data_pages > 0) { result.push_back({data_page_type, data_enc, num_data_pages}); }
+  } else {
+    // No dictionary page, the pages are encoded with something other than RLE (unless it's a
+    // boolean column).
+    for (auto const enc : chunk_meta.encodings) {
+      if (enc != Encoding::RLE) {
+        result.push_back({data_page_type, enc, num_data_pages});
+        break;
+      }
+    }
+    // if result is empty and we're using V2 headers, then assume the data is RLE as well
+    if (result.empty() and is_v2 and (ck.encodings & encoding_to_mask(Encoding::RLE)) != 0) {
+      result.push_back({data_page_type, Encoding::RLE, num_data_pages});
+    }
+  }
+
+  if (not result.empty()) { chunk_meta.encoding_stats = std::move(result); }
+}
+
+/**
  * @brief Compute size (in bytes) of the data stored in the given column.
  *
  * @param column The input column
@@ -228,8 +278,9 @@ size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
     return size_of(column.type()) * column.size();
   } else if (column.type().id() == type_id::STRING) {
     auto const scol = strings_column_view(column);
-    return cudf::detail::get_value<size_type>(scol.offsets(), column.size(), stream) -
-           cudf::detail::get_value<size_type>(scol.offsets(), 0, stream);
+    return cudf::strings::detail::get_offset_value(
+             scol.offsets(), column.size() + column.offset(), stream) -
+           cudf::strings::detail::get_offset_value(scol.offsets(), column.offset(), stream);
   } else if (column.type().id() == type_id::STRUCT) {
     auto const scol = structs_column_view(column);
     size_t ret      = 0;
@@ -612,8 +663,7 @@ std::vector<schema_tree_node> construct_schema_tree(
                                                 column_in_metadata const& col_meta) {
         s.requested_encoding = column_encoding::USE_DEFAULT;
 
-        if (schema[parent_idx].name != "list" and
-            col_meta.get_encoding() != column_encoding::USE_DEFAULT) {
+        if (s.name != "list" and col_meta.get_encoding() != column_encoding::USE_DEFAULT) {
           // do some validation
           switch (col_meta.get_encoding()) {
             case column_encoding::DELTA_BINARY_PACKED:
@@ -658,6 +708,21 @@ std::vector<schema_tree_node> construct_schema_tree(
               }
               break;
 
+            case column_encoding::BYTE_STREAM_SPLIT:
+              if (s.type == Type::BYTE_ARRAY) {
+                CUDF_LOG_WARN(
+                  "BYTE_STREAM_SPLIT encoding is only supported for fixed width columns; the "
+                  "requested encoding will be ignored");
+                return;
+              }
+              if (s.type == Type::INT96) {
+                CUDF_LOG_WARN(
+                  "BYTE_STREAM_SPLIT encoding is not supported for INT96 columns; the "
+                  "requested encoding will be ignored");
+                return;
+              }
+              break;
+
             // supported parquet encodings
             case column_encoding::PLAIN:
             case column_encoding::DICTIONARY: break;
@@ -689,7 +754,14 @@ std::vector<schema_tree_node> construct_schema_tree(
         }
 
         schema_tree_node col_schema{};
-        col_schema.type            = Type::BYTE_ARRAY;
+        // test if this should be output as FIXED_LEN_BYTE_ARRAY
+        if (col_meta.is_type_length_set()) {
+          col_schema.type        = Type::FIXED_LEN_BYTE_ARRAY;
+          col_schema.type_length = col_meta.get_type_length();
+        } else {
+          col_schema.type = Type::BYTE_ARRAY;
+        }
+
         col_schema.converted_type  = thrust::nullopt;
         col_schema.stats_dtype     = statistics_dtype::dtype_byte_array;
         col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
@@ -1009,6 +1081,7 @@ parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_stream
   auto desc        = parquet_column_device_view{};  // Zero out all fields
   desc.stats_dtype = schema_node.stats_dtype;
   desc.ts_scale    = schema_node.ts_scale;
+  desc.type_length = schema_node.type_length;
 
   if (is_list()) {
     desc.level_offsets = _dremel_offsets.data();
@@ -1251,8 +1324,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
       chunk_col_desc.requested_encoding != column_encoding::USE_DEFAULT &&
       chunk_col_desc.requested_encoding != column_encoding::DICTIONARY;
     auto const is_type_non_dict =
-      chunk_col_desc.physical_type == Type::BOOLEAN ||
-      (chunk_col_desc.output_as_byte_array && chunk_col_desc.physical_type == Type::BYTE_ARRAY);
+      chunk_col_desc.physical_type == Type::BOOLEAN || chunk_col_desc.output_as_byte_array;
 
     if (is_type_non_dict || is_requested_non_dict) {
       chunk.use_dictionary = false;
@@ -1691,10 +1763,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     // for multiple fragments per page to smooth things out. using 2 was too
     // unbalanced in final page sizes, so using 4 which seems to be a good
     // compromise at smoothing things out without getting fragment sizes too small.
-    auto frag_size_fn = [&](auto const& col, size_type col_size) {
+    auto frag_size_fn = [&](auto const& col, size_t col_size) {
       int const target_frags_per_page = is_col_fixed_width(col) ? 1 : 4;
       auto const avg_len =
-        target_frags_per_page * util::div_rounding_up_safe<size_type>(col_size, input.num_rows());
+        target_frags_per_page * util::div_rounding_up_safe<size_t>(col_size, input.num_rows());
       if (avg_len > 0) {
         auto const frag_size = util::div_rounding_up_safe<size_type>(max_page_size_bytes, avg_len);
         return std::min<size_type>(max_page_fragment_size, frag_size);
@@ -2129,6 +2201,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         max_write_size = std::max(max_write_size, ck.compressed_size);
 
         update_chunk_encodings(column_chunk_meta.encodings, ck.encodings);
+        update_chunk_encoding_stats(column_chunk_meta, ck, write_v2_headers);
 
         if (ck.ck_stat_size != 0) {
           std::vector<uint8_t> const stats_blob = cudf::detail::make_std_vector_sync(
@@ -2139,6 +2212,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         }
 
         row_group.total_byte_size += ck.bfr_size;
+        row_group.total_compressed_size =
+          row_group.total_compressed_size.value_or(0) + ck.compressed_size;
         column_chunk_meta.total_uncompressed_size = ck.bfr_size;
         column_chunk_meta.total_compressed_size   = ck.compressed_size;
       }
@@ -2202,7 +2277,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   }
 
   auto bounce_buffer =
-    cudf::detail::pinned_host_vector<uint8_t>(all_device_write ? 0 : max_write_size);
+    cudf::detail::make_pinned_vector_async<uint8_t>(all_device_write ? 0 : max_write_size, stream);
 
   return std::tuple{std::move(agg_meta),
                     std::move(pages),
@@ -2236,6 +2311,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
     _single_write_mode(mode),
@@ -2265,6 +2341,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
     _single_write_mode(mode),
@@ -2408,12 +2485,15 @@ void writer::impl::write_parquet_data_to_sink(
           _out_sink[p]->host_write(bounce_buffer.data(), ck.compressed_size);
         }
 
+        auto const chunk_offset = _current_chunk_offset[p];
         auto& column_chunk_meta = row_group.columns[i].meta_data;
         column_chunk_meta.data_page_offset =
-          _current_chunk_offset[p] + ((ck.use_dictionary) ? ck.dictionary_size : 0);
-        column_chunk_meta.dictionary_page_offset =
-          (ck.use_dictionary) ? _current_chunk_offset[p] : 0;
+          chunk_offset + ((ck.use_dictionary) ? ck.dictionary_size : 0);
+        column_chunk_meta.dictionary_page_offset = (ck.use_dictionary) ? chunk_offset : 0;
         _current_chunk_offset[p] += ck.compressed_size;
+
+        // save location of first page in row group
+        if (i == 0) { row_group.file_offset = chunk_offset; }
       }
     }
     for (auto const& task : write_tasks) {
@@ -2488,10 +2568,9 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     std::vector<uint8_t> buffer;
     CompactProtocolWriter cpw(&buffer);
     file_ender_s fendr;
+    auto& fmd = _agg_meta->file(p);
 
     if (_stats_granularity == statistics_freq::STATISTICS_COLUMN) {
-      auto& fmd = _agg_meta->file(p);
-
       // write column indices, updating column metadata along the way
       int chunkidx = 0;
       for (auto& r : fmd.row_groups) {
@@ -2517,6 +2596,26 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
       }
     }
 
+    // set row group ordinals
+    auto iter        = thrust::make_counting_iterator(0);
+    auto& row_groups = fmd.row_groups;
+    std::for_each(
+      iter, iter + row_groups.size(), [&row_groups](auto idx) { row_groups[idx].ordinal = idx; });
+
+    // set sorting_columns on row groups
+    if (_sorting_columns.has_value()) {
+      // convert `sorting_column` to `SortingColumn`
+      auto const& sorting_cols = _sorting_columns.value();
+      std::vector<SortingColumn> scols;
+      std::transform(
+        sorting_cols.begin(), sorting_cols.end(), std::back_inserter(scols), [](auto const& sc) {
+          return SortingColumn{sc.column_idx, sc.is_descending, sc.is_nulls_first};
+        });
+      // and copy to each row group
+      std::for_each(iter, iter + row_groups.size(), [&row_groups, &scols](auto idx) {
+        row_groups[idx].sorting_columns = scols;
+      });
+    }
     buffer.resize(0);
     fendr.footer_len = static_cast<uint32_t>(cpw.write(_agg_meta->get_metadata(p)));
     fendr.magic      = parquet_magic;

@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf_test/column_utilities.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/default_stream.hpp>
 
 #include <cudf/column/column.hpp>
@@ -1122,14 +1121,20 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    *
    * @return column_view to keys column
    */
-  column_view keys() const { return cudf::dictionary_column_view{wrapped->view()}.keys(); }
+  [[nodiscard]] column_view keys() const
+  {
+    return cudf::dictionary_column_view{wrapped->view()}.keys();
+  }
 
   /**
    * @brief Access indices column view
    *
    * @return column_view to indices column
    */
-  column_view indices() const { return cudf::dictionary_column_view{wrapped->view()}.indices(); }
+  [[nodiscard]] column_view indices() const
+  {
+    return cudf::dictionary_column_view{wrapped->view()}.indices();
+  }
 
   /**
    * @brief Default constructor initializes an empty dictionary column of strings
@@ -1793,7 +1798,10 @@ class lists_column_wrapper : public detail::column_wrapper {
     return {std::move(cols), std::move(stubs)};
   }
 
-  column_view get_view() const { return root ? lists_column_view(*wrapped).child() : *wrapped; }
+  [[nodiscard]] column_view get_view() const
+  {
+    return root ? lists_column_view(*wrapped).child() : *wrapped;
+  }
 
   int depth = 0;
   bool root = false;

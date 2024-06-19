@@ -4,16 +4,6 @@
     "CCCL" : {
       "patches" : [
         {
-          "file" : "cccl/bug_fixes.diff",
-          "issue" : "CCCL installs header-search.cmake files in nondeterministic order and has a typo in checking target creation that leads to duplicates",
-          "fixed_in" : "2.3"
-        },
-        {
-          "file" : "cccl/hide_kernels.diff",
-          "issue" : "Mark all cub and thrust kernels with hidden visibility [https://github.com/nvidia/cccl/pulls/443]",
-          "fixed_in" : "2.3"
-        },
-        {
           "file" : "cccl/revert_pr_211.diff",
           "issue" : "thrust::copy introduced a change in behavior that causes failures with cudaErrorInvalidValue.",
           "fixed_in" : ""

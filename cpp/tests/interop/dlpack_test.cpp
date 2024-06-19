@@ -20,6 +20,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/interop.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <thrust/host_vector.h>
 
@@ -98,13 +99,13 @@ TEST_F(DLPackUntypedTests, MultipleTypesToDlpack)
   cudf::test::fixed_width_column_wrapper<int16_t> col1({1, 2, 3, 4});
   cudf::test::fixed_width_column_wrapper<int32_t> col2({1, 2, 3, 4});
   cudf::table_view input({col1, col2});
-  EXPECT_THROW(cudf::to_dlpack(input), cudf::logic_error);
+  EXPECT_THROW(cudf::to_dlpack(input), cudf::data_type_error);
 }
 
 TEST_F(DLPackUntypedTests, InvalidNullsToDlpack)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col1({1, 2, 3, 4});
-  cudf::test::fixed_width_column_wrapper<int32_t> col2({1, 2, 3, 4}, {1, 0, 1, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> col2({1, 2, 3, 4}, {true, false, true, true});
   cudf::table_view input({col1, col2});
   EXPECT_THROW(cudf::to_dlpack(input), cudf::logic_error);
 }

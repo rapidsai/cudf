@@ -16,8 +16,10 @@ set(cython_sources
     aggregation.pyx
     binaryop.pyx
     column.pyx
+    column_factories.pyx
     concatenate.pyx
     copying.pyx
+    datetime.pyx
     filling.pyx
     gpumemoryview.pyx
     groupby.pyx
@@ -25,9 +27,12 @@ set(cython_sources
     join.pyx
     lists.pyx
     merge.pyx
+    quantiles.pyx
     reduce.pyx
     replace.pyx
+    reshape.pyx
     rolling.pyx
+    round.pyx
     scalar.pyx
     search.pyx
     stream_compaction.pyx
@@ -46,4 +51,6 @@ rapids_cython_create_modules(
 link_to_pyarrow_headers(pylibcudf_interop)
 target_include_directories(pylibcudf_interop PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
 
+add_subdirectory(libcudf)
 add_subdirectory(strings)
+add_subdirectory(io)

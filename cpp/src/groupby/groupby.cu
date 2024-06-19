@@ -36,6 +36,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -312,12 +313,15 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(fill_values.size()),
                "Mismatch number of fill_values and columns.");
-  CUDF_EXPECTS(
-    std::all_of(thrust::make_counting_iterator(0),
-                thrust::make_counting_iterator(values.num_columns()),
-                [&](auto i) { return values.column(i).type() == fill_values[i].get().type(); }),
-    "values and fill_value should have the same type.");
-
+  CUDF_EXPECTS(std::equal(values.begin(),
+                          values.end(),
+                          fill_values.cbegin(),
+                          fill_values.cend(),
+                          [](auto const& col, auto const& scalar) {
+                            return cudf::have_same_types(col, scalar.get());
+                          }),
+               "values and fill_value should have the same type.",
+               cudf::data_type_error);
   auto stream = cudf::get_default_stream();
   std::vector<std::unique_ptr<column>> results;
   auto const& group_offsets = helper().group_offsets(stream);

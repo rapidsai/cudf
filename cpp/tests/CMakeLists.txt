@@ -55,8 +55,9 @@ function(ConfigureTest CMAKE_TEST_NAME)
   )
 
   target_link_libraries(
-    ${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main nvtx3-cpp
-                               $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIB}"
+    ${CMAKE_TEST_NAME}
+    PRIVATE cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main
+            nvtx3::nvtx3-cpp $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIB}"
   )
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
@@ -67,12 +68,14 @@ function(ConfigureTest CMAKE_TEST_NAME)
     INSTALL_COMPONENT_SET testing
   )
 
-  set_tests_properties(
-    ${CMAKE_TEST_NAME}
-    PROPERTIES
-      ENVIRONMENT
-      "GTEST_CUDF_STREAM_MODE=new_${_CUDF_TEST_STREAM_MODE}_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_${_CUDF_TEST_STREAM_MODE}>"
-  )
+  if(CUDF_BUILD_STREAMS_TEST_UTIL)
+    set_tests_properties(
+      ${CMAKE_TEST_NAME}
+      PROPERTIES
+        ENVIRONMENT
+        "GTEST_CUDF_STREAM_MODE=new_${_CUDF_TEST_STREAM_MODE}_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_${_CUDF_TEST_STREAM_MODE}>"
+    )
+  endif()
 endfunction()
 
 # ##################################################################################################
@@ -189,10 +192,6 @@ ConfigureTest(
 )
 
 # ##################################################################################################
-# * hash_map tests --------------------------------------------------------------------------------
-ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu)
-
-# ##################################################################################################
 # * quantiles tests -------------------------------------------------------------------------------
 ConfigureTest(
   QUANTILES_TEST quantiles/percentile_approx_test.cpp quantiles/quantile_test.cpp
@@ -267,8 +266,15 @@ ConfigureTest(
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
-  INTEROP_TEST interop/to_arrow_device_test.cpp interop/to_arrow_test.cpp
-  interop/from_arrow_test.cpp interop/dlpack_test.cpp EXTRA_LIB nanoarrow
+  INTEROP_TEST
+  interop/to_arrow_device_test.cpp
+  interop/to_arrow_test.cpp
+  interop/from_arrow_test.cpp
+  interop/from_arrow_device_test.cpp
+  interop/from_arrow_host_test.cpp
+  interop/dlpack_test.cpp
+  EXTRA_LIB
+  nanoarrow
 )
 
 # ##################################################################################################
@@ -287,7 +293,7 @@ ConfigureTest(
   PERCENT 30
 )
 ConfigureTest(
-  ORC_TEST io/orc_test.cpp
+  ORC_TEST io/orc_chunked_reader_test.cu io/orc_test.cpp
   GPUS 1
   PERCENT 30
 )
@@ -374,15 +380,16 @@ ConfigureTest(
 # * utilities tests -------------------------------------------------------------------------------
 ConfigureTest(
   UTILITIES_TEST
-  utilities_tests/type_list_tests.cpp
   utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
+  utilities_tests/default_stream_tests.cpp
   utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
   utilities_tests/logger_tests.cpp
-  utilities_tests/default_stream_tests.cpp
+  utilities_tests/pinned_memory_tests.cpp
   utilities_tests/type_check_tests.cpp
+  utilities_tests/type_list_tests.cpp
 )
 
 # ##################################################################################################
@@ -397,14 +404,10 @@ ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
 ConfigureTest(SPAN_TEST_DEVICE_VECTOR utilities_tests/span_tests.cu)
 
 # Overwrite the environments set by ConfigureTest
-set_tests_properties(
-  SPAN_TEST
-  PROPERTIES
-    ENVIRONMENT
-    "GTEST_FILTER=-${_allowlist_filter};GTEST_CUDF_STREAM_MODE=new_cudf_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_cudf>"
-)
-set_tests_properties(
-  SPAN_TEST_DEVICE_VECTOR PROPERTIES ENVIRONMENT "GTEST_FILTER=${_allowlist_filter}"
+set_property(
+  TEST SPAN_TEST SPAN_TEST_DEVICE_VECTOR
+  APPEND
+  PROPERTY ENVIRONMENT "GTEST_FILTER=-${_allowlist_filter}"
 )
 
 # ##################################################################################################
@@ -562,6 +565,23 @@ ConfigureTest(
 )
 
 # ##################################################################################################
+# * large strings test ----------------------------------------------------------------------------
+ConfigureTest(
+  LARGE_STRINGS_TEST
+  large_strings/concatenate_tests.cpp
+  large_strings/case_tests.cpp
+  large_strings/json_tests.cpp
+  large_strings/large_strings_fixture.cpp
+  large_strings/merge_tests.cpp
+  large_strings/parquet_tests.cpp
+  large_strings/replace_tests.cpp
+  large_strings/reshape_tests.cpp
+  large_strings/split_strings_tests.cpp
+  GPUS 1
+  PERCENT 100
+)
+
+# ##################################################################################################
 # * json path test --------------------------------------------------------------------------------
 ConfigureTest(JSON_PATH_TEST json/json_tests.cpp)
 
@@ -652,9 +672,11 @@ target_include_directories(JIT_PARSER_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOU
 
 # ##################################################################################################
 # * stream testing ---------------------------------------------------------------------------------
-ConfigureTest(
-  STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
-)
+if(CUDF_BUILD_STREAMS_TEST_UTIL)
+  ConfigureTest(
+    STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
+  )
+endif()
 
 ConfigureTest(STREAM_BINARYOP_TEST streams/binaryop_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_CONCATENATE_TEST streams/concatenate_test.cpp STREAM_MODE testing)
@@ -672,7 +694,9 @@ ConfigureTest(STREAM_NULL_MASK_TEST streams/null_mask_test.cpp STREAM_MODE testi
 ConfigureTest(STREAM_ORCIO_TEST streams/io/orc_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_PARQUETIO_TEST streams/io/parquet_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_POOL_TEST streams/pool_test.cu STREAM_MODE testing)
+ConfigureTest(STREAM_REDUCTION_TEST streams/reduction_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_ROLLING_TEST streams/rolling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SEARCH_TEST streams/search_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
 ConfigureTest(

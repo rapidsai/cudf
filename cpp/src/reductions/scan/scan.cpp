@@ -60,10 +60,11 @@ std::unique_ptr<column> scan(column_view const& input,
                              scan_aggregation const& agg,
                              scan_type inclusive,
                              null_policy null_handling,
+                             rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::scan(input, agg, inclusive, null_handling, cudf::get_default_stream(), mr);
+  return detail::scan(input, agg, inclusive, null_handling, stream, mr);
 }
 
 }  // namespace cudf

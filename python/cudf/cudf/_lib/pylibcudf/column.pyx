@@ -6,15 +6,21 @@ from libcpp.utility cimport move
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
-from cudf._lib.cpp.column.column cimport column, column_contents
-from cudf._lib.cpp.column.column_factories cimport make_column_from_scalar
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.column.column cimport column, column_contents
+from cudf._lib.pylibcudf.libcudf.column.column_factories cimport (
+    make_column_from_scalar,
+)
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
 from .types cimport DataType, type_id
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
+
+import functools
+
+import numpy as np
 
 
 cdef class Column:
@@ -223,6 +229,51 @@ cdef class Column:
             c_result = move(make_column_from_scalar(dereference(c_scalar), size))
         return Column.from_libcudf(move(c_result))
 
+    @staticmethod
+    def from_cuda_array_interface_obj(object obj):
+        """Create a Column from an object with a CUDA array interface.
+
+        Parameters
+        ----------
+        obj : object
+            The object with the CUDA array interface to create a column from.
+
+        Returns
+        -------
+        Column
+            A Column containing the data from the CUDA array interface.
+
+        Notes
+        -----
+        Data is not copied when creating the column. The caller is
+        responsible for ensuring the data is not mutated unexpectedly while the
+        column is in use.
+        """
+        data = gpumemoryview(obj)
+        iface = data.__cuda_array_interface__()
+        if iface.get('mask') is not None:
+            raise ValueError("mask not yet supported.")
+
+        typestr = iface['typestr'][1:]
+        if not is_c_contiguous(
+            iface['shape'],
+            iface['strides'],
+            np.dtype(typestr).itemsize
+        ):
+            raise ValueError("Data must be C-contiguous")
+
+        data_type = _datatype_from_dtype_desc(typestr)
+        size = iface['shape'][0]
+        return Column(
+            data_type,
+            size,
+            data,
+            None,
+            0,
+            0,
+            []
+        )
+
     cpdef DataType type(self):
         """The type of data in the column."""
         return self._data_type
@@ -296,3 +347,61 @@ cdef class ListColumnView:
     cpdef offsets(self):
         """The offsets column of the underlying list column."""
         return self._column.child(1)
+
+
+@functools.cache
+def _datatype_from_dtype_desc(desc):
+    mapping = {
+        'u1': type_id.UINT8,
+        'u2': type_id.UINT16,
+        'u4': type_id.UINT32,
+        'u8': type_id.UINT64,
+        'i1': type_id.INT8,
+        'i2': type_id.INT16,
+        'i4': type_id.INT32,
+        'i8': type_id.INT64,
+        'f4': type_id.FLOAT32,
+        'f8': type_id.FLOAT64,
+        'b1': type_id.BOOL8,
+        'M8[s]': type_id.TIMESTAMP_SECONDS,
+        'M8[ms]': type_id.TIMESTAMP_MILLISECONDS,
+        'M8[us]': type_id.TIMESTAMP_MICROSECONDS,
+        'M8[ns]': type_id.TIMESTAMP_NANOSECONDS,
+        'm8[s]': type_id.DURATION_SECONDS,
+        'm8[ms]': type_id.DURATION_MILLISECONDS,
+        'm8[us]': type_id.DURATION_MICROSECONDS,
+        'm8[ns]': type_id.DURATION_NANOSECONDS,
+    }
+    if desc not in mapping:
+        raise ValueError(f"Unsupported dtype: {desc}")
+    return DataType(mapping[desc])
+
+
+def is_c_contiguous(
+    shape: Sequence[int], strides: Sequence[int], itemsize: int
+) -> bool:
+    """Determine if shape and strides are C-contiguous
+
+    Parameters
+    ----------
+    shape : Sequence[int]
+        Number of elements in each dimension.
+    strides : Sequence[int]
+        The stride of each dimension in bytes.
+    itemsize : int
+        Size of an element in bytes.
+
+    Return
+    ------
+    bool
+        The boolean answer.
+    """
+
+    if any(dim == 0 for dim in shape):
+        return True
+    cumulative_stride = itemsize
+    for dim, stride in zip(reversed(shape), reversed(strides)):
+        if dim > 1 and stride != cumulative_stride:
+            return False
+        cumulative_stride *= dim
+    return True

@@ -307,7 +307,7 @@ def categorical_dtype_cudf(categories=None, ordered=False):
 @tolist_dispatch.register((cudf.Series, cudf.BaseIndex))
 @_dask_cudf_nvtx_annotate
 def tolist_cudf(obj):
-    return obj.to_arrow().to_pylist()
+    return obj.to_pandas().tolist()
 
 
 @is_categorical_dtype_dispatch.register(

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -62,7 +64,9 @@ struct contains_scalar_dispatch {
                                                            scalar const& needle,
                                                            rmm::cuda_stream_view stream) const
   {
-    CUDF_EXPECTS(haystack.type() == needle.type(), "Scalar and column types must match");
+    CUDF_EXPECTS(cudf::have_same_types(haystack, needle),
+                 "Scalar and column types must match",
+                 cudf::data_type_error);
     // Don't need to check for needle validity. If it is invalid, it should be handled by the caller
     // before dispatching to this function.
 
@@ -87,7 +91,9 @@ struct contains_scalar_dispatch {
                                                           scalar const& needle,
                                                           rmm::cuda_stream_view stream) const
   {
-    CUDF_EXPECTS(haystack.type() == needle.type(), "Scalar and column types must match");
+    CUDF_EXPECTS(cudf::have_same_types(haystack, needle),
+                 "Scalar and column types must match",
+                 cudf::data_type_error);
     // Don't need to check for needle validity. If it is invalid, it should be handled by the caller
     // before dispatching to this function.
     // In addition, haystack and needle structure compatibility will be checked later on by
