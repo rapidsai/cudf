@@ -939,7 +939,7 @@ struct parquet_column_view {
   [[nodiscard]] bool is_fixed_width() const
   {
     // lists and strings are not fixed width
-    return (max_rep_level() == 0 and physical_type() != Type::BYTE_ARRAY);
+    return max_rep_level() == 0 and physical_type() != Type::BYTE_ARRAY;
   }
 
   std::vector<std::string> const& get_path_in_schema() { return path_in_schema; }
