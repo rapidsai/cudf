@@ -120,36 +120,22 @@ def sort_lists(Column col, bool ascending, str na_position):
 
 @acquire_spill_lock()
 def extract_element_scalar(Column col, size_type index):
-    # shared_ptr required because lists_column_view has no default
-    # ctor
-    cdef shared_ptr[lists_column_view] list_view = (
-        make_shared[lists_column_view](col.view())
+    return Column.from_pylibcudf(
+        pylibcudf.lists.extract_list_elements(
+            col.to_pylibcudf(mode="read"),
+            index,
+        )
     )
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(extract_list_element(list_view.get()[0], index))
-
-    result = Column.from_unique_ptr(move(c_result))
-    return result
 
 
 @acquire_spill_lock()
 def extract_element_column(Column col, Column index):
-    cdef shared_ptr[lists_column_view] list_view = (
-        make_shared[lists_column_view](col.view())
+    return Column.from_pylibcudf(
+        pylibcudf.lists.extract_list_elements(
+            col.to_pylibcudf(mode="read"),
+            index.to_pylibcudf(mode="read"),
+        )
     )
-
-    cdef column_view index_view = index.view()
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(extract_list_element(list_view.get()[0], index_view))
-
-    result = Column.from_unique_ptr(move(c_result))
-    return result
 
 
 @acquire_spill_lock()

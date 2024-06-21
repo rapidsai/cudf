@@ -44,3 +44,29 @@ def test_concatenate_list_elements(test_data, dropna, expected):
     expect = pa.array(expected)
 
     assert_column_eq(expect, res)
+
+
+# @pytest.mark.parametrize(
+#     "test_data, dropna, expected",
+#     [
+#         (
+#             [[[1, 2], [3, 4], [5]], [[6], None, [7, 8, 9]]],
+#             False,
+#             [[1, 2, 3, 4, 5], None],
+#         ),
+#         (
+#             [[[1, 2], [3, 4], [5, None]], [[6], [None], [7, 8, 9]]],
+#             True,
+#             [[1, 2, 3, 4, 5, None], [6, None, 7, 8, 9]],
+#         ),
+#     ],
+# )
+# def test_extract_list_element(test_data, dropna, expected):
+#     arr = pa.array(test_data)
+#     plc_column = plc.interop.from_arrow(arr)
+
+#     res = plc.lists.concatenate_list_elements(plc_column, dropna)
+
+#     expect = pa.array(expected)
+
+#     assert_column_eq(expect, res)
