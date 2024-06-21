@@ -100,7 +100,7 @@ def test_index_of_scalar(test_data):
     value = np.int64(1)
     scalar = cudf.utils.dtypes.to_cudf_compatible_scalar(value, value.dtype)
     s = cudf._lib.scalar.DeviceScalar(scalar, value.dtype)
-    res = plc.lists.index_of(plc_column, s)
+    res = plc.lists.index_of(plc_column, s, True)
 
     expect = pa.array([1, -1, -1, -1], type=pa.int32())
 
@@ -115,7 +115,7 @@ def test_index_of_list_column(test_data):
 
     plc_column1 = plc.interop.from_arrow(arr1)
     plc_column2 = plc.interop.from_arrow(arr2)
-    res = plc.lists.index_of(plc_column1, plc_column2)
+    res = plc.lists.index_of(plc_column1, plc_column2, True)
 
     expect = pa.array([-1, 0, 0, 0], type=pa.int32())
 

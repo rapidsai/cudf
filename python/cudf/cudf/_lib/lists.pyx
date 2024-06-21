@@ -157,21 +157,23 @@ def contains_scalar(Column col, py_search_key):
 
 
 @acquire_spill_lock()
-def index_of_scalar(Column col, object py_search_key):
+def index_of_scalar(Column col, object py_search_key, find_first_option=True):
     return Column.from_pylibcudf(
         pylibcudf.lists.index_of(
             col.to_pylibcudf(mode="read"),
             py_search_key.device_value,
+            find_first_option,
         )
     )
 
 
 @acquire_spill_lock()
-def index_of_column(Column col, Column search_keys):
+def index_of_column(Column col, Column search_keys, find_first_option=True):
     return Column.from_pylibcudf(
         pylibcudf.lists.index_of(
             col.to_pylibcudf(mode="read"),
             search_keys.to_pylibcudf(mode="read"),
+            find_first_option,
         )
     )
 

@@ -23,4 +23,4 @@ cpdef Column contains(Column, ColumnOrScalar)
 
 cpdef Column contains_nulls(Column)
 
-# ctypedef Column index_of(Column, ColumnOrScalar)
+cpdef Column index_of(Column, ColumnOrScalar, bool)

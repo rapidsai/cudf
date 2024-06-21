@@ -163,7 +163,7 @@ cpdef Column contains_nulls(Column input):
     return Column.from_libcudf(move(c_result))
 
 
-cpdef Column index_of(Column input, ColumnOrScalar search_key):
+cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_option):
     """Create a column of values indicating the position of a search
     key row within the corresponding list row in the lists column.
 
@@ -173,6 +173,9 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key):
         The input column.
     search_key : Union[Column, Scalar]
         The search key.
+    find_first_option : bool
+        If true, index_of returns the first match.
+        Otherwise the last match is returned.
 
     Returns
     -------
@@ -184,12 +187,17 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key):
         make_shared[lists_column_view](input.view())
     )
     cdef const scalar* search_key_value = NULL
+    cdef cpp_contains.duplicate_find_option find_option = (
+        cpp_contains.duplicate_find_option.FIND_FIRST if find_first_option
+        else cpp_contains.duplicate_find_option.FIND_LAST
+    )
 
     if ColumnOrScalar is Column:
         with nogil:
             c_result = move(cpp_contains.index_of(
                 list_view.get()[0],
                 search_key.view(),
+                find_option,
             ))
     else:
         search_key_value = search_key.get_raw_ptr()
@@ -197,5 +205,6 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key):
             c_result = move(cpp_contains.index_of(
                 list_view.get()[0],
                 search_key_value[0],
+                find_option,
             ))
     return Column.from_libcudf(move(c_result))
