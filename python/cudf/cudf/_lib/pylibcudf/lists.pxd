@@ -11,7 +11,6 @@ from .table cimport Table
 
 ctypedef fused ColumnOrScalar:
     Column
-    Scalar
     DeviceScalar
 
 cpdef Table explode_outer(Table, size_type explode_column_idx)
@@ -22,6 +21,6 @@ cpdef Column concatenate_list_elements(Column, bool dropna)
 
 cpdef Column contains(Column, ColumnOrScalar)
 
-# cpdef Column contains_nulls(Column)
+cpdef Column contains_nulls(Column)
 
 # ctypedef Column index_of(Column, ColumnOrScalar)

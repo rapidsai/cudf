@@ -20,7 +20,6 @@ from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
 from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
-from cudf._lib.scalar cimport DeviceScalar
 
 from .column cimport Column
 from .table cimport Table
@@ -131,17 +130,71 @@ cpdef Column contains(Column input, ColumnOrScalar search_key):
                 list_view.get()[0],
                 search_key.view(),
             ))
-    elif ColumnOrScalar is DeviceScalar:
+    else:
         search_key_value = search_key.get_raw_ptr()
         with nogil:
             c_result = move(cpp_contains.contains(
                 list_view.get()[0],
                 search_key_value[0],
             ))
-    else:
-        search_key_value = search_key.get()
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column contains_nulls(Column input):
+    """Create a column of bool values indicating whether
+    each row in the lists column contains a null value.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+
+    Returns
+    -------
+    Column
+        A new Column of bools
+    """
+    cdef unique_ptr[column] c_result
+    cdef shared_ptr[lists_column_view] list_view = (
+        make_shared[lists_column_view](input.view())
+    )
+    with nogil:
+        c_result = move(cpp_contains.contains_nulls(list_view.get()[0]))
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column index_of(Column input, ColumnOrScalar search_key):
+    """Create a column of values indicating the position of a search
+    key row within the corresponding list row in the lists column.
+
+    Parameters
+    ----------
+    input : Column
+        The input column.
+    search_key : Union[Column, Scalar]
+        The search key.
+
+    Returns
+    -------
+    Column
+        A new Column of bools
+    """
+    cdef unique_ptr[column] c_result
+    cdef shared_ptr[lists_column_view] list_view = (
+        make_shared[lists_column_view](input.view())
+    )
+    cdef const scalar* search_key_value = NULL
+
+    if ColumnOrScalar is Column:
         with nogil:
-            c_result = move(cpp_contains.contains(
+            c_result = move(cpp_contains.index_of(
+                list_view.get()[0],
+                search_key.view(),
+            ))
+    else:
+        search_key_value = search_key.get_raw_ptr()
+        with nogil:
+            c_result = move(cpp_contains.index_of(
                 list_view.get()[0],
                 search_key_value[0],
             ))

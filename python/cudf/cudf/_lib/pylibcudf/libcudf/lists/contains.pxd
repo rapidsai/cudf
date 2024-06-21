@@ -29,7 +29,7 @@ cdef extern from "cudf/lists/contains.hpp" namespace "cudf::lists" nogil:
     ) except +cudf_exception_handler
 
     cdef unique_ptr[column] contains_nulls(
-        lists_column_view lists,
+        const lists_column_view& lists,
     ) except +cudf_exception_handler
 
     cdef unique_ptr[column] index_of(

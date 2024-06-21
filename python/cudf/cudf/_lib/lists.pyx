@@ -9,9 +9,6 @@ from libcpp.utility cimport move
 from cudf._lib.column cimport Column
 from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.lists.contains cimport (
-    index_of as cpp_index_of,
-)
 from cudf._lib.pylibcudf.libcudf.lists.count_elements cimport (
     count_elements as cpp_count_elements,
 )
@@ -25,7 +22,6 @@ from cudf._lib.pylibcudf.libcudf.lists.sorting cimport (
 from cudf._lib.pylibcudf.libcudf.lists.stream_compaction cimport (
     distinct as cpp_distinct,
 )
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 from cudf._lib.pylibcudf.libcudf.types cimport (
     nan_equality,
     null_equality,
@@ -33,7 +29,6 @@ from cudf._lib.pylibcudf.libcudf.types cimport (
     order,
     size_type,
 )
-from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 from cudf._lib import pylibcudf
@@ -163,41 +158,22 @@ def contains_scalar(Column col, py_search_key):
 
 @acquire_spill_lock()
 def index_of_scalar(Column col, object py_search_key):
-
-    cdef DeviceScalar search_key = py_search_key.device_value
-
-    cdef shared_ptr[lists_column_view] list_view = (
-        make_shared[lists_column_view](col.view())
+    return Column.from_pylibcudf(
+        pylibcudf.lists.index_of(
+            col.to_pylibcudf(mode="read"),
+            py_search_key.device_value,
+        )
     )
-    cdef const scalar* search_key_value = search_key.get_raw_ptr()
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(cpp_index_of(
-            list_view.get()[0],
-            search_key_value[0],
-        ))
-    return Column.from_unique_ptr(move(c_result))
 
 
 @acquire_spill_lock()
 def index_of_column(Column col, Column search_keys):
-
-    cdef column_view keys_view = search_keys.view()
-
-    cdef shared_ptr[lists_column_view] list_view = (
-        make_shared[lists_column_view](col.view())
+    return Column.from_pylibcudf(
+        pylibcudf.lists.index_of(
+            col.to_pylibcudf(mode="read"),
+            search_keys.to_pylibcudf(mode="read"),
+        )
     )
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(cpp_index_of(
-            list_view.get()[0],
-            keys_view,
-        ))
-    return Column.from_unique_ptr(move(c_result))
 
 
 @acquire_spill_lock()
