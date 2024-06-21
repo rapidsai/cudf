@@ -14,6 +14,7 @@ This page provides API documentation for pylibcudf.
     column_factories
     concatenate
     copying
+    datetime
     filling
     gpumemoryview
     groupby

@@ -63,7 +63,9 @@ noop_context: nullcontext[None] = nullcontext()
 def _translate_ir(
     node: Any, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    raise NotImplementedError(f"Translation for {type(node).__name__}")
+    raise NotImplementedError(
+        f"Translation for {type(node).__name__}"
+    )  # pragma: no cover
 
 
 @_translate_ir.register
@@ -122,7 +124,7 @@ def _(
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         exprs = [translate_named_expr(visitor, n=e) for e in node.expr]
-    return ir.Select(schema, inp, exprs)
+    return ir.Select(schema, inp, exprs, node.should_broadcast)
 
 
 @_translate_ir.register
@@ -166,13 +168,13 @@ def _(
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         exprs = [translate_named_expr(visitor, n=e) for e in node.exprs]
-    return ir.HStack(schema, inp, exprs)
+    return ir.HStack(schema, inp, exprs, node.should_broadcast)
 
 
 @_translate_ir.register
 def _(
     node: pl_ir.Reduce, visitor: NodeTraverser, schema: dict[str, plc.DataType]
-) -> ir.IR:
+) -> ir.IR:  # pragma: no cover; polars doesn't emit this node yet
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         exprs = [translate_named_expr(visitor, n=e) for e in node.expr]
@@ -256,17 +258,6 @@ def _(
     return ir.HConcat(schema, [translate_ir(visitor, n=n) for n in node.inputs])
 
 
-@_translate_ir.register
-def _(
-    node: pl_ir.ExtContext, visitor: NodeTraverser, schema: dict[str, plc.DataType]
-) -> ir.IR:
-    return ir.ExtContext(
-        schema,
-        translate_ir(visitor, n=node.input),
-        [translate_ir(visitor, n=n) for n in node.contexts],
-    )
-
-
 def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
     """
     Translate a polars-internal IR node to our representation.
@@ -333,7 +324,9 @@ def translate_named_expr(
 def _translate_expr(
     node: Any, visitor: NodeTraverser, dtype: plc.DataType
 ) -> expr.Expr:
-    raise NotImplementedError(f"Translation for {type(node).__name__}")
+    raise NotImplementedError(
+        f"Translation for {type(node).__name__}"
+    )  # pragma: no cover
 
 
 @_translate_expr.register
