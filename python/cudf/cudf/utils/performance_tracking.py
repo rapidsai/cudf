@@ -70,7 +70,7 @@ def get_memory_records() -> (
 
 
 def print_memory_report(file=sys.stdout) -> None:
-    """Pretty print the result fo the memory profiling
+    """Pretty print the result of the memory profiling
 
     Parameters
     ----------
