@@ -6,7 +6,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.fixture(
@@ -86,3 +89,11 @@ def test_scan(df, columns, mask):
     if columns is not None:
         q = df.select(*columns)
     assert_gpu_result_equal(q)
+
+
+def test_scan_unsupported_raises(tmp_path):
+    df = pl.DataFrame({"a": [1, 2, 3]})
+
+    df.write_ndjson(tmp_path / "df.json")
+    q = pl.scan_ndjson(tmp_path / "df.json")
+    assert_ir_translation_raises(q, NotImplementedError)
