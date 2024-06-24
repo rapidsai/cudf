@@ -20,16 +20,6 @@
 
 namespace cudf::detail {
 
-namespace impl {
-
-void copy_pinned_to_device(void* dst, void const* src, size_t size, rmm::cuda_stream_view stream);
-void copy_device_to_pinned(void* dst, void const* src, size_t size, rmm::cuda_stream_view stream);
-
-void copy_pageable_to_device(void* dst, void const* src, size_t size, rmm::cuda_stream_view stream);
-void copy_device_to_pageable(void* dst, void const* src, size_t size, rmm::cuda_stream_view stream);
-
-}  // namespace impl
-
 enum class copy_kind { PINNED_TO_DEVICE, DEVICE_TO_PINNED, PAGEABLE_TO_DEVICE, DEVICE_TO_PAGEABLE };
 
 /**
@@ -43,20 +33,8 @@ enum class copy_kind { PINNED_TO_DEVICE, DEVICE_TO_PINNED, PAGEABLE_TO_DEVICE, D
  * @param kind Direction of the copy and type of host memory
  * @param stream CUDA stream used for the copy
  */
-template <typename T>
 void cuda_memcpy_async(
-  T* dst, T const* src, size_t size, copy_kind kind, rmm::cuda_stream_view stream)
-{
-  if (kind == copy_kind::PINNED_TO_DEVICE) {
-    impl::copy_pinned_to_device(dst, src, size * sizeof(T), stream);
-  } else if (kind == copy_kind::DEVICE_TO_PINNED) {
-    impl::copy_device_to_pinned(dst, src, size * sizeof(T), stream);
-  } else if (kind == copy_kind::PAGEABLE_TO_DEVICE) {
-    impl::copy_pageable_to_device(dst, src, size * sizeof(T), stream);
-  } else if (kind == copy_kind::DEVICE_TO_PAGEABLE) {
-    impl::copy_device_to_pageable(dst, src, size * sizeof(T), stream);
-  }
-}
+  void* dst, void const* src, size_t size, copy_kind kind, rmm::cuda_stream_view stream);
 
 /**
  * @brief Synchronously copies data between the host and device.
@@ -69,11 +47,7 @@ void cuda_memcpy_async(
  * @param kind Direction of the copy and type of host memory
  * @param stream CUDA stream used for the copy
  */
-template <typename T>
-void cuda_memcpy(T* dst, T const* src, size_t size, copy_kind kind, rmm::cuda_stream_view stream)
-{
-  cuda_memcpy_async(dst, src, size, kind, stream);
-  stream.synchronize();
-}
+void cuda_memcpy(
+  void* dst, void const* src, size_t size, copy_kind kind, rmm::cuda_stream_view stream);
 
 }  // namespace cudf::detail
