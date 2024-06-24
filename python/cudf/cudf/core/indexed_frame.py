@@ -2738,10 +2738,10 @@ class IndexedFrame(Frame):
             else:
                 ca = ColumnAccessor(
                     dict(zip(labels, result_columns)),
-                    rangeindex=self.rangeindex,
-                    multiindex=self.multiindex,
-                    level_names=self.level_names,
-                    label_dtype=self.label_dtype,
+                    rangeindex=self._data.rangeindex,
+                    multiindex=self._data.multiindex,
+                    level_names=self._data.level_names,
+                    label_dtype=self._data.label_dtype,
                     verify=False,
                 )
             out = self._from_data_like_self(ca)
