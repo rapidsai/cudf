@@ -7,16 +7,11 @@ from utils import assert_column_eq
 import cudf._lib.pylibcudf as plc
 
 
-@pytest.fixture(params=[False, True])
-def nullable(request):
-    return request.param
-
-
 @pytest.fixture(params=["float32", "float64"])
-def column(request, nullable):
+def column(request, has_nulls):
     values = [2.5, 2.49, 1.6, 8, -1.5, -1.7, -0.5, 0.5]
     typ = {"float32": pa.float32(), "float64": pa.float64()}[request.param]
-    if nullable:
+    if has_nulls:
         values[2] = None
     return plc.interop.from_arrow(pa.array(values, type=typ))
 
