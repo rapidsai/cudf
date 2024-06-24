@@ -23,7 +23,7 @@ else()
   string(REPLACE "\n" "\n  " _rapids_version_formatted "  ${_rapids_version}")
   message(
     FATAL_ERROR
-    "Could not determine RAPIDS version. Contents of VERSION file:\n${_rapids_version_formatted}"
+      "Could not determine RAPIDS version. Contents of VERSION file:\n${_rapids_version_formatted}"
   )
 endif()
 
