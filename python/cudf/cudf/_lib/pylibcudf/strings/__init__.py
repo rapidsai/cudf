@@ -1,3 +1,12 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from . import capitalize, case, char_types, find
+from . import (
+    capitalize,
+    case,
+    char_types,
+    contains,
+    find,
+    regex_flags,
+    regex_program,
+    replace,
+)

@@ -2737,12 +2737,15 @@ def test_series_dtype_astypes(data):
     assert_eq(result, expected)
 
 
-def test_series_from_large_string():
-    pa_large_string_array = pa.array(["a", "b", "c"]).cast(pa.large_string())
-    got = cudf.Series(pa_large_string_array)
-    expected = pd.Series(pa_large_string_array)
+@pytest.mark.parametrize("pa_type", [pa.string, pa.large_string])
+def test_series_from_large_string(pa_type):
+    pa_string_array = pa.array(["a", "b", "c"]).cast(pa_type())
+    got = cudf.Series(pa_string_array)
+    expected = pd.Series(pa_string_array)
 
     assert_eq(expected, got)
+
+    assert pa_string_array.equals(got.to_arrow())
 
 
 @pytest.mark.parametrize(
@@ -2841,3 +2844,20 @@ def test_series_from_series_index_no_shallow_copy():
     ser1 = cudf.Series(range(3), index=list("abc"))
     ser2 = cudf.Series(ser1)
     assert ser1.index is ser2.index
+
+
+@pytest.mark.parametrize("value", [1, 1.1])
+def test_nans_to_nulls_noop_copies_column(value):
+    ser1 = cudf.Series([value])
+    ser2 = ser1.nans_to_nulls()
+    assert ser1._column is not ser2._column
+
+
+@pytest.mark.parametrize("dropna", [False, True])
+def test_nunique_all_null(dropna):
+    data = [None, None]
+    pd_ser = pd.Series(data)
+    cudf_ser = cudf.Series(data)
+    result = pd_ser.nunique(dropna=dropna)
+    expected = cudf_ser.nunique(dropna=dropna)
+    assert result == expected

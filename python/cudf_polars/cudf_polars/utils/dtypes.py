@@ -13,6 +13,8 @@ import polars as pl
 
 import cudf._lib.pylibcudf as plc
 
+__all__ = ["from_polars"]
+
 
 @cache
 def from_polars(dtype: pl.DataType) -> plc.DataType:
@@ -30,7 +32,8 @@ def from_polars(dtype: pl.DataType) -> plc.DataType:
 
     Raises
     ------
-    NotImplementedError for unsupported conversions.
+    NotImplementedError
+        For unsupported conversions.
     """
     if isinstance(dtype, pl.Boolean):
         return plc.DataType(plc.TypeId.BOOL8)
@@ -67,7 +70,7 @@ def from_polars(dtype: pl.DataType) -> plc.DataType:
             return plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS)
         elif dtype.time_unit == "ns":
             return plc.DataType(plc.TypeId.TIMESTAMP_NANOSECONDS)
-        assert dtype.time_unit is not None
+        assert dtype.time_unit is not None  # pragma: no cover
         assert_never(dtype.time_unit)
     elif isinstance(dtype, pl.Duration):
         if dtype.time_unit == "ms":
@@ -76,7 +79,7 @@ def from_polars(dtype: pl.DataType) -> plc.DataType:
             return plc.DataType(plc.TypeId.DURATION_MICROSECONDS)
         elif dtype.time_unit == "ns":
             return plc.DataType(plc.TypeId.DURATION_NANOSECONDS)
-        assert dtype.time_unit is not None
+        assert dtype.time_unit is not None  # pragma: no cover
         assert_never(dtype.time_unit)
     elif isinstance(dtype, pl.String):
         return plc.DataType(plc.TypeId.STRING)
@@ -84,6 +87,7 @@ def from_polars(dtype: pl.DataType) -> plc.DataType:
         # TODO: Hopefully
         return plc.DataType(plc.TypeId.EMPTY)
     elif isinstance(dtype, pl.List):
+        # TODO: This doesn't consider the value type.
         return plc.DataType(plc.TypeId.LIST)
     else:
         raise NotImplementedError(f"{dtype=} conversion not supported")

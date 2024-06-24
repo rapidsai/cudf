@@ -49,11 +49,15 @@ license-files = ["LICENSE"]
 [tool.setuptools.dynamic]
 version = {file = "cudf_polars/VERSION"}
 
-[tool.setuptools.packages.find]
-exclude = ["*tests*"]
-
 [tool.pytest.ini_options]
 xfail_strict = true
+
+[tool.coverage.report]
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "class .*\\bProtocol\\):",
+  "assert_never\\("
+]
 
 [tool.ruff]
 line-length = 88
@@ -62,8 +66,6 @@ target-version = "py39"
 fix = true
 
 [tool.ruff.lint]
-# __init__.py must re-export everything it imports
-ignore-init-module-imports = false
 select = [
   "E", # pycodestyle
   "W", # pycodestyle
@@ -134,7 +136,7 @@ ignore = [
 fixable = ["ALL"]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**/test_*.py" = ["D", "INP"]
+"**/tests/**/*.py" = ["D"]
 
 [tool.ruff.lint.flake8-pytest-style]
 # https://docs.astral.sh/ruff/settings/#lintflake8-pytest-style
@@ -179,7 +181,6 @@ docstring-code-format = true
 
 [tool.rapids-build-backend]
 build-backend = "setuptools.build_meta"
-commit-file = "cudf_polars/GIT_COMMIT"
 dependencies-file = "../../dependencies.yaml"
 # Pure python
 disable-cuda = true

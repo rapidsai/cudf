@@ -325,8 +325,8 @@ TYPED_TEST(TypedStructUtilitiesTest, StructOfStructWithNullsAtAllLevels)
   auto expected_nums_col_2 =
     cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
                    .get_sliced_child(0, cudf::get_default_stream()));
-  auto expected_structs_col_2 =
-    cudf::test::fixed_width_column_wrapper<bool>{{1, 1, 0, 1, 0, 1, 1}, {1, 1, 0, 1, 0, 1, 1}};
+  auto expected_structs_col_2 = cudf::test::fixed_width_column_wrapper<bool>{
+    {1, 1, 0, 1, 0, 1, 1}, {true, true, false, true, false, true, true}};
   auto expected_nums_col_3 =
     cudf::column(static_cast<cudf::structs_column_view>(struct_of_structs_col)
                    .get_sliced_child(1, cudf::get_default_stream())

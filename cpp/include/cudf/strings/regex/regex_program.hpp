@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,35 +74,35 @@ struct regex_program {
    *
    * @return regex pattern as a string
    */
-  std::string pattern() const;
+  [[nodiscard]] std::string pattern() const;
 
   /**
    * @brief Return the regex_flags used to create this instance
    *
    * @return regex flags setting
    */
-  regex_flags flags() const;
+  [[nodiscard]] regex_flags flags() const;
 
   /**
    * @brief Return the capture_groups used to create this instance
    *
    * @return capture groups setting
    */
-  capture_groups capture() const;
+  [[nodiscard]] capture_groups capture() const;
 
   /**
    * @brief Return the number of instructions in this instance
    *
    * @return Number of instructions
    */
-  int32_t instructions_count() const;
+  [[nodiscard]] int32_t instructions_count() const;
 
   /**
    * @brief Return the number of capture groups in this instance
    *
    * @return Number of groups
    */
-  int32_t groups_count() const;
+  [[nodiscard]] int32_t groups_count() const;
 
   /**
    * @brief Return the size of the working memory for the regex execution
@@ -110,7 +110,7 @@ struct regex_program {
    * @param num_strings Number of strings for computation
    * @return Size of the working memory in bytes
    */
-  std::size_t compute_working_memory_size(int32_t num_strings) const;
+  [[nodiscard]] std::size_t compute_working_memory_size(int32_t num_strings) const;
 
   ~regex_program();
 
