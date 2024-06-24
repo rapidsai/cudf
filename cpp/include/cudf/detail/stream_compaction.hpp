@@ -88,7 +88,6 @@ std::unique_ptr<table> distinct(table_view const& input,
 
 /**
  * @copydoc cudf::stable_distinct
- *
  */
 std::unique_ptr<table> stable_distinct(table_view const& input,
                                        std::vector<size_type> const& keys,
