@@ -5,7 +5,7 @@ set -euo pipefail
 
 package_dir="python/libcudf"
 
-./ci/build_wheel.sh libcudf ${package_dir}
+./ci/build_wheel.sh ${package_dir}
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 

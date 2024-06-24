@@ -13,7 +13,7 @@ RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 cpp /tmp/libcudf_dist
 
 export PIP_FIND_LINKS="/tmp/libcudf_dist"
-./ci/build_wheel.sh cudf ${package_dir}
+./ci/build_wheel.sh ${package_dir}
 
 cd ${package_dir}
 mkdir -p final_dist
