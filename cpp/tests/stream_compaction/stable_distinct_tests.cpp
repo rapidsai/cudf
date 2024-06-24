@@ -188,7 +188,8 @@ TEST_F(StableDistinctKeepAny, NoNullsTableWithNaNs)
     auto const exp_keys2 = floats_col{19., NaN, NaN, NaN, 20., 20., 9., 21.};
     auto const expected  = cudf::table_view{{exp_col1, exp_col2, exp_keys1, exp_keys2}};
 
-    auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY, NULL_EQUAL, NAN_UNEQUAL);
+    auto const result = cudf::stable_distinct(
+      input, key_idx, KEEP_ANY, NULL_EQUAL, NAN_UNEQUAL, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
   }
 
@@ -200,7 +201,8 @@ TEST_F(StableDistinctKeepAny, NoNullsTableWithNaNs)
     auto const exp_keys2 = floats_col{19., NaN, 20., 20., 9., 21.};
     auto const expected  = cudf::table_view{{exp_col1, exp_col2, exp_keys1, exp_keys2}};
 
-    auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY, NULL_EQUAL, NAN_EQUAL);
+    auto const result = cudf::stable_distinct(
+      input, key_idx, KEEP_ANY, NULL_EQUAL, NAN_EQUAL, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
   }
 }
@@ -381,7 +383,8 @@ TEST_F(StableDistinctKeepAny, InputWithNullsAndNaNs)
     auto const exp_keys = floats_col{{20., null, NaN, NaN, NaN, 19., 21.}, null_at(1)};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
-    auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY, NULL_EQUAL, NAN_UNEQUAL);
+    auto const result = cudf::stable_distinct(
+      input, key_idx, KEEP_ANY, NULL_EQUAL, NAN_UNEQUAL, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
   }
 
@@ -391,7 +394,8 @@ TEST_F(StableDistinctKeepAny, InputWithNullsAndNaNs)
     auto const exp_keys = floats_col{{20., null, NaN, 19., 21.}, null_at(1)};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
-    auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY, NULL_EQUAL, NAN_EQUAL);
+    auto const result = cudf::stable_distinct(
+      input, key_idx, KEEP_ANY, NULL_EQUAL, NAN_EQUAL, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
   }
 
@@ -401,7 +405,8 @@ TEST_F(StableDistinctKeepAny, InputWithNullsAndNaNs)
     auto const exp_keys = floats_col{{20., null, null, NaN, NaN, NaN, 19., 21.}, nulls_at({1, 2})};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
-    auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY, NULL_UNEQUAL, NAN_UNEQUAL);
+    auto const result = cudf::stable_distinct(
+      input, key_idx, KEEP_ANY, NULL_UNEQUAL, NAN_UNEQUAL, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
   }
 
@@ -411,7 +416,8 @@ TEST_F(StableDistinctKeepAny, InputWithNullsAndNaNs)
     auto const exp_keys = floats_col{{20., null, null, NaN, 19., 21.}, nulls_at({1, 2})};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
-    auto const result = cudf::stable_distinct(input, key_idx, KEEP_ANY, NULL_UNEQUAL, NAN_EQUAL);
+    auto const result = cudf::stable_distinct(
+      input, key_idx, KEEP_ANY, NULL_UNEQUAL, NAN_EQUAL, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
   }
 }
@@ -508,7 +514,8 @@ TEST_F(StableDistinctKeepFirstLastNone, InputWithNaNsEqual)
     auto const exp_keys = floats_col{20., NaN, 19., 21., 22.};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
-    auto const result = cudf::stable_distinct(input, key_idx, KEEP_FIRST, NULL_EQUAL, NAN_EQUAL);
+    auto const result = cudf::stable_distinct(
+      input, key_idx, KEEP_FIRST, NULL_EQUAL, NAN_EQUAL, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
   }
 
@@ -518,7 +525,8 @@ TEST_F(StableDistinctKeepFirstLastNone, InputWithNaNsEqual)
     auto const exp_keys = floats_col{20., NaN, 21., 19., 22.};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
-    auto const result = cudf::stable_distinct(input, key_idx, KEEP_LAST, NULL_EQUAL, NAN_EQUAL);
+    auto const result = cudf::stable_distinct(
+      input, key_idx, KEEP_LAST, NULL_EQUAL, NAN_EQUAL, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
   }
 
@@ -528,7 +536,8 @@ TEST_F(StableDistinctKeepFirstLastNone, InputWithNaNsEqual)
     auto const exp_keys = floats_col{20., 21., 22.};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
-    auto const result = cudf::stable_distinct(input, key_idx, KEEP_NONE, NULL_EQUAL, NAN_EQUAL);
+    auto const result = cudf::stable_distinct(
+      input, key_idx, KEEP_NONE, NULL_EQUAL, NAN_EQUAL, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
   }
 }
@@ -547,8 +556,8 @@ TEST_F(StableDistinctKeepFirstLastNone, InputWithNaNsUnequal)
     auto const exp_keys = floats_col{20., NaN, NaN, 19., 21., 22.};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
-    auto const result =
-      cudf::stable_distinct(input, key_idx, KEEP_FIRST, NULL_UNEQUAL, NAN_UNEQUAL);
+    auto const result = cudf::stable_distinct(
+      input, key_idx, KEEP_FIRST, NULL_UNEQUAL, NAN_UNEQUAL, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
   }
 
@@ -558,7 +567,8 @@ TEST_F(StableDistinctKeepFirstLastNone, InputWithNaNsUnequal)
     auto const exp_keys = floats_col{NaN, NaN, 21., 19., 22., 20.};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
-    auto const result = cudf::stable_distinct(input, key_idx, KEEP_LAST, NULL_UNEQUAL, NAN_UNEQUAL);
+    auto const result = cudf::stable_distinct(
+      input, key_idx, KEEP_LAST, NULL_UNEQUAL, NAN_UNEQUAL, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
   }
 
@@ -568,7 +578,8 @@ TEST_F(StableDistinctKeepFirstLastNone, InputWithNaNsUnequal)
     auto const exp_keys = floats_col{NaN, NaN, 21., 22.};
     auto const expected = cudf::table_view{{exp_col, exp_keys}};
 
-    auto const result = cudf::stable_distinct(input, key_idx, KEEP_NONE, NULL_UNEQUAL, NAN_UNEQUAL);
+    auto const result = cudf::stable_distinct(
+      input, key_idx, KEEP_NONE, NULL_UNEQUAL, NAN_UNEQUAL, cudf::test::get_default_stream());
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
   }
 }
