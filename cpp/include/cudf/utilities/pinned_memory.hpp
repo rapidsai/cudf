@@ -62,7 +62,7 @@ bool config_default_pinned_memory_resource(pinned_mr_options const& opts);
  * threshold, the copy will be done using kernels. If the size is greater than or equal to this
  * threshold, the copy will be done using cudaMemcpyAsync.
  */
-void kernel_pinned_copy_threshold(size_t threshold);
+void set_kernel_pinned_copy_threshold(size_t threshold);
 
 /**
  * @brief Get the threshold size for using kernels for pinned memory copies.
