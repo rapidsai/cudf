@@ -565,7 +565,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
 }  // namespace detail
 
-// @deprecated
+// deprecated in 24.08
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
                                               std::string const& delimiter,
                                               std::optional<byte_range_info> byte_range,
