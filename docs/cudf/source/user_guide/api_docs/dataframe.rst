@@ -137,6 +137,7 @@ Computations / descriptive stats
    DataFrame.describe
    DataFrame.diff
    DataFrame.eval
+   DataFrame.ewm
    DataFrame.kurt
    DataFrame.kurtosis
    DataFrame.max
