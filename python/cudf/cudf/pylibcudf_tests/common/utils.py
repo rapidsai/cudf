@@ -57,6 +57,8 @@ def assert_column_eq(
     if isinstance(rhs, pa.ChunkedArray):
         rhs = rhs.combine_chunks()
 
+    # print(lhs)
+    # print(rhs)
     assert lhs.equals(rhs)
 
 
@@ -189,19 +191,20 @@ LIST_PA_TYPES = [
 DEFAULT_STRUCT_TESTING_TYPE = pa.struct(
     [pa.field("v", pa.int64(), nullable=False)]
 )
+NESTED_STRUCT_TESTING_TYPE = pa.struct(
+    [
+        pa.field("a", pa.int64(), nullable=False),
+        pa.field(
+            "b_struct",
+            pa.struct([pa.field("b", pa.float64(), nullable=False)]),
+            nullable=False,
+        ),
+    ]
+)
 
-DEFAULT_PA_STRUCT_TESTING_TYPES = [DEFAULT_STRUCT_TESTING_TYPE] + [
-    # Nested case
-    pa.struct(
-        [
-            pa.field("a", pa.int64(), nullable=False),
-            pa.field(
-                "b_struct",
-                pa.struct([pa.field("b", pa.float64(), nullable=False)]),
-                nullable=False,
-            ),
-        ]
-    ),
+DEFAULT_PA_STRUCT_TESTING_TYPES = [
+    DEFAULT_STRUCT_TESTING_TYPE,
+    NESTED_STRUCT_TESTING_TYPE,
 ]
 
 DEFAULT_PA_TYPES = (
