@@ -50,11 +50,11 @@ std::string get_label(std::string const& test_name, nvbench::state const& state)
 std::tuple<std::vector<cuio_source_sink_pair>, size_t, size_t> write_file_data(
   nvbench::state& state, std::vector<cudf::type_id> const& d_types)
 {
-  auto const cardinality = state.get_int64("cardinality");
-  auto const run_length  = state.get_int64("run_length");
-  auto const num_cols    = state.get_int64("num_cols");
-  size_t const num_files            = get_num_read_threads(state);
-  size_t const per_file_data_size   = get_read_size(state);
+  auto const cardinality          = state.get_int64("cardinality");
+  auto const run_length           = state.get_int64("run_length");
+  auto const num_cols             = state.get_int64("num_cols");
+  size_t const num_files          = get_num_read_threads(state);
+  size_t const per_file_data_size = get_read_size(state);
 
   std::vector<cuio_source_sink_pair> source_sink_vector;
 
@@ -86,7 +86,7 @@ void BM_orc_multithreaded_read_common(nvbench::state& state,
                                       std::vector<cudf::type_id> const& d_types,
                                       std::string const& label)
 {
-  auto const data_size = state.get_int64("total_data_size");
+  auto const data_size   = state.get_int64("total_data_size");
   auto const num_threads = state.get_int64("num_threads");
 
   auto streams = cudf::detail::fork_streams(cudf::get_default_stream(), num_threads);
@@ -104,24 +104,24 @@ void BM_orc_multithreaded_read_common(nvbench::state& state,
   {
     cudf::scoped_range range{("(read) " + label).c_str()};
     state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-              [&](nvbench::launch& launch, auto& timer) {
-                auto read_func = [&](int index) {
-                  auto const stream = streams[index % num_threads];
-                  cudf::io::orc_reader_options read_opts =
-                    cudf::io::orc_reader_options::builder(source_info_vector[index]);
-                  cudf::io::read_orc(read_opts, stream, rmm::mr::get_current_device_resource());
-                };
+               [&](nvbench::launch& launch, auto& timer) {
+                 auto read_func = [&](int index) {
+                   auto const stream = streams[index % num_threads];
+                   cudf::io::orc_reader_options read_opts =
+                     cudf::io::orc_reader_options::builder(source_info_vector[index]);
+                   cudf::io::read_orc(read_opts, stream, rmm::mr::get_current_device_resource());
+                 };
 
-                threads.paused = true;
-                for (size_t i = 0; i < num_files; ++i) {
-                  threads.submit(read_func, i);
-                }
-                timer.start();
-                threads.paused = false;
-                threads.wait_for_tasks();
-                cudf::detail::join_streams(streams, cudf::get_default_stream());
-                timer.stop();
-              });
+                 threads.paused = true;
+                 for (size_t i = 0; i < num_files; ++i) {
+                   threads.submit(read_func, i);
+                 }
+                 timer.start();
+                 threads.paused = false;
+                 threads.wait_for_tasks();
+                 cudf::detail::join_streams(streams, cudf::get_default_stream());
+                 timer.stop();
+               });
   }
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
@@ -184,34 +184,35 @@ void BM_orc_multithreaded_read_chunked_common(nvbench::state& state,
     cudf::scoped_range range{("(read) " + label).c_str()};
     std::vector<cudf::io::table_with_metadata> chunks;
     state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-              [&](nvbench::launch& launch, auto& timer) {
-                auto read_func = [&](int index) {
-                  auto const stream = streams[index % num_threads];
-                  cudf::io::orc_reader_options read_opts =
-                    cudf::io::orc_reader_options::builder(source_info_vector[index]);
-                  // divide chunk limits by number of threads so the number of chunks produced is the
-                  // same for all cases. this seems better than the alternative, which is to keep the
-                  // limits the same. if we do that, as the number of threads goes up, the number of
-                  // chunks goes down - so are actually benchmarking the same thing in that case?
-                  auto reader = cudf::io::chunked_orc_reader(
-                    output_limit / num_threads, input_limit / num_threads, read_opts, stream);
+               [&](nvbench::launch& launch, auto& timer) {
+                 auto read_func = [&](int index) {
+                   auto const stream = streams[index % num_threads];
+                   cudf::io::orc_reader_options read_opts =
+                     cudf::io::orc_reader_options::builder(source_info_vector[index]);
+                   // divide chunk limits by number of threads so the number of chunks produced is
+                   // the same for all cases. this seems better than the alternative, which is to
+                   // keep the limits the same. if we do that, as the number of threads goes up, the
+                   // number of chunks goes down - so are actually benchmarking the same thing in
+                   // that case?
+                   auto reader = cudf::io::chunked_orc_reader(
+                     output_limit / num_threads, input_limit / num_threads, read_opts, stream);
 
-                  // read all the chunks
-                  do {
-                    auto table = reader.read_chunk();
-                  } while (reader.has_next());
-                };
+                   // read all the chunks
+                   do {
+                     auto table = reader.read_chunk();
+                   } while (reader.has_next());
+                 };
 
-                threads.paused = true;
-                for (size_t i = 0; i < num_files; ++i) {
-                  threads.submit(read_func, i);
-                }
-                timer.start();
-                threads.paused = false;
-                threads.wait_for_tasks();
-                cudf::detail::join_streams(streams, cudf::get_default_stream());
-                timer.stop();
-              });
+                 threads.paused = true;
+                 for (size_t i = 0; i < num_files; ++i) {
+                   threads.submit(read_func, i);
+                 }
+                 timer.start();
+                 threads.paused = false;
+                 threads.wait_for_tasks();
+                 cudf::detail::join_streams(streams, cudf::get_default_stream());
+                 timer.stop();
+               });
   }
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
@@ -249,7 +250,7 @@ void BM_orc_multithreaded_read_chunked_list(nvbench::state& state)
   cudf::scoped_range range{label.c_str()};
   BM_orc_multithreaded_read_chunked_common(state, {cudf::type_id::LIST}, label);
 }
-auto const thread_range  = std::vector<nvbench::int64_t>{1, 2, 4, 8};
+auto const thread_range    = std::vector<nvbench::int64_t>{1, 2, 4, 8};
 auto const total_data_size = std::vector<nvbench::int64_t>{512 * 1024 * 1024, 1024 * 1024 * 1024};
 
 // mixed data types: fixed width and strings
