@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import warnings
+
 import cupy as cp
 import numpy as np
 import pandas as pd
+from pandas import testing as tm
 
 import cudf
 from cudf._lib.unary import is_nan
@@ -708,3 +711,78 @@ def assert_frame_equal(
             atol=atol,
             obj=f'Column name="{col}"',
         )
+
+
+def assert_eq(left, right, **kwargs):
+    """Assert that two cudf-like things are equivalent
+
+    This equality test works for pandas/cudf dataframes/series/indexes/scalars
+    in the same way, and so makes it easier to perform parametrized testing
+    without switching between assert_frame_equal/assert_series_equal/...
+    functions.
+    """
+    # dtypes that we support but Pandas doesn't will convert to
+    # `object`. Check equality before that happens:
+    if kwargs.get("check_dtype", True):
+        if hasattr(left, "dtype") and hasattr(right, "dtype"):
+            if isinstance(
+                left.dtype, cudf.core.dtypes._BaseDtype
+            ) and not isinstance(
+                left.dtype, cudf.CategoricalDtype
+            ):  # leave categorical comparison to Pandas
+                assert_eq(left.dtype, right.dtype)
+
+    if hasattr(left, "to_pandas"):
+        left = left.to_pandas()
+    if hasattr(right, "to_pandas"):
+        right = right.to_pandas()
+    if isinstance(left, cp.ndarray):
+        left = cp.asnumpy(left)
+    if isinstance(right, cp.ndarray):
+        right = cp.asnumpy(right)
+
+    if isinstance(left, (pd.DataFrame, pd.Series, pd.Index)):
+        # TODO: A warning is emitted from the function
+        # pandas.testing.assert_[series, frame, index]_equal for some inputs:
+        # "DeprecationWarning: elementwise comparison failed; this will raise
+        # an error in the future."
+        # or "FutureWarning: elementwise ..."
+        # This warning comes from a call from pandas to numpy. It is ignored
+        # here because it cannot be fixed within cudf.
+        with warnings.catch_warnings():
+            warnings.simplefilter(
+                "ignore", (DeprecationWarning, FutureWarning)
+            )
+            if isinstance(left, pd.DataFrame):
+                tm.assert_frame_equal(left, right, **kwargs)
+            elif isinstance(left, pd.Series):
+                tm.assert_series_equal(left, right, **kwargs)
+            else:
+                tm.assert_index_equal(left, right, **kwargs)
+
+    elif isinstance(left, np.ndarray) and isinstance(right, np.ndarray):
+        if np.issubdtype(left.dtype, np.floating) and np.issubdtype(
+            right.dtype, np.floating
+        ):
+            assert np.allclose(left, right, equal_nan=True)
+        else:
+            assert np.array_equal(left, right)
+    else:
+        # Use the overloaded __eq__ of the operands
+        if left == right:
+            return True
+        elif any(np.issubdtype(type(x), np.floating) for x in (left, right)):
+            np.testing.assert_almost_equal(left, right)
+        else:
+            np.testing.assert_equal(left, right)
+    return True
+
+
+def assert_neq(left, right, **kwargs):
+    __tracebackhide__ = True
+    try:
+        assert_eq(left, right, **kwargs)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError
