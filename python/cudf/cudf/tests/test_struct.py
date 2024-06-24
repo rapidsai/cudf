@@ -7,7 +7,8 @@ import pytest
 
 import cudf
 from cudf.core.dtypes import StructDtype
-from cudf.testing import DATETIME_TYPES, TIMEDELTA_TYPES, assert_eq
+from cudf.testing import assert_eq
+from cudf.testing._utils import DATETIME_TYPES, TIMEDELTA_TYPES
 
 
 @pytest.mark.parametrize(
