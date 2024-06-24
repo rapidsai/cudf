@@ -17,7 +17,7 @@ from typing import Any, Callable, Literal, Mapping
 import numpy as np
 
 from ..options import _env_get_bool
-from ..testing.testing import assert_eq
+from ..testing import assert_eq
 from .annotation import nvtx
 
 
