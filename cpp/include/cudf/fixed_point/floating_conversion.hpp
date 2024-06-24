@@ -798,9 +798,7 @@ CUDF_HOST_DEVICE T increment_on_truncation(T const integral_mantissa,
 }
 
 /**
- * @brief Perform lossless base-2 -> base-10 fixed-point conversion for exp10 > 0
- *
- * @note Info is lost if the chosen scale factor truncates information.
+ * @brief Perform base-2 -> base-10 fixed-point conversion for exp10 > 0
  *
  * @tparam FloatingType The type of the original floating-point value we are converting from
  * @param base2_value The base-2 fixed-point value we are converting from
@@ -819,8 +817,8 @@ shift_to_decimal_posexp(typename shifting_constants<FloatingType>::IntegerRep co
   // Output type is ShiftingRep
 
   // Here exp10 > 0 and exp2 > 0, so we need to shift left by 2s and divide by 10s.
-  // To do this losslessly, we will iterate back and forth between them, shifting
-  // up by 2s and down by 10s until all of the powers have been applied.
+  // We'll iterate back and forth between them, shifting up by 2s
+  // and down by 10s until all of the powers have been applied.
 
   // However the input base2_value type has virtually no spare room to shift our data
   // without over- or under-flowing and losing precision.
@@ -850,12 +848,6 @@ shift_to_decimal_posexp(typename shifting_constants<FloatingType>::IntegerRep co
   // Iterate, dividing by 10s and shifting up by 2s until we're almost done
   while (exp10 > Constants::max_digits_shift) {
     // More decimal places to shift than we have room: Divide the max number of 10s
-
-    // Note that the result of this division is guaranteed to fit within the low half of the bits.
-    // The highest set bit is num_rep_bits + num_2s_shift_buffer_bits + max_bits_shift
-    // For float this is 30 + 1 + 30 = 61, for double 57 + 4 + 60 = 121
-    // 2^61 / 10^9 (~2^30) is ~2^31, and 2^121 / 10^18 (~2^60) is ~2^61
-    // As a future optimization, we could use a faster division routine that takes this account.
     shifting_rep /= Constants::max_digits_shift_pow;
     exp10 -= Constants::max_digits_shift;
 
@@ -886,9 +878,7 @@ shift_to_decimal_posexp(typename shifting_constants<FloatingType>::IntegerRep co
 }
 
 /**
- * @brief Perform lossless base-2 -> base-10 fixed-point conversion for exp10 < 0
- *
- * @note Info is lost if the chosen scale factor truncates information.
+ * @brief Perform base-2 -> base-10 fixed-point conversion for exp10 < 0
  *
  * @tparam FloatingType The type of the original floating-point value we are converting from
  * @param base2_value The base-2 fixed-point value we are converting from
@@ -941,8 +931,7 @@ shift_to_decimal_negexp(typename shifting_constants<FloatingType>::IntegerRep ba
   static constexpr int shift_from         = Constants::num_significand_bits;
   static constexpr int num_init_bit_shift = shift_up_to - shift_from;
 
-  // Constants::num_2s_shift_buffer_bits; Note: This shift is safe to do in the smaller IntegerRep
-  // as it is up to bit 61 / 31
+  // Perform initial shift
   shifting_rep <<= num_init_bit_shift;
   exp2_mag += num_init_bit_shift;
 
@@ -975,9 +964,7 @@ shift_to_decimal_negexp(typename shifting_constants<FloatingType>::IntegerRep ba
 }
 
 /**
- * @brief Perform lossless floating-point -> integer decimal conversion
- *
- * @note Info is lost if the chosen scale factor truncates information.
+ * @brief Perform floating-point -> integer decimal conversion
  *
  * @tparam Rep The type of integer we are converting to, to store the decimal value
  * @tparam FloatingType The type of floating-point object we are converting from
@@ -1051,15 +1038,13 @@ CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& flo
 }
 
 /**
- * @brief Perform (nearly) lossless base-10 -> base-2 fixed-point conversion for exp10 > 0
- *
- * @note Intended to only be called internally.
+ * @brief Perform base-10 -> base-2 fixed-point conversion for exp10 > 0
  *
  * @tparam DecimalRep The decimal integer type we are converting from
  * @tparam FloatingType The type of floating point object we are converting to
  * @param decimal_rep The decimal integer to convert
- * @param exp10 The number of powers of 10 to apply to undo the scale factor.
- * @return A pair of the base-2 value and the remaining powers of 2 to be applied.
+ * @param exp10 The number of powers of 10 to apply to undo the scale factor
+ * @return A pair of the base-2 value and the remaining powers of 2 to be applied
  */
 template <typename FloatingType,
           typename DecimalRep,
@@ -1116,16 +1101,13 @@ CUDF_HOST_DEVICE inline auto shift_to_binary_posexp(DecimalRep decimal_rep, int 
 }
 
 /**
- * @brief Perform (nearly) lossless base-10 -> base-2 fixed-point conversion for exp10 < 0
- *
- * @note Intended to only be called internally.
- * @note A 1-ulp loss may occur, but only for magnitudes E-270 or smaller.
+ * @brief Perform base-10 -> base-2 fixed-point conversion for exp10 < 0
  *
  * @tparam DecimalRep The decimal integer type we are converting from
  * @tparam FloatingType The type of floating point object we are converting to
  * @param decimal_rep The decimal integer to convert
- * @param exp10 The number of powers of 10 to apply to undo the scale factor.
- * @return A pair of the base-2 value and the remaining powers of 2 to be applied.
+ * @param exp10 The number of powers of 10 to apply to undo the scale factor
+ * @return A pair of the base-2 value and the remaining powers of 2 to be applied
  */
 template <typename FloatingType,
           typename DecimalRep,
@@ -1138,30 +1120,9 @@ CUDF_HOST_DEVICE inline auto shift_to_binary_negexp(DecimalRep decimal_rep, int 
   using Constants   = shifting_constants<FloatingType>;
   using ShiftingRep = typename Constants::ShiftingRep;
 
-  // We would start by lining up our data to num_rep_bits, but if we originated with a floating
-  // number, we had to keep track of extra bits on the low-side because we were bit-shifting down.
-  //
-  // Those bits were not rounded. If we didn't truncate those bits before, we don't want to now
-  // either to ensure that we end up at the same floating point value that we started with.
-  //
-  // We could try to round here instead, but we don't know if we came from a floating-point value
-  // or not, so any rounding may not be desired.
-  //
-  // Note that here we are bit-shifting up, so we also need num_2s_shift_buffer_bits
-  // room on the high side. We have barely enough room for this for floats, but we're one bit
-  // over for doubles. So for doubles we'll keep one less bit on the low-side.
-  //
-  // This MAY cause a discrepancy in the last bit of our double from the value that we started with.
-  // However we only need all 4 bits for extremely large exponents
-  // (one bit to start + one extra bit every 90 powers of 10, so < E-270).
-  // And it's only a partial bit, and the eventual cast to double rounds, so we
-  // are often (always?) fine anyway (e.g. DBL_MIN & DBL_TRUE_MIN work fine).
-  //
-  // See comments on these constants for more details.
-
   // We want to start with our significand bits at the top of the shifting range,
-  // so that we don't lose information we need on intermediary right-shifts.
-  // Note that since we're shifting 2s up, we need num_2s_shift_buffer_bits space on the high side,
+  // so that we lose minimal information we need on intermediary right-shifts.
+  // Note that since we're shifting 2s up, we need num_2s_shift_buffer_bits space on the high side
   static constexpr int shift_up_to = sizeof(ShiftingRep) * 8 - Constants::num_2s_shift_buffer_bits;
   int const shift_from             = count_significant_bits(decimal_rep);
   int const num_init_bit_shift     = shift_up_to - shift_from;
@@ -1185,8 +1146,6 @@ CUDF_HOST_DEVICE inline auto shift_to_binary_negexp(DecimalRep decimal_rep, int 
   // Iterate, dividing by 10s and shifting up by 2s until we're almost done
   while (exp10_mag > Constants::max_digits_shift) {
     // More decimal places to shift than we have room: Divide the max number of 10s
-    // Note that the result of this division is guaranteed to fit within low 64/32 bits
-    // See discussion in shift_to_decimal_posexp() for more details
     shifting_rep /= Constants::max_digits_shift_pow;
     exp10_mag -= Constants::max_digits_shift;
 
@@ -1209,9 +1168,7 @@ CUDF_HOST_DEVICE inline auto shift_to_binary_negexp(DecimalRep decimal_rep, int 
 }
 
 /**
- * @brief Perform (nearly) lossless integer decimal -> floating-point conversion
- *
- * @note A 1 ulp loss may occur, but only to doubles with magnitude <= 1E-270
+ * @brief Perform integer decimal -> floating-point conversion
  *
  * @tparam FloatingType The type of floating-point object we are converting to
  * @tparam Rep The decimal integer type we are converting from
