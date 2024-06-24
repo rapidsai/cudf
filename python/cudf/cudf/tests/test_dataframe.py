@@ -30,14 +30,12 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.errors import MixedTypeError
-from cudf.testing import _utils as utils
+from cudf.testing import _utils as utils, assert_eq, assert_neq
 from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    assert_eq,
     assert_exceptions_equal,
-    assert_neq,
     does_not_raise,
     expect_warning_if,
     gen_rand,

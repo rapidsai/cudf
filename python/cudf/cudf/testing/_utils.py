@@ -19,7 +19,6 @@ from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.core.udf.strings_lowering import cast_string_view_to_udf_string
 from cudf.core.udf.strings_typing import StringView, string_view, udf_string
-from cudf.testing.testing import assert_eq, assert_neq  # noqa: F401
 from cudf.utils import dtypes as dtypeutils
 
 supported_numpy_dtypes = [

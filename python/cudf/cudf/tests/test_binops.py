@@ -15,7 +15,7 @@ import cudf
 from cudf import Index, Series
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
-from cudf.testing import _utils as utils
+from cudf.testing import _utils as utils, assert_eq
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
@@ -194,7 +194,7 @@ def test_series_binop(binop, obj_class):
     if obj_class == "Index":
         result = Series(result)
 
-    utils.assert_eq(result, expect)
+    assert_eq(result, expect)
 
 
 @pytest.mark.parametrize("binop", _binops)
