@@ -12,6 +12,7 @@
 # the License.
 # =============================================================================
 file(READ "${CMAKE_CURRENT_LIST_DIR}/VERSION" _rapids_version)
+
 if(_rapids_version MATCHES [[^([0-9][0-9])\.([0-9][0-9])\.([0-9][0-9])]])
   set(RAPIDS_VERSION_MAJOR "${CMAKE_MATCH_1}")
   set(RAPIDS_VERSION_MINOR "${CMAKE_MATCH_2}")
@@ -22,7 +23,7 @@ else()
   string(REPLACE "\n" "\n  " _rapids_version_formatted "  ${_rapids_version}")
   message(
     FATAL_ERROR
-      "Could not determine RAPIDS version. Contents of VERSION file:\n${_rapids_version_formatted}"
+    "Could not determine RAPIDS version. Contents of VERSION file:\n${_rapids_version_formatted}"
   )
 endif()
 
@@ -33,4 +34,8 @@ if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS-${RAPIDS_VERSION_MAJOR_MI
     "${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS-${RAPIDS_VERSION_MAJOR_MINOR}.cmake"
   )
 endif()
+
+set(rapids-cmake-repo vuule/rapids-cmake)
+set(rapids-cmake-branch test-nvcomp-4.0)
+
 include("${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS-${RAPIDS_VERSION_MAJOR_MINOR}.cmake")
