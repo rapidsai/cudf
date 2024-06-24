@@ -115,6 +115,13 @@ files:
       - build_cpp
       - build_python_common
       - build_python_cudf
+  py_run_libcudf:
+    output: pyproject
+    pyproject_dir: python/libcudf
+    extras:
+      table: project
+    includes:
+      - pyarrow_run
   py_run_cudf:
     output: pyproject
     pyproject_dir: python/cudf
