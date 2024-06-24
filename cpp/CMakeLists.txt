@@ -503,6 +503,7 @@ add_library(
   src/reductions/product.cu
   src/reductions/reductions.cpp
   src/reductions/scan/rank_scan.cu
+  src/reductions/scan/ewm.cu
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
