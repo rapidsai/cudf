@@ -9466,6 +9466,24 @@ def test_explode(data, labels, ignore_index, p_index, label_to_explode):
     assert_eq(expect, got, check_dtype=False)
 
 
+def test_explode_preserve_categorical():
+    gdf = cudf.DataFrame(
+        {
+            "A": [[1, 2], None, [2, 3]],
+            "B": cudf.Series([0, 1, 2], dtype="category"),
+        }
+    )
+    result = gdf.explode("A")
+    expected = cudf.DataFrame(
+        {
+            "A": [1, 2, None, 2, 3],
+            "B": cudf.Series([0, 0, 1, 2, 2], dtype="category"),
+        }
+    )
+    expected.index = cudf.Index([0, 0, 1, 2, 2])
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "df,ascending,expected",
     [
@@ -9964,6 +9982,20 @@ def test_dataframe_nunique(data):
     expected = pdf.nunique()
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [
+        pd.RangeIndex(2, name="foo"),
+        pd.MultiIndex.from_arrays([[1, 2], [2, 3]], names=["foo", 1]),
+        pd.Index([3, 5], dtype=np.int8, name="foo"),
+    ],
+)
+def test_nunique_preserve_column_in_index(columns):
+    df = cudf.DataFrame([[1, 2]], columns=columns)
+    result = df.nunique().index.to_pandas()
+    assert_eq(result, columns, exact=True)
 
 
 @pytest.mark.parametrize(

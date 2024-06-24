@@ -2851,3 +2851,13 @@ def test_nans_to_nulls_noop_copies_column(value):
     ser1 = cudf.Series([value])
     ser2 = ser1.nans_to_nulls()
     assert ser1._column is not ser2._column
+
+
+@pytest.mark.parametrize("dropna", [False, True])
+def test_nunique_all_null(dropna):
+    data = [None, None]
+    pd_ser = pd.Series(data)
+    cudf_ser = cudf.Series(data)
+    result = pd_ser.nunique(dropna=dropna)
+    expected = cudf_ser.nunique(dropna=dropna)
+    assert result == expected
