@@ -7,6 +7,8 @@ import sys
 import pyarrow as pa
 import pytest
 
+import cudf._lib.pylibcudf as plc
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 
 from utils import DEFAULT_STRUCT_TESTING_TYPE
@@ -28,4 +30,36 @@ from utils import DEFAULT_STRUCT_TESTING_TYPE
     ],
 )
 def pa_type(request):
+    return request.param
+
+
+@pytest.fixture(
+    scope="session",
+    params=[
+        pa.int64(),
+        pa.float64(),
+        pa.uint64(),
+    ],
+)
+def numeric_pa_type(request):
+    return request.param
+
+
+@pytest.fixture(
+    scope="session", params=[opt for opt in plc.types.Interpolation]
+)
+def interp_opt(request):
+    return request.param
+
+
+@pytest.fixture(
+    scope="session",
+    params=[opt for opt in plc.types.Sorted],
+)
+def sorted_opt(request):
+    return request.param
+
+
+@pytest.fixture(scope="session", params=[False, True])
+def has_nulls(request):
     return request.param

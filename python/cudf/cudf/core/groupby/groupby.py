@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import copy
 import itertools
@@ -7,7 +8,7 @@ import textwrap
 import warnings
 from collections import abc
 from functools import cached_property
-from typing import Any, Iterable, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Iterable
 
 import cupy as cp
 import numpy as np
@@ -20,14 +21,8 @@ from cudf._lib.null_mask import bitmask_or
 from cudf._lib.reshape import interleave_columns
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
-from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.extensions import no_default
-from cudf.api.types import (
-    is_bool_dtype,
-    is_float_dtype,
-    is_list_like,
-    is_numeric_dtype,
-)
+from cudf.api.types import is_bool_dtype, is_list_like, is_numeric_dtype
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, StructDtype, as_column
@@ -38,6 +33,9 @@ from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import GetAttrGetItemMixin
+
+if TYPE_CHECKING:
+    from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 
 
 def _deprecate_collect():
@@ -335,12 +333,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             FutureWarning,
         )
         index = self.grouping.keys.unique().sort_values().to_pandas()
-        obj_dtypes = self.obj._dtypes
         return pd.DataFrame(
-            {
-                name: [obj_dtypes[name]] * len(index)
-                for name in self.obj._data.names
-            },
+            {name: [dtype] * len(index) for name, dtype in self.obj._dtypes},
             index=index,
         )
 
@@ -499,8 +493,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # treats NaNs the way we treat nulls.
         if cudf.get_option("mode.pandas_compatible"):
             if any(
-                is_float_dtype(typ)
-                for typ in self.grouping.values._dtypes.values()
+                col.dtype.kind == "f" for col in self.grouping.values._columns
             ):
                 raise NotImplementedError(
                     "NaNs are not supported in groupby.rank."
@@ -1043,11 +1036,11 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def sample(
         self,
-        n: Optional[int] = None,
-        frac: Optional[float] = None,
+        n: int | None = None,
+        frac: float | None = None,
         replace: bool = False,
-        weights: Union[abc.Sequence, "cudf.Series", None] = None,
-        random_state: Union[np.random.RandomState, int, None] = None,
+        weights: abc.Sequence | "cudf.Series" | None = None,
+        random_state: np.random.RandomState | int | None = None,
     ):
         """Return a random sample of items in each group.
 
@@ -1232,7 +1225,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def _normalize_aggs(
         self, aggs: MultiColumnAggType
-    ) -> Tuple[Iterable[Any], Tuple[ColumnBase, ...], List[List[AggType]]]:
+    ) -> tuple[Iterable[Any], tuple[ColumnBase, ...], list[list[AggType]]]:
         """
         Normalize aggs to a list of list of aggregations, where `out[i]`
         is a list of aggregations for column `self.obj[i]`. We support three
@@ -1247,7 +1240,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         Each agg can be string or lambda functions.
         """
 
-        aggs_per_column: Iterable[Union[AggType, Iterable[AggType]]]
+        aggs_per_column: Iterable[AggType | Iterable[AggType]]
         if isinstance(aggs, dict):
             column_names, aggs_per_column = aggs.keys(), aggs.values()
             columns = tuple(self.obj._data[col] for col in column_names)
@@ -1315,7 +1308,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         To get the difference between each groups maximum and minimum value
         in one pass, you can do
 
-        >>> df.groupby('A').pipe(lambda x: x.max() - x.min())
+        >>> df.groupby('A', sort=True).pipe(lambda x: x.max() - x.min())
            B
         A
         a  2
@@ -2800,15 +2793,13 @@ class _Grouping(Serializable):
         nkeys = len(self._key_columns)
 
         if nkeys == 0:
-            return cudf.core.index.as_index([], name=None)
+            return cudf.Index([], name=None)
         elif nkeys > 1:
             return cudf.MultiIndex._from_data(
                 dict(zip(range(nkeys), self._key_columns))
             )._set_names(self.names)
         else:
-            return cudf.core.index.as_index(
-                self._key_columns[0], name=self.names[0]
-            )
+            return cudf.Index(self._key_columns[0], name=self.names[0])
 
     @property
     def values(self) -> cudf.core.frame.Frame:

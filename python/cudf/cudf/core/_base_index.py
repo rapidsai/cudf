@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import pickle
 import warnings
-from collections.abc import Generator
 from functools import cached_property
-from typing import Any, Literal, Set, Tuple
+from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 from typing_extensions import Self
@@ -31,21 +30,25 @@ from cudf.api.types import (
 )
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
-from cudf.core.column_accessor import ColumnAccessor
 from cudf.errors import MixedTypeError
 from cudf.utils import ioutils
 from cudf.utils.dtypes import can_convert_to_column, is_mixed_with_object_dtype
 from cudf.utils.utils import _is_same_name
 
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+    from cudf.core.column_accessor import ColumnAccessor
+
 
 class BaseIndex(Serializable):
     """Base class for all cudf Index types."""
 
-    _accessors: Set[Any] = set()
+    _accessors: set[Any] = set()
     _data: ColumnAccessor
 
     @property
-    def _columns(self) -> Tuple[Any, ...]:
+    def _columns(self) -> tuple[Any, ...]:
         raise NotImplementedError
 
     @cached_property
@@ -149,7 +152,7 @@ class BaseIndex(Serializable):
         """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
-    def equals(self, other):
+    def equals(self, other) -> bool:
         """
         Determine if two Index objects contain the same elements.
 
@@ -279,9 +282,7 @@ class BaseIndex(Serializable):
         hash(item)
         return item in self._values
 
-    def _copy_type_metadata(
-        self, other: Self, *, override_dtypes=None
-    ) -> Self:
+    def _copy_type_metadata(self: Self, other: Self) -> Self:
         raise NotImplementedError
 
     def get_level_values(self, level):
@@ -339,9 +340,9 @@ class BaseIndex(Serializable):
     @property
     def names(self):
         """
-        Returns a tuple containing the name of the Index.
+        Returns a FrozenList containing the name of the Index.
         """
-        return (self.name,)
+        return pd.core.indexes.frozen.FrozenList([self.name])
 
     @names.setter
     def names(self, values):
@@ -1119,7 +1120,7 @@ class BaseIndex(Serializable):
         res_name = _get_result_name(self.name, other.name)
 
         if is_mixed_with_object_dtype(self, other) or len(other) == 0:
-            difference = self.copy().unique()
+            difference = self.unique()
             difference.name = res_name
             if sort is True:
                 return difference.sort_values()
@@ -1743,7 +1744,7 @@ class BaseIndex(Serializable):
             self.name = name
             return None
         else:
-            out = self.copy(deep=True)
+            out = self.copy(deep=False)
             out.name = name
             return out
 
@@ -2067,17 +2068,12 @@ class BaseIndex(Serializable):
             raise ValueError(f"{how=} must be 'any' or 'all'")
         try:
             if not self.hasnans:
-                return self.copy()
+                return self.copy(deep=False)
         except NotImplementedError:
             pass
         # This is to be consistent with IndexedFrame.dropna to handle nans
         # as nulls by default
-        data_columns = [
-            col.nans_to_nulls()
-            if isinstance(col, cudf.core.column.NumericalColumn)
-            else col
-            for col in self._columns
-        ]
+        data_columns = [col.nans_to_nulls() for col in self._columns]
 
         return self._from_columns_like_self(
             drop_nulls(

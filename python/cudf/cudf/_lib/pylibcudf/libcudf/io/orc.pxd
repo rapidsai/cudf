@@ -94,7 +94,9 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_writer_options_builder& compression(
             cudf_io_types.compression_type comp
         ) except +
-        orc_writer_options_builder& enable_statistics(bool val) except +
+        orc_writer_options_builder& enable_statistics(
+            cudf_io_types.statistics_freq val
+        ) except +
         orc_writer_options_builder& stripe_size_bytes(size_t val) except +
         orc_writer_options_builder& stripe_size_rows(size_type val) except +
         orc_writer_options_builder& row_index_stride(size_type val) except +
@@ -147,7 +149,7 @@ cdef extern from "cudf/io/orc.hpp" \
             cudf_io_types.compression_type comp
         ) except +
         chunked_orc_writer_options_builder& enable_statistics(
-            bool val
+            cudf_io_types.statistics_freq val
         ) except +
         orc_writer_options_builder& stripe_size_bytes(size_t val) except +
         orc_writer_options_builder& stripe_size_rows(size_type val) except +
