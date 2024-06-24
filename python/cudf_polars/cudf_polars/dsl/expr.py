@@ -512,13 +512,17 @@ class BooleanFunction(Expr):
         ]
         if self.name == pl_expr.BooleanFunction.Any:
             (column,) = columns
-            return plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, plc.aggregation.any(), self.dtype), 1
+            return Column(
+                plc.Column.from_scalar(
+                    plc.reduce.reduce(column.obj, plc.aggregation.any(), self.dtype), 1
+                )
             )
         elif self.name == pl_expr.BooleanFunction.All:
             (column,) = columns
-            return plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, plc.aggregation.all(), self.dtype), 1
+            return Column(
+                plc.Column.from_scalar(
+                    plc.reduce.reduce(column.obj, plc.aggregation.all(), self.dtype), 1
+                )
             )
         if self.name == pl_expr.BooleanFunction.IsNull:
             (column,) = columns
@@ -612,20 +616,32 @@ class BooleanFunction(Expr):
             column, lo, hi = columns
             (closed,) = self.options
             lop, rop = self._BETWEEN_OPS[closed]
+            lo_obj = (
+                lo.obj_scalar
+                if lo.is_scalar and lo.obj.size() != column.obj.size()
+                else lo.obj
+            )
+            hi_obj = (
+                hi.obj_scalar
+                if hi.is_scalar and hi.obj.size() != column.obj.size()
+                else hi.obj
+            )
             return Column(
                 plc.binaryop.binary_operation(
                     plc.binaryop.binary_operation(
-                        column.obj, lo.obj, lop, output_type=self.dtype
+                        column.obj, lo_obj, lop, output_type=self.dtype
                     ),
                     plc.binaryop.binary_operation(
-                        column.obj, hi.obj, rop, output_type=self.dtype
+                        column.obj, hi_obj, rop, output_type=self.dtype
                     ),
                     plc.binaryop.BinaryOperator.LOGICAL_AND,
                     self.dtype,
                 )
             )
         else:
-            raise NotImplementedError(f"BooleanFunction {self.name}")
+            raise NotImplementedError(
+                f"BooleanFunction {self.name}"
+            )  # pragma: no cover; handled by init raising
 
 
 class StringFunction(Expr):
@@ -936,7 +952,9 @@ class Agg(Expr):
         self.options = options
         self.children = (value,)
         if name not in Agg._SUPPORTED:
-            raise NotImplementedError(f"Unsupported aggregation {name=}")
+            raise NotImplementedError(
+                f"Unsupported aggregation {name=}"
+            )  # pragma: no cover; all valid aggs are supported
         # TODO: nan handling in groupby case
         if name == "min":
             req = plc.aggregation.min()
@@ -962,7 +980,9 @@ class Agg(Expr):
         elif name == "count":
             req = plc.aggregation.count(null_handling=plc.types.NullPolicy.EXCLUDE)
         else:
-            raise NotImplementedError
+            raise NotImplementedError(
+                f"Unreachable, {name=} is incorrectly listed in _SUPPORTED"
+            )  # pragma: no cover
         self.request = req
         op = getattr(self, f"_{name}", None)
         if op is None:
@@ -972,7 +992,9 @@ class Agg(Expr):
         elif name in {"count", "first", "last"}:
             pass
         else:
-            raise AssertionError
+            raise NotImplementedError(
+                f"Unreachable, supported agg {name=} has no implementation"
+            )  # pragma: no cover
         self.op = op
 
     _SUPPORTED: ClassVar[frozenset[str]] = frozenset(
@@ -994,11 +1016,15 @@ class Agg(Expr):
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
         if depth >= 1:
-            raise NotImplementedError("Nested aggregations in groupby")
+            raise NotImplementedError(
+                "Nested aggregations in groupby"
+            )  # pragma: no cover; check_agg trips first
         (child,) = self.children
         ((expr, _, _),) = child.collect_agg(depth=depth + 1).requests
         if self.request is None:
-            raise NotImplementedError(f"Aggregation {self.name} in groupby")
+            raise NotImplementedError(
+                f"Aggregation {self.name} in groupby"
+            )  # pragma: no cover; __init__ trips first
         return AggInfo([(expr, self.request, self)])
 
     def _reduce(
@@ -1008,10 +1034,7 @@ class Agg(Expr):
             plc.Column.from_scalar(
                 plc.reduce.reduce(column.obj, request, self.dtype),
                 1,
-            ),
-            is_sorted=plc.types.Sorted.YES,
-            order=plc.types.Order.ASCENDING,
-            null_order=plc.types.NullOrder.BEFORE,
+            )
         )
 
     def _count(self, column: Column) -> Column:
@@ -1024,10 +1047,7 @@ class Agg(Expr):
                     ),
                 ),
                 1,
-            ),
-            is_sorted=plc.types.Sorted.YES,
-            order=plc.types.Order.ASCENDING,
-            null_order=plc.types.NullOrder.BEFORE,
+            )
         )
 
     def _min(self, column: Column, *, propagate_nans: bool) -> Column:
@@ -1038,10 +1058,7 @@ class Agg(Expr):
                         pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
                     ),
                     1,
-                ),
-                is_sorted=plc.types.Sorted.YES,
-                order=plc.types.Order.ASCENDING,
-                null_order=plc.types.NullOrder.BEFORE,
+                )
             )
         if column.nan_count > 0:
             column = column.mask_nans()
@@ -1055,31 +1072,18 @@ class Agg(Expr):
                         pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
                     ),
                     1,
-                ),
-                is_sorted=plc.types.Sorted.YES,
-                order=plc.types.Order.ASCENDING,
-                null_order=plc.types.NullOrder.BEFORE,
+                )
             )
         if column.nan_count > 0:
             column = column.mask_nans()
         return self._reduce(column, request=plc.aggregation.max())
 
     def _first(self, column: Column) -> Column:
-        return Column(
-            plc.copying.slice(column.obj, [0, 1])[0],
-            is_sorted=plc.types.Sorted.YES,
-            order=plc.types.Order.ASCENDING,
-            null_order=plc.types.NullOrder.BEFORE,
-        )
+        return Column(plc.copying.slice(column.obj, [0, 1])[0])
 
     def _last(self, column: Column) -> Column:
         n = column.obj.size()
-        return Column(
-            plc.copying.slice(column.obj, [n - 1, n])[0],
-            is_sorted=plc.types.Sorted.YES,
-            order=plc.types.Order.ASCENDING,
-            null_order=plc.types.NullOrder.BEFORE,
-        )
+        return Column(plc.copying.slice(column.obj, [n - 1, n])[0])
 
     def do_evaluate(
         self,
@@ -1090,7 +1094,9 @@ class Agg(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         if context is not ExecutionContext.FRAME:
-            raise NotImplementedError(f"Agg in context {context}")
+            raise NotImplementedError(
+                f"Agg in context {context}"
+            )  # pragma: no cover; unreachable
         (child,) = self.children
         return self.op(child.evaluate(df, context=context, mapping=mapping))
 

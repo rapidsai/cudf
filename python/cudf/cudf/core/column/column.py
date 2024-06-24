@@ -7,19 +7,7 @@ from collections import abc
 from functools import cached_property
 from itertools import chain
 from types import SimpleNamespace
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    List,
-    Literal,
-    MutableSequence,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, Literal, MutableSequence, Sequence, cast
 
 import cupy
 import numpy as np
@@ -59,6 +47,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._compat import PANDAS_GE_210
+from cudf.core._internals.timezones import get_compatible_timezone
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
     Buffer,
@@ -394,7 +383,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         begin: int,
         end: int,
         inplace: bool = False,
-    ) -> Optional[Self]:
+    ) -> Self | None:
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
@@ -532,9 +521,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise IndexError("single positional indexer is out-of-bounds")
         return libcudf.copying.get_element(self, idx).value
 
-    def slice(
-        self, start: int, stop: int, stride: Optional[int] = None
-    ) -> Self:
+    def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
         stride = 1 if stride is None else stride
         if start < 0:
             start = start + len(self)
@@ -570,7 +557,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             else as_column(value, dtype=self.dtype)
         )
 
-        out: Optional[ColumnBase]  # If None, no need to perform mimic inplace.
+        out: ColumnBase | None  # If None, no need to perform mimic inplace.
         if isinstance(key, slice):
             out = self._scatter_by_slice(key, value_normalized)
         else:
@@ -593,8 +580,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def _scatter_by_slice(
         self,
         key: builtins.slice,
-        value: Union[cudf.core.scalar.Scalar, ColumnBase],
-    ) -> Optional[Self]:
+        value: cudf.core.scalar.Scalar | ColumnBase,
+    ) -> Self | None:
         """If this function returns None, it's either a no-op (slice is empty),
         or the inplace replacement is already performed (fill-in-place).
         """
@@ -630,7 +617,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def _scatter_by_column(
         self,
         key: cudf.core.column.NumericalColumn,
-        value: Union[cudf.core.scalar.Scalar, ColumnBase],
+        value: cudf.core.scalar.Scalar | ColumnBase,
     ) -> Self:
         if is_bool_dtype(key.dtype):
             # `key` is boolean mask
@@ -667,7 +654,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             ]._with_type_metadata(self.dtype)
 
     def _check_scatter_key_length(
-        self, num_keys: int, value: Union[cudf.core.scalar.Scalar, ColumnBase]
+        self, num_keys: int, value: cudf.core.scalar.Scalar | ColumnBase
     ) -> None:
         """`num_keys` is the number of keys to scatter. Should equal to the
         number of rows in ``value`` if ``value`` is a column.
@@ -682,7 +669,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def fillna(
         self,
         fill_value: Any = None,
-        method: Optional[str] = None,
+        method: str | None = None,
     ) -> Self:
         """Fill null values with ``value``.
 
@@ -740,7 +727,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             [as_column(range(0, len(self)), dtype=size_type_dtype)], mask
         )[0]
 
-    def _find_first_and_last(self, value: ScalarLike) -> Tuple[int, int]:
+    def _find_first_and_last(self, value: ScalarLike) -> tuple[int, int]:
         indices = self.indices_of(value)
         if n := len(indices):
             return (
@@ -856,7 +843,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def _process_values_for_isin(
         self, values: Sequence
-    ) -> Tuple[ColumnBase, ColumnBase]:
+    ) -> tuple[ColumnBase, ColumnBase]:
         """
         Helper function for `isin` which pre-process `values` based on `self`.
         """
@@ -868,7 +855,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             rhs = rhs.astype(lhs.dtype)
         return lhs, rhs
 
-    def _isin_earlystop(self, rhs: ColumnBase) -> Union[ColumnBase, None]:
+    def _isin_earlystop(self, rhs: ColumnBase) -> ColumnBase | None:
         """
         Helper function for `isin` which determines possibility of
         early-stopping or not.
@@ -1070,7 +1057,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def as_decimal_column(
         self, dtype: Dtype
-    ) -> Union["cudf.core.column.decimal.DecimalBaseColumn"]:
+    ) -> "cudf.core.column.decimal.DecimalBaseColumn":
         raise NotImplementedError
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
@@ -1154,7 +1141,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             self.dtype
         )
 
-    def serialize(self) -> Tuple[dict, list]:
+    def serialize(self) -> tuple[dict, list]:
         # data model:
 
         # Serialization produces a nested metadata "header" and a flattened
@@ -1167,7 +1154,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # cudf native or foreign some special-casing is required here for
         # serialization.
 
-        header: Dict[Any, Any] = {}
+        header: dict[Any, Any] = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
         try:
@@ -1200,7 +1187,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> ColumnBase:
-        def unpack(header, frames) -> Tuple[Any, list]:
+        def unpack(header, frames) -> tuple[Any, list]:
             count = header["frame_count"]
             klass = pickle.loads(header["type-serialized"])
             obj = klass.deserialize(header, frames[:count])
@@ -1247,13 +1234,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def normalize_binop_value(
         self, other: ScalarLike
-    ) -> Union[ColumnBase, ScalarLike]:
+    ) -> ColumnBase | ScalarLike:
         raise NotImplementedError
 
     def _reduce(
         self,
         op: str,
-        skipna: Optional[bool] = None,
+        skipna: bool | None = None,
         min_count: int = 0,
         *args,
         **kwargs,
@@ -1274,8 +1261,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return preprocessed
 
     def _process_for_reduction(
-        self, skipna: Optional[bool] = None, min_count: int = 0
-    ) -> Union[ColumnBase, ScalarLike]:
+        self, skipna: bool | None = None, min_count: int = 0
+    ) -> ColumnBase | ScalarLike:
         if skipna is None:
             skipna = True
 
@@ -1315,8 +1302,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def _label_encoding(
         self,
         cats: ColumnBase,
-        dtype: Optional[Dtype] = None,
-        na_sentinel: Optional[ScalarLike] = None,
+        dtype: Dtype | None = None,
+        na_sentinel: ScalarLike | None = None,
     ):
         """
         Convert each value in `self` into an integer code, with `cats`
@@ -1389,9 +1376,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
 def column_empty_like(
     column: ColumnBase,
-    dtype: Optional[Dtype] = None,
+    dtype: Dtype | None = None,
     masked: bool = False,
-    newsize: Optional[int] = None,
+    newsize: int | None = None,
 ) -> ColumnBase:
     """Allocate a new column like the given *column*"""
     if dtype is None:
@@ -1446,7 +1433,7 @@ def column_empty(
 ) -> ColumnBase:
     """Allocate a new column like the given row_count and dtype."""
     dtype = cudf.dtype(dtype)
-    children = ()  # type: Tuple[ColumnBase, ...]
+    children: tuple[ColumnBase, ...] = ()
 
     if isinstance(dtype, StructDtype):
         data = None
@@ -1496,14 +1483,14 @@ def column_empty(
 
 
 def build_column(
-    data: Union[Buffer, None],
+    data: Buffer | None,
     dtype: Dtype,
     *,
-    size: Optional[int] = None,
-    mask: Optional[Buffer] = None,
+    size: int | None = None,
+    mask: Buffer | None = None,
     offset: int = 0,
-    null_count: Optional[int] = None,
-    children: Tuple[ColumnBase, ...] = (),
+    null_count: int | None = None,
+    children: tuple[ColumnBase, ...] = (),
 ) -> ColumnBase:
     """
     Build a Column of the appropriate type from the given parameters
@@ -1665,10 +1652,10 @@ def build_column(
 def build_categorical_column(
     categories: ColumnBase,
     codes: ColumnBase,
-    mask: Optional[Buffer] = None,
-    size: Optional[int] = None,
+    mask: Buffer | None = None,
+    size: int | None = None,
     offset: int = 0,
-    null_count: Optional[int] = None,
+    null_count: int | None = None,
     ordered: bool = False,
 ) -> "cudf.core.column.CategoricalColumn":
     """
@@ -1715,7 +1702,7 @@ def check_invalid_array(shape: tuple, dtype):
         raise TypeError("Unsupported type float16")
 
 
-def as_memoryview(arbitrary: Any) -> Optional[memoryview]:
+def as_memoryview(arbitrary: Any) -> memoryview | None:
     try:
         return memoryview(arbitrary)
     except TypeError:
@@ -1724,9 +1711,9 @@ def as_memoryview(arbitrary: Any) -> Optional[memoryview]:
 
 def as_column(
     arbitrary: Any,
-    nan_as_null: Optional[bool] = None,
-    dtype: Optional[Dtype] = None,
-    length: Optional[int] = None,
+    nan_as_null: bool | None = None,
+    dtype: Dtype | None = None,
+    length: int | None = None,
 ):
     """Create a Column from an arbitrary object
 
@@ -1868,6 +1855,21 @@ def as_column(
             arbitrary.dtype,
             (pd.CategoricalDtype, pd.IntervalDtype, pd.DatetimeTZDtype),
         ):
+            if isinstance(arbitrary.dtype, pd.DatetimeTZDtype):
+                new_tz = get_compatible_timezone(arbitrary.dtype)
+                arbitrary = arbitrary.astype(new_tz)
+            if isinstance(arbitrary.dtype, pd.CategoricalDtype) and isinstance(
+                arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
+            ):
+                new_tz = get_compatible_timezone(
+                    arbitrary.dtype.categories.dtype
+                )
+                new_cats = arbitrary.dtype.categories.astype(new_tz)
+                new_dtype = pd.CategoricalDtype(
+                    categories=new_cats, ordered=arbitrary.dtype.ordered
+                )
+                arbitrary = arbitrary.astype(new_dtype)
+
             return as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
@@ -2199,7 +2201,7 @@ def _mask_from_cuda_array_interface_desc(obj, cai_mask) -> Buffer:
         raise NotImplementedError(f"Cannot infer mask from typestr {typestr}")
 
 
-def serialize_columns(columns: list[ColumnBase]) -> Tuple[List[dict], List]:
+def serialize_columns(columns: list[ColumnBase]) -> tuple[list[dict], list]:
     """
     Return the headers and frames resulting
     from serializing a list of Column
@@ -2216,7 +2218,7 @@ def serialize_columns(columns: list[ColumnBase]) -> Tuple[List[dict], List]:
     frames : list
         list of frames
     """
-    headers: List[Dict[Any, Any]] = []
+    headers: list[dict[Any, Any]] = []
     frames = []
 
     if len(columns) > 0:
@@ -2228,7 +2230,7 @@ def serialize_columns(columns: list[ColumnBase]) -> Tuple[List[dict], List]:
     return headers, frames
 
 
-def deserialize_columns(headers: List[dict], frames: List) -> List[ColumnBase]:
+def deserialize_columns(headers: list[dict], frames: list) -> list[ColumnBase]:
     """
     Construct a list of Columns from a list of headers
     and frames.
