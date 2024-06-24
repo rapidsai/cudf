@@ -52,7 +52,7 @@ from cudf.core.udf.utils import (
     _post_process_output_col,
     _return_arr_from_dtype,
 )
-from cudf.core.window import Rolling
+from cudf.core.window import ExponentialMovingWindow, Rolling
 from cudf.utils import docutils, ioutils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import copy_docstring
@@ -1851,6 +1851,32 @@ class IndexedFrame(Frame):
             center=center,
             axis=axis,
             win_type=win_type,
+        )
+
+    @copy_docstring(ExponentialMovingWindow)
+    def ewm(
+        self,
+        com: float | None = None,
+        span: float | None = None,
+        halflife: float | None = None,
+        alpha: float | None = None,
+        min_periods: int | None = 0,
+        adjust: bool = True,
+        ignore_na: bool = False,
+        axis: int = 0,
+        times: str | np.ndarray | None = None,
+    ):
+        return ExponentialMovingWindow(
+            self,
+            com=com,
+            span=span,
+            halflife=halflife,
+            alpha=alpha,
+            min_periods=min_periods,
+            adjust=adjust,
+            ignore_na=ignore_na,
+            axis=axis,
+            times=times,
         )
 
     @_cudf_nvtx_annotate
