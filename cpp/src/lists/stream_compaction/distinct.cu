@@ -52,13 +52,13 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
     generate_labels(input, child.size(), stream, rmm::mr::get_current_device_resource());
 
   auto const distinct_table =
-    cudf::detail::stable_distinct(table_view{{labels->view(), child}},  // input table
-                                  std::vector<size_type>{0, 1},         // keys
-                                  duplicate_keep_option::KEEP_ANY,
-                                  nulls_equal,
-                                  nans_equal,
-                                  stream,
-                                  mr);
+    cudf::stable_distinct(table_view{{labels->view(), child}},  // input table
+                          std::vector<size_type>{0, 1},         // keys
+                          duplicate_keep_option::KEEP_ANY,
+                          nulls_equal,
+                          nans_equal,
+                          stream,
+                          mr);
 
   auto out_offsets =
     reconstruct_offsets(distinct_table->get_column(0).view(), input.size(), stream, mr);
