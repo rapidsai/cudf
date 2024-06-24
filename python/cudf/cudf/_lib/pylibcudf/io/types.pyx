@@ -4,6 +4,8 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+from cudf._lib.pylibcudf.io.datasource cimport Datasource
+from cudf._lib.pylibcudf.libcudf.io.datasource cimport datasource
 from cudf._lib.pylibcudf.libcudf.io.types cimport (
     host_buffer,
     source_info,
@@ -36,9 +38,33 @@ cdef class TableWithMetadata:
         """
         cdef list names = []
         for col_info in self.metadata.schema_info:
-            # TODO: Handle nesting (columns with child columns)
-            assert col_info.children.size() == 0, "Child column names are not handled!"
             names.append(col_info.name.decode())
+        return names
+
+    @property
+    def per_file_user_data(self):
+        """
+        Returns a list containing a dict
+        containing file-format specific metadata,
+        for each file being read in.
+        """
+        return self.metadata.per_file_user_data
+
+    @property
+    def child_names(self):
+        """
+        Return a dictionary mapping the names of columns with children
+        to the names of their child columns
+        """
+        return TableWithMetadata._parse_col_names(self.metadata.schema_info)
+
+    @staticmethod
+    cdef dict _parse_col_names(vector[column_name_info] infos):
+        cdef dict child_names = dict()
+        cdef dict names = dict()
+        for col_info in infos:
+            child_names = TableWithMetadata._parse_col_names(col_info.children)
+            names[col_info.name.decode()] = child_names
         return names
 
     @staticmethod
@@ -68,6 +94,7 @@ cdef class SourceInfo:
             raise ValueError("Need to pass at least one source")
 
         cdef vector[string] c_files
+        cdef vector[datasource*] c_datasources
 
         if isinstance(sources[0], (os.PathLike, str)):
             c_files.reserve(len(sources))
@@ -83,6 +110,13 @@ cdef class SourceInfo:
                 c_files.push_back(<string> str(src).encode())
 
             self.c_obj = move(source_info(c_files))
+            return
+        elif isinstance(sources[0], Datasource):
+            for csrc in sources:
+                if not isinstance(csrc, Datasource):
+                    raise ValueError("All sources must be of the same type!")
+                c_datasources.push_back((<Datasource>csrc).get_datasource())
+            self.c_obj = move(source_info(c_datasources))
             return
 
         # TODO: host_buffer is deprecated API, use host_span instead
@@ -106,5 +140,11 @@ cdef class SourceInfo:
                 c_buffer = bio.getbuffer()  # check if empty?
                 c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0],
                                                      c_buffer.shape[0]))
+        else:
+            raise ValueError("Sources must be a list of str/paths, "
+                             "bytes, or io.BytesIO")
+
+        if empty_buffer is True:
+            c_host_buffers.push_back(host_buffer(<char*>NULL, 0))
 
         self.c_obj = source_info(c_host_buffers)

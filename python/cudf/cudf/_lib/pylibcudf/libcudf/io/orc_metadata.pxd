@@ -7,7 +7,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 
 cimport cudf._lib.pylibcudf.libcudf.io.types as cudf_io_types
-from cudf._lib.variant cimport monostate, variant
+from cudf._lib.pylibcudf.utils.variant cimport monostate, variant
 
 
 cdef extern from "cudf/io/orc_metadata.hpp" \
