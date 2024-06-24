@@ -1,9 +1,10 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import math
 import re
 import warnings
-from typing import Literal, Optional, Sequence, Union
+from typing import Literal, Sequence
 
 import cupy as cp
 import numpy as np
@@ -61,7 +62,7 @@ def to_datetime(
     dayfirst: bool = False,
     yearfirst: bool = False,
     utc: bool = False,
-    format: Optional[str] = None,
+    format: str | None = None,
     exact: bool = True,
     unit: str = "ns",
     infer_datetime_format: bool = True,
@@ -313,7 +314,7 @@ def _process_col(
     unit: str,
     dayfirst: bool,
     infer_datetime_format: bool,
-    format: Optional[str],
+    format: str | None,
     utc: bool,
 ):
     if col.dtype.kind == "f":
@@ -707,7 +708,7 @@ class DateOffset:
     @classmethod
     def _from_pandas_ticks_or_weeks(
         cls,
-        tick: Union[pd.tseries.offsets.Tick, pd.tseries.offsets.Week],
+        tick: pd.tseries.offsets.Tick | pd.tseries.offsets.Week,
     ) -> Self:
         return cls(**{cls._TICK_OR_WEEK_TO_UNITS[type(tick)]: tick.n})
 
@@ -725,7 +726,7 @@ class DateOffset:
 
 
 def _isin_datetimelike(
-    lhs: Union[column.TimeDeltaColumn, column.DatetimeColumn], values: Sequence
+    lhs: column.TimeDeltaColumn | column.DatetimeColumn, values: Sequence
 ) -> column.ColumnBase:
     """
     Check whether values are contained in the
@@ -784,7 +785,7 @@ def date_range(
     name=None,
     closed: Literal["left", "right", "both", "neither"] = "both",
     *,
-    unit: Optional[str] = None,
+    unit: str | None = None,
 ):
     """Return a fixed frequency DatetimeIndex.
 
@@ -1047,22 +1048,3 @@ def _offset_to_nanoseconds_lower_bound(offset: DateOffset) -> int:
         + kwds.get("microseconds", 0) * 10**3
         + kwds.get("nanoseconds", 0)
     )
-
-
-def _to_iso_calendar(arg):
-    formats = ["%G", "%V", "%u"]
-    if not isinstance(arg, (cudf.Index, cudf.core.series.DatetimeProperties)):
-        raise AttributeError(
-            "Can only use .isocalendar accessor with series or index"
-        )
-    if isinstance(arg, cudf.Index):
-        iso_params = [
-            arg._column.as_string_column(arg.dtype, fmt) for fmt in formats
-        ]
-        index = arg._column
-    elif isinstance(arg.series, cudf.Series):
-        iso_params = [arg.strftime(fmt) for fmt in formats]
-        index = arg.series.index
-
-    data = dict(zip(["year", "week", "day"], iso_params))
-    return cudf.DataFrame(data, index=index, dtype=np.int32)

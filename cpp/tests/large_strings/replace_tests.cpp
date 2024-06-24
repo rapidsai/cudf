@@ -21,6 +21,7 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/combine.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
@@ -28,9 +29,9 @@
 #include <limits>
 #include <vector>
 
-struct StringsManyTest : public cudf::test::StringsLargeTest {};
+struct ReplaceTest : public cudf::test::StringsLargeTest {};
 
-TEST_F(StringsManyTest, Replace)
+TEST_F(ReplaceTest, ReplaceLong)
 {
   auto const expected = this->very_long_column();
   auto const view     = cudf::column_view(expected);
@@ -64,4 +65,23 @@ TEST_F(StringsManyTest, Replace)
   for (auto c : sliced) {
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, expected);
   }
+}
+
+TEST_F(ReplaceTest, ReplaceWide)
+{
+  auto const expected   = this->long_column();
+  auto const view       = cudf::column_view(expected);
+  auto const multiplier = 10;
+  auto const separator  = cudf::string_scalar("|");
+  auto const input      = cudf::strings::concatenate(
+    cudf::table_view(std::vector<cudf::column_view>(multiplier, view)), separator);
+
+  auto const input_view = cudf::strings_column_view(input->view());
+  auto const target     = cudf::string_scalar("3");  // fake the actual replace;
+  auto const repl       = cudf::string_scalar("3");  // logic still builds the output
+  auto result           = cudf::strings::replace(input_view, target, repl);
+
+  auto sv = cudf::strings_column_view(result->view());
+  EXPECT_EQ(sv.offsets().type(), cudf::data_type{cudf::type_id::INT64});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input->view(), result->view());
 }

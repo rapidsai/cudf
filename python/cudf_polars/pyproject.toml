@@ -49,11 +49,15 @@ license-files = ["LICENSE"]
 [tool.setuptools.dynamic]
 version = {file = "cudf_polars/VERSION"}
 
-[tool.setuptools.packages.find]
-exclude = ["*tests*"]
-
 [tool.pytest.ini_options]
 xfail_strict = true
+
+[tool.coverage.report]
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "class .*\\bProtocol\\):",
+  "assert_never\\("
+]
 
 [tool.ruff]
 line-length = 88
@@ -177,7 +181,6 @@ docstring-code-format = true
 
 [tool.rapids-build-backend]
 build-backend = "setuptools.build_meta"
-commit-file = "cudf_polars/GIT_COMMIT"
 dependencies-file = "../../dependencies.yaml"
 # Pure python
 disable-cuda = true

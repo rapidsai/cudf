@@ -426,7 +426,6 @@ def test_character_tokenize_series():
         [
             "hello world",
             "sdf",
-            None,
             (
                 "goodbye, one-two:three~four+five_six@sev"
                 "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ"
@@ -543,7 +542,6 @@ def test_character_tokenize_index():
         [
             "hello world",
             "sdf",
-            None,
             (
                 "goodbye, one-two:three~four+five_six@sev"
                 "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ"

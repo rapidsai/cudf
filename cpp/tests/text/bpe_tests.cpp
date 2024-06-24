@@ -129,6 +129,6 @@ TEST_F(TextBytePairEncoding, BPE_Error)
 {
   auto empty = cudf::make_empty_column(cudf::type_id::STRING);
   EXPECT_THROW(nvtext::load_merge_pairs(cudf::strings_column_view(*empty)), cudf::logic_error);
-  auto null_pairs = cudf::test::strings_column_wrapper({"", ""}, {1, 0});
+  auto null_pairs = cudf::test::strings_column_wrapper({"", ""}, {true, false});
   EXPECT_THROW(nvtext::load_merge_pairs(cudf::strings_column_view(null_pairs)), cudf::logic_error);
 }

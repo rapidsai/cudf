@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,9 +31,10 @@ using cudf::test::fixed_width_column_wrapper;
 TEST_F(DictionarySearchTest, search_dictionary)
 {
   cudf::test::dictionary_column_wrapper<std::string> input(
-    {"", "", "10", "10", "20", "20", "30", "40"}, {0, 0, 1, 1, 1, 1, 1, 1});
+    {"", "", "10", "10", "20", "20", "30", "40"},
+    {false, false, true, true, true, true, true, true});
   cudf::test::dictionary_column_wrapper<std::string> values(
-    {"", "08", "10", "11", "30", "32", "90"}, {0, 1, 1, 1, 1, 1, 1});
+    {"", "08", "10", "11", "30", "32", "90"}, {false, true, true, true, true, true, true});
 
   auto result = cudf::upper_bound({cudf::table_view{{input}}},
                                   {cudf::table_view{{values}}},
@@ -52,17 +53,20 @@ TEST_F(DictionarySearchTest, search_dictionary)
 
 TEST_F(DictionarySearchTest, search_table_dictionary)
 {
-  fixed_width_column_wrapper<int32_t> column_0{{10, 10, 20, 20, 20, 20, 20, 20, 20, 50, 30},
-                                               {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
-  fixed_width_column_wrapper<float> column_1{{5.0, 6.0, .5, .5, .5, .5, .7, .7, .7, .7, .5},
-                                             {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+  fixed_width_column_wrapper<int32_t> column_0{
+    {10, 10, 20, 20, 20, 20, 20, 20, 20, 50, 30},
+    {true, true, true, true, true, true, true, true, true, true, false}};
+  fixed_width_column_wrapper<float> column_1{
+    {5.0, 6.0, .5, .5, .5, .5, .7, .7, .7, .7, .5},
+    {true, false, true, true, true, true, true, true, true, true, true}};
   cudf::test::dictionary_column_wrapper<int16_t> column_2{
-    {90, 95, 77, 78, 79, 76, 61, 62, 63, 41, 50}, {1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1}};
+    {90, 95, 77, 78, 79, 76, 61, 62, 63, 41, 50},
+    {true, true, true, true, false, false, true, true, true, true, true}};
   cudf::table_view input({column_0, column_1, column_2});
 
-  fixed_width_column_wrapper<int32_t> values_0{{10, 40, 20}, {1, 0, 1}};
-  fixed_width_column_wrapper<float> values_1{{6., .5, .5}, {0, 1, 1}};
-  cudf::test::dictionary_column_wrapper<int16_t> values_2{{95, 50, 77}, {1, 1, 0}};
+  fixed_width_column_wrapper<int32_t> values_0{{10, 40, 20}, {true, false, true}};
+  fixed_width_column_wrapper<float> values_1{{6., .5, .5}, {false, true, true}};
+  cudf::test::dictionary_column_wrapper<int16_t> values_2{{95, 50, 77}, {true, true, false}};
   cudf::table_view values({values_0, values_1, values_2});
 
   std::vector<cudf::order> order_flags{
@@ -94,8 +98,8 @@ TEST_F(DictionarySearchTest, contains_dictionary)
 
 TEST_F(DictionarySearchTest, contains_nullable_dictionary)
 {
-  cudf::test::dictionary_column_wrapper<int64_t> column({0, 0, 17, 17, 23, 23, 29},
-                                                        {1, 0, 1, 1, 1, 1, 1});
+  cudf::test::dictionary_column_wrapper<int64_t> column(
+    {0, 0, 17, 17, 23, 23, 29}, {true, false, true, true, true, true, true});
   EXPECT_TRUE(cudf::contains(column, numeric_scalar<int64_t>{23}));
   EXPECT_FALSE(cudf::contains(column, numeric_scalar<int64_t>{28}));
 

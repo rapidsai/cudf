@@ -1,8 +1,9 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import functools
 import os
-from typing import Any, Callable, Dict
+from typing import Any, Callable
 
 import cachetools
 import cupy as cp
@@ -57,7 +58,7 @@ libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
-launch_arg_getters: Dict[Any, Any] = {}
+launch_arg_getters: dict[Any, Any] = {}
 
 
 @functools.cache

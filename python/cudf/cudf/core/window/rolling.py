@@ -1,7 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION
 
-import itertools
-
 import numba
 import pandas as pd
 from pandas.api.indexers import BaseIndexer
@@ -16,7 +14,27 @@ from cudf.utils import cudautils
 from cudf.utils.utils import GetAttrGetItemMixin
 
 
-class Rolling(GetAttrGetItemMixin, Reducible):
+class _RollingBase:
+    """
+    Contains methods common to all kinds of rolling
+    """
+
+    def _apply_agg_dataframe(self, df, agg_name):
+        result_df = cudf.DataFrame({})
+        for i, col_name in enumerate(df.columns):
+            result_col = self._apply_agg_series(df[col_name], agg_name)
+            result_df.insert(i, col_name, result_col)
+        result_df.index = df.index
+        return result_df
+
+    def _apply_agg(self, agg_name):
+        if isinstance(self.obj, cudf.Series):
+            return self._apply_agg_series(self.obj, agg_name)
+        else:
+            return self._apply_agg_dataframe(self.obj, agg_name)
+
+
+class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     """
     Rolling window calculations.
 
@@ -251,27 +269,13 @@ class Rolling(GetAttrGetItemMixin, Reducible):
             agg_params=self.agg_params,
         )
 
-    def _apply_agg_dataframe(self, df, agg_name):
-        return cudf.DataFrame._from_data(
-            {
-                col_name: self._apply_agg_column(col, agg_name)
-                for col_name, col in df._data.items()
-            },
-            index=df.index,
-        )
-
     def _apply_agg(self, agg_name):
-        if isinstance(self.obj, cudf.Series):
-            return cudf.Series._from_data(
-                {
-                    self.obj.name: self._apply_agg_column(
-                        self.obj._column, agg_name
-                    )
-                },
-                index=self.obj.index,
-            )
-        else:
-            return self._apply_agg_dataframe(self.obj, agg_name)
+        applied = (
+            self._apply_agg_column(col, agg_name) for col in self.obj._columns
+        )
+        return self.obj._from_data_like_self(
+            self.obj._data._from_columns_like_self(applied)
+        )
 
     def _reduce(
         self,
@@ -533,18 +537,9 @@ class RollingGroupby(Rolling):
             )
 
     def _apply_agg(self, agg_name):
-        index = cudf.MultiIndex.from_frame(
-            cudf.DataFrame(
-                {
-                    key: value
-                    for key, value in itertools.chain(
-                        self._group_keys._data.items(),
-                        self.obj.index._data.items(),
-                    )
-                }
-            )
+        index = cudf.MultiIndex._from_data(
+            {**self._group_keys._data, **self.obj.index._data}
         )
-
         result = super()._apply_agg(agg_name)
         result.index = index
         return result
