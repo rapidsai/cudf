@@ -716,10 +716,28 @@ def assert_frame_equal(
 def assert_eq(left, right, **kwargs):
     """Assert that two cudf-like things are equivalent
 
+    Parameters
+    ----------
+    left
+        Object to compare
+    right
+        Object to compare
+    kwargs
+        Keyword arguments to control behaviour of comparisons. See
+        :func:`assert_frame_equal`, :func:`assert_series_equal`, and
+        :func:`assert_index_equal`.
+
+    Notes
+    -----
     This equality test works for pandas/cudf dataframes/series/indexes/scalars
     in the same way, and so makes it easier to perform parametrized testing
     without switching between assert_frame_equal/assert_series_equal/...
     functions.
+
+    Raises
+    ------
+    AssertionError
+        If the two objects do not compare equal.
     """
     # dtypes that we support but Pandas doesn't will convert to
     # `object`. Check equality before that happens:
@@ -779,6 +797,10 @@ def assert_eq(left, right, **kwargs):
 
 
 def assert_neq(left, right, **kwargs):
+    """Assert that two cudf-like things are not equal.
+
+    Provides the negation of the meaning of :func:`assert_eq`.
+    """
     __tracebackhide__ = True
     try:
         assert_eq(left, right, **kwargs)
