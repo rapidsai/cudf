@@ -151,14 +151,14 @@ cdef csv_reader_options make_csv_reader_options(
         )
 
     if quoting == 1:
-        c_quoting = quote_style.QUOTE_ALL
+        c_quoting = quote_style.ALL
     elif quoting == 2:
-        c_quoting = quote_style.QUOTE_NONNUMERIC
+        c_quoting = quote_style.NONNUMERIC
     elif quoting == 3:
-        c_quoting = quote_style.QUOTE_NONE
+        c_quoting = quote_style.NONE
     else:
         # Default value
-        c_quoting = quote_style.QUOTE_MINIMAL
+        c_quoting = quote_style.MINIMAL
 
     cdef csv_reader_options csv_reader_options_c = move(
         csv_reader_options.builder(c_source_info)

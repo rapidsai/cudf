@@ -283,7 +283,7 @@ CUDF_KERNEL void count_targets(replace_multi_parallel_fn fn, int64_t chars_bytes
   auto const total = block_reduce(temp_storage).Reduce(count, cub::Sum());
 
   if ((lane_idx == 0) && (total > 0)) {
-    cuda::atomic_ref<int64_t, cuda::thread_scope_block> ref{*d_output};
+    cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref{*d_output};
     ref.fetch_add(total, cuda::std::memory_order_relaxed);
   }
 }
@@ -499,11 +499,11 @@ std::unique_ptr<column> replace_string_parallel(strings_column_view const& input
 
 }  // namespace
 
-std::unique_ptr<column> replace(strings_column_view const& input,
-                                strings_column_view const& targets,
-                                strings_column_view const& repls,
-                                rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
+std::unique_ptr<column> replace_multiple(strings_column_view const& input,
+                                         strings_column_view const& targets,
+                                         strings_column_view const& repls,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   CUDF_EXPECTS(((targets.size() > 0) && (targets.null_count() == 0)),
@@ -524,6 +524,17 @@ std::unique_ptr<column> replace(strings_column_view const& input,
 
 // external API
 
+std::unique_ptr<column> replace_multiple(strings_column_view const& strings,
+                                         strings_column_view const& targets,
+                                         strings_column_view const& repls,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::replace_multiple(strings, targets, repls, stream, mr);
+}
+
+// deprecated in 24.08
 std::unique_ptr<column> replace(strings_column_view const& strings,
                                 strings_column_view const& targets,
                                 strings_column_view const& repls,
@@ -531,7 +542,7 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace(strings, targets, repls, stream, mr);
+  return detail::replace_multiple(strings, targets, repls, stream, mr);
 }
 
 }  // namespace strings

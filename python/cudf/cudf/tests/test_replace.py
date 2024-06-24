@@ -6,6 +6,7 @@ from decimal import Decimal
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -1370,3 +1371,10 @@ def test_fillna_columns_multiindex():
     actual = gdf.fillna(10)
 
     assert_eq(expected, actual)
+
+
+def test_fillna_nan_and_null():
+    ser = cudf.Series(pa.array([float("nan"), None, 1.1]), nan_as_null=False)
+    result = ser.fillna(2.2)
+    expected = cudf.Series([2.2, 2.2, 1.1])
+    assert_eq(result, expected)

@@ -1,6 +1,8 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
+import datetime
 import os
+import zoneinfo
 
 import pandas as pd
 import pytest
@@ -70,7 +72,7 @@ def test_localize_ambiguous(request, unit, zone_name):
         dtype=f"datetime64[{unit}]",
     )
     expect = s.to_pandas().dt.tz_localize(
-        zone_name, ambiguous="NaT", nonexistent="NaT"
+        zoneinfo.ZoneInfo(zone_name), ambiguous="NaT", nonexistent="NaT"
     )
     got = s.dt.tz_localize(zone_name)
     assert_eq(expect, got)
@@ -96,7 +98,7 @@ def test_localize_nonexistent(request, unit, zone_name):
         dtype=f"datetime64[{unit}]",
     )
     expect = s.to_pandas().dt.tz_localize(
-        zone_name, ambiguous="NaT", nonexistent="NaT"
+        zoneinfo.ZoneInfo(zone_name), ambiguous="NaT", nonexistent="NaT"
     )
     got = s.dt.tz_localize(zone_name)
     assert_eq(expect, got)
@@ -130,6 +132,9 @@ def test_delocalize_naive():
     "to_tz", ["Europe/London", "America/Chicago", "UTC", None]
 )
 def test_convert(from_tz, to_tz):
+    from_tz = zoneinfo.ZoneInfo(from_tz)
+    if to_tz is not None:
+        to_tz = zoneinfo.ZoneInfo(to_tz)
     ps = pd.Series(pd.date_range("2023-01-01", periods=3, freq="h"))
     gs = cudf.from_pandas(ps)
     ps = ps.dt.tz_localize(from_tz)
@@ -169,6 +174,8 @@ def test_convert_from_naive():
     ],
 )
 def test_convert_edge_cases(data, original_timezone, target_timezone):
+    original_timezone = zoneinfo.ZoneInfo(original_timezone)
+    target_timezone = zoneinfo.ZoneInfo(target_timezone)
     ps = pd.Series(data, dtype="datetime64[s]").dt.tz_localize(
         original_timezone
     )
@@ -223,3 +230,39 @@ def test_contains_tz_aware(item, expected):
 def test_tz_convert_naive_typeerror():
     with pytest.raises(TypeError):
         cudf.date_range("2020", periods=2, freq="D").tz_convert(None)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_from_pandas_obj_tz_aware(klass):
+    tz = zoneinfo.ZoneInfo("US/Pacific")
+    tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    result = cudf.from_pandas(pandas_obj)
+    expected = getattr(cudf, klass)(tz_aware_data)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_from_pandas_obj_tz_aware_unsupported(klass):
+    tz = datetime.timezone(datetime.timedelta(hours=1))
+    tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    with pytest.raises(NotImplementedError):
+        cudf.from_pandas(pandas_obj)
+
+
+@pytest.mark.parametrize(
+    "klass", ["Series", "DatetimeIndex", "Index", "CategoricalIndex"]
+)
+def test_pandas_compatible_non_zoneinfo_raises(klass):
+    pytz = pytest.importorskip("pytz")
+    tz = pytz.timezone("US/Pacific")
+    tz_aware_data = [pd.Timestamp("2020-01-01", tz="UTC").tz_convert(tz)]
+    pandas_obj = getattr(pd, klass)(tz_aware_data)
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pandas_obj)
