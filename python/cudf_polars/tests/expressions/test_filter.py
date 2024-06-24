@@ -2,19 +2,35 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import pytest
+
 import polars as pl
 
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-def test_filter():
-    ldf = pl.DataFrame(
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pytest.param(
+            pl.lit(value=False),
+            marks=pytest.mark.xfail(reason="Expression filter does not handle scalars"),
+        ),
+        pl.col("c"),
+        pl.col("b") > 2,
+    ],
+)
+@pytest.mark.parametrize("predicate_pushdown", [False, True])
+def test_filter_expression(expr, predicate_pushdown):
+    ldf = pl.LazyFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
-            "b": [1, 1, 1, 1, 1, 1, 1],
+            "b": [0, 3, 1, 5, 6, 1, 0],
+            "c": [None, True, False, False, True, True, False],
         }
-    ).lazy()
+    )
 
-    # group-by is just to avoid the filter being pushed into the scan.
-    query = ldf.group_by(pl.col("a")).agg(pl.col("b").sum()).filter(pl.col("b") < 1)
-    assert_gpu_result_equal(query)
+    query = ldf.select(pl.col("a").filter(expr))
+    assert_gpu_result_equal(
+        query, collect_kwargs={"predicate_pushdown": predicate_pushdown}
+    )
