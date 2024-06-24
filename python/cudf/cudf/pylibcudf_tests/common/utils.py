@@ -10,18 +10,22 @@ import pytest
 from cudf._lib import pylibcudf as plc
 
 
-def metadata_from_arrow_array(
-    pa_array: pa.Array,
+def metadata_from_arrow_type(
+    pa_type: pa.Array,
+    name: str = "",
 ) -> plc.interop.ColumnMetadata | None:
-    metadata = None
-    if pa.types.is_list(dtype := pa_array.type) or pa.types.is_struct(dtype):
+    metadata = plc.interop.ColumnMetadata(name)  # None
+    if pa.types.is_list(pa_type) or pa.types.is_struct(pa_type):
+        child_meta = []
+        for i in range(pa_type.num_fields):
+            field_meta = metadata_from_arrow_type(
+                pa_type.field(i).type, pa_type.field(i).name
+            )
+            child_meta.append(field_meta)
         metadata = plc.interop.ColumnMetadata(
-            "",
+            name,
             # libcudf does not store field names, so just match pyarrow's.
-            [
-                plc.interop.ColumnMetadata(pa_array.type.field(i).name)
-                for i in range(pa_array.type.num_fields)
-            ],
+            child_meta,
         )
     return metadata
 
@@ -35,13 +39,13 @@ def assert_column_eq(
         rhs, plc.Column
     ):
         rhs = plc.interop.to_arrow(
-            rhs, metadata=metadata_from_arrow_array(lhs)
+            rhs, metadata=metadata_from_arrow_type(lhs.type)
         )
     elif isinstance(lhs, plc.Column) and isinstance(
         rhs, (pa.Array, pa.ChunkedArray)
     ):
         lhs = plc.interop.to_arrow(
-            lhs, metadata=metadata_from_arrow_array(rhs)
+            lhs, metadata=metadata_from_arrow_type(rhs.type)
         )
     else:
         raise ValueError(
@@ -97,21 +101,16 @@ def is_signed_integer(plc_dtype: plc.DataType):
     )
 
 
-def is_unsigned_integer(plc_dtype: plc.DataType):
-    return plc_dtype.id() in (
-        plc.TypeId.UINT8,
-        plc.TypeId.UINT16,
-        plc.TypeId.UINT32,
-        plc.TypeId.UINT64,
-    )
-
-
 def is_integer(plc_dtype: plc.DataType):
     return plc_dtype.id() in (
         plc.TypeId.INT8,
         plc.TypeId.INT16,
         plc.TypeId.INT32,
         plc.TypeId.INT64,
+        plc.TypeId.UINT8,
+        plc.TypeId.UINT16,
+        plc.TypeId.UINT32,
+        plc.TypeId.UINT64,
     )
 
 
@@ -133,24 +132,29 @@ def is_string(plc_dtype: plc.DataType):
 def is_fixed_width(plc_dtype: plc.DataType):
     return (
         is_integer(plc_dtype)
-        or is_unsigned_integer(plc_dtype)
         or is_floating(plc_dtype)
         or is_boolean(plc_dtype)
     )
 
 
-def is_nested_struct(pa_type: pa.DataType):
-    if isinstance(pa_type, pa.StructType):
-        for i in range(pa_type.num_fields):
-            if isinstance(pa_type[i].type, pa.StructType):
-                return True
-    return False
+def nesting(typ) -> tuple[int, int]:
+    """Return list and struct nesting of a pyarrow type."""
+    if isinstance(typ, pa.ListType):
+        list_, struct = nesting(typ.value_type)
+        return list_ + 1, struct
+    elif isinstance(typ, pa.StructType):
+        lists, structs = map(max, zip(*(nesting(t.type) for t in typ)))
+        return lists, structs + 1
+    else:
+        return 0, 0
 
 
-def is_nested_list(pa_type: pa.DataType):
-    if isinstance(pa_type, pa.ListType):
-        return isinstance(pa_type.value_type, pa.ListType)
-    return False
+def is_nested_struct(typ):
+    return nesting(typ)[1] > 1
+
+
+def is_nested_list(typ):
+    return nesting(typ)[0] > 1
 
 
 def sink_to_str(sink):
