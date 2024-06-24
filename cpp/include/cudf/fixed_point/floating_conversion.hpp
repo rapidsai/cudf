@@ -35,6 +35,49 @@ namespace numeric {
 namespace detail {
 
 /**
+ * @brief Determine the number of significant bits in an integer
+ *
+ * @tparam T Type of input integer value. Must be either uint32_t, uint64_t, or __uint128_t
+ * @param value The integer whose bits are being counted
+ * @return The number of significant bits: the # of bits - # of leading zeroes
+ */
+template <typename T,
+          CUDF_ENABLE_IF(std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> ||
+                         std::is_same_v<T, __uint128_t>)>
+CUDF_HOST_DEVICE inline int count_significant_bits(T value)
+{
+#ifdef __CUDA_ARCH__
+  if constexpr (std::is_same_v<T, uint64_t>) {
+    return 64 - __clzll(static_cast<int64_t>(value));
+  } else if constexpr (std::is_same_v<T, uint32_t>) {
+    return 32 - __clz(static_cast<int32_t>(value));
+  } else if constexpr (std::is_same_v<T, __uint128_t>) {
+    // 128 bit type, must break up into high and low components
+    auto const high_bits = static_cast<int64_t>(value >> 64);
+    auto const low_bits  = static_cast<int64_t>(value);
+    return 128 - (__clzll(high_bits) + static_cast<int>(high_bits == 0) * __clzll(low_bits));
+  }
+#else
+  // Undefined behavior to call __builtin_clzll() with zero in gcc and clang
+  if (value == 0) { return 0; }
+
+  if constexpr (std::is_same_v<T, uint64_t>) {
+    return 64 - __builtin_clzll(value);
+  } else if constexpr (std::is_same_v<T, uint32_t>) {
+    return 32 - __builtin_clz(value);
+  } else if constexpr (std::is_same_v<T, __uint128_t>) {
+    // 128 bit type, must break up into high and low components
+    auto const high_bits = static_cast<uint64_t>(value >> 64);
+    if (high_bits == 0) {
+      return 64 - __builtin_clzll(static_cast<uint64_t>(value));
+    } else {
+      return 128 - __builtin_clzll(high_bits);
+    }
+  }
+#endif
+}
+
+/**
  * @brief Helper struct for getting and setting the components of a floating-point value
  *
  * @tparam FloatingType Type of floating-point value
@@ -62,21 +105,23 @@ struct floating_converter {
   // The low 23 / 52 bits (for float / double) are the mantissa.
   // The mantissa is normalized. There is an understood 1 bit to the left of the binary point.
   // The value of the mantissa is in the range [1, 2).
+  /// # significand bits (includes understood bit)
+  static constexpr int num_significand_bits = cuda::std::numeric_limits<FloatingType>::digits;
   /// # mantissa bits (-1 for understood bit)
-  static constexpr int num_mantissa_bits = cuda::std::numeric_limits<FloatingType>::digits - 1;
+  static constexpr int num_stored_mantissa_bits = num_significand_bits - 1;
   /// The mask for the understood bit
-  static constexpr IntegralType understood_bit_mask = (IntegralType(1) << num_mantissa_bits);
+  static constexpr IntegralType understood_bit_mask = (IntegralType(1) << num_stored_mantissa_bits);
   /// The mask to select the mantissa
   static constexpr IntegralType mantissa_mask = understood_bit_mask - 1;
 
   // And in between are the bits used to store the biased power-of-2 exponent.
   /// # exponents bits (-1 for sign bit)
-  static constexpr int num_exponent_bits = num_floating_bits - num_mantissa_bits - 1;
+  static constexpr int num_exponent_bits = num_floating_bits - num_stored_mantissa_bits - 1;
   /// The mask for the exponents, unshifted
   static constexpr IntegralType unshifted_exponent_mask =
     (IntegralType(1) << num_exponent_bits) - 1;
   /// The mask to select the exponents
-  static constexpr IntegralType exponent_mask = unshifted_exponent_mask << num_mantissa_bits;
+  static constexpr IntegralType exponent_mask = unshifted_exponent_mask << num_stored_mantissa_bits;
 
   // To store positive and negative exponents as unsigned values, the stored value for
   // the power-of-2 is exponent + bias. The bias is 127 for floats and 1023 for doubles.
@@ -136,12 +181,13 @@ struct floating_converter {
   }
 
   /**
-   * @brief Extracts the significand and exponent of a bit-casted floating-point number
+   * @brief Extracts the significand and exponent of a bit-casted floating-point number,
+   * shifted for denormals.
    *
-   * @note This returns (1 - exponent_bias) for denormals. Zeros/inf/NaN not handled.
+   * @note Zeros/inf/NaN not handled.
    *
    * @param integer_rep The bit-casted floating value to extract the exponent from
-   * @return The stored base-2 exponent, or (1 - exponent_bias) for denormals
+   * @return The stored base-2 exponent and significand, shifted for denormals
    */
   CUDF_HOST_DEVICE inline static std::pair<IntegralType, int> get_significand_and_exp2(
     IntegralType integer_rep)
@@ -164,9 +210,15 @@ struct floating_converter {
       // FLT_TRUE_MIN = 2^(1 - 127) * 2^-23 = 2^-149
       // DBL_TRUE_MIN = 2^(1 - 1023) * 2^-52 = 2^-1074
       floating_exp2 = 1 - exponent_bias;
+
+      // Line-up denormal to same (understood) bit as normal numbers
+      // This is so bit-shifting starts at the same bit index
+      auto const lineup_shift = num_significand_bits - count_significant_bits(significand);
+      significand <<= lineup_shift;
+      floating_exp2 -= lineup_shift;
     } else {
       // Extract the exponent value: shift the bits down and subtract the bias.
-      auto const shifted_exponent_bits = exponent_bits >> num_mantissa_bits;
+      auto const shifted_exponent_bits = exponent_bits >> num_stored_mantissa_bits;
       floating_exp2                    = static_cast<int>(shifted_exponent_bits) - exponent_bias;
 
       // Set the high bit for the understood 1/2
@@ -175,7 +227,7 @@ struct floating_converter {
 
     // To convert the mantissa to an integer, we effectively applied #-mantissa-bits
     // powers of 2 to convert the fractional value to an integer, so subtract them off here
-    int const exp2 = floating_exp2 - num_mantissa_bits;
+    int const exp2 = floating_exp2 - num_stored_mantissa_bits;
 
     return {significand, exp2};
   }
@@ -203,7 +255,7 @@ struct floating_converter {
   /**
    * @brief Adds to the base-2 exponent of a floating-point number
    *
-   * @note Where called, the input is guaranteed to be a positive whole number.
+   * @note The caller must guarantee that the input is a positive (> 0) whole number.
    *
    * @param floating The floating value to add to the exponent of. Must be positive.
    * @param exp2 The power-of-2 to add to the floating-point number
@@ -220,7 +272,7 @@ struct floating_converter {
     // Extract the currently stored (biased) exponent
     using SignedType   = std::make_signed_t<IntegralType>;
     auto exponent_bits = integer_rep & exponent_mask;
-    auto stored_exp2   = static_cast<SignedType>(exponent_bits >> num_mantissa_bits);
+    auto stored_exp2   = static_cast<SignedType>(exponent_bits >> num_stored_mantissa_bits);
 
     // Add the additional power-of-2
     stored_exp2 += exp2;
@@ -232,7 +284,7 @@ struct floating_converter {
       // Early out if bit shift will zero it anyway.
       // Note: We must handle this explicitly, as too-large a bit-shift is UB
       auto const bit_shift = -stored_exp2 + 1;  //+1 due to understood bit set below
-      if (bit_shift > num_mantissa_bits) { return 0.0; }
+      if (bit_shift > num_stored_mantissa_bits) { return 0.0; }
 
       // Clear the exponent bits (zero means 2^-126/2^-1022 w/ no understood bit)
       integer_rep &= (~exponent_mask);
@@ -248,7 +300,7 @@ struct floating_converter {
       return cuda::std::numeric_limits<FloatingType>::infinity();
     } else {
       // Normal number: Clear existing exponent bits and set new ones
-      exponent_bits = static_cast<IntegralType>(stored_exp2) << num_mantissa_bits;
+      exponent_bits = static_cast<IntegralType>(stored_exp2) << num_stored_mantissa_bits;
       integer_rep &= (~exponent_mask);
       integer_rep |= exponent_bits;
     }
@@ -257,49 +309,6 @@ struct floating_converter {
     return bit_cast_to_floating(integer_rep);
   }
 };
-
-/**
- * @brief Determine the number of significant bits in an integer
- *
- * @tparam T Type of input integer value. Must be either uint32_t, uint64_t, or __uint128_t
- * @param value The integer whose bits are being counted
- * @return The number of significant bits: the # of bits - # of leading zeroes
- */
-template <typename T,
-          CUDF_ENABLE_IF(std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> ||
-                         std::is_same_v<T, __uint128_t>)>
-CUDF_HOST_DEVICE inline int count_significant_bits(T value)
-{
-#ifdef __CUDA_ARCH__
-  if constexpr (std::is_same_v<T, uint64_t>) {
-    return 64 - __clzll(static_cast<int64_t>(value));
-  } else if constexpr (std::is_same_v<T, uint32_t>) {
-    return 32 - __clz(static_cast<int32_t>(value));
-  } else if constexpr (std::is_same_v<T, __uint128_t>) {
-    // 128 bit type, must break up into high and low components
-    auto const high_bits = static_cast<int64_t>(value >> 64);
-    auto const low_bits  = static_cast<int64_t>(value);
-    return 128 - (__clzll(high_bits) + static_cast<int>(high_bits == 0) * __clzll(low_bits));
-  }
-#else
-  // Undefined behavior to call __builtin_clzll() with zero in gcc and clang
-  if (value == 0) { return 0; }
-
-  if constexpr (std::is_same_v<T, uint64_t>) {
-    return 64 - __builtin_clzll(value);
-  } else if constexpr (std::is_same_v<T, uint32_t>) {
-    return 32 - __builtin_clz(value);
-  } else if constexpr (std::is_same_v<T, __uint128_t>) {
-    // 128 bit type, must break up into high and low components
-    auto const high_bits = static_cast<uint64_t>(value >> 64);
-    if (high_bits == 0) {
-      return 64 - __builtin_clzll(static_cast<uint64_t>(value));
-    } else {
-      return 128 - __builtin_clzll(high_bits);
-    }
-  }
-#endif
-}
 
 /**
  * @brief Recursively calculate a signed large power of 10 (>= 10^19) that can only be stored in an
@@ -329,7 +338,7 @@ constexpr __uint128_t large_power_of_10()
  * @param exp10 The power-of-10 of the denominator, from 0 to 9 inclusive.
  * @return Returns value / 10^exp10
  */
-template <typename T, typename cuda::std::enable_if_t<cuda::std::is_unsigned_v<T>>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline T divide_power10_32bit(T value, int exp10)
 {
   // Computing division this way is much faster than the alternatives.
@@ -379,7 +388,7 @@ CUDF_HOST_DEVICE inline T divide_power10_32bit(T value, int exp10)
  * @param exp10 The power-of-10 of the denominator, from 0 to 19 inclusive.
  * @return Returns value / 10^exp10
  */
-template <typename T, typename cuda::std::enable_if_t<cuda::std::is_unsigned_v<T>>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline T divide_power10_64bit(T value, int exp10)
 {
   // See comments in divide_power10_32bit() for discussion.
@@ -416,7 +425,7 @@ CUDF_HOST_DEVICE inline T divide_power10_64bit(T value, int exp10)
  * @param exp10 The power-of-10 of the denominator, from 0 to 38 inclusive.
  * @return Returns value / 10^exp10.
  */
-template <typename T, typename cuda::std::enable_if_t<cuda::std::is_unsigned_v<T>>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline constexpr T divide_power10_128bit(T value, int exp10)
 {
   // See comments in divide_power10_32bit() for an introduction.
@@ -472,7 +481,7 @@ CUDF_HOST_DEVICE inline constexpr T divide_power10_128bit(T value, int exp10)
  * @param exp10 The power-of-10 of the multiplier, from 0 to 9 inclusive.
  * @return Returns value * 10^exp10
  */
-template <typename T, typename cuda::std::enable_if_t<cuda::std::is_unsigned_v<T>>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline constexpr T multiply_power10_32bit(T value, int exp10)
 {
   // See comments in divide_power10_32bit() for discussion.
@@ -499,7 +508,7 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10_32bit(T value, int exp10)
  * @param exp10 The power-of-10 of the multiplier, from 0 to 19 inclusive.
  * @return Returns value * 10^exp10
  */
-template <typename T, typename cuda::std::enable_if_t<cuda::std::is_unsigned_v<T>>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline constexpr T multiply_power10_64bit(T value, int exp10)
 {
   // See comments in divide_power10_32bit() for discussion.
@@ -536,7 +545,7 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10_64bit(T value, int exp10)
  * @param exp10 The power-of-10 of the multiplier, from 0 to 38 inclusive.
  * @return Returns value * 10^exp10.
  */
-template <typename T, typename cuda::std::enable_if_t<cuda::std::is_unsigned_v<T>>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline constexpr T multiply_power10_128bit(T value, int exp10)
 {
   // See comments in divide_power10_128bit() for discussion.
@@ -596,9 +605,7 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10_128bit(T value, int exp10)
  * @param exp10 The power-of-10 of the multiplier.
  * @return Returns value * 10^exp10
  */
-template <typename Rep,
-          typename T,
-          typename cuda::std::enable_if_t<(cuda::std::is_unsigned_v<T>)>* = nullptr>
+template <typename Rep, typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline constexpr T multiply_power10(T value, int exp10)
 {
   // Use this function if you have no knowledge of what exp10 might be
@@ -624,9 +631,7 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10(T value, int exp10)
  * @param exp10 The power-of-10 of the denominator.
  * @return Returns value / 10^exp10
  */
-template <typename Rep,
-          typename T,
-          typename cuda::std::enable_if_t<(cuda::std::is_unsigned_v<T>)>* = nullptr>
+template <typename Rep, typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline constexpr T divide_power10(T value, int exp10)
 {
   // Use this function if you have no knowledge of what exp10 might be
@@ -646,13 +651,13 @@ CUDF_HOST_DEVICE inline constexpr T divide_power10(T value, int exp10)
  * @tparam IntegerType Type of input unsigned integer value
  * @param value The integer whose bits are being shifted
  * @param bit_shift The number of bits to shift left
- * @return The bit-shifted integer, except max value if overflow would occur
+ * @return The bit-shifted integer, except max value if UB would occur
  */
 template <typename IntegerType, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<IntegerType>)>
 CUDF_HOST_DEVICE inline IntegerType guarded_left_shift(IntegerType value, int bit_shift)
 {
   // Bit shifts larger than this are undefined behavior
-  static constexpr int max_safe_bit_shift = cuda::std::numeric_limits<IntegerType>::digits - 1;
+  constexpr int max_safe_bit_shift = cuda::std::numeric_limits<IntegerType>::digits - 1;
   return (bit_shift <= max_safe_bit_shift) ? value << bit_shift
                                            : cuda::std::numeric_limits<IntegerType>::max();
 }
@@ -669,9 +674,8 @@ template <typename IntegerType, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<IntegerT
 CUDF_HOST_DEVICE inline IntegerType guarded_right_shift(IntegerType value, int bit_shift)
 {
   // Bit shifts larger than this are undefined behavior
-  static constexpr int max_safe_bit_shift = cuda::std::numeric_limits<IntegerType>::digits - 1;
-  return (bit_shift <= max_safe_bit_shift) ? value >> bit_shift
-                                           : cuda::std::numeric_limits<IntegerType>::max();
+  constexpr int max_safe_bit_shift = cuda::std::numeric_limits<IntegerType>::digits - 1;
+  return (bit_shift <= max_safe_bit_shift) ? value >> bit_shift : 0;
 }
 
 /**
@@ -695,18 +699,10 @@ struct shifting_constants {
   // However, to uniquely represent each double / float as different #'s in decimal
   // you need 17 / 9 digits (from std::numeric_limits<T>::max_digits10)
   // To represent 10^17 / 10^9, you need 57 / 30 bits
-  // So we need to keep track of this # of bits during shifting to ensure no info is lost
-  /// # bits needed to represent the value
-  static constexpr int num_rep_bits = is_double ? 57 : 30;
+  // So we need to keep track of at least this # of bits during shifting to ensure no info is lost
 
   // We will be alternately shifting our data back and forth by powers of 2 and 10 to convert
   // between floating and decimal (see shifting functions for details).
-  // For float -> decimal, we want to start with our significand bits at the top of the
-  // num_rep_bits range, so that we don't lose information we need on intermediary right-shifts.
-  // For normal numbers, this bit shift is a fixed distance, defined by the understood 2^0 bit.
-  // For denormals this bit is not set, and must be determined for each value.
-  /// Bit shift needed to line-up value to the top of the representation range
-  static constexpr int normal_lineup_shift = num_rep_bits - num_significand_bits;
 
   // To iteratively shift back and forth, our 2's (bit-) and 10's (divide-/multiply-) shifts must
   // be of nearly the same magnitude, or else we'll over-/under-flow our shifting integer
@@ -762,7 +758,7 @@ struct shifting_constants {
  * @param exp10 The power of 10 that needs to be applied to the significand
  * @return significand, incremented if the conversion to decimal causes truncation
  */
-template <typename T, typename cuda::std::enable_if_t<cuda::std::is_integral_v<T>>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE T increment_on_truncation(T const integral_mantissa,
                                            int const exp2,
                                            int const exp10)
@@ -781,28 +777,21 @@ CUDF_HOST_DEVICE T increment_on_truncation(T const integral_mantissa,
   // Then 1.1999... becomes 1.2000...1... which truncates to 1.2.
   // And if it had been 1.2000...1..., adding 1 ulp still truncates to 1.2, the result is unchanged.
 
-  // The only way that this produces the incorrect result is if, when we entered 1.19999...,
-  // we truly meant 1.19999... (exactly, out to the very last bit), but then decided to truncate
-  // anyway. By choosing to truncate, you're saying you don't actually care about that level of
-  // precision, so being off by < 1 ulp should be just fine, compared to screwing up 1.2 with scale
-  // -1 -> 11
-
-  // So when does the user-supplied scale truncate info?
-  // For powers > 0: When the 10s (scale) shift is larger than the corresponding bit-shift.
-  // For powers < 0: When the 10s shift is less than the corresponding bit-shift.
+  // If we add 1 to the last bit, we are effectively adding 1/2 to the 2nd-to-last bit.
+  // This is like rounding to the 2nd-to-last bit (if we were to floor afterwards).
+  // However we don't want to add 1 to the last bit if we are keeping enough precision.
+  // So, only add 1 if exp10 shift is larger than corresponding exp2 shift to 2nd-to-last bit.
 
   // Corresponding bit-shift:
   // 2^10 is approximately 10^3, but this is off by 1.024%
   // 1.024^30 is 2.03704, so this is high by one bit for every 30*3 = 90 powers of 10
   // So 10^N = 2^(10*N/3 - N/90) = 2^(299*N/90)
-  int const corresponding_exp2 = 299 * exp10 / 90;
-
-  // If exp10 > 0, truncate if divide by more 10s than we shift up by 2s
-  // If exp10 < 0, truncate if shift down by more OR THE SAME 2s than multiply by 10s
-  // Truncate on the same: because for our approximation 2^299 > 10^90
-  // Note that this works for both +/- exponents
+  // Do comparison without dividing, which loses information:
+  // Note: if shift is "equal," still truncates if exp2 < 0 (shifting UP by 2s, 2^10 > 10^3)
+  int const exp2_term  = 90 * (exp2 + 1);  //+1: effectively adding 1/2 to 2nd-to-last-bit
+  int const exp10_term = 299 * exp10;
   bool const conversion_truncates =
-    (exp2 < corresponding_exp2) || ((exp2 == corresponding_exp2) && (exp2 < 0));
+    (exp10_term > exp2_term) || ((exp2_term == exp10_term) && (exp2 < 0));
 
   // (Potentially) increment and return
   return integral_mantissa + static_cast<T>(conversion_truncates);
@@ -819,9 +808,7 @@ CUDF_HOST_DEVICE T increment_on_truncation(T const integral_mantissa,
  * @param exp10 The number of powers of 10 to apply to reach the desired scale factor
  * @return Magnitude of the converted-to decimal integer
  */
-
-template <typename FloatingType,
-          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+template <typename FloatingType, CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
 CUDF_HOST_DEVICE inline typename shifting_constants<FloatingType>::ShiftingRep
 shift_to_decimal_posexp(typename shifting_constants<FloatingType>::IntegerRep const base2_value,
                         int exp2,
@@ -842,11 +829,13 @@ shift_to_decimal_posexp(typename shifting_constants<FloatingType>::IntegerRep co
   using ShiftingRep = typename Constants::ShiftingRep;
   auto shifting_rep = static_cast<ShiftingRep>(base2_value);
 
-  // We want to start by lining up our bits in num_rep_bits (see comments on normal_lineup_shift),
-  // but since we start by bit-shifting up anyway, combine the normal_lineup_shift & max_bits_shift.
+  // We want to start with our significand bits at the top of the shifting range,
+  // so that we don't lose information we need on intermediary right-shifts.
   // Note that since we're shifting 2s up, we need num_2s_shift_buffer_bits space on the high side,
-  // which we do (our max bit shift is low enough that we don't shift into the highest bits)
-  static constexpr int max_init_shift = Constants::normal_lineup_shift + Constants::max_bits_shift;
+  // For all numbers this bit shift is a fixed distance, due to the understood 2^0 bit.
+  static constexpr int shift_up_to = sizeof(ShiftingRep) * 8 - Constants::num_2s_shift_buffer_bits;
+  static constexpr int shift_from  = Constants::num_significand_bits;
+  static constexpr int max_init_shift = shift_up_to - shift_from;
 
   // If our total bit shift is less than this, we don't need to iterate
   if (exp2 <= max_init_shift) {
@@ -909,9 +898,9 @@ shift_to_decimal_posexp(typename shifting_constants<FloatingType>::IntegerRep co
  */
 template <typename Rep,
           typename FloatingType,
-          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
 CUDF_HOST_DEVICE inline typename shifting_constants<FloatingType>::ShiftingRep
-shift_to_decimal_negexp(typename shifting_constants<FloatingType>::IntegerRep const base2_value,
+shift_to_decimal_negexp(typename shifting_constants<FloatingType>::IntegerRep base2_value,
                         int exp2,
                         int exp10)
 {
@@ -919,14 +908,14 @@ shift_to_decimal_negexp(typename shifting_constants<FloatingType>::IntegerRep co
   // See comments in that function for details.
   // Instead here we need to multiply by 10s and shift right by 2s
 
-  // Convert to using positive values so we don't have keep negating each time we multiply
-  int exp2_mag  = -exp2;
-  int exp10_mag = -exp10;
-
   // ShiftingRep: uint64 for float's, __uint128_t for double's
   using Constants   = shifting_constants<FloatingType>;
   using ShiftingRep = typename Constants::ShiftingRep;
-  ShiftingRep shifting_rep;
+  auto shifting_rep = static_cast<ShiftingRep>(base2_value);
+
+  // Convert to using positive values so we don't have keep negating
+  int exp10_mag = -exp10;
+  int exp2_mag  = -exp2;
 
   // For performing final 10s-shift
   auto final_shifts_low10s = [&]() {
@@ -943,19 +932,18 @@ shift_to_decimal_negexp(typename shifting_constants<FloatingType>::IntegerRep co
   };
 
   // If our total decimal shift is less than the max, we don't need to iterate
-  if (exp10_mag <= Constants::max_digits_shift) {
-    shifting_rep = base2_value;
-    return final_shifts_low10s();
-  }
+  if (exp10_mag <= Constants::max_digits_shift) { return final_shifts_low10s(); }
 
-  // We want to start by lining up our bits to num_rep_bits, but since we'll be bit-shifting
-  // down, we need even more low bits as a buffer (see comments on these constants)
-  auto const lineup_shift       = Constants::num_rep_bits - count_significant_bits(base2_value);
-  auto const num_init_bit_shift = lineup_shift + Constants::num_2s_shift_buffer_bits;
+  // We want to start by lining up our bits to the top of the shifting range,
+  // except our first operation is a multiply, so not quite that far
+  // We are bit-shifting down, so we need extra bits on the low-side, which this has.
+  static constexpr int shift_up_to        = sizeof(ShiftingRep) * 8 - Constants::max_bits_shift;
+  static constexpr int shift_from         = Constants::num_significand_bits;
+  static constexpr int num_init_bit_shift = shift_up_to - shift_from;
 
   // Constants::num_2s_shift_buffer_bits; Note: This shift is safe to do in the smaller IntegerRep
   // as it is up to bit 61 / 31
-  shifting_rep = base2_value << num_init_bit_shift;
+  shifting_rep <<= num_init_bit_shift;
   exp2_mag += num_init_bit_shift;
 
   // Iterate, multiplying by 10s and shifting down by 2s until we're almost done
@@ -999,7 +987,7 @@ shift_to_decimal_negexp(typename shifting_constants<FloatingType>::IntegerRep co
  */
 template <typename Rep,
           typename FloatingType,
-          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
 CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& floating,
                                                          scale_type const& scale)
 {
@@ -1026,10 +1014,9 @@ CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& flo
   // Also data within a column tends to be similar, so they will often take the
   // same branches on exp2 as well.
   //
-  // NOTE: All returns here can overflow (e.g. unsigned -> signed)
-  auto const magnitude = [&]() -> Rep {
-    using UnsignedRep = cuda::std::make_unsigned_t<Rep>;
-
+  // NOTE: some returns here can overflow (e.g. ShiftingRep -> UnsignedRep)
+  using UnsignedRep    = cuda::std::make_unsigned_t<Rep>;
+  auto const magnitude = [&]() -> UnsignedRep {
     if (exp10 == 0) {
       // NOTE: Left Bit-shift can overflow! As can cast! (e.g. double -> decimal32)
       // Bit shifts may be large, guard against UB
@@ -1058,7 +1045,9 @@ CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& flo
   }();
 
   // Reapply the sign and return
-  return is_negative ? -magnitude : magnitude;
+  // NOTE: Cast can overflow!
+  auto const signed_magnitude = static_cast<Rep>(magnitude);
+  return is_negative ? -signed_magnitude : signed_magnitude;
 }
 
 /**
@@ -1074,7 +1063,7 @@ CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& flo
  */
 template <typename FloatingType,
           typename DecimalRep,
-          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
 CUDF_HOST_DEVICE inline auto shift_to_binary_posexp(DecimalRep decimal_rep, int exp10)
 {
   // This is the reverse of shift_to_decimal_posexp(), see that for more details.
@@ -1083,10 +1072,13 @@ CUDF_HOST_DEVICE inline auto shift_to_binary_posexp(DecimalRep decimal_rep, int 
   using Constants   = shifting_constants<FloatingType>;
   using ShiftingRep = typename Constants::ShiftingRep;
 
-  // We would start by lining up our data to num_rep_bits, but since we'll be bit-shifting
-  // down, we need even more low bits as a buffer (see comments on these constants)
-  auto const num_significant_bits = count_significant_bits(decimal_rep);
-  int exp2 = num_significant_bits - (Constants::num_rep_bits + Constants::num_2s_shift_buffer_bits);
+  // We want to start by lining up our bits to the top of the shifting range,
+  // except our first operation is a multiply, so not quite that far
+  // We are bit-shifting down, so we need extra bits on the low-side, which this has.
+  static constexpr int shift_up_to = sizeof(ShiftingRep) * 8 - Constants::max_bits_shift;
+  int const shift_from             = count_significant_bits(decimal_rep);
+  int const num_init_bit_shift     = shift_up_to - shift_from;
+  int exp2                         = -num_init_bit_shift;
 
   // Perform the initial bit shift
   ShiftingRep shifting_rep;
@@ -1137,7 +1129,7 @@ CUDF_HOST_DEVICE inline auto shift_to_binary_posexp(DecimalRep decimal_rep, int 
  */
 template <typename FloatingType,
           typename DecimalRep,
-          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
 CUDF_HOST_DEVICE inline auto shift_to_binary_negexp(DecimalRep decimal_rep, int const exp10)
 {
   // This is the reverse of shift_to_decimal_negexp(), see that for more details.
@@ -1166,12 +1158,14 @@ CUDF_HOST_DEVICE inline auto shift_to_binary_negexp(DecimalRep decimal_rep, int 
   // are often (always?) fine anyway (e.g. DBL_MIN & DBL_TRUE_MIN work fine).
   //
   // See comments on these constants for more details.
-  auto const num_significant_bits = count_significant_bits(decimal_rep);
-  int exp2 = num_significant_bits - (Constants::num_rep_bits + Constants::num_2s_shift_buffer_bits);
-  if constexpr (Constants::is_double) { ++exp2; }
 
-  // Max bit shift left to give us the most room for shifting 10s: Multiply by 2s
-  exp2 -= Constants::max_bits_shift;
+  // We want to start with our significand bits at the top of the shifting range,
+  // so that we don't lose information we need on intermediary right-shifts.
+  // Note that since we're shifting 2s up, we need num_2s_shift_buffer_bits space on the high side,
+  static constexpr int shift_up_to = sizeof(ShiftingRep) * 8 - Constants::num_2s_shift_buffer_bits;
+  int const shift_from             = count_significant_bits(decimal_rep);
+  int const num_init_bit_shift     = shift_up_to - shift_from;
+  int exp2                         = -num_init_bit_shift;
 
   // Perform the initial bit shift
   ShiftingRep shifting_rep;
@@ -1227,7 +1221,7 @@ CUDF_HOST_DEVICE inline auto shift_to_binary_negexp(DecimalRep decimal_rep, int 
  */
 template <typename FloatingType,
           typename Rep,
-          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<FloatingType>)>
 CUDF_HOST_DEVICE inline FloatingType convert_integral_to_floating(Rep const& value,
                                                                   scale_type const& scale)
 {

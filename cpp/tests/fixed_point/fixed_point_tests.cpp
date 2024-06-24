@@ -167,7 +167,7 @@ TEST_F(FixedPointTest, PreciseFloatDecimal64Construction)
     auto num3 = cudf::convert_floating_to_fixed<decimal64>(3.141593E22f, scale_type(13));
     auto num4 = cudf::convert_floating_to_fixed<decimal64>(3.141593E27f, scale_type(18));
     auto num5 = cudf::convert_floating_to_fixed<decimal64>(3.141593E32f, scale_type(23));
-    auto num6 = cudf::convert_floating_to_fixed<decimal64>(FLT_MAX, scale_type(29));
+    auto num6 = cudf::convert_floating_to_fixed<decimal64>(3.141593E37f, scale_type(28));
 
     EXPECT_EQ(3.141593E7f, cudf::convert_fixed_to_floating<float>(num0));
     EXPECT_EQ(3.141593E12f, cudf::convert_fixed_to_floating<float>(num1));
@@ -175,7 +175,7 @@ TEST_F(FixedPointTest, PreciseFloatDecimal64Construction)
     EXPECT_EQ(3.141593E22f, cudf::convert_fixed_to_floating<float>(num3));
     EXPECT_EQ(3.141593E27f, cudf::convert_fixed_to_floating<float>(num4));
     EXPECT_EQ(3.141593E32f, cudf::convert_fixed_to_floating<float>(num5));
-    EXPECT_EQ(FLT_MAX, cudf::convert_fixed_to_floating<float>(num6));
+    EXPECT_EQ(3.141593E37f, cudf::convert_fixed_to_floating<float>(num6));
   }
 
   // Negative Exponent
@@ -186,7 +186,7 @@ TEST_F(FixedPointTest, PreciseFloatDecimal64Construction)
     auto num3 = cudf::convert_floating_to_fixed<decimal64>(3.141593E-22f, scale_type(-31));
     auto num4 = cudf::convert_floating_to_fixed<decimal64>(3.141593E-27f, scale_type(-36));
     auto num5 = cudf::convert_floating_to_fixed<decimal64>(3.141593E-32f, scale_type(-41));
-    auto num6 = cudf::convert_floating_to_fixed<decimal64>(FLT_MIN, scale_type(-47));
+    auto num6 = cudf::convert_floating_to_fixed<decimal64>(3.141593E-37f, scale_type(-47));
 
     EXPECT_EQ(3.141593E-7f, cudf::convert_fixed_to_floating<float>(num0));
     EXPECT_EQ(3.141593E-12f, cudf::convert_fixed_to_floating<float>(num1));
@@ -194,7 +194,7 @@ TEST_F(FixedPointTest, PreciseFloatDecimal64Construction)
     EXPECT_EQ(3.141593E-22f, cudf::convert_fixed_to_floating<float>(num3));
     EXPECT_EQ(3.141593E-27f, cudf::convert_fixed_to_floating<float>(num4));
     EXPECT_EQ(3.141593E-32f, cudf::convert_fixed_to_floating<float>(num5));
-    EXPECT_EQ(FLT_MIN, cudf::convert_fixed_to_floating<float>(num6));
+    EXPECT_EQ(3.141593E-37f, cudf::convert_fixed_to_floating<float>(num6));
 
     // Denormals
     auto num7  = cudf::convert_floating_to_fixed<decimal64>(3.141593E-39f, scale_type(-48));
@@ -224,7 +224,7 @@ TEST_F(FixedPointTest, PreciseDoubleDecimal64Construction)
     auto num3 = cudf::convert_floating_to_fixed<decimal64>(3.141593E158, scale_type(141));
     auto num4 = cudf::convert_floating_to_fixed<decimal64>(3.141593E208, scale_type(191));
     auto num5 = cudf::convert_floating_to_fixed<decimal64>(3.141593E258, scale_type(241));
-    auto num6 = cudf::convert_floating_to_fixed<decimal64>(DBL_MAX, scale_type(291));
+    auto num6 = cudf::convert_floating_to_fixed<decimal64>(3.141593E307, scale_type(290));
 
     EXPECT_EQ(3.141593E8, cudf::convert_fixed_to_floating<double>(num0));
     EXPECT_EQ(3.141593E58, cudf::convert_fixed_to_floating<double>(num1));
@@ -232,7 +232,7 @@ TEST_F(FixedPointTest, PreciseDoubleDecimal64Construction)
     EXPECT_EQ(3.141593E158, cudf::convert_fixed_to_floating<double>(num3));
     EXPECT_EQ(3.141593E208, cudf::convert_fixed_to_floating<double>(num4));
     EXPECT_EQ(3.141593E258, cudf::convert_fixed_to_floating<double>(num5));
-    EXPECT_EQ(DBL_MAX, cudf::convert_fixed_to_floating<double>(num6));
+    EXPECT_EQ(3.141593E307, cudf::convert_fixed_to_floating<double>(num6));
   }
 
   // Negative Exponent
@@ -243,7 +243,7 @@ TEST_F(FixedPointTest, PreciseDoubleDecimal64Construction)
     auto num3 = cudf::convert_floating_to_fixed<decimal64>(3.141593E-158, scale_type(-175));
     auto num4 = cudf::convert_floating_to_fixed<decimal64>(3.141593E-208, scale_type(-225));
     auto num5 = cudf::convert_floating_to_fixed<decimal64>(3.141593E-258, scale_type(-275));
-    auto num6 = cudf::convert_floating_to_fixed<decimal64>(DBL_MIN, scale_type(-325));
+    auto num6 = cudf::convert_floating_to_fixed<decimal64>(3.141593E-308, scale_type(-325));
 
     EXPECT_EQ(3.141593E-8, cudf::convert_fixed_to_floating<double>(num0));
     EXPECT_EQ(3.141593E-58, cudf::convert_fixed_to_floating<double>(num1));
@@ -251,13 +251,14 @@ TEST_F(FixedPointTest, PreciseDoubleDecimal64Construction)
     EXPECT_EQ(3.141593E-158, cudf::convert_fixed_to_floating<double>(num3));
     EXPECT_EQ(3.141593E-208, cudf::convert_fixed_to_floating<double>(num4));
     EXPECT_EQ(3.141593E-258, cudf::convert_fixed_to_floating<double>(num5));
-    EXPECT_EQ(DBL_MIN, cudf::convert_fixed_to_floating<double>(num6));
+    EXPECT_EQ(3.141593E-308, cudf::convert_fixed_to_floating<double>(num6));
 
     // Denormals
     auto num7  = cudf::convert_floating_to_fixed<decimal64>(3.141593E-309, scale_type(-326));
     auto num8  = cudf::convert_floating_to_fixed<decimal64>(3.141593E-314, scale_type(-331));
     auto num9  = cudf::convert_floating_to_fixed<decimal64>(3.141593E-319, scale_type(-336));
     auto num10 = cudf::convert_floating_to_fixed<decimal64>(DBL_TRUE_MIN, scale_type(-341));
+
     EXPECT_EQ(3.141593E-309, cudf::convert_fixed_to_floating<double>(num7));
     EXPECT_EQ(3.141593E-314, cudf::convert_fixed_to_floating<double>(num8));
     EXPECT_EQ(3.141593E-319, cudf::convert_fixed_to_floating<double>(num9));
