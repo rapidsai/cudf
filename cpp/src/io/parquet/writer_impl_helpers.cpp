@@ -126,13 +126,4 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta)
   return write_mode == single_write_mode::NO or column->nullable();
 }
 
-[[nodiscard]] bool is_col_fixed_width(column_view const& column)
-{
-  if (column.type().id() == type_id::STRUCT) {
-    return std::all_of(column.child_begin(), column.child_end(), is_col_fixed_width);
-  }
-
-  return is_fixed_width(column.type());
-}
-
 }  // namespace cudf::io::parquet::detail

@@ -93,17 +93,5 @@ void fill_table_meta(std::unique_ptr<table_input_metadata> const& table_meta);
 [[nodiscard]] bool is_output_column_nullable(cudf::detail::LinkedColPtr const& column,
                                              column_in_metadata const& column_metadata,
                                              ::cudf::io::detail::single_write_mode write_mode);
-/**
- * @brief Returns ``true`` if the given column has a fixed size.
- *
- * This doesn't check every row, so assumes string and list columns are not fixed, even
- * if each row is the same width.
- * TODO: update this if FIXED_LEN_BYTE_ARRAY is ever supported for writes.
- *
- * @param column A view of the column
- *
- * @return Whether the column has a fixed size
- */
-[[nodiscard]] bool is_col_fixed_width(column_view const& column);
 
 }  // namespace cudf::io::parquet::detail

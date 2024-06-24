@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING, List, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
 import pandas as pd
@@ -167,7 +167,7 @@ class ListColumn(ColumnBase):
         else:
             super().set_base_data(value)
 
-    def set_base_children(self, value: Tuple[ColumnBase, ...]):
+    def set_base_children(self, value: tuple[ColumnBase, ...]):
         super().set_base_children(value)
         _, values = value
         self._dtype = cudf.ListDtype(element_type=values.dtype)
@@ -269,7 +269,7 @@ class ListColumn(ColumnBase):
         # as ``self``, but with the leaf column transformed
         # by applying ``func`` to it
 
-        cc: List[ListColumn] = []
+        cc: list[ListColumn] = []
         c: ColumnBase = self
 
         while isinstance(c, ListColumn):
@@ -320,7 +320,7 @@ class ListMethods(ColumnMethods):
     def get(
         self,
         index: int,
-        default: Optional[Union[ScalarLike, ColumnLike]] = None,
+        default: ScalarLike | ColumnLike | None = None,
     ) -> ParentType:
         """
         Extract element at the given index from each list in a Series of lists.
@@ -424,7 +424,7 @@ class ListMethods(ColumnMethods):
             contains_scalar(self._column, cudf.Scalar(search_key))
         )
 
-    def index(self, search_key: Union[ScalarLike, ColumnLike]) -> ParentType:
+    def index(self, search_key: ScalarLike | ColumnLike) -> ParentType:
         """
         Returns integers representing the index of the search key for each row.
 
