@@ -178,9 +178,7 @@ cdef class SinkInfo:
 
     Parameters
     ----------
-    sinks : List[Union[str, os.PathLike,
-                        io.BytesIO, io.IOBase,
-                        io.StringIO, io.TextIOBase]]
+    sinks : list of str, PathLike, BytesIO, StringIO
 
         A homogeneous list of sinks (this can be a string filename,
         bytes, or one of the Python I/O classes) to read from.
@@ -231,10 +229,17 @@ cdef class SinkInfo:
                 )
                 data_sinks.push_back(self.sink_storage.back().get())
             self.c_obj = sink_info(data_sinks)
-        elif isinstance(sinks[0], (basestring, os.PathLike)):
+        elif isinstance(sinks[0], str):
             paths.reserve(len(sinks))
             for s in sinks:
-                if not isinstance(s, (basestring, os.PathLike)):
+                if not isinstance(s, str):
+                    raise ValueError("All sinks must be of the same type!")
+                paths.push_back(<string> s.encode())
+            self.c_obj = sink_info(move(paths))
+        elif isinstance(sinks[0], os.PathLike):
+            paths.reserve(len(sinks))
+            for s in sinks:
+                if not isinstance(s, os.PathLike):
                     raise ValueError("All sinks must be of the same type!")
                 paths.push_back(<string> os.path.expanduser(s).encode())
             self.c_obj = sink_info(move(paths))
