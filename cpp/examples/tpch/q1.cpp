@@ -22,9 +22,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
@@ -56,16 +55,15 @@
         l_linestatus;
 */
 
-void write_parquet(cudf::table_view input,
-                   std::string filepath)
-{
-  auto sink_info      = cudf::io::sink_info(filepath);
-  auto builder        = cudf::io::parquet_writer_options::builder(sink_info, input);
+void write_parquet(cudf::table_view input, std::string filepath) {
+  auto sink_info = cudf::io::sink_info(filepath);
+  auto builder = cudf::io::parquet_writer_options::builder(sink_info, input);
   auto options = builder.build();
   cudf::io::write_parquet(options);
 }
 
-std::unique_ptr<cudf::table> append_col_to_table(std::unique_ptr<cudf::table> table, std::unique_ptr<cudf::column> col) {
+std::unique_ptr<cudf::table> append_col_to_table(
+    std::unique_ptr<cudf::table> table, std::unique_ptr<cudf::column> col) {
     std::vector<std::unique_ptr<cudf::column>> columns;
     for (size_t i = 0; i < table->num_columns(); i++) {
         columns.push_back(std::make_unique<cudf::column>(table->get_column(i)));
@@ -74,26 +72,25 @@ std::unique_ptr<cudf::table> append_col_to_table(std::unique_ptr<cudf::table> ta
     return std::make_unique<cudf::table>(std::move(columns));
 }
 
-std::unique_ptr<cudf::table> read_filter_project(std::vector<std::string>& projection_cols) {
+std::unique_ptr<cudf::table> read_parquet(std::vector<std::string>& projection_cols) {
     std::string path = "/home/jayjeetc/tpch_sf1/lineitem/part-0.parquet";
     auto source = cudf::io::source_info(path);
     auto builder = cudf::io::parquet_reader_options_builder(source);
 
-    auto col_ref = cudf::ast::column_reference(5);
-    auto literal_value = cudf::timestamp_scalar<cudf::timestamp_s>(1719255747, true);
-    // auto literal = cudf::ast::literal(literal_value);
-    // auto filter_expr = cudf::ast::operation(
-    //     cudf::ast::ast_operator::LESS, 
-    //     col_ref,
-    //     literal
-    // );
+    auto l_shipdate = cudf::ast::column_reference(5);
+    auto date_scalar = cudf::timestamp_scalar<cudf::timestamp_s>(1719255747L, true);
+    auto date = cudf::ast::literal(date_scalar);
+    auto filter_expr = cudf::ast::operation(
+        cudf::ast::ast_operator::LESS,
+        l_shipdate,
+        date
+    );
 
     builder.columns(projection_cols);
-    // builder.filter(filter_expr);
+    builder.filter(filter_expr);
 
     auto options = builder.build();
     auto result = cudf::io::read_parquet(options);
-    write_parquet(result.tbl->view(), "file.parquet");
     return std::move(result.tbl);
 }
 
@@ -174,7 +171,8 @@ std::unique_ptr<cudf::table> group_by(std::unique_ptr<cudf::table>& table) {
     return std::make_unique<cudf::table>(cudf::table_view(columns));
 }
 
-std::unique_ptr<cudf::table> sort_by_key(std::unique_ptr<cudf::table>& table, std::vector<int>& keys) {
+std::unique_ptr<cudf::table> sort_by_key(
+    std::unique_ptr<cudf::table>& table, std::vector<int>& keys) {
     auto tbl_view = table->view();
     return cudf::sort_by_key(
         tbl_view, 
@@ -199,11 +197,9 @@ int main() {
     std::unique_ptr<cudf::column> charge_col = calc_charge(t1);
     auto t2 = append_col_to_table(std::move(t1), std::move(disc_price_col));
     auto t3 = append_col_to_table(std::move(t2), std::move(charge_col));
+    auto t4 = group_by(t3);
 
-    std::cout << "Table after appending columns: " << std::endl;
-    std::cout << t3->num_rows() << " " << t3->num_columns() << std::endl;
-
-    group_by(t3);
+    write_parquet(t4->view(), "q1.parquet");
 
     return 0;
 }
