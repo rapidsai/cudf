@@ -31,15 +31,14 @@
 #include <cudf/types.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/binaryop.hpp>
-#include <cudf_test/debug_utilities.hpp>
-
+#include <cudf/sorting.hpp>
 /*
     select
         l_returnflag,
         l_linestatus,
         sum(l_quantity) as sum_qty,
         sum(l_extendedprice) as sum_base_price,
-        sum(l_extendedprice * (1 - l_discount)) as sum_disc_price, // done
+        sum(l_extendedprice * (1 - l_discount)) as sum_disc_price,
         sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge,
         avg(l_quantity) as avg_qty,
         avg(l_extendedprice) as avg_price,
@@ -55,8 +54,8 @@
     order by
         l_returnflag,
         l_linestatus;
-
 */
+
 void write_parquet(cudf::table_view input,
                    std::string filepath)
 {
@@ -80,11 +79,9 @@ std::unique_ptr<cudf::table> read_filter_project(std::vector<std::string>& proje
     auto source = cudf::io::source_info(path);
     auto builder = cudf::io::parquet_reader_options_builder(source);
 
-    // auto col_ref = cudf::ast::column_reference(5);
-
-    // auto literal_value = cudf::timestamp_scalar<cudf::timestamp_s>(1719255747, true);
+    auto col_ref = cudf::ast::column_reference(5);
+    auto literal_value = cudf::timestamp_scalar<cudf::timestamp_s>(1719255747, true);
     // auto literal = cudf::ast::literal(literal_value);
-
     // auto filter_expr = cudf::ast::operation(
     //     cudf::ast::ast_operator::LESS, 
     //     col_ref,
@@ -95,7 +92,7 @@ std::unique_ptr<cudf::table> read_filter_project(std::vector<std::string>& proje
     // builder.filter(filter_expr);
 
     auto options = builder.build();
-    cudf::io::table_with_metadata result = cudf::io::read_parquet(options);
+    auto result = cudf::io::read_parquet(options);
     write_parquet(result.tbl->view(), "file.parquet");
     return std::move(result.tbl);
 }
@@ -121,31 +118,71 @@ std::unique_ptr<cudf::column> calc_charge(std::unique_ptr<cudf::table>& table) {
     return charge;
 }
 
-std::vector<cudf::groupby::aggregation_request> make_single_aggregation_request(
-    std::unique_ptr<cudf::groupby_aggregation>&& agg, cudf::column_view value) {
+std::unique_ptr<cudf::table> group_by(std::unique_ptr<cudf::table>& table) {
+    auto tbl_view = table->view();
+    auto keys = cudf::table_view{{tbl_view.column(0), tbl_view.column(1)}};
+
+    auto l_quantity = tbl_view.column(2);
+    auto l_extendedprice = tbl_view.column(3);
+    auto l_discount = tbl_view.column(4);
+    auto l_discprice = tbl_view.column(8);
+    auto l_charge = tbl_view.column(9);
+
+    cudf::groupby::groupby groupby_obj(keys);
     std::vector<cudf::groupby::aggregation_request> requests;
+
     requests.emplace_back(cudf::groupby::aggregation_request());
-    requests[0].aggregations.push_back(std::move(agg));
-    requests[0].values = value;
-    return requests;
+    requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+    requests[0].aggregations.push_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
+    requests[0].values = l_quantity;
+
+    requests.emplace_back(cudf::groupby::aggregation_request());
+    requests[1].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+    requests[1].aggregations.push_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
+    requests[1].values = l_extendedprice;
+
+    requests.emplace_back(cudf::groupby::aggregation_request());
+    requests[2].aggregations.push_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
+    requests[2].values = l_discount;
+
+    requests.emplace_back(cudf::groupby::aggregation_request());
+    requests[3].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+    requests[3].values = l_discprice;
+
+    requests.emplace_back(cudf::groupby::aggregation_request());
+    requests[4].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+    requests[4].values = l_charge;
+
+    requests.emplace_back(cudf::groupby::aggregation_request());
+    requests[5].aggregations.push_back(cudf::make_count_aggregation<cudf::groupby_aggregation>());
+    requests[5].values = l_charge;
+
+    auto agg_results = groupby_obj.aggregate(requests);
+    auto result_key = std::move(agg_results.first);
+    std::vector<cudf::column_view> columns{
+        result_key->get_column(0), 
+        result_key->get_column(1),
+        *agg_results.second[0].results[0],
+        *agg_results.second[0].results[1],
+        *agg_results.second[1].results[0],
+        *agg_results.second[1].results[1],
+        *agg_results.second[2].results[0],
+        *agg_results.second[3].results[0],
+        *agg_results.second[4].results[0],
+        *agg_results.second[5].results[0]
+    };
+    return std::make_unique<cudf::table>(cudf::table_view(columns));
 }
 
-std::unique_ptr<cudf::table> group_by(std::unique_ptr<cudf::table> &table, int32_t groupby_key_index, int32_t groupby_value_index) {
+std::unique_ptr<cudf::table> sort_by_key(std::unique_ptr<cudf::table>& table, std::vector<int>& keys) {
     auto tbl_view = table->view();
-    auto keys = cudf::table_view{{tbl_view.column(0), tbl_view.column(1}};
-    auto val  = tbl_view.column(groupby_value_index);
-    cudf::groupby::groupby grpby_obj(keys);
-    auto requests = make_single_aggregation_request(cudf::make_sum_aggregation<cudf::groupby_aggregation>(), val);
-    auto agg_results = grpby_obj.aggregate(requests);
-    
-    auto result_key = std::move(agg_results.first);
-    auto result_val = std::move(agg_results.second[0].results[0]);
-    std::vector<cudf::column_view> columns{result_key->get_column(0), *result_val};
-    return std::make_unique<cudf::table>(cudf::table_view(columns));    
+    return cudf::sort_by_key(
+        tbl_view, 
+        cudf::table_view{{tbl_view.column(0), tbl_view.column(1)}}
+    );
 }
 
 int main() {
-    // 1. Project 2. Filter 3. GroupBy 4. Aggregation
     std::vector<std::string> column_names = {
         "l_returnflag",
         "l_linestatus",
@@ -165,6 +202,8 @@ int main() {
 
     std::cout << "Table after appending columns: " << std::endl;
     std::cout << t3->num_rows() << " " << t3->num_columns() << std::endl;
+
+    group_by(t3);
 
     return 0;
 }
