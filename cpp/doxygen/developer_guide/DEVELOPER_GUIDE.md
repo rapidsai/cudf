@@ -1,4 +1,4 @@
-# libcudf C++ Developer Guide
+# libcudf C++ Developer Guide {#DEVELOPER_GUIDE}
 
 This document serves as a guide for contributors to libcudf C++ code. Developers should also refer
 to these additional files for further documentation of libcudf best practices.
@@ -469,7 +469,7 @@ libcudf throws under different circumstances, see the [section on error handling
 
 # libcudf API and Implementation
 
-## Streams
+## Streams {#streams}
 
 libcudf is in the process of adding support for asynchronous execution using
 CUDA streams. In order to facilitate the usage of streams, all new libcudf APIs
@@ -703,28 +703,28 @@ The preferred style for how inputs are passed in and outputs are returned is the
     - `column_view const&`
   - Tables:
     - `table_view const&`
-    - Scalar:
-        - `scalar const&`
-    - Everything else:
-       - Trivial or inexpensively copied types
-          - Pass by value
-       - Non-trivial or expensive to copy types
-          - Pass by `const&`
+  - Scalar:
+    - `scalar const&`
+  - Everything else:
+    - Trivial or inexpensively copied types
+      - Pass by value
+    - Non-trivial or expensive to copy types
+      - Pass by `const&`
 - In/Outs
   - Columns:
     - `mutable_column_view&`
   - Tables:
     - `mutable_table_view&`
-    - Everything else:
-        - Pass by via raw pointer
+  - Everything else:
+    - Pass by via raw pointer
 - Outputs
   - Outputs should be *returned*, i.e., no output parameters
   - Columns:
     - `std::unique_ptr<column>`
   - Tables:
     - `std::unique_ptr<table>`
-    - Scalars:
-        - `std::unique_ptr<scalar>`
+  - Scalars:
+    - `std::unique_ptr<scalar>`
 
 
 ### Multiple Return Values
@@ -907,6 +907,10 @@ group a broad set of functions, further namespaces may be used. For example, the
 functions that are specific to columns of Strings. These functions reside in the `cudf::strings::`
 namespace. Similarly, functionality used exclusively for unit testing is in the `cudf::test::`
 namespace.
+
+The public function is expected to contain a call to `CUDF_FUNC_RANGE()` followed by a call to
+a `detail` function with same name and parameters as the public function.
+See the [Streams](#streams) section for an example of this pattern.
 
 ### Internal
 
