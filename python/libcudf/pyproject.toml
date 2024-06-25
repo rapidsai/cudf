@@ -63,6 +63,7 @@ input = "libcudf/VERSION"
 regex = "(?P<value>.*)"
 
 [tool.rapids-build-backend]
+build-backend = "scikit_build_core.build"
 dependencies-file = "../../dependencies.yaml"
 requires = [
     "cmake>=3.26.4",
