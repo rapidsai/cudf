@@ -891,6 +891,13 @@ class MapFunction(IR):
                 # polars requires that all to-explode columns have the
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
+        elif self.name == "rename":
+            old, new, _ = self.options
+            # TODO: perhaps polars should validate renaming in the IR?
+            if len(new) != len(set(new)) or (
+                set(new) & (set(self.df.schema.keys() - set(old)))
+            ):
+                raise NotImplementedError("Duplicate new names in rename.")
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
