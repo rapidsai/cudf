@@ -584,7 +584,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             data = {}
 
         if isinstance(data, (pd.Series, pd.Index, BaseIndex, Series)):
-            if copy:
+            if copy and not isinstance(data, (pd.Series, pd.Index)):
                 data = data.copy(deep=True)
             name_from_data = data.name
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
@@ -3442,14 +3442,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def add_prefix(self, prefix):
         return Series._from_data(
-            data=self._data.copy(deep=True),
+            data=self._data.copy(deep=False),
             index=prefix + self.index.astype(str),
         )
 
     @_cudf_nvtx_annotate
     def add_suffix(self, suffix):
         return Series._from_data(
-            data=self._data.copy(deep=True),
+            data=self._data.copy(deep=False),
             index=self.index.astype(str) + suffix,
         )
 
