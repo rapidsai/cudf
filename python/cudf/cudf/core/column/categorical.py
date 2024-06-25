@@ -1083,13 +1083,14 @@ class CategoricalColumn(column.ColumnBase):
             return cudf.Scalar(fill_value, dtype=self.codes.dtype)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
-            if (
-                isinstance(fill_value.dtype, CategoricalDtype)
-                and self.dtype != fill_value.dtype
-            ):
+            if isinstance(fill_value.dtype, CategoricalDtype):
+                if self.dtype != fill_value.dtype:
+                    raise TypeError(
+                        "Cannot set a categorical with another without identical categories"
+                    )
+            else:
                 raise TypeError(
-                    "Cannot set a Categorical with another, "
-                    "without identical categories"
+                    "Cannot set a categorical with non-categorical data"
                 )
             fill_value = fill_value._set_categories(
                 self.categories,

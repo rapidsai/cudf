@@ -1054,6 +1054,18 @@ def test_fillna_with_nan(data, nan_as_null, fill_value):
     assert_eq(expected, actual)
 
 
+def test_fillna_categorical_with_non_categorical_raises():
+    ser = cudf.Series([1, None], dtype="category")
+    with pytest.raises(TypeError):
+        ser.fillna(cudf.Series([1, 2]))
+
+
+def test_fillna_categorical_with_different_categories_raises():
+    ser = cudf.Series([1, None], dtype="category")
+    with pytest.raises(TypeError):
+        ser.fillna(cudf.Series([1, 2]), dtype="category")
+
+
 def test_series_mask_mixed_dtypes_error():
     s = cudf.Series(["a", "b", "c"])
     with pytest.raises(
