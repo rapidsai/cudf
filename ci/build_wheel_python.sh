@@ -17,6 +17,6 @@ export PIP_FIND_LINKS="/tmp/libcudf_dist"
 
 cd ${package_dir}
 mkdir -p final_dist
-python -m auditwheel repair --exclude libcudf.so --exclude libarrow.so.1400 -w final_dist dist/*
+python -m auditwheel repair --exclude libcudf.so --exclude libarrow.so.1601 -w final_dist dist/*
 
 RAPIDS_PY_WHEEL_NAME="${package_name}_${RAPIDS_PY_CUDA_SUFFIX}" rapids-upload-wheels-to-s3 python final_dist
