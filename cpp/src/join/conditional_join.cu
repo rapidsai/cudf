@@ -48,9 +48,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
 {
   if (right.num_rows() == 0) {
     switch (join_type) {
-      case join_kind::LEFT_ANTI_JOIN:
-        return get_trivial_left_join_indices(left, stream, rmm::mr::get_current_device_resource())
-          .first;
+      case join_kind::LEFT_ANTI_JOIN: return get_trivial_left_join_indices(left, stream, mr).first;
       case join_kind::LEFT_SEMI_JOIN:
         return std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
       default: CUDF_FAIL("Invalid join kind."); break;
@@ -146,8 +144,7 @@ conditional_join(table_view const& left,
       // with a corresponding NULL from the right.
       case join_kind::LEFT_JOIN:
       case join_kind::LEFT_ANTI_JOIN:
-      case join_kind::FULL_JOIN:
-        return get_trivial_left_join_indices(left, stream, rmm::mr::get_current_device_resource());
+      case join_kind::FULL_JOIN: return get_trivial_left_join_indices(left, stream, mr);
       // Inner and left semi joins return empty output because no matches can exist.
       case join_kind::INNER_JOIN:
       case join_kind::LEFT_SEMI_JOIN:
@@ -166,8 +163,7 @@ conditional_join(table_view const& left,
                          std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
       // Full joins need to return the trivial complement.
       case join_kind::FULL_JOIN: {
-        auto ret_flipped =
-          get_trivial_left_join_indices(right, stream, rmm::mr::get_current_device_resource());
+        auto ret_flipped = get_trivial_left_join_indices(right, stream, mr);
         return std::pair(std::move(ret_flipped.second), std::move(ret_flipped.first));
       }
       default: CUDF_FAIL("Invalid join kind."); break;
