@@ -15,8 +15,8 @@
  */
 
 #include "io/utilities/hostdevice_vector.hpp"
-#include "nested_json.hpp"
 #include "json_utils.hpp"
+#include "nested_json.hpp"
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>

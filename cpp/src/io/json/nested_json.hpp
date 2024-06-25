@@ -22,8 +22,9 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/resource_ref.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
+
 #include <thrust/sequence.h>
 
 #include <map>

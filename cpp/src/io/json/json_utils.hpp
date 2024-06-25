@@ -16,16 +16,17 @@
 
 #pragma once
 
-#include <cudf/io/detail/tokenize_json.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/io/detail/tokenize_json.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <cub/device/device_radix_sort.cuh>
-#include <rmm/resource_ref.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <cub/device/device_radix_sort.cuh>
 #include <thrust/sequence.h>
 
 namespace cudf::io::json::detail {
@@ -78,4 +79,4 @@ std::pair<rmm::device_uvector<KeyType>, rmm::device_uvector<IndexType>> stable_s
                                                                   : std::move(order_buffer2)};
 }
 
-}
+}  // namespace cudf::io::json::detail
