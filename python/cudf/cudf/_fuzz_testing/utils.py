@@ -8,7 +8,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 from cudf.utils.dtypes import (
     pandas_dtypes_to_np_dtypes,
     pyarrow_dtypes_to_pandas_dtypes,

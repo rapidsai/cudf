@@ -4,7 +4,7 @@ import pytest
 
 from cudf import NA, DataFrame
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
-from cudf.testing import _utils as utils
+from cudf.testing import assert_eq
 
 
 @pytest.mark.skipif(
@@ -46,7 +46,7 @@ def test_applymap_dataframe(data, func, na_action, request):
     with pytest.warns(FutureWarning):
         got = gdf.applymap(func, na_action=na_action)
 
-    utils.assert_eq(expect, got, check_dtype=False)
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_applymap_raise_cases():
