@@ -15,7 +15,15 @@ def metadata_from_arrow_type(
     name: str = "",
 ) -> plc.interop.ColumnMetadata | None:
     metadata = plc.interop.ColumnMetadata(name)  # None
-    if pa.types.is_list(pa_type) or pa.types.is_struct(pa_type):
+    if pa.types.is_list(pa_type):
+        child_meta = [plc.interop.ColumnMetadata("offsets")]
+        for i in range(pa_type.num_fields):
+            field_meta = metadata_from_arrow_type(
+                pa_type.field(i).type, pa_type.field(i).name
+            )
+            child_meta.append(field_meta)
+        metadata = plc.interop.ColumnMetadata(name, child_meta)
+    elif pa.types.is_struct(pa_type):
         child_meta = []
         for i in range(pa_type.num_fields):
             field_meta = metadata_from_arrow_type(
@@ -57,8 +65,8 @@ def assert_column_eq(
     if isinstance(rhs, pa.ChunkedArray):
         rhs = rhs.combine_chunks()
 
-    # print(lhs)
-    # print(rhs)
+    print(lhs)
+    print(rhs)
     assert lhs.equals(rhs)
 
 
