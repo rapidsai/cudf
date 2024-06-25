@@ -13,7 +13,7 @@
 # limitations under the License.
 
 [build-system]
-build-backend = "scikit_build_core.build"
+build-backend = "rapids_build_backend.build"
 requires = [
     "rapids-build-backend>=0.3.0,<0.4.0.dev0",
     "scikit-build-core[pyproject]>=0.7.0",
