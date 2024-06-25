@@ -11,11 +11,8 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.datasets import randomdata
-from cudf.testing._utils import (
-    assert_eq,
-    assert_exceptions_equal,
-    expect_warning_if,
-)
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 params_dtypes = [np.int32, np.uint32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]

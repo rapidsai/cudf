@@ -17,11 +17,11 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.errors import MixedTypeError
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     SERIES_OR_INDEX_NAMES,
     TIMEDELTA_TYPES,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
     gen_rand,

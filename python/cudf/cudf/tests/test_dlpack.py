@@ -9,7 +9,7 @@ import pytest
 from packaging import version
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 nelems = [0, 3, 10]
 dtype = [np.uint16, np.int32, np.float64]

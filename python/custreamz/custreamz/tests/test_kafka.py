@@ -1,8 +1,8 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 import confluent_kafka as ck
 import pytest
 
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 @pytest.mark.parametrize("commit_offset", [1, 45, 100, 22, 1000, 10])
