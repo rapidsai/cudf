@@ -47,6 +47,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._compat import PANDAS_GE_210
+from cudf.core._internals.timezones import get_compatible_timezone
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
     Buffer,
@@ -1871,6 +1872,21 @@ def as_column(
             arbitrary.dtype,
             (pd.CategoricalDtype, pd.IntervalDtype, pd.DatetimeTZDtype),
         ):
+            if isinstance(arbitrary.dtype, pd.DatetimeTZDtype):
+                new_tz = get_compatible_timezone(arbitrary.dtype)
+                arbitrary = arbitrary.astype(new_tz)
+            if isinstance(arbitrary.dtype, pd.CategoricalDtype) and isinstance(
+                arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
+            ):
+                new_tz = get_compatible_timezone(
+                    arbitrary.dtype.categories.dtype
+                )
+                new_cats = arbitrary.dtype.categories.astype(new_tz)
+                new_dtype = pd.CategoricalDtype(
+                    categories=new_cats, ordered=arbitrary.dtype.ordered
+                )
+                arbitrary = arbitrary.astype(new_dtype)
+
             return as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
