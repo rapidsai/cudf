@@ -17,7 +17,7 @@ from cython.operator import dereference
 
 
 cpdef Column slice_strings(
-    Column input,
+    Column input not None,
     ColumnOrScalar start=None,
     ColumnOrScalar stop=None,
     Scalar step=None
