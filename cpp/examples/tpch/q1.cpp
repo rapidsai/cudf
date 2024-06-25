@@ -45,7 +45,7 @@
         avg(l_discount) as avg_disc,
         count(*) as count_order
     from
-        lineitem
+        '~/tpch_sf1/lineitem/part-0.parquet'
     where
             l_shipdate <= date '1998-09-02'
     group by
