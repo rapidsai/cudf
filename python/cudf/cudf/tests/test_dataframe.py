@@ -3658,6 +3658,12 @@ def test_dataframe_mulitindex_sort_index(
         assert_eq(expected, got)
 
 
+def test_sort_index_axis_1_ignore_index_true_columnaccessor_state_names():
+    gdf = cudf.DataFrame([[1, 2, 3]], columns=["b", "a", "c"])
+    result = gdf.sort_index(axis=1, ignore_index=True)
+    assert result._data.names == tuple(result._data.keys())
+
+
 @pytest.mark.parametrize("dtype", dtypes + ["category"])
 def test_dataframe_0_row_dtype(dtype):
     if dtype == "category":
