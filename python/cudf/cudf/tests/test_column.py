@@ -9,7 +9,8 @@ import pytest
 import cudf
 from cudf._lib.transform import mask_to_bools
 from cudf.core.column.column import as_column
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 from cudf.utils import dtypes as dtypeutils
 
 dtypes = sorted(

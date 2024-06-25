@@ -17,10 +17,10 @@ import cudf
 from cudf import concat
 from cudf.core.column.string import StringColumn
 from cudf.core.index import Index
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    assert_eq,
     assert_exceptions_equal,
 )
 from cudf.utils import dtypes as dtypeutils

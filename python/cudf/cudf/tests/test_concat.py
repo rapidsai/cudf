@@ -10,11 +10,8 @@ import pytest
 
 import cudf
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
-from cudf.testing._utils import (
-    assert_eq,
-    assert_exceptions_equal,
-    expect_warning_if,
-)
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
 @contextmanager
