@@ -882,38 +882,35 @@ cdef class ParquetReader:
         return df
 
     def read(self):
-        dfs = None
+        dfs = self._read_chunk()
         while self._has_next():
-            if dfs is None:
-                dfs = self._read_chunk()
-            else:
-                dfs = [dfs, self._read_chunk()]
-                concatenated_columns = []
-                column_names = dfs[0]._column_names
-                all_columns = []
-                for i in range(len(column_names)):
-                    cols = [table._data.columns[i] for table in dfs]
-                    all_columns.append(cols)
-                i = 0
-                del dfs
-                while True:
-                    try:
-                        columns = all_columns[0]
-                    except IndexError:
-                        break
-                    if len(columns) == 0:
-                        break
-                    res_col = None
-                    res_col = concat_columns(columns)
-                    del all_columns[0]
-                    concatenated_columns.append(res_col.to_pylibcudf(mode="read"))
-                dfs = cudf.DataFrame._from_data(
-                    *data_from_pylibcudf_table(
-                        pylibcudf.Table(concatenated_columns),
-                        column_names=column_names,
-                        index_names=None
-                    )
+            dfs = [dfs, self._read_chunk()]
+            concatenated_columns = []
+            column_names = dfs[0]._column_names
+            all_columns = []
+            for i in range(len(column_names)):
+                cols = [table._data.columns[i] for table in dfs]
+                all_columns.append(cols)
+            i = 0
+            del dfs
+            while True:
+                try:
+                    columns = all_columns[0]
+                except IndexError:
+                    break
+                if len(columns) == 0:
+                    break
+                res_col = None
+                res_col = concat_columns(columns)
+                del all_columns[0]
+                concatenated_columns.append(res_col.to_pylibcudf(mode="read"))
+            dfs = cudf.DataFrame._from_data(
+                *data_from_pylibcudf_table(
+                    pylibcudf.Table(concatenated_columns),
+                    column_names=column_names,
+                    index_names=None
                 )
+            )
 
         df = _process_metadata(dfs, self.result_meta, self.names, self.row_groups,
                                self.filepaths_or_buffers, self.pa_buffers,
