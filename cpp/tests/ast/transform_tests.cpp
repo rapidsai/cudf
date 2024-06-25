@@ -65,6 +65,22 @@ TEST_F(TransformTest, ColumnReference)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
+TEST_F(TransformTest, BasicAdditionDoubleCast)
+{
+  auto c_0 = column_wrapper<double>{3, 20, 1, 50};
+  std::vector<__int128_t> data1{10, 7, 20, 0};
+  auto c_1 = cudf::test::fixed_point_column_wrapper<__int128_t>(
+    data1.begin(), data1.end(), numeric::scale_type{0});
+  auto table      = cudf::table_view{{c_0, c_1}};
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto cast       = cudf::ast::operation(cudf::ast::ast_operator::CAST_TO_FLOAT64, col_ref_1);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, cast);
+  auto expected   = column_wrapper<double>{13, 27, 21, 50};
+  auto result     = cudf::compute_column(table, expression);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
 TEST_F(TransformTest, Literal)
 {
   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
