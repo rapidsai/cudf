@@ -8,6 +8,7 @@ from . cimport (
     concatenate,
     copying,
     datetime,
+    expressions,
     filling,
     groupby,
     join,

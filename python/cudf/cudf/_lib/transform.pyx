@@ -19,7 +19,7 @@ from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 cimport cudf._lib.pylibcudf.libcudf.transform as libcudf_transform
 from cudf._lib.column cimport Column
-from cudf._lib.expressions cimport Expression
+from cudf._lib.pylibcudf.expressions cimport Expression
 from cudf._lib.pylibcudf.libcudf.column.column cimport column
 from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
 from cudf._lib.pylibcudf.libcudf.expressions cimport expression

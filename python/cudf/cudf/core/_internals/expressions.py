@@ -4,7 +4,7 @@ from __future__ import annotations
 import ast
 import functools
 
-from cudf._lib.expressions import (
+from cudf._lib.pylibcudf.expressions import (
     ASTOperator,
     ColumnReference,
     Expression,
