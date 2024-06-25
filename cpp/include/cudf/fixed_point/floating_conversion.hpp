@@ -657,7 +657,7 @@ template <typename IntegerType, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<IntegerT
 CUDF_HOST_DEVICE inline IntegerType guarded_left_shift(IntegerType value, int bit_shift)
 {
   // Bit shifts larger than this are undefined behavior
-  constexpr int max_safe_bit_shift = cuda::std::numeric_limits<IntegerType>::digits - 1;
+  static constexpr int max_safe_bit_shift = cuda::std::numeric_limits<IntegerType>::digits - 1;
   return (bit_shift <= max_safe_bit_shift) ? value << bit_shift
                                            : cuda::std::numeric_limits<IntegerType>::max();
 }
@@ -674,7 +674,7 @@ template <typename IntegerType, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<IntegerT
 CUDF_HOST_DEVICE inline IntegerType guarded_right_shift(IntegerType value, int bit_shift)
 {
   // Bit shifts larger than this are undefined behavior
-  constexpr int max_safe_bit_shift = cuda::std::numeric_limits<IntegerType>::digits - 1;
+  static constexpr int max_safe_bit_shift = cuda::std::numeric_limits<IntegerType>::digits - 1;
   return (bit_shift <= max_safe_bit_shift) ? value >> bit_shift : 0;
 }
 
@@ -748,20 +748,18 @@ struct shifting_constants {
 };
 
 /**
- * @brief Increment integer rep of floating point if conversion causes truncation
+ * @brief Add half a bit to integer rep of floating point if conversion causes truncation
  *
  * @note This fixes problems like 1.2 (value = 1.1999...) at scale -1 -> 11
  *
  * @tparam T Type of integer holding the floating-point significand
- * @param integral_mantissa The integer representation of the floating-point significand
+ * @param integer_rep The integer representation of the floating-point significand
  * @param exp2 The power of 2 that needs to be applied to the significand
  * @param exp10 The power of 10 that needs to be applied to the significand
- * @return significand, incremented if the conversion to decimal causes truncation
+ * @return integer_rep, shifted 1 and ++'d if the conversion to decimal causes truncation
  */
 template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
-CUDF_HOST_DEVICE T increment_on_truncation(T const integral_mantissa,
-                                           int const exp2,
-                                           int const exp10)
+CUDF_HOST_DEVICE cuda::std::pair<T, int> add_half_if_truncates(T integer_rep, int exp2, int exp10)
 {
   // The user-supplied scale may truncate information, so we need to talk about rounding.
   // We have chosen not to round, so we want 1.23456f with scale -4 to be decimal 12345
@@ -773,14 +771,24 @@ CUDF_HOST_DEVICE T increment_on_truncation(T const integral_mantissa,
   // and the value 1.199999... happened to be closer to 1.2 than the next value (1.2000...1...)
 
   // If the scale truncates information (we didn't choose to keep exactly 1.1999...), how
-  // do we make sure we store 1.2? All we have to do is add 1 ulp! (unit in the last place)
+  // do we make sure we store 1.2?  We'll add half an ulp! (unit in the last place)
   // Then 1.1999... becomes 1.2000...1... which truncates to 1.2.
-  // And if it had been 1.2000...1..., adding 1 ulp still truncates to 1.2, the result is unchanged.
+  // And if it had been 1.2000...1..., adding half an ulp still truncates to 1.2
 
-  // If we add 1 to the last bit, we are effectively adding 1/2 to the 2nd-to-last bit.
-  // This is like rounding to the 2nd-to-last bit (if we were to floor afterwards).
-  // However we don't want to add 1 to the last bit if we are keeping enough precision.
-  // So, only add 1 if exp10 shift is larger than corresponding exp2 shift to 2nd-to-last bit.
+  // Why 1/2 an ulp? Because that's all that is needed. The reason we have this problem in the
+  // first place is because the compiler rounded (e.g.) 1.2 to the nearest floating point number.
+  // The distance of this rounding is at most 1/2 ulp, otherwise we'd have rounded the other way.
+
+  // How do we add 1/2 an ulp? Just shift the bits left (updating exp2) and add 1.
+  // We'll always shift up so every input to the conversion algorithm is aligned the same way.
+
+  // If we add a full ulp we run into issues where we add too much and get the wrong result.
+  // This is because (e.g.) 2^23 = 8.4E6 which is not quite 7 digits of precision.
+  // So if we want 7 digits, that may "barely" truncate information; adding a 1 ulp is overkill.
+
+  // So when does the user-supplied scale truncate info?
+  // For powers > 0: When the 10s (scale) shift is larger than the corresponding bit-shift.
+  // For powers < 0: When the 10s shift is less than the corresponding bit-shift.
 
   // Corresponding bit-shift:
   // 2^10 is approximately 10^3, but this is off by 1.024%
@@ -788,13 +796,17 @@ CUDF_HOST_DEVICE T increment_on_truncation(T const integral_mantissa,
   // So 10^N = 2^(10*N/3 - N/90) = 2^(299*N/90)
   // Do comparison without dividing, which loses information:
   // Note: if shift is "equal," still truncates if exp2 < 0 (shifting UP by 2s, 2^10 > 10^3)
-  int const exp2_term  = 90 * (exp2 + 1);  //+1: effectively adding 1/2 to 2nd-to-last-bit
+  int const exp2_term  = 90 * exp2;
   int const exp10_term = 299 * exp10;
   bool const conversion_truncates =
     (exp10_term > exp2_term) || ((exp2_term == exp10_term) && (exp2 < 0));
 
-  // (Potentially) increment and return
-  return integral_mantissa + static_cast<T>(conversion_truncates);
+  // Add half a bit on truncation (shift to make room and update exp2)
+  integer_rep <<= 1;
+  --exp2;
+  integer_rep += static_cast<T>(conversion_truncates);
+
+  return {integer_rep, exp2};
 }
 
 /**
@@ -831,8 +843,9 @@ shift_to_decimal_posexp(typename shifting_constants<FloatingType>::IntegerRep co
   // so that we don't lose information we need on intermediary right-shifts.
   // Note that since we're shifting 2s up, we need num_2s_shift_buffer_bits space on the high side,
   // For all numbers this bit shift is a fixed distance, due to the understood 2^0 bit.
+  // Note that shift_from is +1 due to shift in add_half_if_truncates()
   static constexpr int shift_up_to = sizeof(ShiftingRep) * 8 - Constants::num_2s_shift_buffer_bits;
-  static constexpr int shift_from  = Constants::num_significand_bits;
+  static constexpr int shift_from  = Constants::num_significand_bits + 1;
   static constexpr int max_init_shift = shift_up_to - shift_from;
 
   // If our total bit shift is less than this, we don't need to iterate
@@ -927,8 +940,9 @@ shift_to_decimal_negexp(typename shifting_constants<FloatingType>::IntegerRep ba
   // We want to start by lining up our bits to the top of the shifting range,
   // except our first operation is a multiply, so not quite that far
   // We are bit-shifting down, so we need extra bits on the low-side, which this has.
+  // Note that shift_from is +1 due to shift in add_half_if_truncates()
   static constexpr int shift_up_to        = sizeof(ShiftingRep) * 8 - Constants::max_bits_shift;
-  static constexpr int shift_from         = Constants::num_significand_bits;
+  static constexpr int shift_from         = Constants::num_significand_bits + 1;
   static constexpr int num_init_bit_shift = shift_up_to - shift_from;
 
   // Perform initial shift
@@ -985,16 +999,21 @@ CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& flo
 
   // Note that the base2_value here is an unsigned integer with sizeof(FloatingType)
   auto const is_negative                  = converter::get_is_negative(integer_rep);
-  auto const [base2_value, floating_exp2] = converter::get_significand_and_exp2(integer_rep);
+  auto const [significand, floating_exp2] = converter::get_significand_and_exp2(integer_rep);
 
-  auto const exp2  = floating_exp2;  // Can't capture from a parameter pack
+  auto exp2        = floating_exp2;  // Can't capture from a parameter pack
   auto const exp10 = static_cast<int>(scale);
 
-  // Increment if truncating to yield expected value, see function for discussion
-  auto const incremented = increment_on_truncation(base2_value, exp2, exp10);
+  // Add half a bit if truncating to yield expected value, see function for discussion.
+  auto const [base2_value_bound, exp2_bound] =
+    add_half_if_truncates(significand, floating_exp2, exp10);
+
+  // Structured binding variables cannot be captured :/
+  auto const base2_value = base2_value_bound;
+  auto const exp2        = exp2_bound;
 
   // Apply the powers of 2 and 10 to convert to decimal.
-  // The result will be incremented * (2^exp2) / (10^exp10)
+  // The result will be base2_value * (2^exp2) / (10^exp10)
   //
   // Note that while this code is branchy, the decimal scale factor is part of the
   // column type itself, so every thread will take the same branches on exp10.
@@ -1008,26 +1027,26 @@ CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& flo
       // NOTE: Left Bit-shift can overflow! As can cast! (e.g. double -> decimal32)
       // Bit shifts may be large, guard against UB
       if (exp2 >= 0) {
-        return guarded_left_shift(static_cast<UnsignedRep>(incremented), exp2);
+        return guarded_left_shift(static_cast<UnsignedRep>(base2_value), exp2);
       } else {
-        return guarded_right_shift(incremented, -exp2);
+        return guarded_right_shift(base2_value, -exp2);
       }
     } else if (exp10 > 0) {
       if (exp2 <= 0) {
         // Power-2/10 shifts both downward: order doesn't matter, apply and bail.
         // Guard against shift being undefined behavior
-        auto const shifted = guarded_right_shift(incremented, -exp2);
+        auto const shifted = guarded_right_shift(base2_value, -exp2);
         return divide_power10<decltype(shifted)>(shifted, exp10);
       }
-      return shift_to_decimal_posexp<FloatingType>(incremented, exp2, exp10);
+      return shift_to_decimal_posexp<FloatingType>(base2_value, exp2, exp10);
     } else {  // exp10 < 0
       if (exp2 >= 0) {
         // Power-2/10 shifts both upward: order doesn't matter, apply and bail.
         // NOTE: Either shift, multiply, or cast (e.g. double -> decimal32) can overflow!
-        auto const shifted = guarded_left_shift(static_cast<UnsignedRep>(incremented), exp2);
+        auto const shifted = guarded_left_shift(static_cast<UnsignedRep>(base2_value), exp2);
         return multiply_power10<UnsignedRep>(shifted, -exp10);
       }
-      return shift_to_decimal_negexp<Rep, FloatingType>(incremented, exp2, exp10);
+      return shift_to_decimal_negexp<Rep, FloatingType>(base2_value, exp2, exp10);
     }
   }();
 
