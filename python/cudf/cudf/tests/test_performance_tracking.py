@@ -5,6 +5,7 @@ from io import StringIO
 import pytest
 
 import rmm.mr
+import rmm.statistics
 
 import cudf
 from cudf.utils.performance_tracking import (
@@ -28,7 +29,9 @@ def test_memory_profiling(rmm_reset):
     df1 = cudf.DataFrame({"a": [1, 2, 3]})
     assert len(get_memory_records()) == 0
 
+    rmm.statistics.enable_statistics()
     cudf.set_option("memory_profiling", True)
+
     df1.merge(df1)
 
     assert len(get_memory_records()) > 0
