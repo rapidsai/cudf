@@ -31,6 +31,7 @@
 #include <cudf/groupby.hpp>
 #include <cudf/binaryop.hpp>
 #include <cudf/sorting.hpp>
+
 /*
     select
         l_returnflag,
@@ -56,10 +57,10 @@
 */
 
 void write_parquet(cudf::table_view input, std::string filepath) {
-  auto sink_info = cudf::io::sink_info(filepath);
-  auto builder = cudf::io::parquet_writer_options::builder(sink_info, input);
-  auto options = builder.build();
-  cudf::io::write_parquet(options);
+    auto sink_info = cudf::io::sink_info(filepath);
+    auto builder = cudf::io::parquet_writer_options::builder(sink_info, input);
+    auto options = builder.build();
+    cudf::io::write_parquet(options);
 }
 
 std::unique_ptr<cudf::table> append_col_to_table(
@@ -72,16 +73,27 @@ std::unique_ptr<cudf::table> append_col_to_table(
     return std::make_unique<cudf::table>(std::move(columns));
 }
 
-std::unique_ptr<cudf::table> read_parquet(std::vector<std::string>& projection_cols) {
-    std::string path = "/home/jayjeetc/tpch_sf1/lineitem/part-0.parquet";
-    auto source = cudf::io::source_info(path);
+std::unique_ptr<cudf::table> scan_filter_project() {
+    std::string lineitem = "/home/jayjeetc/tpch_sf1/lineitem/part-0.parquet";
+    auto source = cudf::io::source_info(lineitem);
     auto builder = cudf::io::parquet_reader_options_builder(source);
 
+    std::vector<std::string> projection_cols = {
+        "l_returnflag",
+        "l_linestatus",
+        "l_quantity",
+        "l_extendedprice",
+        "l_discount", 
+        "l_shipdate",
+        "l_orderkey",
+        "l_tax"
+    };
+
     auto l_shipdate = cudf::ast::column_reference(5);
-    auto date_scalar = cudf::timestamp_scalar<cudf::timestamp_s>(1719255747L, true);
+    auto date_scalar = cudf::timestamp_scalar<cudf::timestamp_D>(10471, true);
     auto date = cudf::ast::literal(date_scalar);
     auto filter_expr = cudf::ast::operation(
-        cudf::ast::ast_operator::LESS,
+        cudf::ast::ast_operator::LESS_EQUAL,
         l_shipdate,
         date
     );
@@ -115,7 +127,7 @@ std::unique_ptr<cudf::column> calc_charge(std::unique_ptr<cudf::table>& table) {
     return charge;
 }
 
-std::unique_ptr<cudf::table> group_by(std::unique_ptr<cudf::table>& table) {
+std::unique_ptr<cudf::table> calc_group_by(std::unique_ptr<cudf::table>& table) {
     auto tbl_view = table->view();
     auto keys = cudf::table_view{{tbl_view.column(0), tbl_view.column(1)}};
 
@@ -171,8 +183,8 @@ std::unique_ptr<cudf::table> group_by(std::unique_ptr<cudf::table>& table) {
     return std::make_unique<cudf::table>(cudf::table_view(columns));
 }
 
-std::unique_ptr<cudf::table> sort_by_key(
-    std::unique_ptr<cudf::table>& table, std::vector<int>& keys) {
+std::unique_ptr<cudf::table> sort(
+    std::unique_ptr<cudf::table>& table) {
     auto tbl_view = table->view();
     return cudf::sort_by_key(
         tbl_view, 
@@ -181,25 +193,13 @@ std::unique_ptr<cudf::table> sort_by_key(
 }
 
 int main() {
-    std::vector<std::string> column_names = {
-        "l_returnflag",
-        "l_linestatus",
-        "l_quantity",
-        "l_extendedprice",
-        "l_discount", 
-        "l_shipdate",
-        "l_orderkey",
-        "l_tax"
-    };
-
-    std::unique_ptr<cudf::table> t1 = read_filter_project(column_names);
+    std::unique_ptr<cudf::table> t1 = scan_filter_project();
     std::unique_ptr<cudf::column> disc_price_col = calc_disc_price(t1);
     std::unique_ptr<cudf::column> charge_col = calc_charge(t1);
     auto t2 = append_col_to_table(std::move(t1), std::move(disc_price_col));
     auto t3 = append_col_to_table(std::move(t2), std::move(charge_col));
-    auto t4 = group_by(t3);
-
-    write_parquet(t4->view(), "q1.parquet");
-
+    auto t4 = calc_group_by(t3);
+    auto t5 = sort(t4);
+    write_parquet(t5->view(), "q1.parquet");
     return 0;
 }
