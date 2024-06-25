@@ -1,11 +1,9 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-import numpy as np
 import pyarrow as pa
 import pytest
 from utils import assert_column_eq
 
-import cudf
 from cudf._lib import pylibcudf as plc
 
 
@@ -56,10 +54,9 @@ def test_contains_scalar(test_data):
     arr = pa.array(list_column)
 
     plc_column = plc.interop.from_arrow(arr)
-    value = np.int64(1)
-    scalar = cudf.utils.dtypes.to_cudf_compatible_scalar(value, value.dtype)
-    s = cudf._lib.scalar.DeviceScalar(scalar, value.dtype)
-    res = plc.lists.contains(plc_column, s)
+    scalar = pa.scalar(1)
+    plc_scalar = plc.interop.from_arrow(scalar)
+    res = plc.lists.contains(plc_column, plc_scalar)
 
     expect = pa.array([True, False, False, False])
 
@@ -97,10 +94,9 @@ def test_index_of_scalar(test_data):
     arr = pa.array(list_column)
 
     plc_column = plc.interop.from_arrow(arr)
-    value = np.int64(1)
-    scalar = cudf.utils.dtypes.to_cudf_compatible_scalar(value, value.dtype)
-    s = cudf._lib.scalar.DeviceScalar(scalar, value.dtype)
-    res = plc.lists.index_of(plc_column, s, True)
+    scalar = pa.scalar(1)
+    plc_scalar = plc.interop.from_arrow(scalar)
+    res = plc.lists.index_of(plc_column, plc_scalar, True)
 
     expect = pa.array([1, -1, -1, -1], type=pa.int32())
 

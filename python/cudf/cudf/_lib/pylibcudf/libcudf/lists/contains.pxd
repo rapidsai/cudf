@@ -15,8 +15,8 @@ from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 cdef extern from "cudf/lists/contains.hpp" namespace "cudf::lists" nogil:
 
     cpdef enum class duplicate_find_option(int32_t):
-        FIND_FIRST "cudf::lists::duplicate_find_option::FIND_FIRST"
-        FIND_LAST "cudf::lists::duplicate_find_option::FIND_LAST"
+        FIND_FIRST
+        FIND_LAST
 
     cdef unique_ptr[column] contains(
         const lists_column_view& lists,

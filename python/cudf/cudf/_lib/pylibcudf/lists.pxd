@@ -11,6 +11,7 @@ from .table cimport Table
 
 ctypedef fused ColumnOrScalar:
     Column
+    Scalar
     DeviceScalar
 
 cpdef Table explode_outer(Table, size_type explode_column_idx)
