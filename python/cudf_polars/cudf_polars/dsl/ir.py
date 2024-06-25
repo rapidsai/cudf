@@ -610,13 +610,10 @@ class Join(IR):
         if right_policy is None:
             # Semi join
             lg = join_fn(left_on.table, right_on.table, null_equality)
-            left = left.replace_columns(*left_on.columns)
             table = plc.copying.gather(left.table, lg, left_policy)
             result = DataFrame.from_table(table, left.column_names)
         else:
             lg, rg = join_fn(left_on.table, right_on.table, null_equality)
-            left = left.replace_columns(*left_on.columns)
-            right = right.replace_columns(*right_on.columns)
             if coalesce and how == "inner":
                 right = right.discard_columns(right_on.column_names_set)
             left = DataFrame.from_table(
