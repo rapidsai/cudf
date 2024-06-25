@@ -17,7 +17,7 @@ import dataclasses
 import itertools
 import types
 from functools import cache
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, NoReturn
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import pyarrow as pa
 from typing_extensions import assert_never
@@ -56,7 +56,6 @@ __all__ = [
     "MapFunction",
     "Union",
     "HConcat",
-    "ExtContext",
 ]
 
 
@@ -153,7 +152,9 @@ class IR:
             since the translation phase should pick up things that we
             cannot handle.
         """
-        raise NotImplementedError
+        raise NotImplementedError(
+            f"Evaluation of plan {type(self).__name__}"
+        )  # pragma: no cover
 
 
 @dataclasses.dataclass(slots=True)
@@ -195,7 +196,9 @@ class Scan(IR):
         if self.file_options.n_rows is not None:
             raise NotImplementedError("row limit in scan")
         if self.typ not in ("csv", "parquet"):
-            raise NotImplementedError(f"Unhandled scan type: {self.typ}")
+            raise NotImplementedError(
+                f"Unhandled scan type: {self.typ}"
+            )  # pragma: no cover; polars raises on the rust side for now
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -346,7 +349,9 @@ class Reduce(IR):
     expr: list[expr.NamedExpr]
     """List of expressions to evaluate to form the new dataframe."""
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame]
+    ) -> DataFrame:  # pragma: no cover; polars doesn't emit this node yet
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         columns = broadcast(*(e.evaluate(df) for e in self.expr))
@@ -422,8 +427,6 @@ class GroupBy(IR):
         if isinstance(agg, (expr.BinOp, expr.Cast)):
             return max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, expr.Agg):
-            if agg.name == "implode":
-                raise NotImplementedError("implode in groupby")
             return 1 + max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, (expr.Len, expr.Col, expr.Literal)):
             return 0
@@ -435,7 +438,9 @@ class GroupBy(IR):
         if self.options.rolling is None and self.maintain_order:
             raise NotImplementedError("Maintaining order in groupby")
         if self.options.rolling:
-            raise NotImplementedError("rolling window/groupby")
+            raise NotImplementedError(
+                "rolling window/groupby"
+            )  # pragma: no cover; rollingwindow constructor has already raised
         if any(GroupBy.check_agg(a.value) > 1 for a in self.agg_requests):
             raise NotImplementedError("Nested aggregations in groupby")
         self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
@@ -937,24 +942,4 @@ class HConcat(IR):
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
         return DataFrame(
             list(itertools.chain.from_iterable(df.columns for df in dfs)),
-        )
-
-
-@dataclasses.dataclass(slots=True)
-class ExtContext(IR):
-    """
-    Concatenate dataframes horizontally.
-
-    Prefer HConcat, since this is going to be deprecated on the polars side.
-    """
-
-    df: IR
-    """Input."""
-    extra: list[IR]
-    """List of extra inputs."""
-
-    def __post_init__(self) -> NoReturn:
-        """Validate preconditions."""
-        raise NotImplementedError(
-            "ExtContext will be deprecated, use horizontal concat instead."
         )

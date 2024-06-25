@@ -9,7 +9,7 @@ import pytest
 import cudf
 from cudf.core.byte_pair_encoding import BytePairEncoder
 from cudf.core.tokenize_vocabulary import TokenizeVocabulary
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 def test_tokenize():

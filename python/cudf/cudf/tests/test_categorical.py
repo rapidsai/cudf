@@ -11,11 +11,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import (
-    NUMERIC_TYPES,
-    assert_eq,
-    assert_exceptions_equal,
-)
+from cudf.testing import assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, assert_exceptions_equal
 
 
 @contextmanager
