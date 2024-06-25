@@ -912,10 +912,9 @@ cdef class ParquetReader:
                 )
             )
 
-        df = _process_metadata(dfs, self.result_meta, self.names, self.row_groups,
+        return _process_metadata(dfs, self.result_meta, self.names, self.row_groups,
                                self.filepaths_or_buffers, self.pa_buffers,
                                self.allow_range_index, self.cpp_use_pandas_metadata)
-        return df
 
 cpdef merge_filemetadata(object filemetadata_list):
     """
