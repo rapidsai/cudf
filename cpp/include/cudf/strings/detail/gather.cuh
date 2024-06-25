@@ -33,6 +33,8 @@
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <inttypes.h>
+#include <cstdio>
 
 namespace cudf {
 namespace strings {
@@ -228,7 +230,6 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
 {
   auto const output_count = std::distance(map_begin, map_end);
   if (output_count == 0) return rmm::device_uvector<char>(0, stream, mr);
-
   auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
   auto d_chars    = chars_data.data();
 
@@ -314,7 +315,6 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
     cudf::detail::offsetalator_factory::make_input_iterator(out_offsets_column->view());
   auto out_chars_data = gather_chars(
     d_strings->begin<string_view>(), begin, end, offsets_view, total_bytes, stream, mr);
-
   return make_strings_column(output_count,
                              std::move(out_offsets_column),
                              out_chars_data.release(),

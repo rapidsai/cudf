@@ -52,12 +52,15 @@ namespace detail {
 inline rmm::device_buffer create_data(data_type type,
                                       size_type size,
                                       rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+                                      rmm::device_async_resource_ref mr,
+                                      bool is_string)
 {
   std::size_t data_size = size_of(type) * size;
 
   rmm::device_buffer data(data_size, stream, mr);
-  CUDF_CUDA_TRY(cudaMemsetAsync(data.data(), 0, data_size, stream.value()));
+  if (is_string) {
+    CUDF_CUDA_TRY(cudaMemsetAsync(data.data(), 0, data_size, stream.value()));
+  }
 
   return data;
 }
