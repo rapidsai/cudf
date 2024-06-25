@@ -33,6 +33,8 @@ from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 from cudf._lib import pylibcudf
 
+from cudf._lib.pylibcudf cimport Scalar
+
 
 @acquire_spill_lock()
 def count_elements(Column col):
@@ -151,7 +153,7 @@ def contains_scalar(Column col, py_search_key):
     return Column.from_pylibcudf(
         pylibcudf.lists.contains(
             col.to_pylibcudf(mode="read"),
-            py_search_key.device_value,
+            <Scalar> py_search_key.device_value.c_value,
         )
     )
 
@@ -161,7 +163,7 @@ def index_of_scalar(Column col, object py_search_key):
     return Column.from_pylibcudf(
         pylibcudf.lists.index_of(
             col.to_pylibcudf(mode="read"),
-            py_search_key.device_value,
+            <Scalar> py_search_key.device_value.c_value,
             True,
         )
     )
