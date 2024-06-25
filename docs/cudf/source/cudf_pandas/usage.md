@@ -26,6 +26,36 @@ From the command line, run your Python scripts with `-m cudf.pandas`:
 python -m cudf.pandas script.py
 ```
 
+### Usage in tandem with
+[`multiprocessing`](https://docs.python.org/3/library/multiprocessing.html)
+or
+[`concurrent.futures`](https://docs.python.org/3/library/concurrent.futures.html)
+process pools
+
+To use a pool of workers (for example
+[`multiprocessing.Pool`](https://docs.python.org/3/library/multiprocessing.html#multiprocessing.pool.Pool)
+or
+[`concurrent.futures.ProcessPoolExecutor`](https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ProcessPoolExecutor))
+in your script with `cudf.pandas`, the `cudf.pandas` module must be
+loaded on the worker processes, as well as by the controlling script.
+The most foolproof way to do this is to programmatically install
+`cudf.pandas` at the top of your script, before anything else.
+For example
+
+```python
+# This is equivalent to python -m cudf.pandas, but will run on the
+# workers too. These two lines must run before pandas is imported,
+# either directly or transitively.
+import cudf.pandas
+cudf.pandas.install()
+
+from multiprocessing import Pool
+
+with Pool(4) as pool:
+    # use pool here
+    ...
+```
+
 ## Understanding performance - the `cudf.pandas` profiler
 
 `cudf.pandas` will attempt to use the GPU whenever possible and fall

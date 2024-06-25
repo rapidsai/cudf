@@ -5,9 +5,10 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, TypeVar, Union
 
 import numpy as np
 from pandas import Period, Timedelta, Timestamp
-from pandas.api.extensions import ExtensionDtype
 
 if TYPE_CHECKING:
+    from pandas.api.extensions import ExtensionDtype
+
     import cudf
 
 # Backwards compat: mypy >= 0.790 rejects Type[NotImplemented], but

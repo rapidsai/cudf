@@ -8,8 +8,8 @@ import cudf._lib.pylibcudf as plc
 
 
 @pytest.fixture(scope="module")
-def pa_data_col():
-    return pa.array(
+def data_col():
+    pa_array = pa.array(
         [
             "abc123",
             "ABC123",
@@ -53,16 +53,12 @@ def pa_data_col():
             None,
         ]
     )
+    return pa_array, plc.interop.from_arrow(pa_array)
 
 
 @pytest.fixture(scope="module")
-def plc_data_col(pa_data_col):
-    return plc.interop.from_arrow(pa_data_col)
-
-
-@pytest.fixture(scope="module")
-def pa_target_col():
-    return pa.array(
+def target_col():
+    pa_array = pa.array(
         [
             "a",
             "B",
@@ -106,24 +102,18 @@ def pa_target_col():
             None,  # ends_with
         ]
     )
-
-
-@pytest.fixture(scope="module")
-def plc_target_col(pa_target_col):
-    return plc.interop.from_arrow(pa_target_col)
+    return pa_array, plc.interop.from_arrow(pa_array)
 
 
 @pytest.fixture(params=["a", " ", "A", "Ab", "23"], scope="module")
-def pa_target_scalar(request):
-    return pa.scalar(request.param, type=pa.string())
+def target_scalar(request):
+    pa_scalar = pa.scalar(request.param, type=pa.string())
+    return pa_scalar, plc.interop.from_arrow(pa_scalar)
 
 
-@pytest.fixture(scope="module")
-def plc_target_scalar(pa_target_scalar):
-    return plc.interop.from_arrow(pa_target_scalar)
-
-
-def test_find(pa_data_col, plc_data_col, pa_target_scalar, plc_target_scalar):
+def test_find(data_col, target_scalar):
+    pa_data_col, plc_data_col = data_col
+    pa_target_scalar, plc_target_scalar = target_scalar
     got = plc.strings.find.find(plc_data_col, plc_target_scalar, 0, -1)
 
     expected = pa.array(
@@ -134,7 +124,7 @@ def test_find(pa_data_col, plc_data_col, pa_target_scalar, plc_target_scalar):
         type=pa.int32(),
     )
 
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)
 
 
 def colwise_apply(pa_data_col, pa_target_col, operator):
@@ -161,7 +151,9 @@ def colwise_apply(pa_data_col, pa_target_col, operator):
     return expected
 
 
-def test_find_column(pa_data_col, pa_target_col, plc_data_col, plc_target_col):
+def test_find_column(data_col, target_col):
+    pa_data_col, plc_data_col = data_col
+    pa_target_col, plc_target_col = target_col
     expected = pa.array(
         [
             elem.find(target) if not (elem is None or target is None) else None
@@ -174,10 +166,12 @@ def test_find_column(pa_data_col, pa_target_col, plc_data_col, plc_target_col):
     )
 
     got = plc.strings.find.find(plc_data_col, plc_target_col, 0)
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)
 
 
-def test_rfind(pa_data_col, plc_data_col, pa_target_scalar, plc_target_scalar):
+def test_rfind(data_col, target_scalar):
+    pa_data_col, plc_data_col = data_col
+    pa_target_scalar, plc_target_scalar = target_scalar
     py_target = pa_target_scalar.as_py()
 
     got = plc.strings.find.rfind(plc_data_col, plc_target_scalar, 0, -1)
@@ -192,12 +186,12 @@ def test_rfind(pa_data_col, plc_data_col, pa_target_scalar, plc_target_scalar):
         type=pa.int32(),
     )
 
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)
 
 
-def test_contains(
-    pa_data_col, plc_data_col, pa_target_scalar, plc_target_scalar
-):
+def test_contains(data_col, target_scalar):
+    pa_data_col, plc_data_col = data_col
+    pa_target_scalar, plc_target_scalar = target_scalar
     py_target = pa_target_scalar.as_py()
 
     got = plc.strings.find.contains(plc_data_col, plc_target_scalar)
@@ -211,52 +205,52 @@ def test_contains(
         type=pa.bool_(),
     )
 
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)
 
 
-def test_contains_column(
-    pa_data_col, pa_target_col, plc_data_col, plc_target_col
-):
+def test_contains_column(data_col, target_col):
+    pa_data_col, plc_data_col = data_col
+    pa_target_col, plc_target_col = target_col
     expected = colwise_apply(
         pa_data_col, pa_target_col, lambda st, target: target in st
     )
     got = plc.strings.find.contains(plc_data_col, plc_target_col)
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)
 
 
-def test_starts_with(
-    pa_data_col, plc_data_col, pa_target_scalar, plc_target_scalar
-):
+def test_starts_with(data_col, target_scalar):
+    pa_data_col, plc_data_col = data_col
+    pa_target_scalar, plc_target_scalar = target_scalar
     py_target = pa_target_scalar.as_py()
     got = plc.strings.find.starts_with(plc_data_col, plc_target_scalar)
     expected = pa.compute.starts_with(pa_data_col, py_target)
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)
 
 
-def test_starts_with_column(
-    pa_data_col, pa_target_col, plc_data_col, plc_target_col
-):
+def test_starts_with_column(data_col, target_col):
+    pa_data_col, plc_data_col = data_col
+    pa_target_col, plc_target_col = target_col
     expected = colwise_apply(
         pa_data_col, pa_target_col, lambda st, target: st.startswith(target)
     )
     got = plc.strings.find.starts_with(plc_data_col, plc_target_col)
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)
 
 
-def test_ends_with(
-    pa_data_col, plc_data_col, pa_target_scalar, plc_target_scalar
-):
+def test_ends_with(data_col, target_scalar):
+    pa_data_col, plc_data_col = data_col
+    pa_target_scalar, plc_target_scalar = target_scalar
     py_target = pa_target_scalar.as_py()
     got = plc.strings.find.ends_with(plc_data_col, plc_target_scalar)
     expected = pa.compute.ends_with(pa_data_col, py_target)
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)
 
 
-def test_ends_with_column(
-    pa_data_col, pa_target_col, plc_data_col, plc_target_col
-):
+def test_ends_with_column(data_col, target_col):
+    pa_data_col, plc_data_col = data_col
+    pa_target_col, plc_target_col = target_col
     expected = colwise_apply(
         pa_data_col, pa_target_col, lambda st, target: st.endswith(target)
     )
     got = plc.strings.find.ends_with(plc_data_col, plc_target_col)
-    assert_column_eq(got, expected)
+    assert_column_eq(expected, got)

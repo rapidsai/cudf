@@ -144,7 +144,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnWrapperConstruction)
   // Check child columns for exactly correct values.
   vector_of_columns expected_children;
   expected_children.emplace_back(
-    cudf::test::strings_column_wrapper{names, {1, 1, 1, 0, 1, 1}}.release());
+    cudf::test::strings_column_wrapper{names, {true, true, true, false, true, true}}.release());
   expected_children.emplace_back(cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{
     {48, 27, 25, 31, 351, 351},
     {1, 1, 1, 0, 1, 0}}.release());

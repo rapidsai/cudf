@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 from contextlib import ContextDecorator
-from typing import Any, Dict, Optional, Tuple, Type, Union
+from typing import Any
 
 from cudf.core.buffer.buffer import (
     Buffer,
@@ -22,7 +22,7 @@ from cudf.core.buffer.spillable_buffer import (
 from cudf.options import get_option
 
 
-def get_buffer_owner(data: Any) -> Optional[BufferOwner]:
+def get_buffer_owner(data: Any) -> BufferOwner | None:
     """Get the owner of `data`, if one exists
 
     Search through the stack of data owners in order to find an
@@ -47,10 +47,10 @@ def get_buffer_owner(data: Any) -> Optional[BufferOwner]:
 
 
 def as_buffer(
-    data: Union[int, Any],
+    data: int | Any,
     *,
-    size: Optional[int] = None,
-    owner: Optional[object] = None,
+    size: int | None = None,
+    owner: object | None = None,
     exposed: bool = False,
 ) -> Buffer:
     """Factory function to wrap `data` in a Buffer object.
@@ -117,8 +117,8 @@ def as_buffer(
         )
 
     # Find the buffer types to return based on the current config
-    owner_class: Type[BufferOwner]
-    buffer_class: Type[Buffer]
+    owner_class: type[BufferOwner]
+    buffer_class: type[Buffer]
     if get_global_manager() is not None:
         owner_class = SpillableBufferOwner
         buffer_class = SpillableBuffer
@@ -161,7 +161,7 @@ def as_buffer(
     return buffer_class(owner=owner, offset=ptr - base_ptr, size=size)
 
 
-_thread_spill_locks: Dict[int, Tuple[Optional[SpillLock], int]] = {}
+_thread_spill_locks: dict[int, tuple[SpillLock | None, int]] = {}
 
 
 def _push_thread_spill_lock() -> None:
@@ -193,7 +193,7 @@ class acquire_spill_lock(ContextDecorator):
     pushing and popping from `_thread_spill_locks` using its thread ID.
     """
 
-    def __enter__(self) -> Optional[SpillLock]:
+    def __enter__(self) -> SpillLock | None:
         _push_thread_spill_lock()
         return get_spill_lock()
 
@@ -201,7 +201,7 @@ class acquire_spill_lock(ContextDecorator):
         _pop_thread_spill_lock()
 
 
-def get_spill_lock() -> Union[SpillLock, None]:
+def get_spill_lock() -> SpillLock | None:
     """Return a spill lock within the context of `acquire_spill_lock` or None
 
     Returns None, if spilling is disabled.

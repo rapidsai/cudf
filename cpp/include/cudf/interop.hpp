@@ -40,6 +40,8 @@
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <utility>
+
 struct DLManagedTensor;
 
 struct ArrowDeviceArray;
@@ -121,7 +123,7 @@ struct column_metadata {
    *
    * @param _name Name of the column
    */
-  column_metadata(std::string const& _name) : name(_name) {}
+  column_metadata(std::string _name) : name(std::move(_name)) {}
   column_metadata() = default;
 };
 

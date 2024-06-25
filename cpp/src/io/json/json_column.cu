@@ -888,8 +888,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     col.validity =
       cudf::detail::create_null_mask(col.num_rows, cudf::mask_state::ALL_NULL, stream, mr);
     col.type = json_col_t::StringColumn;
-    col.child_columns.clear();  // their references should be deleted too.
-    col.column_order.clear();
+    // destroy references of all child columns after this step, by calling remove_child_columns
   };
 
   path_from_tree tree_path{column_categories,
@@ -921,6 +920,19 @@ void make_device_json_column(device_span<SymbolT const> input,
   std::vector<uint8_t> is_mixed_type_column(num_columns, 0);
   std::vector<uint8_t> is_pruned(num_columns, 0);
   columns.try_emplace(parent_node_sentinel, std::ref(root));
+
+  std::function<void(NodeIndexT, device_json_column&)> remove_child_columns =
+    [&](NodeIndexT this_col_id, device_json_column& col) {
+      for (auto col_name : col.column_order) {
+        auto child_id                  = mapped_columns[{this_col_id, col_name}];
+        is_mixed_type_column[child_id] = 1;
+        remove_child_columns(child_id, col.child_columns.at(col_name));
+        mapped_columns.erase({this_col_id, col_name});
+        columns.erase(child_id);
+      }
+      col.child_columns.clear();  // their references are deleted above.
+      col.column_order.clear();
+    };
 
   auto name_and_parent_index = [&is_array_of_arrays,
                                 &row_array_parent_col_id,
@@ -1015,6 +1027,7 @@ void make_device_json_column(device_span<SymbolT const> input,
           auto& col = columns.at(old_col_id).get();
           if (col.type == json_col_t::ListColumn or col.type == json_col_t::StructColumn) {
             reinitialize_as_string(old_col_id, col);
+            remove_child_columns(old_col_id, col);
             // all its children (which are already inserted) are ignored later.
           }
           col.forced_as_string_column = true;

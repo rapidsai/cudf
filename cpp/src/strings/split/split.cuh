@@ -30,12 +30,9 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cuda/atomic>
-#include <thrust/binary_search.h>
 #include <thrust/copy.h>
-#include <thrust/count.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
 #include <thrust/transform.h>
 
 namespace cudf::strings::detail {
@@ -298,6 +295,44 @@ std::unique_ptr<column> create_offsets_from_positions(strings_column_view const&
                                                       rmm::device_async_resource_ref mr);
 
 /**
+ * @brief Count the number of delimiters in a strings column
+ *
+ * @tparam Tokenizer Functor containing `is_delimiter` function
+ * @tparam block_size Number of threads per block
+ * @tparam bytes_per_thread Number of bytes processed per thread
+ *
+ * @param tokenizer For checking delimiters
+ * @param d_offsets Offsets for the strings column
+ * @param chars_bytes Number of bytes in the strings column
+ * @param d_output Result of the count
+ */
+template <typename Tokenizer, int64_t block_size, size_type bytes_per_thread>
+CUDF_KERNEL void count_delimiters_kernel(Tokenizer tokenizer,
+                                         cudf::detail::input_offsetalator d_offsets,
+                                         int64_t chars_bytes,
+                                         int64_t* d_output)
+{
+  auto const idx      = cudf::detail::grid_1d::global_thread_id();
+  auto const byte_idx = static_cast<int64_t>(idx) * bytes_per_thread;
+  auto const lane_idx = static_cast<cudf::size_type>(threadIdx.x);
+
+  using block_reduce = cub::BlockReduce<int64_t, block_size>;
+  __shared__ typename block_reduce::TempStorage temp_storage;
+
+  int64_t count = 0;
+  // each thread processes multiple bytes
+  for (auto i = byte_idx; (i < (byte_idx + bytes_per_thread)) && (i < chars_bytes); ++i) {
+    count += tokenizer.is_delimiter(i, d_offsets, chars_bytes);
+  }
+  auto const total = block_reduce(temp_storage).Reduce(count, cub::Sum());
+
+  if ((lane_idx == 0) && (total > 0)) {
+    cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref{*d_output};
+    ref.fetch_add(total, cuda::std::memory_order_relaxed);
+  }
+}
+
+/**
  * @brief Helper function used by split/rsplit and split_record/rsplit_record
  *
  * This function returns all the token/split positions within the input column as processed by
@@ -326,17 +361,19 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
 
   // count the number of delimiters in the entire column
-  auto const delimiter_count =
-    thrust::count_if(rmm::exec_policy(stream),
-                     thrust::counting_iterator<int64_t>(0),
-                     thrust::counting_iterator<int64_t>(chars_bytes),
-                     [tokenizer, d_offsets, chars_bytes] __device__(int64_t idx) {
-                       return tokenizer.is_delimiter(idx, d_offsets, chars_bytes);
-                     });
+  rmm::device_scalar<int64_t> d_count(0, stream);
+  constexpr int64_t block_size         = 512;
+  constexpr size_type bytes_per_thread = 4;
+  auto const num_blocks                = util::div_rounding_up_safe(
+    util::div_rounding_up_safe(chars_bytes, static_cast<int64_t>(bytes_per_thread)), block_size);
+  count_delimiters_kernel<Tokenizer, block_size, bytes_per_thread>
+    <<<num_blocks, block_size, 0, stream.value()>>>(
+      tokenizer, d_offsets, chars_bytes, d_count.data());
+
   // Create a vector of every delimiter position in the chars column.
   // These may include overlapping or otherwise out-of-bounds delimiters which
   // will be resolved during token processing.
-  auto delimiter_positions = rmm::device_uvector<int64_t>(delimiter_count, stream);
+  auto delimiter_positions = rmm::device_uvector<int64_t>(d_count.value(stream), stream);
   auto d_positions         = delimiter_positions.data();
   cudf::detail::copy_if_safe(
     thrust::counting_iterator<int64_t>(0),

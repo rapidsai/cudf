@@ -12,7 +12,7 @@ import pytest
 import cudf
 from cudf import Index, MultiIndex, Series
 from cudf.core.index import CategoricalIndex, DatetimeIndex, RangeIndex
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 @pytest.mark.parametrize("testrange", [(10, 20, 1), (0, -10, -1), (5, 5, 1)])

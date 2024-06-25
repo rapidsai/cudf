@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 
 namespace cudf::io {
 
@@ -32,7 +33,8 @@ class arrow_io_buffer : public datasource::buffer {
   std::shared_ptr<arrow::Buffer> arrow_buffer;
 
  public:
-  explicit arrow_io_buffer(std::shared_ptr<arrow::Buffer> arrow_buffer) : arrow_buffer(arrow_buffer)
+  explicit arrow_io_buffer(std::shared_ptr<arrow::Buffer> arrow_buffer)
+    : arrow_buffer(std::move(arrow_buffer))
   {
   }
   [[nodiscard]] size_t size() const override { return arrow_buffer->size(); }
