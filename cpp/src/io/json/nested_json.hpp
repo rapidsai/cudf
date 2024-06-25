@@ -23,6 +23,8 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/resource_ref.hpp>
+#include <rmm/exec_policy.hpp>
+#include <thrust/sequence.h>
 
 #include <map>
 #include <vector>
@@ -308,6 +310,16 @@ reduce_to_column_tree(tree_meta_t& tree,
                       device_span<size_type> row_offsets,
                       rmm::cuda_stream_view stream);
 
+std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
+reduce_to_column_tree(tree_meta_t& tree,
+                      device_span<NodeIndexT> original_col_ids,
+                      device_span<NodeIndexT> sorted_col_ids,
+                      device_span<NodeIndexT> ordered_node_ids,
+                      device_span<size_type> row_offsets,
+                      bool is_array_of_arrays,
+                      NodeIndexT const row_array_parent_col_id,
+                      rmm::cuda_stream_view stream);
+
 /**
  * @brief Reduce node tree into column tree by aggregating each property of column.
  *
@@ -318,10 +330,15 @@ reduce_to_column_tree(tree_meta_t& tree,
  * @return A tuple containing the column tree, identifier for each column and the maximum row index
  * in each column
  */
+
 std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tree_csr(
   tree_meta_t& tree,
-  device_span<NodeIndexT> col_ids,
+  device_span<NodeIndexT> original_col_ids,
+  device_span<NodeIndexT> sorted_col_ids,
+  device_span<NodeIndexT> ordered_node_ids,
   device_span<size_type> row_offsets,
+  bool is_array_of_arrays,
+  NodeIndexT const row_array_parent_col_id,
   rmm::cuda_stream_view stream);
 
 /**
