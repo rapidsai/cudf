@@ -63,7 +63,7 @@ keyword arguments, cuDF is not able to provide GPU acceleration and
 `cudf.pandas` will fall back to the CPU.
 
 The most accurate way to assess which functions run on the GPU is to try
-running the code while using the cudf.pandas profiling features. The
+running the code while using the `cudf.pandas` profiling features. The
 profiler will indicate which functions ran on GPU / CPU. To improve
 performance, try to use only functionality that can run entirely on GPU.
 This helps reduce the number of memory transfers needed to fallback to
