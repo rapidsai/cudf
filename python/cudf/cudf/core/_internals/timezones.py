@@ -1,19 +1,48 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import datetime
 import os
 import zoneinfo
 from functools import lru_cache
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
+import pandas as pd
 
+import cudf
 from cudf._lib.timezone import make_timezone_transition_table
-from cudf.core.column.column import as_column
 
 if TYPE_CHECKING:
     from cudf.core.column.datetime import DatetimeColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
+
+
+def get_compatible_timezone(dtype: pd.DatetimeTZDtype) -> pd.DatetimeTZDtype:
+    """Convert dtype.tz object to zoneinfo object if possible."""
+    tz = dtype.tz
+    if isinstance(tz, zoneinfo.ZoneInfo):
+        return dtype
+    if cudf.get_option("mode.pandas_compatible"):
+        raise NotImplementedError(
+            f"{tz} must be a zoneinfo.ZoneInfo object in pandas_compatible mode."
+        )
+    elif (tzname := getattr(tz, "zone", None)) is not None:
+        # pytz-like
+        key = tzname
+    elif (tz_file := getattr(tz, "_filename", None)) is not None:
+        # dateutil-like
+        key = tz_file.split("zoneinfo/")[-1]
+    elif isinstance(tz, datetime.tzinfo):
+        # Try to get UTC-like tzinfos
+        reference = datetime.datetime.now()
+        key = tz.tzname(reference)
+        if not (isinstance(key, str) and key.lower() == "utc"):
+            raise NotImplementedError(f"cudf does not support {tz}")
+    else:
+        raise NotImplementedError(f"cudf does not support {tz}")
+    new_tz = zoneinfo.ZoneInfo(key)
+    return pd.DatetimeTZDtype(dtype.unit, new_tz)
 
 
 @lru_cache(maxsize=20)
@@ -87,6 +116,8 @@ def _read_tzfile_as_columns(
     )
 
     if not transition_times_and_offsets:
+        from cudf.core.column.column import as_column
+
         # this happens for UTC-like zones
         min_date = np.int64(np.iinfo("int64").min + 1).astype("M8[s]")
         return (as_column([min_date]), as_column([np.timedelta64(0, "s")]))

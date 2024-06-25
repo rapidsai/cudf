@@ -52,7 +52,7 @@ from cudf.core.udf.utils import (
     _post_process_output_col,
     _return_arr_from_dtype,
 )
-from cudf.core.window import Rolling
+from cudf.core.window import ExponentialMovingWindow, Rolling
 from cudf.utils import docutils, ioutils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import copy_docstring
@@ -1853,6 +1853,32 @@ class IndexedFrame(Frame):
             win_type=win_type,
         )
 
+    @copy_docstring(ExponentialMovingWindow)
+    def ewm(
+        self,
+        com: float | None = None,
+        span: float | None = None,
+        halflife: float | None = None,
+        alpha: float | None = None,
+        min_periods: int | None = 0,
+        adjust: bool = True,
+        ignore_na: bool = False,
+        axis: int = 0,
+        times: str | np.ndarray | None = None,
+    ):
+        return ExponentialMovingWindow(
+            self,
+            com=com,
+            span=span,
+            halflife=halflife,
+            alpha=alpha,
+            min_periods=min_periods,
+            adjust=adjust,
+            ignore_na=ignore_na,
+            axis=axis,
+            times=times,
+        )
+
     @_cudf_nvtx_annotate
     def nans_to_nulls(self):
         """
@@ -2701,11 +2727,24 @@ class IndexedFrame(Frame):
             if ignore_index:
                 out = out.reset_index(drop=True)
         else:
-            labels = sorted(self._data.names, reverse=not ascending)
-            out = self[labels]
+            labels = sorted(self._column_names, reverse=not ascending)
+            result_columns = (self._data[label] for label in labels)
             if ignore_index:
-                out._data.rangeindex = True
-                out._data.names = list(range(self._num_columns))
+                ca = ColumnAccessor(
+                    dict(enumerate(result_columns)),
+                    rangeindex=True,
+                    verify=False,
+                )
+            else:
+                ca = ColumnAccessor(
+                    dict(zip(labels, result_columns)),
+                    rangeindex=self._data.rangeindex,
+                    multiindex=self._data.multiindex,
+                    level_names=self._data.level_names,
+                    label_dtype=self._data.label_dtype,
+                    verify=False,
+                )
+            out = self._from_data_like_self(ca)
 
         return self._mimic_inplace(out, inplace=inplace)
 

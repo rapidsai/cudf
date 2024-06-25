@@ -21,6 +21,11 @@ from cudf._lib.labeling import label_bins
 from cudf._lib.search import search_sorted
 from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
 from cudf.core._compat import PANDAS_GE_220
+from cudf.core._internals.timezones import (
+    check_ambiguous_and_nonexistent,
+    get_compatible_timezone,
+    get_tz_data,
+)
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
@@ -282,8 +287,6 @@ class DatetimeColumn(column.ColumnBase):
 
     @functools.cached_property
     def time_unit(self) -> str:
-        if isinstance(self.dtype, pd.DatetimeTZDtype):
-            return self.dtype.unit
         return np.datetime_data(self.dtype)[0]
 
     @property
@@ -725,8 +728,6 @@ class DatetimeColumn(column.ColumnBase):
         transitions occur in the time zone database for the given timezone.
         If no transitions occur, the tuple `(False, False)` is returned.
         """
-        from cudf.core._internals.timezones import get_tz_data
-
         transition_times, offsets = get_tz_data(zone_name)
         offsets = offsets.astype(f"timedelta64[{self.time_unit}]")  # type: ignore[assignment]
 
@@ -785,26 +786,22 @@ class DatetimeColumn(column.ColumnBase):
         ambiguous: Literal["NaT"] = "NaT",
         nonexistent: Literal["NaT"] = "NaT",
     ):
-        from cudf.core._internals.timezones import (
-            check_ambiguous_and_nonexistent,
-            get_tz_data,
-        )
-
         if tz is None:
             return self.copy()
         ambiguous, nonexistent = check_ambiguous_and_nonexistent(
             ambiguous, nonexistent
         )
-        dtype = pd.DatetimeTZDtype(self.time_unit, tz)
+        dtype = get_compatible_timezone(pd.DatetimeTZDtype(self.time_unit, tz))
+        tzname = dtype.tz.key
         ambiguous_col, nonexistent_col = self._find_ambiguous_and_nonexistent(
-            tz
+            tzname
         )
         localized = self._scatter_by_column(
             self.isnull() | (ambiguous_col | nonexistent_col),
             cudf.Scalar(cudf.NaT, dtype=self.dtype),
         )
 
-        transition_times, offsets = get_tz_data(tz)
+        transition_times, offsets = get_tz_data(tzname)
         transition_times_local = (transition_times + offsets).astype(
             localized.dtype
         )
@@ -845,7 +842,7 @@ class DatetimeTZColumn(DatetimeColumn):
             offset=offset,
             null_count=null_count,
         )
-        self._dtype = dtype
+        self._dtype = get_compatible_timezone(dtype)
 
     def to_pandas(
         self,
@@ -865,6 +862,10 @@ class DatetimeTZColumn(DatetimeColumn):
             self._local_time.to_arrow(), str(self.dtype.tz)
         )
 
+    @functools.cached_property
+    def time_unit(self) -> str:
+        return self.dtype.unit
+
     @property
     def _utc_time(self):
         """Return UTC time as naive timestamps."""
@@ -880,8 +881,6 @@ class DatetimeTZColumn(DatetimeColumn):
     @property
     def _local_time(self):
         """Return the local time as naive timestamps."""
-        from cudf.core._internals.timezones import get_tz_data
-
         transition_times, offsets = get_tz_data(str(self.dtype.tz))
         transition_times = transition_times.astype(_get_base_dtype(self.dtype))
         indices = search_sorted([transition_times], [self], "right") - 1
@@ -911,10 +910,6 @@ class DatetimeTZColumn(DatetimeColumn):
         )
 
     def tz_localize(self, tz: str | None, ambiguous="NaT", nonexistent="NaT"):
-        from cudf.core._internals.timezones import (
-            check_ambiguous_and_nonexistent,
-        )
-
         if tz is None:
             return self._local_time
         ambiguous, nonexistent = check_ambiguous_and_nonexistent(
