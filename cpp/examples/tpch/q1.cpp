@@ -58,7 +58,25 @@
 
 void write_parquet(cudf::table_view input, std::string filepath) {
     auto sink_info = cudf::io::sink_info(filepath);
+    
+    cudf::io::table_metadata metadata;
+    std::vector<cudf::io::column_name_info> column_names;
+    column_names.push_back(cudf::io::column_name_info("l_returnflag"));
+    column_names.push_back(cudf::io::column_name_info("l_linestatus"));
+    column_names.push_back(cudf::io::column_name_info("sum_qty"));
+    column_names.push_back(cudf::io::column_name_info("avg_qty"));
+    column_names.push_back(cudf::io::column_name_info("sum_base_price"));
+    column_names.push_back(cudf::io::column_name_info("avg_price"));
+    column_names.push_back(cudf::io::column_name_info("avg_disc"));
+    column_names.push_back(cudf::io::column_name_info("sum_disc_price"));
+    column_names.push_back(cudf::io::column_name_info("sum_charge"));
+    column_names.push_back(cudf::io::column_name_info("count_order"));
+
+    metadata.schema_info = column_names;
+    auto table_metadata = cudf::io::table_input_metadata{metadata};
+
     auto builder = cudf::io::parquet_writer_options::builder(sink_info, input);
+    builder.metadata(table_metadata);
     auto options = builder.build();
     cudf::io::write_parquet(options);
 }
@@ -193,9 +211,9 @@ std::unique_ptr<cudf::table> sort(
 }
 
 int main() {
-    std::unique_ptr<cudf::table> t1 = scan_filter_project();
-    std::unique_ptr<cudf::column> disc_price_col = calc_disc_price(t1);
-    std::unique_ptr<cudf::column> charge_col = calc_charge(t1);
+    auto t1 = scan_filter_project();
+    auto disc_price_col = calc_disc_price(t1);
+    auto charge_col = calc_charge(t1);
     auto t2 = append_col_to_table(std::move(t1), std::move(disc_price_col));
     auto t3 = append_col_to_table(std::move(t2), std::move(charge_col));
     auto t4 = calc_group_by(t3);
