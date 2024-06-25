@@ -590,17 +590,9 @@ class Join(IR):
                 for new, old in zip(columns[left.num_columns :], right.columns)
             ]
             return DataFrame([*left_cols, *right_cols])
-        left_on = DataFrame(
-            broadcast(
-                *(e.evaluate(left) for e in self.left_on), target_length=left.num_rows
-            )
-        )
-        right_on = DataFrame(
-            broadcast(
-                *(e.evaluate(right) for e in self.right_on),
-                target_length=right.num_rows,
-            )
-        )
+        # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
+        left_on = DataFrame(broadcast(*(e.evaluate(left) for e in self.left_on)))
+        right_on = DataFrame(broadcast(*(e.evaluate(right) for e in self.right_on)))
         null_equality = (
             plc.types.NullEquality.EQUAL
             if join_nulls
