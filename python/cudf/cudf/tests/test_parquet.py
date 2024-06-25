@@ -28,12 +28,8 @@ from cudf.io.parquet import (
     ParquetWriter,
     merge_parquet_filemetadata,
 )
-from cudf.testing import dataset_generator as dg
-from cudf.testing._utils import (
-    TIMEDELTA_TYPES,
-    assert_eq,
-    set_random_null_mask_inplace,
-)
+from cudf.testing import assert_eq, dataset_generator as dg
+from cudf.testing._utils import TIMEDELTA_TYPES, set_random_null_mask_inplace
 
 
 @contextmanager

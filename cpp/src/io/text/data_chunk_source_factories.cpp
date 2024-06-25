@@ -124,7 +124,6 @@ class istream_data_chunk_reader : public data_chunk_reader {
   {
     // 20% faster than _datastream->ignore(size) for large files
     _datastream->seekg(_datastream->tellg() + static_cast<std::ifstream::pos_type>(size));
-    //_datastream->ignore(size);
   };
 
   std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
