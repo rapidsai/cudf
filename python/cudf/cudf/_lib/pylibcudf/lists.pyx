@@ -118,7 +118,8 @@ cpdef Column contains(Column input, ColumnOrScalar search_key):
     Returns
     -------
     Column
-        A new Column of bools
+        A new Column of bools indicating if the search_key was
+        found in the list column.
     """
     cdef unique_ptr[column] c_result
     cdef shared_ptr[lists_column_view] list_view = (
@@ -161,7 +162,8 @@ cpdef Column contains_nulls(Column input):
     Returns
     -------
     Column
-        A new Column of bools
+        A new Column of bools indicating if the list column
+        contains a null value.
     """
     cdef unique_ptr[column] c_result
     cdef shared_ptr[lists_column_view] list_view = (
@@ -189,7 +191,9 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
     Returns
     -------
     Column
-        A new Column of bools
+        A new Column of index values that if the search_key
+        was found in the list column. An index value of -1
+        indicates that the search_key weas not found.
     """
     cdef unique_ptr[column] c_result
     cdef shared_ptr[lists_column_view] list_view = (
