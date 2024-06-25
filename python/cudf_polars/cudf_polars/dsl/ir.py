@@ -518,6 +518,14 @@ class Join(IR):
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
     """
 
+    def __post_init__(self) -> None:
+        """Validate preconditions."""
+        if any(
+            isinstance(e.value, expr.Literal)
+            for e in itertools.chain(self.left_on, self.right_on)
+        ):
+            raise NotImplementedError("Join with literal as join key.")
+
     @staticmethod
     @cache
     def _joiners(
