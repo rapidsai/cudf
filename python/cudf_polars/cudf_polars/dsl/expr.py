@@ -1438,6 +1438,9 @@ class Agg(Expr):
             req = plc.aggregation.variance(ddof=options)
         elif name == "count":
             req = plc.aggregation.count(null_handling=plc.types.NullPolicy.EXCLUDE)
+        elif name == "quantile":
+            # req = plc.aggregation.quantile(interp=interp_mapping[interp])
+            req = None
         else:
             raise NotImplementedError(
                 f"Unreachable, {name=} is incorrectly listed in _SUPPORTED"
@@ -1446,6 +1449,8 @@ class Agg(Expr):
         op = getattr(self, f"_{name}", None)
         if op is None:
             op = partial(self._reduce, request=req)
+        elif name == "quantile":
+            op = partial(op, interp=options)
         elif name in {"min", "max"}:
             op = partial(op, propagate_nans=options)
         elif name in {"count", "first", "last"}:
@@ -1469,6 +1474,7 @@ class Agg(Expr):
             "count",
             "std",
             "var",
+            "quantile",
         ]
     )
 
@@ -1551,6 +1557,27 @@ class Agg(Expr):
         n = column.obj.size()
         return Column(plc.copying.slice(column.obj, [n - 1, n])[0])
 
+    def _quantile(self, column: Column, quantile: Column, *, interp: str) -> Column:
+        interp_mapping = {
+            "nearest": plc.types.Interpolation.NEAREST,
+            "higher": plc.types.Interpolation.HIGHER,
+            "lower": plc.types.Interpolation.LOWER,
+            "midpoint": plc.types.Interpolation.MIDPOINT,
+            "linear": plc.types.Interpolation.LINEAR,
+        }
+        if not quantile.is_scalar:
+            raise ValueError(
+                "cudf-polars only supports expressions that evaluate to a scalar as the quantile argument"
+            )
+        return self._reduce(
+            column,
+            request=plc.aggregation.quantile(
+                # TODO: eww! accept pylibcudf Scalar in quantiles?
+                quantiles=[plc.interop.to_arrow(quantile.obj_scalar).as_py()],
+                interp=interp_mapping[interp],
+            ),
+        )
+
     def do_evaluate(
         self,
         df: DataFrame,
@@ -1563,8 +1590,12 @@ class Agg(Expr):
             raise NotImplementedError(
                 f"Agg in context {context}"
             )  # pragma: no cover; unreachable
-        (child,) = self.children
-        return self.op(child.evaluate(df, context=context, mapping=mapping))
+        return self.op(
+            *(
+                child.evaluate(df, context=context, mapping=mapping)
+                for child in self.children
+            )
+        )
 
 
 class Ternary(Expr):
