@@ -72,7 +72,7 @@ def test_groupby(df: pl.LazyFrame, maintain_order, keys, exprs):
     q = df.group_by(*keys, maintain_order=maintain_order).agg(*exprs)
 
     if not maintain_order:
-        sort_keys = list(q.schema.keys())[: len(keys)]
+        sort_keys = list(q.collect_schema().keys())[: len(keys)]
         q = q.sort(*sort_keys)
 
     assert_gpu_result_equal(q, check_exact=False)
