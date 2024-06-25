@@ -1,33 +1,22 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
-
-from libc.stdint cimport int32_t, int64_t
+# Copyright (c) 2024, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 
 from cudf._lib.pylibcudf.libcudf.expressions cimport (
-    column_reference,
+    ast_operator,
     expression,
-    literal,
-    operation,
+    table_reference,
 )
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport (
-    numeric_scalar,
-    scalar,
-    string_scalar,
-    timestamp_scalar,
-)
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 
 
 cdef class Expression:
     cdef unique_ptr[expression] c_obj
 
-
 cdef class Literal(Expression):
     cdef unique_ptr[scalar] c_scalar
 
-
 cdef class ColumnReference(Expression):
     pass
-
 
 cdef class Operation(Expression):
     pass

@@ -529,6 +529,8 @@ def read_parquet(
     open_file_options=None,
     bytes_per_thread=None,
     dataset_kwargs=None,
+    num_rows=-1,
+    skip_rows=0,
     *args,
     **kwargs,
 ):
@@ -660,6 +662,8 @@ def read_parquet(
         *args,
         columns=columns,
         row_groups=row_groups,
+        num_rows=num_rows,
+        skip_rows=skip_rows,
         use_pandas_metadata=use_pandas_metadata,
         partition_keys=partition_keys,
         partition_categories=partition_categories,
@@ -790,6 +794,8 @@ def _parquet_to_frame(
     paths_or_buffers,
     *args,
     row_groups=None,
+    num_rows=-1,
+    skip_rows=0,
     partition_keys=None,
     partition_categories=None,
     dataset_kwargs=None,
@@ -802,6 +808,8 @@ def _parquet_to_frame(
             paths_or_buffers,
             *args,
             row_groups=row_groups,
+            num_rows=num_rows,
+            skip_rows=skip_rows,
             **kwargs,
         )
 
@@ -834,6 +842,9 @@ def _parquet_to_frame(
                 key_paths,
                 *args,
                 row_groups=key_row_groups,
+                # TODO: is this still right?
+                num_rows=num_rows,
+                skip_rows=skip_rows,
                 **kwargs,
             )
         )
@@ -891,6 +902,8 @@ def _read_parquet(
     engine,
     columns=None,
     row_groups=None,
+    num_rows=-1,
+    skip_rows=0,
     use_pandas_metadata=None,
     *args,
     **kwargs,
@@ -913,6 +926,8 @@ def _read_parquet(
             columns=columns,
             row_groups=row_groups,
             use_pandas_metadata=use_pandas_metadata,
+            num_rows=num_rows,
+            skip_rows=skip_rows,
         )
     else:
         if (

@@ -7,6 +7,7 @@ from . import (
     concatenate,
     copying,
     datetime,
+    expressions,
     filling,
     groupby,
     interop,
