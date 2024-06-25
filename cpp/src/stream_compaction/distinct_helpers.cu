@@ -23,17 +23,19 @@ namespace cudf::detail {
 
 template <typename RowHasher>
 rmm::device_uvector<size_type> reduce_by_row(hash_set_type<RowHasher>& set,
-                                             size_type set_size,
                                              size_type num_rows,
                                              duplicate_keep_option keep,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
 {
-  auto output_indices = rmm::device_uvector<size_type>(set_size, stream, mr);
+  auto output_indices = rmm::device_uvector<size_type>(num_rows, stream, mr);
 
   // If we don't care about order, just gather indices of distinct keys taken from set.
   if (keep == duplicate_keep_option::KEEP_ANY) {
+    auto const iter = thrust::counting_iterator<cudf::size_type>{0};
+    auto const size = set.insert(iter, iter + num_rows, stream.value());
     set.retrieve_all(output_indices.begin(), stream.value());
+    output_indices.resize(size, stream);
     return output_indices;
   }
 
@@ -102,7 +104,6 @@ template rmm::device_uvector<size_type> reduce_by_row(
     false,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator>>& set,
-  size_type set_size,
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,
@@ -113,7 +114,6 @@ template rmm::device_uvector<size_type> reduce_by_row(
     true,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator>>& set,
-  size_type set_size,
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,
@@ -124,7 +124,6 @@ template rmm::device_uvector<size_type> reduce_by_row(
     false,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::physical_equality_comparator>>& set,
-  size_type set_size,
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,
@@ -135,7 +134,6 @@ template rmm::device_uvector<size_type> reduce_by_row(
     true,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::physical_equality_comparator>>& set,
-  size_type set_size,
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,

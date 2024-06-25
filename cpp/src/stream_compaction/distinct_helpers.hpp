@@ -24,6 +24,9 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cuco/static_set.cuh>
+#include <cuda/functional>
+#include <thrust/copy.h>
+#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf::detail {
 
@@ -85,7 +88,6 @@ using hash_set_type =
  */
 template <typename RowHasher>
 rmm::device_uvector<size_type> reduce_by_row(hash_set_type<RowHasher>& set,
-                                             size_type set_size,
                                              size_type num_rows,
                                              duplicate_keep_option keep,
                                              rmm::cuda_stream_view stream,

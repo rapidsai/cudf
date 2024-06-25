@@ -32,13 +32,6 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
-#include <cuco/static_set.cuh>
-#include <cuda/functional>
-#include <thrust/copy.h>
-#include <thrust/distance.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
-
 #include <utility>
 #include <vector>
 
@@ -113,9 +106,7 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
                                                {},
                                                cudf::detail::cuco_allocator{stream},
                                                stream.value()};
-    auto const iter = thrust::counting_iterator<cudf::size_type>{0};
-    auto const size = set.insert(iter, iter + num_rows, stream.value());
-    return detail::reduce_by_row(set, size, num_rows, keep, stream, mr);
+    return detail::reduce_by_row(set, num_rows, keep, stream, mr);
   };
 
   if (cudf::detail::has_nested_columns(input)) {
