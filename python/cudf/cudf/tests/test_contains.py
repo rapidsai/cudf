@@ -9,12 +9,8 @@ import pytest
 import cudf
 from cudf import Series
 from cudf.core.index import Index, RangeIndex
-from cudf.testing._utils import (
-    DATETIME_TYPES,
-    NUMERIC_TYPES,
-    TIMEDELTA_TYPES,
-    assert_eq,
-)
+from cudf.testing import assert_eq
+from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
 
 
 def cudf_date_series(start, stop, freq):

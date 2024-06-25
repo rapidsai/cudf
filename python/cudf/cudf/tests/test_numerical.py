@@ -5,7 +5,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import NUMERIC_TYPES, assert_eq, expect_warning_if
+from cudf.testing import assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, expect_warning_if
 from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
 
 

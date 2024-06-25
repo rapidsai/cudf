@@ -59,6 +59,14 @@ class Aggregation:
         ))
 
     @classmethod
+    def ewma(cls, com=1.0, adjust=True):
+        return cls(pylibcudf.aggregation.ewma(
+            com,
+            pylibcudf.aggregation.EWMHistory.INFINITE
+            if adjust else pylibcudf.aggregation.EWMHistory.FINITE
+        ))
+
+    @classmethod
     def size(cls):
         return cls(pylibcudf.aggregation.count(pylibcudf.types.NullPolicy.INCLUDE))
 
