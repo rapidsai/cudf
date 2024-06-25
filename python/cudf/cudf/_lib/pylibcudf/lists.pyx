@@ -2,7 +2,7 @@
 
 from cython.operator cimport dereference
 from libcpp cimport bool
-from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 from cudf._lib.pylibcudf.libcudf.column.column cimport column
@@ -15,10 +15,6 @@ from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
     concatenate_null_policy,
     concatenate_rows as cpp_concatenate_rows,
 )
-from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
-    lists_column_view,
-)
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
@@ -123,21 +119,13 @@ cpdef Column contains(Column input, ColumnOrScalar search_key):
     """
     cdef unique_ptr[column] c_result
     cdef ListColumnView list_view = input.list_view()
-    cdef const scalar* search_key_value = NULL
-
-    if ColumnOrScalar is Column:
-        with nogil:
-            c_result = move(cpp_contains.contains(
-                list_view.view(),
-                search_key.view(),
-            ))
-    else:
-        search_key_value = search_key.get()
-        with nogil:
-            c_result = move(cpp_contains.contains(
-                list_view.view(),
-                dereference(search_key_value),
-            ))
+    with nogil:
+        c_result = move(cpp_contains.contains(
+            list_view.view(),
+            search_key.view() if ColumnOrScalar is Column else dereference(
+                search_key.get()
+            ),
+        ))
     return Column.from_libcudf(move(c_result))
 
 
@@ -157,11 +145,9 @@ cpdef Column contains_nulls(Column input):
         contains a null value.
     """
     cdef unique_ptr[column] c_result
-    cdef shared_ptr[lists_column_view] list_view = (
-        make_shared[lists_column_view](input.view())
-    )
+    cdef ListColumnView list_view = input.list_view()
     with nogil:
-        c_result = move(cpp_contains.contains_nulls(list_view.get()[0]))
+        c_result = move(cpp_contains.contains_nulls(list_view.view()))
     return Column.from_libcudf(move(c_result))
 
 
@@ -192,21 +178,12 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
         cpp_contains.duplicate_find_option.FIND_FIRST if find_first_option
         else cpp_contains.duplicate_find_option.FIND_LAST
     )
-    cdef const scalar* search_key_value = NULL
-
-    if ColumnOrScalar is Column:
-        with nogil:
-            c_result = move(cpp_contains.index_of(
-                list_view.view(),
-                search_key.view(),
-                find_option,
-            ))
-    else:
-        search_key_value = search_key.get()
-        with nogil:
-            c_result = move(cpp_contains.index_of(
-                list_view.view(),
-                search_key_value[0],
-                find_option,
-            ))
+    with nogil:
+        c_result = move(cpp_contains.index_of(
+            list_view.view(),
+            search_key.view() if ColumnOrScalar is Column else dereference(
+                search_key.get()
+            ),
+            find_option,
+        ))
     return Column.from_libcudf(move(c_result))
