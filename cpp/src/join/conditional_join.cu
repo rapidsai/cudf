@@ -49,7 +49,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
   if (right.num_rows() == 0) {
     switch (join_type) {
       case join_kind::LEFT_ANTI_JOIN:
-        return std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
+        return get_trivial_left_join_indices(left, stream, rmm::mr::get_current_device_resource())
+          .first;
       case join_kind::LEFT_SEMI_JOIN:
         return std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
       default: CUDF_FAIL("Invalid join kind."); break;
@@ -94,10 +95,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
           *left_table, *right_table, join_type, parser.device_expression_data, false, size.data());
     }
     join_size = size.value(stream);
-  }
-
-  if (left.num_rows() == 0) {
-    return std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
   }
 
   rmm::device_scalar<size_type> write_index(0, stream);
