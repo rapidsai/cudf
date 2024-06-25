@@ -889,3 +889,13 @@ TYPED_TEST(ConditionalLeftAntiJoinTest, TestCompareRandomToHashNulls)
   auto [left, right] = gen_random_nullable_repeated_columns<TypeParam>();
   this->compare_to_hash_join_nulls({left}, {right});
 };
+
+TYPED_TEST(ConditionalInnerJoinTest, TestLeftColumnIsEmpty)
+{
+  this->test({{}}, {{0}}, left_zero_eq_right_zero, {{}});
+};
+
+TYPED_TEST(ConditionalInnerJoinTest, TestRightColumnIsEmpty)
+{
+  this->test({{0}}, {{}}, left_zero_eq_right_zero, {{}});
+};
