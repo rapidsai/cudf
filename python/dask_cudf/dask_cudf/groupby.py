@@ -196,8 +196,11 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
     def aggregate(
-        self, arg, split_every=None, split_out=1, shuffle_method=None
+        self, arg, split_every=None, split_out=1, shuffle_method=None, **kwargs
     ):
+        if kwargs:
+            arg = {col_name: agg_func for col_name, (col, agg_func) in kwargs.items()}
+
         if arg == "size":
             return self.size()
 
