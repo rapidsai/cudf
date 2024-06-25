@@ -4,6 +4,8 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+from cudf._lib.pylibcudf.io.datasource cimport Datasource
+from cudf._lib.pylibcudf.libcudf.io.datasource cimport datasource
 from cudf._lib.pylibcudf.libcudf.io.types cimport (
     column_name_info,
     host_buffer,
@@ -75,9 +77,8 @@ cdef class SourceInfo:
 
     Parameters
     ----------
-    sources : List[Union[str, os.PathLike, bytes, io.BytesIO]]
-        A homogeneous list of sources (this can be a string filename,
-        an os.PathLike, bytes, or an io.BytesIO) to read from.
+    sources : List[Union[str, os.PathLike, bytes, io.BytesIO, DataSource]]
+        A homogeneous list of sources to read from.
 
         Mixing different types of sources will raise a `ValueError`.
     """
@@ -87,6 +88,7 @@ cdef class SourceInfo:
             raise ValueError("Need to pass at least one source")
 
         cdef vector[string] c_files
+        cdef vector[datasource*] c_datasources
 
         if isinstance(sources[0], (os.PathLike, str)):
             c_files.reserve(len(sources))
@@ -102,6 +104,13 @@ cdef class SourceInfo:
                 c_files.push_back(<string> str(src).encode())
 
             self.c_obj = move(source_info(c_files))
+            return
+        elif isinstance(sources[0], Datasource):
+            for csrc in sources:
+                if not isinstance(csrc, Datasource):
+                    raise ValueError("All sources must be of the same type!")
+                c_datasources.push_back((<Datasource>csrc).get_datasource())
+            self.c_obj = move(source_info(c_datasources))
             return
 
         # TODO: host_buffer is deprecated API, use host_span instead
@@ -127,9 +136,9 @@ cdef class SourceInfo:
                                                      c_buffer.shape[0]))
         else:
             raise ValueError("Sources must be a list of str/paths, "
-                             "bytes, or io.BytesIO")
+                             "bytes, io.BytesIO, or a Datasource")
 
         if empty_buffer is True:
             c_host_buffers.push_back(host_buffer(<char*>NULL, 0))
 
-        self.c_obj = source_info(c_host_buffers)
+        self.c_obj = move(source_info(c_host_buffers))
