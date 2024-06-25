@@ -1000,9 +1000,7 @@ CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& flo
   // Note that the base2_value here is an unsigned integer with sizeof(FloatingType)
   auto const is_negative                  = converter::get_is_negative(integer_rep);
   auto const [significand, floating_exp2] = converter::get_significand_and_exp2(integer_rep);
-
-  auto exp2        = floating_exp2;  // Can't capture from a parameter pack
-  auto const exp10 = static_cast<int>(scale);
+  auto const exp10                        = static_cast<int>(scale);
 
   // Add half a bit if truncating to yield expected value, see function for discussion.
   auto const [base2_value_bound, exp2_bound] =
