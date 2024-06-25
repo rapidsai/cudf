@@ -76,6 +76,8 @@ def test_slice_column(
     pa_col, plc_col, pa_starts_col, plc_starts_col, pa_stops_col, plc_stops_col
 ):
     def slice_string(st, start, stop):
+        if stop < 0:
+            stop = len(st)
         return st[start:stop] if st is not None else None
 
     expected = pa.array(
