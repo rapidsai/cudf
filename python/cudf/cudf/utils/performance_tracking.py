@@ -30,7 +30,8 @@ def _performance_tracking(func, domain="cudf_python"):
     def wrapper(*args, **kwargs):
         with contextlib.ExitStack() as stack:
             if get_option("memory_profiling"):
-                rmm.statistics.enable_statistics()
+                # NB: the user still needs to call `rmm.statistics.enable_statistics()`
+                #     to enable memory profiling.
                 stack.enter_context(
                     rmm.statistics.profiler(
                         name=rmm.statistics._get_descriptive_name_of_object(

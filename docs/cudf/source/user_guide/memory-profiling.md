@@ -2,12 +2,15 @@
 
 # Memory Profiling
 
-
-Peak memory usage is a common concern in GPU programming since the available GPU memory is typically less than available CPU memory. To easily identify memory hotspots, cudf provides a memory profiler.
+Peak memory usage is a common concern in GPU programming since the available GPU memory is typically less than available CPU memory. To easily identify memory hotspots, cudf provides a memory profiler. In comes with an overhead so avoid using it in performance-sensitive code.
 
 ## Enabling memory profiling
 
-1. Use `cudf.set_option`:
+First, we need to enable memory profiling in [RMM](https://docs.rapids.ai/api/rmm/stable/guide/). One way to do this is by calling {py:func}`rmm.statistics.enable_statistics()`. This will add a statistics resource adaptor to the current RMM memory resource, which enables cudf to access memory profiling information. See the RMM documentation for more details.
+
+Second, we need to enable memory profiling in cudf by using either of the following:
+
+1. Use {py:func}`cudf.set_option`:
 
     ```python
     >>> import cudf
@@ -21,13 +24,15 @@ launch of the Python interpreter:
     CUDF_MEMORY_PROFILING="1" python -c "import cudf"
     ```
 
-## Get profiling result
+To get the result of the profiling, use {py:func}`cudf.utils.performance_tracking.print_memory_report`.
 
-To get the result of the profiling, use {py:func}`cudf.utils.performance_tracking.print_memory_report`. In the following, we enable profiling, do some work, and then print the profiling results:
+In the following example, we enable profiling, do some work, and then print the profiling results:
 
 ```python
 >>> import cudf
 >>> from cudf.utils.performance_tracking import print_memory_report
+>>> from rmm.statistics import enable_statistics
+>>> enable_statistics()
 >>> cudf.set_option("memory_profiling", True)
 >>> cudf.DataFrame({"a": [1, 2, 3]})  # Some work
    a
@@ -51,4 +56,4 @@ ncalls memory_peak memory_total filename:lineno(function)
      6           0            0 cudf/core/index.py:424(RangeIndex.__len__)
 ```
 
-It is also possible to access the raw profiling data through {py:func}`cudf.utils.performance_tracking.get_memory_records`.
+It is also possible to access the raw profiling data by calling: {py:func}`cudf.utils.performance_tracking.get_memory_records`.
