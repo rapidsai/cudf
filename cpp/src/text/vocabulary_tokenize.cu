@@ -92,11 +92,11 @@ struct vocab_equal {
   {
     return d_strings.element<cudf::string_view>(lhs) == rhs;
   }
-#pragma nv_diagnostic pop
   __device__ bool operator()(cudf::string_view const& lhs, cudf::size_type rhs) const noexcept
   {
     return d_strings.element<cudf::string_view>(rhs) == lhs;
   }
+#pragma nv_diagnostic pop
 };
 
 using probe_scheme        = cuco::linear_probing<1, vocab_hasher>;

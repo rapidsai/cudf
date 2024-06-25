@@ -86,7 +86,6 @@ struct comparator_adapter {
 
     return _self_equal(lhs, rhs);
   }
-#pragma nv_diagnostic pop
 
   __device__ constexpr auto operator()(rhs_index_type lhs_index,
                                        rhs_index_type rhs_index) const noexcept
@@ -96,11 +95,19 @@ struct comparator_adapter {
 
     return _self_equal(lhs, rhs);
   }
+
   __device__ constexpr auto operator()(lhs_index_type lhs_index,
                                        rhs_index_type rhs_index) const noexcept
   {
     return _two_table_equal(lhs_index, rhs_index);
   }
+
+  __device__ constexpr auto operator()(rhs_index_type lhs_index,
+                                       lhs_index_type rhs_index) const noexcept
+  {
+    return _two_table_equal(lhs_index, rhs_index);
+  }
+#pragma nv_diagnostic pop
 
  private:
   SelfEqual const _self_equal;

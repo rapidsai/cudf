@@ -42,6 +42,8 @@ template <typename Equal>
 struct comparator_adapter {
   comparator_adapter(Equal const& d_equal) : _d_equal{d_equal} {}
 
+#pragma nv_diagnostic push
+#pragma nv_diag_suppress 177
   __device__ constexpr auto operator()(
     cuco::pair<hash_value_type, lhs_index_type> const&,
     cuco::pair<hash_value_type, lhs_index_type> const&) const noexcept
@@ -65,6 +67,15 @@ struct comparator_adapter {
     if (lhs.first != rhs.first) { return false; }
     return _d_equal(lhs.second, rhs.second);
   }
+
+  __device__ constexpr auto operator()(
+    cuco::pair<hash_value_type, rhs_index_type> const& lhs,
+    cuco::pair<hash_value_type, lhs_index_type> const& rhs) const noexcept
+  {
+    if (lhs.first != rhs.first) { return false; }
+    return _d_equal(lhs.second, rhs.second);
+  }
+#pragma nv_diagnostic pop
 
  private:
   Equal _d_equal;
