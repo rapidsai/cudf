@@ -33,6 +33,9 @@
 #include <cudf/sorting.hpp>
 
 /*
+
+Query:
+
     select
         l_returnflag,
         l_linestatus,
@@ -54,6 +57,76 @@
     order by
         l_returnflag,
         l_linestatus;
+
+Plan:
+
+    ┌─────────────────────────────┐
+    │┌───────────────────────────┐│
+    ││       Physical Plan       ││
+    │└───────────────────────────┘│
+    └─────────────────────────────┘
+    ┌───────────────────────────┐
+    │          ORDER_BY         │
+    │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
+    │          ORDERS:          │
+    │ "part-0".l_returnflag ASC │
+    │ "part-0".l_linestatus ASC │
+    └─────────────┬─────────────┘
+    ┌─────────────┴─────────────┐
+    │       HASH_GROUP_BY       │
+    │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
+    │             #0            │
+    │             #1            │
+    │          sum(#2)          │
+    │          sum(#3)          │
+    │          sum(#4)          │
+    │          sum(#5)          │
+    │          avg(#6)          │
+    │          avg(#7)          │
+    │          avg(#8)          │
+    │        count_star()       │
+    └─────────────┬─────────────┘
+    ┌─────────────┴─────────────┐
+    │         PROJECTION        │
+    │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
+    │        l_returnflag       │
+    │        l_linestatus       │
+    │         l_quantity        │
+    │      l_extendedprice      │
+    │             #4            │
+    │   (#4 * (1.00 + l_tax))   │
+    │         l_quantity        │
+    │      l_extendedprice      │
+    │         l_discount        │
+    └─────────────┬─────────────┘
+    ┌─────────────┴─────────────┐
+    │         PROJECTION        │
+    │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
+    │        l_returnflag       │
+    │        l_linestatus       │
+    │         l_quantity        │
+    │      l_extendedprice      │
+    │ (l_extendedprice * (1.00 -│
+    │        l_discount))       │
+    │           l_tax           │
+    │         l_discount        │
+    └─────────────┬─────────────┘
+    ┌─────────────┴─────────────┐
+    │       PARQUET_SCAN        │
+    │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
+    │        l_returnflag       │
+    │        l_linestatus       │
+    │         l_quantity        │
+    │      l_extendedprice      │
+    │         l_discount        │
+    │           l_tax           │
+    │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
+    │ Filters: l_shipdate<='1998│
+    │-09-02'::DATE AND l_sh...  │
+    │         IS NOT NULL       │
+    │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
+    │        EC: 1200243        │
+    └───────────────────────────┘
 */
 
 void write_parquet(cudf::table_view input, std::string filepath) {
