@@ -56,9 +56,9 @@ void test_durations(mask_op_t mask_op, bool use_byte_stream_split, bool arrow_sc
   // Durations longer than a day are not exactly valid, but cudf should be able to round trip
   auto durations_d = cudf::test::fixed_width_column_wrapper<cudf::duration_D, int64_t>(
     sequence_d, sequence_d + num_rows, mask);
-  auto durations_s = cudf::test::fixed_width_column_wrapper<cudf::duration_s, int64_t>(
+  auto durations_s = cudf::test::fixed_width_column_wrapper<cudf::duration_s, int32_t>(
     sequence_s, sequence_s + num_rows, mask);
-  auto durations_ms = cudf::test::fixed_width_column_wrapper<cudf::duration_ms, int64_t>(
+  auto durations_ms = cudf::test::fixed_width_column_wrapper<cudf::duration_ms, int32_t>(
     sequence, sequence + num_rows, mask);
   auto durations_us = cudf::test::fixed_width_column_wrapper<cudf::duration_us, int64_t>(
     sequence, sequence + num_rows, mask);
