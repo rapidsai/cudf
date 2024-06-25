@@ -16,6 +16,14 @@ cdef source_info make_source_info(list src) except*
 cdef sink_info make_sinks_info(
     list src, vector[unique_ptr[data_sink]] & data) except*
 cdef sink_info make_sink_info(src, unique_ptr[data_sink] & data) except*
+cdef add_df_col_struct_names(
+    df,
+    child_names_dict
+)
+cdef update_col_struct_field_names(
+    Column col,
+    child_names
+)
 cdef update_struct_field_names(
     table,
     vector[column_name_info]& schema_info)

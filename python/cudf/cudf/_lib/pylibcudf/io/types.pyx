@@ -38,8 +38,6 @@ cdef class TableWithMetadata:
         """
         cdef list names = []
         for col_info in self.metadata.schema_info:
-            # TODO: Handle nesting (columns with child columns)
-            assert col_info.children.size() == 0, "Child column names are not handled!"
             names.append(col_info.name.decode())
         return names
 
@@ -50,6 +48,32 @@ cdef class TableWithMetadata:
         out.tbl = Table.from_libcudf(move(tbl_with_meta.tbl))
         out.metadata = tbl_with_meta.metadata
         return out
+
+    @property
+    def per_file_user_data(self):
+        """
+        Returns a list containing a dict
+        containing file-format specific metadata,
+        for each file being read in.
+        """
+        return self.metadata.per_file_user_data
+
+    @property
+    def child_names(self):
+        """
+        Return a dictionary mapping the names of columns with children
+        to the names of their child columns
+        """
+        return TableWithMetadata._parse_col_names(self.metadata.schema_info)
+
+    @staticmethod
+    cdef dict _parse_col_names(vector[column_name_info] infos):
+        cdef dict child_names = dict()
+        cdef dict names = dict()
+        for col_info in infos:
+            child_names = TableWithMetadata._parse_col_names(col_info.children)
+            names[col_info.name.decode()] = child_names
+        return names
 
 cdef class SourceInfo:
     """A class containing details on a source to read from.

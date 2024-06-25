@@ -1,4 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
+from libcpp.vector cimport vector
+
 from cudf._lib.pylibcudf.libcudf.io.types cimport (
     column_encoding,
     column_in_metadata,
@@ -21,6 +23,9 @@ from cudf._lib.pylibcudf.table cimport Table
 cdef class TableWithMetadata:
     cdef public Table tbl
     cdef table_metadata metadata
+
+    @staticmethod
+    cdef dict _parse_col_names(vector[column_name_info] infos)
 
     @staticmethod
     cdef TableWithMetadata from_libcudf(table_with_metadata& tbl)

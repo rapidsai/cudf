@@ -146,6 +146,30 @@ cdef cppclass iobase_data_sink(data_sink):
     size_t bytes_written() with gil:
         return buf.tell()
 
+cdef add_df_col_struct_names(df, child_names_dict):
+    for name, child_names in child_names_dict.items():
+        col = df._data[name]
+
+        df._data[name] = update_col_struct_field_names(col, child_names)
+
+
+cdef update_col_struct_field_names(Column col, child_names):
+    if col.children:
+        children = list(col.children)
+        for i, (child, names) in enumerate(zip(children, child_names.values())):
+            children[i] = update_col_struct_field_names(
+                child,
+                names
+            )
+        col.set_base_children(tuple(children))
+
+    if isinstance(col.dtype, StructDtype):
+        col = col._rename_fields(
+            child_names.keys()
+        )
+
+    return col
+
 
 cdef update_struct_field_names(
     table,
