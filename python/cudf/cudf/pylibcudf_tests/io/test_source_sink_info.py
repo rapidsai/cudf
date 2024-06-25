@@ -2,9 +2,11 @@
 
 import io
 
+import pyarrow as pa
 import pytest
 
 import cudf._lib.pylibcudf as plc
+from cudf._lib.pylibcudf.io.datasource import NativeFileDatasource
 
 
 @pytest.fixture(params=[plc.io.SourceInfo, plc.io.SinkInfo])
@@ -12,8 +14,24 @@ def io_class(request):
     return request.param
 
 
+def _skip_invalid_sinks(io_class, sink):
+    """
+    Skip invalid sinks for SinkInfo
+    """
+    if io_class is plc.io.SinkInfo and isinstance(
+        sink, (bytes, NativeFileDatasource)
+    ):
+        pytest.skip(f"{sink} is not a valid input for SinkInfo")
+
+
 @pytest.mark.parametrize(
-    "source", ["a.txt", b"hello world", io.BytesIO(b"hello world")]
+    "source",
+    [
+        "a.txt",
+        b"hello world",
+        io.BytesIO(b"hello world"),
+        NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
+    ],
 )
 def test_source_info_ctor(io_class, source, tmp_path):
     if isinstance(source, str):
@@ -21,8 +39,7 @@ def test_source_info_ctor(io_class, source, tmp_path):
         file.write_bytes("hello world".encode("utf-8"))
         source = str(file)
 
-    if io_class is plc.io.SinkInfo and isinstance(source, bytes):
-        pytest.skip("bytes is not a valid input for SinkInfo")
+    _skip_invalid_sinks(source)
 
     io_class([source])
 
@@ -33,6 +50,10 @@ def test_source_info_ctor(io_class, source, tmp_path):
         ["a.txt", "a.txt"],
         [b"hello world", b"hello there"],
         [io.BytesIO(b"hello world"), io.BytesIO(b"hello there")],
+        [
+            NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
+            NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
+        ],
     ],
 )
 def test_source_info_ctor_multiple(io_class, sources, tmp_path):
@@ -42,8 +63,8 @@ def test_source_info_ctor_multiple(io_class, sources, tmp_path):
             file = tmp_path / source
             file.write_bytes("hello world".encode("utf-8"))
             sources[i] = str(file)
-        elif io_class is plc.io.SinkInfo and isinstance(source, bytes):
-            pytest.skip("bytes is not a valid input for SinkInfo")
+
+        _skip_invalid_sinks(source)
 
     io_class(sources)
 
@@ -58,6 +79,11 @@ def test_source_info_ctor_multiple(io_class, sources, tmp_path):
             io.BytesIO(b"hello there"),
             b"hello world",
         ],
+        [
+            NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
+            "awef.txt",
+            b"hello world",
+        ],
     ],
 )
 def test_source_info_ctor_mixing_invalid(io_class, sources, tmp_path):
@@ -69,7 +95,11 @@ def test_source_info_ctor_mixing_invalid(io_class, sources, tmp_path):
             file = tmp_path / source
             file.write_bytes("hello world".encode("utf-8"))
             sources[i] = str(file)
-        elif io_class is plc.io.SinkInfo and isinstance(source, bytes):
-            pytest.skip("bytes is not a valid input for SinkInfo")
+        _skip_invalid_sinks(source)
     with pytest.raises(ValueError):
         io_class(sources)
+
+
+def test_source_info_invalid():
+    with pytest.raises(ValueError):
+        plc.io.SourceInfo([123])

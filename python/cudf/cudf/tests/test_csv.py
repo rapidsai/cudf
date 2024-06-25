@@ -18,7 +18,8 @@ from pyarrow import fs as pa_fs
 import cudf
 from cudf import read_csv
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 
 def make_numeric_dataframe(nrows, dtype):

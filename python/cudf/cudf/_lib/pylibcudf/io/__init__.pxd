@@ -1,4 +1,4 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from . cimport avro, json, types
-from .types cimport SinkInfo, SourceInfo, TableWithMetadata
+from . cimport avro, datasource, json, types
+from .types cimport SourceInfo, TableWithMetadata
