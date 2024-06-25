@@ -610,9 +610,8 @@ def test_timezone_column(tmpdir):
         }
     )
     pdf.to_parquet(path)
+
+    # Check that `cudf` and `dask_cudf` results match
     got = dask_cudf.read_parquet(path)
-    # cudf.read_parquet does not support reading timezone aware types yet
-    assert got["time"].dtype == pd.DatetimeTZDtype("ns", "UTC")
-    got["time"] = got["time"].astype("datetime64[ns]")
-    expected = cudf.read_parquet(path)
-    dd.assert_eq(got, expected)
+    expect = cudf.read_parquet(path)
+    dd.assert_eq(got, expect)

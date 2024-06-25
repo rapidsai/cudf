@@ -1,6 +1,7 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
-from typing import Any, Tuple
+from typing import Any
 
 import cupy as cp
 import pandas as pd
@@ -19,7 +20,7 @@ from cudf.core.df_protocol import (
     from_dataframe,
     protocol_dtype_to_cupy_dtype,
 )
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 @pytest.fixture(
@@ -64,7 +65,7 @@ def assert_validity_equal(protocol_buffer, cudf_buffer, size, null, valid):
         raise NotImplementedError()
 
 
-def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
+def assert_buffer_equal(buffer_and_dtype: tuple[_CuDFBuffer, Any], cudfcol):
     buf, dtype = buffer_and_dtype
     device_id = cp.asarray(cudfcol.data).device.id
     assert buf.__dlpack_device__() == (2, device_id)

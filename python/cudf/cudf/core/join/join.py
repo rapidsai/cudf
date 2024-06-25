@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any, ClassVar, List, Optional
+from typing import Any, ClassVar
 
 import cudf
 from cudf import _lib as libcudf
@@ -370,7 +370,7 @@ class Merge:
         else:
             multiindex_columns = False
 
-        index: Optional[cudf.BaseIndex]
+        index: cudf.BaseIndex | None
         if self._using_right_index:
             # right_index and left_on
             index = left_result.index
@@ -398,7 +398,7 @@ class Merge:
         # This is taken care of by using a stable sort here, and (in
         # pandas-compat mode) reordering the gather maps before
         # producing the input result.
-        by: List[Any] = []
+        by: list[Any] = []
         if self._using_left_index and self._using_right_index:
             by.extend(result.index._data.columns)
         if not self._using_left_index:

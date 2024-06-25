@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,8 +115,7 @@ TEST_P(PadParameters, Padding)
   auto results          = cudf::strings::pad(strings_view, width, cudf::strings::side_type::RIGHT);
 
   std::vector<std::string> h_expected;
-  for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr) {
-    std::string str      = *itr;
+  for (auto str : h_strings) {
     cudf::size_type size = str.size();
     if (size < width) str.insert(size, width - size, ' ');
     h_expected.push_back(str);

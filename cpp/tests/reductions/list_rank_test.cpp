@@ -117,17 +117,84 @@ TEST_F(ListRankScanTest, ListOfStruct)
 
   auto col1 = cudf::test::fixed_width_column_wrapper<int32_t>{
     {-1, -1, 0, 2, 2, 2, 1, 2, 0, 2, 0, 2, 0, 2, 0, 0, 1, 2},
-    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
+    {true,
+     true,
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     false,
+     false}};
   auto col2 = cudf::test::strings_column_wrapper{
     {"x", "x", "a", "a", "b", "b", "a", "b", "a", "b", "a", "c", "a", "c", "a", "c", "b", "b"},
-    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1}};
-  auto struct_col = cudf::test::structs_column_wrapper{
-    {col1, col2}, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+    {true,
+     true,
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true}};
+  auto struct_col = cudf::test::structs_column_wrapper{{col1, col2},
+                                                       {false,
+                                                        false,
+                                                        false,
+                                                        false,
+                                                        false,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true,
+                                                        true}};
 
   auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
 
-  auto list_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto list_nullmask = std::vector<bool>{true,
+                                         true,
+                                         false,
+                                         false,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true,
+                                         true};
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
   auto list_column = cudf::column_view(cudf::data_type(cudf::type_id::LIST),
@@ -178,14 +245,16 @@ TEST_F(ListRankScanTest, ListOfEmptyStruct)
   // [{}, {}]
   // [{}, {}]
 
-  auto struct_validity = std::vector<bool>{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
+  auto struct_validity = std::vector<bool>{
+    false, false, false, false, false, false, false, false, true, true, true, true, true, true};
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end());
   auto struct_col = cudf::make_structs_column(14, {}, null_count, std::move(null_mask));
 
   auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     0, 0, 0, 0, 0, 2, 4, 6, 7, 8, 9, 10, 12, 14};
-  auto list_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto list_nullmask = std::vector<bool>{
+    true, true, false, false, true, true, true, true, true, true, true, true, true};
   std::tie(null_mask, null_count) =
     cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
   auto list_column = cudf::make_lists_column(
@@ -213,7 +282,7 @@ TEST_F(ListRankScanTest, EmptyDeepList)
   auto list1 = cudf::test::lists_column_wrapper<int>{};
 
   auto offsets       = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 0, 0, 0};
-  auto list_nullmask = std::vector<bool>{1, 1, 0, 0};
+  auto list_nullmask = std::vector<bool>{true, true, false, false};
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
   auto list_column = cudf::make_lists_column(
