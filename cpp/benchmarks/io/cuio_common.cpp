@@ -19,6 +19,9 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/logger.hpp>
 
+#include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
+
 #include <unistd.h>
 
 #include <cstdio>
@@ -27,6 +30,14 @@
 #include <string>
 
 temp_directory const cuio_source_sink_pair::tmpdir{"cudf_gbench"};
+
+// Don't use cudf's pinned pool for the source data
+rmm::host_async_resource_ref pinned_memory_resource()
+{
+  static rmm::mr::pinned_host_memory_resource mr = rmm::mr::pinned_host_memory_resource{};
+
+  return mr;
+}
 
 std::string random_file_in_dir(std::string const& dir_path)
 {
@@ -41,6 +52,7 @@ std::string random_file_in_dir(std::string const& dir_path)
 
 cuio_source_sink_pair::cuio_source_sink_pair(io_type type)
   : type{type},
+    pinned_buffer({pinned_memory_resource(), cudf::get_default_stream()}),
     d_buffer{0, cudf::get_default_stream()},
     file_name{random_file_in_dir(tmpdir.path())},
     void_sink{cudf::io::data_sink::create()}

@@ -10,6 +10,7 @@ from functools import singledispatch
 from typing import Any
 
 import pyarrow as pa
+from typing_extensions import assert_never
 
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
@@ -63,7 +64,9 @@ noop_context: nullcontext[None] = nullcontext()
 def _translate_ir(
     node: Any, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    raise NotImplementedError(f"Translation for {type(node).__name__}")
+    raise NotImplementedError(
+        f"Translation for {type(node).__name__}"
+    )  # pragma: no cover
 
 
 @_translate_ir.register
@@ -172,7 +175,7 @@ def _(
 @_translate_ir.register
 def _(
     node: pl_ir.Reduce, visitor: NodeTraverser, schema: dict[str, plc.DataType]
-) -> ir.IR:
+) -> ir.IR:  # pragma: no cover; polars doesn't emit this node yet
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         exprs = [translate_named_expr(visitor, n=e) for e in node.expr]
@@ -256,17 +259,6 @@ def _(
     return ir.HConcat(schema, [translate_ir(visitor, n=n) for n in node.inputs])
 
 
-@_translate_ir.register
-def _(
-    node: pl_ir.ExtContext, visitor: NodeTraverser, schema: dict[str, plc.DataType]
-) -> ir.IR:
-    return ir.ExtContext(
-        schema,
-        translate_ir(visitor, n=node.input),
-        [translate_ir(visitor, n=n) for n in node.contexts],
-    )
-
-
 def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
     """
     Translate a polars-internal IR node to our representation.
@@ -333,7 +325,9 @@ def translate_named_expr(
 def _translate_expr(
     node: Any, visitor: NodeTraverser, dtype: plc.DataType
 ) -> expr.Expr:
-    raise NotImplementedError(f"Translation for {type(node).__name__}")
+    raise NotImplementedError(
+        f"Translation for {type(node).__name__}"
+    )  # pragma: no cover
 
 
 @_translate_expr.register
@@ -361,17 +355,20 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
 @_translate_expr.register
 def _(node: pl_expr.Window, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
     # TODO: raise in groupby?
-    if node.partition_by is None:
+    if isinstance(node.options, pl_expr.RollingGroupOptions):
+        # pl.col("a").rolling(...)
         return expr.RollingWindow(
             dtype, node.options, translate_expr(visitor, n=node.function)
         )
-    else:
+    elif isinstance(node.options, pl_expr.WindowMapping):
+        # pl.col("a").over(...)
         return expr.GroupedRollingWindow(
             dtype,
             node.options,
             translate_expr(visitor, n=node.function),
             *(translate_expr(visitor, n=n) for n in node.partition_by),
         )
+    assert_never(node.options)
 
 
 @_translate_expr.register

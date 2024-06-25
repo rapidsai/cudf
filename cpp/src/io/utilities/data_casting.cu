@@ -917,8 +917,8 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
 }
 
 std::unique_ptr<column> parse_data(
-  const char* data,
-  thrust::zip_iterator<thrust::tuple<const size_type*, const size_type*>> offset_length_begin,
+  char const* data,
+  thrust::zip_iterator<thrust::tuple<size_type const*, size_type const*>> offset_length_begin,
   size_type col_size,
   data_type col_type,
   rmm::device_buffer&& null_mask,

@@ -21,7 +21,8 @@ from cudf.core.udf.strings_typing import (
     udf_string,
 )
 from cudf.core.udf.utils import _get_extensionty_size, _ptx_file
-from cudf.testing._utils import assert_eq, sv_to_udf_str
+from cudf.testing import assert_eq
+from cudf.testing._utils import sv_to_udf_str
 from cudf.utils._numba import _CUDFNumbaConfig
 
 _PTX_FILE = _ptx_file()
