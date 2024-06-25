@@ -120,7 +120,11 @@ class istream_data_chunk_reader : public data_chunk_reader {
   {
   }
 
-  void skip_bytes(std::size_t size) override { _datastream->ignore(size); };
+  void skip_bytes(std::size_t size) override
+  {
+    // 20% faster than _datastream->ignore(size) for large files
+    _datastream->seekg(_datastream->tellg() + static_cast<std::ifstream::pos_type>(size));
+  };
 
   std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
                                                     rmm::cuda_stream_view stream) override
@@ -265,7 +269,7 @@ class file_data_chunk_source : public data_chunk_source {
   [[nodiscard]] std::unique_ptr<data_chunk_reader> create_reader() const override
   {
     return std::make_unique<istream_data_chunk_reader>(
-      std::make_unique<std::ifstream>(_filename, std::ifstream::in));
+      std::make_unique<std::ifstream>(_filename, std::ifstream::in | std::ifstream::binary));
   }
 
  private:

@@ -18,6 +18,7 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype
 from cudf.core.index import CategoricalIndex, DatetimeIndex, Index, RangeIndex
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     ALL_TYPES,
     FLOAT_TYPES,
@@ -28,7 +29,6 @@ from cudf.testing._utils import (
     UNSIGNED_TYPES,
     assert_column_memory_eq,
     assert_column_memory_ne,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
 )

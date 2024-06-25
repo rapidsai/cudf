@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 from copy import copy, deepcopy
 
 import cupy as cp
@@ -7,7 +7,8 @@ import pandas as pd
 import pytest
 
 from cudf.core.dataframe import DataFrame
-from cudf.testing._utils import ALL_TYPES, assert_eq, assert_neq
+from cudf.testing import assert_eq, assert_neq
+from cudf.testing._utils import ALL_TYPES
 
 """
 DataFrame copy expectations

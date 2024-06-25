@@ -39,7 +39,7 @@ from cudf.core.buffer.spillable_buffer import (
     SpillableBufferOwner,
     SpillLock,
 )
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 if get_global_manager() is not None:
     pytest.skip(
