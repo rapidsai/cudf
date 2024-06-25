@@ -41,6 +41,7 @@ dependencies:
 - libarrow-acero==16.1.0.*
 - libarrow-dataset==16.1.0.*
 - libarrow==16.1.0.*
+- libcudf==24.8.*
 - libcufile-dev
 - libcurand-dev
 - libkvikio==24.8.*
