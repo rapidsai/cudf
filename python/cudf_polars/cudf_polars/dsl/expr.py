@@ -669,6 +669,7 @@ class StringFunction(Expr):
             pl_expr.StringFunction.EndsWith,
             pl_expr.StringFunction.StartsWith,
             pl_expr.StringFunction.Contains,
+            pl_expr.StringFunction.Slice,
         ):
             raise NotImplementedError(f"String function {self.name}")
         if self.name == pl_expr.StringFunction.Contains:
@@ -710,6 +711,30 @@ class StringFunction(Expr):
                 flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
             )
             return Column(plc.strings.contains.contains_re(column.obj, prog))
+        elif self.name == pl_expr.StringFunction.Slice:
+            child, expr_start, expr_length = self.children
+            assert isinstance(expr_start, Literal)
+            assert isinstance(expr_length, Literal)
+
+            column = child.evaluate(df, context=context, mapping=mapping)
+
+            # libcudf slices via [start,stop).
+            # polars slices with offset + length where start == offset
+            # stop = start + length. Do this math on the host
+            stop = Literal(
+                expr_length.dtype,
+                pa.scalar(
+                    expr_start.value.as_py() + expr_length.value.as_py(),
+                    type=pa.int32(),
+                ),
+            ).evaluate(df, context=context, mapping=mapping)
+            start = expr_start.evaluate(df, context=context, mapping=mapping)
+
+            return Column(
+                plc.strings.slice.slice_strings(
+                    column.obj, start.obj_scalar, stop.obj_scalar
+                )
+            )
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children

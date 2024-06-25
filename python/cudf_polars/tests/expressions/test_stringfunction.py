@@ -104,3 +104,9 @@ def test_contains_invalid(ldf):
         query.collect()
     with pytest.raises(pl.exceptions.ComputeError):
         query.collect(post_opt_callback=partial(execute_with_cudf, raise_on_fail=True))
+
+
+@pytest.mark.parametrize("offset,length", [(1, 3), (0, 3), (0, 0), (-3, 1), (-100, 5)])
+def test_slice(ldf, offset, length):
+    query = ldf.select(pl.col("a").str.slice(offset, length))
+    assert_gpu_result_equal(query)
