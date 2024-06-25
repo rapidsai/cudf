@@ -39,7 +39,7 @@ def test_source_info_ctor(io_class, source, tmp_path):
         file.write_bytes("hello world".encode("utf-8"))
         source = str(file)
 
-    _skip_invalid_sinks(source)
+    _skip_invalid_sinks(io_class, source)
 
     io_class([source])
 
@@ -64,7 +64,7 @@ def test_source_info_ctor_multiple(io_class, sources, tmp_path):
             file.write_bytes("hello world".encode("utf-8"))
             sources[i] = str(file)
 
-        _skip_invalid_sinks(source)
+        _skip_invalid_sinks(io_class, source)
 
     io_class(sources)
 
@@ -95,7 +95,7 @@ def test_source_info_ctor_mixing_invalid(io_class, sources, tmp_path):
             file = tmp_path / source
             file.write_bytes("hello world".encode("utf-8"))
             sources[i] = str(file)
-        _skip_invalid_sinks(source)
+        _skip_invalid_sinks(io_class, source)
     with pytest.raises(ValueError):
         io_class(sources)
 
