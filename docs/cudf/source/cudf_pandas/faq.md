@@ -53,6 +53,22 @@ print(pd)
 <module 'pandas' (ModuleAccelerator(fast=cudf, slow=pandas))>
 ```
 
+## Which functions will run on the GPU?
+
+Generally, `cudf.pandas` will accelerate all the features in the
+{doc}`cuDF API <user_guide/api_docs/index>` on the GPU. There are some
+exceptions. For example, some functions are GPU-accelerated by cuDF but
+do not support for every combination of keyword arguments. In cases like
+unsupported keyword arguments, cuDF is not able to provide GPU
+acceleration and `cudf.pandas` will fall back to the CPU.
+
+The most accurate way to assess which functions run on the GPU is to try
+running the code while using the cudf.pandas profiling features. The
+profiler will indicate which functions ran on GPU / CPU. To improve
+performance, try to use only functionality that can run entirely on GPU.
+This helps reduce the number of memory transfers needed to fallback to
+CPU.
+
 ## Does it work with third-party libraries?
 
 `cudf.pandas` is tested with numerous popular third-party libraries.
