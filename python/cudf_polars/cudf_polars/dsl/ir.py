@@ -123,7 +123,7 @@ def broadcast(
     ]
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class IR:
     """Abstract plan node, representing an unevaluated dataframe."""
 
@@ -157,7 +157,7 @@ class IR:
         )  # pragma: no cover
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class PythonScan(IR):
     """Representation of input from a python function."""
 
@@ -171,7 +171,7 @@ class PythonScan(IR):
         raise NotImplementedError("PythonScan not implemented")
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Scan(IR):
     """Input from files."""
 
@@ -248,7 +248,7 @@ class Scan(IR):
             return df.filter(mask)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Cache(IR):
     """
     Return a cached plan node.
@@ -269,7 +269,7 @@ class Cache(IR):
             return cache.setdefault(self.key, self.value.evaluate(cache=cache))
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class DataFrameScan(IR):
     """
     Input from an existing polars DataFrame.
@@ -315,7 +315,7 @@ class DataFrameScan(IR):
             return df
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Select(IR):
     """Produce a new dataframe selecting given expressions from an input."""
 
@@ -336,7 +336,7 @@ class Select(IR):
         return DataFrame(columns)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Reduce(IR):
     """
     Produce a new dataframe selecting given expressions from an input.
@@ -389,7 +389,7 @@ def placeholder_column(n: int) -> plc.Column:
     )
 
 
-@dataclasses.dataclass(slots=False)
+@dataclasses.dataclass
 class GroupBy(IR):
     """Perform a groupby."""
 
@@ -490,7 +490,7 @@ class GroupBy(IR):
         return DataFrame([*result_keys, *results]).slice(self.options.slice)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Join(IR):
     """A join of two dataframes."""
 
@@ -642,7 +642,7 @@ class Join(IR):
         return result.slice(zlice)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class HStack(IR):
     """Add new columns to a dataframe."""
 
@@ -671,7 +671,7 @@ class HStack(IR):
         return df.with_columns(columns)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Distinct(IR):
     """Produce a new dataframe with distinct rows."""
 
@@ -741,7 +741,7 @@ class Distinct(IR):
         return result.slice(self.zlice)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Sort(IR):
     """Sort a dataframe."""
 
@@ -810,7 +810,7 @@ class Sort(IR):
         return DataFrame(columns).slice(self.zlice)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Slice(IR):
     """Slice a dataframe."""
 
@@ -827,7 +827,7 @@ class Slice(IR):
         return df.slice((self.offset, self.length))
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Filter(IR):
     """Filter a dataframe with a boolean mask."""
 
@@ -843,7 +843,7 @@ class Filter(IR):
         return df.filter(mask)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Projection(IR):
     """Select a subset of columns from a dataframe."""
 
@@ -860,7 +860,7 @@ class Projection(IR):
         return DataFrame(columns)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class MapFunction(IR):
     """Apply some function to a dataframe."""
 
@@ -919,7 +919,7 @@ class MapFunction(IR):
             raise AssertionError("Should never be reached")  # pragma: no cover
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class Union(IR):
     """Concatenate dataframes vertically."""
 
@@ -943,7 +943,7 @@ class Union(IR):
         ).slice(self.zlice)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class HConcat(IR):
     """Concatenate dataframes horizontally."""
 
