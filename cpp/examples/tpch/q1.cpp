@@ -108,6 +108,8 @@ std::unique_ptr<cudf::table> scan_filter_project() {
     };
 
     auto l_shipdate = cudf::ast::column_reference(5);
+
+    // TODO: Fix the date representation for '1998-09-02'
     auto date_scalar = cudf::timestamp_scalar<cudf::timestamp_D>(10471, true);
     auto date = cudf::ast::literal(date_scalar);
     auto filter_expr = cudf::ast::operation(
@@ -186,19 +188,23 @@ std::unique_ptr<cudf::table> calc_group_by(std::unique_ptr<cudf::table>& table) 
 
     auto agg_results = groupby_obj.aggregate(requests);
     auto result_key = std::move(agg_results.first);
-    std::vector<cudf::column_view> columns{
-        result_key->get_column(0), 
-        result_key->get_column(1),
-        *agg_results.second[0].results[0],
-        *agg_results.second[0].results[1],
-        *agg_results.second[1].results[0],
-        *agg_results.second[1].results[1],
-        *agg_results.second[2].results[0],
-        *agg_results.second[3].results[0],
-        *agg_results.second[4].results[0],
-        *agg_results.second[5].results[0]
-    };
-    return std::make_unique<cudf::table>(cudf::table_view(columns));
+
+    auto l_returnflag = std::make_unique<cudf::column>(result_key->get_column(0));
+    auto l_linestatus = std::make_unique<cudf::column>(result_key->get_column(1));
+
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    columns.push_back(std::move(l_returnflag));
+    columns.push_back(std::move(l_linestatus));
+    columns.push_back(std::move(agg_results.second[0].results[0]));
+    columns.push_back(std::move(agg_results.second[0].results[1]));
+    columns.push_back(std::move(agg_results.second[1].results[0]));
+    columns.push_back(std::move(agg_results.second[1].results[1]));
+    columns.push_back(std::move(agg_results.second[2].results[0]));
+    columns.push_back(std::move(agg_results.second[3].results[0]));
+    columns.push_back(std::move(agg_results.second[4].results[0]));
+    columns.push_back(std::move(agg_results.second[5].results[0]));
+    
+    return std::make_unique<cudf::table>(std::move(columns));
 }
 
 std::unique_ptr<cudf::table> sort(
