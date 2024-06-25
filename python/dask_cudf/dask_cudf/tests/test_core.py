@@ -795,7 +795,7 @@ def test_dataframe_set_index():
         pddf = dd.from_pandas(pdf, npartitions=4)
         pddf = pddf.set_index("str")
 
-        from cudf.testing._utils import assert_eq
+        from cudf.testing import assert_eq
 
         assert_eq(ddf.compute(), pddf.compute())
 

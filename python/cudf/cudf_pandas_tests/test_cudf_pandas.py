@@ -1175,7 +1175,7 @@ def test_intermediates_are_proxied():
 
 def test_from_dataframe():
     cudf = pytest.importorskip("cudf")
-    from cudf.testing._utils import assert_eq
+    from cudf.testing import assert_eq
 
     data = {"foo": [1, 2, 3], "bar": [4, 5, 6]}
 
