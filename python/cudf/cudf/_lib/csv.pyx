@@ -8,7 +8,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
-from cudf._lib.io.datasource cimport Datasource, NativeFileDatasource
+from cudf._lib.pylibcudf.io.datasource cimport Datasource, NativeFileDatasource
 from cudf._lib.pylibcudf.libcudf.types cimport data_type
 from cudf._lib.types cimport dtype_to_data_type
 

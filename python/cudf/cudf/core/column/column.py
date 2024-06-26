@@ -47,6 +47,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._compat import PANDAS_GE_210
+from cudf.core._internals.timezones import get_compatible_timezone
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
     Buffer,
@@ -665,15 +666,32 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 f"{num_keys}"
             )
 
+    def _validate_fillna_value(
+        self, fill_value: ScalarLike | ColumnLike
+    ) -> cudf.Scalar | ColumnBase:
+        """Align fill_value for .fillna based on column type."""
+        if is_scalar(fill_value):
+            return cudf.Scalar(fill_value, dtype=self.dtype)
+        return as_column(fill_value)
+
     def fillna(
         self,
-        fill_value: Any = None,
-        method: str | None = None,
+        fill_value: ScalarLike | ColumnLike,
+        method: Literal["ffill", "bfill", None] = None,
     ) -> Self:
         """Fill null values with ``value``.
 
         Returns a copy with null filled.
         """
+        if not self.has_nulls(include_nan=True):
+            return self.copy()
+        elif method is None:
+            if is_scalar(fill_value) and libcudf.scalar._is_null_host_scalar(
+                fill_value
+            ):
+                return self.copy()
+            else:
+                fill_value = self._validate_fillna_value(fill_value)
         return libcudf.replace.replace_nulls(
             input_col=self.nans_to_nulls(),
             replacement=fill_value,
@@ -1854,6 +1872,21 @@ def as_column(
             arbitrary.dtype,
             (pd.CategoricalDtype, pd.IntervalDtype, pd.DatetimeTZDtype),
         ):
+            if isinstance(arbitrary.dtype, pd.DatetimeTZDtype):
+                new_tz = get_compatible_timezone(arbitrary.dtype)
+                arbitrary = arbitrary.astype(new_tz)
+            if isinstance(arbitrary.dtype, pd.CategoricalDtype) and isinstance(
+                arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
+            ):
+                new_tz = get_compatible_timezone(
+                    arbitrary.dtype.categories.dtype
+                )
+                new_cats = arbitrary.dtype.categories.astype(new_tz)
+                new_dtype = pd.CategoricalDtype(
+                    categories=new_cats, ordered=arbitrary.dtype.ordered
+                )
+                arbitrary = arbitrary.astype(new_dtype)
+
             return as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
