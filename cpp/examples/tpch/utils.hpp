@@ -38,6 +38,16 @@ cudf::io::table_metadata create_table_metadata(std::vector<std::string> column_n
     return metadata;
 }
 
+std::unique_ptr<cudf::table> append_col_to_table(
+    std::unique_ptr<cudf::table> table, std::unique_ptr<cudf::column> col) {
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    for (size_t i = 0; i < table->num_columns(); i++) {
+        columns.push_back(std::make_unique<cudf::column>(table->get_column(i)));
+    }
+    columns.push_back(std::move(col));
+    return std::make_unique<cudf::table>(std::move(columns));
+}
+
 std::unique_ptr<cudf::table> order_by(
     std::unique_ptr<cudf::table>& table, std::vector<int32_t> keys) {
     auto table_view = table->view();
