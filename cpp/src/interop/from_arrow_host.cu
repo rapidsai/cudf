@@ -188,8 +188,16 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::string_v
 
   // chars_column does not contain any nulls, they are tracked by the parent string column
   // itself instead. So we pass nullptr for the validity bitmask.
-  int64_t const char_data_length =
-    reinterpret_cast<int64_t const*>(offset_buffers[1])[input->length + input->offset];
+  int64_t const char_data_length = [&]() {
+    if (schema->type == NANOARROW_TYPE_LARGE_STRING) {
+      return reinterpret_cast<int64_t const*>(offset_buffers[1])[input->length + input->offset];
+    } else if (schema->type == NANOARROW_TYPE_STRING) {
+      return static_cast<int64_t>(
+        reinterpret_cast<int32_t const*>(offset_buffers[1])[input->length + input->offset]);
+    } else {
+      CUDF_FAIL("Unsupported string type", cudf::data_type_error);
+    }
+  }();
   void const* char_buffers[2] = {nullptr, input->buffers[2]};
   ArrowArray char_array       = {
           .length     = char_data_length,
