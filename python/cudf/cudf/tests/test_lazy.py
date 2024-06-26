@@ -6,7 +6,7 @@ import cudf
 import cudf.core.lazy
 from cudf.core.lazy import lazy_wrap_dataframe, lazy_wrap_series
 from cudf.pandas.fast_slow_proxy import _State
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 pytest.importorskip("dask_cudf")
 
