@@ -789,7 +789,7 @@ Rolling = make_intermediate_proxy_type(
 
 ExponentialMovingWindow = make_intermediate_proxy_type(
     "ExponentialMovingWindow",
-    _Unusable,
+    cudf.core.window.ewm.ExponentialMovingWindow,
     pd.core.window.ewm.ExponentialMovingWindow,
 )
 
