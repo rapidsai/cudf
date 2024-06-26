@@ -26,6 +26,7 @@
 #include <cuco/static_set.cuh>
 #include <cuda/functional>
 #include <thrust/copy.h>
+#include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
 
 namespace cudf::detail {

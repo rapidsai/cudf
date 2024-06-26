@@ -33,9 +33,9 @@ rmm::device_uvector<size_type> reduce_by_row(hash_set_type<RowHasher>& set,
   // If we don't care about order, just gather indices of distinct keys taken from set.
   if (keep == duplicate_keep_option::KEEP_ANY) {
     auto const iter = thrust::counting_iterator<cudf::size_type>{0};
-    auto const size = set.insert(iter, iter + num_rows, stream.value());
-    set.retrieve_all(output_indices.begin(), stream.value());
-    output_indices.resize(size, stream);
+    set.insert_async(iter, iter + num_rows, stream.value());
+    auto const output_end = set.retrieve_all(output_indices.begin(), stream.value());
+    output_indices.resize(thrust::distance(output_indices.begin(), output_end), stream);
     return output_indices;
   }
 
