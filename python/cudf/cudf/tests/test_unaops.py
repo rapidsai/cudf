@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import itertools
 import operator
@@ -10,7 +10,7 @@ import pytest
 
 import cudf
 from cudf import Series
-from cudf.testing import _utils as utils
+from cudf.testing import _utils as utils, assert_eq
 
 _unaops = [operator.abs, operator.invert, operator.neg, np.ceil, np.floor]
 
@@ -128,4 +128,4 @@ def test_scalar_no_negative_bools():
 def test_series_bool_neg():
     sr = Series([True, False, True, None, False, None, True, True])
     psr = sr.to_pandas(nullable=True)
-    utils.assert_eq((-sr).to_pandas(nullable=True), -psr, check_dtype=True)
+    assert_eq((-sr).to_pandas(nullable=True), -psr, check_dtype=True)
