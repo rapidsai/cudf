@@ -256,15 +256,6 @@ std::unique_ptr<cudf::table> calc_group_by(std::unique_ptr<cudf::table>& table) 
     return std::make_unique<cudf::table>(std::move(columns));
 }
 
-std::unique_ptr<cudf::table> sort(
-    std::unique_ptr<cudf::table>& table) {
-    auto tbl_view = table->view();
-    return cudf::sort_by_key(
-        tbl_view, 
-        cudf::table_view{{tbl_view.column(0), tbl_view.column(1)}}
-    );
-}
-
 int main() {
     auto t1 = scan_filter_project();
     auto disc_price_col = calc_disc_price(t1);
@@ -272,7 +263,7 @@ int main() {
     auto t2 = append_col_to_table(std::move(t1), std::move(disc_price_col));
     auto t3 = append_col_to_table(std::move(t2), std::move(charge_col));
     auto t4 = calc_group_by(t3);
-    auto result_table = sort(t4);
+    auto result_table = order_by(t4, {0, 1});
     auto result_table_metadata = create_table_metadata({
         "l_returnflag",
         "l_linestatus",
