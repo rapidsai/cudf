@@ -8,7 +8,7 @@ import pytest
 
 from cudf import DataFrame, Index, RangeIndex, Series
 from cudf.core.buffer import as_buffer
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 pytestmark = pytest.mark.spilling
 
