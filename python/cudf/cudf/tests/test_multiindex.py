@@ -21,12 +21,8 @@ import pytest
 import cudf
 from cudf.api.extensions import no_default
 from cudf.core.column import as_column
-from cudf.testing._utils import (
-    assert_eq,
-    assert_exceptions_equal,
-    assert_neq,
-    expect_warning_if,
-)
+from cudf.testing import assert_eq, assert_neq
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
 @contextmanager
