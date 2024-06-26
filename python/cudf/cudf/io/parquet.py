@@ -10,7 +10,7 @@ import warnings
 from collections import defaultdict
 from contextlib import ExitStack
 from functools import partial, reduce
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable
 from uuid import uuid4
 
 import numpy as np
@@ -679,7 +679,7 @@ def read_parquet(
     return df
 
 
-def _normalize_filters(filters: list | None) -> List[List[tuple]] | None:
+def _normalize_filters(filters: list | None) -> list[list[tuple]] | None:
     # Utility to normalize and validate the `filters`
     # argument to `read_parquet`
     if not filters:
@@ -709,7 +709,7 @@ def _normalize_filters(filters: list | None) -> List[List[tuple]] | None:
 
 
 def _apply_post_filters(
-    df: cudf.DataFrame, filters: List[List[tuple]] | None
+    df: cudf.DataFrame, filters: list[list[tuple]] | None
 ) -> cudf.DataFrame:
     """Apply DNF filters to an in-memory DataFrame
 
@@ -738,7 +738,7 @@ def _apply_post_filters(
             )
         return ~column.isna() if negate else column.isna()
 
-    handlers: Dict[str, Callable] = {
+    handlers: dict[str, Callable] = {
         "==": operator.eq,
         "!=": operator.ne,
         "<": operator.lt,
@@ -1311,7 +1311,7 @@ class ParquetDatasetWriter:
     ) -> None:
         if isinstance(path, str) and path.startswith("s3://"):
             self.fs_meta = {"is_s3": True, "actual_path": path}
-            self.dir_: Optional[tempfile.TemporaryDirectory] = (
+            self.dir_: tempfile.TemporaryDirectory | None = (
                 tempfile.TemporaryDirectory()
             )
             self.path = self.dir_.name
@@ -1328,12 +1328,12 @@ class ParquetDatasetWriter:
         self.partition_cols = partition_cols
         # Collection of `ParquetWriter`s, and the corresponding
         # partition_col values they're responsible for
-        self._chunked_writers: List[
-            Tuple[libparquet.ParquetWriter, List[str], str]
+        self._chunked_writers: list[
+            tuple[libparquet.ParquetWriter, list[str], str]
         ] = []
         # Map of partition_col values to their ParquetWriter's index
         # in self._chunked_writers for reverse lookup
-        self.path_cw_map: Dict[str, int] = {}
+        self.path_cw_map: dict[str, int] = {}
         self.storage_options = storage_options
         self.filename = file_name_prefix
         self.max_file_size = max_file_size
@@ -1345,7 +1345,7 @@ class ParquetDatasetWriter:
                 )
             self.max_file_size = _parse_bytes(max_file_size)
 
-        self._file_sizes: Dict[str, int] = {}
+        self._file_sizes: dict[str, int] = {}
 
     @_cudf_nvtx_annotate
     def write_table(self, df):

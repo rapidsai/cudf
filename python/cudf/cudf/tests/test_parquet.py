@@ -22,17 +22,14 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
+from cudf._lib.parquet import ParquetReader
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
     merge_parquet_filemetadata,
 )
-from cudf.testing import dataset_generator as dg
-from cudf.testing._utils import (
-    TIMEDELTA_TYPES,
-    assert_eq,
-    set_random_null_mask_inplace,
-)
+from cudf.testing import assert_eq, dataset_generator as dg
+from cudf.testing._utils import TIMEDELTA_TYPES, set_random_null_mask_inplace
 
 
 @contextmanager
@@ -2946,6 +2943,61 @@ def test_per_column_options_string_col(tmpdir, encoding):
     assert encoding in fmd.row_group(0).column(0).encodings
 
 
+@pytest.mark.parametrize(
+    "num_rows",
+    [200, 10000],
+)
+def test_parquet_bss_round_trip(tmpdir, num_rows):
+    def flba(i):
+        hasher = hashlib.sha256()
+        hasher.update(i.to_bytes(4, "little"))
+        return hasher.digest()
+
+    # use pyarrow to write table of types that support BYTE_STREAM_SPLIT encoding
+    rows_per_rowgroup = 5000
+    fixed_data = pa.array(
+        [flba(i) for i in range(num_rows)], type=pa.binary(32)
+    )
+    i32_data = pa.array(list(range(num_rows)), type=pa.int32())
+    i64_data = pa.array(list(range(num_rows)), type=pa.int64())
+    f32_data = pa.array([float(i) for i in range(num_rows)], type=pa.float32())
+    f64_data = pa.array([float(i) for i in range(num_rows)], type=pa.float64())
+    padf = pa.Table.from_arrays(
+        [fixed_data, i32_data, i64_data, f32_data, f64_data],
+        names=["flba", "i32", "i64", "f32", "f64"],
+    )
+    padf_fname = tmpdir.join("padf.parquet")
+    pq.write_table(
+        padf,
+        padf_fname,
+        column_encoding="BYTE_STREAM_SPLIT",
+        use_dictionary=False,
+        row_group_size=rows_per_rowgroup,
+    )
+
+    # round trip data with cudf
+    cdf = cudf.read_parquet(padf_fname)
+    cdf_fname = tmpdir.join("cdf.parquet")
+    cdf.to_parquet(
+        cdf_fname,
+        column_type_length={"flba": 32},
+        column_encoding={
+            "flba": "BYTE_STREAM_SPLIT",
+            "i32": "BYTE_STREAM_SPLIT",
+            "i64": "BYTE_STREAM_SPLIT",
+            "f32": "BYTE_STREAM_SPLIT",
+            "f64": "BYTE_STREAM_SPLIT",
+        },
+        row_group_size_rows=rows_per_rowgroup,
+    )
+
+    # now read back in with pyarrow to test it was written properly by cudf
+    padf2 = pq.read_table(padf_fname)
+    padf3 = pq.read_table(cdf_fname)
+    assert_eq(padf2, padf3)
+    assert_eq(padf2.schema[0].type, padf3.schema[0].type)
+
+
 def test_parquet_reader_rle_boolean(datadir):
     fname = datadir / "rle_boolean_encoding.parquet"
 
@@ -3407,3 +3459,29 @@ def test_parquet_reader_roundtrip_structs_with_arrow_schema():
 
     # Check results
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
+@pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
+@pytest.mark.parametrize("use_pandas_metadata", [True, False])
+@pytest.mark.parametrize("row_groups", [[[0]], None, [[0, 1]]])
+def test_parquet_chunked_reader(
+    chunk_read_limit, pass_read_limit, use_pandas_metadata, row_groups
+):
+    df = pd.DataFrame(
+        {"a": [1, 2, 3, 4] * 1000000, "b": ["av", "qw", "hi", "xyz"] * 1000000}
+    )
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+    reader = ParquetReader(
+        [buffer],
+        chunk_read_limit=chunk_read_limit,
+        pass_read_limit=pass_read_limit,
+        use_pandas_metadata=use_pandas_metadata,
+        row_groups=row_groups,
+    )
+    expected = cudf.read_parquet(
+        buffer, use_pandas_metadata=use_pandas_metadata, row_groups=row_groups
+    )
+    actual = reader.read()
+    assert_eq(expected, actual)

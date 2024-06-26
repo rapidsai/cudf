@@ -37,10 +37,10 @@ struct StringsReplaceTest : public cudf::test::BaseFixture {
                                        "",
                                        nullptr};
 
-    return cudf::test::strings_column_wrapper(
+    return {
       h_strings.begin(),
       h_strings.end(),
-      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; })};
   }
 
   std::unique_ptr<cudf::column> build_large(cudf::column_view const& first,
@@ -277,6 +277,23 @@ TEST_F(StringsReplaceTest, ReplaceErrors)
   EXPECT_THROW(cudf::strings::replace(sv, target, null_input), cudf::logic_error);
   EXPECT_THROW(cudf::strings::replace(sv, null_input, replacement), cudf::logic_error);
   EXPECT_THROW(cudf::strings::replace(sv, empty_input, replacement), cudf::logic_error);
+
+  auto const empty       = cudf::test::strings_column_wrapper();
+  auto const ev          = cudf::strings_column_view(empty);
+  auto const targets     = cudf::test::strings_column_wrapper({"x"});
+  auto const tv          = cudf::strings_column_view(targets);
+  auto const target_null = cudf::test::strings_column_wrapper({""}, {0});
+  auto const tv_null     = cudf::strings_column_view(target_null);
+  auto const repls       = cudf::test::strings_column_wrapper({"y", "z"});
+  auto const rv          = cudf::strings_column_view(repls);
+  auto const repl_null   = cudf::test::strings_column_wrapper({""}, {0});
+  auto const rv_null     = cudf::strings_column_view(repl_null);
+
+  EXPECT_THROW(cudf::strings::replace_multiple(sv, ev, rv), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::replace_multiple(sv, tv_null, rv), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::replace_multiple(sv, tv, ev), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::replace_multiple(sv, tv, rv_null), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::replace_multiple(sv, tv, rv), cudf::logic_error);
 }
 
 TEST_F(StringsReplaceTest, ReplaceSlice)
@@ -341,7 +358,7 @@ TEST_F(StringsReplaceTest, ReplaceMulti)
     cudf::test::strings_column_wrapper repls({"_ ", "A ", "2 "});
     auto repls_view = cudf::strings_column_view(repls);
 
-    auto results = cudf::strings::replace(strings_view, targets_view, repls_view);
+    auto results = cudf::strings::replace_multiple(strings_view, targets_view, repls_view);
 
     std::vector<char const*> h_expected{"_ quick brown fox jumps over _ lazy dog",
                                         "_ fat cat lays next 2 _ other accénted cat",
@@ -361,7 +378,7 @@ TEST_F(StringsReplaceTest, ReplaceMulti)
     cudf::test::strings_column_wrapper repls({"* "});
     auto repls_view = cudf::strings_column_view(repls);
 
-    auto results = cudf::strings::replace(strings_view, targets_view, repls_view);
+    auto results = cudf::strings::replace_multiple(strings_view, targets_view, repls_view);
 
     std::vector<char const*> h_expected{"* quick brown fox jumps over * lazy dog",
                                         "* fat cat lays next * * other accénted cat",
@@ -412,7 +429,7 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
      "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá",
      "",
      ""},
-    {1, 1, 1, 1, 0, 1});
+    {true, true, true, true, false, true});
   auto strings_view = cudf::strings_column_view(input);
 
   auto targets      = cudf::test::strings_column_wrapper({"78901", "bananá", "ápple", "78"});
@@ -422,7 +439,7 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
     cudf::test::strings_column_wrapper repls({"x", "PEAR", "avocado", "$$"});
     auto repls_view = cudf::strings_column_view(repls);
 
-    auto results = cudf::strings::replace(strings_view, targets_view, repls_view);
+    auto results = cudf::strings::replace_multiple(strings_view, targets_view, repls_view);
 
     cudf::test::strings_column_wrapper expected(
       {"This string needs to be very long to trigger the long-replace internal functions. "
@@ -446,7 +463,7 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
        "Test string for overlap check: bananaavocado PEAR avocadoPEAR banavocado avocado PEAR",
        "",
        ""},
-      {1, 1, 1, 1, 0, 1});
+      {true, true, true, true, false, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 
@@ -454,7 +471,7 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
     cudf::test::strings_column_wrapper repls({"*"});
     auto repls_view = cudf::strings_column_view(repls);
 
-    auto results = cudf::strings::replace(strings_view, targets_view, repls_view);
+    auto results = cudf::strings::replace_multiple(strings_view, targets_view, repls_view);
 
     cudf::test::strings_column_wrapper expected(
       {"This string needs to be very long to trigger the long-replace internal functions. "
@@ -474,7 +491,7 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
        "*",
        "",
        ""},
-      {1, 1, 1, 1, 0, 1});
+      {true, true, true, true, false, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 
@@ -494,7 +511,7 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
     auto repls      = cudf::test::strings_column_wrapper({""});
     auto repls_view = cudf::strings_column_view(repls);
 
-    auto results = cudf::strings::replace(strings_view, targets_view, repls_view);
+    auto results = cudf::strings::replace_multiple(strings_view, targets_view, repls_view);
 
     cudf::test::strings_column_wrapper expected(
       {"This string needs to be very long to trigger the long-replace internal functions. "
@@ -510,7 +527,7 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
        "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá",
        "",
        ""},
-      {1, 1, 1, 1, 0, 1});
+      {true, true, true, true, false, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
@@ -522,6 +539,10 @@ TEST_F(StringsReplaceTest, EmptyStringsColumn)
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::replace(
     strings_view, cudf::string_scalar("not"), cudf::string_scalar("pertinent"));
-  auto view = results->view();
+  cudf::test::expect_column_empty(results->view());
+
+  auto const target      = cudf::test::strings_column_wrapper({"x"});
+  auto const target_view = cudf::strings_column_view(target);
+  results                = cudf::strings::replace_multiple(strings_view, target_view, target_view);
   cudf::test::expect_column_empty(results->view());
 }

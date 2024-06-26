@@ -6,6 +6,7 @@ from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
 
 import numpy as np
+import pandas as pd
 from pyarrow import dataset as pa_ds, parquet as pq
 
 from dask import dataframe as dd
@@ -41,6 +42,10 @@ class CudfEngine(ArrowDatasetEngine):
         meta_pd = super()._create_dd_meta(dataset_info, **kwargs)
 
         # Convert to cudf
+        # (drop unsupported timezone information)
+        for k, v in meta_pd.dtypes.items():
+            if isinstance(v, pd.DatetimeTZDtype) and v.tz is not None:
+                meta_pd[k] = meta_pd[k].dt.tz_localize(None)
         meta_cudf = cudf.from_pandas(meta_pd)
 
         # Re-set "object" dtypes to align with pa schema
@@ -311,7 +316,7 @@ class CudfEngine(ArrowDatasetEngine):
 
             if index and (index[0] in df.columns):
                 df = df.set_index(index[0])
-            elif index is False and df.index.names != (None,):
+            elif index is False and df.index.names != [None]:
                 # If index=False, we shouldn't have a named index
                 df.reset_index(inplace=True)
 
