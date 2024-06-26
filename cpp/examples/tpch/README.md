@@ -4,7 +4,7 @@ Implementing the TPC-H queries using `libcudf`.
 
 ## Data Generation
 
-We leverage `Datafusion`s data generator (wrapper around official TPC-H datagen) for generating data in the form of Parquet files. 
+We leverage the data generator (wrapper around official TPC-H datagen) from [Apache Datafusion](https://github.com/apache/datafusion) for generating data in the form of Parquet files. 
 
 ### Requirements 
 
@@ -12,7 +12,7 @@ We leverage `Datafusion`s data generator (wrapper around official TPC-H datagen)
 
 ### Steps
 
-1. Clone the datafusion repository
+1. Clone the Datafusion repository.
 ```bash
 git clone git@github.com:apache/datafusion.git
 ```
