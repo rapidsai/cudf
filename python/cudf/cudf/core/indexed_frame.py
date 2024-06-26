@@ -2727,11 +2727,24 @@ class IndexedFrame(Frame):
             if ignore_index:
                 out = out.reset_index(drop=True)
         else:
-            labels = sorted(self._data.names, reverse=not ascending)
-            out = self[labels]
+            labels = sorted(self._column_names, reverse=not ascending)
+            result_columns = (self._data[label] for label in labels)
             if ignore_index:
-                out._data.rangeindex = True
-                out._data.names = list(range(self._num_columns))
+                ca = ColumnAccessor(
+                    dict(enumerate(result_columns)),
+                    rangeindex=True,
+                    verify=False,
+                )
+            else:
+                ca = ColumnAccessor(
+                    dict(zip(labels, result_columns)),
+                    rangeindex=self._data.rangeindex,
+                    multiindex=self._data.multiindex,
+                    level_names=self._data.level_names,
+                    label_dtype=self._data.label_dtype,
+                    verify=False,
+                )
+            out = self._from_data_like_self(ca)
 
         return self._mimic_inplace(out, inplace=inplace)
 
@@ -3203,29 +3216,6 @@ class IndexedFrame(Frame):
             )
             for i in range(len(splits) + 1)
         ]
-
-    @_cudf_nvtx_annotate
-    def fillna(
-        self, value=None, method=None, axis=None, inplace=False, limit=None
-    ):  # noqa: D102
-        if method is not None:
-            # Do not remove until pandas 3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
-            warnings.warn(
-                f"{type(self).__name__}.fillna with 'method' is "
-                "deprecated and will raise in a future version. "
-                "Use obj.ffill() or obj.bfill() instead.",
-                FutureWarning,
-            )
-        old_index = self.index
-        ret = super().fillna(value, method, axis, inplace, limit)
-        if inplace:
-            self.index = old_index
-        else:
-            ret.index = old_index
-        return ret
 
     @_cudf_nvtx_annotate
     def bfill(self, value=None, axis=None, inplace=None, limit=None):
