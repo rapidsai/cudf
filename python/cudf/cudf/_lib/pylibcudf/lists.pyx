@@ -17,8 +17,10 @@ from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
 )
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
+from cudf._lib.pylibcudf.lists cimport ColumnOrScalar
 
 from .column cimport Column, ListColumnView
+from .scalar cimport Scalar
 from .table cimport Table
 
 
@@ -101,8 +103,8 @@ cpdef Column concatenate_list_elements(Column input, bool dropna):
 
 
 cpdef Column contains(Column input, ColumnOrScalar search_key):
-    """Create a column of bool values based upon the search_key,
-    indicating whether the search_key is contained in the input.
+    """Create a column of bool values indicating whether
+    the search_key is contained in the input.
 
     Parameters
     ----------
@@ -119,6 +121,10 @@ cpdef Column contains(Column input, ColumnOrScalar search_key):
     """
     cdef unique_ptr[column] c_result
     cdef ListColumnView list_view = input.list_view()
+
+    if not isinstance(search_key, (Column, Scalar)):
+        raise TypeError("Must pass a Column or Scalar")
+
     with nogil:
         c_result = move(cpp_contains.contains(
             list_view.view(),
@@ -152,7 +158,7 @@ cpdef Column contains_nulls(Column input):
 
 
 cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_option):
-    """Create a column of values indicating the position of a search
+    """Create a column of index values indicating the position of a search
     key row within the corresponding list row in the lists column.
 
     Parameters
@@ -168,9 +174,9 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
     Returns
     -------
     Column
-        A new Column of index values that if the search_key
-        was found in the list column. An index value of -1
-        indicates that the search_key weas not found.
+        A new Column of index values that indicate where in the
+        list column tthe search_key was found. An index value
+        of -1 indicates that the search_key was not found.
     """
     cdef unique_ptr[column] c_result
     cdef ListColumnView list_view = input.list_view()
@@ -178,6 +184,9 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
         cpp_contains.duplicate_find_option.FIND_FIRST if find_first_option
         else cpp_contains.duplicate_find_option.FIND_LAST
     )
+    if not isinstance(search_key, (Column, Scalar)):
+        raise TypeError("Must pass a Column or Scalar")
+
     with nogil:
         c_result = move(cpp_contains.index_of(
             list_view.view(),

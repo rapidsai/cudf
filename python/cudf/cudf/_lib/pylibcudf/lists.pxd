@@ -3,7 +3,6 @@
 from libcpp cimport bool
 
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
-from cudf._lib.scalar cimport DeviceScalar
 
 from .column cimport Column
 from .scalar cimport Scalar
