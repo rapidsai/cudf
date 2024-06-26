@@ -35,100 +35,27 @@
 #include "utils.hpp"
 
 /*
-
-Query:
-
-    select
-        l_returnflag,
-        l_linestatus,
-        sum(l_quantity) as sum_qty,
-        sum(l_extendedprice) as sum_base_price,
-        sum(l_extendedprice * (1 - l_discount)) as sum_disc_price,
-        sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge,
-        avg(l_quantity) as avg_qty,
-        avg(l_extendedprice) as avg_price,
-        avg(l_discount) as avg_disc,
-        count(*) as count_order
-    from
-        '~/tpch_sf1/lineitem/part-0.parquet'
-    where
-            l_shipdate <= date '1998-09-02'
-    group by
-        l_returnflag,
-        l_linestatus
-    order by
-        l_returnflag,
-        l_linestatus;
-
-Plan:
-
-    ┌─────────────────────────────┐
-    │┌───────────────────────────┐│
-    ││       Physical Plan       ││
-    │└───────────────────────────┘│
-    └─────────────────────────────┘
-    ┌───────────────────────────┐
-    │          ORDER_BY         │
-    │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
-    │          ORDERS:          │
-    │ "part-0".l_returnflag ASC │
-    │ "part-0".l_linestatus ASC │
-    └─────────────┬─────────────┘
-    ┌─────────────┴─────────────┐
-    │       HASH_GROUP_BY       │
-    │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
-    │             #0            │
-    │             #1            │
-    │          sum(#2)          │
-    │          sum(#3)          │
-    │          sum(#4)          │
-    │          sum(#5)          │
-    │          avg(#6)          │
-    │          avg(#7)          │
-    │          avg(#8)          │
-    │        count_star()       │
-    └─────────────┬─────────────┘
-    ┌─────────────┴─────────────┐
-    │         PROJECTION        │
-    │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
-    │        l_returnflag       │
-    │        l_linestatus       │
-    │         l_quantity        │
-    │      l_extendedprice      │
-    │             #4            │
-    │   (#4 * (1.00 + l_tax))   │
-    │         l_quantity        │
-    │      l_extendedprice      │
-    │         l_discount        │
-    └─────────────┬─────────────┘
-    ┌─────────────┴─────────────┐
-    │         PROJECTION        │
-    │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
-    │        l_returnflag       │
-    │        l_linestatus       │
-    │         l_quantity        │
-    │      l_extendedprice      │
-    │ (l_extendedprice * (1.00 -│
-    │        l_discount))       │
-    │           l_tax           │
-    │         l_discount        │
-    └─────────────┬─────────────┘
-    ┌─────────────┴─────────────┐
-    │       PARQUET_SCAN        │
-    │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
-    │        l_returnflag       │
-    │        l_linestatus       │
-    │         l_quantity        │
-    │      l_extendedprice      │
-    │         l_discount        │
-    │           l_tax           │
-    │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
-    │ Filters: l_shipdate<='1998│
-    │-09-02'::DATE AND l_sh...  │
-    │         IS NOT NULL       │
-    │   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
-    │        EC: 1200243        │
-    └───────────────────────────┘
+select
+    l_returnflag,
+    l_linestatus,
+    sum(l_quantity) as sum_qty,
+    sum(l_extendedprice) as sum_base_price,
+    sum(l_extendedprice * (1 - l_discount)) as sum_disc_price,
+    sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge,
+    avg(l_quantity) as avg_qty,
+    avg(l_extendedprice) as avg_price,
+    avg(l_discount) as avg_disc,
+    count(*) as count_order
+from
+    '~/tpch_sf1/lineitem/part-0.parquet'
+where
+        l_shipdate <= date '1998-09-02'
+group by
+    l_returnflag,
+    l_linestatus
+order by
+    l_returnflag,
+    l_linestatus;
 */
 
 std::unique_ptr<cudf::table> scan_filter_project() {
