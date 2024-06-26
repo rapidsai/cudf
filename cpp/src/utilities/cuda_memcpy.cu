@@ -53,9 +53,9 @@ void cuda_memcpy_async(
   void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream)
 {
   switch (kind) {
-    case host_memory_kind::PINNED: copy_pinned(dst, src, size, stream);
+    case host_memory_kind::PINNED: copy_pinned(dst, src, size, stream); break;
     case host_memory_kind::PAGEABLE:
-    default: copy_pageable(dst, src, size, stream);
+    default: copy_pageable(dst, src, size, stream); break;
   }
 }
 
