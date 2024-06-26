@@ -503,7 +503,7 @@ class Join(IR):
     right_on: list[expr.NamedExpr]
     """List of expressions used as keys in the right frame."""
     options: tuple[
-        Literal["inner", "left", "full", "leftsemi", "leftanti"],
+        Literal["inner", "left", "full", "leftsemi", "leftanti", "cross"],
         bool,
         tuple[int, int] | None,
         str | None,
@@ -517,11 +517,6 @@ class Join(IR):
     - suffix: string suffix for right columns if names match
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
     """
-
-    def __post_init__(self) -> None:
-        """Validate preconditions."""
-        if self.options[0] == "cross":
-            raise NotImplementedError("cross join not implemented")
 
     @cache
     @staticmethod
@@ -567,6 +562,26 @@ class Join(IR):
         """Evaluate and return a dataframe."""
         left = self.left.evaluate(cache=cache)
         right = self.right.evaluate(cache=cache)
+        how, join_nulls, zlice, suffix, coalesce = self.options
+        suffix = "_right" if suffix is None else suffix
+        if how == "cross":
+            # Separate implementation, since cross_join returns the
+            # result, not the gather maps
+            columns = plc.join.cross_join(left.table, right.table).columns()
+            left_cols = [
+                NamedColumn(new, old.name).sorted_like(old)
+                for new, old in zip(columns[: left.num_columns], left.columns)
+            ]
+            right_cols = [
+                NamedColumn(
+                    new,
+                    old.name
+                    if old.name not in left.column_names_set
+                    else f"{old.name}{suffix}",
+                )
+                for new, old in zip(columns[left.num_columns :], right.columns)
+            ]
+            return DataFrame([*left_cols, *right_cols])
         left_on = DataFrame(
             broadcast(
                 *(e.evaluate(left) for e in self.left_on), target_length=left.num_rows
@@ -578,13 +593,11 @@ class Join(IR):
                 target_length=right.num_rows,
             )
         )
-        how, join_nulls, zlice, suffix, coalesce = self.options
         null_equality = (
             plc.types.NullEquality.EQUAL
             if join_nulls
             else plc.types.NullEquality.UNEQUAL
         )
-        suffix = "_right" if suffix is None else suffix
         join_fn, left_policy, right_policy = Join._joiners(how)
         if right_policy is None:
             # Semi join
