@@ -8,38 +8,66 @@ from cudf._lib import pylibcudf as plc
 from cudf._lib.pylibcudf.io.types import CompressionType
 
 
-def metadata_from_arrow_array(
-    pa_array: pa.Array,
+def metadata_from_arrow_type(
+    pa_type: pa.Array,
+    name: str = "",
 ) -> plc.interop.ColumnMetadata | None:
-    metadata = None
-    if pa.types.is_list(dtype := pa_array.type) or pa.types.is_struct(dtype):
+    metadata = plc.interop.ColumnMetadata(name)
+    if pa.types.is_list(pa_type):
+        child_meta = [plc.interop.ColumnMetadata("offsets")]
+        for i in range(pa_type.num_fields):
+            field_meta = metadata_from_arrow_type(
+                pa_type.field(i).type, pa_type.field(i).name
+            )
+            child_meta.append(field_meta)
+        metadata = plc.interop.ColumnMetadata(name, child_meta)
+    elif pa.types.is_struct(pa_type):
+        child_meta = []
+        for i in range(pa_type.num_fields):
+            field_meta = metadata_from_arrow_type(
+                pa_type.field(i).type, pa_type.field(i).name
+            )
+            child_meta.append(field_meta)
         metadata = plc.interop.ColumnMetadata(
-            "",
+            name,
             # libcudf does not store field names, so just match pyarrow's.
-            [
-                plc.interop.ColumnMetadata(pa_array.type.field(i).name)
-                for i in range(pa_array.type.num_fields)
-            ],
+            child_meta,
         )
     return metadata
 
 
 def assert_column_eq(
-    lhs: pa.Array | plc.Column, rhs: pa.Array | plc.Column
+    lhs: pa.Array | plc.Column,
+    rhs: pa.Array | plc.Column,
+    check_field_nullability=True,
 ) -> None:
-    """Verify that a pylibcudf array and PyArrow array are equal."""
+    """Verify that a pylibcudf array and PyArrow array are equal.
+
+    Parameters
+    ----------
+    lhs: Union[pa.Array, plc.Column]
+        The array with the expected values
+    rhs: Union[pa.Array, plc.Column]
+        The array to check
+    check_field_nullability:
+        For list/struct dtypes, whether to check if the nullable attributes
+        on child fields are equal.
+
+        Useful for checking roundtripping of lossy formats like JSON that may not
+        preserve this information.
+    """
     # Nested types require children metadata to be passed to the conversion function.
     if isinstance(lhs, (pa.Array, pa.ChunkedArray)) and isinstance(
         rhs, plc.Column
     ):
         rhs = plc.interop.to_arrow(
-            rhs, metadata=metadata_from_arrow_array(lhs)
+            rhs, metadata=metadata_from_arrow_type(lhs.type)
         )
     elif isinstance(lhs, plc.Column) and isinstance(
         rhs, (pa.Array, pa.ChunkedArray)
     ):
         lhs = plc.interop.to_arrow(
-            lhs, metadata=metadata_from_arrow_array(rhs)
+            lhs, metadata=metadata_from_arrow_type(rhs.type)
         )
     else:
         raise ValueError(
@@ -51,6 +79,35 @@ def assert_column_eq(
     if isinstance(rhs, pa.ChunkedArray):
         rhs = rhs.combine_chunks()
 
+    def _make_fields_nullable(typ):
+        new_fields = []
+        for i in range(typ.num_fields):
+            child_field = typ.field(i)
+            if not child_field.nullable:
+                child_type = child_field.type
+                if isinstance(child_field.type, (pa.StructType, pa.ListType)):
+                    child_type = _make_fields_nullable(child_type)
+                new_fields.append(
+                    pa.field(child_field.name, child_type, nullable=True)
+                )
+            else:
+                new_fields.append(child_field)
+
+        if isinstance(typ, pa.StructType):
+            return pa.struct(new_fields)
+        elif isinstance(typ, pa.ListType):
+            return pa.list_(new_fields[0])
+        return typ
+
+    if not check_field_nullability:
+        rhs_type = _make_fields_nullable(rhs.type)
+        rhs = rhs.cast(rhs_type)
+
+        lhs_type = _make_fields_nullable(lhs.type)
+        lhs = rhs.cast(lhs_type)
+
+    print(lhs)
+    print(rhs)
     assert lhs.equals(rhs)
 
 
@@ -64,7 +121,9 @@ def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
 
 
 def assert_table_and_meta_eq(
-    plc_table_w_meta: plc.io.types.TableWithMetadata, pa_table: pa.Table
+    pa_table: pa.Table,
+    plc_table_w_meta: plc.io.types.TableWithMetadata,
+    check_field_nullability=True,
 ) -> None:
     """Verify that the pylibcudf TableWithMetadata and PyArrow table are equal"""
 
@@ -74,7 +133,7 @@ def assert_table_and_meta_eq(
     assert plc_shape == pa_table.shape
 
     for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
-        assert_column_eq(plc_col, pa_col)
+        assert_column_eq(pa_col, plc_col, check_field_nullability)
 
     # Check column name equality
     assert plc_table_w_meta.column_names == pa_table.column_names
@@ -90,7 +149,7 @@ def assert_table_and_metas_eq(
 
     assert res_shape == exp_shape
 
-    for exp_col, res_col in zip(exp.tbl.columns(), res.tbl.columns):
+    for exp_col, res_col in zip(exp.tbl.columns(), res.tbl.columns()):
         assert_column_eq(exp_col, res_col)
 
     # Check column name equality
@@ -153,6 +212,26 @@ def is_fixed_width(plc_dtype: plc.DataType):
     )
 
 
+def nesting(typ) -> tuple[int, int]:
+    """Return list and struct nesting of a pyarrow type."""
+    if isinstance(typ, pa.ListType):
+        list_, struct = nesting(typ.value_type)
+        return list_ + 1, struct
+    elif isinstance(typ, pa.StructType):
+        lists, structs = map(max, zip(*(nesting(t.type) for t in typ)))
+        return lists, structs + 1
+    else:
+        return 0, 0
+
+
+def is_nested_struct(typ):
+    return nesting(typ)[1] > 1
+
+
+def is_nested_list(typ):
+    return nesting(typ)[0] > 1
+
+
 # TODO: enable uint64, some failing tests
 NUMERIC_PA_TYPES = [pa.int64(), pa.float64()]  # pa.uint64()]
 STRING_PA_TYPES = [pa.string()]
@@ -168,29 +247,28 @@ LIST_PA_TYPES = [
 DEFAULT_STRUCT_TESTING_TYPE = pa.struct(
     [pa.field("v", pa.int64(), nullable=False)]
 )
+NESTED_STRUCT_TESTING_TYPE = pa.struct(
+    [
+        pa.field("a", pa.int64(), nullable=False),
+        pa.field(
+            "b_struct",
+            pa.struct([pa.field("b", pa.float64(), nullable=False)]),
+            nullable=False,
+        ),
+    ]
+)
 
-DEFAULT_PA_STRUCT_TESTING_TYPES = [DEFAULT_STRUCT_TESTING_TYPE] + [
-    # Nested case
-    pa.struct(
-        [
-            pa.field("a", pa.int64(), nullable=False),
-            pa.field(
-                "b_struct",
-                pa.struct([pa.field("b", pa.float64(), nullable=False)]),
-                nullable=False,
-            ),
-        ]
-    ),
+DEFAULT_PA_STRUCT_TESTING_TYPES = [
+    DEFAULT_STRUCT_TESTING_TYPE,
+    NESTED_STRUCT_TESTING_TYPE,
 ]
 
 DEFAULT_PA_TYPES = (
     NUMERIC_PA_TYPES
     + STRING_PA_TYPES
     + BOOL_PA_TYPES
-    # exclude nested list/struct cases
-    # since not all tests work with them yet
-    + LIST_PA_TYPES[:1]
-    + DEFAULT_PA_STRUCT_TESTING_TYPES[:1]
+    + LIST_PA_TYPES
+    + DEFAULT_PA_STRUCT_TESTING_TYPES
 )
 
 ALL_PA_TYPES = (

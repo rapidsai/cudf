@@ -25,6 +25,8 @@ cdef class TableWithMetadata:
     cdef public Table tbl
     cdef table_metadata metadata
 
+    cdef vector[column_name_info] _make_column_info(self, list column_names)
+
     @staticmethod
     cdef dict _parse_col_names(vector[column_name_info] infos)
 

@@ -51,7 +51,37 @@ cpdef TableWithMetadata read_json(
     bool prune_columns = False,
     json_recovery_mode_t recovery_mode = json_recovery_mode_t.FAIL,
 ):
-    """
+    """Reads an JSON file into a :py:class:`~.types.TableWithMetadata`.
+
+    Parameters
+    ----------
+    source_info : SourceInfo
+        The SourceInfo object to read the JSON file from.
+    dtypes : list, default None
+        Set data types for the columns in the JSON file.
+
+        Each element of the list has the format
+        (column_name, column_dtype, list of child dtypes), where
+        the list of child dtypes is an empty list if the child is not
+        a nested type (list or struct dtype).
+    compression_type: CompressionType, default CompressionType.AUTO
+        The compression format of the JSON source.
+    byte_range_offset : size_type, default 0
+        Number of bytes to skip from source start.
+    byte_range_size : size_type, default 0
+        Number of bytes to read. By default, will read all bytes.
+    keep_quotes : bool, default False
+        Whether the reader should keep quotes of string values.
+    prune_columns : bool, default False
+        Whether to only read columns specified in dtypes.
+    recover_mode : JSONRecoveryMode, default JSONRecoveryMode.FAIL
+        Whether to raise an error or set corresponding values to null
+        when encountering an invalid JSON line.
+
+    Returns
+    -------
+    TableWithMetadata
+        The Table and its corresponding metadata (column names) that were read in.
     """
     cdef vector[data_type] types_vec
     cdef json_reader_options opts = move(

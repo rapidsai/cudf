@@ -17,6 +17,8 @@ import errno
 import io
 import os
 
+from cudf._lib.pylibcudf.libcudf.io.json import \
+    json_recovery_mode_t as JSONRecoveryMode  # no-cython-lint
 from cudf._lib.pylibcudf.libcudf.io.types import \
     compression_type as CompressionType  # no-cython-lint
 
@@ -26,7 +28,39 @@ cdef class TableWithMetadata:
     (e.g. column names)
 
     For details, see :cpp:class:`cudf::io::table_with_metadata`.
+
+    Parameters
+    ----------
+    tbl : Table
+        The input table.
+    column_names : list
+        A list of tuples each containing the name of each column
+        and the names of its child columns (in the same format).
+        e.g.
+        [("id", []), ("name", [("first", []), ("last", [])])]
+
     """
+    def __init__(self, Table tbl, list column_names):
+        self.tbl = tbl
+
+        self.metadata.schema_info = move(self._make_column_info(column_names))
+
+    cdef vector[column_name_info] _make_column_info(self, list column_names):
+        cdef vector[column_name_info] col_name_infos
+        cdef column_name_info info
+
+        col_name_infos.reserve(len(column_names))
+
+        for name, child_names in column_names:
+            if not isinstance(name, str):
+                raise ValueError("Column name must be a string!")
+
+            info.name = move(<string> name.encode())
+            info.children = move(self._make_column_info(child_names))
+
+            col_name_infos.push_back(info)
+
+        return col_name_infos
 
     @property
     def columns(self):

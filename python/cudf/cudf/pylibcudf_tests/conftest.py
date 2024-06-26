@@ -129,7 +129,7 @@ def source_or_sink(request, tmp_path):
     if isinstance(source_or_sink, str):
         sink = f"{tmp_path}/{sink}"
     elif isinstance(sink, os.PathLike):
-        sink = tmp_path.joinpath(source_or_sink)
+        sink = tmp_path.joinpath()
 
     yield request.param
     # Cleanup after ourselves
