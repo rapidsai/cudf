@@ -34,7 +34,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/pinned_memory.hpp>
+#include <cudf/utilities/host_memory.hpp>
 
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 
@@ -222,7 +222,8 @@ std::string to_records_orient(std::vector<std::map<std::string, std::string>> co
 }
 
 template <typename DecimalType>
-struct JsonFixedPointReaderTest : public JsonReaderTest {};
+struct JsonFixedPointReaderTest : public JsonReaderTest {
+};
 
 template <typename DecimalType>
 struct JsonValidFixedPointReaderTest : public JsonFixedPointReaderTest<DecimalType> {
@@ -1139,7 +1140,7 @@ TEST_P(JsonReaderParamTest, ParseOutOfRangeIntegers)
                                                     "-33333333333333333333333",
                                                     "-444444444444444444444444"};
   std::vector<std::string> greater_uint64_max    = {
-    "18446744073709551615", "18446744073709551616", "18446744073709551617", "18446744073709551618"};
+       "18446744073709551615", "18446744073709551616", "18446744073709551617", "18446744073709551618"};
   std::vector<std::string> less_int64_min = {
     "-9223372036854775807", "-9223372036854775808", "-9223372036854775809", "-9223372036854775810"};
   std::vector<std::string> mixed_range = {
@@ -1369,10 +1370,10 @@ TEST_F(JsonReaderTest, JsonLongString)
       "",  // null
       "",  // null
       "கார்த்தி",
-      "CႮ≪ㇳ䍏凹沦王辿龸ꁗ믜스폶ﴠ",  //  0000-FFFF
-      "𐀀𑿪𒐦𓃰𔙆 𖦆𗿿𘳕𚿾[↳] 𜽆𝓚𞤁🄰",                            // 10000-1FFFF
-      "𠘨𡥌𢗉𣇊𤊩𥅽𦉱𧴱𨁲𩁹𪐢𫇭𬬭𭺷𮊦屮",                // 20000-2FFFF
-      "𰾑𱔈𲍉",                                          // 30000-3FFFF
+      "CႮ≪ㇳ䍏凹沦王辿龸ꁗ믜스폶ﴠ",                                      //  0000-FFFF
+      "𐀀𑿪𒐦𓃰𔙆 𖦆𗿿𘳕𚿾[↳] 𜽆𝓚𞤁🄰",      // 10000-1FFFF
+      "𠘨𡥌𢗉𣇊𤊩𥅽𦉱𧴱𨁲𩁹𪐢𫇭𬬭𭺷𮊦屮",  // 20000-2FFFF
+      "𰾑𱔈𲍉",                                                     // 30000-3FFFF
       R"("$€ \u0024\u20ac \\u0024\\u20ac  \\\u0024\\\u20ac \\\\u0024\\\\u20ac)",
       R"(        \\\\\\\\\\\\\\\\)",
       R"(\\\\\\\\\\\\\\\\)",

@@ -16,7 +16,7 @@
 
 #include "cudf_jni_apis.hpp"
 
-#include <cudf/utilities/pinned_memory.hpp>
+#include <cudf/utilities/host_memory.hpp>
 
 #include <rmm/aligned.hpp>
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>

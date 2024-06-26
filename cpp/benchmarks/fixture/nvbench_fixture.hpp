@@ -16,7 +16,7 @@
 #pragma once
 
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/pinned_memory.hpp>
+#include <cudf/utilities/host_memory.hpp>
 
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>

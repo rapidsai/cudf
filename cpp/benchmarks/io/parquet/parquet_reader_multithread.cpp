@@ -22,7 +22,7 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/pinned_memory.hpp>
+#include <cudf/utilities/host_memory.hpp>
 #include <cudf/utilities/thread_pool.hpp>
 
 #include <nvtx3/nvtx3.hpp>
