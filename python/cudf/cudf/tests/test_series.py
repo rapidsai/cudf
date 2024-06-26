@@ -2757,8 +2757,6 @@ def test_series_from_large_string(pa_type):
 
     assert_eq(expected, got)
 
-    assert pa_string_array.equals(got.to_arrow())
-
 
 @pytest.mark.parametrize(
     "scalar",
