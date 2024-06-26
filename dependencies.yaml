@@ -406,11 +406,11 @@ dependencies:
           - pyarrow>=16.1.0,<16.2.0a0
   run_libcudf:
     common:
-      - output_types: [conda]
+      - output_types: [conda, requirements]
         packages:
-          - &libcudf_conda libcudf==24.8.*
+          - &libcudf_conda libcudf==24.8.*,>=0.0.0a0
     specific:
-      - output_types: [requirements, pyproject]
+      - output_types: [pyproject]
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
