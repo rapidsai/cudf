@@ -217,8 +217,8 @@ struct column_gatherer_impl<Element, std::enable_if_t<is_rep_layout_compatible<E
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
   {
-    auto const num_rows = cudf::distance(gather_map_begin, gather_map_end);
-    auto const policy   = cudf::mask_allocation_policy::NEVER;
+    auto const num_rows     = cudf::distance(gather_map_begin, gather_map_end);
+    auto const policy       = cudf::mask_allocation_policy::NEVER;
     auto destination_column = cudf::allocate_like(source_column, num_rows, policy, stream, mr);
 
     gather_helper(source_column.data<Element>(),
