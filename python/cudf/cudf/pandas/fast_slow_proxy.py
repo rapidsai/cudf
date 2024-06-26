@@ -23,57 +23,55 @@ from ..testing._utils import assert_eq
 from .annotation import nvtx
 
 
-class CudfPandasDebugWarning(UserWarning):
+class CudfPandasWarning(UserWarning):
     """Base warning for an incorrect result in cuDF or Pandas. Or the Pandas result was uncomputable"""
 
     pass
 
 
-class CudfPandasResultsDifferentWarning(UserWarning):
+class ResultsDifferentWarning(CudfPandasWarning):
     """Warns when the results from cuDF and Pandas were different"""
 
     pass
 
 
-class CudfPandasPandasErrorWarning(UserWarning):
+class PandasErrorWarning(CudfPandasWarning):
     """Warns when the results from Pandas could not be computed"""
 
     pass
 
 
-class CudfPandasDebuggingFailedWarning(UserWarning):
+class DebuggingFailedWarning(CudfPandasWarning):
     """Warns when the cuDF-Pandas debugging fails"""
 
     pass
 
 
-class CudfPandasDebugFallbackWarning(UserWarning):
-    """Base warning fof when fallback occurs"""
+class FallbackWarning(CudfPandasWarning):
+    """Base warning for when fallback occurs"""
 
     pass
 
 
-class CudfPandasDebugOOMWarning(CudfPandasDebugFallbackWarning):
+class OOMWarning(FallbackWarning):
     """Warns when cuDF produces a MemoryError or an rmm.RMMError"""
 
     pass
 
 
-class CudfPandasDebugNotImplementedErrorWarning(
-    CudfPandasDebugFallbackWarning
-):
+class NotImplementedErrorWarning(FallbackWarning):
     """Warns cuDF produces a NotImplementedError"""
 
     pass
 
 
-class CudfPandasDebugAttributeErrorWarning(CudfPandasDebugFallbackWarning):
+class AttributeErrorWarning(FallbackWarning):
     """Warns when cuDF produces an AttributeError"""
 
     pass
 
 
-class CudfPandasDebugTypeErrorWarning(CudfPandasDebugFallbackWarning):
+class TypeErrorWarning(FallbackWarning):
     """Warns when cuDF produces a TypeError"""
 
     pass
@@ -974,7 +972,7 @@ def _fast_slow_function_call(
                     warnings.warn(
                         "The result from pandas could not be computed. "
                         f"The exception was {e}.",
-                        CudfPandasPandasErrorWarning,
+                        PandasErrorWarning,
                     )
                 else:
                     try:
@@ -983,13 +981,13 @@ def _fast_slow_function_call(
                         warnings.warn(
                             "The results from cudf and pandas were different. "
                             f"The exception was {e}.",
-                            CudfPandasResultsDifferentWarning,
+                            ResultsDifferentWarning,
                         )
                     except Exception as e:
                         warnings.warn(
                             "cuDF-Pandas debugging failed. "
                             f"The exception was {e}.",
-                            CudfPandasDebuggingFailedWarning,
+                            DebuggingFailedWarning,
                         )
     except Exception as e:
         if _env_get_bool("CUDF_PANDAS_FALLBACK_DEBUGGING", False):
@@ -997,25 +995,25 @@ def _fast_slow_function_call(
                 warnings.warn(
                     "Out of Memory Error. Falling back to the slow path. "
                     f"The exception was {e}.",
-                    CudfPandasDebugOOMWarning,
+                    OOMWarning,
                 )
             elif isinstance(e, NotImplementedError):
                 warnings.warn(
                     "NotImplementedError. Falling back to the slow path. "
                     f"The exception was {e}.",
-                    CudfPandasDebugNotImplementedErrorWarning,
+                    NotImplementedErrorWarning,
                 )
             elif isinstance(e, AttributeError):
                 warnings.warn(
                     "AttributeError. Falling back to the slow path. "
                     f"The exception was {e}.",
-                    CudfPandasDebugAttributeErrorWarning,
+                    AttributeErrorWarning,
                 )
             elif isinstance(e, TypeError):
                 warnings.warn(
                     "TypeError. Falling back to the slow path. "
                     f"The exception was {e}.",
-                    CudfPandasDebugTypeErrorWarning,
+                    TypeErrorWarning,
                 )
         with nvtx.annotate(
             "EXECUTE_SLOW",

@@ -24,13 +24,13 @@ from rmm import RMMError
 
 from cudf.pandas import LOADED, Profiler
 from cudf.pandas.fast_slow_proxy import (
-    CudfPandasDebugAttributeErrorWarning,
-    CudfPandasDebuggingFailedWarning,
-    CudfPandasDebugNotImplementedErrorWarning,
-    CudfPandasDebugOOMWarning,
-    CudfPandasDebugTypeErrorWarning,
-    CudfPandasPandasErrorWarning,
-    CudfPandasResultsDifferentWarning,
+    AttributeErrorWarning,
+    DebuggingFailedWarning,
+    NotImplementedErrorWarning,
+    OOMWarning,
+    PandasErrorWarning,
+    ResultsDifferentWarning,
+    TypeErrorWarning,
     _Unusable,
     is_proxy_object,
 )
@@ -1478,7 +1478,7 @@ def mock_mean_type_error(self, *args, **kwargs):
     [
         (
             mock_mean_one,
-            CudfPandasResultsDifferentWarning,
+            ResultsDifferentWarning,
             "The results from cudf and pandas were different.",
             "CUDF_PANDAS_DEBUGGING",
             pd.Series.mean,
@@ -1486,7 +1486,7 @@ def mock_mean_type_error(self, *args, **kwargs):
         ),
         (
             mock_mean_exception,
-            CudfPandasPandasErrorWarning,
+            PandasErrorWarning,
             "The result from pandas could not be computed.",
             "CUDF_PANDAS_DEBUGGING",
             pd.Series.mean,
@@ -1494,7 +1494,7 @@ def mock_mean_type_error(self, *args, **kwargs):
         ),
         (
             mock_mean_none,
-            CudfPandasDebuggingFailedWarning,
+            DebuggingFailedWarning,
             "cuDF-Pandas debugging failed.",
             "CUDF_PANDAS_DEBUGGING",
             pd.Series.mean,
@@ -1502,7 +1502,7 @@ def mock_mean_type_error(self, *args, **kwargs):
         ),
         (
             mock_mean_memory_error,
-            CudfPandasDebugOOMWarning,
+            OOMWarning,
             "Out of Memory Error.",
             "CUDF_PANDAS_FALLBACK_DEBUGGING",
             cudf.Series.mean,
@@ -1510,7 +1510,7 @@ def mock_mean_type_error(self, *args, **kwargs):
         ),
         (
             mock_mean_rmm_error,
-            CudfPandasDebugOOMWarning,
+            OOMWarning,
             "Out of Memory Error.",
             "CUDF_PANDAS_FALLBACK_DEBUGGING",
             cudf.Series.mean,
@@ -1518,7 +1518,7 @@ def mock_mean_type_error(self, *args, **kwargs):
         ),
         (
             mock_mean_not_impl_error,
-            CudfPandasDebugNotImplementedErrorWarning,
+            NotImplementedErrorWarning,
             "NotImplementedError.",
             "CUDF_PANDAS_FALLBACK_DEBUGGING",
             cudf.Series.mean,
@@ -1526,7 +1526,7 @@ def mock_mean_type_error(self, *args, **kwargs):
         ),
         (
             mock_mean_attr_error,
-            CudfPandasDebugAttributeErrorWarning,
+            AttributeErrorWarning,
             "AttributeError.",
             "CUDF_PANDAS_FALLBACK_DEBUGGING",
             cudf.Series.mean,
@@ -1534,7 +1534,7 @@ def mock_mean_type_error(self, *args, **kwargs):
         ),
         (
             mock_mean_type_error,
-            CudfPandasDebugTypeErrorWarning,
+            TypeErrorWarning,
             "TypeError.",
             "CUDF_PANDAS_FALLBACK_DEBUGGING",
             cudf.Series.mean,
