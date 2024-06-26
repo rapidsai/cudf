@@ -32,6 +32,8 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/sorting.hpp>
 
+#include "utils.hpp"
+
 /*
 
 Query:
@@ -129,9 +131,7 @@ Plan:
     └───────────────────────────┘
 */
 
-void write_parquet(cudf::table_view input, std::string filepath) {
-    auto sink_info = cudf::io::sink_info(filepath);
-    
+cudf::io::table_metadata create_table_metadata() {
     cudf::io::table_metadata metadata;
     std::vector<cudf::io::column_name_info> column_names;
     column_names.push_back(cudf::io::column_name_info("l_returnflag"));
@@ -144,14 +144,8 @@ void write_parquet(cudf::table_view input, std::string filepath) {
     column_names.push_back(cudf::io::column_name_info("sum_disc_price"));
     column_names.push_back(cudf::io::column_name_info("sum_charge"));
     column_names.push_back(cudf::io::column_name_info("count_order"));
-
     metadata.schema_info = column_names;
-    auto table_metadata = cudf::io::table_input_metadata{metadata};
-
-    auto builder = cudf::io::parquet_writer_options::builder(sink_info, input);
-    builder.metadata(table_metadata);
-    auto options = builder.build();
-    cudf::io::write_parquet(options);
+    return metadata;
 }
 
 std::unique_ptr<cudf::table> append_col_to_table(
@@ -182,8 +176,7 @@ std::unique_ptr<cudf::table> scan_filter_project() {
 
     auto l_shipdate = cudf::ast::column_reference(5);
 
-    // TODO: Fix the date representation for '1998-09-02'
-    auto date_scalar = cudf::timestamp_scalar<cudf::timestamp_D>(10471, true);
+    auto date_scalar = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1998, 9, 2), true);
     auto date = cudf::ast::literal(date_scalar);
     auto filter_expr = cudf::ast::operation(
         cudf::ast::ast_operator::LESS_EQUAL,
@@ -296,7 +289,9 @@ int main() {
     auto t2 = append_col_to_table(std::move(t1), std::move(disc_price_col));
     auto t3 = append_col_to_table(std::move(t2), std::move(charge_col));
     auto t4 = calc_group_by(t3);
-    auto t5 = sort(t4);
-    write_parquet(t5->view(), "q1.parquet");
+    auto result_table = sort(t4);
+    auto result_table_metadata = create_table_metadata();
+    std::string result_filename = "q1.parquet";
+    write_parquet(result_table, result_table_metadata, result_filename);
     return 0;
 }
