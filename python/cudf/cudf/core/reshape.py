@@ -300,30 +300,31 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         obj = objs[0]
         if ignore_index:
             if axis == 1:
-                result = obj.copy(deep=True)
+                if isinstance(obj, cudf.Series):
+                    result = obj.to_frame()
+                else:
+                    result = obj.copy(deep=True)
                 result.columns = pd.RangeIndex(len(result._data))
             else:
                 result = type(obj)._from_data(
                     data=obj._data.copy(deep=True),
                     index=cudf.RangeIndex(len(obj)),
                 )
+        elif axis == 0:
+            result = obj.copy(deep=True)
         else:
-            if axis == 0:
-                result = obj.copy()
+            if isinstance(obj, cudf.Series):
+                result = obj.to_frame()
             else:
-                if isinstance(obj, cudf.Series):
-                    result = obj.to_frame()
-                else:
-                    result = obj.copy(deep=True)
-                if keys is not None:
-                    if isinstance(result, cudf.DataFrame):
-                        k = keys[0]
-                        result.columns = cudf.MultiIndex.from_tuples(
-                            [
-                                (k, *c) if isinstance(c, tuple) else (k, c)
-                                for c in result._column_names
-                            ]
-                        )
+                result = obj.copy(deep=True)
+            if keys is not None and isinstance(result, cudf.DataFrame):
+                k = keys[0]
+                result.columns = cudf.MultiIndex.from_tuples(
+                    [
+                        (k, *c) if isinstance(c, tuple) else (k, c)
+                        for c in result._column_names
+                    ]
+                )
 
         if isinstance(result, cudf.Series) and axis == 0:
             # sort has no effect for series concatted along axis 0
