@@ -20,3 +20,7 @@ include(../fetch_dependencies.cmake)
 add_executable(tpch_q1 q1.cpp)
 target_link_libraries(tpch_q1 PRIVATE cudf::cudf)
 target_compile_features(tpch_q1 PRIVATE cxx_std_17)
+
+add_executable(tpch_q6 q6.cpp)
+target_link_libraries(tpch_q6 PRIVATE cudf::cudf)
+target_compile_features(tpch_q6 PRIVATE cxx_std_17)
