@@ -4,11 +4,11 @@
 
 Peak memory usage is a common concern in GPU programming because GPU memory is typically smaller than available CPU memory. To easily identify memory hotspots, cuDF provides a memory profiler. It comes with an overhead so avoid using it in performance-sensitive code.
 
-## How To
+## Enabling Memory Profiling
 
-First, we need to enable memory profiling in [RMM](https://docs.rapids.ai/api/rmm/stable/guide/). One way to do this is by calling {py:func}`rmm.statistics.enable_statistics()`. This will add a statistics resource adaptor to the current RMM memory resource, which enables cudf to access memory profiling information. See the RMM documentation for more details.
+First, enable memory profiling in RMM by calling {py:func}`rmm.statistics.enable_statistics()`. This adds a statistics resource adaptor to the current RMM memory resource, which enables cudf to access memory profiling information. See the [RMM documentation](https://docs.rapids.ai/api/rmm/stable/guide/#memory-statistics-and-profiling) for more details.
 
-Second, we need to enable memory profiling in cudf by setting the `memory_profiling` option to `True`. Use {py:func}`cudf.set_option` or set the environment variable ``CUDF_MEMORY_PROFILING=1`` prior to the launch of the Python interpreter.
+Second, enable memory profiling in cudf by setting the `memory_profiling` option to `True`. Use {py:func}`cudf.set_option` or set the environment variable ``CUDF_MEMORY_PROFILING=1`` prior to the launch of the Python interpreter.
 
 To get the result of the profiling, use {py:func}`cudf.utils.performance_tracking.print_memory_report` or access the raw profiling data by using: {py:func}`cudf.utils.performance_tracking.get_memory_records`.
 
