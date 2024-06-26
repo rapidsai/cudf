@@ -229,23 +229,12 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::string_v
   }();
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, char_data_schema.get(), nullptr));
 
-  rmm::device_buffer chars = [&] {
-    if (schema->type == NANOARROW_TYPE_LARGE_STRING) {
-      rmm::device_buffer chars(char_data_length, stream, mr);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(chars.data(),
-                                    reinterpret_cast<uint8_t const*>(char_array.buffers[1]),
-                                    chars.size(),
-                                    cudaMemcpyDefault,
-                                    stream.value()));
-      return chars;
-    } else if (schema->type == NANOARROW_TYPE_STRING) {
-      auto chars_column =
-        this->operator()<int8_t>(&view, &char_array, data_type(type_id::INT8), true);
-      return std::move(*chars_column->release().data.release());
-    } else {
-      CUDF_FAIL("Unsupported string type", cudf::data_type_error);
-    }
-  }();
+  rmm::device_buffer chars(char_data_length, stream, mr);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(chars.data(),
+                                reinterpret_cast<uint8_t const*>(char_array.buffers[1]),
+                                chars.size(),
+                                cudaMemcpyDefault,
+                                stream.value()));
   auto const num_rows = offsets_column->size() - 1;
   auto out_col        = make_strings_column(num_rows,
                                      std::move(offsets_column),
