@@ -123,7 +123,7 @@ std::unique_ptr<cudf::table> scan_filter_project() {
     return std::move(result.tbl);
 }
 
-void compute_final_cols(std::unique_ptr<cudf::table>& table) {
+std::unique_ptr<cudf::table> compute_result_table(std::unique_ptr<cudf::table>& table) {
     auto l_extendedprice = table->view().column(0);
     auto l_discount = table->view().column(1);
 
@@ -139,10 +139,34 @@ void compute_final_cols(std::unique_ptr<cudf::table>& table) {
 
     auto decimal_sum = static_cast<cudf::scalar_type_t<numeric::decimal64>*>(sum.get());
     double decimal_sum_value = decimal_sum->value();
+
+    std::cout << "Sum: " << decimal_sum_value << std::endl;
+
+    cudf::data_type type = cudf::data_type{cudf::type_id::DECIMAL64};
+    cudf::size_type len = 1;
+    rmm::device_buffer data_buffer = get_device_buffer_from_value(decimal_sum_value);
+    rmm::device_buffer null_mask_buffer = get_empty_device_buffer();
+    auto col = std::make_unique<cudf::column>(
+        type, len, std::move(data_buffer), std::move(null_mask_buffer), 0);
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    columns.push_back(std::move(col));
+    auto result_table = std::make_unique<cudf::table>(std::move(columns));
+    return result_table;
+}
+
+cudf::io::table_metadata create_table_metadata() {
+    cudf::io::table_metadata metadata;
+    std::vector<cudf::io::column_name_info> column_names;
+    column_names.push_back(cudf::io::column_name_info("revenue"));
+    metadata.schema_info = column_names;
+    return metadata;
 }
 
 int main() {
     auto t1 = scan_filter_project();
-    compute_final_cols(t1);
+    auto result_table = compute_result_table(t1);
+    auto result_metadata = create_table_metadata();
+    std::string result_filename = "q6.parquet";
+    write_parquet(result_table, result_metadata, result_filename);
     return 0;
 }

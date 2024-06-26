@@ -5,6 +5,12 @@
 #include <cudf/table/table.hpp>
 #include <cudf/io/parquet.hpp>
 
+#include <rmm/cuda_stream.hpp>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
+
+
 std::tm make_tm(int year, int month, int day) {
     std::tm tm = {0};
     tm.tm_year = year - 1900;
@@ -29,4 +35,23 @@ void write_parquet(std::unique_ptr<cudf::table>& table, cudf::io::table_metadata
     builder.metadata(table_input_metadata);
     auto options = builder.build();
     cudf::io::write_parquet(options);
+}
+
+template<typename T>
+rmm::device_buffer get_device_buffer_from_value(T value) {
+    auto stream = cudf::get_default_stream();    
+    rmm::cuda_stream_view stream_view(stream);
+
+    rmm::device_scalar<T> scalar(stream_view);
+    scalar.set_value_async(value, stream_view);
+
+    rmm::device_buffer buffer(scalar.data(), scalar.size(), stream_view);
+    return buffer;
+}
+
+rmm::device_buffer get_empty_device_buffer() {
+    auto stream = cudf::get_default_stream();    
+    rmm::cuda_stream_view stream_view(stream);
+    rmm::device_buffer buffer(0, stream_view);
+    return buffer;
 }
