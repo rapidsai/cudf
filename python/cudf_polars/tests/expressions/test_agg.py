@@ -20,11 +20,6 @@ def dtype(request):
     return request.param
 
 
-@pytest.fixture(params=[False, True], ids=["no-nulls", "with-nulls"])
-def with_nulls(request):
-    return request.param
-
-
 @pytest.fixture(
     params=[
         False,
@@ -61,3 +56,17 @@ def test_agg(df, agg):
         with pytest.raises(AssertionError):
             assert_gpu_result_equal(q)
     assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
+
+
+@pytest.mark.parametrize(
+    "propagate_nans",
+    [pytest.param(False, marks=pytest.mark.xfail(reason="Need to mask nans")), True],
+    ids=["mask_nans", "propagate_nans"],
+)
+@pytest.mark.parametrize("op", ["min", "max"])
+def test_agg_float_with_nans(propagate_nans, op):
+    df = pl.LazyFrame({"a": [1, 2, float("nan")]})
+    op = getattr(pl.Expr, f"nan_{op}" if propagate_nans else op)
+    q = df.select(op(pl.col("a")))
+
+    assert_gpu_result_equal(q)

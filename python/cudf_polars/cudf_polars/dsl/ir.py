@@ -17,7 +17,7 @@ import dataclasses
 import itertools
 import types
 from functools import cache
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, NoReturn
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import pyarrow as pa
 from typing_extensions import assert_never
@@ -56,7 +56,6 @@ __all__ = [
     "MapFunction",
     "Union",
     "HConcat",
-    "ExtContext",
 ]
 
 
@@ -153,7 +152,9 @@ class IR:
             since the translation phase should pick up things that we
             cannot handle.
         """
-        raise NotImplementedError
+        raise NotImplementedError(
+            f"Evaluation of plan {type(self).__name__}"
+        )  # pragma: no cover
 
 
 @dataclasses.dataclass(slots=True)
@@ -195,7 +196,9 @@ class Scan(IR):
         if self.file_options.n_rows is not None:
             raise NotImplementedError("row limit in scan")
         if self.typ not in ("csv", "parquet"):
-            raise NotImplementedError(f"Unhandled scan type: {self.typ}")
+            raise NotImplementedError(
+                f"Unhandled scan type: {self.typ}"
+            )  # pragma: no cover; polars raises on the rust side for now
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -286,13 +289,18 @@ class DataFrameScan(IR):
         pdf = pl.DataFrame._from_pydf(self.df)
         if self.projection is not None:
             pdf = pdf.select(self.projection)
-        # TODO: goes away when libcudf supports large strings
         table = pdf.to_arrow()
         schema = table.schema
         for i, field in enumerate(schema):
+            # TODO: Nested types
             if field.type == pa.large_string():
-                # TODO: Nested types
+                # TODO: goes away when libcudf supports large strings
                 schema = schema.set(i, pa.field(field.name, pa.string()))
+            elif isinstance(field.type, pa.LargeListType):
+                # TODO: goes away when libcudf supports large lists
+                schema = schema.set(
+                    i, pa.field(field.name, pa.list_(field.type.field(0)))
+                )
         table = table.cast(schema)
         df = DataFrame.from_table(
             plc.interop.from_arrow(table), list(self.schema.keys())
@@ -341,7 +349,9 @@ class Reduce(IR):
     expr: list[expr.NamedExpr]
     """List of expressions to evaluate to form the new dataframe."""
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame]
+    ) -> DataFrame:  # pragma: no cover; polars doesn't emit this node yet
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         columns = broadcast(*(e.evaluate(df) for e in self.expr))
@@ -417,8 +427,6 @@ class GroupBy(IR):
         if isinstance(agg, (expr.BinOp, expr.Cast)):
             return max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, expr.Agg):
-            if agg.name == "implode":
-                raise NotImplementedError("implode in groupby")
             return 1 + max(GroupBy.check_agg(child) for child in agg.children)
         elif isinstance(agg, (expr.Len, expr.Col, expr.Literal)):
             return 0
@@ -430,7 +438,9 @@ class GroupBy(IR):
         if self.options.rolling is None and self.maintain_order:
             raise NotImplementedError("Maintaining order in groupby")
         if self.options.rolling:
-            raise NotImplementedError("rolling window/groupby")
+            raise NotImplementedError(
+                "rolling window/groupby"
+            )  # pragma: no cover; rollingwindow constructor has already raised
         if any(GroupBy.check_agg(a.value) > 1 for a in self.agg_requests):
             raise NotImplementedError("Nested aggregations in groupby")
         self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
@@ -493,7 +503,7 @@ class Join(IR):
     right_on: list[expr.NamedExpr]
     """List of expressions used as keys in the right frame."""
     options: tuple[
-        Literal["inner", "left", "full", "leftsemi", "leftanti"],
+        Literal["inner", "left", "full", "leftsemi", "leftanti", "cross"],
         bool,
         tuple[int, int] | None,
         str | None,
@@ -507,11 +517,6 @@ class Join(IR):
     - suffix: string suffix for right columns if names match
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
     """
-
-    def __post_init__(self) -> None:
-        """Validate preconditions."""
-        if self.options[0] == "cross":
-            raise NotImplementedError("cross join not implemented")
 
     @cache
     @staticmethod
@@ -557,6 +562,26 @@ class Join(IR):
         """Evaluate and return a dataframe."""
         left = self.left.evaluate(cache=cache)
         right = self.right.evaluate(cache=cache)
+        how, join_nulls, zlice, suffix, coalesce = self.options
+        suffix = "_right" if suffix is None else suffix
+        if how == "cross":
+            # Separate implementation, since cross_join returns the
+            # result, not the gather maps
+            columns = plc.join.cross_join(left.table, right.table).columns()
+            left_cols = [
+                NamedColumn(new, old.name).sorted_like(old)
+                for new, old in zip(columns[: left.num_columns], left.columns)
+            ]
+            right_cols = [
+                NamedColumn(
+                    new,
+                    old.name
+                    if old.name not in left.column_names_set
+                    else f"{old.name}{suffix}",
+                )
+                for new, old in zip(columns[left.num_columns :], right.columns)
+            ]
+            return DataFrame([*left_cols, *right_cols])
         left_on = DataFrame(
             broadcast(
                 *(e.evaluate(left) for e in self.left_on), target_length=left.num_rows
@@ -568,13 +593,11 @@ class Join(IR):
                 target_length=right.num_rows,
             )
         )
-        how, join_nulls, zlice, suffix, coalesce = self.options
         null_equality = (
             plc.types.NullEquality.EQUAL
             if join_nulls
             else plc.types.NullEquality.UNEQUAL
         )
-        suffix = "_right" if suffix is None else suffix
         join_fn, left_policy, right_policy = Join._joiners(how)
         if right_policy is None:
             # Semi join
@@ -850,9 +873,11 @@ class MapFunction(IR):
 
     _NAMES: ClassVar[frozenset[str]] = frozenset(
         [
-            "drop_nulls",
             "rechunk",
-            "merge_sorted",
+            # libcudf merge is not stable wrt order of inputs, since
+            # it uses a priority queue to manage the tables it produces.
+            # See: https://github.com/rapidsai/cudf/issues/16010
+            # "merge_sorted",
             "rename",
             "explode",
         ]
@@ -869,46 +894,13 @@ class MapFunction(IR):
                 # polars requires that all to-explode columns have the
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
-        elif self.name == "merge_sorted":
-            assert isinstance(self.df, Union)
-            (key_column,) = self.options
-            if key_column not in self.df.dfs[0].schema:
-                raise ValueError(f"Key column {key_column} not found")
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
-        if self.name == "merge_sorted":
-            # merge_sorted operates on Union inputs
-            # but if we evaluate the Union then we can't unpick the
-            # pieces, so we dive inside and evaluate the pieces by hand
-            assert isinstance(self.df, Union)
-            first, *rest = (c.evaluate(cache=cache) for c in self.df.dfs)
-            (key_column,) = self.options
-            if not all(first.column_names == r.column_names for r in rest):
-                raise ValueError("DataFrame shapes/column names don't match")
-            # Already validated that key_column is in column names
-            index = first.column_names.index(key_column)
-            return DataFrame.from_table(
-                plc.merge.merge_sorted(
-                    [first.table, *(df.table for df in rest)],
-                    [index],
-                    [plc.types.Order.ASCENDING],
-                    [plc.types.NullOrder.BEFORE],
-                ),
-                first.column_names,
-            ).sorted_like(first, subset={key_column})
-        elif self.name == "rechunk":
+        if self.name == "rechunk":
             # No-op in our data model
-            return self.df.evaluate(cache=cache)
-        elif self.name == "drop_nulls":
-            df = self.df.evaluate(cache=cache)
-            (subset,) = self.options
-            subset = set(subset)
-            indices = [i for i, name in enumerate(df.column_names) if name in subset]
-            return DataFrame.from_table(
-                plc.stream_compaction.drop_nulls(df.table, indices, len(indices)),
-                df.column_names,
-            ).sorted_like(df)
+            # Don't think this appears in a plan tree from python
+            return self.df.evaluate(cache=cache)  # pragma: no cover
         elif self.name == "rename":
             df = self.df.evaluate(cache=cache)
             # final tag is "swapping" which is useful for the
@@ -924,7 +916,7 @@ class MapFunction(IR):
                 plc.lists.explode_outer(df.table, index), df.column_names
             ).sorted_like(df, subset=subset)
         else:
-            raise AssertionError("Should never be reached")
+            raise AssertionError("Should never be reached")  # pragma: no cover
 
 
 @dataclasses.dataclass(slots=True)
@@ -963,24 +955,4 @@ class HConcat(IR):
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
         return DataFrame(
             list(itertools.chain.from_iterable(df.columns for df in dfs)),
-        )
-
-
-@dataclasses.dataclass(slots=True)
-class ExtContext(IR):
-    """
-    Concatenate dataframes horizontally.
-
-    Prefer HConcat, since this is going to be deprecated on the polars side.
-    """
-
-    df: IR
-    """Input."""
-    extra: list[IR]
-    """List of extra inputs."""
-
-    def __post_init__(self) -> NoReturn:
-        """Validate preconditions."""
-        raise NotImplementedError(
-            "ExtContext will be deprecated, use horizontal concat instead."
         )

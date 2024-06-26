@@ -464,6 +464,9 @@ def test_options_mode():
     assert xpd.options.mode.copy_on_write == pd.options.mode.copy_on_write
 
 
+# Codecov and Profiler interfere with each-other,
+# hence we don't want to run code-cov on this test.
+@pytest.mark.no_cover
 def test_profiler():
     pytest.importorskip("cudf")
 
@@ -1172,7 +1175,7 @@ def test_intermediates_are_proxied():
 
 def test_from_dataframe():
     cudf = pytest.importorskip("cudf")
-    from cudf.testing._utils import assert_eq
+    from cudf.testing import assert_eq
 
     data = {"foo": [1, 2, 3], "bar": [4, 5, 6]}
 

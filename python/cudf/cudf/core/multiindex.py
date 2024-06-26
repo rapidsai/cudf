@@ -8,10 +8,9 @@ import operator
 import pickle
 import warnings
 from collections import abc
-from collections.abc import Generator
 from functools import cached_property
 from numbers import Integral
-from typing import Any, List, MutableMapping, Tuple, Union
+from typing import TYPE_CHECKING, Any, MutableMapping
 
 import cupy as cp
 import numpy as np
@@ -20,7 +19,6 @@ import pandas as pd
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.types import size_type_dtype
-from cudf._typing import DataFrameOrSeries
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
 from cudf.core import column
@@ -36,8 +34,15 @@ from cudf.utils.dtypes import is_column_like
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
-def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
+    from typing_extensions import Self
+
+    from cudf._typing import DataFrameOrSeries
+
+
+def _maybe_indices_to_slice(indices: cp.ndarray) -> slice | cp.ndarray:
     """Makes best effort to convert an array of indices into a python slice.
     If the conversion is not possible, return input. `indices` are expected
     to be valid.
@@ -846,9 +851,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def _get_row_major(
         self,
         df: DataFrameOrSeries,
-        row_tuple: Union[
-            numbers.Number, slice, Tuple[Any, ...], List[Tuple[Any, ...]]
-        ],
+        row_tuple: numbers.Number
+        | slice
+        | tuple[Any, ...]
+        | list[tuple[Any, ...]],
     ) -> DataFrameOrSeries:
         if pd.api.types.is_bool_dtype(
             list(row_tuple) if isinstance(row_tuple, tuple) else row_tuple
@@ -871,9 +877,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_cudf_nvtx_annotate
     def _validate_indexer(
         self,
-        indexer: Union[
-            numbers.Number, slice, Tuple[Any, ...], List[Tuple[Any, ...]]
-        ],
+        indexer: numbers.Number
+        | slice
+        | tuple[Any, ...]
+        | list[tuple[Any, ...]],
     ):
         if isinstance(indexer, numbers.Number):
             return
@@ -1746,6 +1753,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def unique(self):
         return self.drop_duplicates(keep="first")
 
+    @_cudf_nvtx_annotate
+    def nunique(self, dropna: bool = True) -> int:
+        mi = self.dropna(how="all") if dropna else self
+        return len(mi.unique())
+
     def _clean_nulls_from_index(self):
         """
         Convert all na values(if any) in MultiIndex object
@@ -2090,9 +2102,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return midx
 
     @_cudf_nvtx_annotate
-    def _copy_type_metadata(
-        self: MultiIndex, other: MultiIndex, *, override_dtypes=None
-    ) -> MultiIndex:
+    def _copy_type_metadata(self: Self, other: Self) -> Self:
         res = super()._copy_type_metadata(other)
         if isinstance(other, MultiIndex):
             res._names = other._names
