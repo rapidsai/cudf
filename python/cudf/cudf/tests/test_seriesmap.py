@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from itertools import product
 from math import floor
@@ -9,7 +9,8 @@ import pytest
 
 import cudf
 from cudf import Series
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 
 def test_series_map_basic():

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import itertools
 import os
@@ -11,7 +11,7 @@ import pytest
 import rmm  # noqa: F401
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 _CURRENT_DIRECTORY = str(pathlib.Path(__file__).resolve().parent)
 
