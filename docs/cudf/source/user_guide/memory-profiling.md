@@ -2,7 +2,7 @@
 
 # Memory Profiling
 
-Peak memory usage is a common concern in GPU programming since the available GPU memory is typically less than available CPU memory. To easily identify memory hotspots, cudf provides a memory profiler. In comes with an overhead so avoid using it in performance-sensitive code.
+Peak memory usage is a common concern in GPU programming because GPU memory is typically smaller than available CPU memory. To easily identify memory hotspots, cuDF provides a memory profiler. It comes with an overhead so avoid using it in performance-sensitive code.
 
 ## Enabling memory profiling
 
