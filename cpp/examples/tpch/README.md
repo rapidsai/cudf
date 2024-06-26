@@ -28,4 +28,5 @@ cd benchmarks/
 
 ## Implementation Status
 
-- [x] Q1  
+- [x] Q1
+
