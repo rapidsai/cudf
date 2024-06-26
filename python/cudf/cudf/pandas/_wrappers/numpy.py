@@ -129,6 +129,16 @@ ndarray = make_final_proxy_type(
     },
 )
 
+
+flatiter = make_final_proxy_type(
+    "flatiter",
+    cupy._indexing.iterate.flatiter,
+    numpy.flatiter,
+    fast_to_slow=lambda fast: cupy.asnumpy(fast).flat,
+    slow_to_fast=lambda slow: cupy.asarray(slow).flat,
+)
+
+
 # Mapping flags between slow and fast types
 _ndarray_flags = make_intermediate_proxy_type(
     "_ndarray_flags",
