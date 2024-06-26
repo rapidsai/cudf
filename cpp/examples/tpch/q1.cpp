@@ -131,23 +131,6 @@ Plan:
     └───────────────────────────┘
 */
 
-cudf::io::table_metadata create_table_metadata() {
-    cudf::io::table_metadata metadata;
-    std::vector<cudf::io::column_name_info> column_names;
-    column_names.push_back(cudf::io::column_name_info("l_returnflag"));
-    column_names.push_back(cudf::io::column_name_info("l_linestatus"));
-    column_names.push_back(cudf::io::column_name_info("sum_qty"));
-    column_names.push_back(cudf::io::column_name_info("avg_qty"));
-    column_names.push_back(cudf::io::column_name_info("sum_base_price"));
-    column_names.push_back(cudf::io::column_name_info("avg_price"));
-    column_names.push_back(cudf::io::column_name_info("avg_disc"));
-    column_names.push_back(cudf::io::column_name_info("sum_disc_price"));
-    column_names.push_back(cudf::io::column_name_info("sum_charge"));
-    column_names.push_back(cudf::io::column_name_info("count_order"));
-    metadata.schema_info = column_names;
-    return metadata;
-}
-
 std::unique_ptr<cudf::table> append_col_to_table(
     std::unique_ptr<cudf::table> table, std::unique_ptr<cudf::column> col) {
     std::vector<std::unique_ptr<cudf::column>> columns;
@@ -290,7 +273,18 @@ int main() {
     auto t3 = append_col_to_table(std::move(t2), std::move(charge_col));
     auto t4 = calc_group_by(t3);
     auto result_table = sort(t4);
-    auto result_table_metadata = create_table_metadata();
+    auto result_table_metadata = create_table_metadata({
+        "l_returnflag",
+        "l_linestatus",
+        "sum_qty",
+        "avg_qty",
+        "sum_base_price",
+        "avg_price",
+        "avg_disc",
+        "sum_disc_price",
+        "sum_charge",
+        "count_order"
+    });
     std::string result_filename = "q1.parquet";
     write_parquet(result_table, result_table_metadata, result_filename);
     return 0;

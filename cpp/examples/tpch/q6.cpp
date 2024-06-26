@@ -154,18 +154,10 @@ std::unique_ptr<cudf::table> compute_result_table(std::unique_ptr<cudf::table>& 
     return result_table;
 }
 
-cudf::io::table_metadata create_table_metadata() {
-    cudf::io::table_metadata metadata;
-    std::vector<cudf::io::column_name_info> column_names;
-    column_names.push_back(cudf::io::column_name_info("revenue"));
-    metadata.schema_info = column_names;
-    return metadata;
-}
-
 int main() {
     auto t1 = scan_filter_project();
     auto result_table = compute_result_table(t1);
-    auto result_metadata = create_table_metadata();
+    auto result_metadata = create_table_metadata({"revenue"});
     std::string result_filename = "q6.parquet";
     write_parquet(result_table, result_metadata, result_filename);
     return 0;
