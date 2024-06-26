@@ -2968,7 +2968,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             idx = MultiIndex._from_data(dict(enumerate(data_to_add)))
             idx.names = names
 
-        df = self if inplace else self.copy(deep=False)
+        # TODO: Change to deep=False when copy-on-write is default
+        df = self if inplace else self.copy(deep=True)
 
         if verify_integrity and not idx.is_unique:
             raise ValueError(f"Values in Index are not unique: {idx}")
@@ -3617,7 +3618,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def add_prefix(self, prefix):
-        out = self.copy(deep=False)
+        # TODO: Change to deep=False when copy-on-write is default
+        out = self.copy(deep=True)
         out.columns = [
             prefix + col_name for col_name in list(self._data.keys())
         ]
@@ -3625,7 +3627,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def add_suffix(self, suffix):
-        out = self.copy(deep=False)
+        # TODO: Change to deep=False when copy-on-write is default
+        out = self.copy(deep=True)
         out.columns = [
             col_name + suffix for col_name in list(self._data.keys())
         ]
@@ -3957,7 +3960,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                            weight    1.0    0.8
                            length    0.3    0.2
         """
-        result = self.copy(deep=False)
+        # TODO: Change to deep=False when copy-on-write is default
+        result = self.copy(deep=True)
 
         # To get axis number
         axis = self._get_axis_from_axis_arg(axis)
