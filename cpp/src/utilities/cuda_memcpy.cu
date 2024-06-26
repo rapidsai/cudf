@@ -47,56 +47,20 @@ void copy_pageable(void* dst, void const* src, std::size_t size, rmm::cuda_strea
   CUDF_CUDA_TRY(cudaMemcpyAsync(dst, src, size, cudaMemcpyDefault, stream));
 }
 
-void copy_pinned_to_device(void* dst,
-                           void const* src,
-                           std::size_t size,
-                           rmm::cuda_stream_view stream)
-{
-  copy_pinned(dst, src, size, stream);
-}
-
-void copy_device_to_pinned(void* dst,
-                           void const* src,
-                           std::size_t size,
-                           rmm::cuda_stream_view stream)
-{
-  copy_pinned(dst, src, size, stream);
-}
-
-void copy_device_to_pageable(void* dst,
-                             void const* src,
-                             std::size_t size,
-                             rmm::cuda_stream_view stream)
-{
-  copy_pageable(dst, src, size, stream);
-}
-
-void copy_pageable_to_device(void* dst,
-                             void const* src,
-                             std::size_t size,
-                             rmm::cuda_stream_view stream)
-{
-  copy_pageable(dst, src, size, stream);
-}
-
 };  // namespace
 
 void cuda_memcpy_async(
-  void* dst, void const* src, size_t size, copy_kind kind, rmm::cuda_stream_view stream)
+  void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream)
 {
-  if (kind == copy_kind::PINNED_TO_DEVICE) {
-    copy_pinned_to_device(dst, src, size, stream);
-  } else if (kind == copy_kind::DEVICE_TO_PINNED) {
-    copy_device_to_pinned(dst, src, size, stream);
-  } else if (kind == copy_kind::PAGEABLE_TO_DEVICE) {
-    copy_pageable_to_device(dst, src, size, stream);
-  } else if (kind == copy_kind::DEVICE_TO_PAGEABLE) {
-    copy_device_to_pageable(dst, src, size, stream);
+  switch (kind) {
+    case host_memory_kind::PINNED: copy_pinned(dst, src, size, stream);
+    case host_memory_kind::PAGEABLE:
+    default: copy_pageable(dst, src, size, stream);
   }
 }
 
 void cuda_memcpy(
-  void* dst, void const* src, size_t size, copy_kind kind, rmm::cuda_stream_view stream)
+  void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream)
 {
   cuda_memcpy_async(dst, src, size, kind, stream);
   stream.synchronize();

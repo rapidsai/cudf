@@ -20,7 +20,7 @@
 
 namespace cudf::detail {
 
-enum class copy_kind { PINNED_TO_DEVICE, DEVICE_TO_PINNED, PAGEABLE_TO_DEVICE, DEVICE_TO_PAGEABLE };
+enum class host_memory_kind : uint8_t { PINNED, PAGEABLE };
 
 /**
  * @brief Asynchronously copies data between the host and device.
@@ -30,11 +30,11 @@ enum class copy_kind { PINNED_TO_DEVICE, DEVICE_TO_PINNED, PAGEABLE_TO_DEVICE, D
  * @param dst Destination memory address
  * @param src Source memory address
  * @param size Number of bytes to copy
- * @param kind Direction of the copy and type of host memory
+ * @param kind Type of host memory
  * @param stream CUDA stream used for the copy
  */
 void cuda_memcpy_async(
-  void* dst, void const* src, size_t size, copy_kind kind, rmm::cuda_stream_view stream);
+  void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream);
 
 /**
  * @brief Synchronously copies data between the host and device.
@@ -44,10 +44,10 @@ void cuda_memcpy_async(
  * @param dst Destination memory address
  * @param src Source memory address
  * @param size Number of bytes to copy
- * @param kind Direction of the copy and type of host memory
+ * @param kind Type of host memory
  * @param stream CUDA stream used for the copy
  */
 void cuda_memcpy(
-  void* dst, void const* src, size_t size, copy_kind kind, rmm::cuda_stream_view stream);
+  void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream);
 
 }  // namespace cudf::detail
