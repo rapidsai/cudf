@@ -166,23 +166,30 @@ std::unique_ptr<cudf::table> scan_filter_project() {
 }
 
 std::unique_ptr<cudf::column> calc_disc_price(std::unique_ptr<cudf::table>& table) {
-    auto one = cudf::fixed_point_scalar<numeric::decimal64>(1);
+    auto one = cudf::fixed_point_scalar<numeric::decimal64>(1, -2);
     auto disc = table->get_column(4).view();
     auto one_minus_disc = cudf::binary_operation(one, disc, cudf::binary_operator::SUB, disc.type());
     auto extended_price = table->get_column(3).view();
-    auto disc_price = cudf::binary_operation(extended_price, one_minus_disc->view(), cudf::binary_operator::MUL, extended_price.type());
+
+    auto disc_price_type = cudf::data_type{cudf::type_id::DECIMAL64, -4};
+    auto disc_price = cudf::binary_operation(extended_price, one_minus_disc->view(), cudf::binary_operator::MUL, disc_price_type);
     return disc_price;
 }
 
 std::unique_ptr<cudf::column> calc_charge(std::unique_ptr<cudf::table>& table) {
-    auto one = cudf::fixed_point_scalar<numeric::decimal64>(1);
+    auto one = cudf::fixed_point_scalar<numeric::decimal64>(1, -2);
     auto disc = table->get_column(4).view();
     auto one_minus_disc = cudf::binary_operation(one, disc, cudf::binary_operator::SUB, disc.type());
     auto extended_price = table->get_column(3).view();
-    auto disc_price = cudf::binary_operation(extended_price, one_minus_disc->view(), cudf::binary_operator::MUL, extended_price.type());
+
+    auto disc_price_type = cudf::data_type{cudf::type_id::DECIMAL64, -4};
+    auto disc_price = cudf::binary_operation(extended_price, one_minus_disc->view(), cudf::binary_operator::MUL, disc_price_type);
+        
     auto tax = table->get_column(7).view();
     auto one_plus_tax = cudf::binary_operation(one, tax, cudf::binary_operator::ADD, tax.type());
-    auto charge = cudf::binary_operation(disc_price->view(), one_plus_tax->view(), cudf::binary_operator::MUL, disc_price->type());
+
+    auto charge_type = cudf::data_type{cudf::type_id::DECIMAL64, -6};
+    auto charge = cudf::binary_operation(disc_price->view(), one_plus_tax->view(), cudf::binary_operator::MUL, charge_type);
     return charge;
 }
 
