@@ -76,6 +76,7 @@ struct comparator_adapter {
   {
   }
 
+  // suppress "function was declared but never referenced warning"
 #pragma nv_diagnostic push
 #pragma nv_diag_suppress 177
   __device__ constexpr auto operator()(lhs_index_type lhs_index,

@@ -42,6 +42,7 @@ template <typename Equal>
 struct comparator_adapter {
   comparator_adapter(Equal const& d_equal) : _d_equal{d_equal} {}
 
+  // suppress "function was declared but never referenced warning"
 #pragma nv_diagnostic push
 #pragma nv_diag_suppress 177
   __device__ constexpr auto operator()(
