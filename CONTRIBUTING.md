@@ -75,10 +75,9 @@ Compilers:
 * `nvcc` version 11.8+
 * `cmake` version 3.29.6+
 
-CUDA/GPU:
+CUDA/GPU Runtime:
 
-* CUDA 11.8+
-* NVIDIA driver 450.80.02+
+* CUDA 11.4+
 * Volta architecture or better (Compute Capability >=7.0)
 
 You can obtain CUDA from
