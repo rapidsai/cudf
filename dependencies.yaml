@@ -78,7 +78,7 @@ files:
       - libarrow_run
       - py_version
   # This is the shared library, bundled as a wheel. It is meant to be consumed by the wrapper.
-  py_rapids_build_libcudf:
+  py_build_libcudf:
     output: pyproject
     pyproject_dir: python/libcudf
     extras:
@@ -86,14 +86,14 @@ files:
     includes:
       - rapids_build_skbuild
   # This is the wrapper that gets used in Python, not the shared library wheel
-  py_rapids_build_cudf:
+  py_build_cudf:
     output: pyproject
     pyproject_dir: python/cudf
     extras:
       table: build-system
     includes:
       - rapids_build_skbuild
-  py_build_libcudf:
+  py_rapids_build_libcudf:
     output: pyproject
     pyproject_dir: python/libcudf
     extras:
@@ -104,7 +104,7 @@ files:
       - build_cpp
       - build_python_common
       - build_python_cudf
-  py_build_cudf:
+  py_rapids_build_cudf:
     output: pyproject
     pyproject_dir: python/cudf
     extras:
