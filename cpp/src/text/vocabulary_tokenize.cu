@@ -86,7 +86,7 @@ struct vocab_equal {
     return lhs == rhs;  // all rows are expected to be unique
   }
   // used by find
-// suppress "function was declared but never referenced warning"
+  // suppress "function was declared but never referenced warning"
 #pragma nv_diagnostic push
 #pragma nv_diag_suppress 177
   __device__ bool operator()(cudf::size_type lhs, cudf::string_view const& rhs) const noexcept
