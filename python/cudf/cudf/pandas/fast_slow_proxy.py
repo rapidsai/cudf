@@ -19,7 +19,7 @@ import numpy as np
 from rmm import RMMError
 
 from ..options import _env_get_bool
-from ..testing._utils import assert_eq
+from ..testing import assert_eq
 from .annotation import nvtx
 
 

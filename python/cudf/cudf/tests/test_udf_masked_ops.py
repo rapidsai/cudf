@@ -17,9 +17,9 @@ from cudf.core.udf._ops import (
 )
 from cudf.core.udf.api import Masked
 from cudf.core.udf.utils import precompiled
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     _decimal_series,
-    assert_eq,
     parametrize_numeric_dtypes_pairwise,
     sv_to_udf_str,
 )

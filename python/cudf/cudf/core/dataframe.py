@@ -2981,6 +2981,32 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return df if not inplace else None
 
     @_cudf_nvtx_annotate
+    def fillna(
+        self, value=None, method=None, axis=None, inplace=False, limit=None
+    ):  # noqa: D102
+        if isinstance(value, (pd.Series, pd.DataFrame)):
+            value = cudf.from_pandas(value)
+        if isinstance(value, cudf.Series):
+            # Align value.index to self.columns
+            value = value.reindex(self._column_names)
+        elif isinstance(value, cudf.DataFrame):
+            if not self.index.equals(value.index):
+                # Align value.index to self.index
+                value = value.reindex(self.index)
+            value = dict(value.items())
+        elif isinstance(value, abc.Mapping):
+            # Align value.indexes to self.index
+            value = {
+                key: value.reindex(self.index)
+                if isinstance(value, cudf.Series)
+                else value
+                for key, value in value.items()
+            }
+        return super().fillna(
+            value=value, method=method, axis=axis, inplace=inplace, limit=limit
+        )
+
+    @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
@@ -7361,9 +7387,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3     4  44
         3     5  44
         """
-        if column not in self._column_names:
-            raise KeyError(column)
-
         return super()._explode(column, ignore_index)
 
     def pct_change(
@@ -7511,14 +7534,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         columns: list[ColumnBase],
         column_names: abc.Iterable[str] | None = None,
         index_names: list[str] | None = None,
-        *,
-        override_dtypes: abc.Iterable[Dtype | None] | None = None,
     ) -> DataFrame:
         result = super()._from_columns_like_self(
             columns,
             column_names,
             index_names,
-            override_dtypes=override_dtypes,
         )
         result._set_columns_like(self._data)
         return result

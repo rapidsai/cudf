@@ -18,6 +18,7 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype
 from cudf.core.index import CategoricalIndex, DatetimeIndex, Index, RangeIndex
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     ALL_TYPES,
     FLOAT_TYPES,
@@ -28,7 +29,6 @@ from cudf.testing._utils import (
     UNSIGNED_TYPES,
     assert_column_memory_eq,
     assert_column_memory_ne,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
 )
@@ -252,10 +252,10 @@ def test_index_rename_inplace():
     pds = pd.Index([1, 2, 3], name="asdf")
     gds = Index(pds)
 
-    # inplace=False should yield a deep copy
+    # inplace=False should yield a shallow copy
     gds_renamed_deep = gds.rename("new_name", inplace=False)
 
-    assert gds_renamed_deep._values.data_ptr != gds._values.data_ptr
+    assert gds_renamed_deep._values.data_ptr == gds._values.data_ptr
 
     # inplace=True returns none
     expected_ptr = gds._values.data_ptr
@@ -3212,6 +3212,27 @@ def test_rangeindex_dropna():
     result = ri.dropna()
     expected = ri.copy()
     assert_eq(result, expected)
+
+
+def test_rangeindex_unique_shallow_copy():
+    ri_pandas = pd.RangeIndex(1)
+    result = ri_pandas.unique()
+    assert result is not ri_pandas
+
+    ri_cudf = cudf.RangeIndex(1)
+    result = ri_cudf.unique()
+    assert result is not ri_cudf
+    assert_eq(result, ri_cudf)
+
+
+def test_rename_shallow_copy():
+    idx = pd.Index([1])
+    result = idx.rename("a")
+    assert idx.to_numpy(copy=False) is result.to_numpy(copy=False)
+
+    idx = cudf.Index([1])
+    result = idx.rename("a")
+    assert idx._column is result._column
 
 
 @pytest.mark.parametrize("data", [range(2), [10, 11, 12]])
