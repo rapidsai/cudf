@@ -2400,7 +2400,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if isinstance(map_index, cudf.core.column.StringColumn):
             cat_index = cast(
                 cudf.core.column.CategoricalColumn,
-                map_index.as_categorical_column("category"),
+                map_index.astype("category"),
             )
             map_index = cat_index.codes
             warnings.warn(
