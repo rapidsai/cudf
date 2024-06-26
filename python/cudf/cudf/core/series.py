@@ -3434,14 +3434,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def add_prefix(self, prefix):
         return Series._from_data(
-            data=self._data.copy(deep=False),
+            # TODO: Change to deep=False when copy-on-write is default
+            data=self._data.copy(deep=True),
             index=prefix + self.index.astype(str),
         )
 
     @_cudf_nvtx_annotate
     def add_suffix(self, suffix):
         return Series._from_data(
-            data=self._data.copy(deep=False),
+            # TODO: Change to deep=False when copy-on-write is default
+            data=self._data.copy(deep=True),
             index=self.index.astype(str) + suffix,
         )
 
