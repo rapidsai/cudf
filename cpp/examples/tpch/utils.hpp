@@ -38,6 +38,19 @@ cudf::io::table_metadata create_table_metadata(std::vector<std::string> column_n
     return metadata;
 }
 
+std::unique_ptr<cudf::table> order_by(
+    std::unique_ptr<cudf::table>& table, std::vector<int32_t> keys) {
+    auto table_view = table->view();
+    std::vector<cudf::column_view> column_views;
+    for (auto& key : keys) {
+        column_views.push_back(table_view.column(key));
+    }    
+    return cudf::sort_by_key(
+        table_view, 
+        cudf::table_view{column_views}
+    );
+}
+
 void write_parquet(std::unique_ptr<cudf::table>& table, cudf::io::table_metadata& metadata, std::string& filepath) {
     auto sink_info = cudf::io::sink_info(filepath);
     auto table_input_metadata = cudf::io::table_input_metadata{metadata};
