@@ -131,16 +131,6 @@ Plan:
     └───────────────────────────┘
 */
 
-std::unique_ptr<cudf::table> append_col_to_table(
-    std::unique_ptr<cudf::table> table, std::unique_ptr<cudf::column> col) {
-    std::vector<std::unique_ptr<cudf::column>> columns;
-    for (size_t i = 0; i < table->num_columns(); i++) {
-        columns.push_back(std::make_unique<cudf::column>(table->get_column(i)));
-    }
-    columns.push_back(std::move(col));
-    return std::make_unique<cudf::table>(std::move(columns));
-}
-
 std::unique_ptr<cudf::table> scan_filter_project() {
     std::string lineitem = "/home/jayjeetc/tpch_sf1/lineitem/part-0.parquet";
     auto source = cudf::io::source_info(lineitem);
