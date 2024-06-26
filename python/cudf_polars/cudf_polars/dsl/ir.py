@@ -518,8 +518,8 @@ class Join(IR):
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
     """
 
-    @cache
     @staticmethod
+    @cache
     def _joiners(
         how: Literal["inner", "left", "full", "leftsemi", "leftanti"],
     ) -> tuple[
