@@ -443,11 +443,6 @@ class BooleanFunction(Expr):
         ):
             # With ignore_nulls == False, polars uses Kleene logic
             raise NotImplementedError(f"Kleene logic for {self.name}")
-        if self.name in (
-            pl_expr.BooleanFunction.IsFinite,
-            pl_expr.BooleanFunction.IsInfinite,
-        ):
-            raise NotImplementedError(f"{self.name}")
         if self.name == pl_expr.BooleanFunction.IsIn and not all(
             c.dtype == self.children[0].dtype for c in self.children
         ):
@@ -511,6 +506,33 @@ class BooleanFunction(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
+        if self.name in (
+            pl_expr.BooleanFunction.IsFinite,
+            pl_expr.BooleanFunction.IsInfinite,
+        ):
+            # Avoid evaluating the child if the dtype tells us it's unnecessary.
+            (child,) = self.children
+            is_finite = self.name == pl_expr.BooleanFunction.IsFinite
+            if child.dtype.id() not in (plc.TypeId.FLOAT32, plc.TypeId.FLOAT64):
+                value = plc.interop.from_arrow(
+                    pa.scalar(value=is_finite, type=plc.interop.to_arrow(self.dtype))
+                )
+                return Column(plc.Column.from_scalar(value, df.num_rows))
+            needles = child.evaluate(df, context=context, mapping=mapping)
+            to_search = [-float("inf"), float("inf")]
+            if is_finite:
+                # NaN is neither finite not infinite
+                to_search.append(float("nan"))
+            haystack = plc.interop.from_arrow(
+                pa.array(
+                    to_search,
+                    type=plc.interop.to_arrow(needles.obj.type()),
+                )
+            )
+            result = plc.search.contains(haystack, needles.obj)
+            if is_finite:
+                result = plc.unary.unary_operation(result, plc.unary.UnaryOperator.NOT)
+            return Column(result)
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
