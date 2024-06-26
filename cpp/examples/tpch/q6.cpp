@@ -21,6 +21,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -131,7 +132,7 @@ std::unique_ptr<cudf::table> scan_filter_project() {
     );
 
     builder.columns(projection_cols);
-    // builder.filter(pred_ab);
+    // builder.filter(pred_abcd);
 
     auto options = builder.build();
     auto result = cudf::io::read_parquet(options);
@@ -152,17 +153,9 @@ std::unique_ptr<cudf::table> compute_result_table(std::unique_ptr<cudf::table>& 
     auto const sum_agg = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
     auto sum = cudf::reduce(extendedprice_mul_discount->view(), *sum_agg, extendedprice_mul_discount->type());
 
-    auto decimal_sum = static_cast<cudf::scalar_type_t<numeric::decimal64>*>(sum.get());
-    double decimal_sum_value = decimal_sum->value();
-
-    std::cout << "Sum: " << decimal_sum_value << std::endl;
-
-    cudf::data_type type = cudf::data_type{cudf::type_id::DECIMAL64};
     cudf::size_type len = 1;
-    rmm::device_buffer data_buffer = get_device_buffer_from_value(decimal_sum_value);
-    rmm::device_buffer null_mask_buffer = get_empty_device_buffer();
-    auto col = std::make_unique<cudf::column>(
-        type, len, std::move(data_buffer), std::move(null_mask_buffer), 0);
+    auto col = cudf::make_column_from_scalar(*sum, len);
+
     std::vector<std::unique_ptr<cudf::column>> columns;
     columns.push_back(std::move(col));
     auto result_table = std::make_unique<cudf::table>(std::move(columns));
