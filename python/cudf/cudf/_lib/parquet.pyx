@@ -883,32 +883,25 @@ cdef class ParquetReader:
 
     def read(self):
         dfs = self._read_chunk()
+        column_names = dfs._column_names
+        concatenated_columns = list(dfs._columns)
+        del dfs
         while self._has_next():
-            dfs = [dfs, self._read_chunk()]
-            concatenated_columns = []
-            column_names = dfs[0]._column_names
-            all_columns = []
+            new_chunk = list(self._read_chunk()._columns)
             for i in range(len(column_names)):
-                cols = [table._data.columns[i] for table in dfs]
-                all_columns.append(cols)
-            i = 0
-            del dfs
-            while True:
-                try:
-                    columns = all_columns[0]
-                except IndexError:
-                    break
-                if len(columns) == 0:
-                    break
-                res_col = None
-                res_col = concat_columns(columns)
-                del all_columns[0]
-                concatenated_columns.append(res_col.to_pylibcudf(mode="read"))
-            dfs = cudf.DataFrame._from_data(
-                *data_from_pylibcudf_table(
-                    pylibcudf.Table(concatenated_columns),
-                    column_names=column_names,
-                    index_names=None
+                concatenated_columns[i] = concat_columns(
+                    [concatenated_columns[i], new_chunk[i]]
+                )
+                # Must drop any residual GPU columns to save memory
+                new_chunk[i] = None
+
+        dfs = cudf.DataFrame._from_data(
+            *data_from_pylibcudf_table(
+                pylibcudf.Table(
+                    [col.to_pylibcudf(mode="read") for col in concatenated_columns]
+                ),
+                column_names=column_names,
+                index_names=None
                 )
             )
 
