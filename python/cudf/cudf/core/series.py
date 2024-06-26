@@ -1798,20 +1798,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable, ABC):
     ):
         if isinstance(value, pd.Series):
             value = Series.from_pandas(value)
-
-        if not (is_scalar(value) or isinstance(value, (abc.Mapping, Series))):
-            raise TypeError(
-                f'"value" parameter must be a scalar, dict '
-                f"or Series, but you passed a "
-                f'"{type(value).__name__}"'
-            )
-
-        if isinstance(value, (abc.Mapping, Series)):
+        elif isinstance(value, abc.Mapping):
             value = Series(value)
+        if isinstance(value, cudf.Series):
             if not self.index.equals(value.index):
                 value = value.reindex(self.index)
-            value = value._column
-
+            value = {self.name: value._column}
         return super().fillna(
             value=value, method=method, axis=axis, inplace=inplace, limit=limit
         )
