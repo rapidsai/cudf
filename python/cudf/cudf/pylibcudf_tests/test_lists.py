@@ -12,6 +12,11 @@ def test_data():
     return [[[[0, 1], [2], [5], [6, 7]], [[8], [9], [], [13, 14, 15]]]]
 
 
+@pytest.fixture
+def scalar():
+    return pa.scalar(1)
+
+
 def test_concatenate_rows(test_data):
     arrow_tbl = pa.Table.from_arrays(test_data[0], names=["a", "b"])
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
@@ -49,12 +54,11 @@ def test_concatenate_list_elements(test_data, dropna, expected):
     assert_column_eq(expect, res)
 
 
-def test_contains_scalar(test_data):
+def test_contains_scalar(test_data, scalar):
     list_column = test_data[0][0]
     arr = pa.array(list_column)
 
     plc_column = plc.interop.from_arrow(arr)
-    scalar = pa.scalar(1)
     plc_scalar = plc.interop.from_arrow(scalar)
     res = plc.lists.contains(plc_column, plc_scalar)
 
@@ -89,12 +93,11 @@ def test_contains_nulls():
     assert_column_eq(expect, res)
 
 
-def test_index_of_scalar(test_data):
+def test_index_of_scalar(test_data, scalar):
     list_column = test_data[0][0]
     arr = pa.array(list_column)
 
     plc_column = plc.interop.from_arrow(arr)
-    scalar = pa.scalar(1)
     plc_scalar = plc.interop.from_arrow(scalar)
     res = plc.lists.index_of(plc_column, plc_scalar, True)
 

@@ -106,6 +106,12 @@ cpdef Column contains(Column input, ColumnOrScalar search_key):
     """Create a column of bool values indicating whether
     the search_key is contained in the input.
 
+    ``search_key`` may be a
+    :py:class:`~cudf._lib.pylibcudf.column.Column` or a
+    :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
+
+    For details, see :cpp:func:`contains`.
+
     Parameters
     ----------
     input : Column
@@ -160,6 +166,12 @@ cpdef Column contains_nulls(Column input):
 cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_option):
     """Create a column of index values indicating the position of a search
     key row within the corresponding list row in the lists column.
+
+    ``search_key`` may be a
+    :py:class:`~cudf._lib.pylibcudf.column.Column` or a
+    :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
+
+    For details, see :cpp:func:`index_of`.
 
     Parameters
     ----------
