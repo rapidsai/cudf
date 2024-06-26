@@ -87,6 +87,13 @@ void prefetch(std::string_view key, void const* ptr, std::size_t size);
 void enable_prefetching(std::string_view key);
 
 /**
+ * @brief Disable prefetching for a particular structure or algorithm.
+ *
+ * @param key The key to disable prefetching for.
+ */
+void disable_prefetching(std::string_view key);
+
+/**
  * @brief Enable or disable debug mode.
  *
  * In debug mode, the pointers being prefetched are printed to stderr.

@@ -12,4 +12,5 @@ cdef extern from "cudf/utilities/prefetch.hpp" \
     # but there's no real rush so if we go that route we might as well
     # contribute them upstream to Cython itself.
     void enable_prefetching(string key)
+    void disable_prefetching(string key)
     void prefetch_debugging(bool enable)
