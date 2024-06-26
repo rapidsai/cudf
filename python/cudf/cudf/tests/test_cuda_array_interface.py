@@ -11,12 +11,8 @@ import pytest
 
 import cudf
 from cudf.core.buffer.spill_manager import get_global_manager
-from cudf.testing._utils import (
-    DATETIME_TYPES,
-    NUMERIC_TYPES,
-    TIMEDELTA_TYPES,
-    assert_eq,
-)
+from cudf.testing import assert_eq
+from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)

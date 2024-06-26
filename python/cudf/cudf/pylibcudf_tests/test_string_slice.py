@@ -97,3 +97,20 @@ def test_slice_column(
     )
 
     assert_column_eq(expected, got)
+
+
+def test_slice_invalid(plc_col, plc_starts_col, plc_stops_col):
+    with pytest.raises(TypeError):
+        # no maching signature
+        plc.strings.slice.slice_strings(None, pa_starts_col, pa_stops_col)
+    with pytest.raises(ValueError):
+        # signature found but wrong value passed
+        plc.strings.slice.slice_strings(plc_col, plc_starts_col, None)
+    with pytest.raises(TypeError):
+        # no matching signature (2nd arg)
+        plc.strings.slice.slice_strings(plc_col, None, plc_stops_col)
+    with pytest.raises(TypeError):
+        # can't provide step for columnwise api
+        plc.strings.slice.slice_strings(
+            plc_col, plc_starts_col, plc_stops_col, plc_starts_col
+        )

@@ -20,7 +20,7 @@ from cudf.core.df_protocol import (
     from_dataframe,
     protocol_dtype_to_cupy_dtype,
 )
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 @pytest.fixture(

@@ -52,9 +52,17 @@ cpdef Column slice_strings(
     cdef numeric_scalar[size_type]* cpp_stop
     cdef numeric_scalar[size_type]* cpp_step
 
+    if input is None:
+        raise ValueError("input cannot be None")
+
     if ColumnOrScalar is Column:
         if step is not None:
             raise ValueError("Column-wise slice does not support step")
+
+        if start is None or stop is None:
+            raise ValueError(
+                "start and stop must be provided for Column-wise slice"
+            )
 
         with nogil:
             c_result = cpp_slice.slice_strings(

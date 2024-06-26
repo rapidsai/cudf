@@ -12,7 +12,7 @@ import pytest
 from fsspec.core import get_fs_token_paths
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 moto = pytest.importorskip("moto", minversion="3.1.6")
 boto3 = pytest.importorskip("boto3")
