@@ -486,33 +486,37 @@ use only asynchronous versions of CUDA APIs with the stream parameter.
 
 In order to make the `detail` API callable from other libcudf functions, it should be exposed in a
 header placed in the `cudf/cpp/include/detail/` directory.
+The declaration is not necessary if no other libcudf functions call the `detail` function.
 
 For example:
 
 ```c++
 // cpp/include/cudf/header.hpp
-void external_function(...);
+void external_function(...,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 // cpp/include/cudf/detail/header.hpp
 namespace detail{
-void external_function(..., rmm::cuda_stream_view stream)
+void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 } // namespace detail
 
 // cudf/src/implementation.cpp
 namespace detail{
-    // Use the stream parameter in the detail implementation.
-    void external_function(..., rmm::cuda_stream_view stream){
-        // Implementation uses the stream with async APIs.
-        rmm::device_buffer buff(...,stream);
-        CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
-        kernel<<<..., stream>>>(...);
-        thrust::algorithm(rmm::exec_policy(stream), ...);
-    }
+// Use the stream parameter in the detail implementation.
+void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr){
+  // Implementation uses the stream with async APIs.
+  rmm::device_buffer buff(..., stream, mr);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
+  kernel<<<..., stream>>>(...);
+  thrust::algorithm(rmm::exec_policy(stream), ...);
+}
 } // namespace detail
 
-void external_function(...){
-    CUDF_FUNC_RANGE(); // Generates an NVTX range for the lifetime of this function.
-    detail::external_function(..., cudf::get_default_stream());
+void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE(); // Generates an NVTX range for the lifetime of this function.
+  detail::external_function(..., stream, mr);
 }
 ```
 
