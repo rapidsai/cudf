@@ -65,8 +65,6 @@ def assert_column_eq(
     if isinstance(rhs, pa.ChunkedArray):
         rhs = rhs.combine_chunks()
 
-    print(lhs)
-    print(rhs)
     assert lhs.equals(rhs)
 
 
@@ -219,10 +217,8 @@ DEFAULT_PA_TYPES = (
     NUMERIC_PA_TYPES
     + STRING_PA_TYPES
     + BOOL_PA_TYPES
-    # exclude nested list/struct cases
-    # since not all tests work with them yet
-    + LIST_PA_TYPES  # [:1]
-    + DEFAULT_PA_STRUCT_TESTING_TYPES  # [:1]
+    + LIST_PA_TYPES
+    + DEFAULT_PA_STRUCT_TESTING_TYPES
 )
 
-ALL_PA_TYPES = DEFAULT_PA_TYPES  # + LIST_PA_TYPES[1:] + DEFAULT_PA_STRUCT_TESTING_TYPES[1:]
+ALL_PA_TYPES = DEFAULT_PA_TYPES
