@@ -60,5 +60,10 @@ void prefetch(std::string_view key, void const* ptr, std::size_t size)
 
 void enable_prefetching(std::string_view key) { detail::PrefetchConfig::instance().set(key, true); }
 
+void disable_prefetching(std::string_view key)
+{
+  detail::PrefetchConfig::instance().set(key, false);
+}
+
 void prefetch_debugging(bool enable) { detail::PrefetchConfig::instance().debug = enable; }
 }  // namespace cudf::experimental::prefetch
