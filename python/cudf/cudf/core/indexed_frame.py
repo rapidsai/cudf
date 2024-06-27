@@ -33,7 +33,6 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
-from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, as_column
@@ -42,7 +41,7 @@ from cudf.core.copy_types import BooleanMask, GatherMap
 from cudf.core.dtypes import ListDtype
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import GroupBy
-from cudf.core.index import Index, RangeIndex, _index_from_data
+from cudf.core.index import RangeIndex, _index_from_data, ensure_index
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
@@ -66,6 +65,8 @@ if TYPE_CHECKING:
         Dtype,
         NotImplementedType,
     )
+    from cudf.core._base_index import BaseIndex
+
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
@@ -627,9 +628,7 @@ class IndexedFrame(Frame):
                 f"new values have {len(value)} elements"
             )
         # avoid unnecessary cast to Index
-        if not isinstance(value, BaseIndex):
-            value = Index(value)
-
+        value = ensure_index(value)
         self._index = value
 
     @_cudf_nvtx_annotate
@@ -3595,7 +3594,7 @@ class IndexedFrame(Frame):
         sort: bool = True,
         allow_non_unique: bool = False,
     ) -> Self:
-        index = cudf.Index(index)
+        index = ensure_index(index)
 
         if self.index.equals(index):
             return self

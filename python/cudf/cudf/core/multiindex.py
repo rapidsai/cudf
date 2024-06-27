@@ -28,6 +28,7 @@ from cudf.core.index import (
     BaseIndex,
     _get_indexer_basic,
     _lexsorted_equal_range,
+    ensure_index,
 )
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.utils.dtypes import is_column_like
@@ -172,7 +173,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     "codes and is inconsistent!"
                 )
 
-        levels = [cudf.Index(level) for level in levels]
+        levels = [ensure_index(level) for level in levels]
 
         if len(levels) != len(codes._data):
             raise ValueError(
