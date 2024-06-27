@@ -9,4 +9,5 @@ from . import (
     regex_flags,
     regex_program,
     replace,
+    slice,
 )

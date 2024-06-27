@@ -33,11 +33,13 @@ def test_range_index(testrange):
     "testlist",
     [
         [1, 2, 3, 4],
+        [1, 2, 3, 4, None],
         [1, 2, 3, 3, 4],
         [10, 9, 8, 7],
         [10, 9, 8, 8, 7],
         ["c", "d", "e", "f"],
         ["c", "d", "e", "e", "f"],
+        ["c", "d", "e", "f", None],
         ["z", "y", "x", "r"],
         ["z", "y", "x", "x", "r"],
     ],
@@ -45,6 +47,23 @@ def test_range_index(testrange):
 def test_generic_index(testlist):
     index = Index(testlist)
     index_pd = pd.Index(testlist)
+
+    assert index.is_unique == index_pd.is_unique
+    assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
+    assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
+
+
+@pytest.mark.parametrize(
+    "testlist",
+    [
+        [1, 2, 3, 4, np.nan],
+        [10, 9, 8, np.nan, 7],
+        [10, 9, 8, 8, 7, np.nan],
+    ],
+)
+def test_float_index(testlist):
+    index_pd = pd.Index(testlist)
+    index = cudf.from_pandas(index_pd, nan_as_null=False)
 
     assert index.is_unique == index_pd.is_unique
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing

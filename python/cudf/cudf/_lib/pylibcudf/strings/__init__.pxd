@@ -9,4 +9,5 @@ from . cimport (
     regex_flags,
     regex_program,
     replace,
+    slice,
 )
