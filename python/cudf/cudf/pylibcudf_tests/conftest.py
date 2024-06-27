@@ -126,21 +126,18 @@ def table_data(request):
 
 
 @pytest.fixture(
-    params=["a.txt", pathlib.Path("a.txt"), io.BytesIO(), io.StringIO()],
+    params=["a.txt", pathlib.Path("a.txt"), io.BytesIO, io.StringIO],
 )
 def source_or_sink(request, tmp_path):
     fp_or_buf = request.param
     if isinstance(fp_or_buf, str):
-        fp_or_buf = f"{tmp_path}/{fp_or_buf}"
+        return f"{tmp_path}/{fp_or_buf}"
     elif isinstance(fp_or_buf, os.PathLike):
-        fp_or_buf = tmp_path.joinpath(fp_or_buf)
-
-    yield fp_or_buf
-    # Cleanup after ourselves
-    # since the BytesIO and StringIO objects get cached by pytest
-    if isinstance(fp_or_buf, io.IOBase):
-        fp_or_buf.seek(0)
-        fp_or_buf.truncate(0)
+        return tmp_path.joinpath(fp_or_buf)
+    elif issubclass(fp_or_buf, io.IOBase):
+        # Must construct io.StringIO/io.BytesIO inside
+        # fixture, or we'll end up re-using it
+        return fp_or_buf()
 
 
 @pytest.fixture(
