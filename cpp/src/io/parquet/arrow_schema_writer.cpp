@@ -345,8 +345,9 @@ std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector con
   // Instantiate a flatbuffer builder
   FlatBufferBuilder fbb;
 
-  // Create an empty field offset vector
+  // Create an empty field offset vector and reserve space for linked columns
   std::vector<FieldOffset> field_offsets;
+  field_offsets.reserve(linked_columns.size());
 
   // populate field offsets (aka schema fields)
   std::transform(thrust::make_zip_iterator(
