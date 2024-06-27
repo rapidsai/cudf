@@ -1268,12 +1268,25 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     ('NJ', 'Precip')],
                    names=['state', 'observation'])
         """
-        if isinstance(df, pd.DataFrame):
-            source_data = cudf.DataFrame.from_pandas(df)
-        else:
-            source_data = df
-        names = names if names is not None else source_data._column_names
-        return cls.from_arrays(source_data._columns, names=names)
+        obj = cls.__new__(cls)
+        super(cls, obj).__init__()
+
+        source_data = df.copy(deep=False)
+        source_data.reset_index(drop=True, inplace=True)
+        if isinstance(source_data, pd.DataFrame):
+            source_data = cudf.DataFrame.from_pandas(source_data)
+
+        names = names if names is not None else source_data._data.names
+        # if names are unique
+        # try using those as the source_data column names:
+        if len(dict.fromkeys(names)) == len(names):
+            source_data.columns = names
+        obj._name = None
+        obj._data = source_data._data
+        obj.names = names
+        obj._codes = None
+        obj._levels = None
+        return obj
 
     @classmethod
     @_cudf_nvtx_annotate
