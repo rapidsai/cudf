@@ -3511,7 +3511,7 @@ public class ColumnVectorTest extends CudfTestBase {
     testCastNumericToDecimalsAndBack(DType.FLOAT64, false, 0,
         () -> ColumnVector.fromBoxedDoubles(1.0, 2.1, -3.23, null, 2.41281, (double) Integer.MAX_VALUE),
         () -> ColumnVector.fromBoxedDoubles(1.0, 2.0, -3.0, null, 2.0, (double) Integer.MAX_VALUE),
-        new Long[]{1L, 2L, -3L, null, 2L, Integer.MAX_VALUE.longValue()}
+        new Long[]{1L, 2L, -3L, null, 2L, (long) Integer.MAX_VALUE}
     );
     testCastNumericToDecimalsAndBack(DType.FLOAT64, false, -2,
         () -> ColumnVector.fromBoxedDoubles(1.0, 2.1, -3.23, null, 2.41281, -55.01999),
