@@ -52,16 +52,12 @@ void copy_pageable(void* dst, void const* src, std::size_t size, rmm::cuda_strea
 void cuda_memcpy_async(
   void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream)
 {
-  switch (kind) {
-    case host_memory_kind::PINNED: {
-      copy_pinned(dst, src, size, stream);
-      break;
-    }
-    case host_memory_kind::PAGEABLE:
-    default: {
-      copy_pageable(dst, src, size, stream);
-      break;
-    }
+  if (kind == host_memory_kind::PINNED) {
+    copy_pinned(dst, src, size, stream);
+  } else if (kind == host_memory_kind::PAGEABLE) {
+    copy_pageable(dst, src, size, stream);
+  } else {
+    CUDF_FAIL("Unsupported host memory kind");
   }
 }
 
