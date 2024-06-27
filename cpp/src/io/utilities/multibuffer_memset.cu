@@ -36,7 +36,7 @@
 
 struct memset_task {
   uint64_t size;
-  uint8_t * data;
+  uint64_t * data;
 } typedef memset_task;
 
 // 1 task == 1 block
@@ -47,15 +47,14 @@ __global__ void memset_kernel(memset_task * tasks, int8_t value)
   // block stride over task.begin, task.end
   auto buf = task.data;
   uint64_t end = task.size;
-  uint64_t bytes_left = (task.size + blockDim.x - 1) / blockDim.x;
-  bytes_left *= 8;
+  uint64_t memsets_left = (task.size + blockDim.x - 1) / blockDim.x;
   uint64_t t = threadIdx.x;
-  while(bytes_left > 0){
+  while(memsets_left > 0){
     if (t < end) {
       buf[t] = value;
     }
     t += blockDim.x;
-    bytes_left -= 1;
+    memsets_left -= 1;
   }
 }
 
@@ -104,19 +103,21 @@ void multibuffer_memset(std::vector<cudf::device_span<uint8_t>> & bufs,
     tasks.begin(), 
     cuda::proclaim_return_type<memset_task>(
       [offsets = offsets.data(), offset_size = num_bufs + 1, gpu_bufs = gpu_bufs.data(), bytes_per_task] __device__(cudf::size_type task) {
-        auto buf_idx = thrust::lower_bound(thrust::seq, offsets, offsets + offset_size, task);
+        auto buf_idx = thrust::upper_bound(thrust::seq, offsets, offsets + offset_size, task);
         if (*buf_idx > task) {buf_idx -= 1;}
         size_t start = (task - *buf_idx) * bytes_per_task;
         size_t end = (start + bytes_per_task) <= gpu_bufs[buf_idx - offsets].size() ? start + bytes_per_task : gpu_bufs[buf_idx - offsets].size();
         memset_task ret;
-        ret.size = end - start;
-        ret.data = gpu_bufs[buf_idx - offsets].data() + start;
+        ret.size = (end - start) / 8;
+        ret.data = (uint64_t *)(gpu_bufs[buf_idx - offsets].data() + start);
         return ret;
       }
     )
   );
 
   // launch cuda kernel
-  memset_kernel<<<total_tasks, threads_per_block>>>(tasks.data(), value);
+  if (total_tasks != 0) {
+    memset_kernel<<<total_tasks, threads_per_block>>>(tasks.data(), value);
+  }
 
 }
