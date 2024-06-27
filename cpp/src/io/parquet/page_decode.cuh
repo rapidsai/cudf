@@ -21,6 +21,7 @@
 #include "parquet_gpu.hpp"
 #include "rle_stream.cuh"
 
+#include <cooperative_groups.h>
 #include <cuda/atomic>
 #include <cuda/std/tuple>
 
@@ -420,46 +421,65 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s* s, state_buf* sb, int t
  * @param[in,out] s Page state input/output
  * @param[out] sb Page state buffer output
  * @param[in] target_pos Target output position
- * @param[in] t Thread ID
+ * @param[in] g Cooperative group (thread block or tile)
  * @tparam sizes_only True if only sizes are to be calculated
  * @tparam state_buf Typename of the `state_buf` (usually inferred)
+ * @tparam thread_group Typename of the cooperative group (inferred)
  *
  * @return Total length of strings processed
  */
-template <bool sizes_only, typename state_buf>
-__device__ size_type
-gpuInitStringDescriptors(page_state_s* s, [[maybe_unused]] state_buf* sb, int target_pos, int t)
+template <bool sizes_only, typename state_buf, typename thread_group>
+__device__ size_type gpuInitStringDescriptors(page_state_s* s,
+                                              [[maybe_unused]] state_buf* sb,
+                                              int target_pos,
+                                              thread_group g)
 {
-  int pos       = s->dict_pos;
-  int total_len = 0;
+  int const t         = g.thread_rank();
+  int const dict_size = s->dict_size;
+  int k               = s->dict_val;
+  int pos             = s->dict_pos;
+  int total_len       = 0;
 
-  // This step is purely serial
-  if (!t) {
-    uint8_t const* cur = s->data_start;
-    int dict_size      = s->dict_size;
-    int k              = s->dict_val;
+  // All group threads can participate for fixed len byte arrays.
+  if (s->col.physical_type == FIXED_LEN_BYTE_ARRAY) {
+    int const dtype_len_in = s->dtype_len_in;
+    total_len              = min((target_pos - pos) * dtype_len_in, dict_size - s->dict_val);
+    if constexpr (!sizes_only) {
+      for (pos += t, k += t * dtype_len_in; pos < target_pos; pos += g.size()) {
+        int const len = (k < dict_size) ? dtype_len_in : 0;
+        k             = min(k, dict_size);
+        sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos)] = k;
+        sb->str_len[rolling_index<state_buf::str_buf_size>(pos)]   = len;
+        if (k < dict_size) { k += g.size() * dtype_len_in; }
+      }
+    }
+    // Only thread_rank = 0 updates the s->dict_val
+    if (!t) {
+      s->dict_val += total_len;
+      __threadfence_block();
+    }
+  }
+  // This step is purely serial for byte arrays
+  else {
+    if (!t) {
+      uint8_t const* cur = s->data_start;
 
-    while (pos < target_pos) {
-      int len = 0;
-      if (s->col.physical_type == FIXED_LEN_BYTE_ARRAY) {
-        if (k < dict_size) { len = s->dtype_len_in; }
-      } else {
+      for (int len = 0; pos < target_pos; pos++, len = 0) {
         if (k + 4 <= dict_size) {
           len = (cur[k]) | (cur[k + 1] << 8) | (cur[k + 2] << 16) | (cur[k + 3] << 24);
           k += 4;
           if (k + len > dict_size) { len = 0; }
         }
+        if constexpr (!sizes_only) {
+          sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos)] = k;
+          sb->str_len[rolling_index<state_buf::str_buf_size>(pos)]   = len;
+        }
+        k += len;
+        total_len += len;
       }
-      if constexpr (!sizes_only) {
-        sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos)] = k;
-        sb->str_len[rolling_index<state_buf::str_buf_size>(pos)]   = len;
-      }
-      k += len;
-      total_len += len;
-      pos++;
+      s->dict_val = k;
+      __threadfence_block();
     }
-    s->dict_val = k;
-    __threadfence_block();
   }
 
   return total_len;
