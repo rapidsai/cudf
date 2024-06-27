@@ -16,10 +16,6 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
         "left",
         "semi",
         "anti",
-        pytest.param(
-            "cross",
-            marks=pytest.mark.xfail(reason="cross join not implemented"),
-        ),
         "full",
     ],
 )
@@ -55,3 +51,23 @@ def test_join(how, coalesce, join_nulls, join_expr):
         right, on=join_expr, how=how, join_nulls=join_nulls, coalesce=coalesce
     )
     assert_gpu_result_equal(query, check_row_order=False)
+
+
+def test_cross_join():
+    left = pl.DataFrame(
+        {
+            "a": [1, 2, 3, 1, None],
+            "b": [1, 2, 3, 4, 5],
+            "c": [2, 3, 4, 5, 6],
+        }
+    ).lazy()
+    right = pl.DataFrame(
+        {
+            "a": [1, 4, 3, 7, None, None],
+            "c": [2, 3, 4, 5, 6, 7],
+        }
+    ).lazy()
+
+    q = left.join(right, how="cross")
+
+    assert_gpu_result_equal(q)

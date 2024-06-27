@@ -35,3 +35,5 @@ cpdef Column left_anti_join(
     Table right_keys,
     null_equality nulls_equal
 )
+
+cpdef Table cross_join(Table left, Table right)
