@@ -87,14 +87,21 @@ static void bench_find_string(nvbench::state& state)
         }
       });
     } else {  // combine
-      auto const output = cudf::strings::contains_multi_scalars(input, targets);
-      for (std::size_t i = 0; i < output.size(); ++i) {
-        auto const ref = cudf::strings::contains(input, targets[i]);
-        cudf::test::detail::expect_columns_equal(ref->view(), output[i]->view());
+      auto const output = cudf::strings::first_contains_index(
+        input, targets, cudf::strings::transform_target_op::TO_LOWER);
+      std::vector<std::unique_ptr<cudf::column>> contains_results;
+      std::vector<cudf::column_view> contains_cvs;
+      for (const auto & target : targets) {
+        contains_results.emplace_back(cudf::strings::contains(input, target));
+        contains_cvs.emplace_back(contains_results.back()->view());
       }
+      auto const first_contains_idx =
+        spark_rapids_jni::select_first_true_index(cudf::table_view{contains_cvs});
+      cudf::test::detail::expect_columns_equal(first_contains_idx->view(), output->view());
 
       state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-        [[maybe_unused]] auto output = cudf::strings::contains_multi_scalars(input, targets);
+        [[maybe_unused]] auto output = cudf::strings::first_contains_index(
+          input, targets, cudf::strings::transform_target_op::TO_LOWER);
       });
     }
   } else if (api == "starts_with") {
