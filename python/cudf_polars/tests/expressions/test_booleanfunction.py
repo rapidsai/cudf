@@ -26,7 +26,7 @@ def has_nulls(request):
 def test_booleanfunction_reduction(ignore_nulls):
     ldf = pl.LazyFrame(
         {
-            "a": [1, 2, 3.0, 2, 5],
+            "a": pl.Series([1, 2, 3.0, 2, 5], dtype=pl.Float64()),
             "b": [0, 3, 1, -1, None],
             "c": [1, 6, 5, 3, 2],
         }
@@ -82,7 +82,9 @@ def test_boolean_function_unary(request, expr, has_nans, has_nulls):
     ],
 )
 def test_unsupported_boolean_function(expr):
-    df = pl.LazyFrame({"a": [1, float("nan"), 2, 4], "b": [1, 2, 3, 4]})
+    df = pl.LazyFrame(
+        {"a": pl.Series([1, float("nan"), 2, 4], dtype=pl.Float64()), "b": [1, 2, 3, 4]}
+    )
 
     q = df.select(expr)
 
@@ -95,7 +97,11 @@ def test_unsupported_boolean_function(expr):
 )
 def test_boolean_isbetween(closed, bounds):
     df = pl.LazyFrame(
-        {"a": [1, float("nan"), 2, 4], "lo": [1, 2, 2, 3], "hi": [10, 4, 2, 4]}
+        {
+            "a": pl.Series([1, float("nan"), 2, 4], dtype=pl.Float32()),
+            "lo": [1, 2, 2, 3],
+            "hi": [10, 4, 2, 4],
+        }
     )
 
     q = df.select(pl.col("a").is_between(*bounds, closed=closed))
