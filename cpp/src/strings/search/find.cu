@@ -633,12 +633,12 @@ std::vector<std::unique_ptr<column>> contains_fn_multi_scalars(
                     d_strings = *d_strings,
                     d_targets = d_targets.begin(),
                     d_results = d_results.begin()] __device__(size_type row_idx) {
+                     if (d_strings.is_null(row_idx)) { return; }
+                     auto const d_str = d_strings.element<string_view>(row_idx);
                      for (std::size_t target_idx = 0; target_idx < num_targets; ++target_idx) {
                        auto const d_target = d_targets[target_idx];
                        if (d_target.empty()) { continue; }
-                       d_results[target_idx][row_idx] =
-                         !d_strings.is_null(row_idx) &&
-                         bool{pfn(d_strings.element<string_view>(row_idx), d_target)};
+                       d_results[target_idx][row_idx] = bool{pfn(d_str, d_target)};
                      }
                    });
   for (auto& result : results) {
