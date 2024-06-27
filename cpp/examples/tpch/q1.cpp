@@ -16,6 +16,7 @@
 
 #include <iostream>
 #include <memory>
+#include <chrono>
 #include <vector>
 #include <cudf/io/parquet.hpp>
 #include <cudf/ast/expressions.hpp>
@@ -181,6 +182,8 @@ std::unique_ptr<cudf::table> perform_group_by(std::unique_ptr<cudf::table>& tabl
 }
 
 int main() {
+    auto s = std::chrono::high_resolution_clock::now();
+
     auto t1 = scan_filter_project();
     auto disc_price_col = calc_disc_price(t1);
     auto charge_col = calc_charge(t1);
@@ -188,6 +191,10 @@ int main() {
     auto t3 = append_col_to_table(t2, charge_col);
     auto t4 = perform_group_by(t3);
     auto result_table = order_by(t4, {0, 1});
+    
+    auto e = std::chrono::high_resolution_clock::now();
+    std::cout << "q1: " << std::chrono::duration_cast<std::chrono::milliseconds>(e - s).count() << "ms" << std::endl;
+
     write_parquet(
         std::move(result_table), 
         create_table_metadata({
