@@ -63,7 +63,8 @@ cpdef TableWithMetadata read_json(
         Each element of the list has the format
         (column_name, column_dtype, list of child dtypes), where
         the list of child dtypes is an empty list if the child is not
-        a nested type (list or struct dtype).
+        a nested type (list or struct dtype), and is of format
+        (column_child_name, column_child_type, list of grandchild dtypes).
     compression_type: CompressionType, default CompressionType.AUTO
         The compression format of the JSON source.
     byte_range_offset : size_type, default 0

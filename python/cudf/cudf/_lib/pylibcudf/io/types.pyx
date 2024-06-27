@@ -151,6 +151,15 @@ cdef class SourceInfo:
         cdef vector[host_buffer] c_host_buffers
         cdef const unsigned char[::1] c_buffer
         cdef bint empty_buffer = False
+        cdef list new_sources = []
+
+        if isinstance(sources[0], io.StringIO):
+            for buffer in sources:
+                if not isinstance(buffer, io.StringIO):
+                    raise ValueError("All sources must be of the same type!")
+                new_sources.append(buffer.read().encode())
+            sources = new_sources
+
         if isinstance(sources[0], bytes):
             empty_buffer = True
             for buffer in sources:
@@ -170,7 +179,7 @@ cdef class SourceInfo:
                                                      c_buffer.shape[0]))
         else:
             raise ValueError("Sources must be a list of str/paths, "
-                             "bytes, io.BytesIO, or a Datasource")
+                             "bytes, io.BytesIO, io.StringIO, or a Datasource")
 
         if empty_buffer is True:
             c_host_buffers.push_back(host_buffer(<char*>NULL, 0))

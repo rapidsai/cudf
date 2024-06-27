@@ -125,18 +125,18 @@ def table_data(request):
     params=["a.txt", pathlib.Path("a.txt"), io.BytesIO(), io.StringIO()],
 )
 def source_or_sink(request, tmp_path):
-    sink = request.param
-    if isinstance(source_or_sink, str):
-        sink = f"{tmp_path}/{sink}"
-    elif isinstance(sink, os.PathLike):
-        sink = tmp_path.joinpath()
+    fp_or_buf = request.param
+    if isinstance(fp_or_buf, str):
+        fp_or_buf = f"{tmp_path}/{fp_or_buf}"
+    elif isinstance(fp_or_buf, os.PathLike):
+        fp_or_buf = tmp_path.joinpath(fp_or_buf)
 
-    yield request.param
+    yield fp_or_buf
     # Cleanup after ourselves
     # since the BytesIO and StringIO objects get cached by pytest
-    if isinstance(sink, io.IOBase):
-        sink.seek(0)
-        sink.truncate(0)
+    if isinstance(fp_or_buf, io.IOBase):
+        fp_or_buf.seek(0)
+        fp_or_buf.truncate(0)
 
 
 @pytest.fixture(params=[opt for opt in plc.io.types.CompressionType])

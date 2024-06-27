@@ -7,6 +7,7 @@ import pytest
 from utils import COMPRESSION_TYPE_TO_PANDAS, assert_table_and_meta_eq
 
 import cudf._lib.pylibcudf as plc
+from cudf._lib.pylibcudf.io.types import CompressionType
 
 
 def make_json_source(path_or_buf, pa_table, **kwargs):
@@ -37,30 +38,50 @@ def write_json_bytes(source, json_bytes):
 
 
 @pytest.mark.parametrize("lines", [True, False])
-def test_read_json_basic(table_data, source_or_sink, lines, compression_type):
-    # TODO: separate sources and sinks fixtures?
-    # alternately support StringIO as a source in SourceInfo
+def test_read_json_basic(
+    table_data, source_or_sink, lines, compression_type, request
+):
+    if compression_type in {
+        # Not supported by libcudf
+        CompressionType.SNAPPY,
+        CompressionType.XZ,
+        CompressionType.ZSTD,
+        # Not supported by pandas
+        # TODO: find a way to test these
+        CompressionType.BROTLI,
+        CompressionType.LZ4,
+        CompressionType.LZO,
+        CompressionType.ZLIB,
+    }:
+        pytest.skip("unsupported compression type by pandas/libcudf")
+
+    # can't compress non-binary data with pandas
     if isinstance(source_or_sink, io.StringIO):
-        pytest.skip("skip StringIO since it is only a valid sink")
-    # if compression_type in {plc.io.types.CompressionType.SNAPPY,
-    #                         #plc.io.types.CompressionType.GZIP,
-    #                         #plc.io.types.CompressionType.BZIP2,
-    #                         #plc.io.types.CompressionType.BROTLI
-    #                         }:
-    #     pytest.skip("unsupported libcudf compression type")
+        compression_type = CompressionType.NONE
+
     _, pa_table = table_data
     source = make_json_source(
-        source_or_sink,
-        pa_table,
-        lines=lines,
+        source_or_sink, pa_table, lines=lines, compression=compression_type
     )
+
+    # TODO: create a MRE
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                len(pa_table) > 0
+                and compression_type
+                not in {CompressionType.NONE, CompressionType.AUTO}
+            ),
+            reason="libcudf json reader crashse on non empty table_data",
+        )
+    )
+
     if isinstance(source, io.IOBase):
         source.seek(0)
 
     res = plc.io.json.read_json(
         plc.io.SourceInfo([source]),
-        # TODO: re-enable me!
-        # compression=compression_type,
+        compression=compression_type,
         lines=lines,
     )
 
@@ -73,6 +94,61 @@ def test_read_json_basic(table_data, source_or_sink, lines, compression_type):
     # since nullable=False cannot roundtrip through orient='records'
     # JSON format
     assert_table_and_meta_eq(pa_table, res, check_field_nullability=False)
+
+
+def test_read_json_dtypes(table_data, source_or_sink):
+    # Simple test for dtypes where we read in
+    # all numeric data as floats
+    _, pa_table = table_data
+    source = make_json_source(
+        source_or_sink,
+        pa_table,
+        lines=True,
+    )
+
+    dtypes = []
+    new_fields = []
+    for i in range(len(pa_table.schema)):
+        field = pa_table.schema.field(i)
+        child_types = []
+
+        def get_child_types(typ):
+            typ_child_types = []
+            for i in range(typ.num_fields):
+                curr_field = typ.field(i)
+                typ_child_types.append(
+                    (
+                        curr_field.name,
+                        curr_field.type,
+                        get_child_types(curr_field.type),
+                    )
+                )
+            return typ_child_types
+
+        plc_type = plc.interop.from_arrow(field.type)
+        if pa.types.is_integer(field.type) or pa.types.is_unsigned_integer(
+            field.type
+        ):
+            plc_type = plc.interop.from_arrow(pa.float64())
+            field = field.with_type(pa.float64())
+
+        dtypes.append((field.name, plc_type, child_types))
+
+        new_fields.append(field)
+
+    new_schema = pa.schema(new_fields)
+
+    res = plc.io.json.read_json(
+        plc.io.SourceInfo([source]), dtypes=dtypes, lines=True
+    )
+    new_table = pa_table.cast(new_schema)
+
+    # orient=records is lossy
+    # and doesn't preserve column names when there's zero rows in the table
+    if len(new_table) == 0:
+        new_table = pa.table([])
+
+    assert_table_and_meta_eq(new_table, res, check_field_nullability=False)
 
 
 @pytest.mark.parametrize("chunk_size", [10, 15, 20])
@@ -174,9 +250,6 @@ def test_read_json_lines_recovery_mode(recovery_mode, source_or_sink):
             [[1, 2, None, 3], [10, 11, None, 12]], names=["a", "b"]
         )
         assert_table_and_meta_eq(exp, tbl_w_meta)
-
-
-# TODO: test for dtypes!
 
 
 # TODO: Add tests for these!

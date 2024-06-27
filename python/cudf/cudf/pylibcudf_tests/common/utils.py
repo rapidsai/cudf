@@ -281,7 +281,7 @@ ALL_PA_TYPES = (
 # If a compression type is unsupported, it maps to False.
 
 COMPRESSION_TYPE_TO_PANDAS = {
-    CompressionType.NONE: "none",
+    CompressionType.NONE: None,
     # Users of this dict will have to special case
     # AUTO
     CompressionType.AUTO: None,
