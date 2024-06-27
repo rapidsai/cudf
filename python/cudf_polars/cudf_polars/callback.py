@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     import polars as pl
 
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.typing import NodeTraverser
 
 __all__: list[str] = ["execute_with_cudf"]
 
@@ -33,7 +34,7 @@ def _callback(
         return ir.evaluate(cache={}).to_polars()
 
 
-def execute_with_cudf(nt, *, raise_on_fail: bool = False) -> None:
+def execute_with_cudf(nt: NodeTraverser, *, raise_on_fail: bool = False) -> None:
     """
     A post optimization callback that attempts to execute the plan with cudf.
 

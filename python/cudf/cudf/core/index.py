@@ -5,19 +5,9 @@ from __future__ import annotations
 import operator
 import pickle
 import warnings
-from collections.abc import Generator
 from functools import cache, cached_property
 from numbers import Number
-from typing import (
-    Any,
-    List,
-    Literal,
-    MutableMapping,
-    Optional,
-    Tuple,
-    Union,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, Literal, MutableMapping, cast
 
 import cupy
 import numpy as np
@@ -71,6 +61,9 @@ from cudf.utils.dtypes import (
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import _warn_no_dask_cudf, search_range
 
+if TYPE_CHECKING:
+    from collections.abc import Generator, Iterable
+
 
 class IndexMeta(type):
     """Custom metaclass for Index that overrides instance/subclass tests."""
@@ -98,10 +91,10 @@ class IndexMeta(type):
 
 
 def _lexsorted_equal_range(
-    idx: Union[Index, cudf.MultiIndex],
+    idx: Index | cudf.MultiIndex,
     key_as_table: Frame,
     is_sorted: bool,
-) -> Tuple[int, int, Optional[ColumnBase]]:
+) -> tuple[int, int, ColumnBase | None]:
     """Get equal range for key in lexicographically sorted index. If index
     is not sorted when called, a sort will take place and `sort_inds` is
     returned. Otherwise `None` is returned in that position.
@@ -239,9 +232,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
                     raise ValueError("Step must not be zero.") from err
                 raise
 
-    def _copy_type_metadata(
-        self, other: RangeIndex, *, override_dtypes=None
-    ) -> Self:
+    def _copy_type_metadata(self: Self, other: Self) -> Self:
         # There is no metadata to be copied for RangeIndex since it does not
         # have an underlying column.
         return self
@@ -445,7 +436,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._as_int_index()[index]
 
     @_cudf_nvtx_annotate
-    def equals(self, other):
+    def equals(self, other) -> bool:
         if isinstance(other, RangeIndex):
             return self._range == other._range
         return self._as_int_index().equals(other)
@@ -492,6 +483,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
         dtype = np.dtype(np.int64)
         return _maybe_convert_to_default_type(dtype)
 
+    @property
+    def _dtypes(self) -> Iterable:
+        return [(self.name, self.dtype)]
+
     @_cudf_nvtx_annotate
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
@@ -533,7 +528,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     def unique(self) -> Self:
         # RangeIndex always has unique values
-        return self
+        return self.copy()
 
     @_cudf_nvtx_annotate
     def __mul__(self, other):
@@ -895,7 +890,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @_cudf_nvtx_annotate
-    def nunique(self) -> int:
+    def nunique(self, dropna: bool = True) -> int:
         return len(self)
 
     @_cudf_nvtx_annotate
@@ -1060,6 +1055,16 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @classmethod
     @_cudf_nvtx_annotate
+    def _from_data_like_self(
+        cls, data: MutableMapping, name: Any = no_default
+    ) -> Self:
+        out = _index_from_data(data, name)
+        if name is not no_default:
+            out.name = name
+        return out
+
+    @classmethod
+    @_cudf_nvtx_annotate
     def from_arrow(cls, obj):
         try:
             return cls(ColumnBase.from_arrow(obj))
@@ -1112,15 +1117,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             return ret.values
         return ret
 
-    # Override just to make mypy happy.
-    @_cudf_nvtx_annotate
-    def _copy_type_metadata(
-        self, other: Self, *, override_dtypes=None
-    ) -> Self:
-        return super()._copy_type_metadata(
-            other, override_dtypes=override_dtypes
-        )
-
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def _values(self):
@@ -1159,7 +1155,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             result = _concat_range_index(non_empties)
         else:
             data = concat_columns([o._values for o in non_empties])
-            result = as_index(data)
+            result = Index(data)
 
         names = {obj.name for obj in objs}
         if len(names) == 1:
@@ -1180,12 +1176,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return self._column.is_unique
 
     @_cudf_nvtx_annotate
-    def equals(self, other):
-        if (
-            other is None
-            or not isinstance(other, BaseIndex)
-            or len(self) != len(other)
-        ):
+    def equals(self, other) -> bool:
+        if not isinstance(other, BaseIndex) or len(self) != len(other):
             return False
 
         check_dtypes = False
@@ -1231,7 +1223,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @_cudf_nvtx_annotate
     def astype(self, dtype, copy: bool = True):
-        return _index_from_data(super().astype({self.name: dtype}, copy))
+        return super().astype({self.name: dtype}, copy)
 
     @_cudf_nvtx_annotate
     def get_indexer(self, target, method=None, limit=None, tolerance=None):
@@ -1431,7 +1423,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def __getitem__(self, index):
         res = self._get_elements_from_column(index)
         if isinstance(res, ColumnBase):
-            res = as_index(res, name=self.name)
+            res = Index(res, name=self.name)
         return res
 
     @property  # type: ignore
@@ -1562,10 +1554,11 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.Index:
-        return pd.Index(
-            self._values.to_pandas(nullable=nullable, arrow_type=arrow_type),
-            name=self.name,
+        result = self._column.to_pandas(
+            nullable=nullable, arrow_type=arrow_type
         )
+        result.name = self.name
+        return result
 
     def append(self, other):
         if is_list_like(other):
@@ -1750,13 +1743,10 @@ class DatetimeIndex(Index):
         name = _getdefault_name(data, name=name)
         data = column.as_column(data)
 
-        # TODO: Remove this if statement and fix tests now that
-        # there's timezone support
-        if isinstance(data.dtype, pd.DatetimeTZDtype):
-            raise NotImplementedError(
-                "cuDF does not yet support timezone-aware datetimes"
-            )
-        data = data.astype(dtype)
+        # TODO: if data.dtype.kind == "M" (i.e. data is already datetime type)
+        # We probably shouldn't always astype to datetime64[ns]
+        if not isinstance(data.dtype, pd.DatetimeTZDtype):
+            data = data.astype(dtype)
 
         if copy:
             data = data.copy()
@@ -1772,10 +1762,8 @@ class DatetimeIndex(Index):
                 raise ValueError("No unique frequency found")
 
     @_cudf_nvtx_annotate
-    def _copy_type_metadata(
-        self: DatetimeIndex, other: DatetimeIndex, *, override_dtypes=None
-    ) -> Index:
-        super()._copy_type_metadata(other, override_dtypes=override_dtypes)
+    def _copy_type_metadata(self: Self, other: Self) -> Self:
+        super()._copy_type_metadata(other)
         self._freq = _validate_freq(other._freq)
         return self
 
@@ -1951,7 +1939,7 @@ class DatetimeIndex(Index):
         >>> datetime_index.microsecond
         Index([0, 1, 2], dtype='int32')
         """  # noqa: E501
-        return as_index(
+        return Index(
             (
                 # Need to manually promote column to int32 because
                 # pandas-matching binop behaviour requires that this
@@ -2160,7 +2148,7 @@ class DatetimeIndex(Index):
         return Index._from_data({self.name: month_names})
 
     @_cudf_nvtx_annotate
-    def isocalendar(self):
+    def isocalendar(self) -> cudf.DataFrame:
         """
         Returns a DataFrame with the year, week, and day
         calculated according to the ISO 8601 standard.
@@ -2179,29 +2167,19 @@ class DatetimeIndex(Index):
         2020-05-31 08:00:00  2020    22    7
         1999-12-31 18:40:00  1999    52    5
         """
-        return cudf.core.tools.datetimes._to_iso_calendar(self)
+        ca = cudf.core.column_accessor.ColumnAccessor(
+            self._column.isocalendar(), verify=False
+        )
+        return cudf.DataFrame._from_data(ca, index=self)
 
     @_cudf_nvtx_annotate
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.DatetimeIndex:
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
-        elif nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-
-        result = self._values.to_pandas(arrow_type=arrow_type)
-        if arrow_type:
-            return pd.Index(result, name=self.name)
-        else:
-            freq = (
-                self._freq._maybe_as_fast_pandas_offset()
-                if self._freq is not None
-                else None
-            )
-            return pd.DatetimeIndex(result, name=self.name, freq=freq)
+        result = super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        if not arrow_type and self._freq is not None:
+            result.freq = self._freq._maybe_as_fast_pandas_offset()
+        return result
 
     @_cudf_nvtx_annotate
     def _get_dt_field(self, field):
@@ -2215,7 +2193,7 @@ class DatetimeIndex(Index):
             mask=out_column.base_mask,
             offset=out_column.offset,
         )
-        return as_index(out_column, name=self.name)
+        return Index(out_column, name=self.name)
 
     def _is_boolean(self):
         return False
@@ -2521,23 +2499,6 @@ class TimedeltaIndex(Index):
             return pd.Timedelta(value)
         return value
 
-    @_cudf_nvtx_annotate
-    def to_pandas(
-        self, *, nullable: bool = False, arrow_type: bool = False
-    ) -> pd.TimedeltaIndex:
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
-        elif nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-
-        result = self._values.to_pandas(arrow_type=arrow_type)
-        if arrow_type:
-            return pd.Index(result, name=self.name)
-        else:
-            return pd.TimedeltaIndex(result, name=self.name)
-
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def days(self):
@@ -2545,9 +2506,7 @@ class TimedeltaIndex(Index):
         Number of days for each element.
         """
         # Need to specifically return `int64` to avoid overflow.
-        return as_index(
-            arbitrary=self._values.days, name=self.name, dtype="int64"
-        )
+        return Index(self._values.days, name=self.name, dtype="int64")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2555,9 +2514,7 @@ class TimedeltaIndex(Index):
         """
         Number of seconds (>= 0 and less than 1 day) for each element.
         """
-        return as_index(
-            arbitrary=self._values.seconds, name=self.name, dtype="int32"
-        )
+        return Index(self._values.seconds, name=self.name, dtype="int32")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2565,9 +2522,7 @@ class TimedeltaIndex(Index):
         """
         Number of microseconds (>= 0 and less than 1 second) for each element.
         """
-        return as_index(
-            arbitrary=self._values.microseconds, name=self.name, dtype="int32"
-        )
+        return Index(self._values.microseconds, name=self.name, dtype="int32")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2576,9 +2531,7 @@ class TimedeltaIndex(Index):
         Number of nanoseconds (>= 0 and less than 1 microsecond) for each
         element.
         """
-        return as_index(
-            arbitrary=self._values.nanoseconds, name=self.name, dtype="int32"
-        )
+        return Index(self._values.nanoseconds, name=self.name, dtype="int32")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2587,7 +2540,10 @@ class TimedeltaIndex(Index):
         Return a dataframe of the components (days, hours, minutes,
         seconds, milliseconds, microseconds, nanoseconds) of the Timedeltas.
         """
-        return self._values.components()
+        ca = cudf.core.column_accessor.ColumnAccessor(
+            self._column.components(), verify=False
+        )
+        return cudf.DataFrame._from_data(ca)
 
     @property
     def inferred_freq(self):
@@ -2716,7 +2672,7 @@ class CategoricalIndex(Index):
         """
         The category codes of this categorical.
         """
-        return as_index(self._values.codes)
+        return Index(self._values.codes)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2889,7 +2845,7 @@ class IntervalIndex(Index):
     def __init__(
         self,
         data,
-        closed: Optional[Literal["left", "right", "neither", "both"]] = None,
+        closed: Literal["left", "right", "neither", "both"] | None = None,
         dtype=None,
         copy: bool = False,
         name=None,
@@ -2948,9 +2904,7 @@ class IntervalIndex(Index):
     def from_breaks(
         cls,
         breaks,
-        closed: Optional[
-            Literal["left", "right", "neither", "both"]
-        ] = "right",
+        closed: Literal["left", "right", "neither", "both"] | None = "right",
         name=None,
         copy: bool = False,
         dtype=None,
@@ -3137,7 +3091,7 @@ def _getdefault_name(values, name):
 
 
 @_cudf_nvtx_annotate
-def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
+def _concat_range_index(indexes: list[RangeIndex]) -> BaseIndex:
     """
     An internal Utility function to concat RangeIndex objects.
     """
@@ -3160,7 +3114,7 @@ def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
         elif step is None:
             # First non-empty index had only one element
             if obj.start == start:
-                result = as_index(concat_columns([x._values for x in indexes]))
+                result = Index(concat_columns([x._values for x in indexes]))
                 return result
             step = obj.start - start
 
@@ -3168,7 +3122,7 @@ def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
             next_ is not None and obj.start != next_
         )
         if non_consecutive:
-            result = as_index(concat_columns([x._values for x in indexes]))
+            result = Index(concat_columns([x._values for x in indexes]))
             return result
         if step is not None:
             next_ = obj[-1] + step
@@ -3178,7 +3132,7 @@ def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
 
 
 @_cudf_nvtx_annotate
-def _extended_gcd(a: int, b: int) -> Tuple[int, int, int]:
+def _extended_gcd(a: int, b: int) -> tuple[int, int, int]:
     """
     Extended Euclidean algorithms to solve Bezout's identity:
        a*x + b*y = gcd(x, y)
@@ -3228,7 +3182,7 @@ def _get_nearest_indexer(
     index: Index,
     positions: cudf.Series,
     target_col: cudf.core.column.ColumnBase,
-    tolerance: Union[int, float],
+    tolerance: int | float,
 ):
     """
     Get the indexer for the nearest index labels; requires an index with
@@ -3243,7 +3197,8 @@ def _get_nearest_indexer(
     )
     right_indexer = _get_indexer_basic(
         index=index,
-        positions=positions.copy(deep=True),
+        # positions no longer used so don't copy
+        positions=positions,
         method="backfill",
         target_col=target_col,
         tolerance=tolerance,

@@ -134,7 +134,7 @@ TEST_F(ParquetWriterTest, MultiIndex)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .metadata(expected_metadata)
       .key_value_metadata(
-        {{{"pandas", "\"index_columns\": [\"int8s\", \"int16s\"], \"column1\": [\"int32s\"]"}}});
+        {{{"pandas", R"("index_columns": ["int8s", "int16s"], "column1": ["int32s"])"}}});
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
@@ -242,16 +242,18 @@ TEST_F(ParquetWriterTest, Struct)
   // `Name` column has all valid values.
   auto names_col = cudf::test::strings_column_wrapper{names.begin(), names.end()};
 
-  auto ages_col =
-    cudf::test::fixed_width_column_wrapper<int32_t>{{48, 27, 25, 31, 351, 351}, {1, 1, 1, 1, 1, 0}};
+  auto ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
+    {48, 27, 25, 31, 351, 351}, {true, true, true, true, true, false}};
 
-  auto struct_1 = cudf::test::structs_column_wrapper{{names_col, ages_col}, {1, 1, 1, 1, 0, 1}};
+  auto struct_1 = cudf::test::structs_column_wrapper{{names_col, ages_col},
+                                                     {true, true, true, true, false, true}};
 
   auto is_human_col = cudf::test::fixed_width_column_wrapper<bool>{
-    {true, true, false, false, false, false}, {1, 1, 0, 1, 1, 0}};
+    {true, true, false, false, false, false}, {true, true, false, true, true, false}};
 
-  auto struct_2 =
-    cudf::test::structs_column_wrapper{{is_human_col, struct_1}, {0, 1, 1, 1, 1, 1}}.release();
+  auto struct_2 = cudf::test::structs_column_wrapper{{is_human_col, struct_1},
+                                                     {false, true, true, true, true, true}}
+                    .release();
 
   auto expected = table_view({*struct_2});
 
@@ -274,7 +276,7 @@ class custom_test_data_sink : public cudf::io::data_sink {
     CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
   }
 
-  virtual ~custom_test_data_sink() { flush(); }
+  ~custom_test_data_sink() override { flush(); }
 
   void host_write(void const* data, size_t size) override
   {
@@ -2035,7 +2037,7 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
     mm_writer = cudf::io::data_sink::create(mm_writer_buf);
   }
 
-  virtual ~custom_test_memmap_sink() { mm_writer->flush(); }
+  ~custom_test_memmap_sink() override { mm_writer->flush(); }
 
   void host_write(void const* data, size_t size) override { mm_writer->host_write(data, size); }
 

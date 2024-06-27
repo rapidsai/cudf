@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 def sort_order(
-    descending: Sequence[bool], *, nulls_last: bool, num_keys: int
+    descending: Sequence[bool], *, nulls_last: Sequence[bool], num_keys: int
 ) -> tuple[list[plc.types.Order], list[plc.types.NullOrder]]:
     """
     Produce sort order arguments.
@@ -30,20 +30,24 @@ def sort_order(
 
     Returns
     -------
-    tuple of column_order and null_precendence
+    tuple of column_order and null_precedence
     suitable for passing to sort routines
     """
     # Mimicking polars broadcast handling of descending
     if num_keys > (n := len(descending)) and n == 1:
         descending = [descending[0]] * num_keys
+    if num_keys > (n := len(nulls_last)) and n == 1:
+        nulls_last = [nulls_last[0]] * num_keys
     column_order = [
         plc.types.Order.DESCENDING if d else plc.types.Order.ASCENDING
         for d in descending
     ]
     null_precedence = []
-    for asc in column_order:
-        if (asc == plc.types.Order.ASCENDING) ^ (not nulls_last):
+    if len(descending) != len(nulls_last) or len(descending) != num_keys:
+        raise ValueError("Mismatching length of arguments in sort_order")
+    for asc, null_last in zip(column_order, nulls_last):
+        if (asc == plc.types.Order.ASCENDING) ^ (not null_last):
             null_precedence.append(plc.types.NullOrder.AFTER)
-        elif (asc == plc.types.Order.ASCENDING) ^ nulls_last:
+        elif (asc == plc.types.Order.ASCENDING) ^ null_last:
             null_precedence.append(plc.types.NullOrder.BEFORE)
     return column_order, null_precedence

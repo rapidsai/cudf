@@ -554,6 +554,12 @@ def on_missing_reference(app, env, node, contnode):
 nitpick_ignore = [
     ("py:class", "SeriesOrIndex"),
     ("py:class", "Dtype"),
+    # The following are erroneously warned due to
+    # https://github.com/sphinx-doc/sphinx/issues/11225
+    ("py:class", "pa.Array"),
+    ("py:class", "ScalarLike"),
+    ("py:class", "ParentType"),
+    ("py:class", "ColumnLike"),
     # TODO: Remove this when we figure out why typing_extensions doesn't seem
     # to map types correctly for intersphinx
     ("py:class", "typing_extensions.Self"),
@@ -617,6 +623,8 @@ def linkcode_resolve(domain, info) -> str | None:
         f"branch-{version}/python/cudf/cudf/{fn}{linespec}"
     )
 
+# Needed for avoid build warning for PandasCompat extension
+suppress_warnings = ["myst.domains"]
 
 def setup(app):
     app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")

@@ -36,6 +36,7 @@
 #include <cuda_runtime.h>
 
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
@@ -133,11 +134,11 @@ struct input_column_info {
   std::vector<int> nesting;
 
   input_column_info(int _schema_idx, std::string _name, bool _has_repetition)
-    : schema_idx(_schema_idx), name(_name), has_repetition(_has_repetition)
+    : schema_idx(_schema_idx), name(std::move(_name)), has_repetition(_has_repetition)
   {
   }
 
-  auto nesting_depth() const { return nesting.size(); }
+  [[nodiscard]] auto nesting_depth() const { return nesting.size(); }
 };
 
 // The delta encodings use ULEB128 integers, but parquet only uses max 64 bits.
@@ -148,12 +149,12 @@ using zigzag128_t = int64_t;
 #if !defined(__cpp_lib_is_scoped_enum)
 template <typename Enum, bool = std::is_enum_v<Enum>>
 struct is_scoped_enum {
-  static const bool value = not std::is_convertible_v<Enum, std::underlying_type_t<Enum>>;
+  static bool const value = not std::is_convertible_v<Enum, std::underlying_type_t<Enum>>;
 };
 
 template <typename Enum>
 struct is_scoped_enum<Enum, false> {
-  static const bool value = false;
+  static bool const value = false;
 };
 #else
 using std::is_scoped_enum;
@@ -410,13 +411,7 @@ struct ColumnChunkDesc {
       type_length(datatype_length_),
       physical_type(datatype_),
       level_bits{def_level_bits_, rep_level_bits_},
-      num_data_pages(0),
-      num_dict_pages(0),
-      dict_page(nullptr),
-      str_dict_index(nullptr),
-      valid_map_base{nullptr},
-      column_data_base{nullptr},
-      column_string_base{nullptr},
+
       codec(codec_),
       logical_type(logical_type_),
       ts_clock_rate(ts_clock_rate_),
@@ -424,8 +419,8 @@ struct ColumnChunkDesc {
       src_col_schema(src_col_schema_),
       h_chunk_info(chunk_info_),
       list_bytes_per_row_est(list_bytes_per_row_est_),
-      is_strings_to_cat(strings_to_categorical_),
-      is_large_string_col(false)
+      is_strings_to_cat(strings_to_categorical_)
+
   {
   }
 
@@ -479,8 +474,8 @@ struct parquet_column_device_view : stats_column_desc {
   int32_t type_length;           //!< length of fixed_length_byte_array data
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
-  constexpr uint8_t num_def_level_bits() const { return level_bits & 0xf; }
-  constexpr uint8_t num_rep_level_bits() const { return level_bits >> 4; }
+  [[nodiscard]] constexpr uint8_t num_def_level_bits() const { return level_bits & 0xf; }
+  [[nodiscard]] constexpr uint8_t num_rep_level_bits() const { return level_bits >> 4; }
   uint8_t max_def_level;  //!< needed for SizeStatistics calculation
   uint8_t max_rep_level;
 
@@ -582,9 +577,9 @@ struct EncColumnChunk {
   uint32_t* rep_histogram_data;  //!< Size is (max(level) + 1) * (num_data_pages + 1).
   size_t var_bytes_size;         //!< Sum of var_bytes_size from the pages (byte arrays only)
 
-  constexpr uint32_t num_dict_pages() const { return use_dictionary ? 1 : 0; }
+  [[nodiscard]] constexpr uint32_t num_dict_pages() const { return use_dictionary ? 1 : 0; }
 
-  constexpr uint32_t num_data_pages() const { return num_pages - num_dict_pages(); }
+  [[nodiscard]] constexpr uint32_t num_data_pages() const { return num_pages - num_dict_pages(); }
 };
 
 /**
@@ -623,9 +618,9 @@ struct EncPage {
   Encoding encoding;       //!< Encoding used for page data
   uint16_t num_fragments;  //!< Number of fragments in page
 
-  constexpr bool is_v2() const { return page_type == PageType::DATA_PAGE_V2; }
+  [[nodiscard]] constexpr bool is_v2() const { return page_type == PageType::DATA_PAGE_V2; }
 
-  constexpr auto level_bytes() const { return def_lvl_bytes + rep_lvl_bytes; }
+  [[nodiscard]] constexpr auto level_bytes() const { return def_lvl_bytes + rep_lvl_bytes; }
 };
 
 /**

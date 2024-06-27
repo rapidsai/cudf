@@ -20,11 +20,6 @@ def dtype(request):
     return request.param
 
 
-@pytest.fixture(params=[False, True], ids=["no-nulls", "with-nulls"])
-def with_nulls(request):
-    return request.param
-
-
 @pytest.fixture(
     params=[
         False,
@@ -56,8 +51,22 @@ def test_agg(df, agg):
     q = df.select(expr)
 
     # https://github.com/rapidsai/cudf/issues/15852
-    check_dtype = agg not in {"count", "n_unique", "median"}
-    if not check_dtype and q.schema["a"] != pl.Float64:
+    check_dtypes = agg not in {"n_unique", "median"}
+    if not check_dtypes and q.collect_schema()["a"] != pl.Float64:
         with pytest.raises(AssertionError):
             assert_gpu_result_equal(q)
-    assert_gpu_result_equal(q, check_dtype=check_dtype, check_exact=False)
+    assert_gpu_result_equal(q, check_dtypes=check_dtypes, check_exact=False)
+
+
+@pytest.mark.parametrize(
+    "propagate_nans",
+    [pytest.param(False, marks=pytest.mark.xfail(reason="Need to mask nans")), True],
+    ids=["mask_nans", "propagate_nans"],
+)
+@pytest.mark.parametrize("op", ["min", "max"])
+def test_agg_float_with_nans(propagate_nans, op):
+    df = pl.LazyFrame({"a": pl.Series([1, 2, float("nan")], dtype=pl.Float64())})
+    op = getattr(pl.Expr, f"nan_{op}" if propagate_nans else op)
+    q = df.select(op(pl.col("a")))
+
+    assert_gpu_result_equal(q)

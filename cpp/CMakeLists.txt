@@ -439,7 +439,6 @@ add_library(
   src/io/utilities/data_sink.cpp
   src/io/utilities/datasource.cpp
   src/io/utilities/file_io_utilities.cpp
-  src/io/utilities/parsing_utils.cu
   src/io/utilities/row_selection.cpp
   src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
@@ -503,6 +502,7 @@ add_library(
   src/reductions/product.cu
   src/reductions/reductions.cpp
   src/reductions/scan/rank_scan.cu
+  src/reductions/scan/ewm.cu
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
@@ -662,9 +662,11 @@ add_library(
   src/unary/math_ops.cu
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
+  src/utilities/cuda_memcpy.cu
   src/utilities/default_stream.cpp
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
+  src/utilities/pinned_memory.cpp
   src/utilities/stacktrace.cpp
   src/utilities/stream_pool.cpp
   src/utilities/traits.cpp

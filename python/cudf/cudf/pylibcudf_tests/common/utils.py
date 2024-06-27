@@ -1,6 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-
-from typing import Optional, Union
+from __future__ import annotations
 
 import pyarrow as pa
 import pytest
@@ -10,7 +9,7 @@ from cudf._lib import pylibcudf as plc
 
 def metadata_from_arrow_array(
     pa_array: pa.Array,
-) -> Optional[plc.interop.ColumnMetadata]:
+) -> plc.interop.ColumnMetadata | None:
     metadata = None
     if pa.types.is_list(dtype := pa_array.type) or pa.types.is_struct(dtype):
         metadata = plc.interop.ColumnMetadata(
@@ -25,7 +24,7 @@ def metadata_from_arrow_array(
 
 
 def assert_column_eq(
-    lhs: Union[pa.Array, plc.Column], rhs: Union[pa.Array, plc.Column]
+    lhs: pa.Array | plc.Column, rhs: pa.Array | plc.Column
 ) -> None:
     """Verify that a pylibcudf array and PyArrow array are equal."""
     # Nested types require children metadata to be passed to the conversion function.
@@ -54,13 +53,30 @@ def assert_column_eq(
     assert lhs.equals(rhs)
 
 
-def assert_table_eq(plc_table: plc.Table, pa_table: pa.Table) -> None:
+def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
     """Verify that a pylibcudf table and PyArrow table are equal."""
     plc_shape = (plc_table.num_rows(), plc_table.num_columns())
     assert plc_shape == pa_table.shape
 
     for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
         assert_column_eq(pa_col, plc_col)
+
+
+def assert_table_and_meta_eq(
+    plc_table_w_meta: plc.io.types.TableWithMetadata, pa_table: pa.Table
+) -> None:
+    """Verify that the pylibcudf TableWithMetadata and PyArrow table are equal"""
+
+    plc_table = plc_table_w_meta.tbl
+
+    plc_shape = (plc_table.num_rows(), plc_table.num_columns())
+    assert plc_shape == pa_table.shape
+
+    for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
+        assert_column_eq(plc_col, pa_col)
+
+    # Check column name equality
+    assert plc_table_w_meta.column_names == pa_table.column_names
 
 
 def cudf_raises(expected_exception: BaseException, *args, **kwargs):
