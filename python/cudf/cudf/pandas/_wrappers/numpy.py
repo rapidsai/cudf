@@ -134,8 +134,11 @@ flatiter = make_final_proxy_type(
     "flatiter",
     cupy._indexing.iterate.flatiter,
     numpy.flatiter,
-    fast_to_slow=lambda fast: cupy.asnumpy(fast).flat,
+    fast_to_slow=lambda fast: cupy.asnumpy(fast._base).flat,
     slow_to_fast=lambda slow: cupy.asarray(slow).flat,
+    additional_attributes={
+        "__array__": array_method,
+    },
 )
 
 
