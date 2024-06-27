@@ -19,6 +19,7 @@ This page provides API documentation for pylibcudf.
     gpumemoryview
     groupby
     io/index.rst
+    interop
     join
     lists
     merge

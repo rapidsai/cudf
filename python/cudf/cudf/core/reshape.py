@@ -300,51 +300,31 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         obj = objs[0]
         if ignore_index:
             if axis == 1:
-                result = cudf.DataFrame._from_data(
-                    data=obj._data.copy(deep=True),
-                    index=obj.index.copy(deep=True),
-                )
-                # The DataFrame constructor for dict-like data (such as the
-                # ColumnAccessor given by obj._data here) will drop any columns
-                # in the data that are not in `columns`, so we have to rename
-                # after construction.
-                result.columns = pd.RangeIndex(len(obj._data.names))
-            else:
                 if isinstance(obj, cudf.Series):
-                    result = cudf.Series._from_data(
-                        data=obj._data.copy(deep=True),
-                        index=cudf.RangeIndex(len(obj)),
-                    )
-                elif isinstance(obj, pd.Series):
-                    result = cudf.Series(
-                        data=obj,
-                        index=cudf.RangeIndex(len(obj)),
-                    )
+                    result = obj.to_frame()
                 else:
-                    result = cudf.DataFrame._from_data(
-                        data=obj._data.copy(deep=True),
-                        index=cudf.RangeIndex(len(obj)),
-                    )
-        else:
-            if axis == 0:
-                result = obj.copy()
+                    result = obj.copy(deep=True)
+                result.columns = pd.RangeIndex(len(result._data))
             else:
-                data = obj._data.copy(deep=True)
-                if isinstance(obj, cudf.Series) and obj.name is None:
-                    # If the Series has no name, pandas renames it to 0.
-                    data[0] = data.pop(None)
-                result = cudf.DataFrame._from_data(
-                    data, index=obj.index.copy(deep=True)
+                result = type(obj)._from_data(
+                    data=obj._data.copy(deep=True),
+                    index=cudf.RangeIndex(len(obj)),
                 )
-                if keys is not None:
-                    if isinstance(result, cudf.DataFrame):
-                        k = keys[0]
-                        result.columns = cudf.MultiIndex.from_tuples(
-                            [
-                                (k, *c) if isinstance(c, tuple) else (k, c)
-                                for c in result._column_names
-                            ]
-                        )
+        elif axis == 0:
+            result = obj.copy(deep=True)
+        else:
+            if isinstance(obj, cudf.Series):
+                result = obj.to_frame()
+            else:
+                result = obj.copy(deep=True)
+            if keys is not None and isinstance(result, cudf.DataFrame):
+                k = keys[0]
+                result.columns = cudf.MultiIndex.from_tuples(
+                    [
+                        (k, *c) if isinstance(c, tuple) else (k, c)
+                        for c in result._column_names
+                    ]
+                )
 
         if isinstance(result, cudf.Series) and axis == 0:
             # sort has no effect for series concatted along axis 0
@@ -1179,7 +1159,6 @@ def unstack(df, level, fill_value=None):
     if pd.api.types.is_list_like(level):
         if not level:
             return df
-    df = df.copy(deep=False)
     if not isinstance(df.index, cudf.MultiIndex):
         dtype = df._columns[0].dtype
         for col in df._columns:
@@ -1195,6 +1174,7 @@ def unstack(df, level, fill_value=None):
         )
         return res
     else:
+        df = df.copy(deep=False)
         columns = df.index._poplevels(level)
         index = df.index
     result = _pivot(df, index, columns)

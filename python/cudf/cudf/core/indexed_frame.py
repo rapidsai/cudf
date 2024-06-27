@@ -3218,29 +3218,6 @@ class IndexedFrame(Frame):
         ]
 
     @_cudf_nvtx_annotate
-    def fillna(
-        self, value=None, method=None, axis=None, inplace=False, limit=None
-    ):  # noqa: D102
-        if method is not None:
-            # Do not remove until pandas 3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
-            warnings.warn(
-                f"{type(self).__name__}.fillna with 'method' is "
-                "deprecated and will raise in a future version. "
-                "Use obj.ffill() or obj.bfill() instead.",
-                FutureWarning,
-            )
-        old_index = self.index
-        ret = super().fillna(value, method, axis, inplace, limit)
-        if inplace:
-            self.index = old_index
-        else:
-            ret.index = old_index
-        return ret
-
-    @_cudf_nvtx_annotate
     def bfill(self, value=None, axis=None, inplace=None, limit=None):
         """
         Synonym for :meth:`Series.fillna` with ``method='bfill'``.
