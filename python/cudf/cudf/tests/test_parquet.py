@@ -28,12 +28,8 @@ from cudf.io.parquet import (
     ParquetWriter,
     merge_parquet_filemetadata,
 )
-from cudf.testing import dataset_generator as dg
-from cudf.testing._utils import (
-    TIMEDELTA_TYPES,
-    assert_eq,
-    set_random_null_mask_inplace,
-)
+from cudf.testing import assert_eq, dataset_generator as dg
+from cudf.testing._utils import TIMEDELTA_TYPES, set_random_null_mask_inplace
 
 
 @contextmanager
@@ -3489,3 +3485,14 @@ def test_parquet_chunked_reader(
     )
     actual = reader.read()
     assert_eq(expected, actual)
+
+
+def test_parquet_reader_pandas_compatibility():
+    df = pd.DataFrame(
+        {"a": [1, 2, 3, 4] * 10000, "b": ["av", "qw", "hi", "xyz"] * 10000}
+    )
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+    with cudf.option_context("mode.pandas_compatible", True):
+        expected = cudf.read_parquet(buffer)
+    assert_eq(expected, df)
