@@ -189,14 +189,14 @@ int main() {
     auto charge_col = calc_charge(t1);
     auto t2 = append_col_to_table(t1, disc_price_col);
     auto t3 = append_col_to_table(t2, charge_col);
-    auto t4 = perform_group_by(t3);
-    auto result_table = order_by(t4, {0, 1});
+    auto result_table = perform_group_by(t3);
+    // auto result_table = order_by(t4, {0, 1});
     
     auto e = std::chrono::high_resolution_clock::now();
     std::cout << "q1: " << std::chrono::duration_cast<std::chrono::milliseconds>(e - s).count() << "ms" << std::endl;
 
     write_parquet(
-        std::move(result_table), 
+        result_table,
         create_table_metadata({
             "l_returnflag",
             "l_linestatus",

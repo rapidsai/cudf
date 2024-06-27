@@ -138,13 +138,13 @@ std::unique_ptr<cudf::table> apply_filters(std::unique_ptr<cudf::table>& table) 
         quantity_upper_literal
     );
 
-    auto pred = cudf::ast::operation(
+    auto discount_quantity_pred = cudf::ast::operation(
         cudf::ast::ast_operator::LOGICAL_AND,
         discount_pred,
         quantity_pred
     );
 
-    auto boolean_mask = cudf::compute_column(table->view(), pred);
+    auto boolean_mask = cudf::compute_column(table->view(), discount_quantity_pred);
     return cudf::apply_boolean_mask(table->view(), boolean_mask->view());
 }
 
@@ -186,6 +186,6 @@ int main() {
     auto e = std::chrono::high_resolution_clock::now();
     std::cout << "q6: " << std::chrono::duration_cast<std::chrono::milliseconds>(e - s).count() << "ms" << std::endl;
     
-    write_parquet(std::move(result_table), create_table_metadata({"revenue"}), "q6.parquet");
+    write_parquet(result_table, create_table_metadata({"revenue"}), "q6.parquet");
     return 0;
 }
