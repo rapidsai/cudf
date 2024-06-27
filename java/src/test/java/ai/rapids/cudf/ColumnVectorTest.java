@@ -20,6 +20,42 @@ package ai.rapids.cudf;
 
 import ai.rapids.cudf.ColumnView.FindOptions;
 import ai.rapids.cudf.HostColumnVector.*;
+import src.main.java.ai.rapids.cudf.BaseDeviceMemoryBuffer;
+import src.main.java.ai.rapids.cudf.BinaryOp;
+import src.main.java.ai.rapids.cudf.BufferType;
+import src.main.java.ai.rapids.cudf.CaptureGroups;
+import src.main.java.ai.rapids.cudf.ColumnVector;
+import src.main.java.ai.rapids.cudf.ColumnView;
+import src.main.java.ai.rapids.cudf.ContiguousTable;
+import src.main.java.ai.rapids.cudf.Cuda;
+import src.main.java.ai.rapids.cudf.CudfException;
+import src.main.java.ai.rapids.cudf.DType;
+import src.main.java.ai.rapids.cudf.DefaultHostMemoryAllocator;
+import src.main.java.ai.rapids.cudf.DeviceMemoryBuffer;
+import src.main.java.ai.rapids.cudf.GetJsonObjectOptions;
+import src.main.java.ai.rapids.cudf.HostColumnVector;
+import src.main.java.ai.rapids.cudf.HostColumnVector.BasicType;
+import src.main.java.ai.rapids.cudf.HostColumnVector.DataType;
+import src.main.java.ai.rapids.cudf.HostColumnVector.ListType;
+import src.main.java.ai.rapids.cudf.HostColumnVector.StructData;
+import src.main.java.ai.rapids.cudf.HostColumnVector.StructType;
+import src.main.java.ai.rapids.cudf.HostColumnVectorCore;
+import src.main.java.ai.rapids.cudf.HostMemoryAllocator;
+import src.main.java.ai.rapids.cudf.HostMemoryBuffer;
+import src.main.java.ai.rapids.cudf.MemoryCleaner;
+import src.main.java.ai.rapids.cudf.NullPolicy;
+import src.main.java.ai.rapids.cudf.PadSide;
+import src.main.java.ai.rapids.cudf.QuantileMethod;
+import src.main.java.ai.rapids.cudf.RegexProgram;
+import src.main.java.ai.rapids.cudf.ReplacePolicy;
+import src.main.java.ai.rapids.cudf.RollingAggregation;
+import src.main.java.ai.rapids.cudf.RoundMode;
+import src.main.java.ai.rapids.cudf.Scalar;
+import src.main.java.ai.rapids.cudf.ScanAggregation;
+import src.main.java.ai.rapids.cudf.ScanType;
+import src.main.java.ai.rapids.cudf.Table;
+import src.main.java.ai.rapids.cudf.WindowOptions;
+
 import com.google.common.collect.Lists;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -3511,7 +3547,7 @@ public class ColumnVectorTest extends CudfTestBase {
     testCastNumericToDecimalsAndBack(DType.FLOAT64, false, 0,
         () -> ColumnVector.fromBoxedDoubles(1.0, 2.1, -3.23, null, 2.41281, (double) Integer.MAX_VALUE),
         () -> ColumnVector.fromBoxedDoubles(1.0, 2.0, -3.0, null, 2.0, (double) Integer.MAX_VALUE),
-        new Long[]{1L, 2L, -3L, null, 2L, Integer.MAX_VALUE}
+        new Long[]{1L, 2L, -3L, null, 2L, Integer.MAX_VALUE.longValue()}
     );
     testCastNumericToDecimalsAndBack(DType.FLOAT64, false, -2,
         () -> ColumnVector.fromBoxedDoubles(1.0, 2.1, -3.23, null, 2.41281, -55.01999),
