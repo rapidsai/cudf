@@ -58,6 +58,6 @@ A parquet file named `q1.parquet` would be generated holding the results of the 
 ## Implementation Status
 
 - [x] Q1
-- [ ] Q5
+- [x] Q5
 - [x] Q6
 
