@@ -11,12 +11,12 @@ from packaging import version
 import cudf
 from cudf.core.column import Decimal32Column, Decimal64Column, NumericalColumn
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     FLOAT_TYPES,
     INTEGER_TYPES,
     SIGNED_TYPES,
     _decimal_series,
-    assert_eq,
     expect_warning_if,
 )
 
