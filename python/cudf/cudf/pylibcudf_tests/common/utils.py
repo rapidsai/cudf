@@ -145,24 +145,24 @@ def is_fixed_width(plc_dtype: plc.DataType):
     )
 
 
-def nesting(typ) -> tuple[int, int]:
+def nesting_level(typ) -> tuple[int, int]:
     """Return list and struct nesting of a pyarrow type."""
     if isinstance(typ, pa.ListType):
-        list_, struct = nesting(typ.value_type)
+        list_, struct = nesting_level(typ.value_type)
         return list_ + 1, struct
     elif isinstance(typ, pa.StructType):
-        lists, structs = map(max, zip(*(nesting(t.type) for t in typ)))
+        lists, structs = map(max, zip(*(nesting_level(t.type) for t in typ)))
         return lists, structs + 1
     else:
         return 0, 0
 
 
 def is_nested_struct(typ):
-    return nesting(typ)[1] > 1
+    return nesting_level(typ)[1] > 1
 
 
 def is_nested_list(typ):
-    return nesting(typ)[0] > 1
+    return nesting_level(typ)[0] > 1
 
 
 def sink_to_str(sink):

@@ -48,8 +48,6 @@ cpdef void write_json(
     """
     cdef table_metadata tbl_meta = table_w_meta.metadata
     cdef string na_rep_c = na_rep.encode()
-    cdef string true_value_c = true_value.encode()
-    cdef string false_value_c = false_value.encode()
 
     cdef json_writer_options options = move(
         json_writer_options.builder(sink_info.c_obj, table_w_meta.tbl.view())
@@ -63,9 +61,9 @@ cpdef void write_json(
     if rows_per_chunk != numeric_limits[size_type].max():
         options.set_rows_per_chunk(rows_per_chunk)
     if true_value != "true":
-        options.set_true_value(true_value_c)
+        options.set_true_value(<string>true_value.encode())
     if false_value != "false":
-        options.set_false_value(false_value_c)
+        options.set_false_value(<string>false_value.encode())
 
     with nogil:
         cpp_write_json(options)

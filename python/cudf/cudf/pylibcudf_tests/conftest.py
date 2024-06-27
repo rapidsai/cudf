@@ -52,7 +52,7 @@ def table_data(request):
     """
     nrows = request.param
 
-    table_dict = dict()
+    table_dict = {}
     # Colnames in the format expected by
     # plc.io.TableWithMetadata
     colnames = []
@@ -63,55 +63,36 @@ def table_data(request):
         rand_vals = np.random.randint(0, nrows, nrows)
         child_colnames = []
 
-        if isinstance(typ, pa.ListType):
+        def _generate_nested_data(typ):
+            child_colnames = []
 
-            def _generate_list_data(typ):
-                child_colnames = []
-                if isinstance(typ, pa.ListType):
-                    # recurse to get vals
-                    rand_arrs, grandchild_colnames = _generate_list_data(
-                        typ.value_type
-                    )
-                    pa_array = pa.array(
-                        [list(row_vals) for row_vals in zip(rand_arrs)],
-                        type=typ,
-                    )
-                    child_colnames.append(("", grandchild_colnames))
-                else:
-                    # typ is scalar type
-                    pa_array = pa.array(rand_vals).cast(typ)
-                    child_colnames.append(("", []))
-                return pa_array, child_colnames
+            # recurse to get vals for children
+            rand_arrs = []
+            for i in range(typ.num_fields):
+                rand_arr, grandchild_colnames = _generate_nested_data(
+                    typ.field(i).type
+                )
+                rand_arrs.append(rand_arr)
+                child_colnames.append((typ.field(i).name, grandchild_colnames))
 
-            rand_arr, child_colnames = _generate_list_data(typ)
-        elif isinstance(typ, pa.StructType):
+            if isinstance(typ, pa.StructType):
+                pa_array = pa.StructArray.from_arrays(
+                    [rand_arr for rand_arr in rand_arrs],
+                    names=[typ.field(i).name for i in range(typ.num_fields)],
+                )
+            elif isinstance(typ, pa.ListType):
+                pa_array = pa.array(
+                    [list(row_vals) for row_vals in zip(rand_arrs[0])],
+                    type=typ,
+                )
+                child_colnames.append(("", grandchild_colnames))
+            else:
+                # typ is scalar type
+                pa_array = pa.array(rand_vals).cast(typ)
+            return pa_array, child_colnames
 
-            def _generate_struct_data(typ):
-                child_colnames = []
-                if isinstance(typ, pa.StructType):
-                    # recurse to get vals
-                    rand_arrs = []
-                    for i in range(typ.num_fields):
-                        rand_arr, grandchild_colnames = _generate_struct_data(
-                            typ.field(i).type
-                        )
-                        rand_arrs.append(rand_arr)
-                        child_colnames.append(
-                            (typ.field(i).name, grandchild_colnames)
-                        )
-
-                    pa_array = pa.StructArray.from_arrays(
-                        [rand_arr for rand_arr in rand_arrs],
-                        names=[
-                            typ.field(i).name for i in range(typ.num_fields)
-                        ],
-                    )
-                else:
-                    # typ is scalar type
-                    pa_array = pa.array(rand_vals).cast(typ)
-                return pa_array, child_colnames
-
-            rand_arr, child_colnames = _generate_struct_data(typ)
+        if isinstance(typ, (pa.ListType, pa.StructType)):
+            rand_arr, child_colnames = _generate_nested_data(typ)
         else:
             rand_arr = pa.array(rand_vals).cast(typ)
 

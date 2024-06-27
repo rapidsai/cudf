@@ -1,10 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from libcpp cimport bool
-from libcpp.string cimport string
 
 from cudf._lib.pylibcudf.io.types cimport SinkInfo, TableWithMetadata
-from cudf._lib.pylibcudf.libcudf.io.types cimport compression_type
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 

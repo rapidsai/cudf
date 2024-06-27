@@ -55,7 +55,7 @@ cdef class TableWithMetadata:
             if not isinstance(name, str):
                 raise ValueError("Column name must be a string!")
 
-            info.name = move(<string> name.encode())
+            info.name = <string> name.encode()
             info.children = move(self._make_column_info(child_names))
 
             col_name_infos.push_back(info)
@@ -200,60 +200,48 @@ cdef class SinkInfo:
 
     def __init__(self, list sinks):
         cdef vector[data_sink *] data_sinks
-        cdef unique_ptr[data_sink] sink
-
         cdef vector[string] paths
 
         if not sinks:
             raise ValueError("Need to pass at least one sink")
 
-        if isinstance(sinks[0], io.StringIO):
-            data_sinks.reserve(len(sinks))
-            for s in sinks:
-                if not isinstance(s, io.StringIO):
-                    raise ValueError("All sinks must be of the same type!")
-                self.sink_storage.push_back(
-                    unique_ptr[data_sink](new iobase_data_sink(s))
-                )
-                data_sinks.push_back(self.sink_storage.back().get())
-            self.c_obj = sink_info(data_sinks)
-        elif isinstance(sinks[0], io.IOBase):
-            data_sinks.reserve(len(sinks))
-            for s in sinks:
-                # Files opened in text mode expect writes to be str rather than
-                # bytes, which requires conversion from utf-8. If the underlying
-                # buffer is utf-8, we can bypass this conversion by writing
-                # directly to it.
-                if isinstance(s, io.TextIOBase):
+        cdef object initial_sink_cls = type(sinks[0])
+
+        for s in sinks:
+            if not isinstance(s, initial_sink_cls):
+                raise ValueError("All sinks must be of the same type!")
+            if isinstance(s, str):
+                paths.reserve(len(sinks))
+                paths.push_back(<string> s.encode())
+            elif isinstance(s, os.PathLike):
+                paths.reserve(len(sinks))
+                paths.push_back(<string> os.path.expanduser(s).encode())
+            else:
+                data_sinks.reserve(len(sinks))
+                if isinstance(s, (io.StringIO, io.BytesIO)):
+                    self.sink_storage.push_back(
+                        unique_ptr[data_sink](new iobase_data_sink(s))
+                    )
+                elif isinstance(s, io.TextIOBase):
                     if codecs.lookup(s.encoding).name not in {
                         "utf-8",
                         "ascii",
                     }:
-                        raise NotImplementedError(f"Unsupported encoding {s.encoding}")
-                    sink = move(unique_ptr[data_sink](new iobase_data_sink(s.buffer)))
-                elif isinstance(s, io.BytesIO):
-                    sink = move(unique_ptr[data_sink](new iobase_data_sink(s)))
+                        raise NotImplementedError(
+                            f"Unsupported encoding {s.encoding}"
+                        )
+                    self.sink_storage.push_back(
+                        unique_ptr[data_sink](new iobase_data_sink(s.buffer))
+                    )
                 else:
-                    raise ValueError("All sinks must be of the same type!")
+                    raise TypeError(
+                        "Unrecognized input type: {}".format(type(sinks[0]))
+                    )
 
-                self.sink_storage.push_back(
-                    move(sink)
-                )
                 data_sinks.push_back(self.sink_storage.back().get())
+
+        if data_sinks.size() > 0:
             self.c_obj = sink_info(data_sinks)
-        elif isinstance(sinks[0], str):
-            paths.reserve(len(sinks))
-            for s in sinks:
-                if not isinstance(s, str):
-                    raise ValueError("All sinks must be of the same type!")
-                paths.push_back(<string> s.encode())
-            self.c_obj = sink_info(move(paths))
-        elif isinstance(sinks[0], os.PathLike):
-            paths.reserve(len(sinks))
-            for s in sinks:
-                if not isinstance(s, os.PathLike):
-                    raise ValueError("All sinks must be of the same type!")
-                paths.push_back(<string> os.path.expanduser(s).encode())
-            self.c_obj = sink_info(move(paths))
         else:
-            raise TypeError("Unrecognized input type: {}".format(type(sinks[0])))
+            # we don't have sinks so we must have paths to sinks
+            self.c_obj = sink_info(paths)
