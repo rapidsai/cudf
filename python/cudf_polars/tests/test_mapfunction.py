@@ -6,8 +6,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars import translate_ir
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 def test_merge_sorted_raises():
@@ -17,16 +19,14 @@ def test_merge_sorted_raises():
 
     q = df1.merge_sorted(df2, key="a").merge_sorted(df3, key="a")
 
-    with pytest.raises(NotImplementedError):
-        _ = translate_ir(q._ldf.visit())
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 def test_explode_multiple_raises():
     df = pl.LazyFrame({"a": [[1, 2], [3, 4]], "b": [[5, 6], [7, 8]]})
     q = df.explode("a", "b")
 
-    with pytest.raises(NotImplementedError):
-        _ = translate_ir(q._ldf.visit())
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize("column", ["a", "b"])
@@ -39,5 +39,25 @@ def test_explode_single(column):
         }
     )
     q = df.explode(column)
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("mapping", [{"b": "a"}, {"a": "c", "b": "c"}])
+def test_rename_duplicate_raises(mapping):
+    df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
+
+    q = df.rename(mapping)
+
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "mapping", [{}, {"b": "c"}, {"b": "a", "a": "b"}, {"a": "c", "b": "d"}]
+)
+def test_rename_columns(mapping):
+    df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
+
+    q = df.rename(mapping)
 
     assert_gpu_result_equal(q)
