@@ -2,13 +2,21 @@
 
 import io
 
+import pyarrow as pa
 import pytest
 
 import cudf._lib.pylibcudf as plc
+from cudf._lib.pylibcudf.io.datasource import NativeFileDatasource
 
 
 @pytest.mark.parametrize(
-    "source", ["a.txt", b"hello world", io.BytesIO(b"hello world")]
+    "source",
+    [
+        "a.txt",
+        b"hello world",
+        io.BytesIO(b"hello world"),
+        NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
+    ],
 )
 def test_source_info_ctor(source, tmp_path):
     if isinstance(source, str):
@@ -28,6 +36,10 @@ def test_source_info_ctor(source, tmp_path):
         ["a.txt", "a.txt"],
         [b"hello world", b"hello there"],
         [io.BytesIO(b"hello world"), io.BytesIO(b"hello there")],
+        [
+            NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
+            NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
+        ],
     ],
 )
 def test_source_info_ctor_multiple(sources, tmp_path):
@@ -54,6 +66,11 @@ def test_source_info_ctor_multiple(sources, tmp_path):
             io.BytesIO(b"hello there"),
             b"hello world",
         ],
+        [
+            NativeFileDatasource(pa.PythonFile(io.BytesIO(), mode="r")),
+            "awef.txt",
+            b"hello world",
+        ],
     ],
 )
 def test_source_info_ctor_mixing_invalid(sources, tmp_path):
@@ -67,3 +84,8 @@ def test_source_info_ctor_mixing_invalid(sources, tmp_path):
             sources[i] = str(file)
     with pytest.raises(ValueError):
         plc.io.SourceInfo(sources)
+
+
+def test_source_info_invalid():
+    with pytest.raises(ValueError):
+        plc.io.SourceInfo([123])
