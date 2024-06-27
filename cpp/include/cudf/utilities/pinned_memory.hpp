@@ -87,12 +87,4 @@ void set_allocate_host_as_pinned_threshold(size_t threshold);
  */
 size_t get_allocate_host_as_pinned_threshold();
 
-/**
- * @brief Get the rmm resource to be used for host memory allocations.
- *
- * @param size The size of the allocation
- * @return The rmm resource to be used for host memory allocations
- */
-rmm::host_async_resource_ref get_host_memory_resource(size_t size);
-
 }  // namespace cudf

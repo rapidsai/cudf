@@ -243,13 +243,6 @@ class new_delete_memory_resource {
 static_assert(cuda::mr::resource_with<new_delete_memory_resource, cuda::mr::host_accessible>,
               "Pinned pool mr must be accessible from both host and device");
 
-CUDF_EXPORT rmm::host_async_resource_ref& get_pageable_memory_resource()
-{
-  static new_delete_memory_resource mr{};
-  static rmm::host_async_resource_ref mr_ref{mr};
-  return mr_ref;
-}
-
 }  // namespace
 
 rmm::host_device_async_resource_ref set_pinned_memory_resource(
@@ -292,7 +285,7 @@ size_t get_kernel_pinned_copy_threshold() { return kernel_pinned_copy_threshold(
 CUDF_EXPORT auto& allocate_host_as_pinned_threshold()
 {
   // use pageable memory for all host allocations
-  static std::atomic<size_t> threshold = 0;
+  static std::atomic<size_t> threshold = 20;
   return threshold;
 }
 
@@ -303,10 +296,15 @@ void set_allocate_host_as_pinned_threshold(size_t threshold)
 
 size_t get_allocate_host_as_pinned_threshold() { return allocate_host_as_pinned_threshold(); }
 
-rmm::host_async_resource_ref get_host_memory_resource(size_t size)
+namespace detail {
+
+CUDF_EXPORT rmm::host_async_resource_ref& get_pageable_memory_resource()
 {
-  if (size <= get_allocate_host_as_pinned_threshold()) { return get_pinned_memory_resource(); }
-  return get_pageable_memory_resource();
+  static new_delete_memory_resource mr{};
+  static rmm::host_async_resource_ref mr_ref{mr};
+  return mr_ref;
 }
+
+}  // namespace detail
 
 }  // namespace cudf

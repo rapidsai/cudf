@@ -21,6 +21,8 @@
  * @file vector_factories.hpp
  */
 
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/host_memory.hpp>
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -373,9 +375,16 @@ std::vector<typename Container::value_type> make_std_vector_sync(Container const
  * @return The data copied to the host
  */
 template <typename T>
-thrust::host_vector<T> make_host_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
+host_vector<T> make_host_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
 {
-  return make_vector_async<T, thrust::host_vector<T>>(v, stream);
+  auto result          = host_vector<T>(v.size(), get_host_allocator<T>(v.size(), stream));
+  auto const is_pinned = result.get_allocator().is_device_accessible();
+  cuda_memcpy_async(result.data(),
+                    v.data(),
+                    v.size() * sizeof(T),
+                    is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
+                    stream);
+  return result;
 }
 
 /**
@@ -394,8 +403,8 @@ template <
   typename Container,
   std::enable_if_t<
     std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
-thrust::host_vector<typename Container::value_type> make_host_vector_async(
-  Container const& c, rmm::cuda_stream_view stream)
+host_vector<typename Container::value_type> make_host_vector_async(Container const& c,
+                                                                   rmm::cuda_stream_view stream)
 {
   return make_host_vector_async(device_span<typename Container::value_type const>{c}, stream);
 }
@@ -412,7 +421,7 @@ thrust::host_vector<typename Container::value_type> make_host_vector_async(
  * @return The data copied to the host
  */
 template <typename T>
-thrust::host_vector<T> make_host_vector_sync(device_span<T const> v, rmm::cuda_stream_view stream)
+host_vector<T> make_host_vector_sync(device_span<T const> v, rmm::cuda_stream_view stream)
 {
   auto result = make_host_vector_async(v, stream);
   stream.synchronize();
@@ -435,8 +444,8 @@ template <
   typename Container,
   std::enable_if_t<
     std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
-thrust::host_vector<typename Container::value_type> make_host_vector_sync(
-  Container const& c, rmm::cuda_stream_view stream)
+host_vector<typename Container::value_type> make_host_vector_sync(Container const& c,
+                                                                  rmm::cuda_stream_view stream)
 {
   return make_host_vector_sync(device_span<typename Container::value_type const>{c}, stream);
 }

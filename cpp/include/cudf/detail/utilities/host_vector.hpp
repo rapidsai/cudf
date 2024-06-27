@@ -100,8 +100,14 @@ class rmm_host_allocator {
   /**
    * @brief Construct from a `cudf::host_async_resource_ref`
    */
-  rmm_host_allocator(rmm::host_async_resource_ref _mr, rmm::cuda_stream_view _stream)
-    : mr(_mr), stream(_stream)
+  template <class... Properties>
+  rmm_host_allocator(cuda::mr::async_resource_ref<cuda::mr::host_accessible, Properties...> _mr,
+                     rmm::cuda_stream_view _stream)
+    : mr(_mr),
+      stream(_stream),
+      _is_device_accessible{
+        cuda::has_property<cuda::mr::async_resource_ref<cuda::mr::host_accessible, Properties...>,
+                           cuda::mr::device_accessible>}
   {
   }
 
@@ -173,9 +179,12 @@ class rmm_host_allocator {
    */
   inline bool operator!=(rmm_host_allocator const& x) const { return !operator==(x); }
 
+  bool is_device_accessible() const { return _is_device_accessible; }
+
  private:
   rmm::host_async_resource_ref mr;
   rmm::cuda_stream_view stream;
+  bool _is_device_accessible;
 };
 
 /**
