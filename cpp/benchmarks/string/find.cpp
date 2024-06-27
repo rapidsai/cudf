@@ -71,17 +71,23 @@ static void bench_find_string(nvbench::state& state)
       cudf::strings::find_multiple(input, cudf::strings_column_view(targets));
     });
   } else if (api == "contains") {
-    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      constexpr bool combine = false;
-      if constexpr (not combine) {
-        constexpr int iters = 20;
+    constexpr bool combine = false;
+    constexpr int iters    = 20;
+    if constexpr (not combine) {
+      state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
         for (int i = 0; i < iters; i++) {
           [[maybe_unused]] auto output = cudf::strings::contains(input, target);
         }
-      } else {
-        [[maybe_unused]] auto output = cudf::strings::contains(input, target);
+      });
+    } else {
+      std::vector<cudf::string_scalar> targets;
+      for (int i = 0; i < iters; i++) {
+        targets.emplace_back(cudf::string_scalar(h_targets[2]));
       }
-    });
+      state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+        [[maybe_unused]] auto output = cudf::strings::contains_multi_scalars(input, targets);
+      });
+    }
   } else if (api == "starts_with") {
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { cudf::strings::starts_with(input, target); });

@@ -20,6 +20,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/find.hpp>
@@ -61,7 +62,7 @@ constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 64;
 template <typename TargetIterator, bool forward = true>
 struct finder_fn {
   column_device_view const d_strings;
-  TargetIterator const d_targets;
+  TargetIterator const h_targets;
   size_type const start;
   size_type const stop;
 
@@ -70,7 +71,7 @@ struct finder_fn {
     if (d_strings.is_null(idx)) { return -1; }
     auto const d_str = d_strings.element<string_view>(idx);
     if (d_str.empty() && (start > 0)) { return -1; }
-    auto const d_target = d_targets[idx];
+    auto const d_target = h_targets[idx];
 
     auto const length = d_str.length();
     auto const begin  = (start > length) ? length : start;
@@ -116,7 +117,7 @@ struct empty_target_fn {
  */
 template <typename TargetIterator, bool forward = true>
 CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
-                                         TargetIterator const d_targets,
+                                         TargetIterator const h_targets,
                                          size_type const start,
                                          size_type const stop,
                                          size_type* d_results)
@@ -135,7 +136,7 @@ CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
   __syncwarp();
 
   auto const d_str    = d_strings.element<string_view>(str_idx);
-  auto const d_target = d_targets[str_idx];
+  auto const d_target = h_targets[str_idx];
 
   auto const [begin, left_over] = bytes_to_character_position(d_str, start);
   auto const start_char_pos     = start - left_over;  // keep track of character position
@@ -285,9 +286,9 @@ std::unique_ptr<column> find(strings_column_view const& input,
   if (input.size() == input.null_count()) { return results; }
 
   // call find utility with target iterator
-  auto d_targets  = column_device_view::create(target.parent(), stream);
+  auto h_targets  = column_device_view::create(target.parent(), stream);
   auto target_itr = cudf::detail::make_null_replacement_iterator<string_view>(
-    *d_targets, string_view{}, target.has_nulls());
+    *h_targets, string_view{}, target.has_nulls());
   find_utility<decltype(target_itr), forward>(input, target_itr, *results, start, -1, stream);
 
   // AND the bitmasks from input and target
@@ -381,6 +382,49 @@ CUDF_KERNEL void contains_warp_parallel_fn(column_device_view const d_strings,
   if (lane_idx == 0) { d_results[str_idx] = result; }
 }
 
+CUDF_KERNEL void contains_warp_parallel_multi_scalars_fn(
+  column_device_view const d_strings,
+  cudf::device_span<string_view const> d_targets,
+  cudf::device_span<bool*> d_results)
+{
+  size_type const idx = static_cast<size_type>(threadIdx.x + blockIdx.x * blockDim.x);
+  using warp_reduce   = cub::WarpReduce<bool>;
+  __shared__ typename warp_reduce::TempStorage temp_storage;
+
+  if (idx >= (d_strings.size() * cudf::detail::warp_size)) { return; }
+
+  auto const str_idx  = idx / cudf::detail::warp_size;
+  auto const lane_idx = idx % cudf::detail::warp_size;
+  if (d_strings.is_null(str_idx)) { return; }
+  // get the string for this warp
+  auto const d_str = d_strings.element<string_view>(str_idx);
+  // each warp processes 4 starting bytes
+  auto constexpr bytes_per_warp = 4;
+
+  for (std::size_t target_idx = 0; target_idx < d_targets.size(); ++target_idx) {
+    auto const d_target = d_targets[target_idx];
+    if (d_target.empty()) { continue; }
+    auto found = false;
+    for (auto i = lane_idx * bytes_per_warp;
+         !found && ((i + d_target.size_bytes()) <= d_str.size_bytes());
+         i += cudf::detail::warp_size * bytes_per_warp) {
+      // check the target matches this part of the d_str data
+      // this is definitely faster for very long strings > 128B
+      for (auto j = 0; j < bytes_per_warp; j++) {
+        if (((i + j + d_target.size_bytes()) <= d_str.size_bytes()) &&
+            d_target.compare(d_str.data() + i + j, d_target.size_bytes()) == 0) {
+          found = true;
+          break;
+        }
+      }
+    }
+
+    __syncwarp();  // needed?
+    auto const result = warp_reduce(temp_storage).Reduce(found, cub::Max());
+    if (lane_idx == 0) { d_results[target_idx][str_idx] = result; }
+  }
+}
+
 std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
                                                string_scalar const& target,
                                                rmm::cuda_stream_view stream,
@@ -411,6 +455,64 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
       *d_strings, d_target, results_view.data<bool>());
   }
   results->set_null_count(input.null_count());
+  return results;
+}
+
+std::vector<std::unique_ptr<column>> contains_warp_parallel_multi_scalars(
+  strings_column_view const& input,
+  std::vector<string_scalar> const& targets,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  std::vector<std::unique_ptr<column>> results;
+  if (input.size() == 0) {
+    for (std::size_t idx = 0; idx < targets.size(); ++idx) {
+      results.emplace_back(make_empty_column(type_id::BOOL8));
+    }
+    return results;
+  }
+
+  std::vector<bool*> h_results;
+  for (std::size_t idx = 0; idx < targets.size(); ++idx) {
+    results.emplace_back(make_numeric_column(data_type{type_id::BOOL8},
+                                             input.size(),
+                                             cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                             input.null_count(),
+                                             stream,
+                                             mr));
+
+    // fill the output with `false` unless the `d_target` is empty
+    h_results.emplace_back(results.back()->mutable_view().data<bool>());
+  }
+
+  auto const num_targets = targets.size();
+  std::vector<string_view> h_targets;
+  for (std::size_t idx = 0; idx < targets.size(); ++idx) {
+    auto const& target = targets[idx];
+    CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
+    h_targets.emplace_back(string_view(targets[idx].data(), targets[idx].size()));
+    if (h_targets.back().empty()) {
+      thrust::fill(
+        rmm::exec_policy_nosync(stream), h_results[idx], h_results[idx] + input.size(), true);
+    }
+  }
+
+  // launch warp per string
+  auto const d_strings     = column_device_view::create(input.parent(), stream);
+  constexpr int block_size = 256;
+  auto const d_targets     = cudf::detail::make_device_uvector_async(
+    h_targets, stream, rmm::mr::get_current_device_resource());
+  auto d_results = cudf::detail::make_device_uvector_async(
+    h_results, stream, rmm::mr::get_current_device_resource());
+  cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+  contains_warp_parallel_multi_scalars_fn<<<grid.num_blocks,
+                                            grid.num_threads_per_block,
+                                            0,
+                                            stream.value()>>>(*d_strings, d_targets, d_results);
+
+  for (auto& result : results) {
+    result->set_null_count(input.null_count());
+  }
   return results;
 }
 
@@ -474,6 +576,77 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   return results;
 }
 
+template <typename BoolFunction>
+std::vector<std::unique_ptr<column>> contains_fn_multi_scalars(
+  strings_column_view const& input,
+  std::vector<string_scalar> const& targets,
+  BoolFunction pfn,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  std::vector<std::unique_ptr<column>> results;
+  auto strings_count = input.size();
+
+  if (strings_count == 0) {
+    for (std::size_t idx = 0; idx < targets.size(); ++idx) {
+      results.emplace_back(make_empty_column(type_id::BOOL8));
+    }
+    return results;
+  }
+
+  std::vector<bool*> h_results;
+  for (std::size_t idx = 0; idx < targets.size(); ++idx) {
+    results.emplace_back(make_numeric_column(data_type{type_id::BOOL8},
+                                             input.size(),
+                                             cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                             input.null_count(),
+                                             stream,
+                                             mr));
+
+    // fill the output with `false` unless the `d_target` is empty
+    h_results.emplace_back(results.back()->mutable_view().begin<bool>());
+  }
+
+  auto const num_targets = targets.size();
+  std::vector<string_view> h_targets;
+  for (std::size_t idx = 0; idx < targets.size(); ++idx) {
+    auto const& target = targets[idx];
+    CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
+    h_targets.emplace_back(string_view(targets[idx].data(), targets[idx].size()));
+    if (h_targets.back().empty()) {
+      thrust::fill(
+        rmm::exec_policy_nosync(stream), h_results[idx], h_results[idx] + input.size(), true);
+    }
+  }
+
+  auto const d_targets = cudf::detail::make_device_uvector_async(
+    h_targets, stream, rmm::mr::get_current_device_resource());
+  auto d_results = cudf::detail::make_device_uvector_async(
+    h_results, stream, rmm::mr::get_current_device_resource());
+
+  auto const d_strings = column_device_view::create(input.parent(), stream);
+  thrust::for_each(rmm::exec_policy(stream),
+                   thrust::make_counting_iterator<size_type>(0),
+                   thrust::make_counting_iterator<size_type>(strings_count),
+                   [pfn,
+                    num_targets,
+                    d_strings = *d_strings,
+                    d_targets = d_targets.begin(),
+                    d_results = d_results.begin()] __device__(size_type row_idx) {
+                     for (std::size_t target_idx = 0; target_idx < num_targets; ++target_idx) {
+                       auto const d_target = d_targets[target_idx];
+                       if (d_target.empty()) { continue; }
+                       d_results[target_idx][row_idx] =
+                         !d_strings.is_null(row_idx) &&
+                         bool{pfn(d_strings.element<string_view>(row_idx), d_target)};
+                     }
+                   });
+  for (auto& result : results) {
+    result->set_null_count(input.null_count());
+  }
+  return results;
+}
+
 /**
  * @brief Utility to return a bool column indicating the presence of
  * a string targets[i] in strings[i].
@@ -502,7 +675,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                "strings and targets column must be the same size");
 
   auto targets_column = column_device_view::create(targets.parent(), stream);
-  auto d_targets      = *targets_column;
+  auto h_targets      = *targets_column;
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create output column
@@ -520,12 +693,12 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings.size()),
     d_results,
-    [d_strings, pfn, d_targets] __device__(size_type idx) {
+    [d_strings, pfn, h_targets] __device__(size_type idx) {
       // empty target string returns true
-      if (d_targets.is_valid(idx) && d_targets.element<string_view>(idx).length() == 0) {
+      if (h_targets.is_valid(idx) && h_targets.element<string_view>(idx).length() == 0) {
         return true;
-      } else if (!d_strings.is_null(idx) && !d_targets.is_null(idx)) {
-        return bool{pfn(d_strings.element<string_view>(idx), d_targets.element<string_view>(idx))};
+      } else if (!d_strings.is_null(idx) && !h_targets.is_null(idx)) {
+        return bool{pfn(d_strings.element<string_view>(idx), h_targets.element<string_view>(idx))};
       } else {
         return false;
       }
@@ -552,6 +725,25 @@ std::unique_ptr<column> contains(strings_column_view const& input,
     return d_string.find(d_target) != string_view::npos;
   };
   return contains_fn(input, target, pfn, stream, mr);
+}
+
+std::vector<std::unique_ptr<column>> contains_multi_scalars(
+  strings_column_view const& input,
+  std::vector<string_scalar> const& targets,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  // use warp parallel when the average string width is greater than the threshold
+  if ((input.null_count() < input.size()) &&
+      ((input.chars_size(stream) / input.size()) > AVG_CHAR_BYTES_THRESHOLD)) {
+    return contains_warp_parallel_multi_scalars(input, targets, stream, mr);
+  }
+
+  // benchmark measurements showed this to be faster for smaller strings
+  auto pfn = [] __device__(string_view d_string, string_view d_target) {
+    return d_string.find(d_target) != string_view::npos;
+  };
+  return contains_fn_multi_scalars(input, targets, pfn, stream, mr);
 }
 
 std::unique_ptr<column> contains(strings_column_view const& strings,
@@ -630,6 +822,16 @@ std::unique_ptr<column> contains(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::contains(strings, target, stream, mr);
+}
+
+std::vector<std::unique_ptr<column>> contains_multi_scalars(
+  strings_column_view const& strings,
+  std::vector<string_scalar> const& targets,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::contains_multi_scalars(strings, targets, stream, mr);
 }
 
 std::unique_ptr<column> contains(strings_column_view const& strings,
