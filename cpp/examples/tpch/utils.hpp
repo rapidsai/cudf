@@ -61,7 +61,7 @@ std::unique_ptr<cudf::table> order_by(
     );
 }
 
-void write_parquet(std::unique_ptr<cudf::table>& table, cudf::io::table_metadata& metadata, std::string& filepath) {
+void write_parquet(std::unique_ptr<cudf::table> table, cudf::io::table_metadata metadata, std::string filepath) {
     auto sink_info = cudf::io::sink_info(filepath);
     auto table_input_metadata = cudf::io::table_input_metadata{metadata};
     auto builder = cudf::io::parquet_writer_options::builder(sink_info, table->view());
@@ -69,14 +69,6 @@ void write_parquet(std::unique_ptr<cudf::table>& table, cudf::io::table_metadata
     auto options = builder.build();
     cudf::io::write_parquet(options);
 }
-
-void debug_table(std::unique_ptr<cudf::table> table, std::string filepath) {
-    auto sink_info = cudf::io::sink_info(filepath);
-    auto builder = cudf::io::parquet_writer_options::builder(sink_info, table->view());
-    auto options = builder.build();
-    cudf::io::write_parquet(options);
-}
-
 
 template<typename T>
 rmm::device_buffer get_device_buffer_from_value(T value) {

@@ -56,7 +56,7 @@ std::unique_ptr<cudf::table> scan_filter_project() {
     auto source = cudf::io::source_info(lineitem);
     auto builder = cudf::io::parquet_reader_options_builder(source);
 
-    std::vector<std::string> projection_cols = {
+    std::vector<std::string> cols = {
         "l_extendedprice",
         "l_discount",
         "l_shipdate",
@@ -68,22 +68,22 @@ std::unique_ptr<cudf::table> scan_filter_project() {
     auto shipdate = cudf::ast::column_reference(2);
     auto quantity = cudf::ast::column_reference(3);
 
-    auto date_scalar_a = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
-    auto date_literal_a = cudf::ast::literal(date_scalar_a);
+    auto shipdate_lower = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
+    auto shipdate_lower_literal = cudf::ast::literal(shipdate_lower);
 
-    auto date_scalar_b = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 1, 1), true);
-    auto date_literal_b = cudf::ast::literal(date_scalar_b);
+    auto shipdate_upper = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 1, 1), true);
+    auto shipdate_upper_literal = cudf::ast::literal(shipdate_upper);
 
     auto pred_a = cudf::ast::operation(
         cudf::ast::ast_operator::GREATER_EQUAL,
         shipdate,
-        date_literal_a
+        shipdate_lower_literal
     );
 
     auto pred_b = cudf::ast::operation(
         cudf::ast::ast_operator::LESS,
         shipdate,
-        date_literal_b
+        shipdate_upper_literal
     );
 
     auto pred_ab = cudf::ast::operation(
@@ -92,7 +92,7 @@ std::unique_ptr<cudf::table> scan_filter_project() {
         pred_b
     );
 
-    builder.columns(projection_cols);
+    builder.columns(cols);
 
     // FIXME: since, ast does not support `fixed_point_scalar` yet,
     // we just push down the date filters while scanning the parquet file.
@@ -105,42 +105,42 @@ std::unique_ptr<cudf::table> scan_filter_project() {
 
 std::unique_ptr<cudf::table> apply_filters(std::unique_ptr<cudf::table>& table) {
     // NOTE: apply the remaining filters based on the float32 casted columns
-    auto l_discount = cudf::ast::column_reference(4);
-    auto l_quantity = cudf::ast::column_reference(5);
+    auto discount = cudf::ast::column_reference(4);
+    auto quantity = cudf::ast::column_reference(5);
 
-    auto l_discount_lower = cudf::numeric_scalar<float_t>(0.05);
-    auto l_discount_lower_literal = cudf::ast::literal(l_discount_lower);
-    auto l_discount_upper = cudf::numeric_scalar<float_t>(0.07);
-    auto l_discount_upper_literal = cudf::ast::literal(l_discount_upper);
-    auto l_quantity_upper = cudf::numeric_scalar<float_t>(24);
-    auto l_quantity_upper_literal = cudf::ast::literal(l_quantity_upper);
+    auto discount_lower = cudf::numeric_scalar<float_t>(0.05);
+    auto discount_lower_literal = cudf::ast::literal(discount_lower);
+    auto discount_upper = cudf::numeric_scalar<float_t>(0.07);
+    auto discount_upper_literal = cudf::ast::literal(discount_upper);
+    auto quantity_upper = cudf::numeric_scalar<float_t>(24);
+    auto quantity_upper_literal = cudf::ast::literal(quantity_upper);
 
-    auto l_discount_pred_a = cudf::ast::operation(
+    auto discount_pred_a = cudf::ast::operation(
             cudf::ast::ast_operator::GREATER_EQUAL,
-            l_discount,
-            l_discount_lower_literal
+            discount,
+            discount_lower_literal
         );
     
-    auto l_discount_pred_b = cudf::ast::operation(
+    auto discount_pred_b = cudf::ast::operation(
             cudf::ast::ast_operator::LESS_EQUAL,
-            l_discount,
-            l_discount_upper_literal
+            discount,
+            discount_upper_literal
         );
 
-    auto l_discount_pred = cudf::ast::operation(
-        cudf::ast::ast_operator::LOGICAL_AND, l_discount_pred_a, l_discount_pred_b
+    auto discount_pred = cudf::ast::operation(
+        cudf::ast::ast_operator::LOGICAL_AND, discount_pred_a, discount_pred_b
     );
 
-    auto l_quantity_pred = cudf::ast::operation(
+    auto quantity_pred = cudf::ast::operation(
         cudf::ast::ast_operator::LESS,
-        l_quantity,
-        l_quantity_upper_literal
+        quantity,
+        quantity_upper_literal
     );
 
     auto pred = cudf::ast::operation(
         cudf::ast::ast_operator::LOGICAL_AND,
-        l_discount_pred,
-        l_quantity_pred
+        discount_pred,
+        quantity_pred
     );
 
     auto boolean_mask = cudf::compute_column(table->view(), pred);
@@ -178,7 +178,7 @@ int main() {
     auto t2 = append_col_to_table(t1, discout_float);
     auto t3 = append_col_to_table(t2, quantity_float);
     auto t4 = apply_filters(t3);
-    auto t5 = apply_reduction(t4);
-    debug_table(std::move(t5), "q6.parquet");
+    auto result_table = apply_reduction(t4);
+    write_parquet(std::move(result_table), create_table_metadata({"revenue"}), "q6.parquet");
     return 0;
 }

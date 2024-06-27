@@ -63,7 +63,7 @@ std::unique_ptr<cudf::table> scan_filter_project() {
     auto source = cudf::io::source_info(lineitem);
     auto builder = cudf::io::parquet_reader_options_builder(source);
 
-    std::vector<std::string> projection_cols = {
+    std::vector<std::string> cols = {
         "l_returnflag",
         "l_linestatus",
         "l_quantity",
@@ -74,18 +74,18 @@ std::unique_ptr<cudf::table> scan_filter_project() {
         "l_tax"
     };
 
-    auto l_shipdate = cudf::ast::column_reference(5);
+    auto shipdate = cudf::ast::column_reference(5);
 
-    auto date_scalar = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1998, 9, 2), true);
-    auto date = cudf::ast::literal(date_scalar);
-    auto filter_expr = cudf::ast::operation(
+    auto shipdate_upper = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1998, 9, 2), true);
+    auto shipdate_upper_literal = cudf::ast::literal(shipdate_upper);
+    auto pred = cudf::ast::operation(
         cudf::ast::ast_operator::LESS_EQUAL,
-        l_shipdate,
-        date
+        shipdate,
+        shipdate_upper_literal
     );
 
-    builder.columns(projection_cols);
-    builder.filter(filter_expr);
+    builder.columns(cols);
+    builder.filter(pred);
 
     auto options = builder.build();
     auto result = cudf::io::read_parquet(options);
@@ -120,7 +120,7 @@ std::unique_ptr<cudf::column> calc_charge(std::unique_ptr<cudf::table>& table) {
     return charge;
 }
 
-std::unique_ptr<cudf::table> calc_group_by(std::unique_ptr<cudf::table>& table) {
+std::unique_ptr<cudf::table> perform_group_by(std::unique_ptr<cudf::table>& table) {
     auto tbl_view = table->view();
     auto keys = cudf::table_view{{tbl_view.column(0), tbl_view.column(1)}};
 
@@ -186,21 +186,23 @@ int main() {
     auto charge_col = calc_charge(t1);
     auto t2 = append_col_to_table(t1, disc_price_col);
     auto t3 = append_col_to_table(t2, charge_col);
-    auto t4 = calc_group_by(t3);
+    auto t4 = perform_group_by(t3);
     auto result_table = order_by(t4, {0, 1});
-    auto result_table_metadata = create_table_metadata({
-        "l_returnflag",
-        "l_linestatus",
-        "sum_qty",
-        "avg_qty",
-        "sum_base_price",
-        "avg_price",
-        "avg_disc",
-        "sum_disc_price",
-        "sum_charge",
-        "count_order"
-    });
-    std::string result_filename = "q1.parquet";
-    write_parquet(result_table, result_table_metadata, result_filename);
+    write_parquet(
+        std::move(result_table), 
+        create_table_metadata({
+            "l_returnflag",
+            "l_linestatus",
+            "sum_qty",
+            "avg_qty",
+            "sum_base_price",
+            "avg_price",
+            "avg_disc",
+            "sum_disc_price",
+            "sum_charge",
+            "count_order"
+        }), 
+        "q1.parquet"
+    );
     return 0;
 }
