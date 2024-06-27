@@ -71,8 +71,17 @@ static void bench_find_string(nvbench::state& state)
       cudf::strings::find_multiple(input, cudf::strings_column_view(targets));
     });
   } else if (api == "contains") {
-    state.exec(nvbench::exec_tag::sync,
-               [&](nvbench::launch& launch) { cudf::strings::contains(input, target); });
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      constexpr bool combine = false;
+      if constexpr (not combine) {
+        constexpr int iters = 20;
+        for (int i = 0; i < iters; i++) {
+          [[maybe_unused]] auto output = cudf::strings::contains(input, target);
+        }
+      } else {
+        [[maybe_unused]] auto output = cudf::strings::contains(input, target);
+      }
+    });
   } else if (api == "starts_with") {
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { cudf::strings::starts_with(input, target); });
@@ -84,7 +93,7 @@ static void bench_find_string(nvbench::state& state)
 
 NVBENCH_BENCH(bench_find_string)
   .set_name("find_string")
-  .add_string_axis("api", {"find", "find_multi", "contains", "starts_with", "ends_with"})
+  .add_string_axis("api", {"contains"})
   .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024})
   .add_int64_axis("num_rows", {260'000, 1'953'000, 16'777'216})
   .add_int64_axis("hit_rate", {20, 80});  // percentage
