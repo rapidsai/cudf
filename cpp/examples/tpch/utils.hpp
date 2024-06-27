@@ -11,6 +11,15 @@
 #include <rmm/device_uvector.hpp>
 
 
+
+std::unique_ptr<cudf::table> read_parquet(std::string filename) {
+    auto source = cudf::io::source_info(filename);
+    auto builder = cudf::io::parquet_reader_options_builder(source);
+    auto options = builder.build();
+    auto table_with_metadata = cudf::io::read_parquet(options);
+    return std::move(table_with_metadata.tbl);
+}
+
 std::tm make_tm(int year, int month, int day) {
     std::tm tm = {0};
     tm.tm_year = year - 1900;
