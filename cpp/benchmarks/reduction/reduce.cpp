@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/benchmark_utilities.hpp>
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/table_utilities.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
@@ -34,7 +36,7 @@ void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::reduce_aggregat
   auto const dtype = cudf::type_to_id<type>();
   data_profile const profile =
     data_profile_builder().no_validity().distribution(dtype, distribution_id::UNIFORM, 0, 100);
-  auto const input_column = create_random_column(dtype, row_count{column_size}, profile);
+  auto input_column = create_random_column(dtype, row_count{column_size}, profile);
 
   cudf::data_type output_dtype =
     (agg->kind == cudf::aggregation::MEAN || agg->kind == cudf::aggregation::VARIANCE ||
@@ -46,6 +48,10 @@ void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::reduce_aggregat
     cuda_event_timer timer(state, true);
     auto result = cudf::reduce(*input_column, *agg, output_dtype);
   }
+
+  // The benchmark takes a column and produces two scalars.
+  set_items_processed(state, column_size + 1);
+  set_bytes_processed(state, estimate_size(std::move(input_column)) + cudf::size_of(output_dtype));
 }
 
 #define concat(a, b, c) a##b##c

@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/benchmark_utilities.hpp>
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/table_utilities.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
@@ -31,14 +33,23 @@ static void BM_reduction_scan(benchmark::State& state, bool include_nulls)
 {
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
   auto const dtype  = cudf::type_to_id<type>();
-  auto const column = create_random_column(dtype, row_count{n_rows});
+  auto column = create_random_column(dtype, row_count{n_rows});
   if (!include_nulls) column->set_null_mask(rmm::device_buffer{}, 0);
 
+  int64_t result_size = 0;
   for (auto _ : state) {
-    cuda_event_timer timer(state, true);
-    auto result = cudf::scan(
-      *column, *cudf::make_min_aggregation<cudf::scan_aggregation>(), cudf::scan_type::INCLUSIVE);
+    std::unique_ptr<cudf::column> result = nullptr;
+    {
+      cuda_event_timer timer(state, true);
+      result = cudf::scan(
+        *column, *cudf::make_min_aggregation<cudf::scan_aggregation>(), cudf::scan_type::INCLUSIVE);
+    }
+    result_size = estimate_size(std::move(result));
   }
+
+  // The benchmark takes a column and produces a new column of the same size as input.
+  set_items_processed(state, n_rows * 2);
+  set_bytes_processed(state, estimate_size(std::move(column)) + result_size);
 }
 
 #define SCAN_BENCHMARK_DEFINE(name, type, nulls)                          \

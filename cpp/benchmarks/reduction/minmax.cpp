@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/benchmark_utilities.hpp>
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/table_utilities.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
@@ -28,14 +30,19 @@ template <typename type>
 void BM_reduction(benchmark::State& state)
 {
   cudf::size_type const column_size{(cudf::size_type)state.range(0)};
-  auto const dtype = cudf::type_to_id<type>();
-  auto const input_column =
-    create_random_column(dtype, row_count{column_size}, data_profile_builder().no_validity());
+  auto const dtype_id = cudf::type_to_id<type>();
+  auto input_column =
+    create_random_column(dtype_id, row_count{column_size}, data_profile_builder().no_validity());
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
     auto result = cudf::minmax(*input_column);
   }
+
+  // The benchmark takes a column and produces two scalars.
+  set_items_processed(state, column_size + 2);
+  cudf::data_type dtype = cudf::data_type{dtype_id};
+  set_bytes_processed(state, estimate_size(std::move(input_column)) + 2 * cudf::size_of(dtype));
 }
 
 #define concat(a, b, c) a##b##c

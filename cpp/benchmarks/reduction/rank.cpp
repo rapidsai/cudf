@@ -15,6 +15,8 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/table_utilities.hpp>
+#include <benchmarks/common/nvbench_utilities.hpp>
 
 #include <cudf/detail/scan.hpp>
 #include <cudf/filling.hpp>
@@ -39,11 +41,23 @@ static void nvbench_reduction_scan(nvbench::state& state, nvbench::type_list<typ
   auto const new_tbl = cudf::repeat(table->view(), 2);
   cudf::column_view input(new_tbl->view().column(0));
 
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+  int64_t result_size = 0;
+  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
+    timer.start();
     auto result = cudf::detail::inclusive_dense_rank_scan(
       input, stream_view, rmm::mr::get_current_device_resource());
+    timer.stop();
+
+    // Estimating the result size will launch a kernel. Do not include it in measuring time.
+    result_size += estimate_size(std::move(result));
   });
+
+  state.add_element_count(new_tbl->num_rows());
+  state.add_global_memory_reads(estimate_size(new_tbl->view()));
+  state.add_global_memory_writes(result_size);
+
+  set_throughputs(state);
 }
 
 using data_type = nvbench::type_list<int32_t, cudf::list_view>;
