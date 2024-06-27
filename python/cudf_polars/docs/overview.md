@@ -224,6 +224,24 @@ def test_whatever():
     assert_gpu_result_equal(query)
 ```
 
+## Test coverage and asserting failure modes
+
+Where translation of a query should fail due to the feature being
+unsupported we should test this. To assert that _translation_ raises
+an exception (usually `NotImplementedError`), use the utility function
+`assert_ir_translation_raises`:
+
+```python
+from cudf_polars.testing.asserts import assert_ir_translation_raises
+
+
+def test_whatever():
+    unsupported_query = ...
+    assert_ir_translation_raises(unsupported_query, NotImplementedError)
+```
+
+This test will fail if translation does not raise.
+
 # Debugging
 
 If the callback execution fails during the polars `collect` call, we

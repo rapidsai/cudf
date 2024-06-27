@@ -70,7 +70,7 @@ def from_polars(dtype: pl.DataType) -> plc.DataType:
             return plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS)
         elif dtype.time_unit == "ns":
             return plc.DataType(plc.TypeId.TIMESTAMP_NANOSECONDS)
-        assert dtype.time_unit is not None
+        assert dtype.time_unit is not None  # pragma: no cover
         assert_never(dtype.time_unit)
     elif isinstance(dtype, pl.Duration):
         if dtype.time_unit == "ms":
@@ -79,7 +79,7 @@ def from_polars(dtype: pl.DataType) -> plc.DataType:
             return plc.DataType(plc.TypeId.DURATION_MICROSECONDS)
         elif dtype.time_unit == "ns":
             return plc.DataType(plc.TypeId.DURATION_NANOSECONDS)
-        assert dtype.time_unit is not None
+        assert dtype.time_unit is not None  # pragma: no cover
         assert_never(dtype.time_unit)
     elif isinstance(dtype, pl.String):
         return plc.DataType(plc.TypeId.STRING)
