@@ -39,7 +39,7 @@ cudf::io::table_metadata create_table_metadata(std::vector<std::string> column_n
 }
 
 std::unique_ptr<cudf::table> append_col_to_table(
-    std::unique_ptr<cudf::table> table, std::unique_ptr<cudf::column> col) {
+    std::unique_ptr<cudf::table>& table, std::unique_ptr<cudf::column>& col) {
     std::vector<std::unique_ptr<cudf::column>> columns;
     for (size_t i = 0; i < table->num_columns(); i++) {
         columns.push_back(std::make_unique<cudf::column>(table->get_column(i)));
@@ -69,6 +69,14 @@ void write_parquet(std::unique_ptr<cudf::table>& table, cudf::io::table_metadata
     auto options = builder.build();
     cudf::io::write_parquet(options);
 }
+
+void debug_table(std::unique_ptr<cudf::table> table, std::string filepath) {
+    auto sink_info = cudf::io::sink_info(filepath);
+    auto builder = cudf::io::parquet_writer_options::builder(sink_info, table->view());
+    auto options = builder.build();
+    cudf::io::write_parquet(options);
+}
+
 
 template<typename T>
 rmm::device_buffer get_device_buffer_from_value(T value) {

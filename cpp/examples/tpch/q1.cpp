@@ -124,11 +124,11 @@ std::unique_ptr<cudf::table> calc_group_by(std::unique_ptr<cudf::table>& table) 
     auto tbl_view = table->view();
     auto keys = cudf::table_view{{tbl_view.column(0), tbl_view.column(1)}};
 
-    auto l_quantity = tbl_view.column(2);
-    auto l_extendedprice = tbl_view.column(3);
-    auto l_discount = tbl_view.column(4);
-    auto l_discprice = tbl_view.column(8);
-    auto l_charge = tbl_view.column(9);
+    auto quantity = tbl_view.column(2);
+    auto extendedprice = tbl_view.column(3);
+    auto discount = tbl_view.column(4);
+    auto discprice = tbl_view.column(8);
+    auto charge = tbl_view.column(9);
 
     cudf::groupby::groupby groupby_obj(keys);
     std::vector<cudf::groupby::aggregation_request> requests;
@@ -136,38 +136,38 @@ std::unique_ptr<cudf::table> calc_group_by(std::unique_ptr<cudf::table>& table) 
     requests.emplace_back(cudf::groupby::aggregation_request());
     requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
     requests[0].aggregations.push_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
-    requests[0].values = l_quantity;
+    requests[0].values = quantity;
 
     requests.emplace_back(cudf::groupby::aggregation_request());
     requests[1].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
     requests[1].aggregations.push_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
-    requests[1].values = l_extendedprice;
+    requests[1].values = extendedprice;
 
     requests.emplace_back(cudf::groupby::aggregation_request());
     requests[2].aggregations.push_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
-    requests[2].values = l_discount;
+    requests[2].values = discount;
 
     requests.emplace_back(cudf::groupby::aggregation_request());
     requests[3].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-    requests[3].values = l_discprice;
+    requests[3].values = discprice;
 
     requests.emplace_back(cudf::groupby::aggregation_request());
     requests[4].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-    requests[4].values = l_charge;
+    requests[4].values = charge;
 
     requests.emplace_back(cudf::groupby::aggregation_request());
     requests[5].aggregations.push_back(cudf::make_count_aggregation<cudf::groupby_aggregation>());
-    requests[5].values = l_charge;
+    requests[5].values = charge;
 
     auto agg_results = groupby_obj.aggregate(requests);
     auto result_key = std::move(agg_results.first);
 
-    auto l_returnflag = std::make_unique<cudf::column>(result_key->get_column(0));
-    auto l_linestatus = std::make_unique<cudf::column>(result_key->get_column(1));
+    auto returnflag = std::make_unique<cudf::column>(result_key->get_column(0));
+    auto linestatus = std::make_unique<cudf::column>(result_key->get_column(1));
 
     std::vector<std::unique_ptr<cudf::column>> columns;
-    columns.push_back(std::move(l_returnflag));
-    columns.push_back(std::move(l_linestatus));
+    columns.push_back(std::move(returnflag));
+    columns.push_back(std::move(linestatus));
     columns.push_back(std::move(agg_results.second[0].results[0]));
     columns.push_back(std::move(agg_results.second[0].results[1]));
     columns.push_back(std::move(agg_results.second[1].results[0]));
@@ -184,8 +184,8 @@ int main() {
     auto t1 = scan_filter_project();
     auto disc_price_col = calc_disc_price(t1);
     auto charge_col = calc_charge(t1);
-    auto t2 = append_col_to_table(std::move(t1), std::move(disc_price_col));
-    auto t3 = append_col_to_table(std::move(t2), std::move(charge_col));
+    auto t2 = append_col_to_table(t1, disc_price_col);
+    auto t3 = append_col_to_table(t2, charge_col);
     auto t4 = calc_group_by(t3);
     auto result_table = order_by(t4, {0, 1});
     auto result_table_metadata = create_table_metadata({
