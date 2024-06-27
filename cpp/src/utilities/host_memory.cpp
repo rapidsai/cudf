@@ -18,7 +18,7 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
-#include <cudf/utilities/host_memory.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>

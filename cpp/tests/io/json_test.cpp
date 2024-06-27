@@ -34,7 +34,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/host_memory.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 

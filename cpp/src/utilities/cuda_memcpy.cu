@@ -16,7 +16,7 @@
 
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/host_memory.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/exec_policy.hpp>
 

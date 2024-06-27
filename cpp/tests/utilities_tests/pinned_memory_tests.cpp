@@ -19,7 +19,7 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/io/parquet.hpp>
-#include <cudf/utilities/host_memory.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
