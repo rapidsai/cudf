@@ -150,6 +150,15 @@ std::vector<std::unique_ptr<column>> contains_multi_scalars(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
+enum class transform_target_op { NO, TO_LOWER, TO_UPPER };
+
+std::unique_ptr<column> first_contains_index(
+  strings_column_view const& input,
+  std::vector<string_scalar> const& targets,
+  transform_target_op transform_target = transform_target_op::NO,
+  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr    = rmm::mr::get_current_device_resource());
+
 /**
  * @brief Returns a column of boolean values for each string where true indicates
  * the corresponding target string was found within that string in the provided column.

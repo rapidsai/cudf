@@ -749,6 +749,25 @@ std::vector<std::unique_ptr<column>> contains_multi_scalars(
   return contains_fn_multi_scalars(input, targets, pfn, stream, mr);
 }
 
+std::unique_ptr<column> first_contains_index(strings_column_view const& input,
+                                             std::vector<string_scalar> const& targets,
+                                             transform_target_op transform_target,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr)
+{
+  // use warp parallel when the average string width is greater than the threshold
+  if ((input.null_count() < input.size()) &&
+      ((input.chars_size(stream) / input.size()) > AVG_CHAR_BYTES_THRESHOLD)) {
+    return contains_warp_parallel_multi_scalars(input, targets, stream, mr);
+  }
+
+  // benchmark measurements showed this to be faster for smaller strings
+  auto pfn = [] __device__(string_view d_string, string_view d_target) {
+    return d_string.find(d_target) != string_view::npos;
+  };
+  return contains_fn_multi_scalars(input, targets, pfn, stream, mr);
+}
+
 std::unique_ptr<column> contains(strings_column_view const& strings,
                                  strings_column_view const& targets,
                                  rmm::cuda_stream_view stream,
@@ -835,6 +854,16 @@ std::vector<std::unique_ptr<column>> contains_multi_scalars(
 {
   CUDF_FUNC_RANGE();
   return detail::contains_multi_scalars(strings, targets, stream, mr);
+}
+
+std::unique_ptr<column> first_contains_index(strings_column_view const& strings,
+                                             std::vector<string_scalar> const& targets,
+                                             transform_target_op transform_target,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::first_contains_index(strings, targets, transform_target, stream, mr);
 }
 
 std::unique_ptr<column> contains(strings_column_view const& strings,
