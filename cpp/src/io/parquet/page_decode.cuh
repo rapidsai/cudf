@@ -454,10 +454,7 @@ __device__ size_type gpuInitStringDescriptors(page_state_s* s,
       }
     }
     // Only thread_rank = 0 updates the s->dict_val
-    if (!t) {
-      s->dict_val += total_len;
-      __threadfence_block();
-    }
+    if (!t) { s->dict_val += total_len; }
   }
   // This step is purely serial for byte arrays
   else {
@@ -478,7 +475,6 @@ __device__ size_type gpuInitStringDescriptors(page_state_s* s,
         total_len += len;
       }
       s->dict_val = k;
-      __threadfence_block();
     }
   }
 

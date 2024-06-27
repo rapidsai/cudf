@@ -1028,7 +1028,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       } else {
         gpuInitStringDescriptors<false>(s, sb, src_target_pos, tile32);
       }
-      if (t == 32) { s->dict_pos = src_target_pos; }
+      if (!tile32.thread_rank()) { s->dict_pos = src_target_pos; }
     } else {
       int const me = t - out_thread0;
 
