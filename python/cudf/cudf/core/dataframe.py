@@ -1121,8 +1121,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @staticmethod
     @_cudf_nvtx_annotate
     def _align_input_series_indices(data, index):
-        data = data.copy()
-
         input_series = [
             Series(val)
             for val in data.values()
@@ -1142,6 +1140,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 index = aligned_input_series[0].index
 
+            data = data.copy()
             for name, val in data.items():
                 if isinstance(val, (pd.Series, Series, dict)):
                     data[name] = aligned_input_series.pop(0)
@@ -2969,6 +2968,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             idx = MultiIndex._from_data(dict(enumerate(data_to_add)))
             idx.names = names
 
+        # TODO: Change to deep=False when copy-on-write is default
         df = self if inplace else self.copy(deep=True)
 
         if verify_integrity and not idx.is_unique:
@@ -3565,6 +3565,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             mapper if columns is None and axis in (1, "columns") else columns
         )
 
+        result = self if inplace else self.copy(deep=copy)
+
+        out_index = None
         if index:
             if (
                 any(isinstance(item, str) for item in index.values())
@@ -3586,36 +3589,36 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 out_index._data[level] = column.as_column(level_values)
                 out_index._compute_levels_and_codes()
-                out = DataFrame(index=out_index)
             else:
                 to_replace = list(index.keys())
                 vals = list(index.values())
                 is_all_na = vals.count(None) == len(vals)
 
                 try:
-                    index_data = {
-                        name: col.find_and_replace(to_replace, vals, is_all_na)
-                        for name, col in self.index._data.items()
-                    }
+                    out_index = _index_from_data(
+                        {
+                            name: col.find_and_replace(
+                                to_replace, vals, is_all_na
+                            )
+                            for name, col in self.index._data.items()
+                        }
+                    )
                 except OverflowError:
-                    index_data = self.index._data.copy(deep=True)
+                    pass
 
-                out = DataFrame(index=_index_from_data(index_data))
-        else:
-            out = DataFrame(index=self.index)
+        if out_index is not None:
+            result.index = out_index
 
         if columns:
-            out._data = self._data.rename_levels(mapper=columns, level=level)
-        else:
-            out._data = self._data.copy(deep=copy)
+            result._data = result._data.rename_levels(
+                mapper=columns, level=level
+            )
 
-        if inplace:
-            self._data = out._data
-        else:
-            return out.copy(deep=copy)
+        return result
 
     @_cudf_nvtx_annotate
     def add_prefix(self, prefix):
+        # TODO: Change to deep=False when copy-on-write is default
         out = self.copy(deep=True)
         out.columns = [
             prefix + col_name for col_name in list(self._data.keys())
@@ -3624,6 +3627,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def add_suffix(self, suffix):
+        # TODO: Change to deep=False when copy-on-write is default
         out = self.copy(deep=True)
         out.columns = [
             col_name + suffix for col_name in list(self._data.keys())
@@ -3956,7 +3960,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                            weight    1.0    0.8
                            length    0.3    0.2
         """
-        result = self.copy()
+        # TODO: Change to deep=False when copy-on-write is default
+        result = self.copy(deep=True)
 
         # To get axis number
         axis = self._get_axis_from_axis_arg(axis)
@@ -4027,7 +4032,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Set the old column names as the new index
         result = self.__class__._from_data(
-            {i: col for i, col in enumerate(result_columns)},
+            ColumnAccessor(dict(enumerate(result_columns)), verify=False),
             index=as_index(index),
         )
         # Set the old index as the new column names
@@ -5528,7 +5533,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         b: [[4,5,6]]
         """
 
-        data = self.copy(deep=False)
+        data = self
         index_descr = []
         write_index = preserve_index is not False
         keep_range_index = write_index and preserve_index is None
@@ -5556,6 +5561,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     index_descr = (
                         index.names if index.name is not None else ("index",)
                     )
+                data = data.copy(deep=False)
                 for gen_name, col_name in zip(index_descr, index._data.names):
                     data._insert(
                         data.shape[1],
