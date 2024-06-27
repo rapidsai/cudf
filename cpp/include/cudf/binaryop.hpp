@@ -99,6 +99,7 @@ struct binary_op_common_type {};
 /// Binary operation common type specialization
 template <typename L, typename R>
 struct binary_op_common_type<L, R, std::enable_if_t<has_common_type_v<L, R>>> {
+  /// The common type of the template parameters
   using type = std::common_type_t<L, R>;
 };
 
@@ -108,6 +109,7 @@ struct binary_op_common_type<
   L,
   R,
   std::enable_if_t<is_fixed_point<L>() && cuda::std::is_floating_point_v<R>>> {
+  /// The common type of the template parameters
   using type = L;
 };
 
@@ -117,6 +119,7 @@ struct binary_op_common_type<
   L,
   R,
   std::enable_if_t<is_fixed_point<R>() && cuda::std::is_floating_point_v<L>>> {
+  /// The common type of the template parameters
   using type = R;
 };
 
