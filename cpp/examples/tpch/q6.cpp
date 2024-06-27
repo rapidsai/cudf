@@ -17,6 +17,7 @@
 #include <iostream>
 #include <memory>
 #include <vector>
+#include <chrono>
 #include <cudf/io/parquet.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
@@ -172,6 +173,8 @@ std::unique_ptr<cudf::table> apply_reduction(std::unique_ptr<cudf::table>& table
 }
 
 int main() {
+    auto s = std::chrono::high_resolution_clock::now();
+    
     auto t1 = scan_filter_project();
     auto discout_float = cudf::cast(t1->view().column(1), cudf::data_type{cudf::type_id::FLOAT32});
     auto quantity_float = cudf::cast(t1->view().column(3), cudf::data_type{cudf::type_id::FLOAT32});
@@ -179,6 +182,10 @@ int main() {
     auto t3 = append_col_to_table(t2, quantity_float);
     auto t4 = apply_filters(t3);
     auto result_table = apply_reduction(t4);
+
+    auto e = std::chrono::high_resolution_clock::now();
+    std::cout << "q6: " << std::chrono::duration_cast<std::chrono::milliseconds>(e - s).count() << "ms" << std::endl;
+    
     write_parquet(std::move(result_table), create_table_metadata({"revenue"}), "q6.parquet");
     return 0;
 }
