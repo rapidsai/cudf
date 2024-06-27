@@ -448,11 +448,10 @@ __device__ size_type gpuInitStringDescriptors(page_state_s* s,
       for (pos += t, k += t * dtype_len_in; pos < target_pos; pos += g.size()) {
         sb->str_len[rolling_index<state_buf::str_buf_size>(pos)] =
           (k < dict_size) ? dtype_len_in : 0;
-        // k is upperbounded by dict_size.
-        k                                                          = min(k, dict_size);
+        // dict_idx is upperbounded by dict_size.
         sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos)] = k;
         // Increment k if needed.
-        if (k < dict_size) { k += g.size() * dtype_len_in; }
+        if (k < dict_size) { k = min(k + (g.size() * dtype_len_in), dict_size); }
       }
     }
     // Only thread_rank = 0 updates the s->dict_val
