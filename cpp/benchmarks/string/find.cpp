@@ -74,7 +74,7 @@ static void bench_find_string(nvbench::state& state)
     std::vector<std::string> match_targets{"123", "abc", "4567890", "DEFGHI", "5W43"};
     std::vector<cudf::string_scalar> targets;
 
-    constexpr bool combine = true;
+    constexpr bool combine = false;
     constexpr int iters    = 20;
     for (int i = 0; i < iters; i++) {
       targets.emplace_back(cudf::string_scalar(match_targets[i % match_targets.size()]));
@@ -82,16 +82,21 @@ static void bench_find_string(nvbench::state& state)
 
     if constexpr (not combine) {
       state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-        for (int i = 0; i < iters; i++) {
-          [[maybe_unused]] auto output = cudf::strings::contains(input, targets[i]);
+        std::vector<std::unique_ptr<cudf::column>> contains_results;
+        std::vector<cudf::column_view> contains_cvs;
+        for (const auto& target : targets) {
+          contains_results.emplace_back(cudf::strings::contains(input, target));
+          contains_cvs.emplace_back(contains_results.back()->view());
         }
+        [[maybe_unsed]] auto const first_contains_idx =
+          spark_rapids_jni::select_first_true_index(cudf::table_view{contains_cvs});
       });
     } else {  // combine
       auto const output = cudf::strings::first_contains_index(
         input, targets, cudf::strings::transform_target_op::TO_LOWER);
       std::vector<std::unique_ptr<cudf::column>> contains_results;
       std::vector<cudf::column_view> contains_cvs;
-      for (const auto & target : targets) {
+      for (const auto& target : targets) {
         contains_results.emplace_back(cudf::strings::contains(input, target));
         contains_cvs.emplace_back(contains_results.back()->view());
       }
