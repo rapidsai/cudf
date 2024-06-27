@@ -342,6 +342,16 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
             *(translate_expr(visitor, n=n) for n in node.input),
         )
     elif isinstance(name, pl_expr.BooleanFunction):
+        if name == pl_expr.BooleanFunction.IsBetween:
+            column, lo, hi = (translate_expr(visitor, n=n) for n in node.input)
+            (closed,) = options
+            lop, rop = expr.BooleanFunction._BETWEEN_OPS[closed]
+            return expr.BinOp(
+                dtype,
+                plc.binaryop.BinaryOperator.LOGICAL_AND,
+                expr.BinOp(dtype, lop, column, lo),
+                expr.BinOp(dtype, rop, column, hi),
+            )
         return expr.BooleanFunction(
             dtype,
             name,
