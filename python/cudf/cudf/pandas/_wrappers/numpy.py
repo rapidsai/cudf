@@ -132,7 +132,7 @@ ndarray = make_final_proxy_type(
 
 flatiter = make_final_proxy_type(
     "flatiter",
-    cupy._indexing.iterate.flatiter,
+    cupy.flatiter,
     numpy.flatiter,
     fast_to_slow=lambda fast: cupy.asnumpy(fast.base).flat,
     slow_to_fast=lambda slow: cupy.asarray(slow).flat,

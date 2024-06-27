@@ -1541,5 +1541,5 @@ def test_numpy_cupy_flatiter(series):
     _, s = series
     arr = s.values
 
-    assert type(arr.flat._fsproxy_fast) == cp._indexing.iterate.flatiter
+    assert type(arr.flat._fsproxy_fast) == cp.flatiter
     assert type(arr.flat._fsproxy_slow) == np.flatiter
