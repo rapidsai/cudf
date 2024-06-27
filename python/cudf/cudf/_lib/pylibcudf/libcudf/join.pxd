@@ -70,3 +70,8 @@ cdef extern from "cudf/join.hpp" namespace "cudf" nogil:
         const table_view right_keys,
         null_equality nulls_equal,
     ) except +
+
+    cdef unique_ptr[table] cross_join(
+        const table_view left,
+        const table_view right,
+    ) except +

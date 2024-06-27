@@ -584,7 +584,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             data = {}
 
         if isinstance(data, (pd.Series, pd.Index, BaseIndex, Series)):
-            if copy:
+            if copy and not isinstance(data, (pd.Series, pd.Index)):
                 data = data.copy(deep=True)
             name_from_data = data.name
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
@@ -1797,20 +1797,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     ):
         if isinstance(value, pd.Series):
             value = Series.from_pandas(value)
-
-        if not (is_scalar(value) or isinstance(value, (abc.Mapping, Series))):
-            raise TypeError(
-                f'"value" parameter must be a scalar, dict '
-                f"or Series, but you passed a "
-                f'"{type(value).__name__}"'
-            )
-
-        if isinstance(value, (abc.Mapping, Series)):
+        elif isinstance(value, abc.Mapping):
             value = Series(value)
+        if isinstance(value, cudf.Series):
             if not self.index.equals(value.index):
                 value = value.reindex(self.index)
-            value = value._column
-
+            value = {self.name: value._column}
         return super().fillna(
             value=value, method=method, axis=axis, inplace=inplace, limit=limit
         )
@@ -3442,6 +3434,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def add_prefix(self, prefix):
         return Series._from_data(
+            # TODO: Change to deep=False when copy-on-write is default
             data=self._data.copy(deep=True),
             index=prefix + self.index.astype(str),
         )
@@ -3449,6 +3442,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def add_suffix(self, suffix):
         return Series._from_data(
+            # TODO: Change to deep=False when copy-on-write is default
             data=self._data.copy(deep=True),
             index=self.index.astype(str) + suffix,
         )

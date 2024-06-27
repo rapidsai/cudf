@@ -898,6 +898,7 @@ class RollingWindow(Expr):
         super().__init__(dtype)
         self.options = options
         self.children = (agg,)
+        raise NotImplementedError("Rolling window not implemented")
 
 
 class GroupedRollingWindow(Expr):
@@ -909,6 +910,7 @@ class GroupedRollingWindow(Expr):
         super().__init__(dtype)
         self.options = options
         self.children = (agg, *by)
+        raise NotImplementedError("Grouped rolling window not implemented")
 
 
 class Cast(Expr):
