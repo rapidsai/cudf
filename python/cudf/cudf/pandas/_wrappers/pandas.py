@@ -522,6 +522,26 @@ StringArray = make_final_proxy_type(
     },
 )
 
+ArrowStringArrayNumpySemantics = make_final_proxy_type(
+    "ArrowStringArrayNumpySemantics",
+    _Unusable,
+    pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    # additional_attributes={
+    #     "_data": _FastSlowAttribute("_data", private=True),
+    #     "_mask": _FastSlowAttribute("_mask", private=True),
+    # },
+)
+
+ArrowStringArray = make_final_proxy_type(
+    "ArrowStringArray",
+    _Unusable,
+    pd.core.arrays.string_arrow.ArrowStringArray,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+)
+
 StringDtype = make_final_proxy_type(
     "StringDtype",
     _Unusable,

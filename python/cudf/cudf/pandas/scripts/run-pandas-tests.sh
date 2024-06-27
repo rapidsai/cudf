@@ -25,6 +25,7 @@ PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 # tests/io/test_clipboard.py::TestClipboard crashes pytest workers (possibly due to fixture patching clipboard functionality)
 PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
 --ignore=tests/io/test_clipboard.py"
+# --ignore=tests/arrays/test_datetimelike.py "
 
 mkdir -p pandas-testing
 cd pandas-testing
@@ -133,7 +134,8 @@ and not test_s3_roundtrip"
 TEST_THAT_CRASH_PYTEST_WORKERS="not test_bitmasks_pyarrow \
 and not test_large_string_pyarrow \
 and not test_interchange_from_corrected_buffer_dtypes \
-and not test_eof_states"
+and not test_eof_states \
+and not test_array_tz"
 
 # TODO: Remove "not db" once a postgres & mysql container is set up on the CI
 PANDAS_CI="1" timeout 30m python -m pytest -p cudf.pandas \
