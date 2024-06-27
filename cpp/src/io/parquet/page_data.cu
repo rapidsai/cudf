@@ -279,7 +279,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     }
     // this needs to be here to prevent warp 3 modifying src_pos before all threads have read it
     __syncthreads();
-    auto tile32 = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+    auto const tile32 = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
     if (t < 32) {
       // decode repetition and definition levels.
       // - update validity vectors
