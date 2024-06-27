@@ -33,6 +33,8 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/reduction.hpp>
+#include <cudf/unary.hpp>
+#include <cudf/stream_compaction.hpp>
 
 #include "utils.hpp"
 
@@ -40,7 +42,7 @@
 select
     sum(l_extendedprice * l_discount) as revenue
 from
-    lineitem
+    '~/tpch_sf1/lineitem/part-0.parquet'
 where
         l_shipdate >= date '1994-01-01'
     and l_shipdate < date '1995-01-01'
@@ -61,10 +63,10 @@ std::unique_ptr<cudf::table> scan_filter_project() {
         "l_quantity" 
     };
 
-    auto l_extendedprice = cudf::ast::column_reference(0);
-    auto l_discount = cudf::ast::column_reference(1);
-    auto l_shipdate = cudf::ast::column_reference(2);
-    auto l_quantity = cudf::ast::column_reference(3);
+    auto extendedprice = cudf::ast::column_reference(0);
+    auto discount = cudf::ast::column_reference(1);
+    auto shipdate = cudf::ast::column_reference(2);
+    auto quantity = cudf::ast::column_reference(3);
 
     auto date_scalar_a = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
     auto date_literal_a = cudf::ast::literal(date_scalar_a);
@@ -74,39 +76,14 @@ std::unique_ptr<cudf::table> scan_filter_project() {
 
     auto pred_a = cudf::ast::operation(
         cudf::ast::ast_operator::GREATER_EQUAL,
-        l_shipdate,
+        shipdate,
         date_literal_a
     );
 
     auto pred_b = cudf::ast::operation(
         cudf::ast::ast_operator::LESS,
-        l_shipdate,
+        shipdate,
         date_literal_b
-    );
-
-    auto scalar_a = cudf::numeric_scalar<double>(0.05);
-    auto literal_a = cudf::ast::literal(scalar_a);
-    auto scalar_b = cudf::numeric_scalar<double>(0.07);
-    auto literal_b = cudf::ast::literal(scalar_b);
-    auto scalar_c = cudf::numeric_scalar<double>(24.0);
-    auto literal_c = cudf::ast::literal(scalar_c);
-
-    auto pred_c = cudf::ast::operation(
-        cudf::ast::ast_operator::GREATER_EQUAL,
-        l_discount,
-        literal_a
-    );
-
-    auto pred_d = cudf::ast::operation(
-        cudf::ast::ast_operator::LESS_EQUAL,
-        l_discount,
-        literal_b
-    );
-
-    auto pred_e = cudf::ast::operation(
-        cudf::ast::ast_operator::LESS,
-        l_quantity,
-        literal_c
     );
 
     auto pred_ab = cudf::ast::operation(
@@ -115,35 +92,71 @@ std::unique_ptr<cudf::table> scan_filter_project() {
         pred_b
     );
 
-    auto pred_cd = cudf::ast::operation(
-        cudf::ast::ast_operator::LOGICAL_AND,
-        pred_c,
-        pred_d
-    );
-
-    auto pred_abcd = cudf::ast::operation(
-        cudf::ast::ast_operator::LOGICAL_AND,
-        pred_ab,
-        pred_cd
-    );
-
     builder.columns(projection_cols);
-    // builder.filter(pred_abcd);
+
+    // FIXME: since, ast does not support `fixed_point_scalar` yet,
+    // we just push down the date filters while scanning the parquet file.
+    builder.filter(pred_ab);
 
     auto options = builder.build();
     auto result = cudf::io::read_parquet(options);
     return std::move(result.tbl);
 }
 
-std::unique_ptr<cudf::table> compute_result_table(std::unique_ptr<cudf::table>& table) {
-    auto l_extendedprice = table->view().column(0);
-    auto l_discount = table->view().column(1);
+std::unique_ptr<cudf::table> apply_filters(std::unique_ptr<cudf::table>& table) {
+    // NOTE: apply the remaining filters based on the float32 casted columns
+    auto l_discount = cudf::ast::column_reference(4);
+    auto l_quantity = cudf::ast::column_reference(5);
 
+    auto l_discount_lower = cudf::numeric_scalar<float_t>(0.05);
+    auto l_discount_lower_literal = cudf::ast::literal(l_discount_lower);
+    auto l_discount_upper = cudf::numeric_scalar<float_t>(0.07);
+    auto l_discount_upper_literal = cudf::ast::literal(l_discount_upper);
+    auto l_quantity_upper = cudf::numeric_scalar<float_t>(24);
+    auto l_quantity_upper_literal = cudf::ast::literal(l_quantity_upper);
+
+    auto l_discount_pred_a = cudf::ast::operation(
+            cudf::ast::ast_operator::GREATER_EQUAL,
+            l_discount,
+            l_discount_lower_literal
+        );
+    
+    auto l_discount_pred_b = cudf::ast::operation(
+            cudf::ast::ast_operator::LESS_EQUAL,
+            l_discount,
+            l_discount_upper_literal
+        );
+
+    auto l_discount_pred = cudf::ast::operation(
+        cudf::ast::ast_operator::LOGICAL_AND, l_discount_pred_a, l_discount_pred_b
+    );
+
+    auto l_quantity_pred = cudf::ast::operation(
+        cudf::ast::ast_operator::LESS,
+        l_quantity,
+        l_quantity_upper_literal
+    );
+
+    auto pred = cudf::ast::operation(
+        cudf::ast::ast_operator::LOGICAL_AND,
+        l_discount_pred,
+        l_quantity_pred
+    );
+
+    auto boolean_mask = cudf::compute_column(table->view(), pred);
+    return cudf::apply_boolean_mask(table->view(), boolean_mask->view());
+}
+
+std::unique_ptr<cudf::table> apply_reduction(std::unique_ptr<cudf::table>& table) {
+    auto extendedprice = table->view().column(0);
+    auto discount = table->view().column(1);
+
+    auto extendedprice_mul_discount_type = cudf::data_type{cudf::type_id::DECIMAL64, -4};
     auto extendedprice_mul_discount = cudf::binary_operation(
-        l_extendedprice,
-        l_discount,
+        extendedprice,
+        discount,
         cudf::binary_operator::MUL,
-        cudf::data_type{cudf::type_id::DECIMAL64}
+        extendedprice_mul_discount_type
     );
     
     auto const sum_agg = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
@@ -160,9 +173,12 @@ std::unique_ptr<cudf::table> compute_result_table(std::unique_ptr<cudf::table>& 
 
 int main() {
     auto t1 = scan_filter_project();
-    auto result_table = compute_result_table(t1);
-    auto result_metadata = create_table_metadata({"revenue"});
-    std::string result_filename = "q6.parquet";
-    write_parquet(result_table, result_metadata, result_filename);
+    auto discout_float = cudf::cast(t1->view().column(1), cudf::data_type{cudf::type_id::FLOAT32});
+    auto quantity_float = cudf::cast(t1->view().column(3), cudf::data_type{cudf::type_id::FLOAT32});
+    auto t2 = append_col_to_table(t1, discout_float);
+    auto t3 = append_col_to_table(t2, quantity_float);
+    auto t4 = apply_filters(t3);
+    auto t5 = apply_reduction(t4);
+    debug_table(std::move(t5), "q6.parquet");
     return 0;
 }
