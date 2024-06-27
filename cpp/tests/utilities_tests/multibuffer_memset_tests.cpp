@@ -81,7 +81,7 @@ TEST(MultiBufferTestIntegral, BasicTest2)
 TEST(MultiBufferTestIntegral, BasicTest3)
 {
     long NUM_BUFS = 8;
-    std::vector<long> BUF_SIZES{100, 200, 300, 400, 500, 600, 700, 800};
+    std::vector<long> BUF_SIZES{100, 0, 300, 400, 500, 600, 700, 800};
 
     // Device init
     std::vector<cudf::device_span<uint8_t>> bufs;

@@ -60,7 +60,7 @@ void cudf::io::detail::inline_column_buffer::allocate_strings_data(rmm::cuda_str
 {
   CUDF_EXPECTS(type.id() == type_id::STRING, "allocate_strings_data called for non-string column");
   // size + 1 for final offset. _string_data will be initialized later.
-  _data = create_data(data_type{type_id::INT32}, size + 1, stream, _mr, true);
+  _data = create_data(data_type{type_id::INT32}, size + 1, stream, _mr);
 }
 
 void cudf::io::detail::inline_column_buffer::create_string_data(size_t num_bytes,
@@ -103,12 +103,12 @@ void column_buffer_base<string_policy>::create_with_mask(size_type _size,
 
     // list columns store a buffer of int32's as offsets to represent
     // their individual rows
-    case type_id::LIST: _data = create_data(data_type{type_id::INT32}, size, stream, _mr, false); break;
+    case type_id::LIST: _data = create_data(data_type{type_id::INT32}, size, stream, _mr); break;
 
     // struct columns store no data themselves.  just validity and children.
     case type_id::STRUCT: break;
 
-    default: _data = create_data(type, size, stream, _mr, false); break;
+    default: _data = create_data(type, size, stream, _mr); break;
   }
   if (is_nullable) {
     _null_mask =
