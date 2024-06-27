@@ -71,19 +71,22 @@ static void bench_find_string(nvbench::state& state)
       cudf::strings::find_multiple(input, cudf::strings_column_view(targets));
     });
   } else if (api == "contains") {
+    std::vector<std::string> match_targets{"123", "abc", "4567890", "DEFGHI", "5W43"};
+    std::vector<cudf::string_scalar> targets;
+
     constexpr bool combine = false;
     constexpr int iters    = 20;
+    for (int i = 0; i < iters; i++) {
+      targets.emplace_back(cudf::string_scalar(match_targets[i % match_targets.size()]));
+    }
+
     if constexpr (not combine) {
       state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
         for (int i = 0; i < iters; i++) {
-          [[maybe_unused]] auto output = cudf::strings::contains(input, target);
+          [[maybe_unused]] auto output = cudf::strings::contains(input, targets[i]);
         }
       });
-    } else {
-      std::vector<cudf::string_scalar> targets;
-      for (int i = 0; i < iters; i++) {
-        targets.emplace_back(cudf::string_scalar(h_targets[2]));
-      }
+    } else {  // combine
       state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
         [[maybe_unused]] auto output = cudf::strings::contains_multi_scalars(input, targets);
       });
