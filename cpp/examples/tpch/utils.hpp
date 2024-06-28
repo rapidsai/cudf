@@ -6,6 +6,12 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/join.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/groupby.hpp>
+#include <cudf/binaryop.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/reduction.hpp>
+#include <cudf/unary.hpp>
+#include <cudf/stream_compaction.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
@@ -77,6 +83,51 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<std::string>> read_parquet(s
     return std::make_pair(std::move(table_with_metadata.tbl), column_names);
 }
 
+std::unique_ptr<cudf::table> apply_filter(
+    std::unique_ptr<cudf::table>& table, cudf::ast::operation& predicate) {
+    auto boolean_mask = cudf::compute_column(table->view(), predicate);
+    return cudf::apply_boolean_mask(table->view(), boolean_mask->view());    
+}
+
+struct groupby_context {
+    std::vector<cudf::size_type> keys;
+    std::unordered_map<cudf::size_type, std::vector<cudf::aggregation::Kind>> values;
+};
+
+std::unique_ptr<cudf::table> apply_groupby(
+    std::unique_ptr<cudf::table>& table, groupby_context ctx) {
+    auto keys = table->select(ctx.keys);
+    cudf::groupby::groupby groupby_obj(keys);
+    std::vector<cudf::groupby::aggregation_request> requests;
+    for (auto& [value_index, aggregations] : ctx.values) {
+        requests.emplace_back(cudf::groupby::aggregation_request());
+        for (auto& agg : aggregations) {
+            if (agg == cudf::aggregation::Kind::SUM) {
+                requests.back().aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+            } else if (agg == cudf::aggregation::Kind::MEAN) {
+                requests.back().aggregations.push_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
+            } else if (agg == cudf::aggregation::Kind::COUNT_ALL) {
+                requests.back().aggregations.push_back(cudf::make_count_aggregation<cudf::groupby_aggregation>());
+            } else {
+                throw std::runtime_error("Unsupported aggregation");
+            }
+        }
+        requests.back().values = table->get_column(value_index).view();
+    }
+    auto agg_results = groupby_obj.aggregate(requests);
+    std::vector<std::unique_ptr<cudf::column>> result_columns;
+    for (size_t i = 0; i < agg_results.first->num_columns(); i++) {
+        auto col = std::make_unique<cudf::column>(agg_results.first->get_column(i));
+        result_columns.push_back(std::move(col));
+    }
+    for (size_t i = 0; i < agg_results.second.size(); i++) {
+        for (size_t j = 0; j < agg_results.second[i].results.size(); j++) {
+            result_columns.push_back(std::move(agg_results.second[i].results[j]));
+        }
+    }
+    return std::make_unique<cudf::table>(std::move(result_columns));
+}
+
 std::tm make_tm(int year, int month, int day) {
     std::tm tm = {0};
     tm.tm_year = year - 1900;
@@ -114,7 +165,7 @@ std::unique_ptr<cudf::table> append_col_to_table(
     return std::make_unique<cudf::table>(std::move(columns));
 }
 
-std::unique_ptr<cudf::table> order_by(
+std::unique_ptr<cudf::table> apply_orderby(
     std::unique_ptr<cudf::table>& table, std::vector<int32_t> keys) {
     auto table_view = table->view();
     std::vector<cudf::column_view> column_views;
