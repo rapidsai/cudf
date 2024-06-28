@@ -56,7 +56,7 @@ from cudf.core.window import ExponentialMovingWindow, Rolling
 from cudf.utils import docutils, ioutils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _cudf_nvtx_annotate
 from cudf.utils.utils import _warn_no_dask_cudf
 
 if TYPE_CHECKING:

@@ -30,7 +30,7 @@ from cudf.core.udf.utils import (
     _supported_dtypes_from_frame,
 )
 from cudf.utils._numba import _CUDFNumbaConfig
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _cudf_nvtx_annotate
 
 
 def _get_frame_groupby_type(dtype, index_dtype):

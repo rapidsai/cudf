@@ -22,7 +22,7 @@ from dask.utils import M, OperatorMethodMixin, apply, derived_from, funcname
 
 import cudf
 from cudf import _lib as libcudf
-from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _dask_cudf_nvtx_annotate
 
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods

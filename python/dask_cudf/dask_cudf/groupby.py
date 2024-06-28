@@ -16,7 +16,7 @@ from dask.utils import funcname
 
 import cudf
 from cudf.core.groupby.groupby import _deprecate_collect
-from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _dask_cudf_nvtx_annotate
 
 from dask_cudf.sorting import _deprecate_shuffle_kwarg
 

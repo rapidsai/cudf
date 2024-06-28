@@ -31,7 +31,7 @@ from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _cudf_nvtx_annotate
 from cudf.utils.utils import GetAttrGetItemMixin
 
 if TYPE_CHECKING:

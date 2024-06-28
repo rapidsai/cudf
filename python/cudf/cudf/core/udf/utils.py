@@ -38,7 +38,7 @@ from cudf.utils.dtypes import (
     STRING_TYPES,
     TIMEDELTA_TYPES,
 )
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _cudf_nvtx_annotate
 from cudf.utils.utils import initfunc
 
 # Maximum size of a string column is 2 GiB

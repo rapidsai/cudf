@@ -68,7 +68,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     to_cudf_compatible_scalar,
 )
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _cudf_nvtx_annotate
 
 if TYPE_CHECKING:
     from cudf._typing import (

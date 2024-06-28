@@ -32,7 +32,7 @@ from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.utils import ioutils
 from cudf.utils.dtypes import find_common_type
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _cudf_nvtx_annotate
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 
 if TYPE_CHECKING:

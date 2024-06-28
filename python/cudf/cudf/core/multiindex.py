@@ -32,7 +32,7 @@ from cudf.core.index import (
 )
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.utils.dtypes import is_column_like
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _cudf_nvtx_annotate
 from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 
 if TYPE_CHECKING:

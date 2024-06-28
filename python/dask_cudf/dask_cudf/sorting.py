@@ -18,7 +18,7 @@ from dask.utils import M
 
 import cudf
 from cudf.api.types import _is_categorical_dtype
-from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _dask_cudf_nvtx_annotate
 
 _SHUFFLE_SUPPORT = ("tasks", "p2p")  # "disk" not supported
 

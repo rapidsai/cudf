@@ -58,7 +58,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _cudf_nvtx_annotate
 from cudf.utils.utils import _warn_no_dask_cudf, search_range
 
 if TYPE_CHECKING:
