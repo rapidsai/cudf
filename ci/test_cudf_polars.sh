@@ -18,15 +18,16 @@ else
 fi
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
-RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./dist
+RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 cpp ./dist
+RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./dist
+
+# echo to expand wildcard before adding `[extra]` requires for pip
+rapids-logger "Install cudf wheel"
+python -m pip install --find-links $(pwd)/dist $(echo ./dist/cudf*.whl)[test]
 
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
-
-rapids-logger "Install cudf wheel"
-# echo to expand wildcard before adding `[extra]` requires for pip
-python -m pip install $(echo ./dist/cudf*.whl)[test]
 
 rapids-logger "Install polars (allow pre-release versions)"
 python -m pip install 'polars>=1.0.0a0'
