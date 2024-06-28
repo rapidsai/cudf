@@ -57,9 +57,10 @@ struct h_column_tree_csr {
 };
 
 template <typename T>
-void print(std::string str, std::vector<T> &vec) {
+void print(std::string str, std::vector<T>& vec)
+{
   std::cout << str << " = ";
-  for(size_t i = 0; i < vec.size(); i++)
+  for (size_t i = 0; i < vec.size(); i++)
     std::cout << vec[i] << " ";
   std::cout << std::endl;
 }

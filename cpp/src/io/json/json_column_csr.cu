@@ -195,15 +195,31 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
 
   // Note that the first element of csr_parent_col_ids is -1 (parent_node_sentinel)
   // children adjacency
-  auto num_non_leaf_columns = thrust::unique_count(rmm::exec_policy(stream), csr_parent_col_ids.begin() + 1, csr_parent_col_ids.end());
-  thrust::reduce_by_key(rmm::exec_policy(stream), csr_parent_col_ids.begin() + 1, csr_parent_col_ids.end(), thrust::make_constant_iterator(1), thrust::make_discard_iterator(), rowidx.begin() + 1, thrust::equal_to<TreeDepthT>());
+  auto num_non_leaf_columns = thrust::unique_count(
+    rmm::exec_policy(stream), csr_parent_col_ids.begin() + 1, csr_parent_col_ids.end());
+  thrust::reduce_by_key(rmm::exec_policy(stream),
+                        csr_parent_col_ids.begin() + 1,
+                        csr_parent_col_ids.end(),
+                        thrust::make_constant_iterator(1),
+                        thrust::make_discard_iterator(),
+                        rowidx.begin() + 1,
+                        thrust::equal_to<TreeDepthT>());
   thrust::inclusive_scan(
     rmm::exec_policy(stream), rowidx.begin() + 1, rowidx.end(), rowidx.begin() + 1);
   // overwrite the csr_parent_col_ids with the col ids in the csr tree
   thrust::fill(rmm::exec_policy(stream), csr_parent_col_ids.begin(), csr_parent_col_ids.end(), -1);
-  thrust::scatter(rmm::exec_policy(stream), thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + num_non_leaf_columns, rowidx.begin(), csr_parent_col_ids.begin() + 1);
-  thrust::inclusive_scan(rmm::exec_policy(stream), csr_parent_col_ids.begin(), csr_parent_col_ids.end(), csr_parent_col_ids.begin(), thrust::maximum<NodeIndexT>{});
-  // We are discarding the parent of the root node. Add the parent adjacency. Since we have already performed the scan, we use a counting iterator to add
+  thrust::scatter(rmm::exec_policy(stream),
+                  thrust::make_counting_iterator(0),
+                  thrust::make_counting_iterator(0) + num_non_leaf_columns,
+                  rowidx.begin(),
+                  csr_parent_col_ids.begin() + 1);
+  thrust::inclusive_scan(rmm::exec_policy(stream),
+                         csr_parent_col_ids.begin(),
+                         csr_parent_col_ids.end(),
+                         csr_parent_col_ids.begin(),
+                         thrust::maximum<NodeIndexT>{});
+  // We are discarding the parent of the root node. Add the parent adjacency. Since we have already
+  // performed the scan, we use a counting iterator to add
   thrust::transform(rmm::exec_policy(stream),
                     rowidx.begin() + 2,
                     rowidx.end(),
@@ -222,14 +238,28 @@ std::tuple<column_tree_csr, rmm::device_uvector<size_type>> reduce_to_column_tre
   // excluding root node
   rmm::device_uvector<NodeIndexT> map(num_columns - 1, stream);
   thrust::fill(rmm::exec_policy(stream), map.begin(), map.end(), 1);
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream), csr_parent_col_ids.begin() + 1, csr_parent_col_ids.end(), map.begin(), map.begin());
-  thrust::for_each(rmm::exec_policy(stream), thrust::make_counting_iterator(1), thrust::make_counting_iterator(1) + num_columns - 1,
-                    [rowidx = rowidx.begin(), map = map.begin(), csr_parent_col_ids = csr_parent_col_ids.begin()] __device__(auto i) {
-                      auto csr_parent_col_id = csr_parent_col_ids[i];
-                      if(csr_parent_col_id == 0) map[i - 1]--;
-                      else map[i - 1] += rowidx[csr_parent_col_id];
-                     });
-  thrust::scatter(rmm::exec_policy(stream), thrust::make_counting_iterator(1), thrust::make_counting_iterator(1) + num_columns - 1, map.begin(), colidx.begin());
+  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+                                csr_parent_col_ids.begin() + 1,
+                                csr_parent_col_ids.end(),
+                                map.begin(),
+                                map.begin());
+  thrust::for_each(rmm::exec_policy(stream),
+                   thrust::make_counting_iterator(1),
+                   thrust::make_counting_iterator(1) + num_columns - 1,
+                   [rowidx             = rowidx.begin(),
+                    map                = map.begin(),
+                    csr_parent_col_ids = csr_parent_col_ids.begin()] __device__(auto i) {
+                     auto csr_parent_col_id = csr_parent_col_ids[i];
+                     if (csr_parent_col_id == 0)
+                       map[i - 1]--;
+                     else
+                       map[i - 1] += rowidx[csr_parent_col_id];
+                   });
+  thrust::scatter(rmm::exec_policy(stream),
+                  thrust::make_counting_iterator(1),
+                  thrust::make_counting_iterator(1) + num_columns - 1,
+                  map.begin(),
+                  colidx.begin());
 
   // condition is true if parent is not a list, or sentinel/root
   // Special case to return true if parent is a list and is_array_of_arrays is true
