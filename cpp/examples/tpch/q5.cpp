@@ -85,20 +85,13 @@ std::unique_ptr<cudf::column> calc_disc_price(std::unique_ptr<cudf::table>& tabl
 }
 
 int main() {
-    std::string customer_path = "/home/jayjeetc/tpch_sf1/customer/part-0.parquet";
-    std::string orders_path = "/home/jayjeetc/tpch_sf1/orders/part-0.parquet";
-    std::string lineitem_path = "/home/jayjeetc/tpch_sf1/lineitem/part-0.parquet";
-    std::string supplier_path = "/home/jayjeetc/tpch_sf1/supplier/part-0.parquet";
-    std::string nation_path = "/home/jayjeetc/tpch_sf1/nation/part-0.parquet";
-    std::string region_path = "/home/jayjeetc/tpch_sf1/region/part-0.parquet";
-
-    // read out the tables along with their column names
-    auto customer = read_parquet(customer_path);
-    auto orders = read_parquet(orders_path);
-    auto lineitem = read_parquet(lineitem_path);
-    auto supplier = read_parquet(supplier_path);
-    auto nation = read_parquet(nation_path);
-    auto region = read_parquet(region_path);
+    std::string dataset_dir = "/home/jayjeetc/tpch_sf1/";
+    auto customer = read_parquet(dataset_dir + "customer/part-0.parquet");
+    auto orders = read_parquet(dataset_dir + "orders/part-0.parquet");
+    auto lineitem = read_parquet(dataset_dir + "lineitem/part-0.parquet");
+    auto supplier = read_parquet(dataset_dir + "supplier/part-0.parquet");
+    auto nation = read_parquet(dataset_dir + "nation/part-0.parquet");
+    auto region = read_parquet(dataset_dir + "region/part-0.parquet");
 
     // move the tables out of the pair
     auto customer_table = std::move(customer.first);
@@ -175,7 +168,6 @@ int main() {
     auto revenue_col = calc_disc_price(filtered_table);
     auto new_table = append_col_to_table(filtered_table, revenue_col);
 
-    // perform group by
     groupby_context ctx{{11}, {{
         47, {cudf::aggregation::Kind::SUM}
     }}};
