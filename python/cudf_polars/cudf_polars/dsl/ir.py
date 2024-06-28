@@ -130,6 +130,11 @@ class IR:
     schema: Schema
     """Mapping from column names to their data types."""
 
+    def __post_init__(self):
+        """Validate preconditions."""
+        if any(dtype.id() == plc.TypeId.EMPTY for dtype in self.schema.values()):
+            raise NotImplementedError("Cannot make empty columns.")
+
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """
         Evaluate the node and return a dataframe.
