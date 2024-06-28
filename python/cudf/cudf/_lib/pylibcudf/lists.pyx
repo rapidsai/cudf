@@ -206,3 +206,9 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
             find_option,
         ))
     return Column.from_libcudf(move(c_result))
+
+
+cpdef Column segmented_gather(Column input, Column gather_map_list, bool check_bounds):
+    """column with elements in list of rows gathered based on gather_map_list
+    """
+    pass
