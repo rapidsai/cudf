@@ -12,10 +12,10 @@ from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
 from cudf.utils import ioutils
 from cudf.utils.dtypes import _maybe_convert_to_default_type
-from cudf.utils.performance_tracking import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 @ioutils.doc_read_csv()
 def read_csv(
     filepath_or_buffer,
@@ -151,7 +151,7 @@ def read_csv(
     return df
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 @ioutils.doc_to_csv()
 def to_csv(
     df,

@@ -30,7 +30,7 @@ from cudf.core.udf.utils import (
     _supported_dtypes_from_frame,
 )
 from cudf.utils._numba import _CUDFNumbaConfig
-from cudf.utils.performance_tracking import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
 
 
 def _get_frame_groupby_type(dtype, index_dtype):
@@ -126,7 +126,7 @@ def _get_groupby_apply_kernel(frame, func, args):
     return kernel, return_type
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def jit_groupby_apply(offsets, grouped_values, function, *args):
     """
     Main entrypoint for JIT Groupby.apply via Numba.

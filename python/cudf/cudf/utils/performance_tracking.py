@@ -80,8 +80,3 @@ def print_memory_report(file=sys.stdout) -> None:
         The output stream
     """
     print(rmm.statistics.default_profiler_records.report(), file=file)
-
-
-# TODO: will remove this file and use _performance_tracking before merging
-_cudf_nvtx_annotate = _performance_tracking
-_dask_cudf_nvtx_annotate = _dask_cudf_performance_tracking

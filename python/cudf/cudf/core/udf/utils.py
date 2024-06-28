@@ -38,7 +38,7 @@ from cudf.utils.dtypes import (
     STRING_TYPES,
     TIMEDELTA_TYPES,
 )
-from cudf.utils.performance_tracking import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import initfunc
 
 # Maximum size of a string column is 2 GiB
@@ -71,7 +71,7 @@ def _ptx_file():
     )
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _get_udf_return_type(argty, func: Callable, args=()):
     """
     Get the return type of a masked UDF for a given set of argument dtypes. It
@@ -236,7 +236,7 @@ def _generate_cache_key(frame, func: Callable, args, suffix="__APPLY_UDF"):
     )
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _compile_or_get(
     frame, func, args, kernel_getter=None, suffix="__APPLY_UDF"
 ):
