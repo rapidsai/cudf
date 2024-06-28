@@ -10,6 +10,7 @@ from threading import RLock
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy
+import nvtx
 from typing_extensions import Self
 
 import rmm
@@ -21,7 +22,7 @@ from cudf.core.buffer.buffer import (
     host_memory_allocation,
 )
 from cudf.core.buffer.exposure_tracked_buffer import ExposureTrackedBuffer
-from cudf.utils.nvtx_annotation import _get_color_for_nvtx, annotate
+from cudf.utils.performance_tracking import _get_color_for_nvtx
 from cudf.utils.string import format_bytes
 
 if TYPE_CHECKING:
@@ -200,7 +201,7 @@ class SpillableBufferOwner(BufferOwner):
                 )
 
             if (ptr_type, target) == ("gpu", "cpu"):
-                with annotate(
+                with nvtx.annotate(
                     message="SpillDtoH",
                     color=_get_color_for_nvtx("SpillDtoH"),
                     domain="cudf_python-spill",
@@ -218,7 +219,7 @@ class SpillableBufferOwner(BufferOwner):
                 # trigger a new call to this buffer's `spill()`.
                 # Therefore, it is important that spilling-on-demand doesn't
                 # try to unspill an already locked buffer!
-                with annotate(
+                with nvtx.annotate(
                     message="SpillHtoD",
                     color=_get_color_for_nvtx("SpillHtoD"),
                     domain="cudf_python-spill",
