@@ -280,7 +280,7 @@ def read_orc(
     num_rows=None,
     use_index=True,
     timestamp_type=None,
-    use_python_file_object=True,
+    use_python_file_object=None,
     storage_options=None,
     bytes_per_thread=None,
 ):

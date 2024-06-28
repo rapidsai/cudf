@@ -1702,7 +1702,9 @@ def get_reader_filepath_or_buffer(
     mode="rb",
     fs=None,
     iotypes=(BytesIO, NativeFile),
-    use_python_file_object=False,
+    # Use cudf_false to minimize risk of collisions
+    # with user typos
+    use_python_file_object="cudf_false",
     open_file_options=None,
     allow_raw_text_input=False,
     storage_options=None,
@@ -1713,6 +1715,19 @@ def get_reader_filepath_or_buffer(
     """{docstring}"""
 
     path_or_data = stringify_pathlike(path_or_data)
+
+    if use_python_file_object == "cudf_false":
+        use_python_file_object = False
+    elif use_python_file_object is not None:
+        warnings.warn(
+            "The 'use_python_file_object' keyword is deprecated and "
+            "will be removed in a future version.",
+            FutureWarning,
+        )
+    else:
+        # Preserve defaults for now, even though use_python_file_object
+        # is deprecated
+        use_python_file_object = True
 
     if isinstance(path_or_data, str):
         # Get a filesystem object if one isn't already available
