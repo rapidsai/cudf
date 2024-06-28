@@ -320,7 +320,10 @@ def read_orc(
             )
 
     filepaths_or_buffers = []
+    saw_nativefile = False
     for source in filepath_or_buffer:
+        if isinstance(source, pa.NativeFile):
+            saw_nativefile = True
         if ioutils.is_directory(
             path_or_data=source, storage_options=storage_options
         ):
@@ -360,17 +363,26 @@ def read_orc(
             stripes = selected_stripes
 
     if engine == "cudf":
-        return DataFrame._from_data(
-            *liborc.read_orc(
-                filepaths_or_buffers,
-                columns,
-                stripes,
-                skiprows,
-                num_rows,
-                use_index,
-                timestamp_type,
+        with warnings.catch_warnings():
+            # Don't want to warn if use_python_file_object causes us to get
+            # a NativeFile (there is a separate deprecation warning for that)
+            if not saw_nativefile:
+                warnings.filterwarnings(
+                    action="ignore",
+                    message="Support for reading pyarrow's NativeFile is deprecated",
+                    category=FutureWarning,
+                )
+            return DataFrame._from_data(
+                *liborc.read_orc(
+                    filepaths_or_buffers,
+                    columns,
+                    stripes,
+                    skiprows,
+                    num_rows,
+                    use_index,
+                    timestamp_type,
+                )
             )
-        )
     else:
         from pyarrow import orc
 
