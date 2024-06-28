@@ -712,14 +712,14 @@ class StringFunction(Expr):
             )
             return Column(plc.strings.contains.contains_re(column.obj, prog))
         elif self.name == pl_expr.StringFunction.Slice:
-            child, expr_start, expr_length = self.children
+            child, expr_offset, expr_length = self.children
             column = child.evaluate(df, context=context, mapping=mapping)
             # Case 1 - both are literals
-            if isinstance(expr_start, Literal) and isinstance(expr_length, Literal):
+            if isinstance(expr_offset, Literal) and isinstance(expr_length, Literal):
                 # libcudf slices via [start,stop).
                 # polars slices with offset + length where start == offset
                 # stop = start + length. Do this math on the host
-                start = expr_start.value.as_py()
+                start = expr_offset.value.as_py()
                 length = expr_length.value.as_py()
 
                 if length == 0:
@@ -735,10 +735,25 @@ class StringFunction(Expr):
                         plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
                     )
                 )
-            elif isinstance(expr_start, Col) and isinstance(expr_length, Col):
-                offsets_col = expr_start.evaluate(df, context=context, mapping=mapping)
-                length_col = expr_length.evaluate(df, context=context, mapping=mapping)
-                breakpoint()
+            else:
+                # funnel to column overload
+                if isinstance(expr_offset, Literal):
+                    offsets_col = plc.column_factories.make_column_from_scalar(
+                        expr_offset.value, df.num_rows
+                    )
+                else:
+                    offsets_col = expr_offset.evaluate(
+                        df, context=context, mapping=mapping
+                    )
+                if isinstance(expr_length, Literal):
+                    length_col = plc.column_factories.make_column_from_scalar(
+                        expr_length.value, df.num_rows
+                    )
+                else:
+                    length_col = expr_length.evaluate(
+                        df, context=context, mapping=mapping
+                    )
+
                 if_ = plc.binaryop.binary_operation(
                     offsets_col.obj,
                     plc.interop.from_arrow(pa.scalar(0, type=pa.int32())),
@@ -778,11 +793,6 @@ class StringFunction(Expr):
                 return Column(
                     plc.strings.slice.slice_strings(column.obj, new_starts, stops)
                 )
-
-            elif isinstance(expr_start, Col) and isinstance(expr_length, Literal):
-                raise NotImplementedError  # TODO: finish
-            else:
-                raise NotImplementedError  # TODO: finish
 
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
