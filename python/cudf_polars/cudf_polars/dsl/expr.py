@@ -713,28 +713,77 @@ class StringFunction(Expr):
             return Column(plc.strings.contains.contains_re(column.obj, prog))
         elif self.name == pl_expr.StringFunction.Slice:
             child, expr_start, expr_length = self.children
-            assert isinstance(expr_start, Literal)
-            assert isinstance(expr_length, Literal)
-
             column = child.evaluate(df, context=context, mapping=mapping)
+            # Case 1 - both are literals
+            if isinstance(expr_start, Literal) and isinstance(expr_length, Literal):
+                # libcudf slices via [start,stop).
+                # polars slices with offset + length where start == offset
+                # stop = start + length. Do this math on the host
+                start = expr_start.value.as_py()
+                length = expr_length.value.as_py()
 
-            # libcudf slices via [start,stop).
-            # polars slices with offset + length where start == offset
-            # stop = start + length. Do this math on the host
-            stop = Literal(
-                expr_length.dtype,
-                pa.scalar(
-                    expr_start.value.as_py() + expr_length.value.as_py(),
-                    type=pa.int32(),
-                ),
-            ).evaluate(df, context=context, mapping=mapping)
-            start = expr_start.evaluate(df, context=context, mapping=mapping)
-
-            return Column(
-                plc.strings.slice.slice_strings(
-                    column.obj, start.obj_scalar, stop.obj_scalar
+                if length == 0:
+                    stop = start
+                else:
+                    # -1 is not inclusive of the end element in libcudf
+                    # However a null scalar scans to the end
+                    stop = start + length if length else None
+                return Column(
+                    plc.strings.slice.slice_strings(
+                        column.obj,
+                        plc.interop.from_arrow(pa.scalar(start, type=pa.int32())),
+                        plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
+                    )
                 )
-            )
+            elif isinstance(expr_start, Col) and isinstance(expr_length, Col):
+                offsets_col = expr_start.evaluate(df, context=context, mapping=mapping)
+                length_col = expr_length.evaluate(df, context=context, mapping=mapping)
+                breakpoint()
+                if_ = plc.binaryop.binary_operation(
+                    offsets_col.obj,
+                    plc.interop.from_arrow(pa.scalar(0, type=pa.int32())),
+                    plc.binaryop.BinaryOperator.LESS,
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
+                otherwise = plc.binaryop.binary_operation(
+                    offsets_col.obj,
+                    length_col.obj,
+                    plc.binaryop.BinaryOperator.ADD,
+                    plc.DataType(plc.TypeId.INT32),
+                )
+                new_starts = plc.copying.copy_if_else(otherwise, offsets_col.obj, if_)
+
+                stops = plc.binaryop.binary_operation(
+                    new_starts,
+                    length_col.obj,
+                    plc.binaryop.BinaryOperator.ADD,
+                    plc.DataType(plc.TypeId.INT32),
+                )
+
+                stops_lt_0 = plc.binaryop.binary_operation(
+                    stops,
+                    plc.interop.from_arrow(pa.scalar(0, type=pa.int32())),
+                    plc.binaryop.BinaryOperator.LESS,
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
+
+                stops = plc.copying.copy_if_else(
+                    plc.column_factories.make_column_from_scalar(
+                        plc.interop.from_arrow(pa.scalar(0, type=pa.int32())),
+                        df.num_rows,
+                    ),
+                    stops,
+                    stops_lt_0,
+                )
+                return Column(
+                    plc.strings.slice.slice_strings(column.obj, new_starts, stops)
+                )
+
+            elif isinstance(expr_start, Col) and isinstance(expr_length, Literal):
+                raise NotImplementedError  # TODO: finish
+            else:
+                raise NotImplementedError  # TODO: finish
+
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
