@@ -196,8 +196,6 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
         cpp_contains.duplicate_find_option.FIND_FIRST if find_first_option
         else cpp_contains.duplicate_find_option.FIND_LAST
     )
-    if not isinstance(search_key, (Column, Scalar)):
-        raise TypeError("Must pass a Column or Scalar")
 
     with nogil:
         c_result = move(cpp_contains.index_of(
