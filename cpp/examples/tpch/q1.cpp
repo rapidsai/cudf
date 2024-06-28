@@ -94,7 +94,7 @@ std::unique_ptr<cudf::table> scan_filter_project() {
 }
 
 std::unique_ptr<cudf::column> calc_disc_price(std::unique_ptr<cudf::table>& table) {
-    auto one = cudf::fixed_point_scalar<numeric::decimal64>(1, -2);
+    auto one = cudf::fixed_point_scalar<numeric::decimal64>(1);
     auto disc = table->get_column(4).view();
     auto one_minus_disc = cudf::binary_operation(one, disc, cudf::binary_operator::SUB, disc.type());
     auto extended_price = table->get_column(3).view();
@@ -105,7 +105,7 @@ std::unique_ptr<cudf::column> calc_disc_price(std::unique_ptr<cudf::table>& tabl
 }
 
 std::unique_ptr<cudf::column> calc_charge(std::unique_ptr<cudf::table>& table) {
-    auto one = cudf::fixed_point_scalar<numeric::decimal64>(1, -2);
+    auto one = cudf::fixed_point_scalar<numeric::decimal64>(1);
     auto disc = table->get_column(4).view();
     auto one_minus_disc = cudf::binary_operation(one, disc, cudf::binary_operator::SUB, disc.type());
     auto extended_price = table->get_column(3).view();
