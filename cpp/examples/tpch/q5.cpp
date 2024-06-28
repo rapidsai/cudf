@@ -128,7 +128,7 @@ int main() {
     auto join_e = inner_join(supplier_table->view(), join_d->view(), {0, 3}, {26, 3});
     auto join_e_column_names = concat(supplier.second, join_d_column_names);
 
-    // define the filter expression
+    // apply filter predicates
     auto o_orderdate = cudf::ast::column_reference(26);
     
     auto o_orderdate_lower = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
@@ -169,34 +169,17 @@ int main() {
         pred_c
     );
 
-    auto boolean_mask = cudf::compute_column(join_e->view(), pred_abc);
-    auto filtered_table = cudf::apply_boolean_mask(join_e->view(), boolean_mask->view());
+    auto filtered_table = apply_filter(join_e, pred_abc);
 
     // calcute revenue column
-    std::cout << join_e_column_names.size() << std::endl;
     auto revenue_col = calc_disc_price(filtered_table);
     auto new_table = append_col_to_table(filtered_table, revenue_col);
 
     // perform group by
-    auto groupby_keys = cudf::table_view{{new_table->get_column(11)}};
-
-    cudf::groupby::groupby groupby_obj(groupby_keys);
-    std::vector<cudf::groupby::aggregation_request> requests;
-
-    requests.emplace_back(cudf::groupby::aggregation_request());
-    requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-    auto new_rev_col = new_table->get_column(47);
-    requests[0].values = new_rev_col.view();
-
-    auto agg_results = groupby_obj.aggregate(requests);
-    auto result_key = std::move(agg_results.first);
-
-    std::vector<std::unique_ptr<cudf::column>> result_cols;
-    auto col0 = std::make_unique<cudf::column>(result_key->get_column(0));
-    result_cols.push_back(std::move(col0));
-    result_cols.push_back(std::move(agg_results.second[0].results[0]));
-    auto final_final_tbl = std::make_unique<cudf::table>(std::move(result_cols));
-    auto fff_tbl = order_by(final_final_tbl, {1});
-    write_parquet(fff_tbl, create_table_metadata({"n_name", "revenue"}), "q5.parquet");
-
+    groupby_context ctx{{11}, {{
+        47, {cudf::aggregation::Kind::SUM}
+    }}};
+    auto groupedby_table = apply_groupby(new_table, ctx);
+    auto orderedby_table = apply_orderby(groupedby_table, {1});
+    write_parquet(orderedby_table, create_table_metadata({"n_name", "revenue"}), "q5.parquet");
 }
