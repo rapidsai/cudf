@@ -15,6 +15,9 @@ from cudf._lib.pylibcudf.libcudf.lists.combine cimport (
     concatenate_null_policy,
     concatenate_rows as cpp_concatenate_rows,
 )
+from cudf._lib.pylibcudf.libcudf.lists.count_elements cimport (
+    count_elements as cpp_count_elements,
+)
 from cudf._lib.pylibcudf.libcudf.table.table cimport table
 from cudf._lib.pylibcudf.libcudf.types cimport size_type
 from cudf._lib.pylibcudf.lists cimport ColumnOrScalar
@@ -205,4 +208,25 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
             ),
             find_option,
         ))
+    return Column.from_libcudf(move(c_result))
+
+
+cpdef Column count_elements(Column input):
+    """Count the number of rows in each
+    list element in the given lists column.
+    Parameters
+    ----------
+    input : Column
+        The input column
+    Returns
+    -------
+    Column
+        A new Column of the lengths of each list element
+    """
+    cdef ListColumnView list_view = input.list_view()
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(cpp_count_elements(list_view.view()))
+
     return Column.from_libcudf(move(c_result))
