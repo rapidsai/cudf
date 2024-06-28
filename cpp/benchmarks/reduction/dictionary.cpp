@@ -56,7 +56,7 @@ void BM_reduction_dictionary(benchmark::State& state,
 
   // The benchmark takes a column and produces two scalars.
   set_items_processed(state, column_size + 1);
-  
+
   // We don't set the metrics for the size read/written as row_bit_count() doesn't
   // support the dictionary type yet (and so is estimate_size()).
   // See https://github.com/rapidsai/cudf/issues/16121 for details.

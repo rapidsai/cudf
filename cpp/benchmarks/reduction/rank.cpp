@@ -15,8 +15,8 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/common/table_utilities.hpp>
 #include <benchmarks/common/nvbench_utilities.hpp>
+#include <benchmarks/common/table_utilities.hpp>
 
 #include <cudf/detail/scan.hpp>
 #include <cudf/filling.hpp>
@@ -42,16 +42,18 @@ static void nvbench_reduction_scan(nvbench::state& state, nvbench::type_list<typ
   cudf::column_view input(new_tbl->view().column(0));
 
   int64_t result_size = 0;
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-    rmm::cuda_stream_view stream_view{launch.get_stream()};
-    timer.start();
-    auto result = cudf::detail::inclusive_dense_rank_scan(
-      input, stream_view, rmm::mr::get_current_device_resource());
-    timer.stop();
+  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
+             [&](nvbench::launch& launch, auto& timer) {
+               rmm::cuda_stream_view stream_view{launch.get_stream()};
+               timer.start();
+               auto result = cudf::detail::inclusive_dense_rank_scan(
+                 input, stream_view, rmm::mr::get_current_device_resource());
+               timer.stop();
 
-    // Estimating the result size will launch a kernel. Do not include it in measuring time.
-    result_size += estimate_size(result->view());
-  });
+               // Estimating the result size will launch a kernel. Do not include it in measuring
+               // time.
+               result_size += estimate_size(result->view());
+             });
 
   state.add_element_count(input.size());
   state.add_global_memory_reads(estimate_size(input));
