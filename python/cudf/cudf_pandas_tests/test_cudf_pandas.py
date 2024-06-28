@@ -1605,3 +1605,26 @@ def test_is_proxy_object():
     assert is_proxy_object(np_arr_proxy)
     assert is_proxy_object(s1)
     assert not is_proxy_object(s2)
+
+
+def test_arrow_string_arrays():
+    cu_s = xpd.Series(["a", "b", "c"])
+    pd_s = pd.Series(["a", "b", "c"])
+
+    cu_arr = xpd.arrays.ArrowStringArray._from_sequence(
+        cu_s, dtype=xpd.StringDtype("pyarrow")
+    )
+    pd_arr = pd.arrays.ArrowStringArray._from_sequence(
+        pd_s, dtype=pd.StringDtype("pyarrow")
+    )
+
+    tm.assert_equal(cu_arr, pd_arr)
+
+    cu_arr = xpd.core.arrays.string_arrow.ArrowStringArray._from_sequence(
+        cu_s, dtype=xpd.StringDtype("pyarrow_numpy")
+    )
+    pd_arr = pd.core.arrays.string_arrow.ArrowStringArray._from_sequence(
+        pd_s, dtype=pd.StringDtype("pyarrow_numpy")
+    )
+
+    tm.assert_equal(cu_arr, pd_arr)
