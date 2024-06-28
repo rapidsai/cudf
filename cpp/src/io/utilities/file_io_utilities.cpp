@@ -16,9 +16,11 @@
 
 #include "file_io_utilities.hpp"
 
-#include "io/utilities/config_utils.hpp"
+#include "getenv_or.hpp"
 
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/logger.hpp>
+#include <cudf/io/config_utils.hpp>
 
 #include <rmm/device_buffer.hpp>
 

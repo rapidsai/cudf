@@ -348,6 +348,15 @@ cdef class ListColumnView:
         """The offsets column of the underlying list column."""
         return self._column.child(1)
 
+    cdef lists_column_view view(self) nogil:
+        """Generate a libcudf lists_column_view to pass to libcudf algorithms.
+
+        This method is for pylibcudf's functions to use to generate inputs when
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
+        return lists_column_view(self._column.view())
+
 
 @functools.cache
 def _datatype_from_dtype_desc(desc):

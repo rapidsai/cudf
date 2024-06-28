@@ -207,16 +207,20 @@ enum level_type {
  * Used to control which decode kernels to run.
  */
 enum class decode_kernel_mask {
-  NONE                   = 0,
-  GENERAL                = (1 << 0),  // Run catch-all decode kernel
-  STRING                 = (1 << 1),  // Run decode kernel for string data
-  DELTA_BINARY           = (1 << 2),  // Run decode kernel for DELTA_BINARY_PACKED data
-  DELTA_BYTE_ARRAY       = (1 << 3),  // Run decode kernel for DELTA_BYTE_ARRAY encoded data
-  DELTA_LENGTH_BA        = (1 << 4),  // Run decode kernel for DELTA_LENGTH_BYTE_ARRAY encoded data
-  FIXED_WIDTH_NO_DICT    = (1 << 5),  // Run decode kernel for fixed width non-dictionary pages
-  FIXED_WIDTH_DICT       = (1 << 6),  // Run decode kernel for fixed width dictionary pages
-  BYTE_STREAM_SPLIT      = (1 << 7),  // Run decode kernel for BYTE_STREAM_SPLIT encoded data
-  BYTE_STREAM_SPLIT_FLAT = (1 << 8),  // Same as above but with a flat schema
+  NONE                = 0,
+  GENERAL             = (1 << 0),  // Run catch-all decode kernel
+  STRING              = (1 << 1),  // Run decode kernel for string data
+  DELTA_BINARY        = (1 << 2),  // Run decode kernel for DELTA_BINARY_PACKED data
+  DELTA_BYTE_ARRAY    = (1 << 3),  // Run decode kernel for DELTA_BYTE_ARRAY encoded data
+  DELTA_LENGTH_BA     = (1 << 4),  // Run decode kernel for DELTA_LENGTH_BYTE_ARRAY encoded data
+  FIXED_WIDTH_NO_DICT = (1 << 5),  // Run decode kernel for fixed width non-dictionary pages
+  FIXED_WIDTH_DICT    = (1 << 6),  // Run decode kernel for fixed width dictionary pages
+  BYTE_STREAM_SPLIT   = (1 << 7),  // Run decode kernel for BYTE_STREAM_SPLIT encoded data
+  BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT = (1 << 8),  // Same as above but for flat, fixed-width data
+  BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED =
+    (1 << 9),                              // Same as above but for nested, fixed-width data
+  FIXED_WIDTH_NO_DICT_NESTED = (1 << 10),  // Run decode kernel for fixed width non-dictionary pages
+  FIXED_WIDTH_DICT_NESTED    = (1 << 11),  // Run decode kernel for fixed width dictionary pages
 };
 
 // mask representing all the ways in which a string can be encoded
@@ -888,6 +892,7 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[in] has_nesting Whether or not the data contains nested (but not list) data.
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -896,6 +901,7 @@ void DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
                          std::size_t num_rows,
                          size_t min_row,
                          int level_type_size,
+                         bool has_nesting,
                          kernel_error::pointer error_code,
                          rmm::cuda_stream_view stream);
 
@@ -910,6 +916,7 @@ void DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[in] has_nesting Whether or not the data contains nested (but not list) data.
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -918,11 +925,12 @@ void DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,
                              std::size_t num_rows,
                              size_t min_row,
                              int level_type_size,
+                             bool has_nesting,
                              kernel_error::pointer error_code,
                              rmm::cuda_stream_view stream);
 
 /**
- * @brief Launches kernel for reading dictionary fixed width column data stored in the pages
+ * @brief Launches kernel for reading fixed width column data stored in the pages
  *
  * The page data will be written to the output pointed to in the page's
  * associated column chunk.
@@ -932,16 +940,18 @@ void DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[in] has_nesting Whether or not the data contains nested (but not list) data.
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
-void DecodeSplitPageDataFlat(cudf::detail::hostdevice_span<PageInfo> pages,
-                             cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                             std::size_t num_rows,
-                             size_t min_row,
-                             int level_type_size,
-                             kernel_error::pointer error_code,
-                             rmm::cuda_stream_view stream);
+void DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
+                                   cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                                   std::size_t num_rows,
+                                   size_t min_row,
+                                   int level_type_size,
+                                   bool has_nesting,
+                                   kernel_error::pointer error_code,
+                                   rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing encoder row group fragments

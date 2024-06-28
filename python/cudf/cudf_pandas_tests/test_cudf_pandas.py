@@ -1535,6 +1535,16 @@ def test_is_proxy_object():
     assert not is_proxy_object(s2)
 
 
+def test_numpy_cupy_flatiter(series):
+    cp = pytest.importorskip("cupy")
+
+    _, s = series
+    arr = s.values
+
+    assert type(arr.flat._fsproxy_fast) == cp.flatiter
+    assert type(arr.flat._fsproxy_slow) == np.flatiter
+
+
 def test_arrow_string_arrays():
     cu_s = xpd.Series(["a", "b", "c"])
     pd_s = pd.Series(["a", "b", "c"])

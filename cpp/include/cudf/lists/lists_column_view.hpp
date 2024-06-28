@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ namespace cudf {
  */
 class lists_column_view : private column_view {
  public:
+  lists_column_view() = default;
   /**
    * @brief Construct a new lists column view object from a column view.
    *
