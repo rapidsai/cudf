@@ -6,7 +6,7 @@ import numpy as np
 
 from cudf.core.column import as_column
 from cudf.core.copy_types import BooleanMask
-from cudf.core.index import Index, RangeIndex
+from cudf.core.index import RangeIndex, ensure_index
 from cudf.core.indexed_frame import IndexedFrame
 from cudf.core.scalar import Scalar
 from cudf.options import get_option
@@ -107,7 +107,7 @@ def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
         dtype="int64" if get_option("mode.pandas_compatible") else None,
     ).values
 
-    return labels, cats.values if return_cupy_array else Index(cats)
+    return labels, cats.values if return_cupy_array else ensure_index(cats)
 
 
 def _linear_interpolation(column, index=None):
