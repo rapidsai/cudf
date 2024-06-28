@@ -1451,7 +1451,9 @@ def test_rmm_option_on_import(env_value):
         env=env,
     )
     if env_value in {"cuda", "pool", "async", "managed", "managed_pool"}:
-        assert sp_completed.returncode == 0, f"subprocess return code for env_value='{env_value}' was non-zero ({sp_completed.returncode})"
+        assert (
+            sp_completed.returncode == 0
+        ), f"subprocess return code for env_value='{env_value}' was non-zero ({sp_completed.returncode})"
     else:
         assert sp_completed.returncode == 1
 
