@@ -14,7 +14,56 @@ import polars as pl
 
 import cudf._lib.pylibcudf as plc
 
-__all__ = ["from_polars", "downcast_arrow_lists"]
+__all__ = ["from_polars", "downcast_arrow_lists", "have_compatible_resolution"]
+
+
+TIMELIKE_TYPES: frozenset[plc.TypeId] = frozenset(
+    [
+        plc.TypeId.TIMESTAMP_MILLISECONDS,
+        plc.TypeId.TIMESTAMP_MICROSECONDS,
+        plc.TypeId.TIMESTAMP_NANOSECONDS,
+        plc.TypeId.TIMESTAMP_DAYS,
+        plc.TypeId.DURATION_MILLISECONDS,
+        plc.TypeId.DURATION_MICROSECONDS,
+        plc.TypeId.DURATION_NANOSECONDS,
+    ]
+)
+
+
+def have_compatible_resolution(lid: plc.TypeId, rid: plc.TypeId):
+    """
+    Do two datetime typeids have matching resolution for a binop.
+
+    Parameters
+    ----------
+    lid
+       Left type id
+    rid
+       Right type id
+
+    Returns
+    -------
+    True if resolutions are compatible, False otherwise.
+
+    Notes
+    -----
+    Polars has different casting rules for combining
+    datetimes/durations than libcudf, and while we don't encode the
+    casting rules fully, just reject things we can't handle.
+
+    Precondition for correctness: both lid and rid are timelike.
+    """
+    if lid == rid:
+        return True
+    # Timestamps are smaller than durations in the libcudf enum.
+    lid, rid = sorted([lid, rid])
+    if lid == plc.TypeId.TIMESTAMP_MILLISECONDS:
+        return rid == plc.TypeId.DURATION_MILLISECONDS
+    elif lid == plc.TypeId.TIMESTAMP_MICROSECONDS:
+        return rid == plc.TypeId.DURATION_MICROSECONDS
+    elif lid == plc.TypeId.TIMESTAMP_NANOSECONDS:
+        return rid == plc.TypeId.DURATION_NANOSECONDS
+    return False
 
 
 def downcast_arrow_lists(typ: pa.DataType) -> pa.DataType:
