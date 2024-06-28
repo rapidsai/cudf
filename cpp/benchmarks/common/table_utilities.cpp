@@ -19,6 +19,8 @@
 #include <cudf/transform.hpp>
 #include <cudf/reduction.hpp>
 
+#include <cmath>
+
 int64_t estimate_size(cudf::column_view const& col)
 {
   return estimate_size( cudf::table_view( {col} ) );
@@ -34,5 +36,5 @@ int64_t estimate_size(cudf::table_view const& view)
   auto const total_size_scalar = cudf::reduce(*row_sizes, *agg, sum_dtype);
   auto const total_size_in_bits = static_cast<cudf::numeric_scalar<int64_t>*>(total_size_scalar.get())->value();
   // Convert the size in bits to the size in bytes.
-  return static_cast<int64_t>(static_cast<double>(total_size_in_bits) / 8);
+  return static_cast<int64_t>(std::ceil(static_cast<double>(total_size_in_bits) / 8));
 }
