@@ -21,6 +21,7 @@ import cudf
 from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column, column_empty
+from cudf.core.lazy import lazy_wrap_dataframe, parse_lazy_argument
 from cudf.utils import ioutils
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
@@ -529,6 +530,7 @@ def read_parquet(
     open_file_options=None,
     bytes_per_thread=None,
     dataset_kwargs=None,
+    lazy=None,
     *args,
     **kwargs,
 ):
@@ -653,19 +655,61 @@ def read_parquet(
             | set(columns)
         )
 
-    # Convert parquet data to a cudf.DataFrame
-    df = _parquet_to_frame(
-        filepaths_or_buffers,
-        engine,
-        *args,
-        columns=columns,
-        row_groups=row_groups,
-        use_pandas_metadata=use_pandas_metadata,
-        partition_keys=partition_keys,
-        partition_categories=partition_categories,
-        dataset_kwargs=dataset_kwargs,
-        **kwargs,
-    )
+    # dask_cudf.read_parquet specific arguments, which we only use
+    # when lazy is enabled
+    metadata_task_size = kwargs.pop("metadata_task_size", 0)
+    aggregate_files = kwargs.pop("aggregate_files", None)
+    split_row_groups = kwargs.pop("split_row_groups", False)
+
+    # Read the parquet data
+    df = None
+    # First we try to read the data lazily
+    if parse_lazy_argument(lazy):
+        import dask_cudf
+
+        if engine != "cudf":
+            if lazy is True:
+                raise ValueError('to read lazily `engine == "cudf"`')
+        elif any(not isinstance(p, str) for p in filepaths_or_buffers):
+            if lazy is True:
+                raise ValueError("cannot read buffers lazily")
+        elif engine == "cudf":
+            try:
+                df = lazy_wrap_dataframe(
+                    df=dask_cudf.read_parquet(
+                        path=filepaths_or_buffers,
+                        columns=columns,
+                        filters=None,
+                        storage_options=None,
+                        calculate_divisions=False,
+                        ignore_metadata_file=False,
+                        metadata_task_size=metadata_task_size,
+                        aggregate_files=aggregate_files,
+                        lazy=False,
+                        filesystem="fsspec",
+                        split_row_groups=split_row_groups,
+                        *args,
+                        **kwargs,
+                    ).repartition(npartitions=1),
+                    noop_on_error=False,
+                )
+            except ValueError:
+                pass  # On error we fall back to the eager implementation
+
+    # If that didn't work, we read the data eagerly
+    if df is None:
+        df = _parquet_to_frame(
+            filepaths_or_buffers,
+            engine,
+            *args,
+            columns=columns,
+            row_groups=row_groups,
+            use_pandas_metadata=use_pandas_metadata,
+            partition_keys=partition_keys,
+            partition_categories=partition_categories,
+            dataset_kwargs=dataset_kwargs,
+            **kwargs,
+        )
 
     # Apply filters row-wise (if any are defined), and return
     df = _apply_post_filters(df, filters)

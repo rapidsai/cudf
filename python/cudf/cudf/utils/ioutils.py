@@ -190,6 +190,10 @@ bytes_per_thread : int, default None
     in parallel (using a python thread pool). Default allocation is
     {bytes_per_thread} bytes.
     This parameter is functional only when `use_python_file_object=False`.
+lazy : bool, default None
+    Determine whether to return a lazy or a regular dataframe. If None, the
+    decision is based on whether dask_cudf/dask-expr is available and the
+    cudf option `lazy` (or the CUDF_LAZY environment variable).
 
 Returns
 -------

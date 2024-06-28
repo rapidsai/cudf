@@ -27,6 +27,7 @@ from cudf.io.parquet import (
     _default_open_file_options,
     _normalize_filters,
 )
+from cudf.pandas.module_accelerator import disable_module_accelerator
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
 from cudf.utils.ioutils import (
     _ROW_GROUP_SIZE_BYTES_DEFAULT,
@@ -38,24 +39,25 @@ from cudf.utils.ioutils import (
 class CudfEngine(ArrowDatasetEngine):
     @classmethod
     def _create_dd_meta(cls, dataset_info, **kwargs):
-        # Start with pandas-version of meta
-        meta_pd = super()._create_dd_meta(dataset_info, **kwargs)
+        with disable_module_accelerator():
+            # Start with pandas-version of meta
+            meta_pd = super()._create_dd_meta(dataset_info, **kwargs)
 
-        # Convert to cudf
-        # (drop unsupported timezone information)
-        for k, v in meta_pd.dtypes.items():
-            if isinstance(v, pd.DatetimeTZDtype) and v.tz is not None:
-                meta_pd[k] = meta_pd[k].dt.tz_localize(None)
-        meta_cudf = cudf.from_pandas(meta_pd)
+            # Convert to cudf
+            # (drop unsupported timezone information)
+            for k, v in meta_pd.dtypes.items():
+                if isinstance(v, pd.DatetimeTZDtype) and v.tz is not None:
+                    meta_pd[k] = meta_pd[k].dt.tz_localize(None)
+            with cudf.option_context("mode.pandas_compatible", False):
+                meta_cudf = cudf.from_pandas(meta_pd)
 
-        # Re-set "object" dtypes to align with pa schema
-        kwargs = dataset_info.get("kwargs", {})
-        set_object_dtypes_from_pa_schema(
-            meta_cudf,
-            kwargs.get("schema", None),
-        )
-
-        return meta_cudf
+            # Re-set "object" dtypes to align with pa schema
+            kwargs = dataset_info.get("kwargs", {})
+            set_object_dtypes_from_pa_schema(
+                meta_cudf,
+                kwargs.get("schema", None),
+            )
+            return meta_cudf
 
     @classmethod
     def multi_support(cls):
@@ -236,6 +238,12 @@ class CudfEngine(ArrowDatasetEngine):
         read_kwargs = kwargs.get("read", {})
         read_kwargs.update(open_file_options or {})
         check_file_size = read_kwargs.pop("check_file_size", None)
+
+        # To avoid recursion error, we cannot use "lazy" when reading
+        # a dask partition.
+        read_kwargs["lazy"] = False
+        if kwargs.get("lazy", False):
+            raise ValueError("cannot use the lazy argument within a dask task")
 
         # Wrap reading logic in a `try` block so that we can
         # inform the user that the `read_parquet` partition

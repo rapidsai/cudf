@@ -12,6 +12,7 @@ import re
 import sys
 import textwrap
 import warnings
+from abc import ABC
 from collections import abc, defaultdict
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping, cast
@@ -579,7 +580,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                         self._frame[col].iloc[key[0]] = value[i]
 
 
-class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
+class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin, ABC):
     """
     A GPU Dataframe object.
 
