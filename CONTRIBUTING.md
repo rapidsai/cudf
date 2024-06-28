@@ -78,7 +78,7 @@ Compilers:
 CUDA/GPU Runtime:
 
 * CUDA 11.4+
-* Volta architecture or better (Compute Capability >=7.0)
+* Volta architecture or better ([Compute Capability](https://docs.nvidia.com/deploy/cuda-compatibility/) >=7.0)
 
 You can obtain CUDA from
 [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
