@@ -159,8 +159,9 @@ def _external_only_api(func, alternative=""):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         # Check the immediately preceding frame to see if it's in cudf.
-        frame, lineno = next(traceback.walk_stack(None))
-        fn = frame.f_code.co_filename
+        pre_frame = traceback.extract_stack(limit=2)[0]
+        fn = pre_frame.filename
+        lineno = pre_frame.lineno
         if _cudf_root in fn and _tests_root not in fn:
             raise RuntimeError(
                 f"External-only API called in {fn} at line {lineno}. "
