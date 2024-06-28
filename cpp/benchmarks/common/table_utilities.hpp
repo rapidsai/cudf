@@ -25,9 +25,9 @@
  * and accumulates them, the returned estimate may be an inexact approximation in some
  * cases. See cudf::row_bit_count() for more details.
  * 
- * @param column The column to estimate its size
+ * @param view The column view to estimate its size
  */
-int64_t estimate_size(std::unique_ptr<cudf::column> column);
+int64_t estimate_size(cudf::column_view const& view);
 
 /**
  * @brief Estimates the table size in bytes.
@@ -36,6 +36,6 @@ int64_t estimate_size(std::unique_ptr<cudf::column> column);
  * and accumulates them, the returned estimate may be an inexact approximation in some
  * cases. See cudf::row_bit_count() for more details.
  * 
- * @param view The view to estimate its size
+ * @param view The table view to estimate its size
  */
 int64_t estimate_size(cudf::table_view const& view);

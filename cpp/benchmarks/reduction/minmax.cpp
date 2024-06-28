@@ -31,7 +31,7 @@ void BM_reduction(benchmark::State& state)
 {
   cudf::size_type const column_size{(cudf::size_type)state.range(0)};
   auto const dtype_id = cudf::type_to_id<type>();
-  auto input_column =
+  auto const input_column =
     create_random_column(dtype_id, row_count{column_size}, data_profile_builder().no_validity());
 
   for (auto _ : state) {
@@ -42,7 +42,7 @@ void BM_reduction(benchmark::State& state)
   // The benchmark takes a column and produces two scalars.
   set_items_processed(state, column_size + 2);
   cudf::data_type dtype = cudf::data_type{dtype_id};
-  set_bytes_processed(state, estimate_size(std::move(input_column)) + 2 * cudf::size_of(dtype));
+  set_bytes_processed(state, estimate_size(input_column->view()) + 2 * cudf::size_of(dtype));
 }
 
 #define concat(a, b, c) a##b##c

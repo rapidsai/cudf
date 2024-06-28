@@ -36,7 +36,7 @@ void BM_reduction_anyall(benchmark::State& state,
   auto const dtype           = cudf::type_to_id<type>();
   data_profile const profile = data_profile_builder().no_validity().distribution(
     dtype, distribution_id::UNIFORM, 0, agg->kind == cudf::aggregation::ANY ? 0 : 100);
-  auto values = create_random_column(dtype, row_count{column_size}, profile);
+  auto const values = create_random_column(dtype, row_count{column_size}, profile);
 
   cudf::data_type output_dtype{cudf::type_id::BOOL8};
 
@@ -47,7 +47,7 @@ void BM_reduction_anyall(benchmark::State& state,
 
   // The benchmark takes a column and produces one scalar.
   set_items_processed(state, column_size + 1);
-  set_bytes_processed(state, estimate_size(std::move(values)) + cudf::size_of(output_dtype));
+  set_bytes_processed(state, estimate_size(values->view()) + cudf::size_of(output_dtype));
 }
 
 #define concat(a, b, c) a##b##c

@@ -50,11 +50,11 @@ static void nvbench_reduction_scan(nvbench::state& state, nvbench::type_list<typ
     timer.stop();
 
     // Estimating the result size will launch a kernel. Do not include it in measuring time.
-    result_size += estimate_size(std::move(result));
+    result_size += estimate_size(result->view());
   });
 
-  state.add_element_count(new_tbl->num_rows());
-  state.add_global_memory_reads(estimate_size(new_tbl->view()));
+  state.add_element_count(input.size());
+  state.add_global_memory_reads(estimate_size(input));
   state.add_global_memory_writes(result_size);
 
   set_throughputs(state);

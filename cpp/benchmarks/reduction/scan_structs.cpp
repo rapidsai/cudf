@@ -45,11 +45,9 @@ static void nvbench_structs_scan(nvbench::state& state)
     row_count{size},
     profile);
   auto [null_mask, null_count] = create_random_null_mask(size, null_probability);
-  auto input                   = cudf::make_structs_column(
+  auto const input             = cudf::make_structs_column(
     size, std::move(data_table->release()), null_count, std::move(null_mask));
-  std::vector<std::unique_ptr<cudf::column>> columns;
-  columns.emplace_back(std::move(input));
-  cudf::table input_table{std::move(columns)};
+  auto input_view = input->view();
 
   auto const agg         = cudf::make_min_aggregation<cudf::scan_aggregation>();
   auto const null_policy = static_cast<cudf::null_policy>(state.get_int64("null_policy"));
@@ -59,16 +57,16 @@ static void nvbench_structs_scan(nvbench::state& state)
   int64_t result_size = 0;
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
     timer.start();
-    auto result = cudf::detail::scan_inclusive(
-      input_table.view().column(0), *agg, null_policy, stream, rmm::mr::get_current_device_resource());
+    auto const result = cudf::detail::scan_inclusive(
+      input_view, *agg, null_policy, stream, rmm::mr::get_current_device_resource());
     timer.stop();
 
     // Estimating the result size will launch a kernel. Do not include it in measuring time.
-    result_size += estimate_size(std::move(result));
+    result_size += estimate_size(result->view());
   });
 
-  state.add_element_count(input_table.num_rows());
-  state.add_global_memory_reads(estimate_size(input_table.view()));
+  state.add_element_count(input_view.size());
+  state.add_global_memory_reads(estimate_size(input_view));
   state.add_global_memory_writes(result_size);
 
   set_throughputs(state);

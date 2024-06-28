@@ -19,12 +19,9 @@
 #include <cudf/transform.hpp>
 #include <cudf/reduction.hpp>
 
-int64_t estimate_size(std::unique_ptr<cudf::column> column)
+int64_t estimate_size(cudf::column_view const& col)
 {
-  std::vector<std::unique_ptr<cudf::column>> columns;
-  columns.emplace_back(std::move(column));
-  cudf::table table{std::move(columns)};
-  return estimate_size(table.view());
+  return estimate_size( cudf::table_view( {col} ) );
 }
 
 int64_t estimate_size(cudf::table_view const& view)
