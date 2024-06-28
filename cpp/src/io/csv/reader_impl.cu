@@ -27,6 +27,7 @@
 #include "io/utilities/parsing_utils.cuh"
 
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/csv.hpp>
@@ -951,8 +952,10 @@ parse_options make_parse_options(csv_reader_options const& reader_opts,
   parse_opts.terminator = reader_opts.get_lineterminator();
 
   if (reader_opts.get_quotechar() != '\0' && reader_opts.get_quoting() != quote_style::NONE) {
-    parse_opts.quotechar   = reader_opts.get_quotechar();
-    parse_opts.keepquotes  = false;
+    parse_opts.quotechar  = reader_opts.get_quotechar();
+    parse_opts.keepquotes = false;
+    parse_opts.detect_whitespace_around_quotes =
+      reader_opts.is_enabled_detect_whitespace_around_quotes();
     parse_opts.doublequote = reader_opts.is_enabled_doublequote();
   } else {
     parse_opts.quotechar   = '\0';

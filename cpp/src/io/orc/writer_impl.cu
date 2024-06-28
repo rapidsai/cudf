@@ -27,7 +27,6 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -782,8 +781,16 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
         } else {
           // pushdown mask present; null mask bits w/ set pushdown mask bits will be encoded
           // Use the number of set bits in pushdown mask as size
-          auto bits_to_borrow =
-            8 - (d_pd_set_counts[rg_idx][parent_col_idx] - previously_borrowed) % 8;
+          auto bits_to_borrow = [&]() {
+            auto const parent_valid_count = d_pd_set_counts[rg_idx][parent_col_idx];
+            if (parent_valid_count < previously_borrowed) {
+              // Borrow to make an empty rowgroup
+              return previously_borrowed - parent_valid_count;
+            }
+            auto const misalignment = (parent_valid_count - previously_borrowed) % 8;
+            return (8 - misalignment) % 8;
+          }();
+
           if (bits_to_borrow == 0) {
             // Didn't borrow any bits for this rowgroup
             previously_borrowed = 0;
@@ -2331,7 +2338,7 @@ auto convert_table_to_orc_data(table_view const& input,
                       std::move(streams),
                       std::move(stripes),
                       std::move(stripe_dicts.views),
-                      cudf::detail::pinned_host_vector<uint8_t>()};
+                      cudf::detail::make_pinned_vector_async<uint8_t>(0, stream)};
   }
 
   // Allocate intermediate output stream buffer
@@ -2399,7 +2406,7 @@ auto convert_table_to_orc_data(table_view const& input,
     return max_stream_size;
   }();
 
-  cudf::detail::pinned_host_vector<uint8_t> bounce_buffer(max_out_stream_size);
+  auto bounce_buffer = cudf::detail::make_pinned_vector_async<uint8_t>(max_out_stream_size, stream);
 
   auto intermediate_stats = gather_statistic_blobs(stats_freq, orc_table, segmentation, stream);
 

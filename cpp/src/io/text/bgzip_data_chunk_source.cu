@@ -19,8 +19,9 @@
 #include "io/utilities/config_utils.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/utilities/pinned_host_vector.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -66,7 +67,7 @@ struct bgzip_nvcomp_transform_functor {
 class bgzip_data_chunk_reader : public data_chunk_reader {
  private:
   template <typename T>
-  static void copy_to_device(cudf::detail::pinned_host_vector<T> const& host,
+  static void copy_to_device(cudf::detail::host_vector<T> const& host,
                              rmm::device_uvector<T>& device,
                              rmm::cuda_stream_view stream)
   {
@@ -84,9 +85,9 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       1 << 16;  // 64k offset allocation, resized on demand
 
     cudaEvent_t event;
-    cudf::detail::pinned_host_vector<char> h_compressed_blocks;
-    cudf::detail::pinned_host_vector<std::size_t> h_compressed_offsets;
-    cudf::detail::pinned_host_vector<std::size_t> h_decompressed_offsets;
+    cudf::detail::host_vector<char> h_compressed_blocks;
+    cudf::detail::host_vector<std::size_t> h_compressed_offsets;
+    cudf::detail::host_vector<std::size_t> h_decompressed_offsets;
     rmm::device_uvector<char> d_compressed_blocks;
     rmm::device_uvector<char> d_decompressed_blocks;
     rmm::device_uvector<std::size_t> d_compressed_offsets;
@@ -103,7 +104,10 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     bool is_decompressed{};
 
     decompression_blocks(rmm::cuda_stream_view init_stream)
-      : d_compressed_blocks(0, init_stream),
+      : h_compressed_blocks{cudf::detail::make_pinned_vector_async<char>(0, init_stream)},
+        h_compressed_offsets{cudf::detail::make_pinned_vector_async<std::size_t>(0, init_stream)},
+        h_decompressed_offsets{cudf::detail::make_pinned_vector_async<std::size_t>(0, init_stream)},
+        d_compressed_blocks(0, init_stream),
         d_decompressed_blocks(0, init_stream),
         d_compressed_offsets(0, init_stream),
         d_decompressed_offsets(0, init_stream),

@@ -14,11 +14,11 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
-    assert_eq,
     expect_warning_if,
 )
 
@@ -353,6 +353,14 @@ def test_json_lines_basic(json_input, engine):
     for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
         assert str(cu_col) == str(pd_col)
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
+
+
+@pytest.mark.filterwarnings("ignore:Using CPU")
+@pytest.mark.parametrize("engine", ["auto", "cudf", "pandas"])
+def test_nonexistent_json_correct_error(engine):
+    json_input = "doesnotexist.json"
+    with pytest.raises(FileNotFoundError):
+        cudf.read_json(json_input, engine=engine)
 
 
 @pytest.mark.skipif(
@@ -1384,3 +1392,34 @@ def test_json_nested_mixed_types_error(jsonl_string):
             orient="records",
             lines=True,
         )
+
+
+@pytest.mark.parametrize("on_bad_lines", ["error", "recover", "abc"])
+def test_json_reader_on_bad_lines(on_bad_lines):
+    json_input = StringIO(
+        '{"a":1,"b":10}\n{"a":2,"b":11}\nabc\n{"a":3,"b":12}\n'
+    )
+    if on_bad_lines == "error":
+        with pytest.raises(RuntimeError):
+            cudf.read_json(
+                json_input,
+                lines=True,
+                orient="records",
+                on_bad_lines=on_bad_lines,
+            )
+    elif on_bad_lines == "recover":
+        actual = cudf.read_json(
+            json_input, lines=True, orient="records", on_bad_lines=on_bad_lines
+        )
+        expected = cudf.DataFrame(
+            {"a": [1, 2, None, 3], "b": [10, 11, None, 12]}
+        )
+        assert_eq(actual, expected)
+    else:
+        with pytest.raises(TypeError):
+            cudf.read_json(
+                json_input,
+                lines=True,
+                orient="records",
+                on_bad_lines=on_bad_lines,
+            )

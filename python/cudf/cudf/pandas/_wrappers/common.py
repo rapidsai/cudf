@@ -46,5 +46,10 @@ def cuda_array_interface(self: _FastSlowProxy):
     return self._fsproxy_fast.__cuda_array_interface__
 
 
+@property  # type: ignore
+def array_interface(self: _FastSlowProxy):
+    return self._fsproxy_slow.__array_interface__
+
+
 def custom_iter(self: _FastSlowProxy):
     return iter(self._fsproxy_slow)

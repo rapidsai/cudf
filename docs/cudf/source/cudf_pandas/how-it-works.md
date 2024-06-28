@@ -34,6 +34,5 @@ correct result. Data is automatically transferred from host to device
 transfers.
 
 When using `cudf.pandas`, cuDF's [pandas compatibility
-mode](https://docs.rapids.ai/api/cudf/stable/api_docs/options/#available-options)
-is automatically enabled, ensuring consistency with pandas-specific
-semantics like default sort ordering.
+mode](api.options) is automatically enabled, ensuring consistency with
+pandas-specific semantics like default sort ordering.

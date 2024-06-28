@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 #include <cstddef>
 #include <limits>
 #include <type_traits>
+#include <utility>
 
 namespace cudf {
 /**
@@ -90,7 +91,7 @@ class span_base {
    *
    * @return Reference to the first element in the span
    */
-  constexpr reference front() const { return _data[0]; }
+  [[nodiscard]] constexpr reference front() const { return _data[0]; }
   // not noexcept due to undefined behavior when size = 0
   /**
    * @brief Returns a reference to the last element in the span.
@@ -99,7 +100,7 @@ class span_base {
    *
    * @return Reference to the last element in the span
    */
-  constexpr reference back() const { return _data[_size - 1]; }
+  [[nodiscard]] constexpr reference back() const { return _data[_size - 1]; }
   // not noexcept due to undefined behavior when idx < 0 || idx >= size
   /**
    * @brief Returns a reference to the idx-th element of the sequence.
@@ -119,7 +120,7 @@ class span_base {
    *
    * @return An iterator to the first element of the span
    */
-  constexpr iterator begin() const noexcept { return _data; }
+  [[nodiscard]] constexpr iterator begin() const noexcept { return _data; }
   /**
    * @brief Returns an iterator to the element following the last element of the span.
    *
@@ -127,13 +128,13 @@ class span_base {
    *
    * @return An iterator to the element following the last element of the span
    */
-  constexpr iterator end() const noexcept { return _data + _size; }
+  [[nodiscard]] constexpr iterator end() const noexcept { return _data + _size; }
   /**
    * @brief Returns a pointer to the beginning of the sequence.
    *
    * @return A pointer to the first element of the span
    */
-  constexpr pointer data() const noexcept { return _data; }
+  [[nodiscard]] constexpr pointer data() const noexcept { return _data; }
 
   /**
    * @brief Returns the number of elements in the span.
@@ -160,7 +161,10 @@ class span_base {
    * @param count Number of elements from the beginning of this span to put in the subspan.
    * @return A subspan of the first N elements of the sequence
    */
-  constexpr Derived first(size_type count) const noexcept { return Derived(_data, count); }
+  [[nodiscard]] constexpr Derived first(size_type count) const noexcept
+  {
+    return Derived(_data, count);
+  }
 
   /**
    * @brief Obtains a subspan consisting of the last N elements of the sequence
@@ -168,7 +172,7 @@ class span_base {
    * @param count Number of elements from the end of this span to put in the subspan
    * @return A subspan of the last N elements of the sequence
    */
-  constexpr Derived last(size_type count) const noexcept
+  [[nodiscard]] constexpr Derived last(size_type count) const noexcept
   {
     return Derived(_data + _size - count, count);
   }
@@ -180,7 +184,7 @@ class span_base {
    * @param count The number of elements in the subspan
    * @return A subspan of the sequence, of requested count and offset
    */
-  constexpr Derived subspan(size_type offset, size_type count) const noexcept
+  [[nodiscard]] constexpr Derived subspan(size_type offset, size_type count) const noexcept
   {
     return Derived(_data + offset, count);
   }
@@ -365,7 +369,7 @@ class base_2dspan {
    * @param data Pointer to the data
    * @param size Size of the 2D span as pair
    */
-  base_2dspan(T* data, size_type size) noexcept : _data{data}, _size{size} {}
+  base_2dspan(T* data, size_type size) noexcept : _data{data}, _size{std::move(size)} {}
 
   /**
    * @brief Returns a pointer to the beginning of the sequence.

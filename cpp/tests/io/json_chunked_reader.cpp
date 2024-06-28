@@ -76,10 +76,10 @@ std::vector<cudf::io::table_with_metadata> skeleton_for_parellel_chunk_reader(
   auto prev                = first_delimiter_index[0];
   for (size_t i = 1; i < num_chunks; i++) {
     if (first_delimiter_index[i] == no_min_value) continue;
-    record_ranges.push_back({prev, first_delimiter_index[i]});
+    record_ranges.emplace_back(prev, first_delimiter_index[i]);
     prev = first_delimiter_index[i];
   }
-  record_ranges.push_back({prev, total_source_size});
+  record_ranges.emplace_back(prev, total_source_size);
 
   std::vector<cudf::io::table_with_metadata> tables;
   // Process each chunk in parallel.

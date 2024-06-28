@@ -60,7 +60,7 @@ set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
 
 # always build a default PTX file in case RAPIDS_NO_INITIALIZE is set and the device cc can't be
 # safely queried through a context
-list(INSERT CMAKE_CUDA_ARCHITECTURES 0 "60")
+list(INSERT CMAKE_CUDA_ARCHITECTURES 0 "70")
 
 list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-real" "")
 list(TRANSFORM CMAKE_CUDA_ARCHITECTURES REPLACE "-virtual" "")

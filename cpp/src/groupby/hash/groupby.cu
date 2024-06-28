@@ -16,7 +16,6 @@
 
 #include "groupby/common/utils.hpp"
 #include "groupby/hash/groupby_kernels.cuh"
-#include "hash/concurrent_unordered_map.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
@@ -554,7 +553,8 @@ std::unique_ptr<table> groupby(table_view const& keys,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
 {
-  auto const num_keys            = keys.num_rows();
+  // convert to int64_t to avoid potential overflow with large `keys`
+  auto const num_keys            = static_cast<int64_t>(keys.num_rows());
   auto const null_keys_are_equal = null_equality::EQUAL;
   auto const has_null            = nullate::DYNAMIC{cudf::has_nested_nulls(keys)};
 

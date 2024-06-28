@@ -186,4 +186,4 @@ def test_murmurhash3_x64_128(pa_input_column):
         names=["0", "1"],
     )
 
-    assert_table_eq(got, expect)
+    assert_table_eq(expect, got)

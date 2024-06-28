@@ -1,8 +1,8 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import ast
 import functools
-from typing import List, Tuple
 
 from cudf._lib.expressions import (
     ASTOperator,
@@ -98,9 +98,9 @@ class libcudfASTVisitor(ast.NodeVisitor):
         The column names used to map the names in an expression.
     """
 
-    def __init__(self, col_names: Tuple[str]):
-        self.stack: List[Expression] = []
-        self.nodes: List[Expression] = []
+    def __init__(self, col_names: tuple[str]):
+        self.stack: list[Expression] = []
+        self.nodes: list[Expression] = []
         self.col_names = col_names
 
     @property
@@ -218,7 +218,7 @@ class libcudfASTVisitor(ast.NodeVisitor):
 
 
 @functools.lru_cache(256)
-def parse_expression(expr: str, col_names: Tuple[str]):
+def parse_expression(expr: str, col_names: tuple[str]):
     visitor = libcudfASTVisitor(col_names)
     visitor.visit(ast.parse(expr))
     return visitor

@@ -16,6 +16,11 @@
 
 #pragma once
 
+#include <cudf/types.hpp>
+
+#include <nanoarrow/nanoarrow.h>
+#include <nanoarrow/nanoarrow_types.h>
+
 namespace cudf {
 namespace detail {
 
@@ -25,6 +30,22 @@ namespace detail {
  */
 static constexpr int validity_buffer_idx         = 0;
 static constexpr int fixed_width_data_buffer_idx = 1;
+
+/**
+ * @brief Map ArrowType id to cudf column type id
+ *
+ * @param arrow_view SchemaView to pull the logical and storage types from
+ * @return Column type id
+ */
+data_type arrow_to_cudf_type(ArrowSchemaView const* arrow_view);
+
+/**
+ * @brief Map cudf column type id to ArrowType id
+ *
+ * @param id Column type id
+ * @return ArrowType id
+ */
+ArrowType id_to_arrow_type(cudf::type_id id);
 
 }  // namespace detail
 }  // namespace cudf

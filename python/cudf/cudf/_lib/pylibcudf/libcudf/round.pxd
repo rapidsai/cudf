@@ -9,9 +9,9 @@ from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
 
 cdef extern from "cudf/round.hpp" namespace "cudf" nogil:
 
-    ctypedef enum rounding_method "cudf::rounding_method":
-        HALF_UP "cudf::rounding_method::HALF_UP"
-        HALF_EVEN "cudf::rounding_method::HALF_EVEN"
+    cpdef enum class rounding_method(int32_t):
+        HALF_UP
+        HALF_EVEN
 
     cdef unique_ptr[column] round (
         const column_view& input,

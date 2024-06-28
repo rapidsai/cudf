@@ -25,7 +25,7 @@ target_compile_options(
 target_link_libraries(
   cudf_datagen
   PUBLIC GTest::gmock GTest::gtest benchmark::benchmark nvbench::nvbench Threads::Threads cudf
-         cudftestutil nvtx3-cpp
+         cudftestutil nvtx3::nvtx3-cpp
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
@@ -163,8 +163,10 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
-ConfigureBench(JOIN_BENCH join/left_join.cu join/conditional_join.cu)
-ConfigureNVBench(JOIN_NVBENCH join/join.cu join/mixed_join.cu join/distinct_join.cu)
+ConfigureNVBench(
+  JOIN_NVBENCH join/left_join.cu join/conditional_join.cu join/join.cu join/mixed_join.cu
+  join/distinct_join.cu
+)
 
 # ##################################################################################################
 # * iterator benchmark ----------------------------------------------------------------------------
@@ -257,8 +259,18 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
+# * parquet multithread reader benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(PARQUET_MULTITHREAD_READER_NVBENCH io/parquet/parquet_reader_multithread.cpp)
+
+# ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------
 ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp io/orc/orc_reader_options.cpp)
+
+# ##################################################################################################
+# * orc multithreaded benchmark
+# --------------------------------------------------------------------------
+ConfigureNVBench(ORC_MULTITHREADED_NVBENCH io/orc/orc_reader_multithreaded.cpp)
 
 # ##################################################################################################
 # * csv reader benchmark --------------------------------------------------------------------------

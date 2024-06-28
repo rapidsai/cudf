@@ -167,6 +167,14 @@ class DataFrame(_Frame, dd.core.DataFrame):
         pre_sorted = sorted
         del sorted
 
+        if divisions == "quantile":
+            warnings.warn(
+                "Using divisions='quantile' is now deprecated. "
+                "Please raise an issue on github if you believe "
+                "this feature is necessary.",
+                FutureWarning,
+            )
+
         if (
             divisions == "quantile"
             or isinstance(divisions, (cudf.DataFrame, cudf.Series))

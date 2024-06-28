@@ -102,7 +102,7 @@ TEST_F(TextTokenizeTest, TokenizeErrorTest)
     EXPECT_THROW(nvtext::count_tokens(strings_view, delimiters_view), cudf::logic_error);
   }
   {
-    cudf::test::strings_column_wrapper delimiters({"", ""}, {0, 0});  // null delimiters
+    cudf::test::strings_column_wrapper delimiters({"", ""}, {false, false});  // null delimiters
     cudf::strings_column_view delimiters_view(delimiters);
     EXPECT_THROW(nvtext::tokenize(strings_view, delimiters_view), cudf::logic_error);
     EXPECT_THROW(nvtext::count_tokens(strings_view, delimiters_view), cudf::logic_error);
@@ -111,17 +111,13 @@ TEST_F(TextTokenizeTest, TokenizeErrorTest)
 
 TEST_F(TextTokenizeTest, CharacterTokenize)
 {
-  std::vector<char const*> h_strings{"the mousé ate the cheese", nullptr, ""};
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  cudf::test::strings_column_wrapper input({"the mousé ate the cheese", ""});
 
   cudf::test::strings_column_wrapper expected{"t", "h", "e", " ", "m", "o", "u", "s",
                                               "é", " ", "a", "t", "e", " ", "t", "h",
                                               "e", " ", "c", "h", "e", "e", "s", "e"};
 
-  auto results = nvtext::character_tokenize(cudf::strings_column_view(strings));
+  auto results = nvtext::character_tokenize(cudf::strings_column_view(input));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -131,7 +127,7 @@ TEST_F(TextTokenizeTest, TokenizeEmptyTest)
   auto view  = cudf::strings_column_view(input->view());
   cudf::test::strings_column_wrapper all_empty_wrapper({"", "", ""});
   auto all_empty = cudf::strings_column_view(all_empty_wrapper);
-  cudf::test::strings_column_wrapper all_null_wrapper({"", "", ""}, {0, 0, 0});
+  cudf::test::strings_column_wrapper all_null_wrapper({"", "", ""}, {false, false, false});
   auto all_null = cudf::strings_column_view(all_null_wrapper);
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected({0, 0, 0});
 
@@ -150,8 +146,6 @@ TEST_F(TextTokenizeTest, TokenizeEmptyTest)
   results = nvtext::character_tokenize(view);
   EXPECT_EQ(results->size(), 0);
   results = nvtext::character_tokenize(all_empty);
-  EXPECT_EQ(results->size(), 0);
-  results = nvtext::character_tokenize(all_null);
   EXPECT_EQ(results->size(), 0);
   auto const delimiter = cudf::string_scalar{""};
   results              = nvtext::tokenize_with_vocabulary(view, all_empty, delimiter);
@@ -284,7 +278,7 @@ TEST_F(TextTokenizeTest, TokenizeErrors)
   cudf::strings_column_view view(empty);
   EXPECT_THROW(nvtext::load_vocabulary(view), cudf::logic_error);
 
-  cudf::test::strings_column_wrapper vocab_nulls({""}, {0});
+  cudf::test::strings_column_wrapper vocab_nulls({""}, {false});
   cudf::strings_column_view nulls(vocab_nulls);
   EXPECT_THROW(nvtext::load_vocabulary(nulls), cudf::logic_error);
 

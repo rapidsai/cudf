@@ -231,7 +231,6 @@ def test_set_index(nelem):
         dd.assert_eq(expect, got, check_index=False, check_divisions=False)
 
 
-@xfail_dask_expr("missing support for divisions='quantile'")
 @pytest.mark.parametrize("by", ["a", "b"])
 @pytest.mark.parametrize("nelem", [10, 500])
 @pytest.mark.parametrize("nparts", [1, 10])
@@ -241,7 +240,8 @@ def test_set_index_quantile(nelem, nparts, by):
     df["b"] = np.random.choice(cudf.datasets.names, size=nelem)
     ddf = dd.from_pandas(df, npartitions=nparts)
 
-    got = ddf.set_index(by, divisions="quantile")
+    with pytest.warns(FutureWarning, match="deprecated"):
+        got = ddf.set_index(by, divisions="quantile")
     expect = df.sort_values(by=by).set_index(by)
     dd.assert_eq(got, expect)
 
@@ -795,7 +795,7 @@ def test_dataframe_set_index():
         pddf = dd.from_pandas(pdf, npartitions=4)
         pddf = pddf.set_index("str")
 
-        from cudf.testing._utils import assert_eq
+        from cudf.testing import assert_eq
 
         assert_eq(ddf.compute(), pddf.compute())
 
