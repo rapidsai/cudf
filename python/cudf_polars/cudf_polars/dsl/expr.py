@@ -51,6 +51,7 @@ __all__ = [
     "GroupedRollingWindow",
     "Cast",
     "Agg",
+    "Ternary",
     "BinOp",
 ]
 
@@ -1110,6 +1111,34 @@ class Agg(Expr):
             )  # pragma: no cover; unreachable
         (child,) = self.children
         return self.op(child.evaluate(df, context=context, mapping=mapping))
+
+
+class Ternary(Expr):
+    __slots__ = ("children",)
+    _non_child = ("dtype",)
+    children: tuple[Expr, Expr, Expr]
+
+    def __init__(
+        self, dtype: plc.DataType, when: Expr, then: Expr, otherwise: Expr
+    ) -> None:
+        super().__init__(dtype)
+        self.children = (when, then, otherwise)
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        when, then, otherwise = (
+            child.evaluate(df, context=context, mapping=mapping)
+            for child in self.children
+        )
+        then_obj = then.obj_scalar if then.is_scalar else then.obj
+        otherwise_obj = otherwise.obj_scalar if otherwise.is_scalar else otherwise.obj
+        return Column(plc.copying.copy_if_else(then_obj, otherwise_obj, when.obj))
 
 
 class BinOp(Expr):
