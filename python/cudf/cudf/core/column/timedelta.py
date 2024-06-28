@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import datetime
 import functools
-from typing import TYPE_CHECKING, Any, Optional, Sequence, cast
+from typing import TYPE_CHECKING, Sequence, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -77,10 +76,10 @@ class TimeDeltaColumn(ColumnBase):
         self,
         data: Buffer,
         dtype: Dtype,
-        size: Optional[int] = None,  # TODO: make non-optional
-        mask: Optional[Buffer] = None,
+        size: int | None = None,  # TODO: make non-optional
+        mask: Buffer | None = None,
         offset: int = 0,
-        null_count: Optional[int] = None,
+        null_count: int | None = None,
     ):
         dtype = cudf.dtype(dtype)
         if dtype.kind != "m":
@@ -252,22 +251,6 @@ class TimeDeltaColumn(ColumnBase):
     def time_unit(self) -> str:
         return np.datetime_data(self.dtype)[0]
 
-    def fillna(
-        self,
-        fill_value: Any = None,
-        method: Optional[str] = None,
-    ) -> Self:
-        if fill_value is not None:
-            if cudf.utils.utils._isnat(fill_value):
-                return self.copy(deep=True)
-            if is_scalar(fill_value):
-                fill_value = cudf.Scalar(fill_value)
-                dtype = self.dtype
-                fill_value = fill_value.astype(dtype)
-            else:
-                fill_value = column.as_column(fill_value, nan_as_null=False)
-        return super().fillna(fill_value, method)
-
     def as_numerical_column(
         self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
@@ -316,7 +299,7 @@ class TimeDeltaColumn(ColumnBase):
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
-    def median(self, skipna: Optional[bool] = None) -> pd.Timedelta:
+    def median(self, skipna: bool | None = None) -> pd.Timedelta:
         return pd.Timedelta(
             self.as_numerical_column("int64").median(skipna=skipna),
             unit=self.time_unit,
@@ -346,9 +329,9 @@ class TimeDeltaColumn(ColumnBase):
 
     def sum(
         self,
-        skipna: Optional[bool] = None,
+        skipna: bool | None = None,
         min_count: int = 0,
-        dtype: Optional[Dtype] = None,
+        dtype: Dtype | None = None,
     ) -> pd.Timedelta:
         return pd.Timedelta(
             # Since sum isn't overridden in Numerical[Base]Column, mypy only
@@ -362,7 +345,7 @@ class TimeDeltaColumn(ColumnBase):
 
     def std(
         self,
-        skipna: Optional[bool] = None,
+        skipna: bool | None = None,
         min_count: int = 0,
         dtype: Dtype = np.float64,
         ddof: int = 1,
@@ -392,7 +375,7 @@ class TimeDeltaColumn(ColumnBase):
             other.as_numerical_column("int64")
         )
 
-    def components(self, index=None) -> "cudf.DataFrame":
+    def components(self) -> dict[str, ColumnBase]:
         """
         Return a Dataframe of the components of the Timedeltas.
 
@@ -484,11 +467,7 @@ class TimeDeltaColumn(ColumnBase):
             if self.nullable:
                 res_col = res_col.set_mask(self.mask)
             data[name] = res_col
-
-        return cudf.DataFrame(
-            data=data,
-            index=index,
-        )
+        return data
 
     @property
     def days(self) -> "cudf.core.column.NumericalColumn":

@@ -63,16 +63,22 @@ back to CPU for certain operations. Running your code with the
 `cudf.pandas.profile` magic generates a report showing which
 operations used the GPU and which used the CPU. This can help you
 identify parts of your code that could be rewritten to be more
-GPU-friendly:
+GPU-friendly.
+
+### Using the Function Profiler
+
+First, enable `cudf.pandas`:
 
 ```python
 %load_ext cudf.pandas
 import pandas as pd
 ```
 
+Next, use the IPython/Jupyter magic `cudf.pandas.profile`:
+
 ```python
 %%cudf.pandas.profile
-df = pd.DataFrame({'a': [0, 1, 2], 'b': [3,4,3]})
+df = pd.DataFrame({'a': [0, 1, 2], 'b': [3, 4, 3]})
 
 df.min(axis=1)
 out = df.groupby('a').filter(
@@ -80,13 +86,35 @@ out = df.groupby('a').filter(
 )
 ```
 
+This gives a profiler output after the cell runs, shown below.
+
 ![cudf-pandas-profile](../_static/cudf-pandas-profile.png)
 
 When an operation falls back to using the CPU, it's typically because
 that operation isn't implemented by cuDF. The profiler generates a
 handy link to report the missing functionality to the cuDF team.
 
-To profile a script being run from the command-line, pass the
+### Using the Line Profiler
+
+There is a line profiler activated by the IPython/Jupyter magic `cudf.pandas.line_profile`:
+
+```python
+%%cudf.pandas.line_profile
+df = pd.DataFrame({'a': [0, 1, 2], 'b': [3, 4, 3]})
+
+df.min(axis=1)
+out = df.groupby('a').filter(
+    lambda group: len(group) > 1
+)
+```
+
+The output of the line profiler shows the source code and how much time each line spent executing on the GPU and CPU.
+
+![cudf-pandas-line-profile](../_static/cudf-pandas-line-profile.png)
+
+### Profiling from the command line
+
+To profile a script being run from the command line, pass the
 `--profile` argument:
 
 ```bash

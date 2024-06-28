@@ -2,24 +2,11 @@
 
 from __future__ import annotations
 
-import copy
-import itertools
 import operator
 import pickle
 import warnings
 from collections import abc
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    List,
-    Literal,
-    MutableMapping,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping
 
 # TODO: The `numpy` import is needed for typing purposes during doc builds
 # only, need to figure out why the `np` alias is insufficient then remove.
@@ -32,6 +19,7 @@ from typing_extensions import Self
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_dtype_equal, is_scalar
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
@@ -50,7 +38,7 @@ from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 if TYPE_CHECKING:
     from types import ModuleType
 
-    from cudf._typing import Dtype
+    from cudf._typing import Dtype, ScalarLike
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
@@ -83,15 +71,15 @@ class Frame(BinaryOperand, Scannable):
         return self._data.nrows
 
     @property
-    def _column_names(self) -> Tuple[Any, ...]:
+    def _column_names(self) -> tuple[Any, ...]:
         return self._data.names
 
     @property
-    def _columns(self) -> Tuple[ColumnBase, ...]:
+    def _columns(self) -> tuple[ColumnBase, ...]:
         return self._data.columns
 
     @property
-    def _dtypes(self) -> abc.Iterator:
+    def _dtypes(self) -> abc.Iterable:
         return zip(self._data.names, (col.dtype for col in self._data.columns))
 
     @property
@@ -154,10 +142,8 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def _from_columns_like_self(
         self,
-        columns: List[ColumnBase],
-        column_names: Optional[abc.Iterable[str]] = None,
-        *,
-        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
+        columns: list[ColumnBase],
+        column_names: abc.Iterable[str] | None = None,
     ):
         """Construct a Frame from a list of columns with metadata from self.
 
@@ -167,12 +153,12 @@ class Frame(BinaryOperand, Scannable):
             column_names = self._column_names
         data = dict(zip(column_names, columns))
         frame = self.__class__._from_data(data)
-        return frame._copy_type_metadata(self, override_dtypes=override_dtypes)
+        return frame._copy_type_metadata(self)
 
     @_cudf_nvtx_annotate
     def _mimic_inplace(
         self, result: Self, inplace: bool = False
-    ) -> Optional[Self]:
+    ) -> Self | None:
         if inplace:
             for col in self._data:
                 if col in result._data:
@@ -424,15 +410,15 @@ class Frame(BinaryOperand, Scannable):
         get_array: Callable,
         module: ModuleType,
         copy: bool,
-        dtype: Union[Dtype, None] = None,
+        dtype: Dtype | None = None,
         na_value=None,
-    ) -> Union[cupy.ndarray, numpy.ndarray]:
+    ) -> cupy.ndarray | numpy.ndarray:
         # Internal function to implement to_cupy and to_numpy, which are nearly
         # identical except for the attribute they access to generate values.
 
         def to_array(
             col: ColumnBase, dtype: np.dtype
-        ) -> Union[cupy.ndarray, numpy.ndarray]:
+        ) -> cupy.ndarray | numpy.ndarray:
             if na_value is not None:
                 col = col.fillna(na_value)
             array = get_array(col)
@@ -485,7 +471,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def to_cupy(
         self,
-        dtype: Union[Dtype, None] = None,
+        dtype: Dtype | None = None,
         copy: bool = False,
         na_value=None,
     ) -> cupy.ndarray:
@@ -519,7 +505,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def to_numpy(
         self,
-        dtype: Union[Dtype, None] = None,
+        dtype: Dtype | None = None,
         copy: bool = True,
         na_value=None,
     ) -> numpy.ndarray:
@@ -552,7 +538,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def where(self, cond, other=None, inplace: bool = False) -> Optional[Self]:
+    def where(self, cond, other=None, inplace: bool = False) -> Self | None:
         """
         Replace values where the condition is False.
 
@@ -627,12 +613,12 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def fillna(
         self,
-        value=None,
-        method: Optional[Literal["ffill", "bfill", "pad", "backfill"]] = None,
+        value: None | ScalarLike | cudf.Series = None,
+        method: Literal["ffill", "bfill", "pad", "backfill", None] = None,
         axis=None,
         inplace: bool = False,
         limit=None,
-    ) -> Optional[Self]:
+    ) -> Self | None:
         """Fill null values with ``value`` or specified ``method``.
 
         Parameters
@@ -739,6 +725,16 @@ class Frame(BinaryOperand, Scannable):
             raise ValueError("Cannot specify both 'value' and 'method'.")
 
         if method:
+            # Do not remove until pandas 3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
+            warnings.warn(
+                f"{type(self).__name__}.fillna with 'method' is "
+                "deprecated and will raise in a future version. "
+                "Use obj.ffill() or obj.bfill() instead.",
+                FutureWarning,
+            )
             if method not in {"ffill", "bfill", "pad", "backfill"}:
                 raise NotImplementedError(
                     f"Fill method {method} is not supported"
@@ -748,57 +744,24 @@ class Frame(BinaryOperand, Scannable):
             elif method == "backfill":
                 method = "bfill"
 
-        # TODO: This logic should be handled in different subclasses since
-        # different Frames support different types of values.
-        if isinstance(value, cudf.Series):
-            value = value.reindex(self._data.names)
-        elif isinstance(value, cudf.DataFrame):
-            if not self.index.equals(value.index):  # type: ignore[attr-defined]
-                value = value.reindex(self.index)  # type: ignore[attr-defined]
-            else:
-                value = value
-        elif not isinstance(value, abc.Mapping):
-            value = {name: copy.deepcopy(value) for name in self._data.names}
-        else:
-            value = {
-                key: value.reindex(self.index)  # type: ignore[attr-defined]
-                if isinstance(value, cudf.Series)
-                else value
-                for key, value in value.items()
-            }
-
-        filled_data = {}
-        for col_name, col in self._data.items():
-            if col_name in value and method is None:
-                replace_val = value[col_name]
-            else:
-                replace_val = None
-            should_fill = (
-                (
-                    col_name in value
-                    and col.has_nulls(include_nan=True)
-                    and not libcudf.scalar._is_null_host_scalar(replace_val)
-                )
-                or method is not None
-                or (
-                    isinstance(col, cudf.core.column.CategoricalColumn)
-                    and not libcudf.scalar._is_null_host_scalar(replace_val)
-                )
+        if is_scalar(value):
+            value = {name: value for name in self._column_names}
+        elif not isinstance(value, (abc.Mapping, cudf.Series)):
+            raise TypeError(
+                f'"value" parameter must be a scalar, dict '
+                f"or Series, but you passed a "
+                f'"{type(value).__name__}"'
             )
-            if should_fill:
-                filled_data[col_name] = col.fillna(replace_val, method)
-            else:
-                filled_data[col_name] = col.copy(deep=True)
+
+        filled_columns = [
+            col.fillna(value[name], method) if name in value else col.copy()
+            for name, col in self._data.items()
+        ]
 
         return self._mimic_inplace(
-            self._from_data(
-                data=ColumnAccessor(
-                    data=filled_data,
-                    multiindex=self._data.multiindex,
-                    level_names=self._data.level_names,
-                    rangeindex=self._data.rangeindex,
-                    label_dtype=self._data.label_dtype,
-                    verify=False,
+            self._from_data_like_self(
+                self._data._from_columns_like_self(
+                    filled_columns, verify=False
                 )
             ),
             inplace=inplace,
@@ -1043,29 +1006,14 @@ class Frame(BinaryOperand, Scannable):
         ]
 
     @_cudf_nvtx_annotate
-    def _copy_type_metadata(
-        self,
-        other: Self,
-        *,
-        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
-    ) -> Self:
+    def _copy_type_metadata(self: Self, other: Self) -> Self:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
 
-        If override_dtypes is provided, any non-None entry
-        will be used in preference to the relevant column of other to
-        provide the new dtype.
-
         See `ColumnBase._with_type_metadata` for more information.
         """
-        if override_dtypes is None:
-            override_dtypes = itertools.repeat(None)
-        dtypes = (
-            dtype if dtype is not None else col.dtype
-            for (dtype, col) in zip(override_dtypes, other._data.values())
-        )
-        for (name, col), dtype in zip(self._data.items(), dtypes):
+        for (name, col), (_, dtype) in zip(self._data.items(), other._dtypes):
             self._data.set_by_label(
                 name, col._with_type_metadata(dtype), validate=False
             )
@@ -1495,7 +1443,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def _colwise_binop(
         cls,
-        operands: Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
+        operands: dict[str | None, tuple[ColumnBase, Any, bool, Any]],
         fn: str,
     ):
         """Implement binary ops between two frame-like objects.
@@ -1910,8 +1858,8 @@ class Frame(BinaryOperand, Scannable):
     @staticmethod
     @_cudf_nvtx_annotate
     def _repeat(
-        columns: List[ColumnBase], repeats, axis=None
-    ) -> List[ColumnBase]:
+        columns: list[ColumnBase], repeats, axis=None
+    ) -> list[ColumnBase]:
         if axis is not None:
             raise NotImplementedError(
                 "Only axis=`None` supported at this time."

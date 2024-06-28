@@ -9,15 +9,18 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-def test_extcontext():
+@pytest.mark.parametrize("expr", [pl.col("c"), pl.col("b") < 1, pl.lit(value=True)])
+@pytest.mark.parametrize("predicate_pushdown", [False, True])
+def test_filter(expr, predicate_pushdown):
     ldf = pl.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
             "b": [1, 1, 1, 1, 1, 1, 1],
+            "c": [True, False, False, True, True, True, None],
         }
     ).lazy()
-    ldf2 = ldf.select((pl.col("b") + pl.col("a")).alias("c"))
-    query = ldf.with_context(ldf2).select(pl.col("b"), pl.col("c"))
-    with pytest.raises(pl.exceptions.ComputeError):
-        # ExtContext to be deprecated so we're not implementing it.
-        assert_gpu_result_equal(query)
+
+    query = ldf.filter(expr)
+    assert_gpu_result_equal(
+        query, collect_kwargs={"predicate_pushdown": predicate_pushdown}
+    )

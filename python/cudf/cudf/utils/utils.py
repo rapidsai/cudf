@@ -1,11 +1,11 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import decimal
 import functools
 import os
 import traceback
 import warnings
-from typing import FrozenSet, Set, Union
 
 import numpy as np
 import pandas as pd
@@ -219,7 +219,7 @@ class GetAttrGetItemMixin:
     # `__setstate__`, but this class may be used in complex multiple
     # inheritance hierarchies that might also override serialization.  The
     # solution here is a minimally invasive change that avoids such conflicts.
-    _PROTECTED_KEYS: Union[FrozenSet[str], Set[str]] = frozenset()
+    _PROTECTED_KEYS: frozenset[str] | set[str] = frozenset()
 
     def __getattr__(self, key):
         if key in self._PROTECTED_KEYS:

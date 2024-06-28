@@ -9,17 +9,7 @@ import textwrap
 import warnings
 from collections import abc
 from shutil import get_terminal_size
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    Literal,
-    MutableMapping,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Literal, MutableMapping
 
 import cupy
 import numpy as np
@@ -285,7 +275,7 @@ class _SeriesLocIndexer(_FrameIndexer):
     """
 
     @_cudf_nvtx_annotate
-    def __getitem__(self, arg: Any) -> Union[ScalarLike, DataFrameOrSeries]:
+    def __getitem__(self, arg: Any) -> ScalarLike | DataFrameOrSeries:
         if isinstance(arg, pd.MultiIndex):
             arg = cudf.from_pandas(arg)
 
@@ -464,7 +454,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         If ``False``, leaves ``np.nan`` values as is.
     """
 
-    _accessors: Set[Any] = set()
+    _accessors: set[Any] = set()
     _loc_indexer_type = _SeriesLocIndexer
     _iloc_indexer_type = _SeriesIlocIndexer
     _groupby = SeriesGroupBy
@@ -594,7 +584,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             data = {}
 
         if isinstance(data, (pd.Series, pd.Index, BaseIndex, Series)):
-            if copy:
+            if copy and not isinstance(data, (pd.Series, pd.Index)):
                 data = data.copy(deep=True)
             name_from_data = data.name
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
@@ -677,7 +667,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def _from_data(
         cls,
         data: MutableMapping,
-        index: Optional[BaseIndex] = None,
+        index: BaseIndex | None = None,
         name: Any = no_default,
     ) -> Series:
         out = super()._from_data(data=data, index=index)
@@ -788,9 +778,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ------
             TypeError if the Series does not contain datetimelike values.
         """
-        if isinstance(self._column, DatetimeColumn):
+        if self.dtype.kind == "M":
             return DatetimeProperties(self)
-        elif isinstance(self._column, TimeDeltaColumn):
+        elif self.dtype.kind == "m":
             return TimedeltaProperties(self)
         else:
             raise AttributeError(
@@ -1311,7 +1301,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def _getitem_preprocessed(
         self,
         spec: indexing_utils.IndexingSpec,
-    ) -> Union[Self, ScalarLike]:
+    ) -> Self | ScalarLike:
         """Get subset of entries given structured data
 
         Parameters
@@ -1473,12 +1463,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         fill_value: Any = None,
         reflect: bool = False,
         can_reindex: bool = False,
-    ) -> Tuple[
-        Union[
-            Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            NotImplementedType,
-        ],
-        Optional[BaseIndex],
+    ) -> tuple[
+        dict[str | None, tuple[ColumnBase, Any, bool, Any]]
+        | NotImplementedType,
+        BaseIndex | None,
         bool,
     ]:
         # Specialize binops to align indices.
@@ -1809,20 +1797,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     ):
         if isinstance(value, pd.Series):
             value = Series.from_pandas(value)
-
-        if not (is_scalar(value) or isinstance(value, (abc.Mapping, Series))):
-            raise TypeError(
-                f'"value" parameter must be a scalar, dict '
-                f"or Series, but you passed a "
-                f'"{type(value).__name__}"'
-            )
-
-        if isinstance(value, (abc.Mapping, Series)):
+        elif isinstance(value, abc.Mapping):
             value = Series(value)
+        if isinstance(value, cudf.Series):
             if not self.index.equals(value.index):
                 value = value.reindex(self.index)
-            value = value._column
-
+            value = {self.name: value._column}
         return super().fillna(
             value=value, method=method, axis=axis, inplace=inplace, limit=limit
         )
@@ -3454,6 +3434,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def add_prefix(self, prefix):
         return Series._from_data(
+            # TODO: Change to deep=False when copy-on-write is default
             data=self._data.copy(deep=True),
             index=prefix + self.index.astype(str),
         )
@@ -3461,6 +3442,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def add_suffix(self, suffix):
         return Series._from_data(
+            # TODO: Change to deep=False when copy-on-write is default
             data=self._data.copy(deep=True),
             index=self.index.astype(str) + suffix,
         )
@@ -3689,7 +3671,21 @@ for binop in (
     setattr(Series, binop, make_binop_func(binop))
 
 
-class DatetimeProperties:
+class BaseDatelikeProperties:
+    """
+    Base accessor class for Series values.
+    """
+
+    def __init__(self, series: Series):
+        self.series = series
+
+    def _return_result_like_self(self, column: ColumnBase) -> Series:
+        """Return the method result like self.series"""
+        data = ColumnAccessor({self.series.name: column}, verify=False)
+        return self.series._from_data_like_self(data)
+
+
+class DatetimeProperties(BaseDatelikeProperties):
     """
     Accessor object for datetimelike properties of the Series values.
 
@@ -3739,12 +3735,9 @@ class DatetimeProperties:
     dtype: int16
     """
 
-    def __init__(self, series):
-        self.series = series
-
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def year(self):
+    def year(self) -> Series:
         """
         The year of the datetime.
 
@@ -3769,7 +3762,7 @@ class DatetimeProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def month(self):
+    def month(self) -> Series:
         """
         The month as January=1, December=12.
 
@@ -3794,7 +3787,7 @@ class DatetimeProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def day(self):
+    def day(self) -> Series:
         """
         The day of the datetime.
 
@@ -3819,7 +3812,7 @@ class DatetimeProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def hour(self):
+    def hour(self) -> Series:
         """
         The hours of the datetime.
 
@@ -3844,7 +3837,7 @@ class DatetimeProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def minute(self):
+    def minute(self) -> Series:
         """
         The minutes of the datetime.
 
@@ -3869,7 +3862,7 @@ class DatetimeProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def second(self):
+    def second(self) -> Series:
         """
         The seconds of the datetime.
 
@@ -3894,7 +3887,7 @@ class DatetimeProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def microsecond(self):
+    def microsecond(self) -> Series:
         """
         The microseconds of the datetime.
 
@@ -3915,22 +3908,18 @@ class DatetimeProperties:
         2    2
         dtype: int32
         """
-        return Series(
-            data=(
-                # Need to manually promote column to int32 because
-                # pandas-matching binop behaviour requires that this
-                # __mul__ returns an int16 column.
-                self.series._column.get_dt_field("millisecond").astype("int32")
-                * cudf.Scalar(1000, dtype="int32")
-            )
-            + self.series._column.get_dt_field("microsecond"),
-            index=self.series.index,
-            name=self.series.name,
-        )
+        micro = self.series._column.get_dt_field("microsecond")
+        # Need to manually promote column to int32 because
+        # pandas-matching binop behaviour requires that this
+        # __mul__ returns an int16 column.
+        extra = self.series._column.get_dt_field("millisecond").astype(
+            "int32"
+        ) * cudf.Scalar(1000, dtype="int32")
+        return self._return_result_like_self(micro + extra)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def nanosecond(self):
+    def nanosecond(self) -> Series:
         """
         The nanoseconds of the datetime.
 
@@ -3955,7 +3944,7 @@ class DatetimeProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def weekday(self):
+    def weekday(self) -> Series:
         """
         The day of the week with Monday=0, Sunday=6.
 
@@ -3992,7 +3981,7 @@ class DatetimeProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def dayofweek(self):
+    def dayofweek(self) -> Series:
         """
         The day of the week with Monday=0, Sunday=6.
 
@@ -4029,7 +4018,7 @@ class DatetimeProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def dayofyear(self):
+    def dayofyear(self) -> Series:
         """
         The day of the year, from 1-365 in non-leap years and
         from 1-366 in leap years.
@@ -4067,7 +4056,7 @@ class DatetimeProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def day_of_year(self):
+    def day_of_year(self) -> Series:
         """
         The day of the year, from 1-365 in non-leap years and
         from 1-366 in leap years.
@@ -4105,7 +4094,7 @@ class DatetimeProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_leap_year(self):
+    def is_leap_year(self) -> Series:
         """
         Boolean indicator if the date belongs to a leap year.
 
@@ -4156,15 +4145,11 @@ class DatetimeProperties:
         dtype: bool
         """
         res = libcudf.datetime.is_leap_year(self.series._column).fillna(False)
-        return Series._from_data(
-            ColumnAccessor({None: res}),
-            index=self.series.index,
-            name=self.series.name,
-        )
+        return self._return_result_like_self(res)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def quarter(self):
+    def quarter(self) -> Series:
         """
         Integer indicator for which quarter of the year the date belongs in.
 
@@ -4190,14 +4175,10 @@ class DatetimeProperties:
         res = libcudf.datetime.extract_quarter(self.series._column).astype(
             np.int8
         )
-        return Series._from_data(
-            {None: res},
-            index=self.series.index,
-            name=self.series.name,
-        )
+        return self._return_result_like_self(res)
 
     @_cudf_nvtx_annotate
-    def day_name(self, locale=None):
+    def day_name(self, locale: str | None = None) -> Series:
         """
         Return the day names. Currently supports English locale only.
 
@@ -4228,11 +4209,8 @@ class DatetimeProperties:
         7     Saturday
         dtype: object
         """
-        day_names = self.series._column.get_day_names(locale)
-        return Series._from_data(
-            ColumnAccessor({None: day_names}),
-            index=self.series.index,
-            name=self.series.name,
+        return self._return_result_like_self(
+            self.series._column.get_day_names(locale)
         )
 
     @_cudf_nvtx_annotate
@@ -4261,15 +4239,12 @@ class DatetimeProperties:
         5    February
         dtype: object
         """
-        month_names = self.series._column.get_month_names(locale)
-        return Series._from_data(
-            ColumnAccessor({None: month_names}),
-            index=self.series.index,
-            name=self.series.name,
+        return self._return_result_like_self(
+            self.series._column.get_month_names(locale)
         )
 
     @_cudf_nvtx_annotate
-    def isocalendar(self):
+    def isocalendar(self) -> cudf.DataFrame:
         """
         Returns a DataFrame with the year, week, and day
         calculated according to the ISO 8601 standard.
@@ -4310,11 +4285,14 @@ class DatetimeProperties:
         1    <NA>
         Name: year, dtype: object
         """
-        return cudf.core.tools.datetimes._to_iso_calendar(self)
+        ca = ColumnAccessor(self.series._column.isocalendar(), verify=False)
+        return self.series._constructor_expanddim._from_data(
+            ca, index=self.series.index
+        )
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_month_start(self):
+    def is_month_start(self) -> Series:
         """
         Booleans indicating if dates are the first day of the month.
         """
@@ -4322,7 +4300,7 @@ class DatetimeProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def days_in_month(self):
+    def days_in_month(self) -> Series:
         """
         Get the total number of days in the month that the date falls on.
 
@@ -4365,16 +4343,13 @@ class DatetimeProperties:
         11    31
         dtype: int16
         """
-        res = libcudf.datetime.days_in_month(self.series._column)
-        return Series._from_data(
-            ColumnAccessor({None: res}),
-            index=self.series.index,
-            name=self.series.name,
+        return self._return_result_like_self(
+            libcudf.datetime.days_in_month(self.series._column)
         )
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_month_end(self):
+    def is_month_end(self) -> Series:
         """
         Boolean indicator if the date is the last day of the month.
 
@@ -4411,17 +4386,13 @@ class DatetimeProperties:
         8    False
         dtype: bool
         """  # noqa: E501
-        last_day = libcudf.datetime.last_day_of_month(self.series._column)
-        last_day = Series._from_data(
-            ColumnAccessor({None: last_day}),
-            index=self.series.index,
-            name=self.series.name,
-        )
+        last_day_col = libcudf.datetime.last_day_of_month(self.series._column)
+        last_day = self._return_result_like_self(last_day_col)
         return (self.day == last_day.dt.day).fillna(False)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_quarter_start(self):
+    def is_quarter_start(self) -> Series:
         """
         Boolean indicator if the date is the first day of a quarter.
 
@@ -4462,15 +4433,11 @@ class DatetimeProperties:
         )
 
         result = ((day == cudf.Scalar(1)) & first_month).fillna(False)
-        return Series._from_data(
-            {None: result},
-            index=self.series.index,
-            name=self.series.name,
-        )
+        return self._return_result_like_self(result)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_quarter_end(self):
+    def is_quarter_end(self) -> Series:
         """
         Boolean indicator if the date is the last day of a quarter.
 
@@ -4513,15 +4480,11 @@ class DatetimeProperties:
         )
 
         result = ((day == last_day) & last_month).fillna(False)
-        return Series._from_data(
-            {None: result},
-            index=self.series.index,
-            name=self.series.name,
-        )
+        return self._return_result_like_self(result)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_year_start(self):
+    def is_year_start(self) -> Series:
         """
         Boolean indicator if the date is the first day of the year.
 
@@ -4548,15 +4511,11 @@ class DatetimeProperties:
         outcol = self.series._column.get_dt_field(
             "day_of_year"
         ) == cudf.Scalar(1)
-        return Series._from_data(
-            {None: outcol.fillna(False)},
-            index=self.series.index,
-            name=self.series.name,
-        )
+        return self._return_result_like_self(outcol.fillna(False))
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_year_end(self):
+    def is_year_end(self) -> Series:
         """
         Boolean indicator if the date is the last day of the year.
 
@@ -4586,22 +4545,16 @@ class DatetimeProperties:
         leap = day_of_year == cudf.Scalar(366)
         non_leap = day_of_year == cudf.Scalar(365)
         result = cudf._lib.copying.copy_if_else(leap, non_leap, leap_dates)
-        result = result.fillna(False)
-        return Series._from_data(
-            {None: result},
-            index=self.series.index,
-            name=self.series.name,
+        return self._return_result_like_self(result.fillna(False))
+
+    @_cudf_nvtx_annotate
+    def _get_dt_field(self, field: str) -> Series:
+        return self._return_result_like_self(
+            self.series._column.get_dt_field(field)
         )
 
     @_cudf_nvtx_annotate
-    def _get_dt_field(self, field):
-        out_column = self.series._column.get_dt_field(field)
-        return Series(
-            data=out_column, index=self.series.index, name=self.series.name
-        )
-
-    @_cudf_nvtx_annotate
-    def ceil(self, freq):
+    def ceil(self, freq: str) -> Series:
         """
         Perform ceil operation on the data to the specified freq.
 
@@ -4631,14 +4584,10 @@ class DatetimeProperties:
         2   2001-01-01 00:06:00
         dtype: datetime64[ns]
         """
-        out_column = self.series._column.ceil(freq)
-
-        return Series._from_data(
-            data={self.series.name: out_column}, index=self.series.index
-        )
+        return self._return_result_like_self(self.series._column.ceil(freq))
 
     @_cudf_nvtx_annotate
-    def floor(self, freq):
+    def floor(self, freq: str) -> Series:
         """
         Perform floor operation on the data to the specified freq.
 
@@ -4668,14 +4617,10 @@ class DatetimeProperties:
         2   2001-01-01 00:05:00
         dtype: datetime64[ns]
         """
-        out_column = self.series._column.floor(freq)
-
-        return Series._from_data(
-            data={self.series.name: out_column}, index=self.series.index
-        )
+        return self._return_result_like_self(self.series._column.floor(freq))
 
     @_cudf_nvtx_annotate
-    def round(self, freq):
+    def round(self, freq: str) -> Series:
         """
         Perform round operation on the data to the specified freq.
 
@@ -4708,14 +4653,10 @@ class DatetimeProperties:
         2   2001-01-01 00:05:00
         dtype: datetime64[ns]
         """
-        out_column = self.series._column.round(freq)
-
-        return Series._from_data(
-            data={self.series.name: out_column}, index=self.series.index
-        )
+        return self._return_result_like_self(self.series._column.round(freq))
 
     @_cudf_nvtx_annotate
-    def strftime(self, date_format, *args, **kwargs):
+    def strftime(self, date_format: str, *args, **kwargs) -> Series:
         """
         Convert to Series using specified ``date_format``.
 
@@ -4789,11 +4730,10 @@ class DatetimeProperties:
                     f"https://github.com/rapidsai/cudf/issues/5991 "
                     f"for tracking purposes."
                 )
-        str_col = self.series._column.as_string_column(
-            dtype="str", format=date_format
-        )
-        return Series(
-            data=str_col, index=self.series.index, name=self.series.name
+        return self._return_result_like_self(
+            self.series._column.as_string_column(
+                dtype="str", format=date_format
+            )
         )
 
     @copy_docstring(DatetimeIndex.tz_localize)
@@ -4802,17 +4742,13 @@ class DatetimeProperties:
         tz: str | None,
         ambiguous: Literal["NaT"] = "NaT",
         nonexistent: Literal["NaT"] = "NaT",
-    ):
-        result_col = self.series._column.tz_localize(
-            tz, ambiguous, nonexistent
-        )
-        return Series._from_data(
-            data={self.series.name: result_col},
-            index=self.series.index,
+    ) -> Series:
+        return self._return_result_like_self(
+            self.series._column.tz_localize(tz, ambiguous, nonexistent)
         )
 
     @copy_docstring(DatetimeIndex.tz_convert)
-    def tz_convert(self, tz: str | None):
+    def tz_convert(self, tz: str | None) -> Series:
         """
         Parameters
         ----------
@@ -4822,13 +4758,12 @@ class DatetimeProperties:
             A `tz` of None will convert to UTC and remove the
             timezone information.
         """
-        result_col = self.series._column.tz_convert(tz)
-        return Series._from_data(
-            {self.series.name: result_col}, index=self.series.index
+        return self._return_result_like_self(
+            self.series._column.tz_convert(tz)
         )
 
 
-class TimedeltaProperties:
+class TimedeltaProperties(BaseDatelikeProperties):
     """
     Accessor object for timedelta-like properties of the Series values.
 
@@ -4896,12 +4831,9 @@ class TimedeltaProperties:
     dtype: int64
     """
 
-    def __init__(self, series):
-        self.series = series
-
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def days(self):
+    def days(self) -> Series:
         """
         Number of days.
 
@@ -4933,7 +4865,7 @@ class TimedeltaProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def seconds(self):
+    def seconds(self) -> Series:
         """
         Number of seconds (>= 0 and less than 1 day).
 
@@ -4972,7 +4904,7 @@ class TimedeltaProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def microseconds(self):
+    def microseconds(self) -> Series:
         """
         Number of microseconds (>= 0 and less than 1 second).
 
@@ -5004,7 +4936,7 @@ class TimedeltaProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def nanoseconds(self):
+    def nanoseconds(self) -> Series:
         """
         Return the number of nanoseconds (n), where 0 <= n < 1 microsecond.
 
@@ -5036,7 +4968,7 @@ class TimedeltaProperties:
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def components(self):
+    def components(self) -> cudf.DataFrame:
         """
         Return a Dataframe of the components of the Timedeltas.
 
@@ -5062,13 +4994,15 @@ class TimedeltaProperties:
         3      0      0       35       35           656             0            0
         4     37     13       12       14           234             0            0
         """  # noqa: E501
-        return self.series._column.components(index=self.series.index)
+        ca = ColumnAccessor(self.series._column.components(), verify=False)
+        return self.series._constructor_expanddim._from_data(
+            ca, index=self.series.index
+        )
 
     @_cudf_nvtx_annotate
-    def _get_td_field(self, field):
-        out_column = getattr(self.series._column, field)
-        return Series(
-            data=out_column, index=self.series.index, name=self.series.name
+    def _get_td_field(self, field: str) -> Series:
+        return self._return_result_like_self(
+            getattr(self.series._column, field)
         )
 
 

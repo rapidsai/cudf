@@ -14,20 +14,7 @@ import textwrap
 import warnings
 from collections import abc, defaultdict
 from collections.abc import Iterator
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    List,
-    Literal,
-    MutableMapping,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, Callable, Literal, MutableMapping, cast
 
 import cupy
 import numba
@@ -684,7 +671,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     """
 
     _PROTECTED_KEYS = frozenset(("_data", "_index"))
-    _accessors: Set[Any] = set()
+    _accessors: set[Any] = set()
     _loc_indexer_type = _DataFrameLocIndexer
     _iloc_indexer_type = _DataFrameIlocIndexer
     _groupby = DataFrameGroupBy
@@ -1123,7 +1110,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _from_data(
         cls,
         data: MutableMapping,
-        index: Optional[BaseIndex] = None,
+        index: BaseIndex | None = None,
         columns: Any = None,
     ) -> DataFrame:
         out = super()._from_data(data=data, index=index)
@@ -1134,8 +1121,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @staticmethod
     @_cudf_nvtx_annotate
     def _align_input_series_indices(data, index):
-        data = data.copy()
-
         input_series = [
             Series(val)
             for val in data.values()
@@ -1155,6 +1140,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 index = aligned_input_series[0].index
 
+            data = data.copy()
             for name, val in data.items():
                 if isinstance(val, (pd.Series, Series, dict)):
                     data[name] = aligned_input_series.pop(0)
@@ -1553,7 +1539,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self[columns]
 
     @_cudf_nvtx_annotate
-    def assign(self, **kwargs: Union[Callable[[Self], Any], Any]):
+    def assign(self, **kwargs: Callable[[Self], Any] | Any):
         """
         Assign columns to DataFrame from keyword arguments.
 
@@ -2009,12 +1995,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         fill_value: Any = None,
         reflect: bool = False,
         can_reindex: bool = False,
-    ) -> Tuple[
-        Union[
-            Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
-            NotImplementedType,
-        ],
-        Optional[BaseIndex],
+    ) -> tuple[
+        dict[str | None, tuple[ColumnBase, Any, bool, Any]]
+        | NotImplementedType,
+        BaseIndex | None,
         bool,
     ]:
         lhs, rhs = self._data, other
@@ -2119,8 +2103,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         cls,
         data: dict,
         orient: str = "columns",
-        dtype: Optional[Dtype] = None,
-        columns: Optional[list] = None,
+        dtype: Dtype | None = None,
+        columns: list | None = None,
     ) -> DataFrame:
         """
         Construct DataFrame from dict of array-like or dicts.
@@ -2984,6 +2968,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             idx = MultiIndex._from_data(dict(enumerate(data_to_add)))
             idx.names = names
 
+        # TODO: Change to deep=False when copy-on-write is default
         df = self if inplace else self.copy(deep=True)
 
         if verify_integrity and not idx.is_unique:
@@ -2994,6 +2979,32 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         df.index = idx
         return df if not inplace else None
+
+    @_cudf_nvtx_annotate
+    def fillna(
+        self, value=None, method=None, axis=None, inplace=False, limit=None
+    ):  # noqa: D102
+        if isinstance(value, (pd.Series, pd.DataFrame)):
+            value = cudf.from_pandas(value)
+        if isinstance(value, cudf.Series):
+            # Align value.index to self.columns
+            value = value.reindex(self._column_names)
+        elif isinstance(value, cudf.DataFrame):
+            if not self.index.equals(value.index):
+                # Align value.index to self.index
+                value = value.reindex(self.index)
+            value = dict(value.items())
+        elif isinstance(value, abc.Mapping):
+            # Align value.indexes to self.index
+            value = {
+                key: value.reindex(self.index)
+                if isinstance(value, cudf.Series)
+                else value
+                for key, value in value.items()
+            }
+        return super().fillna(
+            value=value, method=method, axis=axis, inplace=inplace, limit=limit
+        )
 
     @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
@@ -3554,6 +3565,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             mapper if columns is None and axis in (1, "columns") else columns
         )
 
+        result = self if inplace else self.copy(deep=copy)
+
+        out_index = None
         if index:
             if (
                 any(isinstance(item, str) for item in index.values())
@@ -3575,36 +3589,36 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 out_index._data[level] = column.as_column(level_values)
                 out_index._compute_levels_and_codes()
-                out = DataFrame(index=out_index)
             else:
                 to_replace = list(index.keys())
                 vals = list(index.values())
                 is_all_na = vals.count(None) == len(vals)
 
                 try:
-                    index_data = {
-                        name: col.find_and_replace(to_replace, vals, is_all_na)
-                        for name, col in self.index._data.items()
-                    }
+                    out_index = _index_from_data(
+                        {
+                            name: col.find_and_replace(
+                                to_replace, vals, is_all_na
+                            )
+                            for name, col in self.index._data.items()
+                        }
+                    )
                 except OverflowError:
-                    index_data = self.index._data.copy(deep=True)
+                    pass
 
-                out = DataFrame(index=_index_from_data(index_data))
-        else:
-            out = DataFrame(index=self.index)
+        if out_index is not None:
+            result.index = out_index
 
         if columns:
-            out._data = self._data.rename_levels(mapper=columns, level=level)
-        else:
-            out._data = self._data.copy(deep=copy)
+            result._data = result._data.rename_levels(
+                mapper=columns, level=level
+            )
 
-        if inplace:
-            self._data = out._data
-        else:
-            return out.copy(deep=copy)
+        return result
 
     @_cudf_nvtx_annotate
     def add_prefix(self, prefix):
+        # TODO: Change to deep=False when copy-on-write is default
         out = self.copy(deep=True)
         out.columns = [
             prefix + col_name for col_name in list(self._data.keys())
@@ -3613,6 +3627,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def add_suffix(self, suffix):
+        # TODO: Change to deep=False when copy-on-write is default
         out = self.copy(deep=True)
         out.columns = [
             col_name + suffix for col_name in list(self._data.keys())
@@ -3945,7 +3960,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                            weight    1.0    0.8
                            length    0.3    0.2
         """
-        result = self.copy()
+        # TODO: Change to deep=False when copy-on-write is default
+        result = self.copy(deep=True)
 
         # To get axis number
         axis = self._get_axis_from_axis_arg(axis)
@@ -4016,7 +4032,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Set the old column names as the new index
         result = self.__class__._from_data(
-            {i: col for i, col in enumerate(result_columns)},
+            ColumnAccessor(dict(enumerate(result_columns)), verify=False),
             index=as_index(index),
         )
         # Set the old index as the new column names
@@ -4584,7 +4600,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def applymap(
         self,
         func: Callable[[Any], Any],
-        na_action: Union[str, None] = None,
+        na_action: str | None = None,
         **kwargs,
     ) -> DataFrame:
         """
@@ -4617,7 +4633,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def map(
         self,
         func: Callable[[Any], Any],
-        na_action: Union[str, None] = None,
+        na_action: str | None = None,
         **kwargs,
     ) -> DataFrame:
         """
@@ -5517,7 +5533,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         b: [[4,5,6]]
         """
 
-        data = self.copy(deep=False)
+        data = self
         index_descr = []
         write_index = preserve_index is not False
         keep_range_index = write_index and preserve_index is None
@@ -5545,6 +5561,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     index_descr = (
                         index.names if index.name is not None else ("index",)
                     )
+                data = data.copy(deep=False)
                 for gen_name, col_name in zip(index_descr, index._data.names):
                     data._insert(
                         data.shape[1],
@@ -7376,9 +7393,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3     4  44
         3     5  44
         """
-        if column not in self._column_names:
-            raise KeyError(column)
-
         return super()._explode(column, ignore_index)
 
     def pct_change(
@@ -7498,7 +7512,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _sample_axis_1(
         self,
         n: int,
-        weights: Optional[ColumnLike],
+        weights: ColumnLike | None,
         replace: bool,
         random_state: np.random.RandomState,
         ignore_index: bool,
@@ -7523,17 +7537,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     def _from_columns_like_self(
         self,
-        columns: List[ColumnBase],
-        column_names: Optional[abc.Iterable[str]] = None,
-        index_names: Optional[List[str]] = None,
-        *,
-        override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
+        columns: list[ColumnBase],
+        column_names: abc.Iterable[str] | None = None,
+        index_names: list[str] | None = None,
     ) -> DataFrame:
         result = super()._from_columns_like_self(
             columns,
             column_names,
             index_names,
-            override_dtypes=override_dtypes,
         )
         result._set_columns_like(self._data)
         return result
@@ -8128,7 +8139,7 @@ def _setitem_with_dataframe(
     input_df: DataFrame,
     replace_df: DataFrame,
     input_cols: Any = None,
-    mask: Optional[ColumnBase] = None,
+    mask: ColumnBase | None = None,
     ignore_index: bool = False,
 ):
     """
