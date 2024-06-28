@@ -56,6 +56,14 @@ struct h_column_tree_csr {
   std::vector<cuio_json::SymbolOffsetT> range_end;
 };
 
+template <typename T>
+void print(std::string str, std::vector<T> &vec) {
+  std::cout << str << " = ";
+  for(size_t i = 0; i < vec.size(); i++)
+    std::cout << vec[i] << " ";
+  std::cout << std::endl;
+}
+
 bool check_equality(cuio_json::tree_meta_t& d_a,
                     cuio_json::column_tree_csr& d_b,
                     rmm::cuda_stream_view stream)
@@ -89,6 +97,11 @@ bool check_equality(cuio_json::tree_meta_t& d_a,
       v = b.colidx[pos];
       if (a.parent_node_ids[b.column_ids[v]] != b.column_ids[u]) return false;
     }
+  }
+  for (size_t u = 0; u < num_nodes; u++) {
+    if (a.node_categories[b.column_ids[u]] != b.categories[u]) return false;
+    if (a.node_range_begin[b.column_ids[u]] != b.range_begin[u]) return false;
+    if (a.node_range_end[b.column_ids[u]] != b.range_end[u]) return false;
   }
   return true;
 }
@@ -170,6 +183,7 @@ TEST_F(JsonColumnTreeTests, SimpleLines)
                                                       row_array_parent_col_id,
                                                       stream);
 
+  auto iseq = check_equality(d_column_tree, d_column_tree_csr, stream);
   // assert equality between csr and meta formats
-  assert(check_equality(d_column_tree, d_column_tree_csr, stream));
+  assert(iseq == true);
 }
