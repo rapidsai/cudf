@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/utilities/prefetch.hpp>
+
 #include <rmm/device_uvector.hpp>
 
 namespace cudf::experimental::detail {
