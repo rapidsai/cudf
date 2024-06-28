@@ -1068,51 +1068,34 @@ class CategoricalColumn(column.ColumnBase):
 
         return result
 
-    def fillna(
-        self,
-        fill_value: Any = None,
-        method: str | None = None,
-    ) -> Self:
-        """
-        Fill null values with *fill_value*
-        """
-        if fill_value is not None:
-            fill_is_scalar = np.isscalar(fill_value)
-
-            if fill_is_scalar:
-                if fill_value == _DEFAULT_CATEGORICAL_VALUE:
-                    fill_value = self.codes.dtype.type(fill_value)
-                else:
-                    try:
-                        fill_value = self._encode(fill_value)
-                        fill_value = self.codes.dtype.type(fill_value)
-                    except ValueError as err:
-                        err_msg = "fill value must be in categories"
-                        raise ValueError(err_msg) from err
+    def _validate_fillna_value(
+        self, fill_value: ScalarLike | ColumnLike
+    ) -> cudf.Scalar | ColumnBase:
+        """Align fill_value for .fillna based on column type."""
+        if cudf.api.types.is_scalar(fill_value):
+            if fill_value != _DEFAULT_CATEGORICAL_VALUE:
+                try:
+                    fill_value = self._encode(fill_value)
+                except ValueError as err:
+                    raise ValueError(
+                        f"{fill_value=} must be in categories"
+                    ) from err
+            return cudf.Scalar(fill_value, dtype=self.codes.dtype)
+        else:
+            fill_value = column.as_column(fill_value, nan_as_null=False)
+            if isinstance(fill_value.dtype, CategoricalDtype):
+                if self.dtype != fill_value.dtype:
+                    raise TypeError(
+                        "Cannot set a categorical with another without identical categories"
+                    )
             else:
-                fill_value = column.as_column(fill_value, nan_as_null=False)
-                if isinstance(fill_value, CategoricalColumn):
-                    if self.dtype != fill_value.dtype:
-                        raise TypeError(
-                            "Cannot set a Categorical with another, "
-                            "without identical categories"
-                        )
-                # TODO: only required if fill_value has a subset of the
-                # categories:
-                fill_value = fill_value._set_categories(
-                    self.categories,
-                    is_unique=True,
+                raise TypeError(
+                    "Cannot set a categorical with non-categorical data"
                 )
-                fill_value = column.as_column(fill_value.codes).astype(
-                    self.codes.dtype
-                )
-
-        # Validation of `fill_value` will have to be performed
-        # before returning self.
-        if not self.nullable:
-            return self
-
-        return super().fillna(fill_value, method=method)
+            fill_value = fill_value._set_categories(
+                self.categories,
+            )
+            return fill_value.codes.astype(self.codes.dtype)
 
     def indices_of(
         self, value: ScalarLike
@@ -1372,11 +1355,13 @@ class CategoricalColumn(column.ColumnBase):
         if not (is_unique or new_cats.is_unique):
             new_cats = cudf.Series(new_cats)._column.unique()
 
+        if cur_cats.equals(new_cats, check_dtypes=True):
+            # TODO: Internal usages don't always need a copy; add a copy keyword
+            # as_ordered shallow copies
+            return self.copy().as_ordered(ordered=ordered)
+
         cur_codes = self.codes
-        max_cat_size = (
-            len(cur_cats) if len(cur_cats) > len(new_cats) else len(new_cats)
-        )
-        out_code_dtype = min_unsigned_type(max_cat_size)
+        out_code_dtype = min_unsigned_type(max(len(cur_cats), len(new_cats)))
 
         cur_order = column.as_column(range(len(cur_codes)))
         old_codes = column.as_column(

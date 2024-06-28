@@ -51,6 +51,7 @@ __all__ = [
     "GroupedRollingWindow",
     "Cast",
     "Agg",
+    "Ternary",
     "BinOp",
 ]
 
@@ -443,12 +444,12 @@ class BooleanFunction(Expr):
         ):
             # With ignore_nulls == False, polars uses Kleene logic
             raise NotImplementedError(f"Kleene logic for {self.name}")
-        if self.name in (
-            pl_expr.BooleanFunction.IsFinite,
-            pl_expr.BooleanFunction.IsInfinite,
-            pl_expr.BooleanFunction.IsIn,
+        if self.name == pl_expr.BooleanFunction.IsIn and not all(
+            c.dtype == self.children[0].dtype for c in self.children
         ):
-            raise NotImplementedError(f"{self.name}")
+            # TODO: If polars IR doesn't put the casts in, we need to
+            # mimic the supertype promotion rules.
+            raise NotImplementedError("IsIn doesn't support supertype casting")
 
     @staticmethod
     def _distinct(
@@ -506,6 +507,33 @@ class BooleanFunction(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
+        if self.name in (
+            pl_expr.BooleanFunction.IsFinite,
+            pl_expr.BooleanFunction.IsInfinite,
+        ):
+            # Avoid evaluating the child if the dtype tells us it's unnecessary.
+            (child,) = self.children
+            is_finite = self.name == pl_expr.BooleanFunction.IsFinite
+            if child.dtype.id() not in (plc.TypeId.FLOAT32, plc.TypeId.FLOAT64):
+                value = plc.interop.from_arrow(
+                    pa.scalar(value=is_finite, type=plc.interop.to_arrow(self.dtype))
+                )
+                return Column(plc.Column.from_scalar(value, df.num_rows))
+            needles = child.evaluate(df, context=context, mapping=mapping)
+            to_search = [-float("inf"), float("inf")]
+            if is_finite:
+                # NaN is neither finite not infinite
+                to_search.append(float("nan"))
+            haystack = plc.interop.from_arrow(
+                pa.array(
+                    to_search,
+                    type=plc.interop.to_arrow(needles.obj.type()),
+                )
+            )
+            result = plc.search.contains(haystack, needles.obj)
+            if is_finite:
+                result = plc.unary.unary_operation(result, plc.unary.UnaryOperator.NOT)
+            return Column(result)
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
@@ -612,31 +640,13 @@ class BooleanFunction(Expr):
                     (c.obj for c in columns),
                 )
             )
-        elif self.name == pl_expr.BooleanFunction.IsBetween:
-            column, lo, hi = columns
-            (closed,) = self.options
-            lop, rop = self._BETWEEN_OPS[closed]
-            lo_obj = (
-                lo.obj_scalar
-                if lo.is_scalar and lo.obj.size() != column.obj.size()
-                else lo.obj
-            )
-            hi_obj = (
-                hi.obj_scalar
-                if hi.is_scalar and hi.obj.size() != column.obj.size()
-                else hi.obj
-            )
+        elif self.name == pl_expr.BooleanFunction.IsIn:
+            needles, haystack = columns
+            return Column(plc.search.contains(haystack.obj, needles.obj))
+        elif self.name == pl_expr.BooleanFunction.Not:
+            (column,) = columns
             return Column(
-                plc.binaryop.binary_operation(
-                    plc.binaryop.binary_operation(
-                        column.obj, lo_obj, lop, output_type=self.dtype
-                    ),
-                    plc.binaryop.binary_operation(
-                        column.obj, hi_obj, rop, output_type=self.dtype
-                    ),
-                    plc.binaryop.BinaryOperator.LOGICAL_AND,
-                    self.dtype,
-                )
+                plc.unary.unary_operation(column.obj, plc.unary.UnaryOperator.NOT)
             )
         else:
             raise NotImplementedError(
@@ -898,6 +908,7 @@ class RollingWindow(Expr):
         super().__init__(dtype)
         self.options = options
         self.children = (agg,)
+        raise NotImplementedError("Rolling window not implemented")
 
 
 class GroupedRollingWindow(Expr):
@@ -909,6 +920,7 @@ class GroupedRollingWindow(Expr):
         super().__init__(dtype)
         self.options = options
         self.children = (agg, *by)
+        raise NotImplementedError("Grouped rolling window not implemented")
 
 
 class Cast(Expr):
@@ -1099,6 +1111,34 @@ class Agg(Expr):
             )  # pragma: no cover; unreachable
         (child,) = self.children
         return self.op(child.evaluate(df, context=context, mapping=mapping))
+
+
+class Ternary(Expr):
+    __slots__ = ("children",)
+    _non_child = ("dtype",)
+    children: tuple[Expr, Expr, Expr]
+
+    def __init__(
+        self, dtype: plc.DataType, when: Expr, then: Expr, otherwise: Expr
+    ) -> None:
+        super().__init__(dtype)
+        self.children = (when, then, otherwise)
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        when, then, otherwise = (
+            child.evaluate(df, context=context, mapping=mapping)
+            for child in self.children
+        )
+        then_obj = then.obj_scalar if then.is_scalar else then.obj
+        otherwise_obj = otherwise.obj_scalar if otherwise.is_scalar else otherwise.obj
+        return Column(plc.copying.copy_if_else(then_obj, otherwise_obj, when.obj))
 
 
 class BinOp(Expr):

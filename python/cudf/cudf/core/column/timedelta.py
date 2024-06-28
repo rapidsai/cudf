@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import datetime
 import functools
-from typing import TYPE_CHECKING, Any, Sequence, cast
+from typing import TYPE_CHECKING, Sequence, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -251,22 +250,6 @@ class TimeDeltaColumn(ColumnBase):
     @functools.cached_property
     def time_unit(self) -> str:
         return np.datetime_data(self.dtype)[0]
-
-    def fillna(
-        self,
-        fill_value: Any = None,
-        method: str | None = None,
-    ) -> Self:
-        if fill_value is not None:
-            if cudf.utils.utils._isnat(fill_value):
-                return self.copy(deep=True)
-            if is_scalar(fill_value):
-                fill_value = cudf.Scalar(fill_value)
-                dtype = self.dtype
-                fill_value = fill_value.astype(dtype)
-            else:
-                fill_value = column.as_column(fill_value, nan_as_null=False)
-        return super().fillna(fill_value, method)
 
     def as_numerical_column(
         self, dtype: Dtype
