@@ -353,14 +353,14 @@ TEST_F(ToArrowDeviceTest, EmptyTable)
   EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_device->device_id);
   EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_device->device_type);
   ASSERT_CUDA_SUCCEEDED(
-    cudaEventQuery(*reinterpret_cast<cudaEvent_t*>(got_arrow_device->sync_event)));
+    cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_device->sync_event)));
   compare_arrays(schema.get(), arr.get(), &got_arrow_device->array);
 
   got_arrow_device = cudf::to_arrow_device(std::move(*table));
   EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_device->device_id);
   EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_device->device_type);
   ASSERT_CUDA_SUCCEEDED(
-    cudaEventQuery(*reinterpret_cast<cudaEvent_t*>(got_arrow_device->sync_event)));
+    cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_device->sync_event)));
   compare_arrays(schema.get(), arr.get(), &got_arrow_device->array);
 }
 
@@ -390,6 +390,8 @@ TEST_F(ToArrowDeviceTest, DateTimeTable)
   auto got_arrow_array = cudf::to_arrow_device(input.view());
   EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
   EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+  ASSERT_CUDA_SUCCEEDED(
+    cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_array->sync_event)));
 
   EXPECT_EQ(data.size(), got_arrow_array->array.length);
   EXPECT_EQ(0, got_arrow_array->array.null_count);
@@ -406,6 +408,8 @@ TEST_F(ToArrowDeviceTest, DateTimeTable)
   got_arrow_array = cudf::to_arrow_device(std::move(input));
   EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
   EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+  ASSERT_CUDA_SUCCEEDED(
+    cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_array->sync_event)));
 
   EXPECT_EQ(data.size(), got_arrow_array->array.length);
   EXPECT_EQ(0, got_arrow_array->array.null_count);
@@ -460,6 +464,8 @@ TYPED_TEST(ToArrowDeviceTestDurationsTest, DurationTable)
   auto got_arrow_array = cudf::to_arrow_device(input.view());
   EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
   EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+  ASSERT_CUDA_SUCCEEDED(
+    cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_array->sync_event)));
 
   EXPECT_EQ(data.size(), got_arrow_array->array.length);
   EXPECT_EQ(0, got_arrow_array->array.null_count);
@@ -476,6 +482,8 @@ TYPED_TEST(ToArrowDeviceTestDurationsTest, DurationTable)
   got_arrow_array = cudf::to_arrow_device(std::move(input));
   EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
   EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+  ASSERT_CUDA_SUCCEEDED(
+    cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_array->sync_event)));
 
   EXPECT_EQ(data.size(), got_arrow_array->array.length);
   EXPECT_EQ(0, got_arrow_array->array.null_count);
@@ -542,6 +550,8 @@ TEST_F(ToArrowDeviceTest, NestedList)
   auto got_arrow_array = cudf::to_arrow_device(input.view());
   EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
   EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+  ASSERT_CUDA_SUCCEEDED(
+    cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_array->sync_event)));
   compare_arrays(expected_schema.get(), expected_array.get(), &got_arrow_array->array);
 
   got_arrow_array = cudf::to_arrow_device(std::move(input));
@@ -686,11 +696,15 @@ TEST_F(ToArrowDeviceTest, StructColumn)
   auto got_arrow_array = cudf::to_arrow_device(input.view());
   EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
   EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+  ASSERT_CUDA_SUCCEEDED(
+    cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_array->sync_event)));
   compare_arrays(expected_schema.get(), expected_array.get(), &got_arrow_array->array);
 
   got_arrow_array = cudf::to_arrow_device(std::move(input));
   EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
   EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+  ASSERT_CUDA_SUCCEEDED(
+    cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_array->sync_event)));
   compare_arrays(expected_schema.get(), expected_array.get(), &got_arrow_array->array);
 }
 
@@ -759,11 +773,15 @@ TEST_F(ToArrowDeviceTest, FixedPoint64Table)
     auto got_arrow_array = cudf::to_arrow_device(input.view());
     ASSERT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
     ASSERT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+    ASSERT_CUDA_SUCCEEDED(
+      cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_array->sync_event)));
     compare_arrays(expected_schema.get(), expected_array.get(), &got_arrow_array->array);
 
     got_arrow_array = cudf::to_arrow_device(std::move(input));
     ASSERT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
     ASSERT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+    ASSERT_CUDA_SUCCEEDED(
+      cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_array->sync_event)));
     compare_arrays(expected_schema.get(), expected_array.get(), &got_arrow_array->array);
   }
 }
@@ -806,11 +824,15 @@ TEST_F(ToArrowDeviceTest, FixedPoint128Table)
     auto got_arrow_array = cudf::to_arrow_device(input.view());
     EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
     EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+    ASSERT_CUDA_SUCCEEDED(
+      cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_array->sync_event)));
     compare_arrays(expected_schema.get(), expected_array.get(), &got_arrow_array->array);
 
     got_arrow_array = cudf::to_arrow_device(std::move(input));
     EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
     EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+    ASSERT_CUDA_SUCCEEDED(
+      cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_array->sync_event)));
     compare_arrays(expected_schema.get(), expected_array.get(), &got_arrow_array->array);
   }
 }
