@@ -48,7 +48,7 @@ from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
-from cudf.core.index import BaseIndex, DatetimeIndex, RangeIndex, as_index
+from cudf.core.index import BaseIndex, DatetimeIndex, RangeIndex, ensure_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -588,10 +588,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 data = data.copy(deep=True)
             name_from_data = data.name
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
-            if isinstance(data, pd.Series):
-                index_from_data = cudf.Index(data.index)
-            elif isinstance(data, Series):
-                index_from_data = data.index
+            if isinstance(data, (pd.Series, Series)):
+                index_from_data = ensure_index(data.index)
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.Series._from_data for constructing a Series from "
@@ -642,7 +640,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             name = name_from_data
 
         if index is not None:
-            index = cudf.Index(index)
+            index = ensure_index(index)
 
         if index_from_data is not None:
             first_index = index_from_data
@@ -3191,7 +3189,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return Series._from_data(
             data={self.name: result},
-            index=as_index(np_array_q) if quant_index else None,
+            index=cudf.Index(np_array_q) if quant_index else None,
         )
 
     @docutils.doc_describe()

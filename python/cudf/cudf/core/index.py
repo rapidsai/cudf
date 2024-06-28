@@ -65,6 +65,17 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
 
 
+def ensure_index(index_like: Any) -> BaseIndex:
+    """
+    Ensure an Index is returned.
+
+    Avoids a shallow copy compared to calling cudf.Index(...)
+    """
+    if not isinstance(index_like, BaseIndex):
+        return cudf.Index(index_like)
+    return index_like
+
+
 class IndexMeta(type):
     """Custom metaclass for Index that overrides instance/subclass tests."""
 
@@ -1569,7 +1580,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 to_concat.append(obj)
         else:
             this = self
-            other = cudf.Index(other)
+            other = ensure_index(other)
 
             if len(this) == 0 or len(other) == 0:
                 # we'll filter out empties later in ._concat
