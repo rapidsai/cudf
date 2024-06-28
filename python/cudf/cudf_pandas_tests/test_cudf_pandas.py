@@ -1543,3 +1543,26 @@ def test_numpy_cupy_flatiter(series):
 
     assert type(arr.flat._fsproxy_fast) == cp.flatiter
     assert type(arr.flat._fsproxy_slow) == np.flatiter
+
+
+def test_arrow_string_arrays():
+    cu_s = xpd.Series(["a", "b", "c"])
+    pd_s = pd.Series(["a", "b", "c"])
+
+    cu_arr = xpd.arrays.ArrowStringArray._from_sequence(
+        cu_s, dtype=xpd.StringDtype("pyarrow")
+    )
+    pd_arr = pd.arrays.ArrowStringArray._from_sequence(
+        pd_s, dtype=pd.StringDtype("pyarrow")
+    )
+
+    tm.assert_equal(cu_arr, pd_arr)
+
+    cu_arr = xpd.core.arrays.string_arrow.ArrowStringArray._from_sequence(
+        cu_s, dtype=xpd.StringDtype("pyarrow_numpy")
+    )
+    pd_arr = pd.core.arrays.string_arrow.ArrowStringArray._from_sequence(
+        pd_s, dtype=pd.StringDtype("pyarrow_numpy")
+    )
+
+    tm.assert_equal(cu_arr, pd_arr)

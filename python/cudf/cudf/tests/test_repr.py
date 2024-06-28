@@ -1210,7 +1210,7 @@ def test_multiindex_repr(pmi, max_seq_items):
             .index,
             textwrap.dedent(
                 """
-                MultiIndex([('abc',                       'NaT', 0.345),
+                MultiIndex([('abc',                         NaT, 0.345),
                             ( <NA>, '0 days 00:00:00.000000001',  <NA>),
                             ('xyz', '0 days 00:00:00.000000002', 100.0),
                             ( <NA>, '0 days 00:00:00.000000003',  10.0)],
@@ -1252,10 +1252,10 @@ def test_multiindex_repr(pmi, max_seq_items):
             .index,
             textwrap.dedent(
                 """
-            MultiIndex([('NaT', <NA>),
-                        ('NaT', <NA>),
-                        ('NaT', <NA>),
-                        ('NaT', <NA>)],
+            MultiIndex([(NaT, <NA>),
+                        (NaT, <NA>),
+                        (NaT, <NA>),
+                        (NaT, <NA>)],
                     names=['b', 'a'])
             """
             ),

@@ -83,6 +83,8 @@ cdef class Table:
 
     cpdef int num_rows(self):
         """The number of rows in this table."""
+        if self.num_columns() == 0:
+            return 0
         return self._columns[0].size()
 
     cpdef list columns(self):
