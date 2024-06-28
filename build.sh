@@ -70,7 +70,7 @@ BUILD_DISABLE_DEPRECATION_WARNINGS=ON
 BUILD_PER_THREAD_DEFAULT_STREAM=OFF
 BUILD_REPORT_METRICS=OFF
 BUILD_REPORT_INCL_CACHE_STATS=OFF
-BUILD_LARGE_STRINGS=ON
+BUILD_DISABLE_LARGE_STRINGS=OFF
 USE_PROPRIETARY_NVCOMP=ON
 PYTHON_ARGS_FOR_INSTALL="-m pip install --no-build-isolation --no-deps --config-settings rapidsai.disable-cuda=true"
 
@@ -155,6 +155,7 @@ function buildLibCudfJniInDocker {
                 -DCUDF_ENABLE_ARROW_S3=OFF \
                 -DBUILD_TESTS=OFF \
                 -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON \
+                -DCUDF_LARGE_STRINGS_DISABLED=ON \
                 -DRMM_LOGGING_LEVEL=OFF \
                 -DBUILD_SHARED_LIBS=OFF && \
              cmake --build . --parallel ${PARALLEL_LEVEL} && \
@@ -242,7 +243,7 @@ if [[ "${EXTRA_CMAKE_ARGS}" != *"DFIND_CUDF_CPP"* ]]; then
 fi
 
 if hasArg --disable_large_strings; then
-    BUILD_LARGE_STRINGS="OFF"
+    BUILD_DISABLE_LARGE_STRINGS="ON"
 fi
 
 # If clean given, run it prior to any other steps
@@ -297,7 +298,7 @@ if buildAll || hasArg libcudf; then
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DDISABLE_DEPRECATION_WARNINGS=${BUILD_DISABLE_DEPRECATION_WARNINGS} \
           -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
-          -DCUDF_LARGE_STRINGS_ENABLED=${BUILD_LARGE_STRINGS} \
+          -DCUDF_LARGE_STRINGS_DISABLED=${BUILD_DISABLE_LARGE_STRINGS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
           ${EXTRA_CMAKE_ARGS}
 
