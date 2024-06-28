@@ -91,6 +91,7 @@ def downcast_arrow_lists(typ: pa.DataType) -> pa.DataType:
         return pa.list_(downcast_arrow_lists(typ.value_type))
     # We don't have to worry about diving into struct types for now
     # since those are always NotImplemented before we get here.
+    assert not isinstance(typ, pa.StructType)
     return typ
 
 
