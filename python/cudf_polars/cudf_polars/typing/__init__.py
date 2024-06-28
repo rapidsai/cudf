@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Literal, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Literal, Protocol, Union
 
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
@@ -15,43 +15,45 @@ import cudf._lib.pylibcudf as plc
 if TYPE_CHECKING:
     from typing import Callable
 
+    from typing_extensions import TypeAlias
+
     import polars as pl
 
-IR: TypeAlias = (
-    pl_ir.PythonScan
-    | pl_ir.Scan
-    | pl_ir.Cache
-    | pl_ir.DataFrameScan
-    | pl_ir.Select
-    | pl_ir.GroupBy
-    | pl_ir.Join
-    | pl_ir.HStack
-    | pl_ir.Distinct
-    | pl_ir.Sort
-    | pl_ir.Slice
-    | pl_ir.Filter
-    | pl_ir.SimpleProjection
-    | pl_ir.MapFunction
-    | pl_ir.Union
-    | pl_ir.HConcat
-    | pl_ir.ExtContext
-)
+IR: TypeAlias = Union[
+    pl_ir.PythonScan,
+    pl_ir.Scan,
+    pl_ir.Cache,
+    pl_ir.DataFrameScan,
+    pl_ir.Select,
+    pl_ir.GroupBy,
+    pl_ir.Join,
+    pl_ir.HStack,
+    pl_ir.Distinct,
+    pl_ir.Sort,
+    pl_ir.Slice,
+    pl_ir.Filter,
+    pl_ir.SimpleProjection,
+    pl_ir.MapFunction,
+    pl_ir.Union,
+    pl_ir.HConcat,
+    pl_ir.ExtContext,
+]
 
-Expr: TypeAlias = (
-    pl_expr.Function
-    | pl_expr.Window
-    | pl_expr.Literal
-    | pl_expr.Sort
-    | pl_expr.SortBy
-    | pl_expr.Gather
-    | pl_expr.Filter
-    | pl_expr.Cast
-    | pl_expr.Column
-    | pl_expr.Agg
-    | pl_expr.BinaryExpr
-    | pl_expr.Len
-    | pl_expr.PyExprIR
-)
+Expr: TypeAlias = Union[
+    pl_expr.Function,
+    pl_expr.Window,
+    pl_expr.Literal,
+    pl_expr.Sort,
+    pl_expr.SortBy,
+    pl_expr.Gather,
+    pl_expr.Filter,
+    pl_expr.Cast,
+    pl_expr.Column,
+    pl_expr.Agg,
+    pl_expr.BinaryExpr,
+    pl_expr.Len,
+    pl_expr.PyExprIR,
+]
 
 Schema: TypeAlias = Mapping[str, plc.DataType]
 
