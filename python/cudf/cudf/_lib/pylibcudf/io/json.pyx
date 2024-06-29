@@ -3,7 +3,6 @@
 from libcpp cimport bool
 from libcpp.limits cimport numeric_limits
 from libcpp.string cimport string
-from libcpp.utility cimport move
 
 from cudf._lib.pylibcudf.io.types cimport SinkInfo, TableWithMetadata
 from cudf._lib.pylibcudf.libcudf.io.json cimport (
@@ -49,7 +48,7 @@ cpdef void write_json(
     cdef table_metadata tbl_meta = table_w_meta.metadata
     cdef string na_rep_c = na_rep.encode()
 
-    cdef json_writer_options options = move(
+    cdef json_writer_options options = (
         json_writer_options.builder(sink_info.c_obj, table_w_meta.tbl.view())
         .metadata(tbl_meta)
         .na_rep(na_rep_c)

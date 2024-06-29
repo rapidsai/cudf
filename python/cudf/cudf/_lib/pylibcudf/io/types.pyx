@@ -43,7 +43,7 @@ cdef class TableWithMetadata:
     def __init__(self, Table tbl, list column_names):
         self.tbl = tbl
 
-        self.metadata.schema_info = move(self._make_column_info(column_names))
+        self.metadata.schema_info = self._make_column_info(column_names)
 
     cdef vector[column_name_info] _make_column_info(self, list column_names):
         cdef vector[column_name_info] col_name_infos
@@ -56,7 +56,7 @@ cdef class TableWithMetadata:
                 raise ValueError("Column name must be a string!")
 
             info.name = <string> name.encode()
-            info.children = move(self._make_column_info(child_names))
+            info.children = self._make_column_info(child_names)
 
             col_name_infos.push_back(info)
 
@@ -207,38 +207,35 @@ cdef class SinkInfo:
 
         cdef object initial_sink_cls = type(sinks[0])
 
-        for s in sinks:
-            if not isinstance(s, initial_sink_cls):
-                raise ValueError("All sinks must be of the same type!")
-            if isinstance(s, str):
-                paths.reserve(len(sinks))
-                paths.push_back(<string> s.encode())
-            elif isinstance(s, os.PathLike):
-                paths.reserve(len(sinks))
-                paths.push_back(<string> os.path.expanduser(s).encode())
-            else:
-                data_sinks.reserve(len(sinks))
-                if isinstance(s, (io.StringIO, io.BytesIO)):
+        if not all(isinstance(s, initial_sink_cls) for s in sinks):
+            raise ValueError("All sinks must be of the same type!")
+
+        if isinstance(sinks[0], os.PathLike):
+            sinks = [os.path.expanduser(s) for s in sinks]
+
+        if isinstance(sinks[0], (io.StringIO, io.BytesIO, io.TextIOBase)):
+            data_sinks.reserve(len(sinks))
+            if isinstance(sinks[0], (io.StringIO, io.BytesIO)):
+                for s in sinks:
                     self.sink_storage.push_back(
                         unique_ptr[data_sink](new iobase_data_sink(s))
                     )
-                elif isinstance(s, io.TextIOBase):
-                    if codecs.lookup(s.encoding).name not in {
-                        "utf-8",
-                        "ascii",
-                    }:
-                        raise NotImplementedError(
-                            f"Unsupported encoding {s.encoding}"
-                        )
+            elif isinstance(sinks[0], io.TextIOBase):
+                for s in sinks:
+                    if codecs.lookup(s).name not in ('utf-8', 'ascii'):
+                        raise NotImplementedError(f"Unsupported encoding {s.encoding}")
                     self.sink_storage.push_back(
                         unique_ptr[data_sink](new iobase_data_sink(s.buffer))
                     )
-                else:
-                    raise TypeError(
-                        "Unrecognized input type: {}".format(type(sinks[0]))
-                    )
-
-                data_sinks.push_back(self.sink_storage.back().get())
+            data_sinks.push_back(self.sink_storage.back().get())
+        elif isinstance(sinks[0], str):
+            paths.reserve(len(sinks))
+            for s in sinks:
+                paths.push_back(<string> s.encode())
+        else:
+            raise TypeError(
+                "Unrecognized input type: {}".format(type(sinks[0]))
+            )
 
         if data_sinks.size() > 0:
             self.c_obj = sink_info(data_sinks)
