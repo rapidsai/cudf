@@ -92,13 +92,40 @@ int main() {
         groupby_context{
             {"l_returnflag", "l_linestatus"},
             {
-                {"l_extendedprice", {cudf::aggregation::Kind::SUM, cudf::aggregation::Kind::MEAN}},
-                {"l_quantity", {cudf::aggregation::Kind::SUM, cudf::aggregation::Kind::MEAN}},
-                {"l_discount", {cudf::aggregation::Kind::MEAN}},
-                {"disc_price", {cudf::aggregation::Kind::SUM}},
-                {"charge", {cudf::aggregation::Kind::SUM, cudf::aggregation::Kind::COUNT_ALL}},
-            },
-            {"l_returnflag", "l_linestatus", "sum_base_price", "avg_price", "sum_qty", "avg_qty", "avg_disc", "sum_disc_price", "sum_charge", "count_order"}
+                {
+                    "l_extendedprice", 
+                    {
+                        {cudf::aggregation::Kind::SUM, "sum_base_price"}, 
+                        {cudf::aggregation::Kind::MEAN, "avg_price"}    
+                    }
+                },
+                {
+                    "l_quantity", 
+                    {
+                        {cudf::aggregation::Kind::SUM, "sum_qty"},
+                        {cudf::aggregation::Kind::MEAN, "avg_qty"}
+                    }
+                },
+                {
+                    "l_discount", 
+                    {
+                        {cudf::aggregation::Kind::MEAN, "avg_disc"},
+                    }
+                },
+                {
+                    "disc_price", 
+                    {
+                        {cudf::aggregation::Kind::SUM, "sum_disc_price"},
+                    }
+                },
+                {
+                    "charge", 
+                    {
+                        {cudf::aggregation::Kind::SUM, "sum_charge"}, 
+                        {cudf::aggregation::Kind::COUNT_ALL, "count_order"}
+                    }
+                },
+            }
         }
     );
 
