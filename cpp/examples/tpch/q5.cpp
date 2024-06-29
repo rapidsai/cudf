@@ -157,9 +157,8 @@ int main() {
     groupby_context ctx{
         {"n_name"}, 
         {
-            {"revenue", {cudf::aggregation::Kind::SUM}},
-        },
-        {"n_name", "revenue"}
+            {"revenue", {{cudf::aggregation::Kind::SUM, "revenue"}}},
+        }
     };
     auto groupedby_table = apply_groupby(appended_table, ctx);
     auto orderedby_table = apply_orderby(

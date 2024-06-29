@@ -193,27 +193,30 @@ std::unique_ptr<table_with_cols> apply_mask(
 
 struct groupby_context {
     std::vector<std::string> keys;
-    std::unordered_map<std::string, std::vector<cudf::aggregation::Kind>> values;
-    std::vector<std::string> schema;
+    std::unordered_map<std::string, std::vector<std::pair<cudf::aggregation::Kind, std::string>>> values;
 };
 
 std::unique_ptr<table_with_cols> apply_groupby(
     std::unique_ptr<table_with_cols>& table, groupby_context ctx) {
     auto keys = table->select(ctx.keys);
     cudf::groupby::groupby groupby_obj(keys);
+    std::vector<std::string> result_column_names;
+    result_column_names.insert(
+        result_column_names.end(), ctx.keys.begin(), ctx.keys.end());
     std::vector<cudf::groupby::aggregation_request> requests;
     for (auto& [value_col, aggregations] : ctx.values) {
         requests.emplace_back(cudf::groupby::aggregation_request());
         for (auto& agg : aggregations) {
-            if (agg == cudf::aggregation::Kind::SUM) {
+            if (agg.first == cudf::aggregation::Kind::SUM) {
                 requests.back().aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-            } else if (agg == cudf::aggregation::Kind::MEAN) {
+            } else if (agg.first == cudf::aggregation::Kind::MEAN) {
                 requests.back().aggregations.push_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
-            } else if (agg == cudf::aggregation::Kind::COUNT_ALL) {
+            } else if (agg.first == cudf::aggregation::Kind::COUNT_ALL) {
                 requests.back().aggregations.push_back(cudf::make_count_aggregation<cudf::groupby_aggregation>());
             } else {
                 throw std::runtime_error("Unsupported aggregation");
             }
+            result_column_names.push_back(agg.second);
         }
         requests.back().values = table->column(value_col);
     }
@@ -229,7 +232,8 @@ std::unique_ptr<table_with_cols> apply_groupby(
         }
     }
     auto result_table = std::make_unique<cudf::table>(std::move(result_columns));
-    return std::make_unique<table_with_cols>(std::move(result_table), ctx.schema);
+    return std::make_unique<table_with_cols>(
+        std::move(result_table), result_column_names);
 }
 
 std::tm make_tm(int year, int month, int day) {
