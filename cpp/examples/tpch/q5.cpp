@@ -109,13 +109,13 @@ int main() {
     );
 
     // 3. Apply the filter predicates
-    auto o_orderdate = cudf::ast::column_reference(joined_table->col_id("o_orderdate"));
+    auto o_orderdate_ref = cudf::ast::column_reference(joined_table->col_id("o_orderdate"));
     
     auto o_orderdate_lower = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
     auto o_orderdate_lower_limit = cudf::ast::literal(o_orderdate_lower);
     auto o_orderdate_pred_a = cudf::ast::operation(
         cudf::ast::ast_operator::GREATER_EQUAL,
-        o_orderdate,
+        o_orderdate_ref,
         o_orderdate_lower_limit
     );
     
@@ -123,16 +123,16 @@ int main() {
     auto o_orderdate_upper_limit = cudf::ast::literal(o_orderdate_upper);
     auto o_orderdate_pred_b = cudf::ast::operation(
         cudf::ast::ast_operator::LESS,
-        o_orderdate,
+        o_orderdate_ref,
         o_orderdate_upper_limit
     );
     
-    auto r_name = cudf::ast::column_reference(joined_table->col_id("r_name")); 
+    auto r_name_ref = cudf::ast::column_reference(joined_table->col_id("r_name")); 
     auto r_name_value = cudf::string_scalar("ASIA");
     auto r_name_literal = cudf::ast::literal(r_name_value);
     auto r_name_pred = cudf::ast::operation(
         cudf::ast::ast_operator::EQUAL,
-        r_name,
+        r_name_ref,
         r_name_literal
     );
 

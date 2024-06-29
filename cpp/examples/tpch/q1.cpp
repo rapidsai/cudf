@@ -67,12 +67,12 @@ int main() {
     std::string dataset_dir = "/home/jayjeetc/tpch_sf1/";
     
     // 1. Read out the `lineitem` table from parquet file
-    auto shipdate = cudf::ast::column_reference(5);
+    auto shipdate_ref = cudf::ast::column_reference(5);
     auto shipdate_upper = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1998, 9, 2), true);
     auto shipdate_upper_literal = cudf::ast::literal(shipdate_upper);
     auto shipdate_pred = std::make_unique<cudf::ast::operation>(
         cudf::ast::ast_operator::LESS_EQUAL,
-        shipdate,
+        shipdate_ref,
         shipdate_upper_literal
     );
     auto lineitem = read_parquet(

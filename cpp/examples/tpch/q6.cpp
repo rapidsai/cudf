@@ -14,28 +14,9 @@
  * limitations under the License.
  */
 
-#include <iostream>
-#include <memory>
-#include <vector>
-#include <chrono>
-#include <cudf/io/parquet.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/transform.hpp>
-#include <cudf/types.hpp>
-#include <cudf/groupby.hpp>
-#include <cudf/binaryop.hpp>
-#include <cudf/sorting.hpp>
-#include <cudf/reduction.hpp>
-#include <cudf/unary.hpp>
-#include <cudf/stream_compaction.hpp>
 
 #include "utils.hpp"
 
@@ -52,62 +33,66 @@ where
     and l_quantity < 24;
 */
 
-std::unique_ptr<cudf::table> scan_filter_project() {
-    std::string lineitem = "/home/jayjeetc/tpch_sf1/lineitem/part-0.parquet";
-    auto source = cudf::io::source_info(lineitem);
-    auto builder = cudf::io::parquet_reader_options_builder(source);
-
-    std::vector<std::string> cols = {
-        "l_extendedprice",
-        "l_discount",
-        "l_shipdate",
-        "l_quantity" 
-    };
-
-    auto extendedprice = cudf::ast::column_reference(0);
-    auto discount = cudf::ast::column_reference(1);
-    auto shipdate = cudf::ast::column_reference(2);
-    auto quantity = cudf::ast::column_reference(3);
-
-    auto shipdate_lower = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
-    auto shipdate_lower_literal = cudf::ast::literal(shipdate_lower);
-
-    auto shipdate_upper = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 1, 1), true);
-    auto shipdate_upper_literal = cudf::ast::literal(shipdate_upper);
-
-    auto pred_a = cudf::ast::operation(
-        cudf::ast::ast_operator::GREATER_EQUAL,
-        shipdate,
-        shipdate_lower_literal
+std::unique_ptr<cudf::column> calc_revenue(std::unique_ptr<table_with_cols>& table) {
+    auto extendedprice = table->column("l_extendedprice");
+    auto discount = table->column("l_discount");
+    auto extendedprice_mul_discount_type = cudf::data_type{cudf::type_id::DECIMAL64, -4};
+    auto extendedprice_mul_discount = cudf::binary_operation(
+        extendedprice,
+        discount,
+        cudf::binary_operator::MUL,
+        extendedprice_mul_discount_type
     );
-
-    auto pred_b = cudf::ast::operation(
-        cudf::ast::ast_operator::LESS,
-        shipdate,
-        shipdate_upper_literal
-    );
-
-    auto pred_ab = cudf::ast::operation(
-        cudf::ast::ast_operator::LOGICAL_AND,
-        pred_a,
-        pred_b
-    );
-
-    builder.columns(cols);
-
-    // FIXME: since, ast does not support `fixed_point_scalar` yet,
-    // we just push down the date filters while scanning the parquet file.
-    builder.filter(pred_ab);
-
-    auto options = builder.build();
-    auto result = cudf::io::read_parquet(options);
-    return std::move(result.tbl);
+    return extendedprice_mul_discount;
 }
 
-std::unique_ptr<cudf::table> apply_filters(std::unique_ptr<cudf::table>& table) {
-    // NOTE: apply the remaining filters based on the float32 casted columns
-    auto discount = cudf::ast::column_reference(4);
-    auto quantity = cudf::ast::column_reference(5);
+int main() {
+    std::string dataset_dir = "/home/jayjeetc/tpch_sf1/";
+
+    // 1. Read out the `lineitem` table from parquet file
+    auto shipdate_ref = cudf::ast::column_reference(2);
+    auto shipdate_lower = cudf::timestamp_scalar<cudf::timestamp_D>(
+        days_since_epoch(1994, 1, 1), true);
+    auto shipdate_lower_literal = cudf::ast::literal(shipdate_lower);
+    auto shipdate_upper = cudf::timestamp_scalar<cudf::timestamp_D>(
+        days_since_epoch(1995, 1, 1), true);
+    auto shipdate_upper_literal = cudf::ast::literal(shipdate_upper);
+    auto shipdate_pred_a = cudf::ast::operation(
+        cudf::ast::ast_operator::GREATER_EQUAL,
+        shipdate_ref,
+        shipdate_lower_literal
+    );
+    auto shipdate_pred_b = cudf::ast::operation(
+        cudf::ast::ast_operator::LESS,
+        shipdate_ref,
+        shipdate_upper_literal
+    );
+    auto shipdate_pred = std::make_unique<cudf::ast::operation>(
+        cudf::ast::ast_operator::LOGICAL_AND,
+        shipdate_pred_a,
+        shipdate_pred_b
+    );
+    auto lineitem = read_parquet(
+        dataset_dir + "lineitem/part-0.parquet", 
+        {"l_extendedprice", "l_discount", "l_shipdate", "l_quantity"},
+        std::move(shipdate_pred)
+    );
+
+    // 2. Cast the discount and quantity columns to float32 and append to lineitem table
+    auto discout_float = cudf::cast(
+        lineitem->column("l_discount"), cudf::data_type{cudf::type_id::FLOAT32});
+    auto quantity_float = cudf::cast(
+        lineitem->column("l_quantity"), cudf::data_type{cudf::type_id::FLOAT32});
+    auto appended_table = lineitem
+        ->append(discout_float, "l_discount_float")
+        ->append(quantity_float, "l_quantity_float");
+    
+    // 3. Apply the filters
+    auto discount_ref = cudf::ast::column_reference(
+        appended_table->col_id("l_discount_float"));
+    auto quantity_ref = cudf::ast::column_reference(
+        appended_table->col_id("l_quantity_float")
+    );
 
     auto discount_lower = cudf::numeric_scalar<float_t>(0.05);
     auto discount_lower_literal = cudf::ast::literal(discount_lower);
@@ -117,75 +102,43 @@ std::unique_ptr<cudf::table> apply_filters(std::unique_ptr<cudf::table>& table) 
     auto quantity_upper_literal = cudf::ast::literal(quantity_upper);
 
     auto discount_pred_a = cudf::ast::operation(
-            cudf::ast::ast_operator::GREATER_EQUAL,
-            discount,
-            discount_lower_literal
-        );
+        cudf::ast::ast_operator::GREATER_EQUAL,
+        discount_ref,
+        discount_lower_literal
+    );
     
     auto discount_pred_b = cudf::ast::operation(
-            cudf::ast::ast_operator::LESS_EQUAL,
-            discount,
-            discount_upper_literal
-        );
-
+        cudf::ast::ast_operator::LESS_EQUAL,
+        discount_ref,
+        discount_upper_literal
+    );
     auto discount_pred = cudf::ast::operation(
         cudf::ast::ast_operator::LOGICAL_AND, discount_pred_a, discount_pred_b
     );
-
     auto quantity_pred = cudf::ast::operation(
         cudf::ast::ast_operator::LESS,
-        quantity,
+        quantity_ref,
         quantity_upper_literal
     );
-
     auto discount_quantity_pred = cudf::ast::operation(
         cudf::ast::ast_operator::LOGICAL_AND,
         discount_pred,
         quantity_pred
     );
+    auto filtered_table = apply_filter(appended_table, discount_quantity_pred);
 
-    auto boolean_mask = cudf::compute_column(table->view(), discount_quantity_pred);
-    return cudf::apply_boolean_mask(table->view(), boolean_mask->view());
-}
+    // 4. Calculate the `revenue` column
+    auto revenue = calc_revenue(filtered_table);
 
-std::unique_ptr<cudf::table> apply_reduction(std::unique_ptr<cudf::table>& table) {
-    auto extendedprice = table->view().column(0);
-    auto discount = table->view().column(1);
-
-    auto extendedprice_mul_discount_type = cudf::data_type{cudf::type_id::DECIMAL64, -4};
-    auto extendedprice_mul_discount = cudf::binary_operation(
-        extendedprice,
-        discount,
-        cudf::binary_operator::MUL,
-        extendedprice_mul_discount_type
+    // 5. Sum the `revenue` column
+    auto revenue_view = revenue->view();
+    auto result_table = apply_reduction(
+        revenue_view,
+        cudf::aggregation::Kind::SUM,
+        "revenue"
     );
-    
-    auto const sum_agg = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
-    auto sum = cudf::reduce(extendedprice_mul_discount->view(), *sum_agg, extendedprice_mul_discount->type());
 
-    cudf::size_type len = 1;
-    auto col = cudf::make_column_from_scalar(*sum, len);
-
-    std::vector<std::unique_ptr<cudf::column>> columns;
-    columns.push_back(std::move(col));
-    auto result_table = std::make_unique<cudf::table>(std::move(columns));
-    return result_table;
-}
-
-int main() {
-    auto s = std::chrono::high_resolution_clock::now();
-    
-    auto t1 = scan_filter_project();
-    auto discout_float = cudf::cast(t1->view().column(1), cudf::data_type{cudf::type_id::FLOAT32});
-    auto quantity_float = cudf::cast(t1->view().column(3), cudf::data_type{cudf::type_id::FLOAT32});
-    auto t2 = append_col_to_table(t1, discout_float);
-    auto t3 = append_col_to_table(t2, quantity_float);
-    auto t4 = apply_filters(t3);
-    auto result_table = apply_reduction(t4);
-
-    auto e = std::chrono::high_resolution_clock::now();
-    std::cout << "q6: " << std::chrono::duration_cast<std::chrono::milliseconds>(e - s).count() << "ms" << std::endl;
-    
-    write_parquet(result_table, create_table_metadata({"revenue"}), "q6.parquet");
+    // 6. Write query result to a parquet file
+    result_table->to_parquet("q6.parquet");
     return 0;
 }
