@@ -25,6 +25,7 @@
 #include <cudf/groupby.hpp>
 #include <cudf/binaryop.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/transform.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -66,17 +67,6 @@ std::unique_ptr<cudf::table> join_and_gather(
     return std::make_unique<cudf::table>(std::move(joined_cols));
 }
 
-std::unique_ptr<cudf::table> inner_join(
-  cudf::table_view left_input,
-  cudf::table_view right_input,
-  std::vector<cudf::size_type> left_on,
-  std::vector<cudf::size_type> right_on,
-  cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
-{
-  return join_and_gather(
-    left_input, right_input, left_on, right_on, compare_nulls);
-}
-
 template <typename T>
 std::vector<T> concat(const std::vector<T>& lhs, const std::vector<T>& rhs) {
     std::vector<T> result;
@@ -86,7 +76,88 @@ std::vector<T> concat(const std::vector<T>& lhs, const std::vector<T>& rhs) {
     return result;
 }
 
-std::pair<std::unique_ptr<cudf::table>, std::vector<std::string>> read_parquet(std::string filename) {
+class table_with_cols {
+    public:
+        table_with_cols(
+            std::unique_ptr<cudf::table> tbl, std::vector<std::string> col_names) 
+                : tbl(std::move(tbl)), col_names(col_names) {}
+        cudf::table_view table() {
+            return tbl->view();
+        }
+        cudf::column_view column(std::string col_name) {
+            return tbl->view().column(col_id(col_name));
+        }
+        std::vector<std::string> columns() {
+            return col_names;
+        }
+        cudf::size_type col_id(std::string col_name) {
+            auto it = std::find(col_names.begin(), col_names.end(), col_name);
+            if (it == col_names.end()) {
+                throw std::runtime_error("Column not found");
+            }
+            return std::distance(col_names.begin(), it);
+        }
+        std::unique_ptr<table_with_cols> append(std::unique_ptr<cudf::column>& col, std::string col_name) {
+            std::vector<std::unique_ptr<cudf::column>> updated_cols;
+            std::vector<std::string> updated_col_names;
+            for (size_t i = 0; i < tbl->num_columns(); i++) {
+                updated_cols.push_back(std::make_unique<cudf::column>(tbl->get_column(i)));
+                updated_col_names.push_back(col_names[i]);
+            }
+            updated_cols.push_back(std::move(col));
+            updated_col_names.push_back(col_name);
+            auto updated_table = std::make_unique<cudf::table>(std::move(updated_cols));
+            return std::make_unique<table_with_cols>(std::move(updated_table), updated_col_names);
+        }
+        cudf::table_view select(std::vector<std::string> col_names) {
+            std::vector<cudf::size_type> col_indices;
+            for (auto &col_name : col_names) {
+                col_indices.push_back(col_id(col_name));
+            }
+            return tbl->select(col_indices);
+        }
+        void to_parquet(std::string filepath) {
+            auto sink_info = cudf::io::sink_info(filepath);
+            cudf::io::table_metadata metadata;
+            std::vector<cudf::io::column_name_info> col_name_infos;
+            for (auto &col_name : col_names) {
+                col_name_infos.push_back(cudf::io::column_name_info(col_name));
+            }
+            metadata.schema_info = col_name_infos;
+            auto table_input_metadata = cudf::io::table_input_metadata{metadata};
+            auto builder = cudf::io::parquet_writer_options::builder(sink_info, tbl->view());
+            builder.metadata(table_input_metadata);
+            auto options = builder.build();
+            cudf::io::write_parquet(options);
+        }
+    private:
+        std::unique_ptr<cudf::table> tbl;
+        std::vector<std::string> col_names;
+};
+
+std::unique_ptr<table_with_cols> apply_inner_join(
+  std::unique_ptr<table_with_cols>& left_input,
+  std::unique_ptr<table_with_cols>& right_input,
+  std::vector<std::string> left_on,
+  std::vector<std::string> right_on,
+  cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) {
+    std::vector<cudf::size_type> left_on_indices;
+    std::vector<cudf::size_type> right_on_indices;
+    for (auto &col_name : left_on) {
+        left_on_indices.push_back(left_input->col_id(col_name));
+    }
+    for (auto &col_name : right_on) {
+        right_on_indices.push_back(right_input->col_id(col_name));
+    }
+    auto table = join_and_gather(
+        left_input->table(), right_input->table(), 
+        left_on_indices, right_on_indices, compare_nulls
+    );
+    return std::make_unique<table_with_cols>(std::move(table), 
+        concat(left_input->columns(), right_input->columns()));
+}
+
+std::unique_ptr<table_with_cols> read_parquet(std::string filename) {
     auto source = cudf::io::source_info(filename);
     auto builder = cudf::io::parquet_reader_options_builder(source);
     auto options = builder.build();
@@ -96,26 +167,35 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<std::string>> read_parquet(s
     for (auto &col_info : schema_info) {
         column_names.push_back(col_info.name);
     }
-    return std::make_pair(std::move(table_with_metadata.tbl), column_names);
+    return std::make_unique<table_with_cols>(
+        std::move(table_with_metadata.tbl), column_names);
 }
 
-std::unique_ptr<cudf::table> apply_filter(
-    std::unique_ptr<cudf::table>& table, cudf::ast::operation& predicate) {
-    auto boolean_mask = cudf::compute_column(table->view(), predicate);
-    return cudf::apply_boolean_mask(table->view(), boolean_mask->view());    
+std::unique_ptr<table_with_cols> apply_filter(
+    std::unique_ptr<table_with_cols>& table, cudf::ast::operation& predicate) {
+    auto boolean_mask = cudf::compute_column(table->table(), predicate);
+    auto result_table = cudf::apply_boolean_mask(table->table(), boolean_mask->view());    
+    return std::make_unique<table_with_cols>(std::move(result_table), table->columns());
+}
+
+std::unique_ptr<table_with_cols> apply_mask(
+    std::unique_ptr<table_with_cols>& table, std::unique_ptr<cudf::column>& mask) {
+    auto result_table = cudf::apply_boolean_mask(table->table(), mask->view());
+    return std::make_unique<table_with_cols>(std::move(result_table), table->columns());
 }
 
 struct groupby_context {
-    std::vector<cudf::size_type> keys;
-    std::unordered_map<cudf::size_type, std::vector<cudf::aggregation::Kind>> values;
+    std::vector<std::string> keys;
+    std::unordered_map<std::string, std::vector<cudf::aggregation::Kind>> values;
+    std::vector<std::string> schema;
 };
 
-std::unique_ptr<cudf::table> apply_groupby(
-    std::unique_ptr<cudf::table>& table, groupby_context ctx) {
+std::unique_ptr<table_with_cols> apply_groupby(
+    std::unique_ptr<table_with_cols>& table, groupby_context ctx) {
     auto keys = table->select(ctx.keys);
     cudf::groupby::groupby groupby_obj(keys);
     std::vector<cudf::groupby::aggregation_request> requests;
-    for (auto& [value_index, aggregations] : ctx.values) {
+    for (auto& [value_col, aggregations] : ctx.values) {
         requests.emplace_back(cudf::groupby::aggregation_request());
         for (auto& agg : aggregations) {
             if (agg == cudf::aggregation::Kind::SUM) {
@@ -128,7 +208,7 @@ std::unique_ptr<cudf::table> apply_groupby(
                 throw std::runtime_error("Unsupported aggregation");
             }
         }
-        requests.back().values = table->get_column(value_index).view();
+        requests.back().values = table->column(value_col);
     }
     auto agg_results = groupby_obj.aggregate(requests);
     std::vector<std::unique_ptr<cudf::column>> result_columns;
@@ -141,7 +221,8 @@ std::unique_ptr<cudf::table> apply_groupby(
             result_columns.push_back(std::move(agg_results.second[i].results[j]));
         }
     }
-    return std::make_unique<cudf::table>(std::move(result_columns));
+    auto result_table = std::make_unique<cudf::table>(std::move(result_columns));
+    return std::make_unique<table_with_cols>(std::move(result_table), ctx.schema);
 }
 
 std::tm make_tm(int year, int month, int day) {
@@ -161,64 +242,19 @@ int32_t days_since_epoch(int year, int month, int day) {
     return static_cast<int32_t>(diff);
 }
 
-cudf::io::table_metadata create_table_metadata(std::vector<std::string> column_names) {
-    cudf::io::table_metadata metadata;
-    std::vector<cudf::io::column_name_info> column_name_infos;
-    for (auto &col_name : column_names) {
-        column_name_infos.push_back(cudf::io::column_name_info(col_name));
-    }
-    metadata.schema_info = column_name_infos;
-    return metadata;
-}
-
-std::unique_ptr<cudf::table> append_col_to_table(
-    std::unique_ptr<cudf::table>& table, std::unique_ptr<cudf::column>& col) {
-    std::vector<std::unique_ptr<cudf::column>> columns;
-    for (size_t i = 0; i < table->num_columns(); i++) {
-        columns.push_back(std::make_unique<cudf::column>(table->get_column(i)));
-    }
-    columns.push_back(std::move(col));
-    return std::make_unique<cudf::table>(std::move(columns));
-}
-
-std::unique_ptr<cudf::table> apply_orderby(
-    std::unique_ptr<cudf::table>& table, std::vector<int32_t> keys) {
-    auto table_view = table->view();
+std::unique_ptr<table_with_cols> apply_orderby(
+    std::unique_ptr<table_with_cols>& table, 
+    std::vector<std::string> sort_keys,
+    std::vector<cudf::order> sort_key_orders) {
     std::vector<cudf::column_view> column_views;
-    for (auto& key : keys) {
-        column_views.push_back(table_view.column(key));
-    }    
-    return cudf::sort_by_key(
-        table_view, 
+    for (auto& key : sort_keys) {
+        column_views.push_back(table->column(key));
+    }
+    auto result_table = cudf::sort_by_key(
+        table->table(), 
         cudf::table_view{column_views},
-        {cudf::order::DESCENDING}
+        sort_key_orders
     );
-}
-
-void write_parquet(std::unique_ptr<cudf::table>& table, cudf::io::table_metadata metadata, std::string filepath) {
-    auto sink_info = cudf::io::sink_info(filepath);
-    auto table_input_metadata = cudf::io::table_input_metadata{metadata};
-    auto builder = cudf::io::parquet_writer_options::builder(sink_info, table->view());
-    builder.metadata(table_input_metadata);
-    auto options = builder.build();
-    cudf::io::write_parquet(options);
-}
-
-template<typename T>
-rmm::device_buffer get_device_buffer_from_value(T value) {
-    auto stream = cudf::get_default_stream();    
-    rmm::cuda_stream_view stream_view(stream);
-
-    rmm::device_scalar<T> scalar(stream_view);
-    scalar.set_value_async(value, stream_view);
-
-    rmm::device_buffer buffer(scalar.data(), scalar.size(), stream_view);
-    return buffer;
-}
-
-rmm::device_buffer get_empty_device_buffer() {
-    auto stream = cudf::get_default_stream();    
-    rmm::cuda_stream_view stream_view(stream);
-    rmm::device_buffer buffer(0, stream_view);
-    return buffer;
+    return std::make_unique<table_with_cols>(
+        std::move(result_table), table->columns());
 }
