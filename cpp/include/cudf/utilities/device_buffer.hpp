@@ -16,15 +16,16 @@
 
 #pragma once
 
+#include <cudf/utilities/prefetch.hpp>
+
 #include <rmm/device_buffer.hpp>
 
-namespace cudf::experimental::detail {
+namespace cudf::experimental::buffer::detail {
 
 /**
  * A wrapper around rmm::device_buffer that provides an additional data()
  * method that prefetches the data to the GPU if enabled.
  */
-template <typename T>
 class device_buffer : public rmm::device_buffer {
  public:
   using rmm::device_buffer::device_buffer;
@@ -37,7 +38,7 @@ class device_buffer : public rmm::device_buffer {
   {
     auto const* data = rmm::device_buffer::data();
     cudf::experimental::prefetch::detail::prefetch(
-      "device_buffer::data", data, rmm::device_buffer::size());
+      "device_buffer::data_const", data, rmm::device_buffer::size());
     return data;
   }
 
@@ -53,6 +54,17 @@ class device_buffer : public rmm::device_buffer {
       "device_buffer::data", data, rmm::device_buffer::size());
     return data;
   }
+
+  /**
+   * @brief Move assignment operator
+   * @param other The device_buffer to move from
+   * @return A reference to this device_buffer
+   */
+  device_buffer& operator=(rmm::device_buffer&& other) noexcept
+  {
+    rmm::device_buffer::operator=(std::move(other));
+    return *this;
+  }
 };
 
-}  // namespace cudf::experimental::detail
+}  // namespace cudf::experimental::buffer::detail
