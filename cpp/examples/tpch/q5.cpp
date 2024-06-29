@@ -21,9 +21,9 @@
 #include "utils.hpp"
 
 /*
-create view lineitem as select * from '~/tpch_sf1/lineitem/part-0.parquet';
-create view orders as select * from '~/tpch_sf1/orders/part-0.parquet';
 create view customer as select * from '~/tpch_sf1/customer/part-0.parquet';
+create view orders as select * from '~/tpch_sf1/orders/part-0.parquet';
+create view lineitem as select * from '~/tpch_sf1/lineitem/part-0.parquet';
 create view supplier as select * from '~/tpch_sf1/supplier/part-0.parquet';
 create view nation as select * from '~/tpch_sf1/nation/part-0.parquet';
 create view region as select * from '~/tpch_sf1/region/part-0.parquet';
