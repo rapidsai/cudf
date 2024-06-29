@@ -66,7 +66,7 @@ std::unique_ptr<cudf::column> calc_charge(std::unique_ptr<table_with_cols>& tabl
 int main() {
     std::string dataset_dir = "/home/jayjeetc/tpch_sf1/";
     
-    // 1. Read out table from parquet file
+    // 1. Read out the `lineitem` table from parquet file
     auto shipdate = cudf::ast::column_reference(5);
     auto shipdate_upper = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1998, 9, 2), true);
     auto shipdate_upper_literal = cudf::ast::literal(shipdate_upper);
