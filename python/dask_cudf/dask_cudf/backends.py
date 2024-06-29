@@ -667,17 +667,10 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
         )
 
     @staticmethod
-    def read_json(*args, engine="auto", **kwargs):
-        return _default_backend(
-            dd.read_json,
-            *args,
-            engine=(
-                partial(cudf.read_json, engine=engine)
-                if isinstance(engine, str)
-                else engine
-            ),
-            **kwargs,
-        )
+    def read_json(*args, **kwargs):
+        from dask_cudf.io.json import read_json
+
+        return read_json(*args, **kwargs)
 
     @staticmethod
     def read_orc(*args, **kwargs):
