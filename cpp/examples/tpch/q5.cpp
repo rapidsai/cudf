@@ -167,4 +167,5 @@ int main() {
     
     // 6. Write query result to a parquet file
     orderedby_table->to_parquet("q5.parquet");
+    return 0;
 }
