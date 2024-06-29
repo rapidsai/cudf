@@ -157,9 +157,16 @@ std::unique_ptr<table_with_cols> apply_inner_join(
         concat(left_input->columns(), right_input->columns()));
 }
 
-std::unique_ptr<table_with_cols> read_parquet(std::string filename) {
+std::unique_ptr<table_with_cols> read_parquet(
+    std::string filename, std::vector<std::string> columns = {}, std::unique_ptr<cudf::ast::operation> predicate = nullptr) {
     auto source = cudf::io::source_info(filename);
-    auto builder = cudf::io::parquet_reader_options_builder(source);
+    auto builder = cudf::io::parquet_reader_options_builder(source);    
+    if (columns.size()) {
+        builder.columns(columns);
+    }
+    if (predicate) {
+        builder.filter(*predicate);
+    }
     auto options = builder.build();
     auto table_with_metadata = cudf::io::read_parquet(options);
     auto schema_info = table_with_metadata.metadata.schema_info;
