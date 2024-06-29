@@ -27,7 +27,7 @@
 #include <memory>
 #include <optional>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 namespace text {
 
@@ -101,4 +101,4 @@ std::unique_ptr<cudf::column> multibyte_split(data_chunk_source const& source,
 
 }  // namespace text
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

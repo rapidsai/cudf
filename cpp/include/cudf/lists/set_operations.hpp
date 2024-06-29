@@ -23,7 +23,8 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf::lists {
+namespace CUDF_EXPORT cudf {
+namespace lists {
 /**
  * @addtogroup set_operations
  * @{
@@ -177,4 +178,5 @@ std::unique_ptr<column> difference_distinct(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
-}  // namespace cudf::lists
+}  // namespace lists
+}  // namespace CUDF_EXPORT cudf

@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/device_vector.hpp>
@@ -30,7 +32,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup utility_span
  * @{
@@ -507,4 +509,4 @@ template <class T>
 using device_2dspan = base_2dspan<T, device_span>;
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

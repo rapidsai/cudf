@@ -90,7 +90,7 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(input, stream);
   auto const has_nulls          = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
-  auto const has_nested_columns = cudf::detail::has_nested_columns(input);
+  auto const has_nested_columns = cudf::has_nested_columns(input);
 
   auto const row_hash  = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const row_equal = cudf::experimental::row::equality::self_comparator(preprocessed_input);
@@ -109,7 +109,7 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
     return detail::reduce_by_row(set, num_rows, keep, stream, mr);
   };
 
-  if (cudf::detail::has_nested_columns(input)) {
+  if (cudf::has_nested_columns(input)) {
     return dipatch_row_equal<true>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);
   } else {
     return dipatch_row_equal<false>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);

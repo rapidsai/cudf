@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <cuda/std/limits>
@@ -23,7 +24,7 @@
 
 #include <cstring>
 
-namespace numeric {
+namespace CUDF_EXPORT numeric {
 
 /**
  * @addtogroup floating_conversion
@@ -612,4 +613,4 @@ CUDF_HOST_DEVICE inline constexpr T divide_power10(T value, int exp10)
 }  // namespace detail
 
 /** @} */  // end of group
-}  // namespace numeric
+}  // namespace CUDF_EXPORT numeric

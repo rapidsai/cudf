@@ -20,7 +20,7 @@
 
 #include <algorithm>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief Compare the types of two `column_view`s
@@ -147,4 +147,4 @@ inline bool all_have_same_types(ForwardIt first, ForwardIt last)
          });
 }
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

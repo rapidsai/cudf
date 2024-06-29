@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,12 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <cstdint>
 
-namespace cudf::io::orc {
+namespace CUDF_EXPORT cudf {
+namespace io::orc {
 /**
  * @addtogroup io_types
  * @{
@@ -104,4 +107,5 @@ enum ProtofType : uint8_t {
 };
 
 /** @} */  // end of group
-}  // namespace cudf::io::orc
+}  // namespace io::orc
+}  // namespace CUDF_EXPORT cudf

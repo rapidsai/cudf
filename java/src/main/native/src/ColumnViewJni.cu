@@ -22,10 +22,10 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>
@@ -201,17 +201,17 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
   // Use `cudf::duplicate_keep_option::KEEP_LAST` so this will produce the desired behavior when
   // being called in `create_map` in spark-rapids.
   // Other options comparing nulls and NaNs are set as all-equal.
-  auto out_columns = cudf::detail::stable_distinct(
-                       table_view{{column_view{cudf::device_span<cudf::size_type const>{labels}},
-                                   child.child(0),
-                                   child.child(1)}},  // input table
-                       std::vector<size_type>{0, 1},  // key columns
-                       cudf::duplicate_keep_option::KEEP_LAST,
-                       cudf::null_equality::EQUAL,
-                       cudf::nan_equality::ALL_EQUAL,
-                       stream,
-                       rmm::mr::get_current_device_resource())
-                       ->release();
+  auto out_columns =
+    cudf::stable_distinct(table_view{{column_view{cudf::device_span<cudf::size_type const>{labels}},
+                                      child.child(0),
+                                      child.child(1)}},  // input table
+                          std::vector<size_type>{0, 1},  // key columns
+                          cudf::duplicate_keep_option::KEEP_LAST,
+                          cudf::null_equality::EQUAL,
+                          cudf::nan_equality::ALL_EQUAL,
+                          stream,
+                          rmm::mr::get_current_device_resource())
+      ->release();
   auto const out_labels = out_columns.front()->view();
 
   // Assemble a structs column of <out_keys, out_vals>.
@@ -237,7 +237,7 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
     std::move(out_offsets),
     std::move(out_structs),
     input.null_count(),
-    cudf::detail::copy_bitmask(input.parent(), stream, rmm::mr::get_current_device_resource()),
+    cudf::copy_bitmask(input.parent(), stream, rmm::mr::get_current_device_resource()),
     stream);
 }
 

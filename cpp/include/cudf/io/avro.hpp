@@ -28,7 +28,7 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 /**
  * @addtogroup io_readers
@@ -221,4 +221,4 @@ table_with_metadata read_avro(
 
 /** @} */  // end of group
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

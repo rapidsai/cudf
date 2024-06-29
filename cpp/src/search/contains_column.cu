@@ -19,6 +19,7 @@
 #include <cudf/detail/search.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
+#include <cudf/search.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>

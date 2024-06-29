@@ -22,7 +22,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-namespace cudf::io::json::detail {
+namespace cudf {
+namespace io::json::detail {
 
 /**
  * @brief Reads and returns the entire data set.
@@ -34,6 +35,7 @@ namespace cudf::io::json::detail {
  *
  * @return cudf::table object that contains the array of cudf::column.
  */
+CUDF_EXPORT
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& options,
                               rmm::cuda_stream_view stream,
@@ -61,6 +63,7 @@ void write_json(data_sink* sink,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  */
+CUDF_EXPORT
 void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<char>>& indata,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr);
@@ -72,7 +75,9 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<char>
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  */
+CUDF_EXPORT
 void normalize_whitespace(datasource::owning_buffer<rmm::device_uvector<char>>& indata,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr);
-}  // namespace cudf::io::json::detail
+}  // namespace io::json::detail
+}  // namespace cudf

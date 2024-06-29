@@ -18,6 +18,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
+#include <cudf/search.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -74,7 +75,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   auto const haystack_it = cudf::experimental::row::lhs_iterator(0);
   auto const needles_it  = cudf::experimental::row::rhs_iterator(0);
 
-  if (cudf::detail::has_nested_columns(haystack) || cudf::detail::has_nested_columns(needles)) {
+  if (cudf::has_nested_columns(haystack) || cudf::has_nested_columns(needles)) {
     auto const d_comparator = comparator.less<true>(nullate::DYNAMIC{has_nulls});
     if (find_first) {
       thrust::lower_bound(rmm::exec_policy(stream),

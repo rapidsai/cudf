@@ -587,14 +587,14 @@ transform_lists_of_structs(column_view const& lhs,
                                   stream,
                                   rmm::mr::get_current_device_resource());
 
-      auto const ranks        = compute_ranks(concatenated_children->view(),
+      auto const ranks = compute_ranks(concatenated_children->view(),
                                        column_null_order,
                                        stream,
                                        rmm::mr::get_current_device_resource());
-      auto const ranks_slices = cudf::detail::slice(
-        ranks->view(),
-        {0, child_lhs.size(), child_lhs.size(), child_lhs.size() + child_rhs.size()},
-        stream);
+      auto const ranks_slices =
+        cudf::slice(ranks->view(),
+                    {0, child_lhs.size(), child_lhs.size(), child_lhs.size() + child_rhs.size()},
+                    stream);
 
       out_cols_lhs.emplace_back(std::make_unique<column>(ranks_slices.front(), stream, mr));
       out_cols_rhs.emplace_back(std::make_unique<column>(ranks_slices.back(), stream, mr));
@@ -652,7 +652,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
   auto d_depths = detail::make_device_uvector_async(
     verticalized_col_depths, stream, rmm::mr::get_current_device_resource());
 
-  if (detail::has_nested_columns(preprocessed_input)) {
+  if (has_nested_columns(preprocessed_input)) {
     auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(preprocessed_input, stream);
     return std::shared_ptr<preprocessed_table>(
       new preprocessed_table(std::move(d_table),

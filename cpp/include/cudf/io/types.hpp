@@ -33,16 +33,16 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 //! IO interfaces
 namespace io {
 class data_sink;
 class datasource;
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
 
 //! cuDF interfaces
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 //! IO interfaces
 namespace io {
 /**
@@ -1086,4 +1086,4 @@ class reader_column_schema {
 
 /** @} */  // end of group
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

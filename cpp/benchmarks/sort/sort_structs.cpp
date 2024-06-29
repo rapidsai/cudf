@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ void nvbench_sort_struct(nvbench::state& state)
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
-    cudf::detail::sorted_order(*input, {}, {}, stream_view, rmm::mr::get_current_device_resource());
+    cudf::sorted_order(*input, {}, {}, stream_view, rmm::mr::get_current_device_resource());
   });
 }
 

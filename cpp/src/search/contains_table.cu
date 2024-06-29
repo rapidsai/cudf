@@ -18,6 +18,7 @@
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/search.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
@@ -288,7 +289,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
       }
     };
 
-  if (cudf::detail::has_nested_columns(haystack)) {
+  if (cudf::has_nested_columns(haystack)) {
     dispatch_nan_comparator<true>(compare_nulls,
                                   compare_nans,
                                   haystack_has_nulls,

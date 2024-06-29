@@ -15,9 +15,10 @@
  */
 
 #include "file_io_utilities.hpp"
-#include "io/utilities/config_utils.hpp"
 
+#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/config_utils.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -44,7 +45,7 @@ class file_source : public datasource {
   explicit file_source(char const* filepath) : _file(filepath, O_RDONLY)
   {
     detail::force_init_cuda_context();
-    if (detail::cufile_integration::is_kvikio_enabled()) {
+    if (cufile_integration::is_kvikio_enabled()) {
       _kvikio_file = kvikio::FileHandle(filepath);
       CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode {}.",
                     _kvikio_file.is_compat_mode_on() ? "on" : "off");
@@ -433,7 +434,7 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
                                                size_t size)
 {
 #ifdef CUFILE_FOUND
-  if (detail::cufile_integration::is_always_enabled()) {
+  if (cufile_integration::is_always_enabled()) {
     // avoid mmap as GDS is expected to be used for most reads
     return std::make_unique<direct_read_source>(filepath.c_str());
   }

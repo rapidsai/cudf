@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -329,9 +329,7 @@ TEST_F(CopyingTest, PurgeNonEmptyNulls)
                        .release();
 
   // Set nullmask, post construction.
-  // TODO: Once set_null_mask's public API exposes a stream parameter, use that
-  // instead of the detail API.
-  cudf::detail::set_null_mask(
+  cudf::set_null_mask(
     input->mutable_view().null_mask(), 2, 3, false, cudf::test::get_default_stream());
   input->set_null_count(1);
 

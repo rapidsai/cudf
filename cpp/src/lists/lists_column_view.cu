@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,14 +52,14 @@ column_view lists_column_view::get_sliced_child(rmm::cuda_stream_view stream) co
     size_type child_offset_start = cudf::detail::get_value<size_type>(offsets(), offset(), stream);
     size_type child_offset_end =
       cudf::detail::get_value<size_type>(offsets(), offset() + size(), stream);
-    return cudf::detail::slice(child(), {child_offset_start, child_offset_end}, stream).front();
+    return cudf::slice(child(), {child_offset_start, child_offset_end}, stream).front();
   }
 
   // if I don't have a positive offset, but I am shorter than my offsets() would otherwise indicate,
   // I need to do a split and return the front.
   if (size() < offsets().size() - 1) {
     size_type child_offset = cudf::detail::get_value<size_type>(offsets(), size(), stream);
-    return cudf::detail::slice(child(), {0, child_offset}, stream).front();
+    return cudf::slice(child(), {0, child_offset}, stream).front();
   }
 
   // otherwise just return the child directly

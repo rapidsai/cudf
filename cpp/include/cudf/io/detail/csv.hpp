@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/io/csv.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>

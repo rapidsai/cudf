@@ -47,8 +47,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& input,
 
   // slice the offsets child column
   auto offsets_column = std::make_unique<cudf::column>(
-    cudf::detail::slice(
-      input.offsets(), {offsets_offset, offsets_offset + strings_count + 1}, stream)
+    cudf::slice(input.offsets(), {offsets_offset, offsets_offset + strings_count + 1}, stream)
       .front(),
     stream,
     mr);

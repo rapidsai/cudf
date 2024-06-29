@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 
-#include "config_utils.hpp"
+#include "getenv_or.hpp"
 
+#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <cstdlib>
+#include <sstream>
 #include <string>
 
-namespace cudf::io::detail {
+namespace cudf::io {
 
 namespace cufile_integration {
 
@@ -80,4 +82,4 @@ bool is_stable_enabled() { return is_all_enabled() or get_env_policy() == usage_
 
 }  // namespace nvcomp_integration
 
-}  // namespace cudf::io::detail
+}  // namespace cudf::io

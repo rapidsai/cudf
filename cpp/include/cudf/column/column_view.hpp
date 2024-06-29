@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,7 @@
  * @brief column view class definitions
  */
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 /**
  * @brief A non-owning, immutable view of device data as a column of elements,
  * some of which may be null as indicated by a bitmask.
@@ -284,11 +283,11 @@ class column_view_base {
                    size_type offset = 0);
 };
 
-class mutable_column_view_base : public column_view_base {
- public:
- protected:
-};
-}  // namespace detail
+class mutable_column_view_base : public column_view_base {};
+
+}  // namespace cudf::detail
+
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief A non-owning, immutable view of device data as a column of elements,
@@ -765,5 +764,6 @@ std::size_t shallow_hash(column_view const& input);
  * @return If `lhs` and `rhs` have equivalent shallow state
  */
 bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs);
+
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

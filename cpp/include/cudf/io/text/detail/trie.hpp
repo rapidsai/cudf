@@ -18,6 +18,7 @@
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/detail/multistate.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -30,7 +31,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 namespace text {
 namespace detail {
@@ -248,4 +249,4 @@ struct trie {
 }  // namespace detail
 }  // namespace text
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

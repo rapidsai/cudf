@@ -117,7 +117,7 @@ std::size_t compute_join_output_size(
     }
   };
 
-  if (cudf::detail::has_nested_columns(probe_table)) {
+  if (cudf::has_nested_columns(probe_table)) {
     auto const device_comparator = row_comparator.equal_to<true>(has_nulls, nulls_equal);
     return comparator_helper(device_comparator);
   } else {
@@ -230,7 +230,7 @@ probe_join_hash_table(
     }
   };
 
-  if (cudf::detail::has_nested_columns(probe_table)) {
+  if (cudf::has_nested_columns(probe_table)) {
     auto const device_comparator = row_comparator.equal_to<true>(probe_nulls, compare_nulls);
     comparator_helper(device_comparator);
   } else {
@@ -310,7 +310,7 @@ std::size_t get_full_join_size(
     hash_table.pair_retrieve_outer(
       iter, iter + probe_table_num_rows, out1_zip_begin, out2_zip_begin, equality, stream.value());
   };
-  if (cudf::detail::has_nested_columns(probe_table)) {
+  if (cudf::has_nested_columns(probe_table)) {
     auto const device_comparator = row_comparator.equal_to<true>(probe_nulls, compare_nulls);
     comparator_helper(device_comparator);
   } else {

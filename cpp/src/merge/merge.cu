@@ -27,6 +27,7 @@
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/merge.hpp>
 #include <cudf/strings/detail/merge.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
@@ -553,8 +554,7 @@ table_ptr_type merge(cudf::table_view const& left_table,
   // extract merged row order according to indices:
   //
   auto const merged_indices = [&]() {
-    if (cudf::detail::has_nested_columns(left_table) or
-        cudf::detail::has_nested_columns(right_table)) {
+    if (cudf::has_nested_columns(left_table) or cudf::has_nested_columns(right_table)) {
       return generate_merged_indices_nested(
         index_left_view, index_right_view, column_order, null_precedence, nullable, stream);
     } else {
@@ -694,11 +694,11 @@ std::unique_ptr<cudf::table> merge(std::vector<table_view> const& tables_to_merg
                                    std::vector<cudf::size_type> const& key_cols,
                                    std::vector<cudf::order> const& column_order,
                                    std::vector<cudf::null_order> const& null_precedence,
+                                   rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::merge(
-    tables_to_merge, key_cols, column_order, null_precedence, cudf::get_default_stream(), mr);
+  return detail::merge(tables_to_merge, key_cols, column_order, null_precedence, stream, mr);
 }
 
 }  // namespace cudf

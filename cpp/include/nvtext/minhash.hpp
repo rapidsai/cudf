@@ -19,11 +19,12 @@
 #include <cudf/hashing.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/resource_ref.hpp>
 
-namespace nvtext {
+namespace CUDF_EXPORT nvtext {
 /**
  * @addtogroup nvtext_minhash
  * @{
@@ -151,4 +152,4 @@ std::unique_ptr<cudf::column> minhash64(
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
-}  // namespace nvtext
+}  // namespace CUDF_EXPORT nvtext

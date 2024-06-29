@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
  * @brief Scalar device view class definitions
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @brief A non-owning view of scalar from device that is trivially copyable
@@ -440,4 +440,4 @@ auto get_scalar_device_view(fixed_point_scalar<T>& s)
   return fixed_point_scalar_device_view<T>(s.type(), s.data(), s.validity_data());
 }
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

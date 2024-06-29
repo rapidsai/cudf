@@ -19,13 +19,13 @@
 #include "io/orc/reader_impl.hpp"
 #include "io/orc/reader_impl_chunking.hpp"
 #include "io/orc/reader_impl_helpers.hpp"
-#include "io/utilities/config_utils.hpp"
 #include "io/utilities/hostdevice_span.hpp"
 
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/config_utils.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 

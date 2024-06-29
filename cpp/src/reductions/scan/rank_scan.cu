@@ -17,6 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/scan.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
@@ -84,7 +85,7 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                        device_comparator, resolver));
   };
 
-  if (cudf::detail::has_nested_columns(order_by_tview)) {
+  if (cudf::has_nested_columns(order_by_tview)) {
     auto const device_comparator =
       comp.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(table_view({order_by}))});
     comparator_helper(device_comparator);

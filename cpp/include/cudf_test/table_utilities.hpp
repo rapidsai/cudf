@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,10 @@
 
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
-namespace cudf::test::detail {
+namespace CUDF_EXPORT cudf {
+namespace test::detail {
 /**
  * @brief Verifies the property equality of two tables.
  *
@@ -57,7 +59,8 @@ void expect_tables_equal(cudf::table_view lhs, cudf::table_view rhs);
  */
 void expect_tables_equivalent(cudf::table_view lhs, cudf::table_view rhs);
 
-}  // namespace cudf::test::detail
+}  // namespace test::detail
+}  // namespace CUDF_EXPORT cudf
 
 // Macros for showing line of failure.
 #define CUDF_TEST_EXPECT_TABLE_PROPERTIES_EQUAL(lhs, rhs)        \

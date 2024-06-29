@@ -156,7 +156,7 @@ compute_row_frequencies(table_view const& input,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr)
 {
-  auto const has_nested_columns = cudf::detail::has_nested_columns(input);
+  auto const has_nested_columns = cudf::has_nested_columns(input);
 
   // Nested types are not tested, thus we just throw exception if we see such input for now.
   // We should remove this check after having enough tests.

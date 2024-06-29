@@ -20,6 +20,7 @@
 #include <cudf_test/stream_checking_resource_adaptor.hpp>
 
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/aligned.hpp>
 #include <rmm/cuda_stream_view.hpp>
@@ -32,7 +33,7 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace test {
 
 /// MR factory functions
@@ -92,7 +93,7 @@ inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
 }
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
 
 /**
  * @brief Parses the cuDF test command line options.

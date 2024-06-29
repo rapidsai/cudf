@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ cudf::size_type unique_count(table_view const& keys,
                              rmm::cuda_stream_view stream)
 {
   auto const row_comp = cudf::experimental::row::equality::self_comparator(keys, stream);
-  if (cudf::detail::has_nested_columns(keys)) {
+  if (cudf::has_nested_columns(keys)) {
     auto const comp =
       row_comp.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(keys)}, nulls_equal);
     // Using a temporary buffer for intermediate transform results from the lambda containing
