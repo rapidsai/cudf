@@ -14,35 +14,22 @@
  * limitations under the License.
  */
 
-#include <iostream>
-#include <memory>
-#include <vector>
-#include <chrono>
-#include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/transform.hpp>
-#include <cudf/types.hpp>
-#include <cudf/groupby.hpp>
-#include <cudf/binaryop.hpp>
-#include <cudf/sorting.hpp>
-#include <cudf/reduction.hpp>
-#include <cudf/unary.hpp>
-#include <cudf/stream_compaction.hpp>
-
+#include <cudf/datetime.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/contains.hpp>
-
 
 #include "utils.hpp"
 
 /*
+create view part as select * from '~/tpch_sf1/part/part-0.parquet';
+create view supplier as select * from '~/tpch_sf1/supplier/part-0.parquet';
+create view lineitem as select * from '~/tpch_sf1/lineitem/part-0.parquet';
+create view partsupp as select * from '~/tpch_sf1/partsupp/part-0.parquet';
+create view orders as select * from '~/tpch_sf1/orders/part-0.parquet';
+create view nation as select * from '~/tpch_sf1/nation/part-0.parquet';
+
 select
     nation,
     o_year,
@@ -77,6 +64,21 @@ order by
     o_year desc;
 */
 
+std::unique_ptr<cudf::column> calc_amount(std::unique_ptr<table_with_cols>& table) {
+    auto one = cudf::fixed_point_scalar<numeric::decimal64>(1);
+    auto discount = table->column("l_discount");
+    auto one_minus_discount = cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type());
+    auto extended_price = table->column("l_extendedprice");
+    auto extended_price_discounted_type = cudf::data_type{cudf::type_id::DECIMAL64, -4};
+    auto extended_price_discounted = cudf::binary_operation(extended_price, one_minus_discount->view(), cudf::binary_operator::MUL, extended_price_discounted_type);
+    auto supply_cost = table->column("ps_supplycost");
+    auto quantity = table->column("l_quantity");
+    auto supply_cost_quantity_type = cudf::data_type{cudf::type_id::DECIMAL64, -4};
+    auto supply_cost_quantity = cudf::binary_operation(supply_cost, quantity, cudf::binary_operator::MUL, supply_cost_quantity_type);
+    auto amount = cudf::binary_operation(extended_price_discounted->view(), supply_cost_quantity->view(), cudf::binary_operator::SUB, extended_price_discounted->type());
+    return amount;
+}
+
 int main() {
     std::string dataset_dir = "/home/jayjeetc/tpch_sf1/";
 
@@ -88,28 +90,14 @@ int main() {
     auto partsupp = read_parquet(dataset_dir + "partsupp/part-0.parquet");
     auto supplier = read_parquet(dataset_dir + "supplier/part-0.parquet");
 
-    // 2. Filter the part table using `p_name like '%green%'`
+    // 2. Generating the `profit` table
+    // 2.1 Filter the part table using `p_name like '%green%'`
     auto p_name = part->table().column(1);
     auto mask = cudf::strings::like(
         cudf::strings_column_view(p_name), cudf::string_scalar("%green%"));
     auto part_filtered = apply_mask(part, mask);
     
-    // 3. Join the tables
-    /*
-    
-    supplier and lineitem on s_suppkey and l_suppkey // done
-
-    partsupp and lineitem on ps_suppkey and l_suppkey // done 
-    partsupp and lineitem on ps_partkey and l_partkey // done
-
-    part and lineitem on p_partkey and l_partkey
-
-    orders and lineitem on o_orderkey and l_orderkey
-
-    nation and supplier on n_nationkey and s_nationkey // done
-    
-    */
-   std::cout << "Joining tables" << std::endl;
+    // 2.2 Perform the joins
     auto join_a = apply_inner_join(
         lineitem,
         supplier,
@@ -134,10 +122,48 @@ int main() {
         {"l_orderkey"}, 
         {"o_orderkey"}
     );
-    auto join_e = apply_inner_join(
+    auto joined_table = apply_inner_join(
         join_d,
         nation,
         {"s_nationkey"}, 
         {"n_nationkey"}
     );
+
+    // 2.3 Calculate the `nation`, `o_year`, and `amount` columns
+    auto n_name = std::make_unique<cudf::column>(joined_table->column("n_name"));
+    auto o_year = cudf::datetime::extract_year(joined_table->column("o_orderdate"));
+    auto amount = calc_amount(joined_table);
+
+    // 2.4 Put together the `profit` table
+    std::vector<std::unique_ptr<cudf::column>> profit_columns;
+    profit_columns.push_back(std::move(n_name));
+    profit_columns.push_back(std::move(o_year));
+    profit_columns.push_back(std::move(amount));
+
+    auto profit_table = std::make_unique<cudf::table>(std::move(profit_columns));
+    auto profit = std::make_unique<table_with_cols>(
+        std::move(profit_table),
+        std::vector<std::string>{"nation", "o_year", "amount"} 
+    );
+
+    // 3. Perform the group by operation
+    auto groupedby_table = apply_groupby(
+        profit,
+        groupby_context{
+            {"nation", "o_year"},
+            {
+                {"amount", {{cudf::groupby_aggregation::SUM, "sum_profit"}}}
+            }
+        }
+    );
+
+    // 4. Perform the orderby operation
+    auto orderedby_table = apply_orderby(
+        groupedby_table,
+        {"nation", "o_year"},
+        {cudf::order::ASCENDING, cudf::order::DESCENDING}
+    );
+
+    // 5. Write query result to a parquet file
+    orderedby_table->to_parquet("q9.parquet");
 }
