@@ -320,6 +320,7 @@ std::unique_ptr<column> distinct_indices(
  * @param keep Copy any, first, last, or none of the found duplicates
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether NaN elements should be considered as equal
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned table
  * @return Table with distinct rows, preserving input order
  */
@@ -329,6 +330,7 @@ std::unique_ptr<table> stable_distinct(
   duplicate_keep_option keep        = duplicate_keep_option::KEEP_ANY,
   null_equality nulls_equal         = null_equality::EQUAL,
   nan_equality nans_equal           = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**

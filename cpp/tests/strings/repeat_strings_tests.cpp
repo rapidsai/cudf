@@ -20,9 +20,9 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/strings/utilities.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -221,7 +221,7 @@ TEST_F(RepeatStringsTest, StringsColumnWithColumnRepeatTimesInvalidInput)
 
 TEST_F(RepeatStringsTest, StringsColumnWithColumnRepeatTimesOverflowOutput)
 {
-  if (cudf::strings::detail::is_large_strings_enabled()) { return; }
+  if (cudf::strings::is_large_strings_enabled()) { return; }
 
   auto const strs    = strs_col{"1", "12", "123", "1234", "12345", "123456", "1234567"};
   auto const strs_cv = cudf::strings_column_view(strs);
