@@ -118,7 +118,7 @@ int main() {
     
     auto o_orderdate_lower = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1994, 1, 1), true);
     auto o_orderdate_lower_limit = cudf::ast::literal(o_orderdate_lower);
-    auto orderdate_pred_a = cudf::ast::operation(
+    auto o_orderdate_pred_a = cudf::ast::operation(
         cudf::ast::ast_operator::GREATER_EQUAL,
         o_orderdate,
         o_orderdate_lower_limit
@@ -126,7 +126,7 @@ int main() {
     
     auto o_orderdate_upper = cudf::timestamp_scalar<cudf::timestamp_D>(days_since_epoch(1995, 1, 1), true);
     auto o_orderdate_upper_limit = cudf::ast::literal(o_orderdate_upper);
-    auto orderdate_pred_b = cudf::ast::operation(
+    auto o_orderdate_pred_b = cudf::ast::operation(
         cudf::ast::ast_operator::LESS,
         o_orderdate,
         o_orderdate_upper_limit
@@ -141,15 +141,15 @@ int main() {
         r_name_literal
     );
 
-    auto orderdate_pred = cudf::ast::operation(
+    auto o_orderdate_pred = cudf::ast::operation(
         cudf::ast::ast_operator::LOGICAL_AND,
-        orderdate_pred_a,
-        orderdate_pred_b
+        o_orderdate_pred_a,
+        o_orderdate_pred_b
     );
 
     auto final_pred = cudf::ast::operation(
         cudf::ast::ast_operator::LOGICAL_AND,
-        orderdate_pred,
+        o_orderdate_pred,
         r_name_pred
     );
     auto filtered_table = apply_filter(joined_table, final_pred);
