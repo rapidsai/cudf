@@ -187,9 +187,11 @@ probe_join_hash_table(
   }
 
   auto left_indices =
-    std::make_unique<cudf::experimental::detail::device_uvector<size_type>>(join_size, stream, mr);
+    std::make_unique<cudf::experimental::uvector::detail::device_uvector<size_type>>(
+      join_size, stream, mr);
   auto right_indices =
-    std::make_unique<cudf::experimental::detail::device_uvector<size_type>>(join_size, stream, mr);
+    std::make_unique<cudf::experimental::uvector::detail::device_uvector<size_type>>(
+      join_size, stream, mr);
 
   auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
 

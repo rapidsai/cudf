@@ -20,7 +20,7 @@
 
 #include <rmm/device_uvector.hpp>
 
-namespace cudf::experimental::detail {
+namespace cudf::experimental::uvector::detail {
 
 /**
  * A wrapper around rmm::device_uvector that provides an additional data()
@@ -38,10 +38,21 @@ class device_uvector : public rmm::device_uvector<T> {
   [[nodiscard]] typename rmm::device_uvector<T>::pointer data() noexcept
   {
     auto data = rmm::device_uvector<T>::data();
-    // May not need this
-    // if constexpr (std::is_integral_v<T>) {
     cudf::experimental::prefetch::detail::prefetch(
       "device_uvector::data", data, rmm::device_uvector<T>::size() * sizeof(T));
+    return data;
+  }
+
+  /**
+   * @brief Returns a const pointer to the underlying device memory.
+   *
+   * @return A pointer to the underlying device memory.
+   */
+  [[nodiscard]] typename rmm::device_uvector<T>::const_pointer data() const noexcept
+  {
+    auto data = rmm::device_uvector<T>::data();
+    cudf::experimental::prefetch::detail::prefetch(
+      "device_uvector::data_const", data, rmm::device_uvector<T>::size() * sizeof(T));
     return data;
   }
 
@@ -57,4 +68,4 @@ class device_uvector : public rmm::device_uvector<T> {
   [[nodiscard]] typename rmm::device_uvector<T>::iterator begin() noexcept { return data(); }
 };
 
-}  // namespace cudf::experimental::detail
+}  // namespace cudf::experimental::uvector::detail
