@@ -23,9 +23,9 @@ add_executable(tpch_q5 q5.cpp)
 target_link_libraries(tpch_q5 PRIVATE cudf::cudf)
 target_compile_features(tpch_q5 PRIVATE cxx_std_17)
 
-# add_executable(tpch_q6 q6.cpp)
-# target_link_libraries(tpch_q6 PRIVATE cudf::cudf)
-# target_compile_features(tpch_q6 PRIVATE cxx_std_17)
+add_executable(tpch_q6 q6.cpp)
+target_link_libraries(tpch_q6 PRIVATE cudf::cudf)
+target_compile_features(tpch_q6 PRIVATE cxx_std_17)
 
 add_executable(tpch_q9 q9.cpp)
 target_link_libraries(tpch_q9 PRIVATE cudf::cudf)

@@ -29,7 +29,8 @@
 #include <cudf/reduction.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/stream_compaction.hpp>
-
+#include <cudf/reduction.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -268,4 +269,19 @@ std::unique_ptr<table_with_cols> apply_orderby(
     );
     return std::make_unique<table_with_cols>(
         std::move(result_table), table->columns());
+}
+
+std::unique_ptr<table_with_cols> apply_reduction(
+    cudf::column_view& column, cudf::aggregation::Kind agg_kind, std::string col_name) {
+    auto agg = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
+    auto result = cudf::reduce(column, *agg, column.type());
+    cudf::size_type len = 1;
+    auto col = cudf::make_column_from_scalar(*result, len);
+    std::vector<std::unique_ptr<cudf::column>> columns;
+    columns.push_back(std::move(col));
+    auto result_table = std::make_unique<cudf::table>(std::move(columns));
+    std::vector<std::string> col_names = {col_name};
+    return std::make_unique<table_with_cols>(
+        std::move(result_table), col_names
+    );
 }
