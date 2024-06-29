@@ -60,4 +60,4 @@ A parquet file named `q1.parquet` would be generated holding the results of the 
 - [x] Q1
 - [x] Q5
 - [x] Q6
-
+- [x] Q9
