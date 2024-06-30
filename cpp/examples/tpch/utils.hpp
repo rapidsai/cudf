@@ -31,10 +31,6 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <rmm/cuda_stream.hpp>
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
-#include <rmm/device_uvector.hpp>
 
 const std::string BASE_DATASET_DIR = "/home/jayjeetc/tpch_sf1/";
 
