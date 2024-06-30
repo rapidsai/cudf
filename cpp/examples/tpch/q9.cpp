@@ -80,7 +80,7 @@ std::unique_ptr<cudf::column> calc_amount(std::unique_ptr<table_with_cols>& tabl
 }
 
 int main() {
-    std::string dataset_dir = "/home/jayjeetc/tpch_sf1/";
+    std::string dataset_dir = BASE_DATASET_DIR;
 
     // 1. Read out the table from parquet files
     auto lineitem = read_parquet(dataset_dir + "lineitem/part-0.parquet");
