@@ -66,7 +66,7 @@ std::unique_ptr<cudf::column> calc_revenue(std::unique_ptr<table_with_cols>& tab
 }
 
 int main() {
-    std::string dataset_dir = "/home/jayjeetc/tpch_sf1/";
+    std::string dataset_dir = BASE_DATASET_DIR;
     
     // 1. Read out the tables from parquet files
     auto customer = read_parquet(dataset_dir + "customer/part-0.parquet");

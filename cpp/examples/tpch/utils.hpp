@@ -36,6 +36,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+const std::string BASE_DATASET_DIR = "/home/jayjeetc/tpch_sf1/";
 
 std::unique_ptr<cudf::table> join_and_gather(
     cudf::table_view left_input,

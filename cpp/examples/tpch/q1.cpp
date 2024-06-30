@@ -64,7 +64,7 @@ std::unique_ptr<cudf::column> calc_charge(std::unique_ptr<table_with_cols>& tabl
 }
 
 int main() {
-    std::string dataset_dir = "/home/jayjeetc/tpch_sf1/";
+    std::string dataset_dir = BASE_DATASET_DIR;
     
     // 1. Read out the `lineitem` table from parquet file
     auto shipdate_ref = cudf::ast::column_reference(5);
