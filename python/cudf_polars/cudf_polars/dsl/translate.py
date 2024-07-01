@@ -445,7 +445,7 @@ def _(node: pl_expr.Agg, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Ex
         dtype,
         node.name,
         node.options,
-        translate_expr(visitor, n=node.arguments),
+        *(translate_expr(visitor, n=n) for n in node.arguments),
     )
 
 
