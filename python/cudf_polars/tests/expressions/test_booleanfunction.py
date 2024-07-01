@@ -6,7 +6,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"])
@@ -26,7 +29,7 @@ def has_nulls(request):
 def test_booleanfunction_reduction(ignore_nulls):
     ldf = pl.LazyFrame(
         {
-            "a": [1, 2, 3.0, 2, 5],
+            "a": pl.Series([1, 2, 3.0, 2, 5], dtype=pl.Float64()),
             "b": [0, 3, 1, -1, None],
             "c": [1, 6, 5, 3, 2],
         }
@@ -67,22 +70,27 @@ def test_boolean_function_unary(request, expr, has_nans, has_nulls):
 
     df = pl.LazyFrame({"a": pl.Series(values, dtype=pl.Float32())})
 
-    q = df.select(expr(pl.col("a")))
+    q = df.select(expr(pl.col("a")), expr(pl.col("a")).not_().alias("b"))
 
     assert_gpu_result_equal(q)
 
 
-@pytest.mark.xfail(reason="Evaluation handlers not yet implemented")
 @pytest.mark.parametrize(
     "expr",
     [
         pl.col("a").is_finite(),
         pl.col("a").is_infinite(),
-        pl.col("a").is_in(pl.col("b")),
+        [pl.col("a").is_infinite(), pl.col("b").is_finite()],
     ],
 )
-def test_unsupported_boolean_function(expr):
-    df = pl.LazyFrame({"a": [1, float("nan"), 2, 4], "b": [1, 2, 3, 4]})
+def test_boolean_finite(expr):
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series([1, float("nan"), 2, float("inf")], dtype=pl.Float64()),
+            "b": [1, 2, 3, 4],
+            "c": pl.Series([1, 2, 3, 4], dtype=pl.Float64()),
+        }
+    )
 
     q = df.select(expr)
 
@@ -95,7 +103,11 @@ def test_unsupported_boolean_function(expr):
 )
 def test_boolean_isbetween(closed, bounds):
     df = pl.LazyFrame(
-        {"a": [1, float("nan"), 2, 4], "lo": [1, 2, 2, 3], "hi": [10, 4, 2, 4]}
+        {
+            "a": pl.Series([1, float("nan"), 2, 4], dtype=pl.Float32()),
+            "lo": [1, 2, 2, 3],
+            "hi": [10, 4, 2, 4],
+        }
     )
 
     q = df.select(pl.col("a").is_between(*bounds, closed=closed))
@@ -127,3 +139,33 @@ def test_boolean_horizontal(request, expr, has_nulls, wide):
     q = ldf.select(expr)
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("a").is_in(pl.col("b")),
+        pl.col("a").is_in(pl.col("c")),
+        pl.col("c").is_in(pl.col("d")),
+    ],
+)
+def test_boolean_is_in(expr):
+    ldf = pl.LazyFrame(
+        {
+            "a": pl.Series([1, 2, 3], dtype=pl.Int64()),
+            "b": pl.Series([3, 4, 2], dtype=pl.Int64()),
+            "c": pl.Series([1, None, 3], dtype=pl.Int64()),
+            "d": pl.Series([10, None, 11], dtype=pl.Int64()),
+        }
+    )
+
+    q = ldf.select(expr)
+
+    assert_gpu_result_equal(q)
+
+
+def test_boolean_is_in_raises_unsupported():
+    ldf = pl.LazyFrame({"a": pl.Series([1, 2, 3], dtype=pl.Int64)})
+    q = ldf.select(pl.col("a").is_in(pl.lit(1, dtype=pl.Int32())))
+
+    assert_ir_translation_raises(q, NotImplementedError)

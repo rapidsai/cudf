@@ -30,6 +30,11 @@
 namespace cudf {
 namespace io {
 namespace text {
+/**
+ * @addtogroup io_readers
+ * @{
+ * @file
+ */
 
 /**
  * @brief Parsing options for multibyte_split.
@@ -110,6 +115,8 @@ std::unique_ptr<cudf::column> multibyte_split(
   std::optional<byte_range_info> byte_range,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+
+/** @} */  // end of group
 
 }  // namespace text
 }  // namespace io
