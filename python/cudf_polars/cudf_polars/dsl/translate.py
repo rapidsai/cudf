@@ -432,8 +432,11 @@ def _(node: pl_expr.Cast, visitor: NodeTraverser, dtype: plc.DataType) -> expr.E
     # Push casts into literals so we can handle Cast(Literal(Null))
     if isinstance(inner, expr.Literal):
         return expr.Literal(dtype, inner.value.cast(plc.interop.to_arrow(dtype)))
-    else:
-        return expr.Cast(dtype, inner)
+    elif isinstance(inner, expr.Cast):
+        # Translation of Len/Count-agg put in a cast, remove double
+        # casts if we have one.
+        (inner,) = inner.children
+    return expr.Cast(dtype, inner)
 
 
 @_translate_expr.register
@@ -443,12 +446,15 @@ def _(node: pl_expr.Column, visitor: NodeTraverser, dtype: plc.DataType) -> expr
 
 @_translate_expr.register
 def _(node: pl_expr.Agg, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
-    return expr.Agg(
+    value = expr.Agg(
         dtype,
         node.name,
         node.options,
         *(translate_expr(visitor, n=n) for n in node.arguments),
     )
+    if value.name == "count" and value.dtype.id() != plc.TypeId.INT32:
+        return expr.Cast(value.dtype, value)
+    return value
 
 
 @_translate_expr.register
@@ -475,7 +481,10 @@ def _(
 
 @_translate_expr.register
 def _(node: pl_expr.Len, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
-    return expr.Len(dtype)
+    value = expr.Len(dtype)
+    if dtype.id() != plc.TypeId.INT32:
+        return expr.Cast(dtype, value)
+    return value  # pragma: no cover; never reached since polars len has uint32 dtype
 
 
 def translate_expr(visitor: NodeTraverser, *, n: int) -> expr.Expr:

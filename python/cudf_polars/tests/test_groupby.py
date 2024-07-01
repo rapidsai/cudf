@@ -83,10 +83,7 @@ def test_groupby(df: pl.LazyFrame, maintain_order, keys, exprs):
 def test_groupby_len(df, keys):
     q = df.group_by(*keys).agg(pl.len())
 
-    # TODO: polars returns UInt32, libcudf returns Int32
-    with pytest.raises(AssertionError):
-        assert_gpu_result_equal(q, check_row_order=False)
-    assert_gpu_result_equal(q, check_dtypes=False, check_row_order=False)
+    assert_gpu_result_equal(q, check_row_order=False)
 
 
 @pytest.mark.parametrize(
