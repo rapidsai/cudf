@@ -443,12 +443,15 @@ def _(node: pl_expr.Column, visitor: NodeTraverser, dtype: plc.DataType) -> expr
 
 @_translate_expr.register
 def _(node: pl_expr.Agg, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
-    return expr.Agg(
+    value = expr.Agg(
         dtype,
         node.name,
         node.options,
         *(translate_expr(visitor, n=n) for n in node.arguments),
     )
+    if value.name == "count" and value.dtype.id() != plc.TypeId.INT32:
+        return expr.Cast(value.dtype, value)
+    return value
 
 
 @_translate_expr.register
@@ -475,7 +478,10 @@ def _(
 
 @_translate_expr.register
 def _(node: pl_expr.Len, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
-    return expr.Len(dtype)
+    value = expr.Len(dtype)
+    if dtype.id() != plc.TypeId.INT32:
+        return expr.Cast(dtype, value)
+    return value
 
 
 def translate_expr(visitor: NodeTraverser, *, n: int) -> expr.Expr:
