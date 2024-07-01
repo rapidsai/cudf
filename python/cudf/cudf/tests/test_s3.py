@@ -268,12 +268,13 @@ def test_read_parquet(
             f"s3://{bucket}/{fname}", storage_options=s3so
         )[0]
         with fs.open(f"s3://{bucket}/{fname}", mode="rb") as f:
-            got2 = cudf.read_parquet(
-                f,
-                bytes_per_thread=bytes_per_thread,
-                columns=columns,
-                use_python_file_object=use_python_file_object,
-            )
+            with pytest.warns(FutureWarning):
+                got2 = cudf.read_parquet(
+                    f,
+                    bytes_per_thread=bytes_per_thread,
+                    columns=columns,
+                    use_python_file_object=use_python_file_object,
+                )
     assert_eq(expect, got2)
 
 
