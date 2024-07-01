@@ -76,8 +76,9 @@ TYPED_TEST(MergeTest_, SingleTableInput)
   cudf::table_view left_view{{colWrap1}};
 
   std::unique_ptr<cudf::table> p_outputTable;
-  CUDF_EXPECT_NO_THROW(p_outputTable =
-                         cudf::merge({left_view}, key_cols, column_order, null_precedence));
+  CUDF_EXPECT_NO_THROW(
+    p_outputTable = cudf::merge(
+      {left_view}, key_cols, column_order, null_precedence, cudf::test::get_default_stream()));
 
   auto input_column_view{left_view.column(0)};
   auto output_column_view{p_outputTable->view().column(0)};
