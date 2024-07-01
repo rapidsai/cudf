@@ -679,7 +679,7 @@ class BooleanFunction(Expr):
 
 
 class StringFunction(Expr):
-    __slots__ = ("name", "options", "children")
+    __slots__ = ("name", "options", "children", "regex_program")
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
@@ -716,6 +716,13 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         "Regex contains only supports a scalar pattern"
                     )
+                try:
+                    self.regex_program = plc.strings.regex_program.RegexProgram.create(
+                        self.children[1].value.as_py(),
+                        flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
+                    )
+                except Exception as e:
+                    raise NotImplementedError("Unsupported regex pattern.") from e
 
     def do_evaluate(
         self,
@@ -739,11 +746,9 @@ class StringFunction(Expr):
                 )
                 return Column(plc.strings.find.contains(column.obj, pattern))
             assert isinstance(arg, Literal)
-            prog = plc.strings.regex_program.RegexProgram.create(
-                arg.value.as_py(),
-                flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
+            return Column(
+                plc.strings.contains.contains_re(column.obj, self.regex_program)
             )
-            return Column(plc.strings.contains.contains_re(column.obj, prog))
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
@@ -955,6 +960,13 @@ class Cast(Expr):
     def __init__(self, dtype: plc.DataType, value: Expr) -> None:
         super().__init__(dtype)
         self.children = (value,)
+        if (
+            self.dtype.id() == plc.TypeId.STRING
+            or value.dtype.id() == plc.TypeId.STRING
+        ):
+            raise NotImplementedError(
+                "Need to implement cast to/from string separately."
+            )
 
     def do_evaluate(
         self,
@@ -978,15 +990,15 @@ class Cast(Expr):
 class Agg(Expr):
     __slots__ = ("name", "options", "op", "request", "children")
     _non_child = ("dtype", "name", "options")
-    children: tuple[Expr]
+    children: tuple[Expr, ...]
 
     def __init__(
-        self, dtype: plc.DataType, name: str, options: Any, value: Expr
+        self, dtype: plc.DataType, name: str, options: Any, *children: Expr
     ) -> None:
         super().__init__(dtype)
         self.name = name
         self.options = options
-        self.children = (value,)
+        self.children = children
         if name not in Agg._SUPPORTED:
             raise NotImplementedError(
                 f"Unsupported aggregation {name=}"

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import itertools
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
@@ -50,7 +51,11 @@ class DataFrame:
             [plc.interop.ColumnMetadata(name=c.name) for c in self.columns],
         )
 
-        return cast(pl.DataFrame, pl.from_arrow(table))
+        result: pl.DataFrame = cast(pl.DataFrame, pl.from_arrow(table))
+        if list(result.schema.keys()) != self.column_names:
+            # Empty column name gets translated in from_arrow
+            return result.rename(dict(zip(result.schema.keys(), self.column_names)))
+        return result
 
     @cached_property
     def column_names_set(self) -> frozenset[str]:
@@ -160,7 +165,10 @@ class DataFrame:
         -----
         If column names overlap, newer names replace older ones.
         """
-        return type(self)([*self.columns, *columns])
+        columns = list(
+            {c.name: c for c in itertools.chain(self.columns, columns)}.values()
+        )
+        return type(self)(columns)
 
     def discard_columns(self, names: Set[str]) -> Self:
         """Drop columns by name."""
@@ -169,6 +177,8 @@ class DataFrame:
     def select(self, names: Sequence[str]) -> Self:
         """Select columns by name returning DataFrame."""
         want = set(names)
+        if len(self.columns) != len(self._column_map):
+            raise ValueError("Lost some columns with overlapping names")
         if not want.issubset(self.column_names_set):
             raise ValueError("Can't select missing names")
         return type(self)([self._column_map[name] for name in names])

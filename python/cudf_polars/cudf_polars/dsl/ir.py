@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import json
 import types
 from functools import cache
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
@@ -95,6 +96,8 @@ def broadcast(
     ``target_length`` is provided and not all columns are length-1
     (i.e. ``n != 1``), then ``target_length`` must be equal to ``n``.
     """
+    if len(columns) == 0:
+        return []
     lengths: set[int] = {column.obj.size() for column in columns}
     if lengths == {1}:
         if target_length is None:
@@ -180,8 +183,10 @@ class PythonScan(IR):
 class Scan(IR):
     """Input from files."""
 
-    typ: Any
+    typ: str
     """What type of file are we reading? Parquet, CSV, etc..."""
+    options: tuple[Any, ...]
+    """Type specific options, as json-encoded strings."""
     paths: list[str]
     """List of paths to read from."""
     file_options: Any
@@ -211,17 +216,21 @@ class Scan(IR):
         with_columns = options.with_columns
         row_index = options.row_index
         if self.typ == "csv":
+            opts, cloud_opts = map(json.loads, self.options)
             df = DataFrame.from_cudf(
                 cudf.concat(
                     [cudf.read_csv(p, usecols=with_columns) for p in self.paths]
                 )
             )
         elif self.typ == "parquet":
+            opts, cloud_opts = map(json.loads, self.options)
             cdf = cudf.read_parquet(self.paths, columns=with_columns)
             assert isinstance(cdf, cudf.DataFrame)
             df = DataFrame.from_cudf(cdf)
         else:
-            assert_never(self.typ)
+            raise NotImplementedError(
+                f"Unhandled scan type: {self.typ}"
+            )  # pragma: no cover; post init trips first
         if row_index is not None:
             name, offset = row_index
             dtype = self.schema[name]
@@ -566,6 +575,62 @@ class Join(IR):
         else:
             assert_never(how)
 
+    def _reorder_maps(
+        self,
+        left_rows: int,
+        lg: plc.Column,
+        left_policy: plc.copying.OutOfBoundsPolicy,
+        right_rows: int,
+        rg: plc.Column,
+        right_policy: plc.copying.OutOfBoundsPolicy,
+    ) -> tuple[plc.Column, plc.Column]:
+        """
+        Reorder gather maps to satisfy polars join order restrictions.
+
+        Parameters
+        ----------
+        left_rows
+            Number of rows in left table
+        lg
+            Left gather map
+        left_policy
+            Nullify policy for left map
+        right_rows
+            Number of rows in right table
+        rg
+            Right gathert map
+        right_policy
+            Nullify policy for right map
+
+        Returns
+        -------
+        tuple of reordered left and right gather maps.
+
+        Notes
+        -----
+        For a left join, the polars result preserves the order of the
+        left keys, and is stable wrt the right keys. For all other
+        joins, there is no order obligation.
+        """
+        # TODO: size_type
+        dt = plc.interop.to_arrow(plc.DataType(plc.TypeId.INT32))
+        init = plc.interop.from_arrow(pa.scalar(0, type=dt))
+        step = plc.interop.from_arrow(pa.scalar(1, type=dt))
+        left_order = plc.copying.gather(
+            plc.Table([plc.filling.sequence(left_rows, init, step)]), lg, left_policy
+        )
+        right_order = plc.copying.gather(
+            plc.Table([plc.filling.sequence(right_rows, init, step)]), rg, right_policy
+        )
+        return tuple(
+            plc.sorting.stable_sort_by_key(
+                plc.Table([lg, rg]),
+                plc.Table([*left_order.columns(), *right_order.columns()]),
+                [plc.types.Order.ASCENDING, plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
+            ).columns()
+        )
+
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         left = self.left.evaluate(cache=cache)
@@ -608,6 +673,11 @@ class Join(IR):
             lg, rg = join_fn(left_on.table, right_on.table, null_equality)
             if coalesce and how == "inner":
                 right = right.discard_columns(right_on.column_names_set)
+            if how == "left":
+                # Order of left table is preserved
+                lg, rg = self._reorder_maps(
+                    left.num_rows, lg, left_policy, right.num_rows, rg, right_policy
+                )
             left = DataFrame.from_table(
                 plc.copying.gather(left.table, lg, left_policy), left.column_names
             )
@@ -947,6 +1017,14 @@ class Union(IR):
         ).slice(self.zlice)
 
 
+def empty_column(
+    nrows: int, dtype: plc.DataType, mask_state: plc.MaskState
+) -> plc.Column:
+    if dtype.id() in (plc.TypeId.LIST, plc.TypeId.STRING):
+        raise NotImplementedError("Empty list/string column")
+    return plc.column_factories.make_fixed_width_column(dtype, nrows, mask_state)
+
+
 @dataclasses.dataclass
 class HConcat(IR):
     """Concatenate dataframes horizontally."""
@@ -957,6 +1035,31 @@ class HConcat(IR):
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
+        max_rows = max(df.num_rows for df in dfs)
+        # Horizontal concatenation extends shorter tables with nulls
+        dfs = [
+            df
+            if df.num_rows == max_rows
+            else DataFrame.from_table(
+                plc.concatenate.concatenate(
+                    [
+                        df.table,
+                        plc.Table(
+                            [
+                                empty_column(
+                                    max_rows - df.num_rows,
+                                    c.obj.type(),
+                                    plc.MaskState.ALL_NULL,
+                                )
+                                for c in df.columns
+                            ]
+                        ),
+                    ]
+                ),
+                df.column_names,
+            )
+            for df in dfs
+        ]
         return DataFrame(
             list(itertools.chain.from_iterable(df.columns for df in dfs)),
         )

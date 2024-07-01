@@ -87,9 +87,11 @@ def _(
 def _(
     node: pl_ir.Scan, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
+    typ, *options = node.scan_type
     return ir.Scan(
         schema,
-        node.scan_type,
+        typ,
+        tuple(options),
         node.paths,
         node.file_options,
         translate_named_expr(visitor, n=node.predicate)
@@ -441,12 +443,15 @@ def _(node: pl_expr.Column, visitor: NodeTraverser, dtype: plc.DataType) -> expr
 
 @_translate_expr.register
 def _(node: pl_expr.Agg, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
-    return expr.Agg(
+    value = expr.Agg(
         dtype,
         node.name,
         node.options,
-        translate_expr(visitor, n=node.arguments),
+        *(translate_expr(visitor, n=n) for n in node.arguments),
     )
+    if value.name == "count" and value.dtype.id() != plc.TypeId.INT32:
+        return expr.Cast(value.dtype, value)
+    return value
 
 
 @_translate_expr.register
@@ -463,17 +468,21 @@ def _(node: pl_expr.Ternary, visitor: NodeTraverser, dtype: plc.DataType) -> exp
 def _(
     node: pl_expr.BinaryExpr, visitor: NodeTraverser, dtype: plc.DataType
 ) -> expr.Expr:
-    return expr.BinOp(
-        dtype,
-        expr.BinOp._MAPPING[node.op],
-        translate_expr(visitor, n=node.left),
-        translate_expr(visitor, n=node.right),
-    )
+    left = translate_expr(visitor, n=node.left)
+    right = translate_expr(visitor, n=node.right)
+    if dtype.id() == plc.TypeId.STRING and node.op == pl_expr.Operator.PLUS:
+        return expr.StringFunction(
+            dtype, pl_expr.StringFunction.ConcatHorizontal, (), left, right
+        )
+    return expr.BinOp(dtype, expr.BinOp._MAPPING[node.op], left, right)
 
 
 @_translate_expr.register
 def _(node: pl_expr.Len, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
-    return expr.Len(dtype)
+    value = expr.Len(dtype)
+    if dtype.id() != plc.TypeId.INT32:
+        return expr.Cast(dtype, value)
+    return value
 
 
 def translate_expr(visitor: NodeTraverser, *, n: int) -> expr.Expr:
