@@ -7838,11 +7838,12 @@ public class TableTest extends CudfTestBase {
         .build();
          Table result = t.groupBy(0).aggregate(
              GroupByAggregation.sum().onColumn(1));
+         Table sorted = result.orderBy(OrderByArg.asc(0));
          Table expected = new Table.TestBuilder()
              .column("1-URGENT", "3-MEDIUM")
              .column(5289L + 5303L, 5203L + 5206L)
              .build()) {
-      assertTablesAreEqual(expected, result);
+      assertTablesAreEqual(expected, sorted);
     }
   }
 

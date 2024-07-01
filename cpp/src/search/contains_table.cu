@@ -53,12 +53,12 @@ struct hasher_adapter {
 
   __device__ constexpr auto operator()(lhs_index_type idx) const noexcept
   {
-    return _haystack_hasher(static_cast<size_type>(idx));
+    return _needle_hasher(static_cast<size_type>(idx));
   }
 
   __device__ constexpr auto operator()(rhs_index_type idx) const noexcept
   {
-    return _needle_hasher(static_cast<size_type>(idx));
+    return _haystack_hasher(static_cast<size_type>(idx));
   }
 
  private:
@@ -76,8 +76,20 @@ struct comparator_adapter {
   {
   }
 
+  // suppress "function was declared but never referenced warning"
+#pragma nv_diagnostic push
+#pragma nv_diag_suppress 177
   __device__ constexpr auto operator()(lhs_index_type lhs_index,
                                        lhs_index_type rhs_index) const noexcept
+  {
+    auto const lhs = static_cast<size_type>(lhs_index);
+    auto const rhs = static_cast<size_type>(rhs_index);
+
+    return _self_equal(lhs, rhs);
+  }
+
+  __device__ constexpr auto operator()(rhs_index_type lhs_index,
+                                       rhs_index_type rhs_index) const noexcept
   {
     auto const lhs = static_cast<size_type>(lhs_index);
     auto const rhs = static_cast<size_type>(rhs_index);
@@ -90,6 +102,13 @@ struct comparator_adapter {
   {
     return _two_table_equal(lhs_index, rhs_index);
   }
+
+  __device__ constexpr auto operator()(rhs_index_type lhs_index,
+                                       lhs_index_type rhs_index) const noexcept
+  {
+    return _two_table_equal(lhs_index, rhs_index);
+  }
+#pragma nv_diagnostic pop
 
  private:
   SelfEqual const _self_equal;
@@ -210,18 +229,18 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
 
   auto const self_equal = cudf::experimental::row::equality::self_comparator(preprocessed_haystack);
   auto const two_table_equal = cudf::experimental::row::equality::two_table_comparator(
-    preprocessed_haystack, preprocessed_needles);
+    preprocessed_needles, preprocessed_haystack);
 
   // The output vector.
   auto contained = rmm::device_uvector<bool>(needles.num_rows(), stream, mr);
 
   auto const haystack_iter = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, cuda::proclaim_return_type<lhs_index_type>([] __device__(auto idx) {
-      return lhs_index_type{idx};
-    }));
-  auto const needles_iter = cudf::detail::make_counting_transform_iterator(
     size_type{0}, cuda::proclaim_return_type<rhs_index_type>([] __device__(auto idx) {
       return rhs_index_type{idx};
+    }));
+  auto const needles_iter = cudf::detail::make_counting_transform_iterator(
+    size_type{0}, cuda::proclaim_return_type<lhs_index_type>([] __device__(auto idx) {
+      return lhs_index_type{idx};
     }));
 
   auto const helper_func =
@@ -229,7 +248,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
       auto const d_equal = comparator_adapter{d_self_equal, d_two_table_equal};
 
       auto set = cuco::static_set{cuco::extent{compute_hash_table_size(haystack.num_rows())},
-                                  cuco::empty_key{lhs_index_type{-1}},
+                                  cuco::empty_key{rhs_index_type{-1}},
                                   d_equal,
                                   probing_scheme,
                                   {},

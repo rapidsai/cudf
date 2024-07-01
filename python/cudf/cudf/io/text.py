@@ -5,10 +5,10 @@ from io import BytesIO, StringIO
 import cudf
 from cudf._lib import text as libtext
 from cudf.utils import ioutils
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 @ioutils.doc_read_text()
 def read_text(
     filepath_or_buffer,

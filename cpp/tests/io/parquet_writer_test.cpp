@@ -134,7 +134,7 @@ TEST_F(ParquetWriterTest, MultiIndex)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .metadata(expected_metadata)
       .key_value_metadata(
-        {{{"pandas", "\"index_columns\": [\"int8s\", \"int16s\"], \"column1\": [\"int32s\"]"}}});
+        {{{"pandas", R"("index_columns": ["int8s", "int16s"], "column1": ["int32s"])"}}});
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
@@ -242,16 +242,18 @@ TEST_F(ParquetWriterTest, Struct)
   // `Name` column has all valid values.
   auto names_col = cudf::test::strings_column_wrapper{names.begin(), names.end()};
 
-  auto ages_col =
-    cudf::test::fixed_width_column_wrapper<int32_t>{{48, 27, 25, 31, 351, 351}, {1, 1, 1, 1, 1, 0}};
+  auto ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
+    {48, 27, 25, 31, 351, 351}, {true, true, true, true, true, false}};
 
-  auto struct_1 = cudf::test::structs_column_wrapper{{names_col, ages_col}, {1, 1, 1, 1, 0, 1}};
+  auto struct_1 = cudf::test::structs_column_wrapper{{names_col, ages_col},
+                                                     {true, true, true, true, false, true}};
 
   auto is_human_col = cudf::test::fixed_width_column_wrapper<bool>{
-    {true, true, false, false, false, false}, {1, 1, 0, 1, 1, 0}};
+    {true, true, false, false, false, false}, {true, true, false, true, true, false}};
 
-  auto struct_2 =
-    cudf::test::structs_column_wrapper{{is_human_col, struct_1}, {0, 1, 1, 1, 1, 1}}.release();
+  auto struct_2 = cudf::test::structs_column_wrapper{{is_human_col, struct_1},
+                                                     {false, true, true, true, true, true}}
+                    .release();
 
   auto expected = table_view({*struct_2});
 
@@ -274,7 +276,7 @@ class custom_test_data_sink : public cudf::io::data_sink {
     CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
   }
 
-  virtual ~custom_test_data_sink() { flush(); }
+  ~custom_test_data_sink() override { flush(); }
 
   void host_write(void const* data, size_t size) override
   {
@@ -1783,7 +1785,8 @@ TEST_F(ParquetWriterTest, DeltaBinaryStartsWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
-TEST_F(ParquetWriterTest, ByteStreamSplit)
+std::pair<std::unique_ptr<cudf::table>, cudf::io::table_input_metadata>
+make_byte_stream_split_table(bool as_struct)
 {
   constexpr auto num_rows = 100;
   std::mt19937 engine{31337};
@@ -1800,24 +1803,73 @@ TEST_F(ParquetWriterTest, ByteStreamSplit)
   // throw in a list to make sure both decoders are working
   auto col4 = make_parquet_list_col<int32_t>(engine, num_rows, 5, true);
 
-  auto expected = table_view{{col0, col1, col2, col3, *col4}};
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.reserve(5);
+  columns.push_back(col0.release());
+  columns.push_back(col1.release());
+  columns.push_back(col2.release());
+  columns.push_back(col3.release());
+  columns.push_back(std::move(col4));
 
-  cudf::io::table_input_metadata expected_metadata(expected);
-  expected_metadata.column_metadata[0].set_name("int32s");
-  expected_metadata.column_metadata[1].set_name("int64s");
-  expected_metadata.column_metadata[2].set_name("floats");
-  expected_metadata.column_metadata[3].set_name("doubles");
-  expected_metadata.column_metadata[4].set_name("int32list");
-  auto const encoding = cudf::io::column_encoding::BYTE_STREAM_SPLIT;
-  for (int i = 0; i <= 3; i++) {
-    expected_metadata.column_metadata[i].set_encoding(encoding);
-  }
+  return [&]() -> std::pair<std::unique_ptr<cudf::table>, cudf::io::table_input_metadata> {
+    auto const encoding = cudf::io::column_encoding::BYTE_STREAM_SPLIT;
 
-  expected_metadata.column_metadata[4].child(1).set_encoding(encoding);
+    // make as a nested struct
+    if (as_struct) {
+      auto valids =
+        cudf::detail::make_counting_transform_iterator(0, [](int i) { return i % 2 == 0; });
+      auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+
+      std::vector<std::unique_ptr<cudf::column>> table_cols;
+      table_cols.push_back(
+        cudf::make_structs_column(num_rows, std::move(columns), null_count, std::move(null_mask)));
+
+      auto tbl      = std::make_unique<cudf::table>(std::move(table_cols));
+      auto expected = table_view{*tbl};
+
+      cudf::io::table_input_metadata expected_metadata(expected);
+      expected_metadata.column_metadata[0].set_name("struct");
+      expected_metadata.column_metadata[0].set_encoding(encoding);
+
+      expected_metadata.column_metadata[0].child(0).set_name("int32s");
+      expected_metadata.column_metadata[0].child(1).set_name("int64s");
+      expected_metadata.column_metadata[0].child(2).set_name("floats");
+      expected_metadata.column_metadata[0].child(3).set_name("doubles");
+      expected_metadata.column_metadata[0].child(4).set_name("int32list");
+      for (int idx = 0; idx <= 3; idx++) {
+        expected_metadata.column_metadata[0].child(idx).set_encoding(encoding);
+      }
+      expected_metadata.column_metadata[0].child(4).child(1).set_encoding(encoding);
+
+      return {std::move(tbl), expected_metadata};
+    }
+
+    // make flat
+    auto tbl      = std::make_unique<cudf::table>(std::move(columns));
+    auto expected = table_view{*tbl};
+
+    cudf::io::table_input_metadata expected_metadata(expected);
+    expected_metadata.column_metadata[0].set_name("int32s");
+    expected_metadata.column_metadata[1].set_name("int64s");
+    expected_metadata.column_metadata[2].set_name("floats");
+    expected_metadata.column_metadata[3].set_name("doubles");
+    expected_metadata.column_metadata[4].set_name("int32list");
+    for (int idx = 0; idx <= 3; idx++) {
+      expected_metadata.column_metadata[idx].set_encoding(encoding);
+    }
+
+    expected_metadata.column_metadata[4].child(1).set_encoding(encoding);
+    return {std::move(tbl), expected_metadata};
+  }();
+}
+
+TEST_F(ParquetWriterTest, ByteStreamSplit)
+{
+  auto [expected, expected_metadata] = make_byte_stream_split_table(false);
 
   auto const filepath = temp_env->get_temp_filepath("ByteStreamSplit.parquet");
   cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
       .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
 
@@ -1825,7 +1877,24 @@ TEST_F(ParquetWriterTest, ByteStreamSplit)
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_parquet(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, result.tbl->view());
+}
+
+TEST_F(ParquetWriterTest, ByteStreamSplitStruct)
+{
+  auto [expected, expected_metadata] = make_byte_stream_split_table(true);
+
+  auto const filepath = temp_env->get_temp_filepath("ByteStreamSplitStruct.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
+      .metadata(expected_metadata);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, result.tbl->view());
 }
 
 TEST_F(ParquetWriterTest, DecimalByteStreamSplit)
@@ -1968,7 +2037,7 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
     mm_writer = cudf::io::data_sink::create(mm_writer_buf);
   }
 
-  virtual ~custom_test_memmap_sink() { mm_writer->flush(); }
+  ~custom_test_memmap_sink() override { mm_writer->flush(); }
 
   void host_write(void const* data, size_t size) override { mm_writer->host_write(data, size); }
 

@@ -1,12 +1,12 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-from typing import Any, Set, Tuple, TypeVar
+from typing import Any, TypeVar
 
 # Note: It may be possible to define a narrower bound here eventually.
 BinaryOperandType = TypeVar("BinaryOperandType", bound="Any")
 
 class BinaryOperand:
-    _SUPPORTED_BINARY_OPERATIONS: Set
+    _SUPPORTED_BINARY_OPERATIONS: set
 
     def _binaryop(self, other: BinaryOperandType, op: str): ...
     def __add__(self, other): ...
@@ -36,4 +36,4 @@ class BinaryOperand:
     def __gt__(self, other): ...
     def __ge__(self, other): ...
     @staticmethod
-    def _check_reflected_op(op) -> Tuple[bool, str]: ...
+    def _check_reflected_op(op) -> tuple[bool, str]: ...
