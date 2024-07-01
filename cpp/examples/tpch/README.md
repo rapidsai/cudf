@@ -54,10 +54,3 @@ The TPC-H query binaries would be built inside `examples/tpch/build`.
 ./tpch/build/tpch_q1
 ```
 A parquet file named `q1.parquet` would be generated holding the results of the query.
-
-## Implementation Status
-
-- [x] Q1
-- [x] Q5
-- [x] Q6
-- [x] Q9
