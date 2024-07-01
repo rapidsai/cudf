@@ -31,8 +31,8 @@ struct common_type_functor {
   template <typename TypeLhs, typename TypeRhs>
   std::optional<data_type> operator()() const
   {
-    if constexpr (cudf::has_common_type_v<TypeLhs, TypeRhs>) {
-      using TypeCommon = std::common_type_t<TypeLhs, TypeRhs>;
+    if constexpr (binary_op_has_common_type_v<TypeLhs, TypeRhs>) {
+      using TypeCommon = binary_op_common_type_t<TypeLhs, TypeRhs>;
       return data_type{type_to_id<TypeCommon>()};
     }
 
@@ -85,8 +85,8 @@ struct is_binary_operation_supported {
   {
     if constexpr (column_device_view::has_element_accessor<TypeLhs>() and
                   column_device_view::has_element_accessor<TypeRhs>()) {
-      if constexpr (has_common_type_v<TypeLhs, TypeRhs>) {
-        using common_t = std::common_type_t<TypeLhs, TypeRhs>;
+      if constexpr (binary_op_has_common_type_v<TypeLhs, TypeRhs>) {
+        using common_t = binary_op_common_type_t<TypeLhs, TypeRhs>;
         return std::is_invocable_v<BinaryOperator, common_t, common_t>;
       } else {
         return std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>;
@@ -102,8 +102,8 @@ struct is_binary_operation_supported {
     if constexpr (column_device_view::has_element_accessor<TypeLhs>() and
                   column_device_view::has_element_accessor<TypeRhs>()) {
       if (has_mutable_element_accessor(out_type) or is_fixed_point(out_type)) {
-        if constexpr (has_common_type_v<TypeLhs, TypeRhs>) {
-          using common_t = std::common_type_t<TypeLhs, TypeRhs>;
+        if constexpr (binary_op_has_common_type_v<TypeLhs, TypeRhs>) {
+          using common_t = binary_op_common_type_t<TypeLhs, TypeRhs>;
           if constexpr (std::is_invocable_v<BinaryOperator, common_t, common_t>) {
             using ReturnType = std::invoke_result_t<BinaryOperator, common_t, common_t>;
             return is_constructible<ReturnType>(out_type) or
