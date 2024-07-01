@@ -254,6 +254,23 @@ def test_generic_null_scalar_construction_fails(value):
 
 
 @pytest.mark.parametrize(
+    "value, dtype", [(1000, "uint8"), (2**30, "int16"), (-1, "uint16")]
+)
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+def test_scalar_out_of_bounds_pyint_fails(value, dtype):
+    # Test that we align with NumPy on scalar creation behavior from
+    # Python integers.
+    np_ver = np.lib.NumpyVersion(np.__version__)
+    if np_ver >= "2.0":
+        with pytest.raises(OverflowError):
+            cudf.Scalar(value, dtype)
+    else:
+        # NumPy allowed this, but it gives a DeprecationWarning on newer
+        # versions (which cudf did not used to do).
+        assert cudf.Scalar(value, dtype).value == np.dtype(dtype).type(value)
+
+
+@pytest.mark.parametrize(
     "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["object"]
 )
 def test_scalar_dtype_and_validity(dtype):
