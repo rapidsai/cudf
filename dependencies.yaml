@@ -287,8 +287,8 @@ dependencies:
       - output_types: conda
         packages:
           - fmt>=10.1.1,<11
-          - librmm==24.8.*
-          - libkvikio==24.8.*
+          - librmm==24.8.*,>=0.0.0a0
+          - libkvikio==24.8.*,>=0.0.0a0
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==3.0.6
@@ -500,7 +500,7 @@ dependencies:
       - output_types: [conda]
         packages:
           - breathe>=4.35.0
-          - dask-cuda==24.8.*
+          - dask-cuda==24.8.*,>=0.0.0a0
           - *doxygen
           - make
           - myst-nb
@@ -582,7 +582,7 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - pynvjitlink
+              - pynvjitlink>=0.0.0a0
           - matrix: {cuda: "11.*"}
             packages:
               - cubinlinker
@@ -592,7 +592,7 @@ dependencies:
           - matrix: {cuda: "12.*"}
             packages:
               - rmm-cu12==24.8.*,>=0.0.0a0
-              - pynvjitlink-cu12
+              - pynvjitlink-cu12>=0.0.0a0
           - matrix: {cuda: "11.*"}
             packages:
               - rmm-cu11==24.8.*,>=0.0.0a0
