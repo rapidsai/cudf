@@ -1,6 +1,9 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import io
+import os
+
 import pyarrow as pa
 import pytest
 
@@ -108,6 +111,8 @@ def assert_column_eq(
 
     print(lhs)
     print(rhs)
+    print(lhs.type)
+    print(rhs.type)
     assert lhs.equals(rhs)
 
 
@@ -171,21 +176,16 @@ def is_signed_integer(plc_dtype: plc.DataType):
     )
 
 
-def is_unsigned_integer(plc_dtype: plc.DataType):
-    return plc_dtype.id() in (
-        plc.TypeId.UINT8,
-        plc.TypeId.UINT16,
-        plc.TypeId.UINT32,
-        plc.TypeId.UINT64,
-    )
-
-
 def is_integer(plc_dtype: plc.DataType):
     return plc_dtype.id() in (
         plc.TypeId.INT8,
         plc.TypeId.INT16,
         plc.TypeId.INT32,
         plc.TypeId.INT64,
+        plc.TypeId.UINT8,
+        plc.TypeId.UINT16,
+        plc.TypeId.UINT32,
+        plc.TypeId.UINT64,
     )
 
 
@@ -212,28 +212,45 @@ def is_fixed_width(plc_dtype: plc.DataType):
     )
 
 
-def nesting(typ) -> tuple[int, int]:
+def nesting_level(typ) -> tuple[int, int]:
     """Return list and struct nesting of a pyarrow type."""
     if isinstance(typ, pa.ListType):
-        list_, struct = nesting(typ.value_type)
+        list_, struct = nesting_level(typ.value_type)
         return list_ + 1, struct
     elif isinstance(typ, pa.StructType):
-        lists, structs = map(max, zip(*(nesting(t.type) for t in typ)))
+        lists, structs = map(max, zip(*(nesting_level(t.type) for t in typ)))
         return lists, structs + 1
     else:
         return 0, 0
 
 
 def is_nested_struct(typ):
-    return nesting(typ)[1] > 1
+    return nesting_level(typ)[1] > 1
 
 
 def is_nested_list(typ):
-    return nesting(typ)[0] > 1
+    return nesting_level(typ)[0] > 1
 
 
-# TODO: enable uint64, some failing tests
-NUMERIC_PA_TYPES = [pa.int64(), pa.float64()]  # pa.uint64()]
+def sink_to_str(sink):
+    """
+    Takes a sink (e.g. StringIO/BytesIO, filepath, etc.)
+    and reads in the contents into a string (str not bytes)
+    for comparison
+    """
+    if isinstance(sink, (str, os.PathLike)):
+        with open(sink, "r") as f:
+            str_result = f.read()
+    elif isinstance(sink, io.BytesIO):
+        sink.seek(0)
+        str_result = sink.read().decode()
+    else:
+        sink.seek(0)
+        str_result = sink.read()
+    return str_result
+
+
+NUMERIC_PA_TYPES = [pa.int64(), pa.float64(), pa.uint64()]
 STRING_PA_TYPES = [pa.string()]
 BOOL_PA_TYPES = [pa.bool_()]
 LIST_PA_TYPES = [
@@ -271,11 +288,6 @@ DEFAULT_PA_TYPES = (
     + DEFAULT_PA_STRUCT_TESTING_TYPES
 )
 
-ALL_PA_TYPES = (
-    DEFAULT_PA_TYPES + LIST_PA_TYPES[1:] + DEFAULT_PA_STRUCT_TESTING_TYPES[1:]
-)
-
-
 # Map pylibcudf compression types to pandas ones
 # Not all compression types map cleanly, read the comments to learn more!
 # If a compression type is unsupported, it maps to False.
@@ -298,3 +310,4 @@ COMPRESSION_TYPE_TO_PANDAS = {
     CompressionType.SNAPPY: "snappy",
     CompressionType.BROTLI: "brotli",
 }
+ALL_PA_TYPES = DEFAULT_PA_TYPES

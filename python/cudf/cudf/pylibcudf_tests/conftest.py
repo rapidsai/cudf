@@ -37,6 +37,8 @@ def numeric_pa_type(request):
     return request.param
 
 
+# TODO: Consider adding another fixture/adapting this
+# fixture to consider nullability
 @pytest.fixture(scope="session", params=[0, 100])
 def table_data(request):
     """
@@ -50,64 +52,47 @@ def table_data(request):
     """
     nrows = request.param
 
-    table_dict = dict()
+    table_dict = {}
     # Colnames in the format expected by
     # plc.io.TableWithMetadata
     colnames = []
+
+    np.random.seed(42)
 
     for typ in ALL_PA_TYPES:
         rand_vals = np.random.randint(0, nrows, nrows)
         child_colnames = []
 
-        if isinstance(typ, pa.ListType):
+        def _generate_nested_data(typ):
+            child_colnames = []
 
-            def _generate_list_data(typ):
-                child_colnames = []
-                if isinstance(typ, pa.ListType):
-                    # recurse to get vals
-                    rand_arrs, grandchild_colnames = _generate_list_data(
-                        typ.value_type
-                    )
-                    pa_array = pa.array(
-                        [list(row_vals) for row_vals in zip(rand_arrs)],
-                        type=typ,
-                    )
-                    child_colnames.append(("", grandchild_colnames))
-                else:
-                    # typ is scalar type
-                    pa_array = pa.array(rand_vals).cast(typ)
-                    child_colnames.append(("", []))
-                return pa_array, child_colnames
+            # recurse to get vals for children
+            rand_arrs = []
+            for i in range(typ.num_fields):
+                rand_arr, grandchild_colnames = _generate_nested_data(
+                    typ.field(i).type
+                )
+                rand_arrs.append(rand_arr)
+                child_colnames.append((typ.field(i).name, grandchild_colnames))
 
-            rand_arr, child_colnames = _generate_list_data(typ)
-        elif isinstance(typ, pa.StructType):
+            if isinstance(typ, pa.StructType):
+                pa_array = pa.StructArray.from_arrays(
+                    [rand_arr for rand_arr in rand_arrs],
+                    names=[typ.field(i).name for i in range(typ.num_fields)],
+                )
+            elif isinstance(typ, pa.ListType):
+                pa_array = pa.array(
+                    [list(row_vals) for row_vals in zip(rand_arrs[0])],
+                    type=typ,
+                )
+                child_colnames.append(("", grandchild_colnames))
+            else:
+                # typ is scalar type
+                pa_array = pa.array(rand_vals).cast(typ)
+            return pa_array, child_colnames
 
-            def _generate_struct_data(typ):
-                child_colnames = []
-                if isinstance(typ, pa.StructType):
-                    # recurse to get vals
-                    rand_arrs = []
-                    for i in range(typ.num_fields):
-                        rand_arr, grandchild_colnames = _generate_struct_data(
-                            typ.field(i).type
-                        )
-                        rand_arrs.append(rand_arr)
-                        child_colnames.append(
-                            (typ.field(i).name, grandchild_colnames)
-                        )
-
-                    pa_array = pa.StructArray.from_arrays(
-                        [rand_arr for rand_arr in rand_arrs],
-                        names=[
-                            typ.field(i).name for i in range(typ.num_fields)
-                        ],
-                    )
-                else:
-                    # typ is scalar type
-                    pa_array = pa.array(rand_vals).cast(typ)
-                return pa_array, child_colnames
-
-            rand_arr, child_colnames = _generate_struct_data(typ)
+        if isinstance(typ, (pa.ListType, pa.StructType)):
+            rand_arr, child_colnames = _generate_nested_data(typ)
         else:
             rand_arr = pa.array(rand_vals).cast(typ)
 
@@ -122,21 +107,18 @@ def table_data(request):
 
 
 @pytest.fixture(
-    params=["a.txt", pathlib.Path("a.txt"), io.BytesIO(), io.StringIO()],
+    params=["a.txt", pathlib.Path("a.txt"), io.BytesIO, io.StringIO],
 )
 def source_or_sink(request, tmp_path):
     fp_or_buf = request.param
     if isinstance(fp_or_buf, str):
-        fp_or_buf = f"{tmp_path}/{fp_or_buf}"
+        return f"{tmp_path}/{fp_or_buf}"
     elif isinstance(fp_or_buf, os.PathLike):
-        fp_or_buf = tmp_path.joinpath(fp_or_buf)
-
-    yield fp_or_buf
-    # Cleanup after ourselves
-    # since the BytesIO and StringIO objects get cached by pytest
-    if isinstance(fp_or_buf, io.IOBase):
-        fp_or_buf.seek(0)
-        fp_or_buf.truncate(0)
+        return tmp_path.joinpath(fp_or_buf)
+    elif issubclass(fp_or_buf, io.IOBase):
+        # Must construct io.StringIO/io.BytesIO inside
+        # fixture, or we'll end up re-using it
+        return fp_or_buf()
 
 
 @pytest.fixture(params=[opt for opt in plc.io.types.CompressionType])

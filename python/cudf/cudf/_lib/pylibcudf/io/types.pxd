@@ -1,7 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-
+from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
+from cudf._lib.pylibcudf.libcudf.io.data_sink cimport data_sink
 from cudf._lib.pylibcudf.libcudf.io.types cimport (
     column_encoding,
     column_in_metadata,
@@ -35,3 +36,8 @@ cdef class TableWithMetadata:
 
 cdef class SourceInfo:
     cdef source_info c_obj
+
+cdef class SinkInfo:
+    # This vector just exists to keep the unique_ptrs to the sinks alive
+    cdef vector[unique_ptr[data_sink]] sink_storage
+    cdef sink_info c_obj

@@ -4,7 +4,11 @@ import io
 import pandas as pd
 import pyarrow as pa
 import pytest
-from utils import COMPRESSION_TYPE_TO_PANDAS, assert_table_and_meta_eq
+from utils import (
+    COMPRESSION_TYPE_TO_PANDAS,
+    assert_table_and_meta_eq,
+    sink_to_str,
+)
 
 import cudf._lib.pylibcudf as plc
 from cudf._lib.pylibcudf.io.types import CompressionType
@@ -35,6 +39,114 @@ def write_json_bytes(source, json_bytes):
     else:
         source.write(json_bytes)
         source.seek(0)
+
+
+@pytest.mark.parametrize("rows_per_chunk", [8, 100])
+@pytest.mark.parametrize("lines", [True, False])
+def test_write_json_basic(table_data, source_or_sink, lines, rows_per_chunk):
+    plc_table_w_meta, pa_table = table_data
+    sink = source_or_sink
+
+    plc.io.json.write_json(
+        plc.io.SinkInfo([sink]),
+        plc_table_w_meta,
+        lines=lines,
+        rows_per_chunk=rows_per_chunk,
+    )
+
+    exp = pa_table.to_pandas()
+
+    # Convert everything to string to make
+    # comparisons easier
+    str_result = sink_to_str(sink)
+
+    pd_result = exp.to_json(orient="records", lines=lines)
+
+    assert str_result == pd_result
+
+
+@pytest.mark.parametrize("include_nulls", [True, False])
+@pytest.mark.parametrize("na_rep", ["null", "awef", ""])
+def test_write_json_nulls(na_rep, include_nulls):
+    names = ["a", "b"]
+    pa_tbl = pa.Table.from_arrays(
+        [pa.array([1.0, 2.0, None]), pa.array([True, None, False])],
+        names=names,
+    )
+    plc_tbl = plc.interop.from_arrow(pa_tbl)
+    plc_tbl_w_meta = plc.io.types.TableWithMetadata(
+        plc_tbl, column_names=[(name, []) for name in names]
+    )
+
+    sink = io.StringIO()
+
+    plc.io.json.write_json(
+        plc.io.SinkInfo([sink]),
+        plc_tbl_w_meta,
+        na_rep=na_rep,
+        include_nulls=include_nulls,
+    )
+
+    exp = pa_tbl.to_pandas()
+
+    # Convert everything to string to make
+    # comparisons easier
+    str_result = sink_to_str(sink)
+    pd_result = exp.to_json(orient="records")
+
+    if not include_nulls:
+        # No equivalent in pandas, so we just
+        # sanity check by making sure na_rep
+        # doesn't appear in the output
+
+        # don't quote null
+        for name in names:
+            assert f'{{"{name}":{na_rep}}}' not in str_result
+        return
+
+    # pandas doesn't suppport na_rep
+    # let's just manually do str.replace
+    pd_result = pd_result.replace("null", na_rep)
+
+    assert str_result == pd_result
+
+
+@pytest.mark.parametrize("true_value", ["True", "correct"])
+@pytest.mark.parametrize("false_value", ["False", "wrong"])
+def test_write_json_bool_opts(true_value, false_value):
+    names = ["a"]
+    pa_tbl = pa.Table.from_arrays([pa.array([True, None, False])], names=names)
+    plc_tbl = plc.interop.from_arrow(pa_tbl)
+    plc_tbl_w_meta = plc.io.types.TableWithMetadata(
+        plc_tbl, column_names=[(name, []) for name in names]
+    )
+
+    sink = io.StringIO()
+
+    plc.io.json.write_json(
+        plc.io.SinkInfo([sink]),
+        plc_tbl_w_meta,
+        include_nulls=True,
+        na_rep="null",
+        true_value=true_value,
+        false_value=false_value,
+    )
+
+    exp = pa_tbl.to_pandas()
+
+    # Convert everything to string to make
+    # comparisons easier
+    str_result = sink_to_str(sink)
+    pd_result = exp.to_json(orient="records")
+
+    # pandas doesn't suppport na_rep
+    # let's just manually do str.replace
+    if true_value != "true":
+        pd_result = pd_result.replace("true", true_value)
+    if false_value != "false":
+        pd_result = pd_result.replace("false", false_value)
+
+    assert str_result == pd_result
 
 
 @pytest.mark.parametrize("lines", [True, False])
@@ -85,10 +197,27 @@ def test_read_json_basic(
         lines=lines,
     )
 
-    # orient=records is lossy
-    # and doesn't preserve column names when there's zero rows in the table
+    # Adjustments to correct for the fact orient=records is lossy
+    #  and doesn't
+    # 1) preserve colnames when zero rows in table
+    # 2) preserve struct nullability
+    # 3) differentiate int64/uint64
     if len(pa_table) == 0:
         pa_table = pa.table([])
+
+    new_fields = []
+    for i in range(len(pa_table.schema)):
+        curr_field = pa_table.schema.field(i)
+        if curr_field.type == pa.uint64():
+            try:
+                curr_field = curr_field.with_type(pa.int64())
+            except OverflowError:
+                # There will be no confusion, values are too large
+                # for int64 anyways
+                pass
+        new_fields.append(curr_field)
+
+    pa_table = pa_table.cast(pa.schema(new_fields))
 
     # Convert non-nullable struct fields to nullable fields
     # since nullable=False cannot roundtrip through orient='records'

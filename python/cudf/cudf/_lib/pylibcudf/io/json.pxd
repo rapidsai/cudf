@@ -2,6 +2,7 @@
 from libcpp cimport bool
 
 from cudf._lib.pylibcudf.io.types cimport (
+    SinkInfo,
     SourceInfo,
     TableWithMetadata,
     compression_type,
@@ -21,4 +22,16 @@ cpdef TableWithMetadata read_json(
     bool mixed_types_as_string = *,
     bool prune_columns = *,
     json_recovery_mode_t recovery_mode = *,
+)
+
+
+cpdef void write_json(
+    SinkInfo sink_info,
+    TableWithMetadata tbl,
+    str na_rep = *,
+    bool include_nulls = *,
+    bool lines = *,
+    size_type rows_per_chunk = *,
+    str true_value = *,
+    str false_value = *
 )
