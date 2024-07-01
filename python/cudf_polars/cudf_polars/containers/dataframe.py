@@ -51,7 +51,11 @@ class DataFrame:
             [plc.interop.ColumnMetadata(name=c.name) for c in self.columns],
         )
 
-        return cast(pl.DataFrame, pl.from_arrow(table))
+        result: pl.DataFrame = cast(pl.DataFrame, pl.from_arrow(table))
+        if list(result.schema.keys()) != self.column_names:
+            # Empty column name gets translated in from_arrow
+            return result.rename(dict(zip(result.schema.keys(), self.column_names)))
+        return result
 
     @cached_property
     def column_names_set(self) -> frozenset[str]:
