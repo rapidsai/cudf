@@ -723,7 +723,7 @@ class StringFunction(Expr):
             if isinstance(expr_offset, Literal) and isinstance(expr_length, Literal):
                 # libcudf slices via [start,stop).
                 # polars slices with offset + length where start == offset
-                # stop = start + length. Do this math on the host
+                # stop = start + length. Do this maths on the host
                 start = expr_offset.value.as_py()
                 length = expr_length.value.as_py()
 
