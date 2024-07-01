@@ -94,14 +94,6 @@ def test_from_arrow_max_precision_decimal32():
     [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(18, 9)],
 )
 def test_typecast_from_float_to_decimal(request, data, from_dtype, to_dtype):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=version.parse(pa.__version__) >= version.parse("13.0.0")
-            and from_dtype == np.dtype("float32")
-            and to_dtype.scale > 7,
-            reason="These fail on bits well past the precision of float32. https://github.com/rapidsai/cudf/issues/14169",
-        )
-    )
     got = data.astype(from_dtype)
 
     pa_arr = got.to_arrow().cast(
