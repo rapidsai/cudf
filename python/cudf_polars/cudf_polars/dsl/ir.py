@@ -1017,6 +1017,14 @@ class Union(IR):
         ).slice(self.zlice)
 
 
+def empty_column(
+    nrows: int, dtype: plc.DataType, mask_state: plc.MaskState
+) -> plc.Column:
+    if dtype.id() in (plc.TypeId.LIST, plc.TypeId.STRING):
+        raise NotImplementedError("Empty list/string column")
+    return plc.column_factories.make_fixed_width_column(dtype, nrows, mask_state)
+
+
 @dataclasses.dataclass
 class HConcat(IR):
     """Concatenate dataframes horizontally."""
@@ -1027,6 +1035,31 @@ class HConcat(IR):
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         dfs = [df.evaluate(cache=cache) for df in self.dfs]
+        max_rows = max(df.num_rows for df in dfs)
+        # Horizontal concatenation extends shorter tables with nulls
+        dfs = [
+            df
+            if df.num_rows == max_rows
+            else DataFrame.from_table(
+                plc.concatenate.concatenate(
+                    [
+                        df.table,
+                        plc.Table(
+                            [
+                                empty_column(
+                                    max_rows - df.num_rows,
+                                    c.obj.type(),
+                                    plc.MaskState.ALL_NULL,
+                                )
+                                for c in df.columns
+                            ]
+                        ),
+                    ]
+                ),
+                df.column_names,
+            )
+            for df in dfs
+        ]
         return DataFrame(
             list(itertools.chain.from_iterable(df.columns for df in dfs)),
         )
