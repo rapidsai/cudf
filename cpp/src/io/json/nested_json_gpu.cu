@@ -1457,11 +1457,12 @@ void get_stack_context(device_span<SymbolT const> json_in,
 
   static constexpr auto min_translated_out = 0;
   static constexpr auto max_translated_out = 1;
-  auto json_to_stack_ops_fst = fst::detail::make_fst(
+  auto json_to_stack_ops_fst               = fst::detail::make_fst(
     fst::detail::make_symbol_group_lut(to_stack_op::get_sgid_lut(delimiter)),
     fst::detail::make_transition_table(to_stack_op::get_transition_table(stack_behavior)),
-    fst::detail::make_translation_table<max_translation_table_size, min_translated_out, max_translated_out>(
-      to_stack_op::get_translation_table(stack_behavior)),
+    fst::detail::
+      make_translation_table<max_translation_table_size, min_translated_out, max_translated_out>(
+        to_stack_op::get_translation_table(stack_behavior)),
     stream);
 
   // "Search" for relevant occurrence of brackets and braces that indicate the beginning/end

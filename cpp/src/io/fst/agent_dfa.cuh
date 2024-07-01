@@ -60,7 +60,7 @@ struct VectorCompositeOp {
 /**
  * @brief A class whose ReadSymbol member function is invoked for each symbol being read from the
  * input tape. The wrapper class looks up whether a state transition caused by a symbol is supposed
- * to emit any output symbol (the "transduced" output) and, if so, keeps track of how many symbols
+ * to emit any output symbol (the "transduced" output) and, if so, keeps track of *how many* symbols
  * it intends to write out.
  */
 template <typename TransducerTableT>
@@ -88,12 +88,26 @@ class DFACountCallbackWrapper {
     out_count += count;
   }
 
-  __host__ __device__ __forceinline__ void TearDown() {}
+  __device__ __forceinline__ void TearDown() {}
   TransducerTableT const transducer_table;
   uint32_t out_count{};
 };
 
-template <int maxc,
+/**
+ * @brief A class whose ReadSymbol member function is invoked for each symbol being read from the
+ * input tape. The wrapper class looks up whether a state transition caused by a symbol is supposed
+ * to emit any output symbol (the "transduced" output) and, if so, writes out such symbols to the
+ * given output iterators.
+ *
+ * @tparam MaxTranslatedOutChars The maximum number of symbols that are written on a any given state
+ * transition
+ * @tparam TransducerTableT The type implementing a transducer table that can be used for looking up
+ * the symbols that are supposed to be emitted on a given state transition.
+ * @tparam TransducedOutItT A random-access output iterator type to which symbols returned by the
+ * transducer table are assignable.
+ * @tparam TransducedIndexOutItT A random-access output iterator type to which indexes are written.
+ */
+template <int MaxTranslatedOutChars,
           typename TransducerTableT,
           typename TransducedOutItT,
           typename TransducedIndexOutItT>
@@ -103,9 +117,9 @@ class DFASWriteCallbackWrapper {
                                                       TransducedOutItT out_it,
                                                       TransducedIndexOutItT out_idx_it,
                                                       uint32_t out_offset,
-                                                      uint32_t,
-                                                      uint32_t,
-                                                      uint32_t)
+                                                      uint32_t /*tile_out_offset*/,
+                                                      uint32_t /*tile_in_offset*/,
+                                                      uint32_t /*tile_out_count*/)
     : transducer_table(transducer_table),
       out_it(out_it),
       out_idx_it(out_idx_it),
@@ -119,39 +133,24 @@ class DFASWriteCallbackWrapper {
     this->in_offset = in_offset;
   }
 
-  template <typename CharIndexT, typename StateIndexT, typename SymbolIndexT, typename SymbolT>
-  __device__ __forceinline__ void ReadSymbol(CharIndexT const character_index,
-                                             StateIndexT const old_state,
-                                             StateIndexT const new_state,
-                                             SymbolIndexT const symbol_id,
-                                             SymbolT const read_symbol,
-                                             cub::Int2Type<1>)
+  template <typename CharIndexT,
+            typename StateIndexT,
+            typename SymbolIndexT,
+            typename SymbolT,
+            int MaxTranslatedOutChars_>
+  __device__ __forceinline__
+    typename ::cuda::std::enable_if<(MaxTranslatedOutChars_ <= 2), void>::type
+    ReadSymbol(CharIndexT const character_index,
+               StateIndexT const old_state,
+               StateIndexT const new_state,
+               SymbolIndexT const symbol_id,
+               SymbolT const read_symbol,
+               cub::Int2Type<MaxTranslatedOutChars_> /*MaxTranslatedOutChars*/)
   {
     uint32_t const count = transducer_table(old_state, symbol_id, read_symbol);
 
 #pragma unroll
-    for (uint32_t out_char = 0; out_char < 1; out_char++) {
-      if (out_char < count) {
-        out_it[out_offset + out_char] =
-          transducer_table(old_state, symbol_id, out_char, read_symbol);
-        out_idx_it[out_offset + out_char] = in_offset + character_index;
-      }
-    }
-    out_offset += count;
-  }
-
-  template <typename CharIndexT, typename StateIndexT, typename SymbolIndexT, typename SymbolT>
-  __device__ __forceinline__ void ReadSymbol(CharIndexT const character_index,
-                                             StateIndexT const old_state,
-                                             StateIndexT const new_state,
-                                             SymbolIndexT const symbol_id,
-                                             SymbolT const read_symbol,
-                                             cub::Int2Type<2>)
-  {
-    uint32_t const count = transducer_table(old_state, symbol_id, read_symbol);
-
-#pragma unroll
-    for (uint32_t out_char = 0; out_char < 2; out_char++) {
+    for (uint32_t out_char = 0; out_char < MaxTranslatedOutChars_; out_char++) {
       if (out_char < count) {
         out_it[out_offset + out_char] =
           transducer_table(old_state, symbol_id, out_char, read_symbol);
@@ -165,13 +164,15 @@ class DFASWriteCallbackWrapper {
             typename StateIndexT,
             typename SymbolIndexT,
             typename SymbolT,
-            int N>
-  __device__ __forceinline__ void ReadSymbol(CharIndexT const character_index,
-                                             StateIndexT const old_state,
-                                             StateIndexT const new_state,
-                                             SymbolIndexT const symbol_id,
-                                             SymbolT const read_symbol,
-                                             cub::Int2Type<N>)
+            int MaxTranslatedOutChars_>
+  __device__ __forceinline__
+    typename ::cuda::std::enable_if<(MaxTranslatedOutChars_ > 2), void>::type
+    ReadSymbol(CharIndexT const character_index,
+               StateIndexT const old_state,
+               StateIndexT const new_state,
+               SymbolIndexT const symbol_id,
+               SymbolT const read_symbol,
+               cub::Int2Type<MaxTranslatedOutChars_>)
   {
     uint32_t const count = transducer_table(old_state, symbol_id, read_symbol);
 
@@ -189,11 +190,15 @@ class DFASWriteCallbackWrapper {
                                              SymbolIndexT const symbol_id,
                                              SymbolT const read_symbol)
   {
-    ReadSymbol(
-      character_index, old_state, new_state, symbol_id, read_symbol, cub::Int2Type<maxc>{});
+    ReadSymbol(character_index,
+               old_state,
+               new_state,
+               symbol_id,
+               read_symbol,
+               cub::Int2Type<MaxTranslatedOutChars>{});
   }
 
-  __host__ __device__ __forceinline__ void TearDown() {}
+  __device__ __forceinline__ void TearDown() {}
 
  public:
   TransducerTableT const transducer_table;
@@ -203,25 +208,44 @@ class DFASWriteCallbackWrapper {
   uint32_t in_offset;
 };
 
-template <bool discard_idx,
-          bool discard_out,
-          int maxc,
-          int cache_size,
-          typename out_t,
+/**
+ * @brief A class whose ReadSymbol member function is invoked for each symbol being read from the
+ * input tape. The wrapper class looks up whether a state transition caused by a symbol is supposed
+ * to emit any output symbol (the "transduced" output) and, if so, writes out such symbols to the
+ * given output iterators. This class uses a shared memory-backed write buffer to coalesce writes to
+ * global memory.
+ *
+ * @tparam DisrcardIndexOutput Whether to discard the indexes instead of writing them to the given
+ * output iterator
+ * @tparam DiscardTranslatedOutput Whether to discard the translated output symbols instead of
+ * writing them to the given output iterator
+ * @tparam NumWriteBufferItems The number of items to allocate in shared memory for the write
+ * buffer.
+ * @tparam OutputT The type of the translated items
+ * @tparam TransducerTableT The type implementing a transducer table that can be used for looking up
+ * the symbols that are supposed to be emitted on a given state transition.
+ * @tparam TransducedOutItT A random-access output iterator type to which symbols returned by the
+ * transducer table are assignable.
+ * @tparam TransducedIndexOutItT A random-access output iterator type to which indexes are written.
+ */
+template <bool DisrcardIndexOutput,
+          bool DiscardTranslatedOutput,
+          int NumWriteBufferItems,
+          typename OutputT,
           typename TransducerTableT,
           typename TransducedOutItT,
           typename TransducedIndexOutItT>
 class WriteCoalescingCallbackWrapper {
   struct TempStorage_Offsets {
-    uint16_t compacted_offset[cache_size];
+    uint16_t compacted_offset[NumWriteBufferItems];
   };
   struct TempStorage_Symbols {
-    out_t compacted_symbols[cache_size];
+    OutputT compacted_symbols[NumWriteBufferItems];
   };
   using offset_cache_t =
-    ::cuda::std::conditional_t<discard_idx, cub::NullType, TempStorage_Offsets>;
-  using symbol_cache_t =
-    ::cuda::std::conditional_t<discard_out, cub::Uninitialized<cub::NullType>, TempStorage_Symbols>;
+    ::cuda::std::conditional_t<DisrcardIndexOutput, cub::NullType, TempStorage_Offsets>;
+  using symbol_cache_t = ::cuda::std::
+    conditional_t<DiscardTranslatedOutput, cub::Uninitialized<cub::NullType>, TempStorage_Symbols>;
   struct TempStorage_ : offset_cache_t, symbol_cache_t {};
 
   __device__ __forceinline__ TempStorage_& PrivateStorage()
@@ -267,11 +291,11 @@ class WriteCoalescingCallbackWrapper {
   {
     uint32_t const count = transducer_table(old_state, symbol_id, read_symbol);
     for (uint32_t out_char = 0; out_char < count; out_char++) {
-      if constexpr (!discard_idx) {
+      if constexpr (!DisrcardIndexOutput) {
         temp_storage.compacted_offset[thread_out_offset + out_char - tile_out_offset] =
           in_offset + character_index - tile_in_offset;
       }
-      if constexpr (!discard_out) {
+      if constexpr (!DiscardTranslatedOutput) {
         temp_storage.compacted_symbols[thread_out_offset + out_char - tile_out_offset] =
           transducer_table(old_state, symbol_id, out_char, read_symbol);
       }
@@ -282,12 +306,12 @@ class WriteCoalescingCallbackWrapper {
   __device__ __forceinline__ void TearDown()
   {
     __syncthreads();
-    if constexpr (!discard_out) {
+    if constexpr (!DiscardTranslatedOutput) {
       for (uint32_t out_char = threadIdx.x; out_char < tile_out_count; out_char += blockDim.x) {
         out_it[tile_out_offset + out_char] = temp_storage.compacted_symbols[out_char];
       }
     }
-    if constexpr (!discard_idx) {
+    if constexpr (!DisrcardIndexOutput) {
       for (uint32_t out_char = threadIdx.x; out_char < tile_out_count; out_char += blockDim.x) {
         out_idx_it[tile_out_offset + out_char] =
           temp_storage.compacted_offset[out_char] + tile_in_offset;
@@ -734,13 +758,13 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
 
   using OutSymbolT = typename DfaT::OutSymbolT;
   // static constexpr int32_t MIN_TRANSLATED_OUT = DfaT::MIN_TRANSLATED_OUT;
-  static constexpr int32_t MAX_TRANSLATED_OUT = DfaT::MAX_TRANSLATED_OUT;
+  static constexpr int32_t num_max_translated_out = DfaT::MAX_TRANSLATED_OUT;
   static constexpr bool discard_out_index =
     ::cuda::std::is_same<TransducedIndexOutItT, thrust::discard_iterator<>>::value;
   static constexpr bool discard_out_it =
     ::cuda::std::is_same<TransducedOutItT, thrust::discard_iterator<>>::value;
   using NonWriteCoalescingT =
-    DFASWriteCallbackWrapper<MAX_TRANSLATED_OUT,
+    DFASWriteCallbackWrapper<num_max_translated_out,
                              decltype(dfa.InitTranslationTable(transducer_table_storage)),
                              TransducedOutItT,
                              TransducedIndexOutItT>;
@@ -748,17 +772,15 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
   using WriteCoalescingT =
     WriteCoalescingCallbackWrapper<discard_out_index,
                                    discard_out_it,
-                                   MAX_TRANSLATED_OUT,
-                                   MAX_TRANSLATED_OUT * SYMBOLS_PER_BLOCK,
+                                   num_max_translated_out * SYMBOLS_PER_BLOCK,
                                    OutSymbolT,
                                    decltype(dfa.InitTranslationTable(transducer_table_storage)),
                                    TransducedOutItT,
                                    TransducedIndexOutItT>;
 
-  // static constexpr bool is_mapping_fst = (MIN_TRANSLATED_OUT == 1) and (MAX_TRANSLATED_OUT == 1);
   static constexpr bool is_translation_pass = (!IS_TRANS_VECTOR_PASS) || IS_SINGLE_PASS;
 
-  // Use write-coalescing only if it's
+  // Use write-coalescing only if the worst-case output size per tile fits into shared memory
   static constexpr bool use_shmem_cache =
     is_translation_pass and (sizeof(typename WriteCoalescingT::TempStorage) <= 24 * 1024);
 
@@ -850,7 +872,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
     }
 
     // Perform finite-state machine simulation, computing size of transduced output
-    DFACountCallbackWrapper count_chars_writte_callback_op{transducer_table};
+    DFACountCallbackWrapper count_chars_callback_op{transducer_table};
 
     StateIndexT t_start_state = state;
     agent_dfa.GetThreadStateTransitions(symbol_matcher,
@@ -859,7 +881,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
                                         blockIdx.x * SYMBOLS_PER_BLOCK,
                                         num_chars,
                                         state,
-                                        count_chars_writte_callback_op,
+                                        count_chars_callback_op,
                                         cub::Int2Type<IS_SINGLE_PASS>());
 
     __syncthreads();
@@ -880,7 +902,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
     if (tile_idx == 0) {
       OffsetT block_aggregate = 0;
       OutOffsetBlockScan(scan_temp_storage)
-        .ExclusiveScan(count_chars_writte_callback_op.out_count,
+        .ExclusiveScan(count_chars_callback_op.out_count,
                        thread_out_offset,
                        static_cast<OffsetT>(0),
                        cub::Sum{},
@@ -898,8 +920,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
         offset_tile_state, prefix_callback_temp_storage, cub::Sum{}, tile_idx);
 
       OutOffsetBlockScan(scan_temp_storage)
-        .ExclusiveScan(
-          count_chars_writte_callback_op.out_count, thread_out_offset, cub::Sum{}, prefix_op);
+        .ExclusiveScan(count_chars_callback_op.out_count, thread_out_offset, cub::Sum{}, prefix_op);
       tile_out_offset = prefix_op.GetExclusivePrefix();
       tile_out_count  = prefix_op.GetBlockAggregate();
       if (tile_idx == gridDim.x - 1 && threadIdx.x == 0) {
