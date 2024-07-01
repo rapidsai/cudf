@@ -12,12 +12,8 @@ import cudf
 from cudf import NA
 from cudf._lib.copying import get_element
 from cudf.api.types import is_scalar
-from cudf.testing._utils import (
-    DATETIME_TYPES,
-    NUMERIC_TYPES,
-    TIMEDELTA_TYPES,
-    assert_eq,
-)
+from cudf.testing import assert_eq
+from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
 
 
 @pytest.mark.parametrize(

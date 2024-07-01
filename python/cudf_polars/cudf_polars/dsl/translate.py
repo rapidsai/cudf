@@ -10,8 +10,10 @@ from functools import singledispatch
 from typing import Any
 
 import pyarrow as pa
+from typing_extensions import assert_never
 
-from polars.polars import PySeries, _expr_nodes as pl_expr, _ir_nodes as pl_ir
+import polars.polars as plrs
+from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 import cudf._lib.pylibcudf as plc
 
@@ -63,7 +65,9 @@ noop_context: nullcontext[None] = nullcontext()
 def _translate_ir(
     node: Any, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    raise NotImplementedError(f"Translation for {type(node).__name__}")
+    raise NotImplementedError(
+        f"Translation for {type(node).__name__}"
+    )  # pragma: no cover
 
 
 @_translate_ir.register
@@ -172,7 +176,7 @@ def _(
 @_translate_ir.register
 def _(
     node: pl_ir.Reduce, visitor: NodeTraverser, schema: dict[str, plc.DataType]
-) -> ir.IR:
+) -> ir.IR:  # pragma: no cover; polars doesn't emit this node yet
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         exprs = [translate_named_expr(visitor, n=e) for e in node.expr]
@@ -256,17 +260,6 @@ def _(
     return ir.HConcat(schema, [translate_ir(visitor, n=n) for n in node.inputs])
 
 
-@_translate_ir.register
-def _(
-    node: pl_ir.ExtContext, visitor: NodeTraverser, schema: dict[str, plc.DataType]
-) -> ir.IR:
-    return ir.ExtContext(
-        schema,
-        translate_ir(visitor, n=node.input),
-        [translate_ir(visitor, n=n) for n in node.contexts],
-    )
-
-
 def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
     """
     Translate a polars-internal IR node to our representation.
@@ -333,7 +326,9 @@ def translate_named_expr(
 def _translate_expr(
     node: Any, visitor: NodeTraverser, dtype: plc.DataType
 ) -> expr.Expr:
-    raise NotImplementedError(f"Translation for {type(node).__name__}")
+    raise NotImplementedError(
+        f"Translation for {type(node).__name__}"
+    )  # pragma: no cover
 
 
 @_translate_expr.register
@@ -348,6 +343,16 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
             *(translate_expr(visitor, n=n) for n in node.input),
         )
     elif isinstance(name, pl_expr.BooleanFunction):
+        if name == pl_expr.BooleanFunction.IsBetween:
+            column, lo, hi = (translate_expr(visitor, n=n) for n in node.input)
+            (closed,) = options
+            lop, rop = expr.BooleanFunction._BETWEEN_OPS[closed]
+            return expr.BinOp(
+                dtype,
+                plc.binaryop.BinaryOperator.LOGICAL_AND,
+                expr.BinOp(dtype, lop, column, lo),
+                expr.BinOp(dtype, rop, column, hi),
+            )
         return expr.BooleanFunction(
             dtype,
             name,
@@ -361,28 +366,27 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
 @_translate_expr.register
 def _(node: pl_expr.Window, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
     # TODO: raise in groupby?
-    if node.partition_by is None:
+    if isinstance(node.options, pl_expr.RollingGroupOptions):
+        # pl.col("a").rolling(...)
         return expr.RollingWindow(
             dtype, node.options, translate_expr(visitor, n=node.function)
         )
-    else:
+    elif isinstance(node.options, pl_expr.WindowMapping):
+        # pl.col("a").over(...)
         return expr.GroupedRollingWindow(
             dtype,
             node.options,
             translate_expr(visitor, n=node.function),
             *(translate_expr(visitor, n=n) for n in node.partition_by),
         )
+    assert_never(node.options)
 
 
 @_translate_expr.register
 def _(node: pl_expr.Literal, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
-    if isinstance(node.value, PySeries):
-        value = node.value.to_arrow()
-        # TODO: casting from large string to string is not ideal
-        if value.type == pa.large_string():
-            value = value.cast(pa.string())
-    else:
-        value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
+    if isinstance(node.value, plrs.PySeries):
+        return expr.LiteralColumn(dtype, node.value)
+    value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
     return expr.Literal(dtype, value)
 
 
@@ -442,6 +446,16 @@ def _(node: pl_expr.Agg, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Ex
         node.name,
         node.options,
         translate_expr(visitor, n=node.arguments),
+    )
+
+
+@_translate_expr.register
+def _(node: pl_expr.Ternary, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
+    return expr.Ternary(
+        dtype,
+        translate_expr(visitor, n=node.predicate),
+        translate_expr(visitor, n=node.truthy),
+        translate_expr(visitor, n=node.falsy),
     )
 
 

@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import copy
 import itertools
@@ -7,7 +8,7 @@ import textwrap
 import warnings
 from collections import abc
 from functools import cached_property
-from typing import Any, Iterable, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Iterable
 
 import cupy as cp
 import numpy as np
@@ -20,7 +21,6 @@ from cudf._lib.null_mask import bitmask_or
 from cudf._lib.reshape import interleave_columns
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
-from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype, is_list_like, is_numeric_dtype
 from cudf.core._compat import PANDAS_LT_300
@@ -31,8 +31,11 @@ from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin
+
+if TYPE_CHECKING:
+    from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 
 
 def _deprecate_collect():
@@ -389,7 +392,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             zip(index.to_pandas(), cp.split(indices.values, offsets[1:-1]))
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def get_group(self, name, obj=None):
         """
         Construct DataFrame from group with provided name.
@@ -433,7 +436,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
         return obj.iloc[self.indices[name]]
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def size(self):
         """
         Return the size of each group.
@@ -448,7 +451,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             .agg("size")
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def cumcount(self):
         """
         Return the cumulative count of keys in each group.
@@ -464,7 +467,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             .agg("cumcount")
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def rank(
         self,
         method="average",
@@ -518,7 +521,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             [*self.grouping.keys._columns], dropna=self._dropna
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def agg(self, func):
         """
         Apply aggregation(s) to the groups.
@@ -818,7 +821,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         else:
             return result
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def head(self, n: int = 5, *, preserve_order: bool = True):
         """Return first n rows of each group
 
@@ -871,7 +874,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             n, take_head=True, preserve_order=preserve_order
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def tail(self, n: int = 5, *, preserve_order: bool = True):
         """Return last n rows of each group
 
@@ -925,7 +928,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             n, take_head=False, preserve_order=preserve_order
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def nth(self, n):
         """
         Return the nth row from each group.
@@ -946,7 +949,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         del self.obj._data["__groupbynth_order__"]
         return result
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def ngroup(self, ascending=True):
         """
         Number each group from 0 to the number of groups - 1.
@@ -1033,11 +1036,11 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def sample(
         self,
-        n: Optional[int] = None,
-        frac: Optional[float] = None,
+        n: int | None = None,
+        frac: float | None = None,
         replace: bool = False,
-        weights: Union[abc.Sequence, "cudf.Series", None] = None,
-        random_state: Union[np.random.RandomState, int, None] = None,
+        weights: abc.Sequence | "cudf.Series" | None = None,
+        random_state: np.random.RandomState | int | None = None,
     ):
         """Return a random sample of items in each group.
 
@@ -1222,7 +1225,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def _normalize_aggs(
         self, aggs: MultiColumnAggType
-    ) -> Tuple[Iterable[Any], Tuple[ColumnBase, ...], List[List[AggType]]]:
+    ) -> tuple[Iterable[Any], tuple[ColumnBase, ...], list[list[AggType]]]:
         """
         Normalize aggs to a list of list of aggregations, where `out[i]`
         is a list of aggregations for column `self.obj[i]`. We support three
@@ -1237,7 +1240,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         Each agg can be string or lambda functions.
         """
 
-        aggs_per_column: Iterable[Union[AggType, Iterable[AggType]]]
+        aggs_per_column: Iterable[AggType | Iterable[AggType]]
         if isinstance(aggs, dict):
             column_names, aggs_per_column = aggs.keys(), aggs.values()
             columns = tuple(self.obj._data[col] for col in column_names)
@@ -1258,7 +1261,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         ]
         return column_names, columns, normalized_aggs
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def pipe(self, func, *args, **kwargs):
         """
         Apply a function `func` with arguments to this GroupBy
@@ -1305,7 +1308,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         To get the difference between each groups maximum and minimum value
         in one pass, you can do
 
-        >>> df.groupby('A').pipe(lambda x: x.max() - x.min())
+        >>> df.groupby('A', sort=True).pipe(lambda x: x.max() - x.min())
            B
         A
         a  2
@@ -1313,7 +1316,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         return cudf.core.common.pipe(self, func, *args, **kwargs)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _jit_groupby_apply(
         self, function, group_names, offsets, group_keys, grouped_values, *args
     ):
@@ -1324,7 +1327,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             chunk_results, group_names, group_keys, grouped_values
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _iterative_groupby_apply(
         self, function, group_names, offsets, group_keys, grouped_values, *args
     ):
@@ -1412,7 +1415,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 result.index = cudf.MultiIndex._from_data(index_data)
         return result
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def apply(
         self, function, *args, engine="auto", include_groups: bool = True
     ):
@@ -1570,7 +1573,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             result = result.reset_index()
         return result
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def apply_grouped(self, function, **kwargs):
         """Apply a transformation function over the grouped chunk.
 
@@ -1709,7 +1712,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         kwargs.update({"chunks": offsets})
         return grouped_values.apply_chunks(function, **kwargs)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _broadcast(self, values):
         """
         Broadcast the results of an aggregation to the group
@@ -1733,7 +1736,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             values.index = self.obj.index
         return values
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def transform(self, function):
         """Apply an aggregation, then broadcast the result to the group size.
 
@@ -1798,7 +1801,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def count(self, dropna=True):
         """Compute the number of values in each column.
 
@@ -1813,7 +1816,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return self.agg(func)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def describe(self, include=None, exclude=None):
         """
         Generate descriptive statistics that summarizes the central tendency,
@@ -1885,7 +1888,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
         return res
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def corr(self, method="pearson", min_periods=1):
         """
         Compute pairwise correlation of columns, excluding NA/null values.
@@ -1947,7 +1950,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             lambda x: x.corr(method, min_periods), "Correlation"
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def cov(self, min_periods=0, ddof=1):
         """
         Compute the pairwise covariance among the columns of a DataFrame,
@@ -2126,7 +2129,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return res
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def var(self, ddof=1):
         """Compute the column-wise variance of the values in each group.
 
@@ -2142,7 +2145,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return self.agg(func)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def std(self, ddof=1):
         """Compute the column-wise std of the values in each group.
 
@@ -2158,7 +2161,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return self.agg(func)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def quantile(self, q=0.5, interpolation="linear"):
         """Compute the column-wise quantiles of the values in each group.
 
@@ -2176,18 +2179,18 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return self.agg(func)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def collect(self):
         """Get a list of all the values for each column in each group."""
         _deprecate_collect()
         return self.agg(list)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def unique(self):
         """Get a list of the unique values for each column in each group."""
         return self.agg("unique")
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def diff(self, periods=1, axis=0):
         """Get the difference between the values in each group.
 
@@ -2255,7 +2258,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return self._scan_fill("bfill", limit)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def fillna(
         self,
         value=None,
@@ -2322,7 +2325,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             value=value, inplace=inplace, axis=axis, limit=limit
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """
         Shift each group by ``periods`` positions.
@@ -2385,7 +2388,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(values)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def pct_change(
         self,
         periods=1,
