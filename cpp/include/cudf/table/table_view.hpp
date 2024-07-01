@@ -17,6 +17,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <algorithm>
 #include <vector>
