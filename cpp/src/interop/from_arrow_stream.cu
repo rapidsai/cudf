@@ -17,7 +17,7 @@
 #include "arrow_utilities.hpp"
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/concatenate.hpp>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/table/table.hpp>
@@ -128,7 +128,7 @@ std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
     chunks.begin(), chunks.end(), std::back_inserter(chunk_views), [](auto const& chunk) {
       return chunk->view();
     });
-  return cudf::concatenate(chunk_views, stream, mr);
+  return cudf::detail::concatenate(chunk_views, stream, mr);
 }
 
 }  // namespace detail
@@ -138,7 +138,6 @@ std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-
   return detail::from_arrow_stream(input, stream, mr);
 }
 }  // namespace cudf
