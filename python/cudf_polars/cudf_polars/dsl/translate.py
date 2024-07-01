@@ -468,12 +468,13 @@ def _(node: pl_expr.Ternary, visitor: NodeTraverser, dtype: plc.DataType) -> exp
 def _(
     node: pl_expr.BinaryExpr, visitor: NodeTraverser, dtype: plc.DataType
 ) -> expr.Expr:
-    return expr.BinOp(
-        dtype,
-        expr.BinOp._MAPPING[node.op],
-        translate_expr(visitor, n=node.left),
-        translate_expr(visitor, n=node.right),
-    )
+    left = translate_expr(visitor, n=node.left)
+    right = translate_expr(visitor, n=node.right)
+    if dtype.id() == plc.TypeId.STRING and node.op == pl_expr.Operator.PLUS:
+        return expr.StringFunction(
+            dtype, pl_expr.StringFunction.ConcatHorizontal, (), left, right
+        )
+    return expr.BinOp(dtype, expr.BinOp._MAPPING[node.op], left, right)
 
 
 @_translate_expr.register
