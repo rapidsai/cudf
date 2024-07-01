@@ -29,7 +29,8 @@ rapids-logger "Install cudf wheel"
 python -m pip install $(echo ./dist/cudf*.whl)[test]
 
 rapids-logger "Install cudf_polars"
-python -m pip install python/cudf_polars
+python -m pip install 'polars>=1.0'
+python -m pip install --no-deps python/cudf_polars
 
 rapids-logger "Run cudf_polars tests"
 
