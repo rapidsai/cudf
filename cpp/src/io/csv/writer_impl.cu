@@ -376,8 +376,15 @@ void write_chunked(data_sink* out_sink,
 
   // use strings concatenate to build the final CSV output in device memory
   auto contents_w_nl = [&] {
+    auto const total_size =
+      str_column_view.chars_size(stream) + (newline.size() * str_column_view.size());
+    if (total_size < static_cast<int64_t>(std::numeric_limits<size_type>::max())) {
+      return cudf::strings::detail::join_strings(
+               str_column_view, newline, string_scalar{"", false, stream}, stream, mr)
+        ->release();
+    }
     auto nl_col = cudf::make_column_from_scalar(newline, str_column_view.size(), stream);
-    // convert the last element into an empty string but resetting the last offset value
+    // convert the last element into an empty string by resetting the last offset value
     auto& offsets     = nl_col->child(strings_column_view::offsets_column_index);
     auto offsets_view = offsets.mutable_view();
     cudf::fill_in_place(offsets_view,
