@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_range.cuh>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/indexalator.cuh>

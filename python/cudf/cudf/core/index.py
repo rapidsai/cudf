@@ -58,11 +58,22 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf, search_range
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
+
+
+def ensure_index(index_like: Any) -> BaseIndex:
+    """
+    Ensure an Index is returned.
+
+    Avoids a shallow copy compared to calling cudf.Index(...)
+    """
+    if not isinstance(index_like, BaseIndex):
+        return cudf.Index(index_like)
+    return index_like
 
 
 class IndexMeta(type):
@@ -204,7 +215,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     _range: range
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __init__(
         self, start, stop=None, step=1, dtype=None, copy=False, name=None
     ):
@@ -259,17 +270,17 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return codes, uniques
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def name(self):
         return self._name
 
     @name.setter  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def name(self, value):
         self._name = value
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def start(self) -> int:
         """
         The value of the `start` parameter (0 if this was not supplied).
@@ -277,7 +288,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._range.start
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def stop(self) -> int:
         """
         The value of the stop parameter.
@@ -285,7 +296,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._range.stop
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def step(self) -> int:
         """
         The value of the step parameter.
@@ -293,12 +304,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._range.step
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _num_rows(self) -> int:
         return len(self)
 
     @cached_property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _values(self):
         if len(self) > 0:
             return column.as_column(self._range, dtype=self.dtype)
@@ -330,18 +341,18 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return False
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def hasnans(self) -> bool:
         return False
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _data(self):
         return cudf.core.column_accessor.ColumnAccessor(
             {self.name: self._values}
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __contains__(self, item):
         hash(item)
         if isinstance(item, bool) or not isinstance(
@@ -357,7 +368,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         except (ValueError, OverflowError):
             return False
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def copy(self, name=None, deep=False):
         """
         Make a copy of this object.
@@ -377,7 +388,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
         return RangeIndex(self._range, name=name)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def astype(self, dtype, copy: bool = True):
         if is_dtype_equal(dtype, self.dtype):
             return self
@@ -386,15 +397,15 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def fillna(self, value, downcast=None):
         return self.copy()
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def drop_duplicates(self, keep="first"):
         return self
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def duplicated(self, keep="first") -> cupy.ndarray:
         return cupy.zeros(len(self), dtype=bool)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __repr__(self):
         return (
             f"{self.__class__.__name__}(start={self.start}, stop={self.stop}"
@@ -408,15 +419,15 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @property
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def size(self) -> int:
         return len(self)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __len__(self):
         return len(self._range)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __getitem__(self, index):
         if isinstance(index, slice):
             sl_start, sl_stop, sl_step = index.indices(len(self))
@@ -435,13 +446,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
             return self.start + index * self.step
         return self._as_int_index()[index]
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def equals(self, other) -> bool:
         if isinstance(other, RangeIndex):
             return self._range == other._range
         return self._as_int_index().equals(other)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def serialize(self):
         header = {}
         header["index_column"] = {}
@@ -462,7 +473,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return header, frames
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def deserialize(cls, header, frames):
         h = header["index_column"]
         name = pickle.loads(header["name"])
@@ -472,7 +483,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return RangeIndex(start=start, stop=stop, step=step, name=name)
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def dtype(self):
         """
         `dtype` of the range of values in RangeIndex.
@@ -487,7 +498,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _dtypes(self) -> Iterable:
         return [(self.name, self.dtype)]
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.RangeIndex:
@@ -508,16 +519,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return True
 
     @cached_property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def is_monotonic_increasing(self) -> bool:
         return self.step > 0 or len(self) <= 1
 
     @cached_property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def is_monotonic_decreasing(self):
         return self.step < 0 or len(self) <= 1
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def memory_usage(self, deep: bool = False) -> int:
         if deep:
             warnings.warn(
@@ -530,7 +541,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # RangeIndex always has unique values
         return self.copy()
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __mul__(self, other):
         # Multiplication by raw ints must return a RangeIndex to match pandas.
         if isinstance(other, cudf.Scalar) and other.dtype.kind in "iu":
@@ -547,24 +558,24 @@ class RangeIndex(BaseIndex, BinaryOperand):
             )
         return self._as_int_index().__mul__(other)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __rmul__(self, other):
         # Multiplication is commutative.
         return self.__mul__(other)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _as_int_index(self):
         # Convert self to an integer index. This method is used to perform ops
         # that are not defined directly on RangeIndex.
         return cudf.Index._from_data(self._data)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return self._as_int_index().__array_ufunc__(
             ufunc, method, *inputs, **kwargs
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def get_indexer(self, target, limit=None, method=None, tolerance=None):
         target_col = cudf.core.column.as_column(target)
         if method is not None or not isinstance(
@@ -594,7 +605,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             locs[valid] = len(self) - 1 - locs[valid]
         return locs
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def get_loc(self, key):
         if not is_scalar(key):
             raise TypeError("Should be a scalar-like")
@@ -608,7 +619,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             raise KeyError(key)
         return idx_int
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _union(self, other, sort=None):
         if isinstance(other, RangeIndex):
             # Variable suffixes are of the
@@ -685,7 +696,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             self._as_int_index()._union(other, sort=sort)
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _intersection(self, other, sort=None):
         if not isinstance(other, RangeIndex):
             return self._try_reconstruct_range_index(
@@ -733,7 +744,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
         return self._try_reconstruct_range_index(new_index)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def difference(self, other, sort=None):
         if isinstance(other, RangeIndex) and self.equals(other):
             return self[:0]._get_reconciled_name_object(other)
@@ -785,14 +796,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
         else:
             return sorted_index
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         gather_map = cudf.core.column.as_column(gather_map)
         return cudf.Index._from_data(
             {self.name: self._values.take(gather_map, nullify, check_bounds)}
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _apply_boolean_mask(self, boolean_mask):
         return cudf.Index._from_data(
             {self.name: self._values.apply_boolean_mask(boolean_mask)}
@@ -838,21 +849,21 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _column(self):
         return self._as_int_index()._column
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _columns(self):
         return self._as_int_index()._columns
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def values_host(self) -> np.ndarray:
         return np.arange(start=self.start, stop=self.stop, step=self.step)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def argsort(
         self,
         ascending=True,
@@ -865,19 +876,19 @@ class RangeIndex(BaseIndex, BinaryOperand):
         else:
             return cupy.arange(len(self))
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def where(self, cond, other=None, inplace=False):
         return self._as_int_index().where(cond, other, inplace)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def to_numpy(self) -> np.ndarray:
         return self.values_host
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def to_cupy(self) -> cupy.ndarray:
         return self.values
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def to_arrow(self) -> pa.Array:
         return pa.array(self._range, type=pa.from_numpy_dtype(self.dtype))
 
@@ -889,23 +900,23 @@ class RangeIndex(BaseIndex, BinaryOperand):
             "using .to_numpy()."
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def nunique(self, dropna: bool = True) -> int:
         return len(self)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def isna(self) -> cupy.ndarray:
         return cupy.zeros(len(self), dtype=bool)
 
     isnull = isna
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def notna(self) -> cupy.ndarray:
         return cupy.ones(len(self), dtype=bool)
 
     notnull = isna
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _minmax(self, meth: str):
         no_steps = len(self) - 1
         if no_steps == -1:
@@ -1004,12 +1015,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         Column's, the data Column will be cloned to adopt this name.
     """
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __init__(self, data, **kwargs):
         name = _getdefault_name(data, name=kwargs.get("name"))
         super().__init__({name: data})
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         ret = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
 
@@ -1046,7 +1057,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return NotImplemented
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _from_data(cls, data: MutableMapping, name: Any = no_default) -> Self:
         out = super()._from_data(data=data)
         if name is not no_default:
@@ -1054,7 +1065,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return out
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _from_data_like_self(
         cls, data: MutableMapping, name: Any = no_default
     ) -> Self:
@@ -1064,7 +1075,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return out
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def from_arrow(cls, obj):
         try:
             return cls(ColumnBase.from_arrow(obj))
@@ -1118,12 +1129,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return ret
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _values(self):
         return self._column
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _concat(cls, objs):
         non_empties = [index for index in objs if len(index)]
         if len(objs) != len(non_empties):
@@ -1166,16 +1177,16 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         result.name = name
         return result
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def memory_usage(self, deep=False):
         return self._column.memory_usage
 
     @cached_property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def is_unique(self):
         return self._column.is_unique
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def equals(self, other) -> bool:
         if not isinstance(other, BaseIndex) or len(self) != len(other):
             return False
@@ -1198,7 +1209,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         except TypeError:
             return False
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def copy(self, name=None, deep=False):
         """
         Make a copy of this object.
@@ -1221,11 +1232,11 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             {name: self._values.copy(True) if deep else self._values}
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def astype(self, dtype, copy: bool = True):
         return super().astype({self.name: dtype}, copy)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def get_indexer(self, target, method=None, limit=None, tolerance=None):
         if is_scalar(target):
             raise TypeError("Should be a sequence")
@@ -1297,7 +1308,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
         return _return_get_indexer_result(result_series.to_cupy())
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def get_loc(self, key):
         if not is_scalar(key):
             raise TypeError("Should be a scalar-like")
@@ -1333,7 +1344,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         mask[true_inds] = True
         return mask
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __repr__(self):
         max_seq_items = pd.get_option("max_seq_items") or len(self)
         mr = 0
@@ -1419,7 +1430,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         lines.append(f"{prior_to_dtype} {keywords})")
         return "\n".join(lines)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __getitem__(self, index):
         res = self._get_elements_from_column(index)
         if isinstance(res, ColumnBase):
@@ -1427,20 +1438,20 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return res
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def dtype(self):
         """
         `dtype` of the underlying values in Index.
         """
         return self._values.dtype
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def isna(self):
         return self._column.isnull().values
 
     isnull = isna
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def notna(self):
         return self._column.notnull().values
 
@@ -1470,11 +1481,11 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return False
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def hasnans(self):
         return self._column.has_nulls(include_nan=True)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def argsort(
         self,
         axis=0,
@@ -1518,7 +1529,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             Frame._repeat([*self._columns], repeats, axis), self._column_names
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def where(self, cond, other=None, inplace=False):
         result_col = super().where(cond, other, inplace)
         return self._mimic_inplace(
@@ -1569,7 +1580,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 to_concat.append(obj)
         else:
             this = self
-            other = cudf.Index(other)
+            other = ensure_index(other)
 
             if len(this) == 0 or len(other) == 0:
                 # we'll filter out empties later in ._concat
@@ -1615,7 +1626,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @copy_docstring(StringMethods)  # type: ignore
     @property
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def str(self):
         if is_string_dtype(self.dtype):
             return StringMethods(parent=self)
@@ -1698,7 +1709,7 @@ class DatetimeIndex(Index):
                   dtype='datetime64[ns]', name='a')
     """
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __init__(
         self,
         data=None,
@@ -1761,7 +1772,7 @@ class DatetimeIndex(Index):
             ):
                 raise ValueError("No unique frequency found")
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _copy_type_metadata(self: Self, other: Self) -> Self:
         super()._copy_type_metadata(other)
         self._freq = _validate_freq(other._freq)
@@ -1783,7 +1794,7 @@ class DatetimeIndex(Index):
             return pd.Timestamp(value)
         return value
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def copy(self, name=None, deep=False):
         idx_copy = super().copy(name=name, deep=deep)
         return idx_copy._copy_type_metadata(self)
@@ -1801,7 +1812,7 @@ class DatetimeIndex(Index):
         )
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def year(self):
         """
         The year of the datetime.
@@ -1820,7 +1831,7 @@ class DatetimeIndex(Index):
         return self._get_dt_field("year")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def month(self):
         """
         The month as January=1, December=12.
@@ -1839,7 +1850,7 @@ class DatetimeIndex(Index):
         return self._get_dt_field("month")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def day(self):
         """
         The day of the datetime.
@@ -1858,7 +1869,7 @@ class DatetimeIndex(Index):
         return self._get_dt_field("day")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def hour(self):
         """
         The hours of the datetime.
@@ -1879,7 +1890,7 @@ class DatetimeIndex(Index):
         return self._get_dt_field("hour")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def minute(self):
         """
         The minutes of the datetime.
@@ -1900,7 +1911,7 @@ class DatetimeIndex(Index):
         return self._get_dt_field("minute")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def second(self):
         """
         The seconds of the datetime.
@@ -1921,7 +1932,7 @@ class DatetimeIndex(Index):
         return self._get_dt_field("second")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def microsecond(self):
         """
         The microseconds of the datetime.
@@ -1952,7 +1963,7 @@ class DatetimeIndex(Index):
         )
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def nanosecond(self):
         """
         The nanoseconds of the datetime.
@@ -1974,7 +1985,7 @@ class DatetimeIndex(Index):
         return self._get_dt_field("nanosecond")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def weekday(self):
         """
         The day of the week with Monday=0, Sunday=6.
@@ -1996,7 +2007,7 @@ class DatetimeIndex(Index):
         return self._get_dt_field("weekday")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def dayofweek(self):
         """
         The day of the week with Monday=0, Sunday=6.
@@ -2018,7 +2029,7 @@ class DatetimeIndex(Index):
         return self._get_dt_field("weekday")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def dayofyear(self):
         """
         The day of the year, from 1-365 in non-leap years and
@@ -2041,7 +2052,7 @@ class DatetimeIndex(Index):
         return self._get_dt_field("day_of_year")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def day_of_year(self):
         """
         The day of the year, from 1-365 in non-leap years and
@@ -2064,7 +2075,7 @@ class DatetimeIndex(Index):
         return self._get_dt_field("day_of_year")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def is_leap_year(self):
         """
         Boolean indicator if the date belongs to a leap year.
@@ -2083,7 +2094,7 @@ class DatetimeIndex(Index):
         return cupy.asarray(res)
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def quarter(self):
         """
         Integer indicator for which quarter of the year the date belongs in.
@@ -2108,7 +2119,7 @@ class DatetimeIndex(Index):
         res = extract_quarter(self._values)
         return Index(res, dtype="int8")
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def day_name(self, locale: str | None = None) -> Index:
         """
         Return the day names. Currently supports English locale only.
@@ -2128,7 +2139,7 @@ class DatetimeIndex(Index):
         day_names = self._column.get_day_names(locale)
         return Index._from_data({self.name: day_names})
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def month_name(self, locale: str | None = None) -> Index:
         """
         Return the month names. Currently supports English locale only.
@@ -2147,7 +2158,7 @@ class DatetimeIndex(Index):
         month_names = self._column.get_month_names(locale)
         return Index._from_data({self.name: month_names})
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def isocalendar(self) -> cudf.DataFrame:
         """
         Returns a DataFrame with the year, week, and day
@@ -2172,7 +2183,7 @@ class DatetimeIndex(Index):
         )
         return cudf.DataFrame._from_data(ca, index=self)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.DatetimeIndex:
@@ -2181,7 +2192,7 @@ class DatetimeIndex(Index):
             result.freq = self._freq._maybe_as_fast_pandas_offset()
         return result
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def _get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)
         # column.column_empty_like always returns a Column object
@@ -2198,7 +2209,7 @@ class DatetimeIndex(Index):
     def _is_boolean(self):
         return False
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def ceil(self, freq):
         """
         Perform ceil operation on the data to the specified freq.
@@ -2231,7 +2242,7 @@ class DatetimeIndex(Index):
 
         return self.__class__._from_data({self.name: out_column})
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def floor(self, freq):
         """
         Perform floor operation on the data to the specified freq.
@@ -2264,7 +2275,7 @@ class DatetimeIndex(Index):
 
         return self.__class__._from_data({self.name: out_column})
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def round(self, freq):
         """
         Perform round operation on the data to the specified freq.
@@ -2452,7 +2463,7 @@ class TimedeltaIndex(Index):
                   dtype='timedelta64[s]', name='delta-index')
     """
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __init__(
         self,
         data=None,
@@ -2500,7 +2511,7 @@ class TimedeltaIndex(Index):
         return value
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def days(self):
         """
         Number of days for each element.
@@ -2509,7 +2520,7 @@ class TimedeltaIndex(Index):
         return Index(self._values.days, name=self.name, dtype="int64")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def seconds(self):
         """
         Number of seconds (>= 0 and less than 1 day) for each element.
@@ -2517,7 +2528,7 @@ class TimedeltaIndex(Index):
         return Index(self._values.seconds, name=self.name, dtype="int32")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def microseconds(self):
         """
         Number of microseconds (>= 0 and less than 1 second) for each element.
@@ -2525,7 +2536,7 @@ class TimedeltaIndex(Index):
         return Index(self._values.microseconds, name=self.name, dtype="int32")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def nanoseconds(self):
         """
         Number of nanoseconds (>= 0 and less than 1 microsecond) for each
@@ -2534,7 +2545,7 @@ class TimedeltaIndex(Index):
         return Index(self._values.nanoseconds, name=self.name, dtype="int32")
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def components(self):
         """
         Return a dataframe of the components (days, hours, minutes,
@@ -2612,7 +2623,7 @@ class CategoricalIndex(Index):
     CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, dtype='category', name='a')
     """  # noqa: E501
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __init__(
         self,
         data=None,
@@ -2667,7 +2678,7 @@ class CategoricalIndex(Index):
         super().__init__(data, name=name)
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def codes(self):
         """
         The category codes of this categorical.
@@ -2675,7 +2686,7 @@ class CategoricalIndex(Index):
         return Index(self._values.codes)
 
     @property  # type: ignore
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def categories(self):
         """
         The categories of this categorical.
@@ -2689,7 +2700,7 @@ class CategoricalIndex(Index):
         return True
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def interval_range(
     start=None,
     end=None,
@@ -2841,7 +2852,7 @@ class IntervalIndex(Index):
     IntervalIndex
     """
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __init__(
         self,
         data,
@@ -2900,7 +2911,7 @@ class IntervalIndex(Index):
         return self.dtype.closed
 
     @classmethod
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def from_breaks(
         cls,
         breaks,
@@ -2975,7 +2986,7 @@ class IntervalIndex(Index):
         return self
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def as_index(
     arbitrary, nan_as_null=no_default, copy=False, name=no_default, dtype=None
 ) -> BaseIndex:
@@ -3090,7 +3101,7 @@ def _getdefault_name(values, name):
     return name
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _concat_range_index(indexes: list[RangeIndex]) -> BaseIndex:
     """
     An internal Utility function to concat RangeIndex objects.
@@ -3131,7 +3142,7 @@ def _concat_range_index(indexes: list[RangeIndex]) -> BaseIndex:
     return RangeIndex(start, stop, step)
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _extended_gcd(a: int, b: int) -> tuple[int, int, int]:
     """
     Extended Euclidean algorithms to solve Bezout's identity:

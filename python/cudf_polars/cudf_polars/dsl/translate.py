@@ -12,6 +12,7 @@ from typing import Any
 import pyarrow as pa
 from typing_extensions import assert_never
 
+import polars.polars as plrs
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 import cudf._lib.pylibcudf as plc
@@ -342,6 +343,16 @@ def _(node: pl_expr.Function, visitor: NodeTraverser, dtype: plc.DataType) -> ex
             *(translate_expr(visitor, n=n) for n in node.input),
         )
     elif isinstance(name, pl_expr.BooleanFunction):
+        if name == pl_expr.BooleanFunction.IsBetween:
+            column, lo, hi = (translate_expr(visitor, n=n) for n in node.input)
+            (closed,) = options
+            lop, rop = expr.BooleanFunction._BETWEEN_OPS[closed]
+            return expr.BinOp(
+                dtype,
+                plc.binaryop.BinaryOperator.LOGICAL_AND,
+                expr.BinOp(dtype, lop, column, lo),
+                expr.BinOp(dtype, rop, column, hi),
+            )
         return expr.BooleanFunction(
             dtype,
             name,
@@ -373,6 +384,8 @@ def _(node: pl_expr.Window, visitor: NodeTraverser, dtype: plc.DataType) -> expr
 
 @_translate_expr.register
 def _(node: pl_expr.Literal, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
+    if isinstance(node.value, plrs.PySeries):
+        return expr.LiteralColumn(dtype, node.value)
     value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
     return expr.Literal(dtype, value)
 
@@ -433,6 +446,16 @@ def _(node: pl_expr.Agg, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Ex
         node.name,
         node.options,
         translate_expr(visitor, n=node.arguments),
+    )
+
+
+@_translate_expr.register
+def _(node: pl_expr.Ternary, visitor: NodeTraverser, dtype: plc.DataType) -> expr.Expr:
+    return expr.Ternary(
+        dtype,
+        translate_expr(visitor, n=node.predicate),
+        translate_expr(visitor, n=node.truthy),
+        translate_expr(visitor, n=node.falsy),
     )
 
 
