@@ -78,6 +78,7 @@ CMakeFiles/
 Debug
 build/
 cpp/build/
+cpp/examples/*/install/
 cpp/include/cudf/ipc_generated/*.h
 cpp/thirdparty/googletest/
 
@@ -159,9 +160,6 @@ ENV/
 
 # Dask
 dask-worker-space/
-
-# protobuf
-**/*_pb2.py
 
 # Sphinx docs & build artifacts
 docs/cudf/source/api_docs/generated/*

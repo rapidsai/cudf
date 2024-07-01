@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -34,7 +35,7 @@
 
 CUDF_KERNEL void init_curand(curandState* state, int const nstates)
 {
-  int ithread = threadIdx.x + blockIdx.x * blockDim.x;
+  int ithread = cudf::detail::grid_1d::global_thread_id();
 
   if (ithread < nstates) { curand_init(1234ULL, ithread, 0, state + ithread); }
 }
@@ -46,13 +47,14 @@ CUDF_KERNEL void init_build_tbl(key_type* const build_tbl,
                                 curandState* state,
                                 int const num_states)
 {
-  auto const start_idx = blockIdx.x * blockDim.x + threadIdx.x;
-  auto const stride    = blockDim.x * gridDim.x;
+  auto const start_idx = cudf::detail::grid_1d::global_thread_id();
+  auto const stride    = cudf::detail::grid_1d::grid_stride();
   assert(start_idx < num_states);
 
   curandState localState = state[start_idx];
 
-  for (size_type idx = start_idx; idx < build_tbl_size; idx += stride) {
+  for (cudf::thread_index_type tidx = start_idx; tidx < build_tbl_size; tidx += stride) {
+    auto const idx = static_cast<size_type>(tidx);
     double const x = curand_uniform_double(&localState);
 
     build_tbl[idx] = static_cast<key_type>(x * (build_tbl_size / multiplicity));
@@ -71,13 +73,14 @@ CUDF_KERNEL void init_probe_tbl(key_type* const probe_tbl,
                                 curandState* state,
                                 int const num_states)
 {
-  auto const start_idx = blockIdx.x * blockDim.x + threadIdx.x;
-  auto const stride    = blockDim.x * gridDim.x;
+  auto const start_idx = cudf::detail::grid_1d::global_thread_id();
+  auto const stride    = cudf::detail::grid_1d::grid_stride();
   assert(start_idx < num_states);
 
   curandState localState = state[start_idx];
 
-  for (size_type idx = start_idx; idx < probe_tbl_size; idx += stride) {
+  for (cudf::thread_index_type tidx = start_idx; tidx < probe_tbl_size; tidx += stride) {
+    auto const idx = static_cast<size_type>(tidx);
     key_type val;
     double x = curand_uniform_double(&localState);
 

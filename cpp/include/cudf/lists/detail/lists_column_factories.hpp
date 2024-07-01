@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace lists {
@@ -38,7 +39,7 @@ namespace detail {
 std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& value,
                                                             size_type size,
                                                             rmm::cuda_stream_view stream,
-                                                            rmm::mr::device_memory_resource* mr);
+                                                            rmm::device_async_resource_ref mr);
 
 /**
  * @brief Create an empty lists column.
@@ -51,7 +52,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
  */
 std::unique_ptr<column> make_empty_lists_column(data_type child_type,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr);
+                                                rmm::device_async_resource_ref mr);
 
 /**
  * @brief Create a lists column with all null rows.
@@ -64,7 +65,7 @@ std::unique_ptr<column> make_empty_lists_column(data_type child_type,
 std::unique_ptr<column> make_all_nulls_lists_column(size_type size,
                                                     data_type child_type,
                                                     rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr);
+                                                    rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace lists

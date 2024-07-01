@@ -53,6 +53,22 @@ print(pd)
 <module 'pandas' (ModuleAccelerator(fast=cudf, slow=pandas))>
 ```
 
+## Which functions will run on the GPU?
+
+Generally, `cudf.pandas` will accelerate all the features in the
+{ref}`cuDF API <cudf-api>` on the GPU. There are some exceptions. For
+example, some functions are GPU-accelerated by cuDF but do not support
+every combination of keyword arguments. In cases like unsupported
+keyword arguments, cuDF is not able to provide GPU acceleration and
+`cudf.pandas` will fall back to the CPU.
+
+The most accurate way to assess which functions run on the GPU is to try
+running the code while using the `cudf.pandas` profiling features. The
+profiler will indicate which functions ran on GPU / CPU. To improve
+performance, try to use only functionality that can run entirely on GPU.
+This helps reduce the number of memory transfers needed to fallback to
+CPU.
+
 ## Does it work with third-party libraries?
 
 `cudf.pandas` is tested with numerous popular third-party libraries.
@@ -150,16 +166,4 @@ for testing or benchmarking purposes. To do so, set the
 
 ```bash
 CUDF_PANDAS_FALLBACK_MODE=1 python -m cudf.pandas some_script.py
-```
-
-## Slow tab completion in IPython?
-
-You may experience slow tab completion when inspecting the
-methods/attributes of large dataframes. We expect this issue to be
-resolved in an upcoming release. In the mean time, you may execute the
-following command in IPython before loading `cudf.pandas` to work
-around the issue:
-
-```
-%config IPCompleter.jedi_compute_type_timeout=0
 ```

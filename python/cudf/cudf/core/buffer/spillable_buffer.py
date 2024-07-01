@@ -7,7 +7,7 @@ import pickle
 import time
 import weakref
 from threading import RLock
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy
 from typing_extensions import Self
@@ -20,6 +20,7 @@ from cudf.core.buffer.buffer import (
     cuda_array_interface_wrapper,
     host_memory_allocation,
 )
+from cudf.core.buffer.exposure_tracked_buffer import ExposureTrackedBuffer
 from cudf.utils.nvtx_annotation import _get_color_for_nvtx, annotate
 from cudf.utils.string import format_bytes
 
@@ -87,14 +88,14 @@ class SpillableBufferOwner(BufferOwner):
     lock: RLock
     _spill_locks: weakref.WeakSet
     _last_accessed: float
-    _ptr_desc: Dict[str, Any]
+    _ptr_desc: dict[str, Any]
     _manager: SpillManager
 
-    def _finalize_init(self, ptr_desc: Dict[str, Any]) -> None:
+    def _finalize_init(self, ptr_desc: dict[str, Any]) -> None:
         """Finish initialization of the spillable buffer
 
-        This implements the common initialization that `_from_device_memory`
-        and `_from_host_memory` are missing.
+        This implements the common initialization that `from_device_memory`
+        and `from_host_memory` are missing.
 
         Parameters
         ----------
@@ -119,7 +120,7 @@ class SpillableBufferOwner(BufferOwner):
         self._manager.add(self)
 
     @classmethod
-    def _from_device_memory(cls, data: Any, exposed: bool) -> Self:
+    def from_device_memory(cls, data: Any, exposed: bool) -> Self:
         """Create a spillabe buffer from device memory.
 
         No data is being copied.
@@ -136,16 +137,16 @@ class SpillableBufferOwner(BufferOwner):
         SpillableBufferOwner
             Buffer representing the same device memory as `data`
         """
-        ret = super()._from_device_memory(data, exposed=exposed)
+        ret = super().from_device_memory(data, exposed=exposed)
         ret._finalize_init(ptr_desc={"type": "gpu"})
         return ret
 
     @classmethod
-    def _from_host_memory(cls, data: Any) -> Self:
+    def from_host_memory(cls, data: Any) -> Self:
         """Create a spillabe buffer from host memory.
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
-        be convertible to a buffer object using `numpy.array()`
+        be convertible to a buffer object using `numpy.asanyarray()`
 
         The new buffer is marked as spilled to host memory already.
 
@@ -154,7 +155,7 @@ class SpillableBufferOwner(BufferOwner):
         Parameters
         ----------
         data : Any
-            An object that represens host memory.
+            An object that represents host memory.
 
         Returns
         -------
@@ -164,17 +165,13 @@ class SpillableBufferOwner(BufferOwner):
 
         # Convert to a memoryview using numpy array, this will not copy data
         # in most cases.
-        data = memoryview(numpy.array(data, copy=False, subok=True))
+        data = memoryview(numpy.asanyarray(data))
         if not data.c_contiguous:
             raise ValueError("Buffer data must be C-contiguous")
         data = data.cast("B")  # Make sure itemsize==1
 
         # Create an already spilled buffer
-        ret = cls.__new__(cls)
-        ret._owner = None
-        ret._ptr = 0
-        ret._size = data.nbytes
-        ret._exposed = False
+        ret = cls(ptr=0, size=data.nbytes, owner=None, exposed=False)
         ret._finalize_init(ptr_desc={"type": "cpu", "memoryview": data})
         return ret
 
@@ -300,7 +297,7 @@ class SpillableBufferOwner(BufferOwner):
             self._last_accessed = time.monotonic()
         return self._ptr
 
-    def memory_info(self) -> Tuple[int, int, str]:
+    def memory_info(self) -> tuple[int, int, str]:
         """Get pointer, size, and device type of this buffer.
 
         Warning, it is not safe to access the pointer value without
@@ -344,7 +341,7 @@ class SpillableBufferOwner(BufferOwner):
         }
 
     def memoryview(
-        self, *, offset: int = 0, size: Optional[int] = None
+        self, *, offset: int = 0, size: int | None = None
     ) -> memoryview:
         size = self._size if size is None else size
         with self.lock:
@@ -372,21 +369,8 @@ class SpillableBufferOwner(BufferOwner):
         )
 
 
-class SpillableBuffer(Buffer):
-    """A slice of a spillable buffer
-
-    This buffer applies the slicing and then delegates all
-    operations to its owning buffer.
-
-    Parameters
-    ----------
-    owner : SpillableBufferOwner
-        The owner of the view
-    offset : int
-        Memory offset into the owning buffer
-    size : int
-        Size of the view (in bytes)
-    """
+class SpillableBuffer(ExposureTrackedBuffer):
+    """A slice of a spillable buffer"""
 
     _owner: SpillableBufferOwner
 
@@ -398,24 +382,17 @@ class SpillableBuffer(Buffer):
         return self._owner.is_spilled
 
     @property
-    def exposed(self) -> bool:
-        return self._owner.exposed
-
-    @property
     def spillable(self) -> bool:
         return self._owner.spillable
 
     def spill_lock(self, spill_lock: SpillLock) -> None:
         self._owner.spill_lock(spill_lock=spill_lock)
 
-    def memory_info(self) -> Tuple[int, int, str]:
+    def memory_info(self) -> tuple[int, int, str]:
         (ptr, _, device_type) = self._owner.memory_info()
         return (ptr + self._offset, self.nbytes, device_type)
 
-    def mark_exposed(self) -> None:
-        self._owner.mark_exposed()
-
-    def serialize(self) -> Tuple[dict, list]:
+    def serialize(self) -> tuple[dict, list]:
         """Serialize the Buffer
 
         Normally, we would use `[self]` as the frames. This would work but
@@ -434,8 +411,8 @@ class SpillableBuffer(Buffer):
         given to `.deserialize()`, otherwise we would have a `Buffer` pointing
         to memory already owned by an existing `SpillableBufferOwner`.
         """
-        header: Dict[str, Any] = {}
-        frames: List[Buffer | memoryview]
+        header: dict[str, Any] = {}
+        frames: list[Buffer | memoryview]
         with self._owner.lock:
             header["type-serialized"] = pickle.dumps(self.__class__)
             header["owner-type-serialized"] = pickle.dumps(type(self._owner))
@@ -449,7 +426,7 @@ class SpillableBuffer(Buffer):
                 ptr, size, _ = self.memory_info()
                 frames = [
                     Buffer(
-                        owner=BufferOwner._from_device_memory(
+                        owner=BufferOwner.from_device_memory(
                             cuda_array_interface_wrapper(
                                 ptr=ptr,
                                 size=size,
@@ -460,6 +437,22 @@ class SpillableBuffer(Buffer):
                     )
                 ]
             return header, frames
+
+    def copy(self, deep: bool = True) -> Self:
+        from cudf.core.buffer.utils import acquire_spill_lock
+
+        if not deep:
+            return super().copy(deep=False)
+
+        if self.is_spilled:
+            # In this case, we make the new copy point to the same spilled
+            # data in host memory. We can do this since spilled data is never
+            # modified.
+            owner = self._owner.from_host_memory(self.memoryview())
+            return self.__class__(owner=owner, offset=0, size=owner.size)
+
+        with acquire_spill_lock():
+            return super().copy(deep=deep)
 
     @property
     def __cuda_array_interface__(self) -> dict:

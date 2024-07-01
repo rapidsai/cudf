@@ -2,7 +2,7 @@
 
 from libcpp cimport bool
 
-from cudf._lib.cpp.replace cimport replace_policy
+from cudf._lib.pylibcudf.libcudf.replace cimport replace_policy
 
 from .column cimport Column
 from .scalar cimport Scalar

@@ -7,7 +7,7 @@ package_dir="python/cudf"
 
 export SKBUILD_CMAKE_ARGS="-DUSE_LIBARROW_FROM_PYARROW=ON"
 
-./ci/build_wheel.sh cudf ${package_dir}
+./ci/build_wheel.sh ${package_dir}
 
 python -m auditwheel repair -w ${package_dir}/final_dist ${package_dir}/dist/*
 

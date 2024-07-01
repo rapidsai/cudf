@@ -17,11 +17,11 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.errors import MixedTypeError
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     SERIES_OR_INDEX_NAMES,
     TIMEDELTA_TYPES,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
     gen_rand,
@@ -774,8 +774,9 @@ def test_round_nan_as_null_false(series, decimal):
 @pytest.mark.parametrize("ps", _series_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_series_isnull_isna(ps, nan_as_null):
+    nan_contains = ps.apply(lambda x: isinstance(x, float) and np.isnan(x))
     if nan_as_null is False and (
-        ps.isna().any() and not ps.isna().all() and ps.dtype == object
+        nan_contains.any() and not nan_contains.all() and ps.dtype == object
     ):
         with pytest.raises(MixedTypeError):
             cudf.Series.from_pandas(ps, nan_as_null=nan_as_null)
@@ -789,8 +790,9 @@ def test_series_isnull_isna(ps, nan_as_null):
 @pytest.mark.parametrize("ps", _series_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_series_notnull_notna(ps, nan_as_null):
+    nan_contains = ps.apply(lambda x: isinstance(x, float) and np.isnan(x))
     if nan_as_null is False and (
-        ps.isna().any() and not ps.isna().all() and ps.dtype == object
+        nan_contains.any() and not nan_contains.all() and ps.dtype == object
     ):
         with pytest.raises(MixedTypeError):
             cudf.Series.from_pandas(ps, nan_as_null=nan_as_null)
@@ -1050,6 +1052,18 @@ def test_fillna_with_nan(data, nan_as_null, fill_value):
     actual = gs.fillna(fill_value)
 
     assert_eq(expected, actual)
+
+
+def test_fillna_categorical_with_non_categorical_raises():
+    ser = cudf.Series([1, None], dtype="category")
+    with pytest.raises(TypeError):
+        ser.fillna(cudf.Series([1, 2]))
+
+
+def test_fillna_categorical_with_different_categories_raises():
+    ser = cudf.Series([1, None], dtype="category")
+    with pytest.raises(TypeError):
+        ser.fillna(cudf.Series([1, 2]), dtype="category")
 
 
 def test_series_mask_mixed_dtypes_error():
@@ -2218,7 +2232,7 @@ def test_series_constructor_unbounded_sequence():
 
 
 def test_series_constructor_error_mixed_type():
-    with pytest.raises(pa.ArrowTypeError):
+    with pytest.raises(MixedTypeError):
         cudf.Series(["abc", np.nan, "123"], nan_as_null=False)
 
 
@@ -2356,12 +2370,23 @@ def test_multi_dim_series_error():
 
 def test_bool_series_mixed_dtype_error():
     ps = pd.Series([True, False, None])
+    all_bool_ps = pd.Series([True, False, True], dtype="object")
     # ps now has `object` dtype, which
     # isn't supported by `cudf`.
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(TypeError):
+            cudf.Series(ps)
+        with pytest.raises(TypeError):
+            cudf.from_pandas(ps)
+        with pytest.raises(TypeError):
+            cudf.Series(ps, dtype=bool)
+        expected = cudf.Series(all_bool_ps, dtype=bool)
+        assert_eq(expected, all_bool_ps.astype(bool))
+    nan_bools_mix = pd.Series([True, False, True, np.nan], dtype="object")
+    gs = cudf.Series(nan_bools_mix, nan_as_null=True)
+    assert_eq(gs.to_pandas(nullable=True), nan_bools_mix.astype("boolean"))
     with pytest.raises(TypeError):
-        cudf.Series(ps, nan_as_null=False)
-    with pytest.raises(TypeError):
-        cudf.from_pandas(ps, nan_as_null=False)
+        cudf.Series(nan_bools_mix, nan_as_null=False)
 
 
 @pytest.mark.parametrize(
@@ -2537,7 +2562,7 @@ def test_nan_as_null_from_arrow_objects(klass, data):
 @pytest.mark.parametrize("reso", ["M", "ps"])
 @pytest.mark.parametrize("typ", ["M", "m"])
 def test_series_invalid_reso_dtype(reso, typ):
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         cudf.Series([], dtype=f"{typ}8[{reso}]")
 
 
@@ -2637,22 +2662,24 @@ def test_series_setitem_mixed_bool_dtype():
 @pytest.mark.parametrize(
     "nat, value",
     [
-        [np.datetime64("nat"), np.datetime64("2020-01-01")],
-        [np.timedelta64("nat"), np.timedelta64(1)],
+        [np.datetime64("nat", "ns"), np.datetime64("2020-01-01", "ns")],
+        [np.timedelta64("nat", "ns"), np.timedelta64(1, "ns")],
     ],
 )
 @pytest.mark.parametrize("nan_as_null", [True, False])
-def test_series_np_array_nat_nan_as_nulls(nat, value, request, nan_as_null):
+def test_series_np_array_nat_nan_as_nulls(nat, value, nan_as_null):
     expected = np.array([nat, value])
-    if expected.dtype.kind == "m":
-        request.applymarker(
-            pytest.mark.xfail(
-                raises=TypeError, reason="timedelta64 not supported by cupy"
-            )
-        )
     ser = cudf.Series(expected, nan_as_null=nan_as_null)
     assert ser[0] is pd.NaT
     assert ser[1] == value
+
+
+def test_series_unitness_np_datetimelike_units():
+    data = np.array([np.timedelta64(1)])
+    with pytest.raises(TypeError):
+        cudf.Series(data)
+    with pytest.raises(TypeError):
+        pd.Series(data)
 
 
 def test_series_duplicate_index_reindex():
@@ -2722,12 +2749,15 @@ def test_series_dtype_astypes(data):
     assert_eq(result, expected)
 
 
-def test_series_from_large_string():
-    pa_large_string_array = pa.array(["a", "b", "c"]).cast(pa.large_string())
-    got = cudf.Series(pa_large_string_array)
-    expected = pd.Series(pa_large_string_array)
+@pytest.mark.parametrize("pa_type", [pa.string, pa.large_string])
+def test_series_from_large_string(pa_type):
+    pa_string_array = pa.array(["a", "b", "c"]).cast(pa_type())
+    got = cudf.Series(pa_string_array)
+    expected = pd.Series(pa_string_array)
 
     assert_eq(expected, got)
+
+    assert pa_string_array.equals(got.to_arrow())
 
 
 @pytest.mark.parametrize(
@@ -2784,3 +2814,62 @@ def test_squeeze(axis, data):
 def test_squeeze_invalid_axis(axis):
     with pytest.raises(ValueError):
         cudf.Series([1]).squeeze(axis=axis)
+
+
+def test_series_init_with_nans():
+    with cudf.option_context("mode.pandas_compatible", True):
+        gs = cudf.Series([1, 2, 3, np.nan])
+    assert gs.dtype == np.dtype("float64")
+    ps = pd.Series([1, 2, 3, np.nan])
+    assert_eq(ps, gs)
+
+
+@pytest.mark.parametrize("data", [None, 123, 33243243232423, 0])
+def test_timestamp_series_init(data):
+    scalar = pd.Timestamp(data)
+    expected = pd.Series([scalar])
+    actual = cudf.Series([scalar])
+
+    assert_eq(expected, actual)
+
+    expected = pd.Series(scalar)
+    actual = cudf.Series(scalar)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("data", [None, 123, 33243243232423, 0])
+def test_timedelta_series_init(data):
+    scalar = pd.Timedelta(data)
+    expected = pd.Series([scalar])
+    actual = cudf.Series([scalar])
+
+    assert_eq(expected, actual)
+
+    expected = pd.Series(scalar)
+    actual = cudf.Series(scalar)
+
+    assert_eq(expected, actual)
+
+
+def test_series_from_series_index_no_shallow_copy():
+    ser1 = cudf.Series(range(3), index=list("abc"))
+    ser2 = cudf.Series(ser1)
+    assert ser1.index is ser2.index
+
+
+@pytest.mark.parametrize("value", [1, 1.1])
+def test_nans_to_nulls_noop_copies_column(value):
+    ser1 = cudf.Series([value])
+    ser2 = ser1.nans_to_nulls()
+    assert ser1._column is not ser2._column
+
+
+@pytest.mark.parametrize("dropna", [False, True])
+def test_nunique_all_null(dropna):
+    data = [None, None]
+    pd_ser = pd.Series(data)
+    cudf_ser = cudf.Series(data)
+    result = pd_ser.nunique(dropna=dropna)
+    expected = cudf_ser.nunique(dropna=dropna)
+    assert result == expected

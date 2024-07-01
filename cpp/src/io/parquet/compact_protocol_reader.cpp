@@ -16,6 +16,9 @@
 
 #include "compact_protocol_reader.hpp"
 
+#include "parquet.hpp"
+#include "parquet_common.hpp"
+
 #include <cudf/utilities/error.hpp>
 
 #include <algorithm>
@@ -39,7 +42,7 @@ class parquet_field {
 
  public:
   virtual ~parquet_field() = default;
-  int field() const { return _field_val; }
+  [[nodiscard]] int field() const { return _field_val; }
 };
 
 std::string field_type_string(FieldType type)
@@ -171,6 +174,7 @@ class parquet_field_int : public parquet_field {
 };
 
 using parquet_field_int8  = parquet_field_int<int8_t, FieldType::I8>;
+using parquet_field_int16 = parquet_field_int<int16_t, FieldType::I16>;
 using parquet_field_int32 = parquet_field_int<int32_t, FieldType::I32>;
 using parquet_field_int64 = parquet_field_int<int64_t, FieldType::I64>;
 
@@ -618,9 +622,18 @@ void CompactProtocolReader::read(IntType* i)
 
 void CompactProtocolReader::read(RowGroup* r)
 {
+  using optional_i16 = parquet_field_optional<int16_t, parquet_field_int16>;
+  using optional_i64 = parquet_field_optional<int64_t, parquet_field_int64>;
+  using optional_list_sorting_column =
+    parquet_field_optional<std::vector<SortingColumn>, parquet_field_struct_list<SortingColumn>>;
+
   auto op = std::make_tuple(parquet_field_struct_list(1, r->columns),
                             parquet_field_int64(2, r->total_byte_size),
-                            parquet_field_int64(3, r->num_rows));
+                            parquet_field_int64(3, r->num_rows),
+                            optional_list_sorting_column(4, r->sorting_columns),
+                            optional_i64(5, r->file_offset),
+                            optional_i64(6, r->total_compressed_size),
+                            optional_i16(7, r->ordinal));
   function_builder(this, op);
 }
 
@@ -640,6 +653,9 @@ void CompactProtocolReader::read(ColumnChunkMetaData* c)
 {
   using optional_size_statistics =
     parquet_field_optional<SizeStatistics, parquet_field_struct<SizeStatistics>>;
+  using optional_list_enc_stats =
+    parquet_field_optional<std::vector<PageEncodingStats>,
+                           parquet_field_struct_list<PageEncodingStats>>;
   auto op = std::make_tuple(parquet_field_enum<Type>(1, c->type),
                             parquet_field_enum_list(2, c->encodings),
                             parquet_field_string_list(3, c->path_in_schema),
@@ -651,6 +667,7 @@ void CompactProtocolReader::read(ColumnChunkMetaData* c)
                             parquet_field_int64(10, c->index_page_offset),
                             parquet_field_int64(11, c->dictionary_page_offset),
                             parquet_field_struct(12, c->statistics),
+                            optional_list_enc_stats(13, c->encoding_stats),
                             optional_size_statistics(16, c->size_statistics));
   function_builder(this, op);
 }
@@ -746,19 +763,38 @@ void CompactProtocolReader::read(Statistics* s)
 {
   using optional_binary = parquet_field_optional<std::vector<uint8_t>, parquet_field_binary>;
   using optional_int64  = parquet_field_optional<int64_t, parquet_field_int64>;
+  using optional_bool   = parquet_field_optional<bool, parquet_field_bool>;
 
   auto op = std::make_tuple(optional_binary(1, s->max),
                             optional_binary(2, s->min),
                             optional_int64(3, s->null_count),
                             optional_int64(4, s->distinct_count),
                             optional_binary(5, s->max_value),
-                            optional_binary(6, s->min_value));
+                            optional_binary(6, s->min_value),
+                            optional_bool(7, s->is_max_value_exact),
+                            optional_bool(8, s->is_min_value_exact));
   function_builder(this, op);
 }
 
 void CompactProtocolReader::read(ColumnOrder* c)
 {
   auto op = std::make_tuple(parquet_field_union_enumerator<ColumnOrder::Type>(1, c->type));
+  function_builder(this, op);
+}
+
+void CompactProtocolReader::read(PageEncodingStats* s)
+{
+  auto op = std::make_tuple(parquet_field_enum<PageType>(1, s->page_type),
+                            parquet_field_enum<Encoding>(2, s->encoding),
+                            parquet_field_int32(3, s->count));
+  function_builder(this, op);
+}
+
+void CompactProtocolReader::read(SortingColumn* s)
+{
+  auto op = std::make_tuple(parquet_field_int32(1, s->column_idx),
+                            parquet_field_bool(2, s->descending),
+                            parquet_field_bool(3, s->nulls_first));
   function_builder(this, op);
 }
 

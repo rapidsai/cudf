@@ -23,6 +23,7 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/unary.hpp>
 
 #include <algorithm>
 #include <limits>
@@ -45,67 +46,71 @@ TYPED_TEST(FixedPointTestAllReps, SimpleDecimalXXConstruction)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-  decimalXX num0{1.234567, scale_type{0}};
-  decimalXX num1{1.234567, scale_type{-1}};
-  decimalXX num2{1.234567, scale_type{-2}};
-  decimalXX num3{1.234567, scale_type{-3}};
-  decimalXX num4{1.234567, scale_type{-4}};
-  decimalXX num5{1.234567, scale_type{-5}};
-  decimalXX num6{1.234567, scale_type{-6}};
+  auto num0 = cudf::convert_floating_to_fixed<decimalXX>(1.234567, scale_type(0));
+  auto num1 = cudf::convert_floating_to_fixed<decimalXX>(1.234567, scale_type(-1));
+  auto num2 = cudf::convert_floating_to_fixed<decimalXX>(1.234567, scale_type(-2));
+  auto num3 = cudf::convert_floating_to_fixed<decimalXX>(1.234567, scale_type(-3));
+  auto num4 = cudf::convert_floating_to_fixed<decimalXX>(1.234567, scale_type(-4));
+  auto num5 = cudf::convert_floating_to_fixed<decimalXX>(1.234567, scale_type(-5));
+  auto num6 = cudf::convert_floating_to_fixed<decimalXX>(1.234567, scale_type(-6));
 
-  EXPECT_EQ(1, static_cast<double>(num0));
-  EXPECT_EQ(1.2, static_cast<double>(num1));
-  EXPECT_EQ(1.23, static_cast<double>(num2));
-  EXPECT_EQ(1.234, static_cast<double>(num3));
-  EXPECT_EQ(1.2345, static_cast<double>(num4));
-  EXPECT_EQ(1.23456, static_cast<double>(num5));
-  EXPECT_EQ(1.234567, static_cast<double>(num6));
+  EXPECT_EQ(1, cudf::convert_fixed_to_floating<double>(num0));
+  EXPECT_EQ(1.2, cudf::convert_fixed_to_floating<double>(num1));
+  EXPECT_EQ(1.23, cudf::convert_fixed_to_floating<double>(num2));
+  EXPECT_EQ(1.234, cudf::convert_fixed_to_floating<double>(num3));
+  EXPECT_EQ(1.2345, cudf::convert_fixed_to_floating<double>(num4));
+  EXPECT_EQ(1.23456, cudf::convert_fixed_to_floating<double>(num5));
+  EXPECT_EQ(1.234567, cudf::convert_fixed_to_floating<double>(num6));
 }
 
 TYPED_TEST(FixedPointTestAllReps, SimpleNegativeDecimalXXConstruction)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-  decimalXX num0{-1.234567, scale_type{0}};
-  decimalXX num1{-1.234567, scale_type{-1}};
-  decimalXX num2{-1.234567, scale_type{-2}};
-  decimalXX num3{-1.234567, scale_type{-3}};
-  decimalXX num4{-1.234567, scale_type{-4}};
-  decimalXX num5{-1.234567, scale_type{-5}};
-  decimalXX num6{-1.234567, scale_type{-6}};
+  auto num0 = cudf::convert_floating_to_fixed<decimalXX>(-1.234567, scale_type(0));
+  auto num1 = cudf::convert_floating_to_fixed<decimalXX>(-1.234567, scale_type(-1));
+  auto num2 = cudf::convert_floating_to_fixed<decimalXX>(-1.234567, scale_type(-2));
+  auto num3 = cudf::convert_floating_to_fixed<decimalXX>(-1.234567, scale_type(-3));
+  auto num4 = cudf::convert_floating_to_fixed<decimalXX>(-1.234567, scale_type(-4));
+  auto num5 = cudf::convert_floating_to_fixed<decimalXX>(-1.234567, scale_type(-5));
+  auto num6 = cudf::convert_floating_to_fixed<decimalXX>(-1.234567, scale_type(-6));
 
-  EXPECT_EQ(-1, static_cast<double>(num0));
-  EXPECT_EQ(-1.2, static_cast<double>(num1));
-  EXPECT_EQ(-1.23, static_cast<double>(num2));
-  EXPECT_EQ(-1.234, static_cast<double>(num3));
-  EXPECT_EQ(-1.2345, static_cast<double>(num4));
-  EXPECT_EQ(-1.23456, static_cast<double>(num5));
-  EXPECT_EQ(-1.234567, static_cast<double>(num6));
+  EXPECT_EQ(-1, cudf::convert_fixed_to_floating<double>(num0));
+  EXPECT_EQ(-1.2, cudf::convert_fixed_to_floating<double>(num1));
+  EXPECT_EQ(-1.23, cudf::convert_fixed_to_floating<double>(num2));
+  EXPECT_EQ(-1.234, cudf::convert_fixed_to_floating<double>(num3));
+  EXPECT_EQ(-1.2345, cudf::convert_fixed_to_floating<double>(num4));
+  EXPECT_EQ(-1.23456, cudf::convert_fixed_to_floating<double>(num5));
+  EXPECT_EQ(-1.234567, cudf::convert_fixed_to_floating<double>(num6));
 }
 
 TYPED_TEST(FixedPointTestAllReps, PaddedDecimalXXConstruction)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-  decimalXX a{1.1, scale_type{-1}};
-  decimalXX b{1.01, scale_type{-2}};
-  decimalXX c{1.001, scale_type{-3}};
-  decimalXX d{1.0001, scale_type{-4}};
-  decimalXX e{1.00001, scale_type{-5}};
-  decimalXX f{1.000001, scale_type{-6}};
+  auto a = cudf::convert_floating_to_fixed<decimalXX>(1.1, scale_type(-1));
+  auto b = cudf::convert_floating_to_fixed<decimalXX>(1.01, scale_type(-2));
+  auto c = cudf::convert_floating_to_fixed<decimalXX>(1.001, scale_type(-3));
+  auto d = cudf::convert_floating_to_fixed<decimalXX>(1.0001, scale_type(-4));
+  auto e = cudf::convert_floating_to_fixed<decimalXX>(1.00001, scale_type(-5));
+  auto f = cudf::convert_floating_to_fixed<decimalXX>(1.000001, scale_type(-6));
+  auto x = cudf::convert_floating_to_fixed<decimalXX>(1.000123, scale_type(-8));
+  auto y = cudf::convert_floating_to_fixed<decimalXX>(0.000123, scale_type(-8));
 
-  decimalXX x{1.000123, scale_type{-8}};
-  decimalXX y{0.000123, scale_type{-8}};
+  EXPECT_EQ(1.1, cudf::convert_fixed_to_floating<double>(a));
+  EXPECT_EQ(1.01, cudf::convert_fixed_to_floating<double>(b));
+  EXPECT_EQ(1,
+            cudf::convert_fixed_to_floating<double>(
+              c));  // intentional (inherited problem from floating point)
+  EXPECT_EQ(1.0001, cudf::convert_fixed_to_floating<double>(d));
+  EXPECT_EQ(1.00001, cudf::convert_fixed_to_floating<double>(e));
+  EXPECT_EQ(1,
+            cudf::convert_fixed_to_floating<double>(
+              f));  // intentional (inherited problem from floating point)
 
-  EXPECT_EQ(1.1, static_cast<double>(a));
-  EXPECT_EQ(1.01, static_cast<double>(b));
-  EXPECT_EQ(1, static_cast<double>(c));  // intentional (inherited problem from floating point)
-  EXPECT_EQ(1.0001, static_cast<double>(d));
-  EXPECT_EQ(1.00001, static_cast<double>(e));
-  EXPECT_EQ(1, static_cast<double>(f));  // intentional (inherited problem from floating point)
-
-  EXPECT_TRUE(1.000123 - static_cast<double>(x) < std::numeric_limits<double>::epsilon());
-  EXPECT_EQ(0.000123, static_cast<double>(y));
+  EXPECT_TRUE(1.000123 - cudf::convert_fixed_to_floating<double>(x) <
+              std::numeric_limits<double>::epsilon());
+  EXPECT_EQ(0.000123, cudf::convert_fixed_to_floating<double>(y));
 }
 
 TYPED_TEST(FixedPointTestAllReps, SimpleBinaryFPConstruction)
@@ -118,34 +123,34 @@ TYPED_TEST(FixedPointTestAllReps, SimpleBinaryFPConstruction)
   binary_fp num3{10, scale_type{3}};
   binary_fp num4{10, scale_type{4}};
 
-  binary_fp num5{1.24, scale_type{0}};
-  binary_fp num6{1.24, scale_type{-1}};
-  binary_fp num7{1.32, scale_type{-2}};
-  binary_fp num8{1.41, scale_type{-3}};
-  binary_fp num9{1.45, scale_type{-4}};
+  auto num5 = cudf::convert_floating_to_fixed<binary_fp>(1.24, scale_type(0));
+  auto num6 = cudf::convert_floating_to_fixed<binary_fp>(1.24, scale_type(-1));
+  auto num7 = cudf::convert_floating_to_fixed<binary_fp>(1.32, scale_type(-2));
+  auto num8 = cudf::convert_floating_to_fixed<binary_fp>(1.41, scale_type(-3));
+  auto num9 = cudf::convert_floating_to_fixed<binary_fp>(1.45, scale_type(-4));
 
-  EXPECT_EQ(10, static_cast<double>(num0));
-  EXPECT_EQ(10, static_cast<double>(num1));
-  EXPECT_EQ(8, static_cast<double>(num2));
-  EXPECT_EQ(8, static_cast<double>(num3));
-  EXPECT_EQ(0, static_cast<double>(num4));
+  EXPECT_EQ(10, cudf::convert_fixed_to_floating<double>(num0));
+  EXPECT_EQ(10, cudf::convert_fixed_to_floating<double>(num1));
+  EXPECT_EQ(8, cudf::convert_fixed_to_floating<double>(num2));
+  EXPECT_EQ(8, cudf::convert_fixed_to_floating<double>(num3));
+  EXPECT_EQ(0, cudf::convert_fixed_to_floating<double>(num4));
 
-  EXPECT_EQ(1, static_cast<double>(num5));
-  EXPECT_EQ(1, static_cast<double>(num6));
-  EXPECT_EQ(1.25, static_cast<double>(num7));
-  EXPECT_EQ(1.375, static_cast<double>(num8));
-  EXPECT_EQ(1.4375, static_cast<double>(num9));
+  EXPECT_EQ(1, cudf::convert_fixed_to_floating<double>(num5));
+  EXPECT_EQ(1, cudf::convert_fixed_to_floating<double>(num6));
+  EXPECT_EQ(1.25, cudf::convert_fixed_to_floating<double>(num7));
+  EXPECT_EQ(1.375, cudf::convert_fixed_to_floating<double>(num8));
+  EXPECT_EQ(1.4375, cudf::convert_fixed_to_floating<double>(num9));
 }
 
 TYPED_TEST(FixedPointTestAllReps, MoreSimpleBinaryFPConstruction)
 {
   using binary_fp = fixed_point<TypeParam, Radix::BASE_2>;
 
-  binary_fp num0{1.25, scale_type{-2}};
-  binary_fp num1{2.1, scale_type{-4}};
+  auto num0 = cudf::convert_floating_to_fixed<binary_fp>(1.25, scale_type(-2));
+  auto num1 = cudf::convert_floating_to_fixed<binary_fp>(2.1, scale_type(-4));
 
-  EXPECT_EQ(1.25, static_cast<double>(num0));
-  EXPECT_EQ(2.0625, static_cast<double>(num1));
+  EXPECT_EQ(1.25, cudf::convert_fixed_to_floating<double>(num0));
+  EXPECT_EQ(2.0625, cudf::convert_fixed_to_floating<double>(num1));
 }
 
 TYPED_TEST(FixedPointTestAllReps, SimpleDecimalXXMath)
@@ -166,7 +171,7 @@ TYPED_TEST(FixedPointTestAllReps, SimpleDecimalXXMath)
   EXPECT_EQ(TWO / ONE, TWO);
   EXPECT_EQ(SIX / TWO, THREE);
 
-  decimalXX a{1.23, scale_type{-2}};
+  auto a = cudf::convert_floating_to_fixed<decimalXX>(1.23, scale_type(-2));
   decimalXX b{0, scale_type{0}};
 
   EXPECT_EQ(a + b, a);
@@ -211,8 +216,8 @@ TYPED_TEST(FixedPointTestAllReps, DecimalXXTrickyDivision)
   EXPECT_EQ(SIXTY_1 / TEN_0, ONE_1);
   EXPECT_EQ(SIXTY_1 / TEN_1, SIX_0);
 
-  decimalXX A{34.56, scale_type{-2}};
-  decimalXX B{1.234, scale_type{-3}};
+  auto A = cudf::convert_floating_to_fixed<decimalXX>(34.56, scale_type(-2));
+  auto B = cudf::convert_floating_to_fixed<decimalXX>(1.234, scale_type(-3));
   decimalXX C{1, scale_type{-2}};
 
   EXPECT_EQ(static_cast<int32_t>(A / B), 20);
@@ -255,17 +260,17 @@ TYPED_TEST(FixedPointTestAllReps, ArithmeticWithDifferentScales)
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
   decimalXX a{1, scale_type{0}};
-  decimalXX b{1.2, scale_type{-1}};
-  decimalXX c{1.23, scale_type{-2}};
-  decimalXX d{1.111, scale_type{-3}};
+  auto b = cudf::convert_floating_to_fixed<decimalXX>(1.2, scale_type(-1));
+  auto c = cudf::convert_floating_to_fixed<decimalXX>(1.23, scale_type(-2));
+  auto d = cudf::convert_floating_to_fixed<decimalXX>(1.111, scale_type(-3));
 
-  decimalXX x{2.2, scale_type{-1}};
-  decimalXX y{3.43, scale_type{-2}};
-  decimalXX z{4.541, scale_type{-3}};
+  auto x = cudf::convert_floating_to_fixed<decimalXX>(2.2, scale_type(-1));
+  auto y = cudf::convert_floating_to_fixed<decimalXX>(3.43, scale_type(-2));
+  auto z = cudf::convert_floating_to_fixed<decimalXX>(4.541, scale_type(-3));
 
-  decimalXX xx{0.2, scale_type{-1}};
-  decimalXX yy{0.03, scale_type{-2}};
-  decimalXX zz{0.119, scale_type{-3}};
+  auto xx = cudf::convert_floating_to_fixed<decimalXX>(0.2, scale_type(-1));
+  auto yy = cudf::convert_floating_to_fixed<decimalXX>(0.03, scale_type(-2));
+  auto zz = cudf::convert_floating_to_fixed<decimalXX>(0.119, scale_type(-3));
 
   EXPECT_EQ(a + b, x);
   EXPECT_EQ(a + b + c, y);
@@ -280,12 +285,12 @@ TYPED_TEST(FixedPointTestAllReps, RescaledTest)
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
   decimalXX num0{1, scale_type{0}};
-  decimalXX num1{1.2, scale_type{-1}};
-  decimalXX num2{1.23, scale_type{-2}};
-  decimalXX num3{1.234, scale_type{-3}};
-  decimalXX num4{1.2345, scale_type{-4}};
-  decimalXX num5{1.23456, scale_type{-5}};
-  decimalXX num6{1.234567, scale_type{-6}};
+  auto num1 = cudf::convert_floating_to_fixed<decimalXX>(1.2, scale_type(-1));
+  auto num2 = cudf::convert_floating_to_fixed<decimalXX>(1.23, scale_type(-2));
+  auto num3 = cudf::convert_floating_to_fixed<decimalXX>(1.234, scale_type(-3));
+  auto num4 = cudf::convert_floating_to_fixed<decimalXX>(1.2345, scale_type(-4));
+  auto num5 = cudf::convert_floating_to_fixed<decimalXX>(1.23456, scale_type(-5));
+  auto num6 = cudf::convert_floating_to_fixed<decimalXX>(1.234567, scale_type(-6));
 
   EXPECT_EQ(num0, num6.rescaled(scale_type{0}));
   EXPECT_EQ(num1, num6.rescaled(scale_type{-1}));
@@ -314,7 +319,7 @@ TYPED_TEST(FixedPointTestAllReps, BoolConversion)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-  decimalXX truthy_value{1.234567, scale_type{0}};
+  auto truthy_value = cudf::convert_floating_to_fixed<decimalXX>(1.234567, scale_type(0));
   decimalXX falsy_value{0, scale_type{0}};
 
   // Test explicit conversions
@@ -442,12 +447,14 @@ void float_vector_test(ValueType const initial_value,
   std::vector<decimal32> vec1(size);
   std::vector<ValueType> vec2(size);
 
-  std::iota(std::begin(vec1), std::end(vec1), decimal32{initial_value, scale_type{scale}});
+  auto decimal_input = cudf::convert_floating_to_fixed<decimal32>(initial_value, scale_type{scale});
+  std::iota(std::begin(vec1), std::end(vec1), decimal_input);
   std::iota(std::begin(vec2), std::end(vec2), initial_value);
 
   auto equal = std::equal(
     std::cbegin(vec1), std::cend(vec1), std::cbegin(vec2), [](auto const& a, auto const& b) {
-      return static_cast<double>(a) - b <= std::numeric_limits<ValueType>::epsilon();
+      return cudf::convert_fixed_to_floating<double>(a) - b <=
+             std::numeric_limits<ValueType>::epsilon();
     });
 
   EXPECT_TRUE(equal);
@@ -491,7 +498,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointColumnWrapper)
 TYPED_TEST(FixedPointTestAllReps, NoScaleOrWrongTypeID)
 {
   EXPECT_THROW(cudf::make_fixed_point_column(cudf::data_type{cudf::type_id::INT32}, 0),
-               cudf::logic_error);
+               cudf::data_type_error);
 }
 
 TYPED_TEST(FixedPointTestAllReps, SimpleFixedPointColumnWrapper)

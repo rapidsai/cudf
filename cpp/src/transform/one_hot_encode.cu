@@ -24,9 +24,11 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
@@ -58,9 +60,11 @@ struct ohe_equality_functor {
 std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const& input,
                                                               column_view const& categories,
                                                               rmm::cuda_stream_view stream,
-                                                              rmm::mr::device_memory_resource* mr)
+                                                              rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(input.type() == categories.type(), "Mismatch type between input and categories.");
+  CUDF_EXPECTS(cudf::have_same_types(input, categories),
+               "Mismatch type between input and categories.",
+               cudf::data_type_error);
 
   if (categories.is_empty()) { return {make_empty_column(type_id::BOOL8), table_view{}}; }
 
@@ -110,7 +114,7 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
 
 std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const& input,
                                                               column_view const& categories,
-                                                              rmm::mr::device_memory_resource* mr)
+                                                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::one_hot_encode(input, categories, cudf::get_default_stream(), mr);

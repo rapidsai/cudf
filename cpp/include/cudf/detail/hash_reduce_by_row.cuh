@@ -22,6 +22,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuco/static_map.cuh>
 #include <thrust/for_each.h>
@@ -124,7 +125,7 @@ rmm::device_uvector<OutputType> hash_reduce_by_row(
   ReduceFuncBuilder func_builder,
   OutputType init,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto const map_dview  = map.get_device_view();
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);

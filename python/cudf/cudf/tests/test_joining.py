@@ -9,11 +9,11 @@ import pytest
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype, Decimal128Dtype
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
 )
@@ -1527,7 +1527,7 @@ def test_categorical_typecast_outer():
         result = left.merge(right, how="outer", on="key")
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["object"])
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str"])
 def test_categorical_typecast_inner_one_cat(dtype):
     data = np.array([1, 2, 3], dtype=dtype)
 
@@ -1538,7 +1538,7 @@ def test_categorical_typecast_inner_one_cat(dtype):
     assert result["key"].dtype == left["key"].dtype.categories.dtype
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["object"])
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str"])
 def test_categorical_typecast_left_one_cat(dtype):
     data = np.array([1, 2, 3], dtype=dtype)
 
@@ -1549,7 +1549,7 @@ def test_categorical_typecast_left_one_cat(dtype):
     assert result["key"].dtype == left["key"].dtype
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["object"])
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str"])
 def test_categorical_typecast_outer_one_cat(dtype):
     data = np.array([1, 2, 3], dtype=dtype)
 

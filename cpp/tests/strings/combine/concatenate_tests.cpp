@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,11 +98,11 @@ TEST_F(StringsCombineTest, Concatenate)
 TEST_F(StringsCombineTest, ConcatenateSkipNulls)
 {
   cudf::test::strings_column_wrapper strings1({"eee", "", "", "", "aa", "bbb", "ééé"},
-                                              {1, 0, 0, 1, 1, 1, 1});
+                                              {true, false, false, true, true, true, true});
   cudf::test::strings_column_wrapper strings2({"xyz", "", "d", "éa", "", "", "f"},
-                                              {1, 0, 1, 1, 1, 0, 1});
+                                              {true, false, true, true, true, false, true});
   cudf::test::strings_column_wrapper strings3({"q", "", "s", "t", "u", "", "w"},
-                                              {1, 1, 1, 1, 1, 0, 1});
+                                              {true, true, true, true, true, false, true});
 
   cudf::table_view table({strings1, strings2, strings3});
 
@@ -126,7 +126,8 @@ TEST_F(StringsCombineTest, ConcatenateSkipNulls)
   }
   {
     cudf::test::strings_column_wrapper expected(
-      {"eee+xyz+q", "", "", "+éa+t", "aa++u", "", "ééé+f+w"}, {1, 0, 0, 1, 1, 0, 1});
+      {"eee+xyz+q", "", "", "+éa+t", "aa++u", "", "ééé+f+w"},
+      {true, false, false, true, true, false, true});
     auto results = cudf::strings::concatenate(table,
                                               cudf::string_scalar("+"),
                                               cudf::string_scalar("", false),

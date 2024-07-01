@@ -57,7 +57,8 @@ TYPED_TEST(CopyTest, CopyIfElseTestManyNulls)
 {
   using T = TypeParam;
 
-  cudf::test::fixed_width_column_wrapper<bool> mask_w{{1, 0, 0, 0, 0, 0, 1}, {1, 1, 1, 1, 1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<bool> mask_w{{1, 0, 0, 0, 0, 0, 1},
+                                                      {true, true, true, true, true, true, false}};
 
   wrapper<T, int32_t> lhs_w({5, 5, 5, 5, 5, 5, 5}, {1, 1, 1, 1, 1, 1, 1});
   wrapper<T, int32_t> rhs_w({6, 6, 6, 6, 6, 6, 6}, {1, 0, 0, 0, 0, 0, 1});
@@ -124,7 +125,7 @@ TYPED_TEST(CopyTest, CopyIfElseTestMultipleBlocks)
   std::vector<int32_t> h_rhs(num, 6);
   std::vector<bool> h_mask(num, false);
   std::vector<bool> h_validity(num, true);
-  h_validity[0] = 0;
+  h_validity[0] = false;
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> lhs_w(
     h_lhs.begin(), h_lhs.end(), h_validity.begin());
@@ -712,7 +713,7 @@ TEST_F(DictionaryCopyIfElseTest, TypeMismatch)
   cudf::test::dictionary_column_wrapper<double> input2({1.0, 1.0, 1.0, 1.0});
   cudf::test::fixed_width_column_wrapper<bool> mask({1, 0, 0, 1});
 
-  EXPECT_THROW(cudf::copy_if_else(input1, input2, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::copy_if_else(input1, input2, mask), cudf::data_type_error);
 
   cudf::string_scalar input3{"1"};
   EXPECT_THROW(cudf::copy_if_else(input1, input3, mask), cudf::data_type_error);

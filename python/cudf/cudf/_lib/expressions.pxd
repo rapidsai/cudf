@@ -3,13 +3,13 @@
 from libc.stdint cimport int32_t, int64_t
 from libcpp.memory cimport unique_ptr
 
-from cudf._lib.cpp.expressions cimport (
+from cudf._lib.pylibcudf.libcudf.expressions cimport (
     column_reference,
     expression,
     literal,
     operation,
 )
-from cudf._lib.cpp.scalar.scalar cimport (
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport (
     numeric_scalar,
     scalar,
     string_scalar,

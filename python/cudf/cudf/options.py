@@ -1,11 +1,14 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import os
 import textwrap
-from collections.abc import Container
 from contextlib import ContextDecorator
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    from collections.abc import Container
 
 
 @dataclass
@@ -16,7 +19,7 @@ class Option:
     validator: Callable
 
 
-_OPTIONS: Dict[str, Option] = {}
+_OPTIONS: dict[str, Option] = {}
 
 
 def _env_get_int(name, default):
@@ -123,7 +126,7 @@ def _build_option_description(name, opt):
     )
 
 
-def describe_option(name: Optional[str] = None):
+def describe_option(name: str | None = None):
     """Prints the description of an option.
 
     If `name` is unspecified, prints the description of all available options.
@@ -152,11 +155,6 @@ def _make_contains_validator(valid_options: Container) -> Callable:
 
 
 def _cow_validator(val):
-    if get_option("spill") and val:
-        raise ValueError(
-            "Copy-on-write is not supported when spilling is enabled. "
-            "Please set `spill` to `False`"
-        )
     if val not in {False, True}:
         raise ValueError(
             f"{val} is not a valid option. Must be one of {{False, True}}."
@@ -164,14 +162,6 @@ def _cow_validator(val):
 
 
 def _spill_validator(val):
-    try:
-        if get_option("copy_on_write") and val:
-            raise ValueError(
-                "Spilling is not supported when copy-on-write is enabled. "
-                "Please set `copy_on_write` to `False`"
-            )
-    except KeyError:
-        pass
     if val not in {False, True}:
         raise ValueError(
             f"{val} is not a valid option. Must be one of {{False, True}}."

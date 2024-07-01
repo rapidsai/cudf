@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
 import warnings
@@ -10,9 +10,6 @@ import cudf
 from cudf._lib import orc as liborc
 from cudf.api.types import is_list_like
 from cudf.utils import ioutils
-from cudf.utils.metadata import (  # type: ignore
-    orc_column_statistics_pb2 as cs_pb2,
-)
 
 
 def _make_empty_df(filepath_or_buffer, columns):
@@ -173,45 +170,38 @@ def read_orc_statistics(
     files_statistics = []
     stripes_statistics = []
     for source in filepaths_or_buffers:
-        path_or_buf, compression = ioutils.get_reader_filepath_or_buffer(
+        path_or_buf, _ = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source, compression=None, **kwargs
         )
-        if compression is not None:
-            ValueError("URL content-encoding decompression is not supported")
-
-        # Read in statistics and unpack
         (
             column_names,
-            raw_file_statistics,
-            raw_stripes_statistics,
-        ) = liborc.read_raw_orc_statistics(path_or_buf)
+            parsed_file_statistics,
+            parsed_stripes_statistics,
+        ) = liborc.read_parsed_orc_statistics(path_or_buf)
 
         # Parse column names
         column_names = [
             column_name.decode("utf-8") for column_name in column_names
         ]
 
-        # Parse statistics
-        cs = cs_pb2.ColumnStatistics()
-
+        # Parse file statistics
         file_statistics = {
-            column_names[i]: _parse_column_statistics(cs, raw_file_stats)
-            for i, raw_file_stats in enumerate(raw_file_statistics)
-            if columns is None or column_names[i] in columns
+            column_name: column_stats
+            for column_name, column_stats in zip(
+                column_names, parsed_file_statistics
+            )
+            if columns is None or column_name in columns
         }
-        if any(
-            not parsed_statistics
-            for parsed_statistics in file_statistics.values()
-        ):
-            continue
-        else:
-            files_statistics.append(file_statistics)
+        files_statistics.append(file_statistics)
 
-        for raw_stripe_statistics in raw_stripes_statistics:
+        # Parse stripe statistics
+        for parsed_stripe_statistics in parsed_stripes_statistics:
             stripe_statistics = {
-                column_names[i]: _parse_column_statistics(cs, raw_file_stats)
-                for i, raw_file_stats in enumerate(raw_stripe_statistics)
-                if columns is None or column_names[i] in columns
+                column_name: column_stats
+                for column_name, column_stats in zip(
+                    column_names, parsed_stripe_statistics
+                )
+                if columns is None or column_name in columns
             }
             if any(
                 not parsed_statistics

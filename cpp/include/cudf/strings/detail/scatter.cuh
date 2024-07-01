@@ -24,6 +24,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/distance.h>
@@ -63,7 +64,7 @@ std::unique_ptr<column> scatter(SourceIterator begin,
                                 MapIterator scatter_map,
                                 strings_column_view const& target,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   if (target.is_empty()) return make_empty_column(type_id::STRING);
 

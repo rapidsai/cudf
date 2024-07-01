@@ -19,6 +19,7 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/types.hpp>
@@ -34,17 +35,26 @@ struct JsonWSNormalizationTest : public cudf::test::BaseFixture {};
 
 void run_test(std::string const& host_input, std::string const& expected_host_output)
 {
-  auto stream_view  = cudf::get_default_stream();
+  // Prepare cuda stream for data transfers & kernels
+  auto stream_view = cudf::test::get_default_stream();
+
   auto device_input = cudf::detail::make_device_uvector_async(
     host_input, stream_view, rmm::mr::get_current_device_resource());
 
   // Preprocessing FST
-  auto device_fst_output = cudf::io::json::detail::normalize_whitespace(
-    std::move(device_input), stream_view, rmm::mr::get_current_device_resource());
+  cudf::io::datasource::owning_buffer<rmm::device_uvector<char>> device_data(
+    std::move(device_input));
+  cudf::io::json::detail::normalize_whitespace(
+    device_data, stream_view, rmm::mr::get_current_device_resource());
 
-  auto const preprocessed_host_output =
-    cudf::detail::make_std_vector_sync(device_fst_output, stream_view);
+  std::string preprocessed_host_output(device_data.size(), 0);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(preprocessed_host_output.data(),
+                                device_data.data(),
+                                preprocessed_host_output.size(),
+                                cudaMemcpyDeviceToHost,
+                                stream_view.value()));
 
+  stream_view.synchronize();
   ASSERT_EQ(preprocessed_host_output.size(), expected_host_output.size());
   CUDF_TEST_EXPECT_VECTOR_EQUAL(
     preprocessed_host_output, expected_host_output, preprocessed_host_output.size());

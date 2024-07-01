@@ -57,16 +57,15 @@ requirements:
     - {{ compiler('cuda') }}
     {% endif %}
     - cuda-version ={{ cuda_version }}
-    - sysroot_{{ target_platform }} {{ sysroot_version }}
+    - {{ stdlib("c") }}
   host:
-    - protobuf ==4.24.*
     - python
     - cython >=3.0.3
+    - rapids-build-backend >=0.3.0,<0.4.0.dev0
     - scikit-build-core >=0.7.0
-    - setuptools
     - dlpack >=0.8,<1.0
     - numpy 1.23
-    - pyarrow ==14.0.2.*
+    - pyarrow ==16.1.0.*
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}
@@ -78,14 +77,13 @@ requirements:
     {% endif %}
     - cuda-version ={{ cuda_version }}
   run:
-    - {{ pin_compatible('protobuf', min_pin='x.x', max_pin='x') }}
     - python
     - typing_extensions >=4.0.0
-    - pandas >=2.0,<2.2.2dev0
+    - pandas >=2.0,<2.2.3dev0
     - cupy >=12.0.0
     - numba >=0.57
     - {{ pin_compatible('numpy', max_pin='x') }}
-    - {{ pin_compatible('pyarrow', max_pin='x') }}
+    - {{ pin_compatible('pyarrow', max_pin='x.x') }}
     - libcudf ={{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0

@@ -1,6 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.unary cimport unary_operator
+from cudf._lib.pylibcudf.libcudf.unary cimport unary_operator
 
 from .column cimport Column
 from .types cimport DataType

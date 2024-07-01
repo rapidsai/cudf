@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 #include "distinct_helpers.hpp"
 
 #include <cudf/detail/hash_reduce_by_row.cuh>
+
+#include <rmm/resource_ref.hpp>
 
 namespace cudf::detail {
 
@@ -88,7 +90,7 @@ rmm::device_uvector<size_type> reduce_by_row(
   null_equality nulls_equal,
   nan_equality nans_equal,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(keep != duplicate_keep_option::KEEP_ANY,
                "This function should not be called with KEEP_ANY");

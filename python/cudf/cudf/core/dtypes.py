@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import decimal
 import operator
@@ -6,7 +7,7 @@ import pickle
 import textwrap
 import warnings
 from functools import cached_property
-from typing import Any, Callable, Dict, List, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -16,11 +17,13 @@ from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import cudf
-from cudf._typing import Dtype
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer
 from cudf.utils.docutils import doc_apply
+
+if TYPE_CHECKING:
+    from cudf._typing import Dtype
+    from cudf.core.buffer import Buffer
 
 
 def dtype(arbitrary):
@@ -51,6 +54,11 @@ def dtype(arbitrary):
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
 
+    if isinstance(arbitrary, str) and arbitrary in {"hex", "hex32", "hex64"}:
+        # read_csv only accepts "hex"
+        # e.g. test_csv_reader_hexadecimals, test_csv_reader_hexadecimal_overflow
+        return arbitrary
+
     # use `pandas_dtype` to try and interpret
     # `arbitrary` as a Pandas extension type.
     #  Return the corresponding NumPy/cuDF type.
@@ -77,11 +85,11 @@ def dtype(arbitrary):
 
 
 def _decode_type(
-    cls: Type,
+    cls: type,
     header: dict,
     frames: list,
-    is_valid_class: Callable[[Type, Type], bool] = operator.is_,
-) -> Tuple[dict, list, Type]:
+    is_valid_class: Callable[[type, type], bool] = operator.is_,
+) -> tuple[dict, list, type]:
     """Decode metadata-encoded type and check validity
 
     Parameters
@@ -181,10 +189,10 @@ class CategoricalDtype(_BaseDtype):
         Index(['b', 'a'], dtype='object')
         """
         if self._categories is None:
-            return cudf.core.index.as_index(
+            return cudf.Index(
                 cudf.core.column.column_empty(0, dtype="object", masked=False)
             )
-        return cudf.core.index.as_index(self._categories, copy=False)
+        return cudf.Index(self._categories, copy=False)
 
     @property
     def type(self):
@@ -204,10 +212,6 @@ class CategoricalDtype(_BaseDtype):
         Whether the categories have an ordered relationship.
         """
         return self._ordered
-
-    @ordered.setter
-    def ordered(self, value) -> None:
-        self._ordered = value
 
     @classmethod
     def from_pandas(cls, dtype: pd.CategoricalDtype) -> "CategoricalDtype":
@@ -478,8 +482,8 @@ class ListDtype(_BaseDtype):
     def __hash__(self):
         return hash(self._typ)
 
-    def serialize(self) -> Tuple[dict, list]:
-        header: Dict[str, Dtype] = {}
+    def serialize(self) -> tuple[dict, list]:
+        header: dict[str, Dtype] = {}
         header["type-serialized"] = pickle.dumps(type(self))
 
         frames = []
@@ -624,13 +628,13 @@ class StructDtype(_BaseDtype):
     def __hash__(self):
         return hash(self._typ)
 
-    def serialize(self) -> Tuple[dict, list]:
-        header: Dict[str, Any] = {}
+    def serialize(self) -> tuple[dict, list]:
+        header: dict[str, Any] = {}
         header["type-serialized"] = pickle.dumps(type(self))
 
-        frames: List[Buffer] = []
+        frames: list[Buffer] = []
 
-        fields: Dict[str, Union[bytes, Tuple[Any, Tuple[int, int]]]] = {}
+        fields: dict[str, bytes | tuple[Any, tuple[int, int]]] = {}
 
         for k, dtype in self.fields.items():
             if isinstance(dtype, _BaseDtype):
@@ -820,7 +824,7 @@ class DecimalDtype(_BaseDtype):
         precision = max(len(metadata.digits), -metadata.exponent)
         return cls(precision, -metadata.exponent)
 
-    def serialize(self) -> Tuple[dict, list]:
+    def serialize(self) -> tuple[dict, list]:
         return (
             {
                 "type-serialized": pickle.dumps(type(self)),
@@ -943,7 +947,7 @@ class IntervalDtype(StructDtype):
     def __hash__(self):
         return hash((self.subtype, self.closed))
 
-    def serialize(self) -> Tuple[dict, list]:
+    def serialize(self) -> tuple[dict, list]:
         header = {
             "type-serialized": pickle.dumps(type(self)),
             "fields": pickle.dumps((self.subtype, self.closed)),
@@ -1003,7 +1007,10 @@ def _is_categorical_dtype(obj):
             pd.Series,
         ),
     ):
-        return _is_categorical_dtype(obj.dtype)
+        try:
+            return isinstance(cudf.dtype(obj.dtype), cudf.CategoricalDtype)
+        except TypeError:
+            return False
     if hasattr(obj, "type"):
         if obj.type is pd.CategoricalDtype.type:
             return True

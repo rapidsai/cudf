@@ -49,11 +49,12 @@ public enum BinaryOp {
   LESS_EQUAL(25), // <=
   GREATER_EQUAL(26), // >=
   NULL_EQUALS(27), // like EQUAL but NULL == NULL is TRUE and NULL == not NULL is FALSE
-  NULL_MAX(28), // MAX but NULL < not NULL
-  NULL_MIN(29), // MIN but NULL > not NULL
+  NULL_NOT_EQUALS(28), // negation of NULL_EQUALS
+  NULL_MAX(29), // MAX but NULL < not NULL
+  NULL_MIN(30), // MIN but NULL > not NULL
   //NOT IMPLEMENTED YET GENERIC_BINARY(30);
-  NULL_LOGICAL_AND(31),
-  NULL_LOGICAL_OR(32);
+  NULL_LOGICAL_AND(32),
+  NULL_LOGICAL_OR(33);
 
 
   static final EnumSet<BinaryOp> COMPARISON = EnumSet.of(

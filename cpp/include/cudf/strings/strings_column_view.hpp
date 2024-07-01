@@ -86,28 +86,6 @@ class strings_column_view : private column_view {
   [[nodiscard]] column_view offsets() const;
 
   /**
-   * @brief Return an iterator for the offsets child column.
-   *
-   * @deprecated Since 24.04
-   *
-   * This automatically applies the offset of the parent.
-   *
-   * @return Iterator pointing to the first offset value.
-   */
-  [[deprecated]] offset_iterator offsets_begin() const;
-
-  /**
-   * @brief Return an end iterator for the offsets child column.
-   *
-   * @deprecated Since 24.04
-   *
-   * This automatically applies the offset of the parent.
-   *
-   * @return Iterator pointing 1 past the last offset value.
-   */
-  [[deprecated]] offset_iterator offsets_end() const;
-
-  /**
    * @brief Returns the number of bytes in the chars child column.
    *
    * This accounts for empty columns but does not reflect a sliced parent column

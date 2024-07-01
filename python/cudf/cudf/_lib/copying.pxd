@@ -1,6 +1,6 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.contiguous_split cimport packed_columns
+from cudf._lib.pylibcudf.libcudf.contiguous_split cimport packed_columns
 
 
 cdef class _CPackedColumns:

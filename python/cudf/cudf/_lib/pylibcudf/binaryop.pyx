@@ -5,11 +5,11 @@ from cython.operator import dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.cpp cimport binaryop as cpp_binaryop
-from cudf._lib.cpp.binaryop cimport binary_operator
-from cudf._lib.cpp.column.column cimport column
+from cudf._lib.pylibcudf.libcudf cimport binaryop as cpp_binaryop
+from cudf._lib.pylibcudf.libcudf.binaryop cimport binary_operator
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
 
-from cudf._lib.cpp.binaryop import \
+from cudf._lib.pylibcudf.libcudf.binaryop import \
     binary_operator as BinaryOperator  # no-cython-lint
 
 from .column cimport Column

@@ -27,7 +27,6 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -782,8 +781,16 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
         } else {
           // pushdown mask present; null mask bits w/ set pushdown mask bits will be encoded
           // Use the number of set bits in pushdown mask as size
-          auto bits_to_borrow =
-            8 - (d_pd_set_counts[rg_idx][parent_col_idx] - previously_borrowed) % 8;
+          auto bits_to_borrow = [&]() {
+            auto const parent_valid_count = d_pd_set_counts[rg_idx][parent_col_idx];
+            if (parent_valid_count < previously_borrowed) {
+              // Borrow to make an empty rowgroup
+              return previously_borrowed - parent_valid_count;
+            }
+            auto const misalignment = (parent_valid_count - previously_borrowed) % 8;
+            return (8 - misalignment) % 8;
+          }();
+
           if (bits_to_borrow == 0) {
             // Didn't borrow any bits for this rowgroup
             previously_borrowed = 0;
@@ -2331,7 +2338,7 @@ auto convert_table_to_orc_data(table_view const& input,
                       std::move(streams),
                       std::move(stripes),
                       std::move(stripe_dicts.views),
-                      cudf::detail::pinned_host_vector<uint8_t>()};
+                      cudf::detail::make_pinned_vector_async<uint8_t>(0, stream)};
   }
 
   // Allocate intermediate output stream buffer
@@ -2399,7 +2406,7 @@ auto convert_table_to_orc_data(table_view const& input,
     return max_stream_size;
   }();
 
-  cudf::detail::pinned_host_vector<uint8_t> bounce_buffer(max_out_stream_size);
+  auto bounce_buffer = cudf::detail::make_pinned_vector_async<uint8_t>(max_out_stream_size, stream);
 
   auto intermediate_stats = gather_statistic_blobs(stats_freq, orc_table, segmentation, stream);
 
@@ -2438,7 +2445,6 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
-  init_state();
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
@@ -2460,20 +2466,13 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
-  init_state();
 }
 
 writer::impl::~impl() { close(); }
 
-void writer::impl::init_state()
-{
-  // Write file header
-  _out_sink->host_write(MAGIC, std::strlen(MAGIC));
-}
-
 void writer::impl::write(table_view const& input)
 {
-  CUDF_EXPECTS(not _closed, "Data has already been flushed to out and closed");
+  CUDF_EXPECTS(_state != writer_state::CLOSED, "Data has already been flushed to out and closed");
 
   if (not _table_meta) { _table_meta = make_table_meta(input); }
 
@@ -2516,6 +2515,11 @@ void writer::impl::write(table_view const& input)
     }
   }();
 
+  if (_state == writer_state::NO_DATA_WRITTEN) {
+    // Write the ORC file header if this is the first write
+    _out_sink->host_write(MAGIC, std::strlen(MAGIC));
+  }
+
   // Compression/encoding were all successful. Now write the intermediate results.
   write_orc_data_to_sink(enc_data,
                          segmentation,
@@ -2533,6 +2537,8 @@ void writer::impl::write(table_view const& input)
 
   // Update file-level and compression statistics
   update_statistics(orc_table.num_rows(), std::move(intermediate_stats), compression_stats);
+
+  _state = writer_state::DATA_WRITTEN;
 }
 
 void writer::impl::update_statistics(
@@ -2683,8 +2689,11 @@ void writer::impl::add_table_to_footer_data(orc_table_view const& orc_table,
 
 void writer::impl::close()
 {
-  if (_closed) { return; }
-  _closed = true;
+  if (_state != writer_state::DATA_WRITTEN) {
+    // writer is either closed or no data has been written
+    _state = writer_state::CLOSED;
+    return;
+  }
   PostScript ps;
 
   if (_stats_freq != statistics_freq::STATISTICS_NONE) {
@@ -2769,6 +2778,8 @@ void writer::impl::close()
   pbw.put_byte(ps_length);
   _out_sink->host_write(pbw.data(), pbw.size());
   _out_sink->flush();
+
+  _state = writer_state::CLOSED;
 }
 
 // Forward to implementation
@@ -2794,9 +2805,6 @@ writer::~writer() = default;
 
 // Forward to implementation
 void writer::write(table_view const& table) { _impl->write(table); }
-
-// Forward to implementation
-void writer::skip_close() { _impl->skip_close(); }
 
 // Forward to implementation
 void writer::close() { _impl->close(); }

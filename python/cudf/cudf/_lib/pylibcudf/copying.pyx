@@ -11,18 +11,24 @@ from libcpp.vector cimport vector
 # directly from that. It will make namespacing much cleaner in pylibcudf. What
 # we really want here would be
 # cimport libcudf... libcudf.copying.algo(...)
-from cudf._lib.cpp cimport copying as cpp_copying
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
-from cudf._lib.cpp.copying cimport mask_allocation_policy, out_of_bounds_policy
-from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf cimport copying as cpp_copying
+from cudf._lib.pylibcudf.libcudf.column.column cimport column
+from cudf._lib.pylibcudf.libcudf.column.column_view cimport (
+    column_view,
+    mutable_column_view,
+)
+from cudf._lib.pylibcudf.libcudf.copying cimport (
+    mask_allocation_policy,
+    out_of_bounds_policy,
+)
+from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
-from cudf._lib.cpp.copying import \
+from cudf._lib.pylibcudf.libcudf.copying import \
     mask_allocation_policy as MaskAllocationPolicy  # no-cython-lint
-from cudf._lib.cpp.copying import \
+from cudf._lib.pylibcudf.libcudf.copying import \
     out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
 
 from .column cimport Column

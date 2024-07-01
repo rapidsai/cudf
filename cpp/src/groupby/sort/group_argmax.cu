@@ -20,6 +20,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/gather.h>
 
@@ -31,7 +32,7 @@ std::unique_ptr<column> group_argmax(column_view const& values,
                                      cudf::device_span<size_type const> group_labels,
                                      column_view const& key_sort_order,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   auto indices = type_dispatcher(values.type(),
                                  group_reduction_dispatcher<aggregation::ARGMAX>{},

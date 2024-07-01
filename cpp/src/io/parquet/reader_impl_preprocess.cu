@@ -452,9 +452,9 @@ std::string encoding_to_string(Encoding encoding)
 [[nodiscard]] std::string list_unsupported_encodings(device_span<PageInfo const> pages,
                                                      rmm::cuda_stream_view stream)
 {
-  auto const to_mask = [] __device__(auto const& page) {
+  auto const to_mask = cuda::proclaim_return_type<uint32_t>([] __device__(auto const& page) {
     return is_supported_encoding(page.encoding) ? 0U : encoding_to_mask(page.encoding);
-  };
+  });
   uint32_t const unsupported = thrust::transform_reduce(
     rmm::exec_policy(stream), pages.begin(), pages.end(), to_mask, 0U, thrust::bit_or<uint32_t>());
   return encoding_bitmask_to_str(unsupported);
@@ -636,15 +636,24 @@ void decode_page_headers(pass_intermediate_data& pass,
   stream.synchronize();
 }
 
+constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
+{
+  auto const is_decimal =
+    chunk.logical_type.has_value() and chunk.logical_type->type == LogicalType::DECIMAL;
+  auto const is_binary =
+    chunk.physical_type == BYTE_ARRAY or chunk.physical_type == FIXED_LEN_BYTE_ARRAY;
+  return is_binary and not is_decimal;
+}
+
 struct set_str_dict_index_count {
   device_span<size_t> str_dict_index_count;
-  device_span<const ColumnChunkDesc> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
   __device__ void operator()(PageInfo const& page)
   {
     auto const& chunk = chunks[page.chunk_idx];
-    if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) && chunk.physical_type == BYTE_ARRAY &&
-        (chunk.num_dict_pages > 0)) {
+    if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0 and chunk.num_dict_pages > 0 and
+        is_string_chunk(chunk)) {
       // there is only ever one dictionary page per chunk, so this is safe to do in parallel.
       str_dict_index_count[page.chunk_idx] = page.num_input_values;
     }
@@ -653,13 +662,13 @@ struct set_str_dict_index_count {
 
 struct set_str_dict_index_ptr {
   string_index_pair* const base;
-  device_span<const size_t> str_dict_index_offsets;
+  device_span<size_t const> str_dict_index_offsets;
   device_span<ColumnChunkDesc> chunks;
 
   __device__ void operator()(size_t i)
   {
     auto& chunk = chunks[i];
-    if (chunk.physical_type == BYTE_ARRAY && (chunk.num_dict_pages > 0)) {
+    if (chunk.num_dict_pages > 0 and is_string_chunk(chunk)) {
       chunk.str_dict_index = base + str_dict_index_offsets[i];
     }
   }
@@ -670,7 +679,7 @@ struct set_str_dict_index_ptr {
  *
  */
 struct set_list_row_count_estimate {
-  device_span<const ColumnChunkDesc> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
   __device__ void operator()(PageInfo& page)
   {
@@ -699,7 +708,7 @@ struct set_list_row_count_estimate {
  */
 struct set_final_row_count {
   device_span<PageInfo> pages;
-  device_span<const ColumnChunkDesc> chunks;
+  device_span<ColumnChunkDesc const> chunks;
 
   __device__ void operator()(size_t i)
   {
@@ -864,7 +873,7 @@ void reader::impl::allocate_nesting_info()
           nesting_info[cur_depth].max_def_level = cur_schema.max_definition_level;
           pni[cur_depth].size                   = 0;
           pni[cur_depth].type =
-            to_type_id(cur_schema, _strings_to_categorical, _timestamp_type.id());
+            to_type_id(cur_schema, _strings_to_categorical, _options.timestamp_type.id());
           pni[cur_depth].nullable = cur_schema.repetition_type == OPTIONAL;
         }
 
@@ -1169,10 +1178,10 @@ struct page_to_string_size {
 struct page_offset_output_iter {
   PageInfo* p;
 
-  using value_type        = size_type;
-  using difference_type   = size_type;
-  using pointer           = size_type*;
-  using reference         = size_type&;
+  using value_type        = size_t;
+  using difference_type   = size_t;
+  using pointer           = size_t*;
+  using reference         = size_t&;
   using iterator_category = thrust::output_device_iterator_tag;
 
   __host__ __device__ page_offset_output_iter operator+(int i) { return {p + i}; }
@@ -1212,26 +1221,29 @@ struct update_pass_num_rows {
 
 }  // anonymous namespace
 
-void reader::impl::preprocess_file(
-  int64_t skip_rows,
-  std::optional<size_type> const& num_rows,
-  host_span<std::vector<size_type> const> row_group_indices,
-  std::optional<std::reference_wrapper<ast::expression const>> filter)
+void reader::impl::preprocess_file(read_mode mode)
 {
   CUDF_EXPECTS(!_file_preprocessed, "Attempted to preprocess file more than once");
 
   // if filter is not empty, then create output types as vector and pass for filtering.
-  std::vector<data_type> output_types;
-  if (filter.has_value()) {
-    std::transform(_output_buffers.cbegin(),
-                   _output_buffers.cend(),
-                   std::back_inserter(output_types),
+
+  std::vector<data_type> output_dtypes;
+  if (_expr_conv.get_converted_expr().has_value()) {
+    std::transform(_output_buffers_template.cbegin(),
+                   _output_buffers_template.cend(),
+                   std::back_inserter(output_dtypes),
                    [](auto const& col) { return col.type; });
   }
+
   std::tie(
     _file_itm_data.global_skip_rows, _file_itm_data.global_num_rows, _file_itm_data.row_groups) =
-    _metadata->select_row_groups(
-      row_group_indices, skip_rows, num_rows, output_types, filter, _stream);
+    _metadata->select_row_groups(_options.row_group_indices,
+                                 _options.skip_rows,
+                                 _options.num_rows,
+                                 output_dtypes,
+                                 _output_column_schemas,
+                                 _expr_conv.get_converted_expr(),
+                                 _stream);
 
   // check for page indexes
   _has_page_index = std::all_of(_file_itm_data.row_groups.begin(),
@@ -1261,7 +1273,7 @@ void reader::impl::preprocess_file(
   printf("# Input columns: %'lu\n", _input_columns.size());
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
     auto const& schema = _metadata->get_schema(_input_columns[idx].schema_idx);
-    auto const type_id = to_type_id(schema, _strings_to_categorical, _timestamp_type.id());
+    auto const type_id = to_type_id(schema, _strings_to_categorical, _options.timestamp_type.id());
     printf("\tC(%'lu, %s): %s\n",
            idx,
            _input_columns[idx].name.c_str(),
@@ -1315,7 +1327,7 @@ void reader::impl::generate_list_column_row_count_estimates()
   _stream.synchronize();
 }
 
-void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t chunk_read_limit)
+void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_limit)
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -1442,7 +1454,7 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
   compute_output_chunks_for_subpass();
 }
 
-void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses_custom_row_bounds)
+void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows)
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -1455,7 +1467,7 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
   // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
   // respect the user bounds. It is only necessary to do this second pass if uses_custom_row_bounds
   // is set (if the user has specified artificial bounds).
-  if (uses_custom_row_bounds) {
+  if (uses_custom_row_bounds(mode)) {
     ComputePageSizes(subpass.pages,
                      pass.chunks,
                      skip_rows,
@@ -1464,8 +1476,6 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
                      false,  // no need to compute string sizes
                      pass.level_type_size,
                      _stream);
-
-    // print_pages(pages, _stream);
   }
 
   // iterate over all input columns and allocate any associated output
@@ -1489,8 +1499,10 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
       // if we haven't already processed this column because it is part of a struct hierarchy
       else if (out_buf.size == 0) {
         // add 1 for the offset if this is a list column
-        out_buf.create(
+        // we're going to start null mask as all valid and then turn bits off if necessary
+        out_buf.create_with_mask(
           out_buf.type.id() == type_id::LIST && l_idx < max_depth ? num_rows + 1 : num_rows,
+          cudf::mask_state::ALL_VALID,
           _stream,
           _mr);
       }
@@ -1568,7 +1580,8 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
           if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
 
           // allocate
-          out_buf.create(size, _stream, _mr);
+          // we're going to start null mask as all valid and then turn bits off if necessary
+          out_buf.create_with_mask(size, cudf::mask_state::ALL_VALID, _stream, _mr);
         }
       }
     }

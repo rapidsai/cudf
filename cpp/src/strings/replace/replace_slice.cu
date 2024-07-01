@@ -27,6 +27,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 
@@ -44,13 +45,14 @@ struct replace_slice_fn {
   string_view const d_repl;
   size_type const start;
   size_type const stop;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     auto const d_str   = d_strings.element<string_view>(idx);
@@ -68,49 +70,52 @@ struct replace_slice_fn {
                                    in_ptr + end,
                                    d_str.size_bytes() - end);
     } else {
-      d_offsets[idx] = d_str.size_bytes() + d_repl.size_bytes() - (end - begin);
+      d_sizes[idx] = d_str.size_bytes() + d_repl.size_bytes() - (end - begin);
     }
   }
 };
 
 }  // namespace
 
-std::unique_ptr<column> replace_slice(strings_column_view const& strings,
+std::unique_ptr<column> replace_slice(strings_column_view const& input,
                                       string_scalar const& repl,
                                       size_type start,
                                       size_type stop,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
-  if (strings.is_empty()) return make_empty_column(type_id::STRING);
+  if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid.");
-  if (stop > 0) CUDF_EXPECTS(start <= stop, "Parameter start must be less than or equal to stop.");
+  if (stop > 0) {
+    CUDF_EXPECTS(start <= stop, "Parameter start must be less than or equal to stop.");
+  }
 
   string_view d_repl(repl.data(), repl.size());
 
-  auto d_strings = column_device_view::create(strings.parent(), stream);
+  auto d_strings = column_device_view::create(input.parent(), stream);
 
   // this utility calls the given functor to build the offsets and chars columns
-  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
-    replace_slice_fn{*d_strings, d_repl, start, stop}, strings.size(), stream, mr);
+  auto [offsets_column, chars] = make_strings_children(
+    replace_slice_fn{*d_strings, d_repl, start, stop}, input.size(), stream, mr);
 
-  return make_strings_column(strings.size(),
+  return make_strings_column(input.size(),
                              std::move(offsets_column),
                              chars.release(),
-                             strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
+                             input.null_count(),
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
+
 }  // namespace detail
 
-std::unique_ptr<column> replace_slice(strings_column_view const& strings,
+std::unique_ptr<column> replace_slice(strings_column_view const& input,
                                       string_scalar const& repl,
                                       size_type start,
                                       size_type stop,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_slice(strings, repl, start, stop, stream, mr);
+  return detail::replace_slice(input, repl, start, stop, stream, mr);
 }
 
 }  // namespace strings

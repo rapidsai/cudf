@@ -465,7 +465,7 @@ TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
   auto dict_target = cudf::dictionary::encode(target);
   auto dict_source = cudf::dictionary::encode(source);
   EXPECT_THROW(cudf::copy_range(dict_source->view(), dict_target->view(), 0, 100, 0),
-               cudf::logic_error);
+               cudf::data_type_error);
 }
 
 template <typename T>

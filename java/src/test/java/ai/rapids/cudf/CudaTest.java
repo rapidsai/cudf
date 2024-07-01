@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,8 +39,9 @@ public class CudaTest {
   public void testCudaException() {
     assertThrows(CudaException.class, () -> {
           try {
-            Cuda.memset(Long.MAX_VALUE, (byte) 0, 1024);
-          } catch (CudaFatalException ignored) {
+            Cuda.freePinned(-1L);
+          } catch (CudaFatalException fatalEx) {
+            throw new AssertionError("Expected CudaException but got fatal error", fatalEx);
           } catch (CudaException ex) {
             assertEquals(CudaException.CudaError.cudaErrorInvalidValue, ex.getCudaError());
             throw ex;

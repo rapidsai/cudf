@@ -17,7 +17,7 @@ import warnings
 from abc import abstractmethod
 from importlib._bootstrap import _ImportLockContext as ImportLock
 from types import ModuleType
-from typing import Any, ContextManager, Dict, List, NamedTuple
+from typing import Any, ContextManager, NamedTuple
 
 from typing_extensions import Self
 
@@ -377,7 +377,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
     attempts to call the fast version first).
     """
 
-    _denylist: List[str]
+    _denylist: tuple[str]
     _use_fast_lib: bool
     _use_fast_lib_lock: threading.RLock
     _module_cache_prefix: str = "_slow_lib_"
@@ -407,7 +407,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             if mod.startswith(self.slow_lib):
                 sys.modules[self._module_cache_prefix + mod] = sys.modules[mod]
                 del sys.modules[mod]
-        self._denylist = [*slow_module.__path__, *fast_module.__path__]
+        self._denylist = (*slow_module.__path__, *fast_module.__path__)
 
         # Lock to manage temporarily disabling delivering wrapped attributes
         self._use_fast_lib_lock = threading.RLock()
@@ -519,7 +519,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
     def getattr_real_or_wrapped(
         name: str,
         *,
-        real: Dict[str, Any],
+        real: dict[str, Any],
         wrapped_objs,
         loader: ModuleAccelerator,
     ) -> Any:
@@ -551,17 +551,13 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             # release the lock after reading this value)
             use_real = not loader._use_fast_lib
         if not use_real:
-            CUDF_PANDAS_PATH = __file__.rsplit("/", 1)[0]
             # Only need to check the denylist if we're not turned off.
             frame = sys._getframe()
             # We cannot possibly be at the top level.
             assert frame.f_back
             calling_module = pathlib.PurePath(frame.f_back.f_code.co_filename)
-            use_real = not calling_module.is_relative_to(
-                CUDF_PANDAS_PATH
-            ) and any(
-                calling_module.is_relative_to(path)
-                for path in loader._denylist
+            use_real = _caller_in_denylist(
+                calling_module, tuple(loader._denylist)
             )
         try:
             if use_real:
@@ -623,3 +619,13 @@ def disable_module_accelerator() -> contextlib.ExitStack:
                 stack.enter_context(finder.disabled())
         return stack.pop_all()
     assert False  # pacify type checker
+
+
+# because this function gets called so often and is quite
+# expensive to run, we cache the results:
+@functools.lru_cache(maxsize=1024)
+def _caller_in_denylist(calling_module, denylist):
+    CUDF_PANDAS_PATH = __file__.rsplit("/", 1)[0]
+    return not calling_module.is_relative_to(CUDF_PANDAS_PATH) and any(
+        calling_module.is_relative_to(path) for path in denylist
+    )

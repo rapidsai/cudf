@@ -10,16 +10,19 @@ import traceback
 import warnings
 import weakref
 from collections import defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import partial
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING
 
 import rmm.mr
 
-from cudf.core.buffer.spillable_buffer import SpillableBufferOwner
 from cudf.options import get_option
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.string import format_bytes
+
+if TYPE_CHECKING:
+    from cudf.core.buffer.spillable_buffer import SpillableBufferOwner
 
 _spill_cudf_nvtx_annotate = partial(
     _cudf_nvtx_annotate, domain="cudf_python-spill"
@@ -36,7 +39,7 @@ def get_traceback() -> str:
 
 def get_rmm_memory_resource_stack(
     mr: rmm.mr.DeviceMemoryResource,
-) -> List[rmm.mr.DeviceMemoryResource]:
+) -> list[rmm.mr.DeviceMemoryResource]:
     """Get the RMM resource stack
 
     Parameters
@@ -96,14 +99,14 @@ class SpillStatistics:
         total_nbytes: int = 0
         spilled_nbytes: int = 0
 
-    spill_totals: Dict[Tuple[str, str], Tuple[int, float]]
+    spill_totals: dict[tuple[str, str], tuple[int, float]]
 
     def __init__(self, level) -> None:
         self.lock = threading.Lock()
         self.level = level
         self.spill_totals = defaultdict(lambda: (0, 0))
         # Maps each traceback to a Expose
-        self.exposes: Dict[str, SpillStatistics.Expose] = {}
+        self.exposes: dict[str, SpillStatistics.Expose] = {}
 
     def log_spill(self, src: str, dst: str, nbytes: int, time: float) -> None:
         """Log a (un-)spilling event
@@ -201,10 +204,6 @@ class SpillManager:
     This class implements tracking of all known spillable buffers, on-demand
     spilling of said buffers, and (optionally) maintains a memory usage limit.
 
-    When `spill_on_demand=True`, the manager registers an RMM out-of-memory
-    error handler, which will spill spillable buffers in order to free up
-    memory.
-
     When `device_memory_limit=<limit-in-bytes>`, the manager will try keep
     the device memory usage below the specified limit by spilling of spillable
     buffers continuously, which will introduce a modest overhead.
@@ -213,8 +212,6 @@ class SpillManager:
 
     Parameters
     ----------
-    spill_on_demand : bool
-        Enable spill on demand.
     device_memory_limit: int, optional
         If not None, this is the device memory limit in bytes that triggers
         device to host spilling. The global manager sets this to the value
@@ -230,29 +227,14 @@ class SpillManager:
     def __init__(
         self,
         *,
-        spill_on_demand: bool = False,
-        device_memory_limit: Optional[int] = None,
+        device_memory_limit: int | None = None,
         statistic_level: int = 0,
     ) -> None:
         self._lock = threading.Lock()
         self._buffers = weakref.WeakValueDictionary()
         self._id_counter = 0
-        self._spill_on_demand = spill_on_demand
         self._device_memory_limit = device_memory_limit
         self.statistics = SpillStatistics(statistic_level)
-
-        if self._spill_on_demand:
-            # Set the RMM out-of-memory handle if not already set
-            mr = rmm.mr.get_current_device_resource()
-            if all(
-                not isinstance(m, rmm.mr.FailureCallbackResourceAdaptor)
-                for m in get_rmm_memory_resource_stack(mr)
-            ):
-                rmm.mr.set_current_device_resource(
-                    rmm.mr.FailureCallbackResourceAdaptor(
-                        mr, self._out_of_memory_handle
-                    )
-                )
 
     def _out_of_memory_handle(self, nbytes: int, *, retry_once=True) -> bool:
         """Try to handle an out-of-memory error by spilling
@@ -316,7 +298,7 @@ class SpillManager:
 
     def buffers(
         self, order_by_access_time: bool = False
-    ) -> Tuple[SpillableBufferOwner, ...]:
+    ) -> tuple[SpillableBufferOwner, ...]:
         """Get all managed buffers
 
         Parameters
@@ -365,7 +347,7 @@ class SpillManager:
                     buf.lock.release()
         return spilled
 
-    def spill_to_device_limit(self, device_limit: Optional[int] = None) -> int:
+    def spill_to_device_limit(self, device_limit: int | None = None) -> int:
         """Try to spill device memory until device limit
 
         Notice, by default this is a no-op.
@@ -408,8 +390,7 @@ class SpillManager:
             dev_limit = format_bytes(self._device_memory_limit)
 
         return (
-            f"<SpillManager spill_on_demand={self._spill_on_demand} "
-            f"device_memory_limit={dev_limit} | "
+            f"<SpillManager device_memory_limit={dev_limit} | "
             f"{format_bytes(spilled)} spilled | "
             f"{format_bytes(unspilled)} ({unspillable_ratio:.0%}) "
             f"unspilled (unspillable)>"
@@ -421,10 +402,10 @@ class SpillManager:
 #   - Initialized to None (spilling disabled)
 #   - Initialized to a SpillManager instance (spilling enabled)
 _global_manager_uninitialized: bool = True
-_global_manager: Optional[SpillManager] = None
+_global_manager: SpillManager | None = None
 
 
-def set_global_manager(manager: Optional[SpillManager]) -> None:
+def set_global_manager(manager: SpillManager | None) -> None:
     """Set the global manager, which if None disables spilling"""
 
     global _global_manager, _global_manager_uninitialized
@@ -438,16 +419,86 @@ def set_global_manager(manager: Optional[SpillManager]) -> None:
     _global_manager_uninitialized = False
 
 
-def get_global_manager() -> Optional[SpillManager]:
+def get_global_manager() -> SpillManager | None:
     """Get the global manager or None if spilling is disabled"""
     global _global_manager_uninitialized
     if _global_manager_uninitialized:
-        manager = None
         if get_option("spill"):
             manager = SpillManager(
-                spill_on_demand=get_option("spill_on_demand"),
                 device_memory_limit=get_option("spill_device_limit"),
                 statistic_level=get_option("spill_stats"),
             )
-        set_global_manager(manager)
+            set_global_manager(manager)
+            if get_option("spill_on_demand"):
+                set_spill_on_demand_globally()
+        else:
+            set_global_manager(None)
     return _global_manager
+
+
+def set_spill_on_demand_globally() -> None:
+    """Enable spill on demand in the current global spill manager.
+
+    Warning: this modifies the current RMM memory resource. A memory resource
+    to handle out-of-memory errors is pushed onto the RMM memory resource stack.
+
+    Raises
+    ------
+    ValueError
+        If no global spill manager exists (spilling is disabled).
+    ValueError
+        If a failure callback resource is already in the resource stack.
+    """
+
+    manager = get_global_manager()
+    if manager is None:
+        raise ValueError(
+            "Cannot enable spill on demand with no global spill manager"
+        )
+    mr = rmm.mr.get_current_device_resource()
+    if any(
+        isinstance(m, rmm.mr.FailureCallbackResourceAdaptor)
+        for m in get_rmm_memory_resource_stack(mr)
+    ):
+        raise ValueError(
+            "Spill on demand (or another failure callback resource) "
+            "is already registered"
+        )
+    rmm.mr.set_current_device_resource(
+        rmm.mr.FailureCallbackResourceAdaptor(
+            mr, manager._out_of_memory_handle
+        )
+    )
+
+
+@contextmanager
+def spill_on_demand_globally():
+    """Context to enable spill on demand temporarily.
+
+    Warning: this modifies the current RMM memory resource. A memory resource
+    to handle out-of-memory errors is pushed onto the RMM memory resource stack
+    when entering the context and popped again when exiting.
+
+    Raises
+    ------
+    ValueError
+        If no global spill manager exists (spilling is disabled).
+    ValueError
+        If a failure callback resource is already in the resource stack.
+    ValueError
+        If the RMM memory source stack was changed while in the context.
+    """
+    set_spill_on_demand_globally()
+    # Save the new memory resource stack for later cleanup
+    mr_stack = get_rmm_memory_resource_stack(
+        rmm.mr.get_current_device_resource()
+    )
+    try:
+        yield
+    finally:
+        mr = rmm.mr.get_current_device_resource()
+        if mr_stack != get_rmm_memory_resource_stack(mr):
+            raise ValueError(
+                "RMM memory source stack was changed while in the context"
+            )
+        rmm.mr.set_current_device_resource(mr_stack[1])

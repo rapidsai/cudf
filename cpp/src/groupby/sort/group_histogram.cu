@@ -26,6 +26,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_buffer.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/gather.h>
 
@@ -38,7 +39,7 @@ std::unique_ptr<column> build_histogram(column_view const& values,
                                         std::optional<column_view> const& partial_counts,
                                         size_type num_groups,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be the same as that of group labels.",
@@ -89,7 +90,7 @@ std::unique_ptr<column> group_histogram(column_view const& values,
                                         cudf::device_span<size_type const> group_labels,
                                         size_type num_groups,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
 {
   // Empty group should be handled before reaching here.
   CUDF_EXPECTS(num_groups > 0, "Group should not be empty.", std::invalid_argument);
@@ -101,7 +102,7 @@ std::unique_ptr<column> group_merge_histogram(column_view const& values,
                                               cudf::device_span<size_type const> group_offsets,
                                               size_type num_groups,
                                               rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+                                              rmm::device_async_resource_ref mr)
 {
   // Empty group should be handled before reaching here.
   CUDF_EXPECTS(num_groups > 0, "Group should not be empty.", std::invalid_argument);

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -40,7 +40,7 @@ comment = (
     "Merging this PR would result in "
     f"{pr_passed}/{pr_total} ({passing_percentage:.2f}%) "
     "Pandas tests passing, "
-    f"{rate_change_type} in the test pass rate by "
+    f"{rate_change_type} by "
     f"{pass_rate_change:.2f}%. "
     f"Trunk stats: {main_passed}/{main_total}."
 )

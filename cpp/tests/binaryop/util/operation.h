@@ -416,6 +416,14 @@ struct NullEquals {
 };
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct NullNotEquals {
+  TypeOut operator()(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) const
+  {
+    return !NullEquals<TypeOut, TypeLhs, TypeRhs>()(x, y, lhs_valid, rhs_valid, output_valid);
+  }
+};
+
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct NullMax {
   TypeOut operator()(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) const
   {

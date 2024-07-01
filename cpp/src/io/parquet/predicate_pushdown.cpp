@@ -29,11 +29,14 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
-#include <list>
 #include <numeric>
 #include <optional>
+#include <unordered_set>
 
 namespace cudf::io::parquet::detail {
 
@@ -126,10 +129,10 @@ struct stats_caster {
   // Creates device columns from column statistics (min, max)
   template <typename T>
   std::pair<std::unique_ptr<column>, std::unique_ptr<column>> operator()(
-    size_t col_idx,
+    int schema_idx,
     cudf::data_type dtype,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const
+    rmm::device_async_resource_ref mr) const
   {
     // List, Struct, Dictionary types are not supported
     if constexpr (cudf::is_compound<T>() && !std::is_same_v<T, string_view>) {
@@ -165,7 +168,7 @@ struct stats_caster {
 
         static auto make_strings_children(host_span<string_view> host_strings,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+                                          rmm::device_async_resource_ref mr)
         {
           std::vector<char> chars{};
           std::vector<cudf::size_type> offsets(1, 0);
@@ -182,7 +185,7 @@ struct stats_caster {
 
         auto to_device(cudf::data_type dtype,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr)
+                       rmm::device_async_resource_ref mr)
         {
           if constexpr (std::is_same_v<T, string_view>) {
             auto [d_chars, d_offsets] = make_strings_children(val, stream, mr);
@@ -205,22 +208,31 @@ struct stats_caster {
       };  // local struct host_column
       host_column min(total_row_groups);
       host_column max(total_row_groups);
-
       size_type stats_idx = 0;
       for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
         for (auto const rg_idx : row_group_indices[src_idx]) {
           auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
-          auto const& colchunk  = row_group.columns[col_idx];
-          // To support deprecated min, max fields.
-          auto const& min_value = colchunk.meta_data.statistics.min_value.has_value()
-                                    ? colchunk.meta_data.statistics.min_value
-                                    : colchunk.meta_data.statistics.min;
-          auto const& max_value = colchunk.meta_data.statistics.max_value.has_value()
-                                    ? colchunk.meta_data.statistics.max_value
-                                    : colchunk.meta_data.statistics.max;
-          // translate binary data to Type then to <T>
-          min.set_index(stats_idx, min_value, colchunk.meta_data.type);
-          max.set_index(stats_idx, max_value, colchunk.meta_data.type);
+          auto col              = std::find_if(
+            row_group.columns.begin(),
+            row_group.columns.end(),
+            [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
+          if (col != std::end(row_group.columns)) {
+            auto const& colchunk = *col;
+            // To support deprecated min, max fields.
+            auto const& min_value = colchunk.meta_data.statistics.min_value.has_value()
+                                      ? colchunk.meta_data.statistics.min_value
+                                      : colchunk.meta_data.statistics.min;
+            auto const& max_value = colchunk.meta_data.statistics.max_value.has_value()
+                                      ? colchunk.meta_data.statistics.max_value
+                                      : colchunk.meta_data.statistics.max;
+            // translate binary data to Type then to <T>
+            min.set_index(stats_idx, min_value, colchunk.meta_data.type);
+            max.set_index(stats_idx, max_value, colchunk.meta_data.type);
+          } else {
+            // Marking it null, if column present in row group
+            min.set_index(stats_idx, thrust::nullopt, {});
+            max.set_index(stats_idx, thrust::nullopt, {});
+          }
           stats_idx++;
         }
       };
@@ -377,6 +389,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::filter_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
+  host_span<int const> output_column_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
@@ -411,7 +424,8 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   std::vector<std::unique_ptr<column>> columns;
   stats_caster stats_col{total_row_groups, per_file_metadata, input_row_group_indices};
   for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
-    auto const& dtype = output_dtypes[col_idx];
+    auto const schema_idx = output_column_schemas[col_idx];
+    auto const& dtype     = output_dtypes[col_idx];
     // Only comparable types except fixed point are supported.
     if (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING) {
       // placeholder only for unsupported types.
@@ -422,14 +436,14 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
       continue;
     }
     auto [min_col, max_col] =
-      cudf::type_dispatcher<dispatch_storage_type>(dtype, stats_col, col_idx, dtype, stream, mr);
+      cudf::type_dispatcher<dispatch_storage_type>(dtype, stats_col, schema_idx, dtype, stream, mr);
     columns.push_back(std::move(min_col));
     columns.push_back(std::move(max_col));
   }
   auto stats_table = cudf::table(std::move(columns));
 
   // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
-  stats_expression_converter stats_expr{filter, static_cast<size_type>(output_dtypes.size())};
+  stats_expression_converter stats_expr{filter.get(), static_cast<size_type>(output_dtypes.size())};
   auto stats_ast     = stats_expr.get_stats_expr();
   auto predicate_col = cudf::detail::compute_column(stats_table, stats_ast.get(), stream, mr);
   auto predicate     = predicate_col->view();
@@ -460,9 +474,9 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
     return std::nullopt;
   }
   size_type is_required_idx = 0;
-  for (size_t src_idx = 0; src_idx < input_row_group_indices.size(); ++src_idx) {
+  for (auto const& input_row_group_index : input_row_group_indices) {
     std::vector<size_type> filtered_row_groups;
-    for (auto const rg_idx : input_row_group_indices[src_idx]) {
+    for (auto const rg_idx : input_row_group_index) {
       if ((!validity_it[is_required_idx]) || is_row_group_required[is_required_idx]) {
         filtered_row_groups.push_back(rg_idx);
       }
@@ -474,6 +488,20 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
 }
 
 // convert column named expression to column index reference expression
+named_to_reference_converter::named_to_reference_converter(
+  std::optional<std::reference_wrapper<ast::expression const>> expr, table_metadata const& metadata)
+{
+  if (!expr.has_value()) return;
+  // create map for column name.
+  std::transform(metadata.schema_info.cbegin(),
+                 metadata.schema_info.cend(),
+                 thrust::counting_iterator<size_t>(0),
+                 std::inserter(column_name_to_index, column_name_to_index.end()),
+                 [](auto const& sch, auto index) { return std::make_pair(sch.name, index); });
+
+  expr.value().get().accept(*this);
+}
+
 std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
   ast::literal const& expr)
 {
@@ -527,6 +555,84 @@ named_to_reference_converter::visit_operands(
     transformed_operands.push_back(new_operand);
   }
   return transformed_operands;
+}
+
+/**
+ * @brief Converts named columns to index reference columns
+ *
+ */
+class names_from_expression : public ast::detail::expression_transformer {
+ public:
+  names_from_expression(std::optional<std::reference_wrapper<ast::expression const>> expr,
+                        std::vector<std::string> const& skip_names)
+    : _skip_names(skip_names.cbegin(), skip_names.cend())
+  {
+    if (!expr.has_value()) return;
+    expr.value().get().accept(*this);
+  }
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override
+  {
+    return expr;
+  }
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override
+  {
+    return expr;
+  }
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(
+    ast::column_name_reference const& expr) override
+  {
+    // collect column names
+    auto col_name = expr.get_column_name();
+    if (_skip_names.count(col_name) == 0) { _column_names.insert(col_name); }
+    return expr;
+  }
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override
+  {
+    visit_operands(expr.get_operands());
+    return expr;
+  }
+
+  /**
+   * @brief Returns the column names in AST.
+   *
+   * @return AST operation expression
+   */
+  [[nodiscard]] std::vector<std::string> to_vector() &&
+  {
+    return {std::make_move_iterator(_column_names.begin()),
+            std::make_move_iterator(_column_names.end())};
+  }
+
+ private:
+  void visit_operands(std::vector<std::reference_wrapper<ast::expression const>> operands)
+  {
+    for (auto const& operand : operands) {
+      operand.get().accept(*this);
+    }
+  }
+
+  std::unordered_set<std::string> _column_names;
+  std::unordered_set<std::string> _skip_names;
+};
+
+[[nodiscard]] std::vector<std::string> get_column_names_in_expression(
+  std::optional<std::reference_wrapper<ast::expression const>> expr,
+  std::vector<std::string> const& skip_names)
+{
+  return names_from_expression(expr, skip_names).to_vector();
 }
 
 }  // namespace cudf::io::parquet::detail

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <optional>
@@ -85,18 +86,18 @@ struct parse_options {
 std::unique_ptr<cudf::column> multibyte_split(
   data_chunk_source const& source,
   std::string const& delimiter,
-  parse_options options               = {},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  parse_options options             = {},
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<cudf::column> multibyte_split(
   data_chunk_source const& source,
   std::string const& delimiter,
   std::optional<byte_range_info> byte_range,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<cudf::column> multibyte_split(data_chunk_source const& source,
                                               std::string const& delimiter,
-                                              rmm::mr::device_memory_resource* mr);
+                                              rmm::device_async_resource_ref mr);
 
 }  // namespace text
 }  // namespace io

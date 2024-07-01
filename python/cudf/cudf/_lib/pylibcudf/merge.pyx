@@ -4,10 +4,10 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib.cpp cimport merge as cpp_merge
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport null_order, order, size_type
+from cudf._lib.pylibcudf.libcudf cimport merge as cpp_merge
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.types cimport null_order, order, size_type
 
 from .table cimport Table
 

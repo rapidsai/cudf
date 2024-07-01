@@ -10,9 +10,12 @@ from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
-from cudf._lib.cpp cimport expressions as libcudf_exp
-from cudf._lib.cpp.types cimport size_type
-from cudf._lib.cpp.wrappers.timestamps cimport timestamp_ms, timestamp_us
+from cudf._lib.pylibcudf.libcudf cimport expressions as libcudf_exp
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.wrappers.timestamps cimport (
+    timestamp_ms,
+    timestamp_us,
+)
 
 # Necessary for proper casting, see below.
 ctypedef int32_t underlying_type_ast_operator

@@ -23,6 +23,7 @@
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace test {
@@ -36,7 +37,7 @@ namespace test {
  * ```
  */
 class BaseFixture : public ::testing::Test {
-  rmm::mr::device_memory_resource* _mr{rmm::mr::get_current_device_resource()};
+  rmm::device_async_resource_ref _mr{rmm::mr::get_current_device_resource()};
 
  public:
   /**
@@ -44,7 +45,7 @@ class BaseFixture : public ::testing::Test {
    * all tests inheriting from this fixture
    * @return pointer to memory resource
    */
-  rmm::mr::device_memory_resource* mr() { return _mr; }
+  rmm::device_async_resource_ref mr() { return _mr; }
 };
 
 /**
@@ -57,7 +58,7 @@ class BaseFixture : public ::testing::Test {
  */
 template <typename T>
 class BaseFixtureWithParam : public ::testing::TestWithParam<T> {
-  rmm::mr::device_memory_resource* _mr{rmm::mr::get_current_device_resource()};
+  rmm::device_async_resource_ref _mr{rmm::mr::get_current_device_resource()};
 
  public:
   /**
@@ -65,7 +66,7 @@ class BaseFixtureWithParam : public ::testing::TestWithParam<T> {
    * all tests inheriting from this fixture
    * @return pointer to memory resource
    */
-  rmm::mr::device_memory_resource* mr() const { return _mr; }
+  [[nodiscard]] rmm::device_async_resource_ref mr() const { return _mr; }
 };
 
 /**

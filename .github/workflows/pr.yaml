@@ -20,6 +20,7 @@ jobs:
       - conda-python-cudf-tests
       - conda-python-other-tests
       - conda-java-tests
+      - static-configure
       - conda-notebook-tests
       - docs-build
       - wheel-build-cudf
@@ -29,44 +30,43 @@ jobs:
       - devcontainer
       - unit-tests-cudf-pandas
       - pandas-tests
-      #- pandas-tests-diff
-      #- pandas-tests-diff-comment
+      - pandas-tests-diff
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.08
   checks:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.08
     with:
       enable_check_generated_files: false
   conda-cpp-build:
     needs: checks
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@branch-24.08
     with:
       build_type: pull-request
   conda-cpp-checks:
     needs: conda-cpp-build
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@branch-24.08
     with:
       build_type: pull-request
       enable_check_symbols: true
   conda-cpp-tests:
     needs: conda-cpp-build
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@branch-24.08
     with:
       build_type: pull-request
   conda-python-build:
     needs: conda-cpp-build
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@branch-24.08
     with:
       build_type: pull-request
   conda-python-cudf-tests:
     needs: conda-python-build
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.08
     with:
       build_type: pull-request
       script: "ci/test_python_cudf.sh"
@@ -74,24 +74,34 @@ jobs:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     needs: conda-python-build
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.08
     with:
       build_type: pull-request
       script: "ci/test_python_other.sh"
   conda-java-tests:
     needs: conda-cpp-build
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.08
     with:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_java.sh"
+  static-configure:
+    needs: checks
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.08
+    with:
+      build_type: pull-request
+      # Use the wheel container so we can skip conda solves and since our
+      # primary static consumers (Spark) are not in conda anyway.
+      container_image: "rapidsai/ci-wheel:latest"
+      run_script: "ci/configure_cpp_static.sh"
   conda-notebook-tests:
     needs: conda-python-build
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.08
     with:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
@@ -101,7 +111,7 @@ jobs:
   docs-build:
     needs: conda-python-build
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.08
     with:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
@@ -111,21 +121,21 @@ jobs:
   wheel-build-cudf:
     needs: checks
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.08
     with:
       build_type: pull-request
       script: "ci/build_wheel_cudf.sh"
   wheel-tests-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.08
     with:
       build_type: pull-request
       script: ci/test_wheel_cudf.sh
   wheel-build-dask-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.08
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -134,7 +144,7 @@ jobs:
   wheel-tests-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.08
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -142,7 +152,7 @@ jobs:
       script: ci/test_wheel_dask_cudf.sh
   devcontainer:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@branch-24.08
     with:
       arch: '["amd64"]'
       cuda: '["12.2"]'
@@ -153,7 +163,7 @@ jobs:
   unit-tests-cudf-pandas:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.08
     with:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
@@ -162,42 +172,18 @@ jobs:
     # run the Pandas unit tests using PR branch
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.08
     with:
-      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.9" and .CUDA_VER == "12.2.2" ))
       build_type: pull-request
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
       # Hide test failures because they exceed the GITHUB_STEP_SUMMARY output limit.
       test_summary_show: "none"
-  #pandas-tests-diff:
-  #  # diff the results of running the Pandas unit tests and publish a job summary
-  #  needs: [pandas-tests-main, pandas-tests-pr]
-  #  secrets: inherit
-  #  # This branch exports a `job_output` output that the downstream job reads.
-  #  uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.06
-  #  with:
-  #    node_type: cpu4
-  #    build_type: pull-request
-  #    run_script: ci/cudf_pandas_scripts/pandas-tests/diff.sh
-  #pandas-tests-diff-comment:
-  #  # Post comment of pass/fail rate on PR
-  #  runs-on: ubuntu-latest
-  #  needs: pandas-tests-diff
-  #  steps:
-  #    - uses: actions/github-script@v6
-  #      with:
-  #        script: |
-  #          const branch = process.env.GITHUB_REF_NAME;
-  #          const prBranchPattern = new RegExp("^pull-request/[0-9]+$");
-  #          if (!branch.match(prBranchPattern)) {
-  #            throw new Error(`${branch} does not match PR branch pattern.`);
-  #          }
-  #          const summary_url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-  #          const prNumber = branch.split("/")[1];
-  #          const summary_comment = `${{ needs.pandas-tests-diff.outputs.job_output }}`;
-  #          github.rest.issues.createComment({
-  #            issue_number: prNumber,
-  #            owner: context.repo.owner,
-  #            repo: context.repo.repo,
-  #            body: `${summary_comment}\n\nHere is [a link to the full test summary](${summary_url}).\n`
-  #          })
+  pandas-tests-diff:
+    # diff the results of running the Pandas unit tests and publish a job summary
+    needs: pandas-tests
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.08
+    with:
+        node_type: cpu4
+        build_type: pull-request
+        run_script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"

@@ -317,9 +317,10 @@ TEST_P(ParquetV2Test, SlicedTable)
 
   // Struct column
   auto ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
-    {48, 27, 25, 31, 351, 351, 29, 15}, {1, 1, 1, 1, 1, 0, 1, 1}};
+    {48, 27, 25, 31, 351, 351, 29, 15}, {true, true, true, true, true, false, true, true}};
 
-  auto col5 = cudf::test::structs_column_wrapper{{ages_col}, {1, 1, 1, 1, 0, 1, 1, 1}};
+  auto col5 = cudf::test::structs_column_wrapper{{ages_col},
+                                                 {true, true, true, true, false, true, true, true}};
 
   // Struct/List mixed column
 
@@ -503,8 +504,8 @@ TEST_P(ParquetV2Test, StructOfList)
 
   auto weights_col = cudf::test::fixed_width_column_wrapper<float>{1.1, 2.4, 5.3, 8.0, 9.6, 6.9};
 
-  auto ages_col =
-    cudf::test::fixed_width_column_wrapper<int32_t>{{48, 27, 25, 31, 351, 351}, {1, 1, 1, 1, 1, 0}};
+  auto ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
+    {48, 27, 25, 31, 351, 351}, {true, true, true, true, true, false}};
 
   auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
   auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
@@ -533,13 +534,14 @@ TEST_P(ParquetV2Test, StructOfList)
             lcw{lcw{}, lcw{}, lcw{}}};
 
   auto struct_1 = cudf::test::structs_column_wrapper{{weights_col, ages_col, land_unit, flats},
-                                                     {1, 1, 1, 1, 0, 1}};
+                                                     {true, true, true, true, false, true}};
 
   auto is_human_col = cudf::test::fixed_width_column_wrapper<bool>{
-    {true, true, false, false, false, false}, {1, 1, 0, 1, 1, 0}};
+    {true, true, false, false, false, false}, {true, true, false, true, true, false}};
 
-  auto struct_2 =
-    cudf::test::structs_column_wrapper{{is_human_col, struct_1}, {0, 1, 1, 1, 1, 1}}.release();
+  auto struct_2 = cudf::test::structs_column_wrapper{{is_human_col, struct_1},
+                                                     {false, true, true, true, true, true}}
+                    .release();
 
   auto expected = table_view({*struct_2});
 
@@ -580,16 +582,18 @@ TEST_P(ParquetV2Test, ListOfStruct)
 
   auto weight_col = cudf::test::fixed_width_column_wrapper<float>{1.1, 2.4, 5.3, 8.0, 9.6, 6.9};
 
-  auto ages_col =
-    cudf::test::fixed_width_column_wrapper<int32_t>{{48, 27, 25, 31, 351, 351}, {1, 1, 1, 1, 1, 0}};
+  auto ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
+    {48, 27, 25, 31, 351, 351}, {true, true, true, true, true, false}};
 
-  auto struct_1 = cudf::test::structs_column_wrapper{{weight_col, ages_col}, {1, 1, 1, 1, 0, 1}};
+  auto struct_1 = cudf::test::structs_column_wrapper{{weight_col, ages_col},
+                                                     {true, true, true, true, false, true}};
 
   auto is_human_col = cudf::test::fixed_width_column_wrapper<bool>{
-    {true, true, false, false, false, false}, {1, 1, 0, 1, 1, 0}};
+    {true, true, false, false, false, false}, {true, true, false, true, true, false}};
 
-  auto struct_2 =
-    cudf::test::structs_column_wrapper{{is_human_col, struct_1}, {0, 1, 1, 1, 1, 1}}.release();
+  auto struct_2 = cudf::test::structs_column_wrapper{{is_human_col, struct_1},
+                                                     {false, true, true, true, true, true}}
+                    .release();
 
   auto list_offsets_column =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 5, 5, 6}.release();
@@ -752,9 +756,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
       auto const oi = read_offset_index(source, chunk);
 
       int64_t num_vals = 0;
-      for (size_t o = 0; o < oi.page_locations.size(); o++) {
-        auto const& page_loc = oi.page_locations[o];
-        auto const ph        = read_page_header(source, page_loc);
+      for (auto const& page_loc : oi.page_locations) {
+        auto const ph = read_page_header(source, page_loc);
         EXPECT_EQ(ph.type, expected_hdr_type);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
         num_vals += is_v2 ? ph.data_page_header_v2.num_rows : ph.data_page_header.num_values;
@@ -779,8 +782,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
         EXPECT_EQ(ci.null_counts.value()[p], 0);
         EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
       }
-      for (size_t p = 0; p < ci.max_values.size(); p++)
-        EXPECT_TRUE(compare_binary(stats.max_value.value(), ci.max_values[p], ptype, ctype) >= 0);
+      for (auto const& max_value : ci.max_values)
+        EXPECT_TRUE(compare_binary(stats.max_value.value(), max_value, ptype, ctype) >= 0);
     }
   }
 }
@@ -857,9 +860,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
       auto const oi = read_offset_index(source, chunk);
 
       int64_t num_vals = 0;
-      for (size_t o = 0; o < oi.page_locations.size(); o++) {
-        auto const& page_loc = oi.page_locations[o];
-        auto const ph        = read_page_header(source, page_loc);
+      for (auto const& page_loc : oi.page_locations) {
+        auto const ph = read_page_header(source, page_loc);
         EXPECT_EQ(ph.type, expected_hdr_type);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
         num_vals += is_v2 ? ph.data_page_header_v2.num_rows : ph.data_page_header.num_values;
@@ -889,8 +891,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
         }
         EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
       }
-      for (size_t p = 0; p < ci.max_values.size(); p++) {
-        EXPECT_TRUE(compare_binary(stats.max_value.value(), ci.max_values[p], ptype, ctype) >= 0);
+      for (auto const& max_value : ci.max_values) {
+        EXPECT_TRUE(compare_binary(stats.max_value.value(), max_value, ptype, ctype) >= 0);
       }
     }
   }
@@ -953,9 +955,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
       auto const oi = read_offset_index(source, chunk);
 
       int64_t num_vals = 0;
-      for (size_t o = 0; o < oi.page_locations.size(); o++) {
-        auto const& page_loc = oi.page_locations[o];
-        auto const ph        = read_page_header(source, page_loc);
+      for (auto const& page_loc : oi.page_locations) {
+        auto const ph = read_page_header(source, page_loc);
         EXPECT_EQ(ph.type, expected_hdr_type);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
         num_vals += is_v2 ? ph.data_page_header_v2.num_rows : ph.data_page_header.num_values;
@@ -1055,9 +1056,8 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStruct)
       auto const oi = read_offset_index(source, chunk);
 
       int64_t num_vals = 0;
-      for (size_t o = 0; o < oi.page_locations.size(); o++) {
-        auto const& page_loc = oi.page_locations[o];
-        auto const ph        = read_page_header(source, page_loc);
+      for (auto const& page_loc : oi.page_locations) {
+        auto const ph = read_page_header(source, page_loc);
         EXPECT_EQ(ph.type, expected_hdr_type);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
         // last column has 2 values per row
@@ -1075,11 +1075,11 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStruct)
 
       auto const ptype = fmd.schema[colidx].type;
       auto const ctype = fmd.schema[colidx].converted_type;
-      for (size_t p = 0; p < ci.min_values.size(); p++) {
-        EXPECT_TRUE(compare_binary(stats.min_value.value(), ci.min_values[p], ptype, ctype) <= 0);
+      for (auto const& min_value : ci.min_values) {
+        EXPECT_TRUE(compare_binary(stats.min_value.value(), min_value, ptype, ctype) <= 0);
       }
-      for (size_t p = 0; p < ci.max_values.size(); p++) {
-        EXPECT_TRUE(compare_binary(stats.max_value.value(), ci.max_values[p], ptype, ctype) >= 0);
+      for (auto const& max_value : ci.max_values) {
+        EXPECT_TRUE(compare_binary(stats.max_value.value(), max_value, ptype, ctype) >= 0);
       }
     }
   }
@@ -1141,8 +1141,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
   // col3 will have num_ordered_rows / 4 nulls total
   int const null_mods[] = {0, 2, 3, 4};
 
-  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
-    auto const& rg = fmd.row_groups[r];
+  for (auto const& rg : fmd.row_groups) {
     for (size_t c = 0; c < rg.columns.size(); c++) {
       auto const& chunk = rg.columns[c];
 
@@ -1343,8 +1342,7 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
 
   read_footer(source, &fmd);
 
-  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
-    auto const& rg = fmd.row_groups[r];
+  for (auto const& rg : fmd.row_groups) {
     for (size_t c = 0; c < rg.columns.size(); c++) {
       auto const& chunk = rg.columns[c];
 
@@ -1371,9 +1369,8 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
       // the first row index is correct
       auto const oi = read_offset_index(source, chunk);
 
-      for (size_t o = 0; o < oi.page_locations.size(); o++) {
-        auto const& page_loc = oi.page_locations[o];
-        auto const ph        = read_page_header(source, page_loc);
+      for (auto const& page_loc : oi.page_locations) {
+        auto const ph = read_page_header(source, page_loc);
         EXPECT_EQ(ph.type, expected_hdr_type);
         // check null counts in V2 header
         if (is_v2) { EXPECT_EQ(ph.data_page_header_v2.num_nulls, expected_null_counts[c]); }

@@ -3,6 +3,7 @@
 """
 Test related to MultiIndex
 """
+
 import datetime
 import itertools
 import operator
@@ -20,13 +21,8 @@ import pytest
 import cudf
 from cudf.api.extensions import no_default
 from cudf.core.column import as_column
-from cudf.core.index import as_index
-from cudf.testing._utils import (
-    assert_eq,
-    assert_exceptions_equal,
-    assert_neq,
-    expect_warning_if,
-)
+from cudf.testing import assert_eq, assert_neq
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
 @contextmanager
@@ -157,8 +153,6 @@ def test_multiindex_swaplevel():
 
 
 def test_string_index():
-    from cudf.core.index import Index
-
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = cudf.from_pandas(pdf)
     stringIndex = ["a", "b", "c", "d", "e"]
@@ -169,11 +163,11 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = Index(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = cudf.Index(["a", "b", "c", "d", "e"], name="name")
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = as_index(as_column(["a", "b", "c", "d", "e"]), name="name")
+    stringIndex = cudf.Index(as_column(["a", "b", "c", "d", "e"]), name="name")
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
@@ -2152,3 +2146,26 @@ def test_index_to_pandas_arrow_type(scalar):
         levels=[pd.arrays.ArrowExtensionArray(pa_array)], codes=[[0]]
     )
     pd.testing.assert_index_equal(result, expected)
+
+
+def test_multi_index_contains_hashable():
+    gidx = cudf.MultiIndex.from_tuples(zip(["foo", "bar", "baz"], [1, 2, 3]))
+    pidx = gidx.to_pandas()
+
+    assert_exceptions_equal(
+        lambda: [] in gidx,
+        lambda: [] in pidx,
+        lfunc_args_and_kwargs=((),),
+        rfunc_args_and_kwargs=((),),
+    )
+
+
+@pytest.mark.parametrize("array", [[1, 2], [1, None], [None, None]])
+@pytest.mark.parametrize("dropna", [True, False])
+def test_nunique(array, dropna):
+    arrays = [array, [3, 4]]
+    gidx = cudf.MultiIndex.from_arrays(arrays)
+    pidx = pd.MultiIndex.from_arrays(arrays)
+    result = gidx.nunique(dropna=dropna)
+    expected = pidx.nunique(dropna=dropna)
+    assert result == expected

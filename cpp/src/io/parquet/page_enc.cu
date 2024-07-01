@@ -15,6 +15,7 @@
  */
 
 #include "delta_enc.cuh"
+#include "io/parquet/parquet_gpu.hpp"
 #include "io/utilities/block_utils.cuh"
 #include "page_string_utils.cuh"
 #include "parquet_gpu.cuh"
@@ -108,10 +109,10 @@ using rle_page_enc_state_s = page_enc_state_s<rle_buffer_size>;
 /**
  * @brief Returns the size of the type in the Parquet file.
  */
-constexpr uint32_t physical_type_len(Type physical_type, type_id id)
+constexpr uint32_t physical_type_len(Type physical_type, type_id id, int type_length)
 {
-  if (physical_type == FIXED_LEN_BYTE_ARRAY and id == type_id::DECIMAL128) {
-    return sizeof(__int128_t);
+  if (physical_type == FIXED_LEN_BYTE_ARRAY) {
+    return id == type_id::DECIMAL128 ? sizeof(__int128_t) : type_length;
   }
   switch (physical_type) {
     case INT96: return 12u;
@@ -182,7 +183,7 @@ void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
 
   auto const physical_type   = s->col.physical_type;
   auto const leaf_type       = s->col.leaf_column->type().id();
-  auto const dtype_len       = physical_type_len(physical_type, leaf_type);
+  auto const dtype_len       = physical_type_len(physical_type, leaf_type, s->col.type_length);
   auto const nvals           = s->frag.num_leaf_values;
   auto const start_value_idx = s->frag.start_value_idx;
 
@@ -238,8 +239,10 @@ void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
 Encoding __device__ determine_encoding(PageType page_type,
                                        Type physical_type,
                                        bool use_dictionary,
-                                       bool write_v2_headers)
+                                       bool write_v2_headers,
+                                       bool is_split_stream)
 {
+  if (is_split_stream) { return Encoding::BYTE_STREAM_SPLIT; }
   // NOTE: For dictionary encoding, parquet v2 recommends using PLAIN in dictionary page and
   // RLE_DICTIONARY in data page, but parquet v1 uses PLAIN_DICTIONARY in both dictionary and
   // data pages (actual encoding is identical).
@@ -514,6 +517,7 @@ __device__ encode_kernel_mask data_encoding_for_col(EncColumnChunk const* chunk,
       case column_encoding::DELTA_BINARY_PACKED: return encode_kernel_mask::DELTA_BINARY;
       case column_encoding::DELTA_LENGTH_BYTE_ARRAY: return encode_kernel_mask::DELTA_LENGTH_BA;
       case column_encoding::DELTA_BYTE_ARRAY: return encode_kernel_mask::DELTA_BYTE_ARRAY;
+      case column_encoding::BYTE_STREAM_SPLIT: return encode_kernel_mask::BYTE_STREAM_SPLIT;
     }
   }
 
@@ -537,7 +541,8 @@ __device__ size_t delta_data_len(Type physical_type,
                                  size_t page_size,
                                  encode_kernel_mask encoding)
 {
-  auto const dtype_len_out = physical_type_len(physical_type, type_id);
+  // dtype_len_out is for the lengths, rather than the char data, so pass sizeof(int32_t)
+  auto const dtype_len_out = physical_type_len(physical_type, type_id, sizeof(int32_t));
   auto const dtype_len     = [&]() -> uint32_t {
     if (physical_type == INT32) { return int32_logical_len(type_id); }
     if (physical_type == INT96) { return sizeof(int64_t); }
@@ -1591,7 +1596,9 @@ __device__ void finish_page_encode(state_buf* s,
     }
     pages[blockIdx.x] = s->page;
     if (not comp_results.empty()) {
-      comp_results[blockIdx.x]   = {0, compression_status::FAILURE};
+      auto const status =
+        s->col.skip_compression ? compression_status::SKIPPED : compression_status::FAILURE;
+      comp_results[blockIdx.x]   = {0, status};
       pages[blockIdx.x].comp_res = &comp_results[blockIdx.x];
     }
   }
@@ -1606,6 +1613,19 @@ __device__ void finish_page_encode(state_buf* s,
   }
 }
 
+// Encode a fixed-width data type int `dst`. `dst` points to the first byte
+// of the result. `stride` is 1 for PLAIN encoding and num_values for
+// BYTE_STREAM_SPLIT.
+template <typename T>
+__device__ inline void encode_value(uint8_t* dst, T src, size_type stride)
+{
+  T v = src;
+  for (int i = 0; i < sizeof(T); i++) {
+    dst[i * stride] = v;
+    v >>= 8;
+  }
+}
+
 // PLAIN page data encoder
 // blockDim(128, 1, 1)
 template <int block_size>
@@ -1614,7 +1634,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
                  device_span<compression_result> comp_results,
-                 bool write_v2_headers)
+                 bool write_v2_headers,
+                 bool is_split_stream)
 {
   __shared__ __align__(8) page_enc_state_s<0> state_g;
   using block_scan = cub::BlockScan<uint32_t, block_size>;
@@ -1634,13 +1655,15 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
-  if (BitAnd(s->page.kernel_mask, encode_kernel_mask::PLAIN) == 0) { return; }
+  auto const allowed_mask =
+    is_split_stream ? encode_kernel_mask::BYTE_STREAM_SPLIT : encode_kernel_mask::PLAIN;
+  if (BitAnd(s->page.kernel_mask, allowed_mask) == 0) { return; }
 
   // Encode data values
   __syncthreads();
   auto const physical_type = s->col.physical_type;
   auto const type_id       = s->col.leaf_column->type().id();
-  auto const dtype_len_out = physical_type_len(physical_type, type_id);
+  auto const dtype_len_out = physical_type_len(physical_type, type_id, s->col.type_length);
   auto const dtype_len_in  = [&]() -> uint32_t {
     if (physical_type == INT32) { return int32_logical_len(type_id); }
     if (physical_type == INT96) { return sizeof(int64_t); }
@@ -1648,17 +1671,19 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   }();
 
   if (t == 0) {
-    uint8_t* dst   = s->cur;
-    s->rle_run     = 0;
-    s->rle_pos     = 0;
-    s->rle_numvals = 0;
-    s->rle_out     = dst;
-    s->page.encoding =
-      determine_encoding(s->page.page_type, physical_type, s->ck.use_dictionary, write_v2_headers);
+    uint8_t* dst     = s->cur;
+    s->rle_run       = 0;
+    s->rle_pos       = 0;
+    s->rle_numvals   = 0;
+    s->rle_out       = dst;
+    s->page.encoding = determine_encoding(
+      s->page.page_type, physical_type, s->ck.use_dictionary, write_v2_headers, is_split_stream);
     s->page_start_val  = row_to_value_idx(s->page.start_row, s->col);
     s->chunk_start_val = row_to_value_idx(s->ck.start_row, s->col);
   }
   __syncthreads();
+
+  auto const stride = is_split_stream ? s->page.num_valid : 1;
 
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
     uint32_t nvals = min(s->page.num_leaf_values - cur_val_idx, block_size);
@@ -1706,6 +1731,13 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     uint32_t total_len = 0;
     block_scan(scan_storage).ExclusiveSum(len, pos, total_len);
     __syncthreads();
+
+    // if BYTE_STREAM_SPLIT, then translate byte positions to indexes
+    if (is_split_stream) {
+      pos /= dtype_len_out;
+      total_len /= dtype_len_out;
+    }
+
     if (t == 0) { s->cur = dst + total_len; }
     if (is_valid) {
       switch (physical_type) {
@@ -1723,13 +1755,11 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
             }
           }();
 
-          dst[pos + 0] = v;
-          dst[pos + 1] = v >> 8;
-          dst[pos + 2] = v >> 16;
-          dst[pos + 3] = v >> 24;
+          encode_value(dst + pos, v, stride);
         } break;
+        case DOUBLE:
         case INT64: {
-          int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
+          auto v           = s->col.leaf_column->element<int64_t>(val_idx);
           int32_t ts_scale = s->col.ts_scale;
           if (ts_scale != 0) {
             if (ts_scale < 0) {
@@ -1738,16 +1768,10 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
               v *= ts_scale;
             }
           }
-          dst[pos + 0] = v;
-          dst[pos + 1] = v >> 8;
-          dst[pos + 2] = v >> 16;
-          dst[pos + 3] = v >> 24;
-          dst[pos + 4] = v >> 32;
-          dst[pos + 5] = v >> 40;
-          dst[pos + 6] = v >> 48;
-          dst[pos + 7] = v >> 56;
+          encode_value(dst + pos, v, stride);
         } break;
         case INT96: {
+          // only PLAIN encoding is supported
           int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
           int32_t ts_scale = s->col.ts_scale;
           if (ts_scale != 0) {
@@ -1774,27 +1798,14 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
           }();
 
           // the 12 bytes of fixed length data.
-          v             = last_day_nanos.count();
-          dst[pos + 0]  = v;
-          dst[pos + 1]  = v >> 8;
-          dst[pos + 2]  = v >> 16;
-          dst[pos + 3]  = v >> 24;
-          dst[pos + 4]  = v >> 32;
-          dst[pos + 5]  = v >> 40;
-          dst[pos + 6]  = v >> 48;
-          dst[pos + 7]  = v >> 56;
-          uint32_t w    = julian_days.count();
-          dst[pos + 8]  = w;
-          dst[pos + 9]  = w >> 8;
-          dst[pos + 10] = w >> 16;
-          dst[pos + 11] = w >> 24;
+          v = last_day_nanos.count();
+          encode_value(dst + pos, v, 1);
+          uint32_t w = julian_days.count();
+          encode_value(dst + pos + 8, w, 1);
         } break;
 
-        case DOUBLE: {
-          auto v = s->col.leaf_column->element<double>(val_idx);
-          memcpy(dst + pos, &v, 8);
-        } break;
         case BYTE_ARRAY: {
+          // only PLAIN encoding is supported
           auto const bytes = [](cudf::type_id const type_id,
                                 column_device_view const* leaf_column,
                                 uint32_t const val_idx) -> void const* {
@@ -1808,11 +1819,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
               default: CUDF_UNREACHABLE("invalid type id for byte array writing!");
             }
           }(type_id, s->col.leaf_column, val_idx);
-          uint32_t v   = len - 4;  // string length
-          dst[pos + 0] = v;
-          dst[pos + 1] = v >> 8;
-          dst[pos + 2] = v >> 16;
-          dst[pos + 3] = v >> 24;
+          uint32_t v = len - 4;  // string length
+          encode_value(dst + pos, v, 1);
           if (v != 0) memcpy(dst + pos + 4, bytes, v);
         } break;
         case FIXED_LEN_BYTE_ARRAY: {
@@ -1820,10 +1828,29 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
             // When using FIXED_LEN_BYTE_ARRAY for decimals, the rep is encoded in big-endian
             auto const v = s->col.leaf_column->element<numeric::decimal128>(val_idx).value();
             auto const v_char_ptr = reinterpret_cast<char const*>(&v);
-            thrust::copy(thrust::seq,
-                         thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
-                         thrust::make_reverse_iterator(v_char_ptr),
-                         dst + pos);
+            if (is_split_stream) {
+              for (int i = dtype_len_out - 1; i >= 0; i--, pos += stride) {
+                dst[pos] = v_char_ptr[i];
+              }
+            } else {
+              thrust::copy(thrust::seq,
+                           thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
+                           thrust::make_reverse_iterator(v_char_ptr),
+                           dst + pos);
+            }
+          } else {
+            auto const elem =
+              get_element<statistics::byte_array_view>(*(s->col.leaf_column), val_idx);
+            if (len != 0 and elem.data() != nullptr) {
+              if (is_split_stream) {
+                auto const v_char_ptr = reinterpret_cast<uint8_t const*>(elem.data());
+                for (int i = 0; i < dtype_len_out; i++, pos += stride) {
+                  dst[pos] = v_char_ptr[i];
+                }
+              } else {
+                memcpy(dst + pos, elem.data(), len);
+              }
+            }
           }
         } break;
       }
@@ -1831,6 +1858,9 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     __syncthreads();
   }
 
+  // for BYTE_STREAM_SPLIT, s->cur now points to the end of the first stream.
+  // need it to point to the end of the Nth stream.
+  if (is_split_stream and t == 0) { s->cur += (dtype_len_out - 1) * s->page.num_valid; }
   finish_page_encode<block_size>(
     s, s->cur, pages, comp_in, comp_out, comp_results, write_v2_headers);
 }
@@ -1868,7 +1898,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   // Encode data values
   auto const physical_type = s->col.physical_type;
   auto const type_id       = s->col.leaf_column->type().id();
-  auto const dtype_len_out = physical_type_len(physical_type, type_id);
+  auto const dtype_len_out = physical_type_len(physical_type, type_id, s->col.type_length);
   auto const dtype_len_in  = [&]() -> uint32_t {
     if (physical_type == INT32) { return int32_logical_len(type_id); }
     if (physical_type == INT96) { return sizeof(int64_t); }
@@ -1881,13 +1911,13 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
                            ? s->ck.dict_rle_bits
                            : -1;
   if (t == 0) {
-    uint8_t* dst   = s->cur;
-    s->rle_run     = 0;
-    s->rle_pos     = 0;
-    s->rle_numvals = 0;
-    s->rle_out     = dst;
-    s->page.encoding =
-      determine_encoding(s->page.page_type, physical_type, s->ck.use_dictionary, write_v2_headers);
+    uint8_t* dst     = s->cur;
+    s->rle_run       = 0;
+    s->rle_pos       = 0;
+    s->rle_numvals   = 0;
+    s->rle_out       = dst;
+    s->page.encoding = determine_encoding(
+      s->page.page_type, physical_type, s->ck.use_dictionary, write_v2_headers, false);
     if (dict_bits >= 0 && physical_type != BOOLEAN) {
       dst[0]     = dict_bits;
       s->rle_out = dst + 1;
@@ -1896,6 +1926,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
       s->rle_out     = dst + RLE_LENGTH_FIELD_LEN;
       s->rle_len_pos = dst;
     }
+    s->cur             = s->rle_out;
     s->page_start_val  = row_to_value_idx(s->page.start_row, s->col);
     s->chunk_start_val = row_to_value_idx(s->ck.start_row, s->col);
   }
@@ -1999,7 +2030,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   // Encode data values
   auto const physical_type = s->col.physical_type;
   auto const type_id       = s->col.leaf_column->type().id();
-  auto const dtype_len_out = physical_type_len(physical_type, type_id);
+  auto const dtype_len_out = physical_type_len(physical_type, type_id, s->col.type_length);
   auto const dtype_len_in  = [&]() -> uint32_t {
     if (physical_type == INT32) { return int32_logical_len(type_id); }
     if (physical_type == INT96) { return sizeof(int64_t); }
@@ -2494,6 +2525,7 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
     if (auto comp_res = curr_page.comp_res; comp_res != nullptr) {
       auto const lvl_bytes = curr_page.is_v2() ? curr_page.level_bytes() : 0;
       compressed_data_size += comp_res->bytes_written + lvl_bytes;
+      // TODO: would this be better as a ballot?
       if (comp_res->status != compression_status::SUCCESS) {
         atomicOr(&compression_error[warp_id], 1);
       }
@@ -2926,6 +2958,9 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
     auto const [min_ptr, min_size] =
       get_extremum(&s->min_value, dtype, scratch, true, NO_TRUNC_STATS);
     encoder.field_binary(6, min_ptr, min_size);
+    // cudf min/max statistics are always exact (i.e. not truncated)
+    encoder.field_bool(7, true);
+    encoder.field_bool(8, true);
   }
   encoder.end(&end);
   return end;
@@ -3197,7 +3232,7 @@ __device__ int32_t calculate_boundary_order(statistics_chunk const* s,
 }
 
 // align ptr to an 8-byte boundary. address returned will be <= ptr.
-constexpr __device__ void* align8(void* ptr)
+inline __device__ void* align8(void* ptr)
 {
   // it's ok to round down because we have an extra 7 bytes in the buffer
   auto algn = 3 & reinterpret_cast<std::uintptr_t>(ptr);
@@ -3413,7 +3448,14 @@ void EncodePages(device_span<EncPage> pages,
     gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, write_v2_headers, encode_kernel_mask::PLAIN);
     gpuEncodePages<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
-      pages, comp_in, comp_out, comp_results, write_v2_headers);
+      pages, comp_in, comp_out, comp_results, write_v2_headers, false);
+  }
+  if (BitAnd(kernel_mask, encode_kernel_mask::BYTE_STREAM_SPLIT) != 0) {
+    auto const strm = streams[s_idx++];
+    gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
+      pages, write_v2_headers, encode_kernel_mask::BYTE_STREAM_SPLIT);
+    gpuEncodePages<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
+      pages, comp_in, comp_out, comp_results, write_v2_headers, true);
   }
   if (BitAnd(kernel_mask, encode_kernel_mask::DELTA_BINARY) != 0) {
     auto const strm = streams[s_idx++];

@@ -11,10 +11,10 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column, column_view
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.column.column cimport column, column_view
+from cudf._lib.pylibcudf.libcudf.table.table cimport table
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 try:
     import ujson as json
@@ -313,6 +313,17 @@ cdef data_from_pylibcudf_table(tbl, column_names, index_names=None):
         columns_from_pylibcudf_table(tbl),
         column_names,
         index_names
+    )
+
+cdef data_from_pylibcudf_io(tbl_with_meta):
+    """
+    Unpacks the TableWithMetadata from libcudf I/O
+    into a dict of columns and an Index (cuDF format)
+    """
+    return _data_from_columns(
+        columns=[Column.from_pylibcudf(plc) for plc in tbl_with_meta.columns],
+        column_names=tbl_with_meta.column_names,
+        index_names=None
     )
 
 cdef columns_from_table_view(

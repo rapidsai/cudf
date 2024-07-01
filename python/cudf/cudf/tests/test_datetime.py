@@ -15,10 +15,10 @@ import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.index import DatetimeIndex
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
 )
@@ -2088,25 +2088,6 @@ def test_datetime_constructor(data, dtype):
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        [pd.Timestamp("2001-01-01", tz="America/New_York")],
-        pd.Series(["2001-01-01"], dtype="datetime64[ns, America/New_York]"),
-        pd.Index(["2001-01-01"], dtype="datetime64[ns, America/New_York]"),
-    ],
-)
-def test_construction_from_tz_timestamps(data):
-    with pytest.raises(NotImplementedError):
-        _ = cudf.Series(data)
-    with pytest.raises(NotImplementedError):
-        _ = cudf.Index(data)
-    with pytest.raises(NotImplementedError):
-        _ = cudf.DatetimeIndex(data)
-    with pytest.raises(NotImplementedError):
-        cudf.CategoricalIndex(data)
-
-
 @pytest.mark.parametrize("op", _cmpops)
 def test_datetime_binop_tz_timestamp(op):
     s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
@@ -2191,9 +2172,8 @@ def test_datetime_index_freq_error(data, dtype, freq):
 
 
 def test_strings_with_utc_offset_not_implemented():
-    with pytest.warns(DeprecationWarning, match="parsing timezone"):  # cupy
-        with pytest.raises(NotImplementedError):
-            DatetimeIndex(["2022-07-22 00:00:00+02:00"])
+    with pytest.raises(NotImplementedError):
+        DatetimeIndex(["2022-07-22 00:00:00+02:00"])
 
 
 @pytest.mark.parametrize("code", ["z", "Z"])
@@ -2227,78 +2207,116 @@ def test_args_not_datetime_typerror(arg):
 
 
 @pytest.mark.parametrize(
-    "data",
+    "data, dtype",
     [
         [
-            "2000-01-01 00:00:00.000000000",
-            "2000-01-01 00:00:00.000000000",
-            "2000-01-01 00:00:00.000000000",
+            [
+                "2000-01-01 00:00:00.000000000",
+                "2000-01-01 00:00:00.000000000",
+                "2000-01-01 00:00:00.000000000",
+            ],
+            "datetime64[s]",
         ],
         [
-            "2000-01-01 00:00:00.000000000",
-            None,
-            "2000-01-01 00:00:00.000000000",
+            [
+                "2000-01-01 00:00:00.000000000",
+                None,
+                "2000-01-01 00:00:00.000000000",
+            ],
+            "datetime64[s]",
         ],
         [
-            "2000-01-01 00:00:00.001000000",
-            "2000-01-01 00:00:00.000000000",
-            "2000-01-01 00:00:00.000000000",
+            [
+                "2000-01-01 00:00:00.001000000",
+                "2000-01-01 00:00:00.000000000",
+                "2000-01-01 00:00:00.000000000",
+            ],
+            "datetime64[us]",
         ],
         [
-            "2000-01-01 00:00:00.010000000",
-            "2000-01-01 00:00:00.020000000",
-            "2000-01-01 00:00:00.030000000",
+            [
+                "2000-01-01 00:00:00.010000000",
+                "2000-01-01 00:00:00.020000000",
+                "2000-01-01 00:00:00.030000000",
+            ],
+            "datetime64[ms]",
         ],
         [
-            "2000-01-01 00:00:00.010000000",
-            "2000-01-01 00:00:00.020000000",
-            None,
+            [
+                "2000-01-01 00:00:00.010000000",
+                "2000-01-01 00:00:00.020000000",
+                None,
+            ],
+            "datetime64[ms]",
         ],
         [
-            "2000-01-01 00:00:00.000001000",
-            "2000-01-01 00:00:00.000000000",
-            "2000-01-01 00:00:00.000004000",
+            [
+                "2000-01-01 00:00:00.000001000",
+                "2000-01-01 00:00:00.000000000",
+                "2000-01-01 00:00:00.000004000",
+            ],
+            "datetime64[us]",
         ],
         [
-            None,
-            "2000-01-01 00:00:00.000000000",
-            "2000-01-01 00:00:00.000004000",
+            [
+                None,
+                "2000-01-01 00:00:00.000000000",
+                "2000-01-01 00:00:00.000004000",
+            ],
+            "datetime64[us]",
         ],
         [
-            "2000-01-01 00:00:00.000000010",
-            "2000-01-01 00:00:00.000000002",
-            "2000-01-01 00:00:00.000000000",
+            [
+                "2000-01-01 00:00:00.000000010",
+                "2000-01-01 00:00:00.000000002",
+                "2000-01-01 00:00:00.000000000",
+            ],
+            "datetime64[ns]",
         ],
         [
-            "2000-01-01 00:00:00.000000010",
-            None,
-            "2000-01-01 00:00:00.000000000",
+            [
+                "2000-01-01 00:00:00.000000010",
+                None,
+                "2000-01-01 00:00:00.000000000",
+            ],
+            "datetime64[ns]",
         ],
         [
-            "2000-01-01 00:00:01.000000000",
-            "2000-01-01 00:00:40.000000000",
-            "2000-01-01 00:00:59.000000000",
+            [
+                "2000-01-01 00:00:01.000000000",
+                "2000-01-01 00:00:40.000000000",
+                "2000-01-01 00:00:59.000000000",
+            ],
+            "datetime64[s]",
         ],
         [
-            "2000-01-01 00:10:00.000000000",
-            "2000-01-01 00:30:40.000000000",
-            "2000-01-01 00:59:00.000000000",
+            [
+                "2000-01-01 00:10:00.000000000",
+                "2000-01-01 00:30:40.000000000",
+                "2000-01-01 00:59:00.000000000",
+            ],
+            "datetime64[s]",
         ],
         [
-            "2000-01-01 07:00:00.000000000",
-            "2000-01-01 08:00:00.000000000",
-            None,
+            [
+                "2000-01-01 07:00:00.000000000",
+                "2000-01-01 08:00:00.000000000",
+                None,
+            ],
+            "datetime64[s]",
         ],
-        [None, None, None],
-        [],
+        [[None, None, None], "datetime64[s]"],
+        [[], "datetime64[s]"],
         [
-            "2000-01-01 00:10:00.123456789",
-            "2000-01-01 00:30:40.123123456",
-            "2000-01-01 00:59:00.675347634",
+            [
+                "2000-01-01 00:10:00.123456789",
+                "2000-01-01 00:30:40.123123456",
+                "2000-01-01 00:59:00.675347634",
+            ],
+            "datetime64[ns]",
         ],
     ],
 )
-@pytest.mark.parametrize("dtype", DATETIME_TYPES)
 def test_datetime_to_str(data, dtype):
     gs = cudf.Series(data, dtype=dtype)
     ps = gs.to_pandas()
@@ -2309,6 +2327,15 @@ def test_datetime_to_str(data, dtype):
     expected = ps.astype("string")
 
     assert_eq(actual.to_pandas(nullable=True), expected)
+
+
+def test_datetime_string_to_datetime_resolution_loss_raises():
+    data = ["2020-01-01 00:00:00.00001"]
+    dtype = "datetime64[s]"
+    with pytest.raises(ValueError):
+        cudf.Series(data, dtype=dtype)
+    with pytest.raises(ValueError):
+        pd.Series(data, dtype=dtype)
 
 
 def test_dateimeindex_from_noniso_string():
@@ -2345,15 +2372,71 @@ def test_datetime_raise_warning(freqstr):
         t.dt.ceil(freqstr)
 
 
-def test_timezone_array_notimplemented():
+def test_timezone_pyarrow_array():
     pa_array = pa.array(
         [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)],
         type=pa.timestamp("ns", "UTC"),
     )
-    with pytest.raises(NotImplementedError):
-        cudf.Series(pa_array)
+    result = cudf.Series(pa_array)
+    expected = pa_array.to_pandas()
+    assert_eq(result, expected)
 
 
 def test_to_datetime_errors_ignore_deprecated():
     with pytest.warns(FutureWarning):
         cudf.to_datetime("2001-01-01 00:04:45", errors="ignore")
+
+
+def test_date_range_freq_default():
+    result = pd.date_range("2020-01-01", periods=2, name="foo")
+    expected = cudf.date_range("2020-01-01", periods=2, name="foo")
+    assert_eq(result, expected)
+
+
+def test_date_range_tz():
+    result = pd.date_range("2020-01-01", periods=2, tz="UTC")
+    expected = cudf.date_range("2020-01-01", periods=2, tz="UTC")
+    assert_eq(result, expected)
+
+    result = pd.date_range("2020-01-01", "2020-01-02", periods=2, tz="UTC")
+    expected = cudf.date_range("2020-01-01", "2020-01-02", periods=2, tz="UTC")
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("meth", ["day_name", "month_name"])
+@pytest.mark.parametrize("klass", [pd.Series, pd.DatetimeIndex])
+def test_day_month_name(meth, klass):
+    data = [
+        "2020-05-31 08:00:00",
+        None,
+        "1999-12-31 18:40:00",
+        "2000-12-31 04:00:00",
+        None,
+        "1900-02-28 07:00:00",
+        "1800-03-14 07:30:00",
+        "2100-03-14 07:30:00",
+        "1970-01-01 00:00:00",
+        "1969-12-31 12:59:00",
+    ]
+
+    p_obj = klass(data, dtype="datetime64[s]")
+    g_obj = cudf.from_pandas(p_obj)
+
+    if klass is pd.Series:
+        p_obj = p_obj.dt
+        g_obj = g_obj.dt
+
+    expect = getattr(p_obj, meth)()
+    got = getattr(g_obj, meth)()
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("meth", ["day_name", "month_name"])
+@pytest.mark.parametrize("klass", [cudf.Series, cudf.DatetimeIndex])
+def test_day_month_name_locale_not_implemented(meth, klass):
+    obj = klass(cudf.date_range("2020-01-01", periods=7))
+    if klass is cudf.Series:
+        obj = obj.dt
+    with pytest.raises(NotImplementedError):
+        getattr(obj, meth)(locale="pt_BR.utf8")

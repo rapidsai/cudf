@@ -11,8 +11,8 @@ import cudf
 import dask_cudf
 from dask_cudf.tests.utils import skip_dask_expr
 
-# No dask-expr support
-pytestmark = skip_dask_expr()
+# No dask-expr support for dask<2024.4.0
+pytestmark = skip_dask_expr(lt_version="2024.4.0")
 
 cur_dir = os.path.dirname(__file__)
 text_file = os.path.join(cur_dir, "data/text/sample.pgn")

@@ -7,9 +7,9 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.cpp.types cimport data_type
-from cudf._lib.io.datasource cimport Datasource, NativeFileDatasource
+cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
+from cudf._lib.pylibcudf.io.datasource cimport Datasource, NativeFileDatasource
+from cudf._lib.pylibcudf.libcudf.types cimport data_type
 from cudf._lib.types cimport dtype_to_data_type
 
 import numpy as np
@@ -18,7 +18,7 @@ import pandas as pd
 import cudf
 from cudf.core.buffer import acquire_spill_lock
 
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.pylibcudf.libcudf.types cimport size_type
 
 import errno
 import os
@@ -29,22 +29,22 @@ from io import BytesIO, StringIO
 from libc.stdint cimport int32_t
 from libcpp cimport bool
 
-from cudf._lib.cpp.io.csv cimport (
+from cudf._lib.io.utils cimport make_sink_info, make_source_info
+from cudf._lib.pylibcudf.libcudf.io.csv cimport (
     csv_reader_options,
     csv_writer_options,
     read_csv as cpp_read_csv,
     write_csv as cpp_write_csv,
 )
-from cudf._lib.cpp.io.data_sink cimport data_sink
-from cudf._lib.cpp.io.types cimport (
+from cudf._lib.pylibcudf.libcudf.io.data_sink cimport data_sink
+from cudf._lib.pylibcudf.libcudf.io.types cimport (
     compression_type,
     quote_style,
     sink_info,
     source_info,
     table_with_metadata,
 )
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.io.utils cimport make_sink_info, make_source_info
+from cudf._lib.pylibcudf.libcudf.table.table_view cimport table_view
 from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 from pyarrow.lib import NativeFile
@@ -151,14 +151,14 @@ cdef csv_reader_options make_csv_reader_options(
         )
 
     if quoting == 1:
-        c_quoting = quote_style.QUOTE_ALL
+        c_quoting = quote_style.ALL
     elif quoting == 2:
-        c_quoting = quote_style.QUOTE_NONNUMERIC
+        c_quoting = quote_style.NONNUMERIC
     elif quoting == 3:
-        c_quoting = quote_style.QUOTE_NONE
+        c_quoting = quote_style.NONE
     else:
         # Default value
-        c_quoting = quote_style.QUOTE_MINIMAL
+        c_quoting = quote_style.MINIMAL
 
     cdef csv_reader_options csv_reader_options_c = move(
         csv_reader_options.builder(c_source_info)
@@ -434,7 +434,7 @@ def read_csv(
     if dtype is not None:
         if isinstance(dtype, abc.Mapping):
             for k, v in dtype.items():
-                if cudf.api.types._is_categorical_dtype(v):
+                if isinstance(cudf.dtype(v), cudf.CategoricalDtype):
                     df._data[str(k)] = df._data[str(k)].astype(v)
         elif (
             cudf.api.types.is_scalar(dtype) or
@@ -442,11 +442,11 @@ def read_csv(
                 np.dtype, pd.api.extensions.ExtensionDtype, type
             ))
         ):
-            if cudf.api.types._is_categorical_dtype(dtype):
+            if isinstance(cudf.dtype(dtype), cudf.CategoricalDtype):
                 df = df.astype(dtype)
         elif isinstance(dtype, abc.Collection):
             for index, col_dtype in enumerate(dtype):
-                if cudf.api.types._is_categorical_dtype(col_dtype):
+                if isinstance(cudf.dtype(col_dtype), cudf.CategoricalDtype):
                     col_name = df._data.names[index]
                     df._data[col_name] = df._data[col_name].astype(col_dtype)
 
@@ -554,11 +554,10 @@ cdef data_type _get_cudf_data_type_from_dtype(object dtype) except *:
     # TODO: Remove this work-around Dictionary types
     # in libcudf are fully mapped to categorical columns:
     # https://github.com/rapidsai/cudf/issues/3960
-    if cudf.api.types._is_categorical_dtype(dtype):
-        if isinstance(dtype, str):
-            dtype = "str"
-        else:
-            dtype = dtype.categories.dtype
+    if isinstance(dtype, cudf.CategoricalDtype):
+        dtype = dtype.categories.dtype
+    elif dtype == "category":
+        dtype = "str"
 
     if isinstance(dtype, str):
         if str(dtype) == "date32":

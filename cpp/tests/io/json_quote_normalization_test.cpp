@@ -20,6 +20,8 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/types.hpp>
@@ -33,29 +35,28 @@
 // Base test fixture for tests
 struct JsonNormalizationTest : public cudf::test::BaseFixture {};
 
-void run_test(const std::string& host_input, const std::string& expected_host_output)
+void run_test(std::string const& host_input, std::string const& expected_host_output)
 {
   // RMM memory resource
   std::shared_ptr<rmm::mr::device_memory_resource> rsc =
     std::make_shared<rmm::mr::cuda_memory_resource>();
 
-  rmm::device_uvector<char> device_input(
-    host_input.size(), cudf::test::get_default_stream(), rsc.get());
-  CUDF_CUDA_TRY(cudaMemcpyAsync(device_input.data(),
-                                host_input.data(),
-                                host_input.size(),
-                                cudaMemcpyHostToDevice,
-                                cudf::test::get_default_stream().value()));
-  // Preprocessing FST
-  auto device_fst_output = cudf::io::json::detail::normalize_single_quotes(
-    std::move(device_input), cudf::test::get_default_stream(), rsc.get());
+  auto stream_view  = cudf::test::get_default_stream();
+  auto device_input = cudf::detail::make_device_uvector_async(
+    host_input, stream_view, rmm::mr::get_current_device_resource());
 
-  std::string preprocessed_host_output(device_fst_output.size(), 0);
+  // Preprocessing FST
+  cudf::io::datasource::owning_buffer<rmm::device_uvector<char>> device_data(
+    std::move(device_input));
+  cudf::io::json::detail::normalize_single_quotes(device_data, stream_view, rsc.get());
+
+  std::string preprocessed_host_output(device_data.size(), 0);
   CUDF_CUDA_TRY(cudaMemcpyAsync(preprocessed_host_output.data(),
-                                device_fst_output.data(),
+                                device_data.data(),
                                 preprocessed_host_output.size(),
                                 cudaMemcpyDeviceToHost,
-                                cudf::test::get_default_stream().value()));
+                                stream_view.value()))
+  stream_view.synchronize();
   CUDF_TEST_EXPECT_VECTOR_EQUAL(
     preprocessed_host_output, expected_host_output, preprocessed_host_output.size());
 }

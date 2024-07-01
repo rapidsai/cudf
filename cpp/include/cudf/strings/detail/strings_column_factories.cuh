@@ -25,6 +25,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/copy.h>
@@ -73,7 +74,7 @@ template <typename IndexPairIterator>
 std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
                                             IndexPairIterator end,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   size_type strings_count = thrust::distance(begin, end);
@@ -85,9 +86,10 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
       return (item.first != nullptr ? static_cast<size_type>(item.second) : size_type{0});
     });
   auto offsets_transformer_itr = thrust::make_transform_iterator(begin, offsets_transformer);
-  auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
+  auto [offsets_column, bytes] = cudf::strings::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-  auto offsets_view = offsets_column->view();
+  auto const d_offsets =
+    cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
 
   // create null mask
   auto validator = [] __device__(string_index_pair const item) { return item.first != nullptr; };
@@ -97,11 +99,10 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
     (null_count > 0) ? std::move(new_nulls.first) : rmm::device_buffer{0, stream, mr};
 
   // build chars column
-  auto chars_data = [offsets_view, bytes = bytes, begin, strings_count, null_count, stream, mr] {
+  auto chars_data = [d_offsets, bytes = bytes, begin, strings_count, null_count, stream, mr] {
     auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
     // use a character-parallel kernel for long string lengths
     if (avg_bytes_per_row > FACTORY_BYTES_PER_ROW_THRESHOLD) {
-      auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets_view);
       auto const str_begin = thrust::make_transform_iterator(
         begin, cuda::proclaim_return_type<string_view>([] __device__(auto ip) {
           return string_view{ip.first, ip.second};
@@ -120,12 +121,11 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
       auto d_chars    = chars_data.data();
       auto copy_chars = [d_chars] __device__(auto item) {
         string_index_pair const str = thrust::get<0>(item);
-        size_type const offset      = thrust::get<1>(item);
+        int64_t const offset        = thrust::get<1>(item);
         if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
       };
       thrust::for_each_n(rmm::exec_policy(stream),
-                         thrust::make_zip_iterator(
-                           thrust::make_tuple(begin, offsets_view.template begin<size_type>())),
+                         thrust::make_zip_iterator(thrust::make_tuple(begin, d_offsets)),
                          strings_count,
                          copy_chars);
       return chars_data;
@@ -163,25 +163,19 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
                                             size_type null_count,
                                             rmm::device_buffer&& null_mask,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   size_type strings_count = thrust::distance(offsets_begin, offsets_end) - 1;
-  size_type bytes         = std::distance(chars_begin, chars_end) * sizeof(char);
-  if (strings_count == 0) return make_empty_column(type_id::STRING);
+  if (strings_count == 0) { return make_empty_column(type_id::STRING); }
 
+  int64_t const bytes = std::distance(chars_begin, chars_end) * sizeof(char);
   CUDF_EXPECTS(bytes >= 0, "invalid offsets data");
 
   // build offsets column -- this is the number of strings + 1
-  auto offsets_column = make_numeric_column(
-    data_type{type_to_id<size_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
-  auto offsets_view = offsets_column->mutable_view();
-  thrust::transform(rmm::exec_policy(stream),
-                    offsets_begin,
-                    offsets_end,
-                    offsets_view.data<int32_t>(),
-                    cuda::proclaim_return_type<int32_t>(
-                      [] __device__(auto offset) { return static_cast<int32_t>(offset); }));
+  auto [offsets_column, computed_bytes] =
+    cudf::strings::detail::make_offsets_child_column(offsets_begin, offsets_end, stream, mr);
+  CUDF_EXPECTS(bytes == computed_bytes, "unexpected byte count");
 
   // build chars column
   rmm::device_uvector<char> chars_data(bytes, stream, mr);

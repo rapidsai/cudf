@@ -31,6 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
@@ -477,7 +478,7 @@ CUDF_KERNEL void compute_segment_sizes(device_span<column_device_view const> col
 std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
                                                 size_type segment_length,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::device_async_resource_ref mr)
 {
   // If there is no rows, segment_length will not be checked.
   if (t.num_rows() <= 0) { return cudf::make_empty_column(type_id::INT32); }
@@ -557,7 +558,7 @@ std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
 
 std::unique_ptr<column> row_bit_count(table_view const& t,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   return segmented_row_bit_count(t, 1, stream, mr);
 }
@@ -566,13 +567,13 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
 
 std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
                                                 size_type segment_length,
-                                                rmm::mr::device_memory_resource* mr)
+                                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::segmented_row_bit_count(t, segment_length, cudf::get_default_stream(), mr);
 }
 
-std::unique_ptr<column> row_bit_count(table_view const& t, rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> row_bit_count(table_view const& t, rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::row_bit_count(t, cudf::get_default_stream(), mr);

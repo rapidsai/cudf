@@ -28,6 +28,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/for_each.h>
@@ -36,18 +37,18 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
-std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
+std::unique_ptr<column> replace_nulls(strings_column_view const& input,
                                       string_scalar const& repl,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
-  size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(type_id::STRING);
+  size_type strings_count = input.size();
+  if (strings_count == 0) { return make_empty_column(type_id::STRING); }
   CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid.");
 
   string_view d_repl(repl.data(), repl.size());
 
-  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_strings      = *strings_column;
 
   // build offsets column
@@ -58,12 +59,12 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
     }));
   auto [offsets_column, bytes] = cudf::strings::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-  auto d_offsets = offsets_column->view().data<int32_t>();
+  auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
 
   // build chars column
   rmm::device_uvector<char> chars(bytes, stream, mr);
   auto d_chars = chars.data();
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      [d_strings, d_repl, d_offsets, d_chars] __device__(size_type idx) {

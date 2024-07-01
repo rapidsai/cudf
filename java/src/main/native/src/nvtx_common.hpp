@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ namespace cudf {
 namespace jni {
 
 struct java_domain {
-  static constexpr char const *name{"Java"};
+  static constexpr char const* name{"Java"};
 };
 
-} // namespace jni
-} // namespace cudf
+}  // namespace jni
+}  // namespace cudf

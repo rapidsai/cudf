@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from collections import abc
-from typing import TYPE_CHECKING, Any, Tuple, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
@@ -43,15 +43,15 @@ class _ColumnIndexer(_Indexer):
 
 class _IndexIndexer(_Indexer):
     def get(self, obj: cudf.DataFrame) -> ColumnBase:
-        return obj._index._data[self.name]
+        return obj.index._data[self.name]
 
     def set(self, obj: cudf.DataFrame, value: ColumnBase, validate=False):
-        obj._index._data.set_by_label(self.name, value, validate=validate)
+        obj.index._data.set_by_label(self.name, value, validate=validate)
 
 
 def _match_join_keys(
     lcol: ColumnBase, rcol: ColumnBase, how: str
-) -> Tuple[ColumnBase, ColumnBase]:
+) -> tuple[ColumnBase, ColumnBase]:
     # Casts lcol and rcol to a common dtype for use as join keys. If no casting
     # is necessary, they are returned as is.
 
@@ -133,7 +133,7 @@ def _match_join_keys(
 
 def _match_categorical_dtypes_both(
     lcol: CategoricalColumn, rcol: CategoricalColumn, how: str
-) -> Tuple[ColumnBase, ColumnBase]:
+) -> tuple[ColumnBase, ColumnBase]:
     ltype, rtype = lcol.dtype, rcol.dtype
 
     # when both are ordered and both have the same categories,

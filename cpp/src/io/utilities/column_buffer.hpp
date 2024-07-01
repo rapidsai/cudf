@@ -31,6 +31,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/pair.h>
 
@@ -50,7 +52,7 @@ namespace detail {
 inline rmm::device_buffer create_data(data_type type,
                                       size_type size,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   std::size_t data_size = size_of(type) * size;
 
@@ -96,7 +98,7 @@ class column_buffer_base {
                      size_type _size,
                      bool _is_nullable,
                      rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr)
+                     rmm::device_async_resource_ref mr)
     : column_buffer_base(_type, _is_nullable)
   {
   }
@@ -111,7 +113,14 @@ class column_buffer_base {
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for
   // preprocessing steps such as in the Parquet reader
-  void create(size_type _size, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
+  void create(size_type _size, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+
+  // like create(), but also takes a `cudf::mask_state` to allow initializing the null mask as
+  // something other than `ALL_NULL`
+  void create_with_mask(size_type _size,
+                        cudf::mask_state null_mask_state,
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr);
 
   // Create a new column_buffer that has empty data but with the same basic information as the
   // input column, including same type, nullability, name, and user_data.
@@ -128,8 +137,11 @@ class column_buffer_base {
   auto& null_count() { return _null_count; }
 
   auto data() { return static_cast<string_policy*>(this)->data_impl(); }
-  auto data() const { return static_cast<string_policy const*>(this)->data_impl(); }
-  auto data_size() const { return static_cast<string_policy const*>(this)->data_size_impl(); }
+  [[nodiscard]] auto data() const { return static_cast<string_policy const*>(this)->data_impl(); }
+  [[nodiscard]] auto data_size() const
+  {
+    return static_cast<string_policy const*>(this)->data_size_impl();
+  }
 
   std::unique_ptr<column> make_string_column(rmm::cuda_stream_view stream)
   {
@@ -140,7 +152,7 @@ class column_buffer_base {
   rmm::device_buffer _data{};
   rmm::device_buffer _null_mask{};
   size_type _null_count{0};
-  rmm::mr::device_memory_resource* _mr;
+  rmm::device_async_resource_ref _mr{rmm::mr::get_current_device_resource()};
 
  public:
   data_type type{type_id::EMPTY};
@@ -174,7 +186,7 @@ class gather_column_buffer : public column_buffer_base<gather_column_buffer> {
                        size_type _size,
                        bool _is_nullable,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr)
+                       rmm::device_async_resource_ref mr)
     : column_buffer_base<gather_column_buffer>(_type, _size, _is_nullable, stream, mr)
   {
     create(_size, stream, mr);
@@ -182,9 +194,9 @@ class gather_column_buffer : public column_buffer_base<gather_column_buffer> {
 
   void allocate_strings_data(rmm::cuda_stream_view stream);
 
-  void* data_impl() { return _strings ? _strings->data() : _data.data(); }
-  void const* data_impl() const { return _strings ? _strings->data() : _data.data(); }
-  size_t data_size_impl() const { return _strings ? _strings->size() : _data.size(); }
+  [[nodiscard]] void* data_impl() { return _strings ? _strings->data() : _data.data(); }
+  [[nodiscard]] void const* data_impl() const { return _strings ? _strings->data() : _data.data(); }
+  [[nodiscard]] size_t data_size_impl() const { return _strings ? _strings->size() : _data.size(); }
 
   std::unique_ptr<column> make_string_column_impl(rmm::cuda_stream_view stream);
 
@@ -208,7 +220,7 @@ class inline_column_buffer : public column_buffer_base<inline_column_buffer> {
                        size_type _size,
                        bool _is_nullable,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr)
+                       rmm::device_async_resource_ref mr)
     : column_buffer_base<inline_column_buffer>(_type, _size, _is_nullable, stream, mr)
   {
     create(_size, stream, mr);
@@ -217,14 +229,14 @@ class inline_column_buffer : public column_buffer_base<inline_column_buffer> {
   void allocate_strings_data(rmm::cuda_stream_view stream);
 
   void* data_impl() { return _data.data(); }
-  void const* data_impl() const { return _data.data(); }
-  size_t data_size_impl() const { return _data.size(); }
+  [[nodiscard]] void const* data_impl() const { return _data.data(); }
+  [[nodiscard]] size_t data_size_impl() const { return _data.size(); }
   std::unique_ptr<column> make_string_column_impl(rmm::cuda_stream_view stream);
 
   void create_string_data(size_t num_bytes, rmm::cuda_stream_view stream);
   void* string_data() { return _string_data.data(); }
-  void const* string_data() const { return _string_data.data(); }
-  size_t string_size() const { return _string_data.size(); }
+  [[nodiscard]] void const* string_data() const { return _string_data.data(); }
+  [[nodiscard]] size_t string_size() const { return _string_data.size(); }
 
  private:
   rmm::device_buffer _string_data{};
@@ -251,7 +263,7 @@ template <class string_policy>
 std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
                                    column_name_info* schema_info,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr);
+                                   rmm::device_async_resource_ref mr);
 
 /**
  * @brief Given a column_buffer, produce a formatted name string describing the type.

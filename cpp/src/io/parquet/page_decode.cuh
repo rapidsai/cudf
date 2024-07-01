@@ -122,7 +122,7 @@ struct null_count_back_copier {
  */
 constexpr bool is_string_col(PageInfo const& page, device_span<ColumnChunkDesc const> chunks)
 {
-  if (page.flags & PAGEINFO_FLAGS_DICTIONARY != 0) { return false; }
+  if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0) { return false; }
   auto const& col = chunks[page.chunk_idx];
   return is_string_col(col);
 }
@@ -924,7 +924,7 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
 
   auto start = cur;
 
-  auto init_rle = [s, lvl, end, level_bits](uint8_t const* cur, uint8_t const* end) {
+  auto init_rle = [s, lvl, level_bits](uint8_t const* cur, uint8_t const* end) {
     uint32_t const run      = get_vlq32(cur, end);
     s->initial_rle_run[lvl] = run;
     if (!(run & 1)) {
@@ -1160,7 +1160,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
             int32_t units = 0;
             // Duration types are not included because no scaling is done when reading
             if (s->col.logical_type.has_value()) {
-              auto const& lt = s->col.logical_type.value();
+              auto const& lt = *s->col.logical_type;
               if (lt.is_timestamp_millis()) {
                 units = cudf::timestamp_ms::period::den;
               } else if (lt.is_timestamp_micros()) {
@@ -1217,7 +1217,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       } else if (data_type == INT32) {
         // check for smaller bitwidths
         if (s->col.logical_type.has_value()) {
-          auto const& lt = s->col.logical_type.value();
+          auto const& lt = *s->col.logical_type;
           if (lt.type == LogicalType::INTEGER) {
             s->dtype_len = lt.bit_width() / 8;
           } else if (lt.is_time_millis()) {
@@ -1298,9 +1298,13 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       // be made to is_supported_encoding() in reader_impl_preprocess.cu
       switch (s->page.encoding) {
         case Encoding::PLAIN_DICTIONARY:
-        case Encoding::RLE_DICTIONARY:
+        case Encoding::RLE_DICTIONARY: {
           // RLE-packed dictionary indices, first byte indicates index length in bits
-          if (s->col.physical_type == BYTE_ARRAY && s->col.str_dict_index != nullptr) {
+          auto const is_decimal =
+            s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
+          if ((s->col.physical_type == BYTE_ARRAY or
+               s->col.physical_type == FIXED_LEN_BYTE_ARRAY) and
+              not is_decimal and s->col.str_dict_index != nullptr) {
             // String dictionary: use index
             s->dict_base = reinterpret_cast<uint8_t const*>(s->col.str_dict_index);
             s->dict_size = s->col.dict_page->num_input_values * sizeof(string_index_pair);
@@ -1314,8 +1318,9 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           if (s->dict_bits > 32 || (!s->dict_base && s->col.dict_page->num_input_values > 0)) {
             s->set_error_code(decode_error::INVALID_DICT_WIDTH);
           }
-          break;
+        } break;
         case Encoding::PLAIN:
+        case Encoding::BYTE_STREAM_SPLIT:
           s->dict_size = static_cast<int32_t>(end - cur);
           s->dict_val  = 0;
           if (s->col.physical_type == BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }

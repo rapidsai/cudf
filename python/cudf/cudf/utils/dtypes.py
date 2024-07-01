@@ -91,6 +91,10 @@ STRING_TYPES = {"object"}
 BOOL_TYPES = {"bool"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 
+# The NumPy scalar types are a bit of a mess as they align with the C types
+# so for now we use the `sctypes` dict (although it was made private in 2.0)
+_NUMPY_SCTYPES = np.sctypes if hasattr(np, "sctypes") else np._core.sctypes
+
 
 def np_to_pa_dtype(dtype):
     """Util to convert numpy dtype to PyArrow dtype."""
@@ -335,7 +339,7 @@ def min_signed_type(x, min_size=8):
     Return the smallest *signed* integer dtype
     that can represent the integer ``x``
     """
-    for int_dtype in np.sctypes["int"]:
+    for int_dtype in _NUMPY_SCTYPES["int"]:
         if (cudf.dtype(int_dtype).itemsize * 8) >= min_size:
             if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
                 return int_dtype
@@ -348,7 +352,7 @@ def min_unsigned_type(x, min_size=8):
     Return the smallest *unsigned* integer dtype
     that can represent the integer ``x``
     """
-    for int_dtype in np.sctypes["uint"]:
+    for int_dtype in _NUMPY_SCTYPES["uint"]:
         if (cudf.dtype(int_dtype).itemsize * 8) >= min_size:
             if 0 <= x <= np.iinfo(int_dtype).max:
                 return int_dtype
@@ -392,9 +396,9 @@ def get_min_float_dtype(col):
 
 
 def is_mixed_with_object_dtype(lhs, rhs):
-    if cudf.api.types._is_categorical_dtype(lhs.dtype):
+    if isinstance(lhs.dtype, cudf.CategoricalDtype):
         return is_mixed_with_object_dtype(lhs.dtype.categories, rhs)
-    elif cudf.api.types._is_categorical_dtype(rhs.dtype):
+    elif isinstance(rhs.dtype, cudf.CategoricalDtype):
         return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
 
     return (lhs.dtype == "object" and rhs.dtype != "object") or (
@@ -587,7 +591,7 @@ def find_common_type(dtypes):
 def _dtype_pandas_compatible(dtype):
     """
     A utility function, that returns `str` instead of `object`
-    dtype when pandas comptibility mode is enabled.
+    dtype when pandas compatibility mode is enabled.
     """
     if cudf.get_option("mode.pandas_compatible") and dtype == cudf.dtype("O"):
         return "str"

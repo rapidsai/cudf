@@ -10,20 +10,17 @@ cuda_compiler:
 cuda11_compiler:
   - nvcc
 
-sysroot_version:
+c_stdlib:
+  - sysroot
+
+c_stdlib_version:
   - "2.17"
 
 cmake_version:
   - ">=3.26.4"
 
-gbench_version:
-  - "==1.8.0"
-
-gtest_version:
-  - ">=1.13.0"
-
 libarrow_version:
-  - "==14.0.2"
+  - "==16.1.0"
 
 dlpack_version:
   - ">=0.8,<1.0"

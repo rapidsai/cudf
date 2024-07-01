@@ -16,7 +16,6 @@
 
 #include "groupby/common/utils.hpp"
 #include "groupby/hash/groupby_kernels.cuh"
-#include "hash/concurrent_unordered_map.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
@@ -44,6 +43,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuco/static_set.cuh>
 #include <thrust/for_each.h>
@@ -190,7 +190,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   SetType set;
   bitmask_type const* __restrict__ row_bitmask;
   rmm::cuda_stream_view stream;
-  rmm::mr::device_memory_resource* mr;
+  rmm::device_async_resource_ref mr;
 
  public:
   using cudf::detail::aggregation_finalizer::visit;
@@ -202,7 +202,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
                               SetType set,
                               bitmask_type const* row_bitmask,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
     : col(col),
       sparse_results(sparse_results),
       dense_results(dense_results),
@@ -398,7 +398,7 @@ void sparse_to_dense_results(table_view const& keys,
                              bool keys_have_nulls,
                              null_policy include_null_keys,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   auto row_bitmask =
     cudf::detail::bitmask_and(keys, stream, rmm::mr::get_current_device_resource()).first;
@@ -551,9 +551,10 @@ std::unique_ptr<table> groupby(table_view const& keys,
                                bool const keys_have_nulls,
                                null_policy const include_null_keys,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
-  auto const num_keys            = keys.num_rows();
+  // convert to int64_t to avoid potential overflow with large `keys`
+  auto const num_keys            = static_cast<int64_t>(keys.num_rows());
   auto const null_keys_are_equal = null_equality::EQUAL;
   auto const has_null            = nullate::DYNAMIC{cudf::has_nested_nulls(keys)};
 
@@ -654,7 +655,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   host_span<aggregation_request const> requests,
   null_policy include_null_keys,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   cudf::detail::result_cache cache(requests.size());
 

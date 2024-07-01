@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import copy
 import itertools
@@ -7,7 +8,7 @@ import textwrap
 import warnings
 from collections import abc
 from functools import cached_property
-from typing import Any, Iterable, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Iterable
 
 import cupy as cp
 import numpy as np
@@ -20,14 +21,8 @@ from cudf._lib.null_mask import bitmask_or
 from cudf._lib.reshape import interleave_columns
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
-from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.extensions import no_default
-from cudf.api.types import (
-    is_bool_dtype,
-    is_float_dtype,
-    is_list_like,
-    is_numeric_dtype,
-)
+from cudf.api.types import is_bool_dtype, is_list_like, is_numeric_dtype
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, StructDtype, as_column
@@ -38,6 +33,18 @@ from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import GetAttrGetItemMixin
+
+if TYPE_CHECKING:
+    from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
+
+
+def _deprecate_collect():
+    warnings.warn(
+        "Groupby.collect is deprecated and "
+        "will be removed in a future version. "
+        "Use `.agg(list)` instead.",
+        FutureWarning,
+    )
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]
@@ -326,12 +333,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             FutureWarning,
         )
         index = self.grouping.keys.unique().sort_values().to_pandas()
-        obj_dtypes = self.obj._dtypes
         return pd.DataFrame(
-            {
-                name: [obj_dtypes[name]] * len(index)
-                for name in self.obj._data.names
-            },
+            {name: [dtype] * len(index) for name, dtype in self.obj._dtypes},
             index=index,
         )
 
@@ -490,8 +493,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # treats NaNs the way we treat nulls.
         if cudf.get_option("mode.pandas_compatible"):
             if any(
-                is_float_dtype(typ)
-                for typ in self.grouping.values._dtypes.values()
+                col.dtype.kind == "f" for col in self.grouping.values._columns
             ):
                 raise NotImplementedError(
                     "NaNs are not supported in groupby.rank."
@@ -940,7 +942,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         result = result[sizes > n]
 
-        result._index = self.obj.index.take(
+        result.index = self.obj.index.take(
             result._data["__groupbynth_order__"]
         )
         del result._data["__groupbynth_order__"]
@@ -1029,16 +1031,16 @@ class GroupBy(Serializable, Reducible, Scannable):
         if has_null_group:
             group_ids.iloc[-1] = cudf.NA
 
-        group_ids._index = index
+        group_ids.index = index
         return self._broadcast(group_ids)
 
     def sample(
         self,
-        n: Optional[int] = None,
-        frac: Optional[float] = None,
+        n: int | None = None,
+        frac: float | None = None,
         replace: bool = False,
-        weights: Union[abc.Sequence, "cudf.Series", None] = None,
-        random_state: Union[np.random.RandomState, int, None] = None,
+        weights: abc.Sequence | "cudf.Series" | None = None,
+        random_state: np.random.RandomState | int | None = None,
     ):
         """Return a random sample of items in each group.
 
@@ -1199,9 +1201,11 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def _grouped(self, *, include_groups: bool = True):
         offsets, grouped_key_cols, grouped_value_cols = self._groupby.groups(
-            [*self.obj._index._columns, *self.obj._columns]
+            [*self.obj.index._columns, *self.obj._columns]
         )
-        grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)
+        grouped_keys = cudf.core.index._index_from_data(
+            dict(enumerate(grouped_key_cols))
+        )
         if isinstance(self.grouping.keys, cudf.MultiIndex):
             grouped_keys.names = self.grouping.keys.names
             to_drop = self.grouping.keys.names
@@ -1221,7 +1225,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def _normalize_aggs(
         self, aggs: MultiColumnAggType
-    ) -> Tuple[Iterable[Any], Tuple[ColumnBase, ...], List[List[AggType]]]:
+    ) -> tuple[Iterable[Any], tuple[ColumnBase, ...], list[list[AggType]]]:
         """
         Normalize aggs to a list of list of aggregations, where `out[i]`
         is a list of aggregations for column `self.obj[i]`. We support three
@@ -1236,7 +1240,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         Each agg can be string or lambda functions.
         """
 
-        aggs_per_column: Iterable[Union[AggType, Iterable[AggType]]]
+        aggs_per_column: Iterable[AggType | Iterable[AggType]]
         if isinstance(aggs, dict):
             column_names, aggs_per_column = aggs.keys(), aggs.values()
             columns = tuple(self.obj._data[col] for col in column_names)
@@ -1304,7 +1308,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         To get the difference between each groups maximum and minimum value
         in one pass, you can do
 
-        >>> df.groupby('A').pipe(lambda x: x.max() - x.min())
+        >>> df.groupby('A', sort=True).pipe(lambda x: x.max() - x.min())
            B
         A
         a  2
@@ -1767,13 +1771,23 @@ class GroupBy(Serializable, Reducible, Scannable):
         --------
         agg
         """
+        if not (isinstance(function, str) or callable(function)):
+            raise TypeError(
+                "Aggregation must be a named aggregation or a callable"
+            )
         try:
             result = self.agg(function)
         except TypeError as e:
             raise NotImplementedError(
                 "Currently, `transform()` supports only aggregations."
             ) from e
-
+        # If the aggregation is a scan, don't broadcast
+        if libgroupby._is_all_scan_aggregate([[function]]):
+            if len(result) != len(self.obj):
+                raise AssertionError(
+                    "Unexpected result length for scan transform"
+                )
+            return result
         return self._broadcast(result)
 
     def rolling(self, *args, **kwargs):
@@ -2168,7 +2182,8 @@ class GroupBy(Serializable, Reducible, Scannable):
     @_cudf_nvtx_annotate
     def collect(self):
         """Get a list of all the values for each column in each group."""
-        return self.agg("collect")
+        _deprecate_collect()
+        return self.agg(list)
 
     @_cudf_nvtx_annotate
     def unique(self):
@@ -2778,15 +2793,13 @@ class _Grouping(Serializable):
         nkeys = len(self._key_columns)
 
         if nkeys == 0:
-            return cudf.core.index.as_index([], name=None)
+            return cudf.Index([], name=None)
         elif nkeys > 1:
             return cudf.MultiIndex._from_data(
                 dict(zip(range(nkeys), self._key_columns))
             )._set_names(self.names)
         else:
-            return cudf.core.index.as_index(
-                self._key_columns[0], name=self.names[0]
-            )
+            return cudf.Index(self._key_columns[0], name=self.names[0])
 
     @property
     def values(self) -> cudf.core.frame.Frame:
@@ -2827,8 +2840,8 @@ class _Grouping(Serializable):
             self._key_columns.append(self._obj._data[by])
         except KeyError as e:
             # `by` can be index name(label) too.
-            if by in self._obj._index.names:
-                self._key_columns.append(self._obj._index._data[by])
+            if by in self._obj.index.names:
+                self._key_columns.append(self._obj.index._data[by])
             else:
                 raise e
         self.names.append(by)
