@@ -3,11 +3,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 import polars as pl
 
-from cudf_polars import translate_ir
+from cudf_polars.testing.asserts import assert_ir_translation_raises
 
 
 def test_rolling():
@@ -29,13 +27,13 @@ def test_rolling():
         min_a=pl.min("a").rolling(index_column="dt", period="2d"),
         max_a=pl.max("a").rolling(index_column="dt", period="2d"),
     )
-    with pytest.raises(NotImplementedError):
-        _ = translate_ir(q._ldf.visit())
+
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 def test_grouped_rolling():
     df = pl.LazyFrame({"a": [1, 2, 3, 4, 5, 6], "b": [1, 2, 1, 3, 1, 2]})
 
     q = df.select(pl.col("a").min().over("b"))
-    with pytest.raises(NotImplementedError):
-        _ = translate_ir(q._ldf.visit())
+
+    assert_ir_translation_raises(q, NotImplementedError)

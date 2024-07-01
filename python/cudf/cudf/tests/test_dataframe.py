@@ -10024,6 +10024,14 @@ def test_dataframe_rename_duplicate_column():
         gdf.rename(columns={"a": "b"}, inplace=True)
 
 
+def test_dataframe_rename_columns_keep_type():
+    gdf = cudf.DataFrame([[1, 2, 3]])
+    gdf.columns = cudf.Index([4, 5, 6], dtype=np.int8)
+    result = gdf.rename({4: 50}, axis="columns").columns
+    expected = pd.Index([50, 5, 6], dtype=np.int8)
+    assert_eq(result, expected)
+
+
 @pytest_unmark_spilling
 @pytest.mark.skipif(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
@@ -11070,3 +11078,27 @@ def test_dataframe_loc_int_float(dtype1, dtype2):
     expected = pdf.loc[pidx]
 
     assert_eq(actual, expected, check_index_type=True, check_dtype=True)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        cudf.DataFrame(range(2)),
+        None,
+        [cudf.Series(range(2))],
+        [[0], [1]],
+        {1: range(2)},
+        cupy.arange(2),
+    ],
+)
+def test_init_with_index_no_shallow_copy(data):
+    idx = cudf.RangeIndex(2)
+    df = cudf.DataFrame(data, index=idx)
+    assert df.index is idx
+
+
+def test_from_records_with_index_no_shallow_copy():
+    idx = cudf.RangeIndex(2)
+    data = np.array([(1.0, 2), (3.0, 4)], dtype=[("x", "<f8"), ("y", "<i8")])
+    df = cudf.DataFrame(data.view(np.recarray), index=idx)
+    assert df.index is idx

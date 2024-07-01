@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,20 +59,18 @@ void parquet_read_common(cudf::size_type num_rows_to_read,
 }
 
 template <data_type DataType>
-void BM_parquet_read_data(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>>)
+void BM_parquet_read_data_common(nvbench::state& state,
+                                 data_profile const& profile,
+                                 nvbench::type_list<nvbench::enum_type<DataType>>)
 {
   auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
-  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
-  auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
   auto const compression = cudf::io::compression_type::SNAPPY;
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
-    auto const tbl = create_random_table(
-      cycle_dtypes(d_type, num_cols),
-      table_size_bytes{data_size},
-      data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
+    auto const tbl =
+      create_random_table(cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, profile);
     auto const view = tbl->view();
 
     cudf::io::parquet_writer_options write_opts =
@@ -83,6 +81,32 @@ void BM_parquet_read_data(nvbench::state& state, nvbench::type_list<nvbench::enu
   }();
 
   parquet_read_common(num_rows_written, num_cols, source_sink, state);
+}
+
+template <data_type DataType>
+void BM_parquet_read_data(nvbench::state& state,
+                          nvbench::type_list<nvbench::enum_type<DataType>> type_list)
+{
+  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
+  BM_parquet_read_data_common<DataType>(
+    state, data_profile_builder().cardinality(cardinality).avg_run_length(run_length), type_list);
+}
+
+template <data_type DataType>
+void BM_parquet_read_fixed_width_struct(nvbench::state& state,
+                                        nvbench::type_list<nvbench::enum_type<DataType>> type_list)
+{
+  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
+  std::vector<cudf::type_id> s_types{
+    cudf::type_id::INT32, cudf::type_id::FLOAT32, cudf::type_id::INT64};
+  BM_parquet_read_data_common<DataType>(state,
+                                        data_profile_builder()
+                                          .cardinality(cardinality)
+                                          .avg_run_length(run_length)
+                                          .struct_types(s_types),
+                                        type_list);
 }
 
 void BM_parquet_read_io_compression(nvbench::state& state)
@@ -247,3 +271,13 @@ NVBENCH_BENCH(BM_parquet_read_io_small_mixed)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
   .add_int64_axis("num_string_cols", {1, 2, 3});
+
+// a benchmark for structs that only contain fixed-width types
+using d_type_list_struct_only = nvbench::enum_type_list<data_type::STRUCT>;
+NVBENCH_BENCH_TYPES(BM_parquet_read_fixed_width_struct, NVBENCH_TYPE_AXES(d_type_list_struct_only))
+  .set_name("parquet_read_fixed_width_struct")
+  .set_type_axes_names({"data_type"})
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
+  .set_min_samples(4)
+  .add_int64_axis("cardinality", {0, 1000})
+  .add_int64_axis("run_length", {1, 32});

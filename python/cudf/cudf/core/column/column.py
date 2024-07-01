@@ -927,13 +927,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @property
     def is_monotonic_increasing(self) -> bool:
-        return not self.has_nulls() and libcudf.sort.is_sorted(
+        return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
             [self], [True], None
         )
 
     @property
     def is_monotonic_decreasing(self) -> bool:
-        return not self.has_nulls() and libcudf.sort.is_sorted(
+        return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
             [self], [False], None
         )
 
