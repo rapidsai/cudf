@@ -8,8 +8,11 @@ import pytest
 
 import polars as pl
 
-from cudf_polars import execute_with_cudf, translate_ir
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars import execute_with_cudf
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.fixture
@@ -69,22 +72,19 @@ def test_supported_stringfunction_expression(ldf):
 def test_unsupported_stringfunction(ldf):
     q = ldf.select(pl.col("a").str.count_matches("e", literal=True))
 
-    with pytest.raises(NotImplementedError):
-        _ = translate_ir(q._ldf.visit())
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 def test_contains_re_non_strict_raises(ldf):
     q = ldf.select(pl.col("a").str.contains(".", strict=False))
 
-    with pytest.raises(NotImplementedError):
-        _ = translate_ir(q._ldf.visit())
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 def test_contains_re_non_literal_raises(ldf):
     q = ldf.select(pl.col("a").str.contains(pl.col("b"), literal=False))
 
-    with pytest.raises(NotImplementedError):
-        _ = translate_ir(q._ldf.visit())
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize(
