@@ -173,6 +173,8 @@ class DataFrame:
     def select(self, names: Sequence[str]) -> Self:
         """Select columns by name returning DataFrame."""
         want = set(names)
+        if len(self.columns) != len(self._column_map):
+            raise ValueError("Lost some columns with overlapping names")
         if not want.issubset(self.column_names_set):
             raise ValueError("Can't select missing names")
         return type(self)([self._column_map[name] for name in names])
