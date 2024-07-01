@@ -63,6 +63,11 @@ markers = [
   "arm_slow: mark a test as slow for arm64 architecture",
   "skip_ubsan: Tests known to fail UBSAN check",
 ]
+log_format = %(asctime)s %(levelname)s %(message)s
+log_date_format = %Y-%m-%d %H:%M:%S
+log_file = pandas-tests.log
+log_file_level = INFO
+log_cli = true
 EOF
     # append the contents of patch-confest.py to conftest.py
     cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py

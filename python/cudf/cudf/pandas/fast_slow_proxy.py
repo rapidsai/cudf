@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import functools
 import inspect
+import logging
 import operator
 import pickle
 import types
@@ -930,13 +931,42 @@ def _fast_slow_function_call(
                             "Pandas debugging mode failed. "
                             f"The exception was {e}."
                         )
-    except Exception:
+    except Exception as err:
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
             domain="cudf_pandas",
         ):
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+            if _env_get_bool("CUDF_PANDAS_SLOW_LOG", False):
+
+                def reprify(arg) -> str:
+                    try:
+                        return repr(arg)
+                    except Exception:
+                        return "<REPR FAILED>"
+
+                logging.basicConfig(
+                    filename="pandas-tests.log", level=logging.INFO
+                )
+                module = getattr(slow_args[0], "__module__", "")
+                obj_name = getattr(
+                    slow_args[0], "__name__", type(slow_args[0]).__name__
+                )
+                called = f"{module}.{obj_name}"
+                fmt_args = ",".join((reprify(val) for val in slow_args[1]))
+                if len(slow_args) == 3:
+                    fmt_kwargs = ",".join(
+                        f"{kwarg}={value!r}"
+                        for kwarg, value in slow_args[2].items()
+                    )
+                    fmt_args = ",".join((fmt_args, fmt_kwargs))
+                logging.info(
+                    f"The following fast call was made: {called}({fmt_args})"
+                )
+                logging.info(f"Exception Type: {type(err).__name__}")
+                logging.info(f"Called: {called}")
+                logging.info(f"Arguments: {fmt_args}")
             with disable_module_accelerator():
                 result = func(*slow_args, **slow_kwargs)
     return _maybe_wrap_result(result, func, *args, **kwargs), fast
