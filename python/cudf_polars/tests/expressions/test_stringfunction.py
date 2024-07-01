@@ -34,6 +34,28 @@ def ldf(with_nulls):
     return pl.LazyFrame({"a": a, "b": range(len(a))})
 
 
+@pytest.fixture(
+    params=[
+        (1, None),
+        (-2, None),
+        (-100, None),
+        (1, 1),
+        (-2, 2),
+        (-100, 3),
+        (0, 0),
+        (0, 1000),
+    ]
+)
+def slice_column_data(ldf, request):
+    start, length = request.param
+    if length:
+        return ldf.with_columns(
+            pl.lit(start).alias("start"), pl.lit(length).alias("length")
+        )
+    else:
+        return ldf.with_columns(pl.lit(start).alias("start"))
+
+
 def test_supported_stringfunction_expression(ldf):
     query = ldf.select(
         pl.col("a").str.starts_with("Z"),
@@ -118,3 +140,14 @@ def test_slice_scalars_offset(ldf, offset):
 def test_slice_scalars_length_and_offset(ldf, offset, length):
     query = ldf.select(pl.col("a").str.slice(offset, length))
     assert_gpu_result_equal(query)
+
+
+def test_slice_column(slice_column_data):
+    if "length" in slice_column_data.columns:
+        query = slice_column_data.select(
+            pl.col("a").str.slice(pl.col("start"), pl.col("length"))
+        )
+    else:
+        query = slice_column_data.select(pl.col("a").str.slice(pl.col("start")))
+    with pytest.raises(pl.exceptions.ComputeError):
+        assert_gpu_result_equal(query)
