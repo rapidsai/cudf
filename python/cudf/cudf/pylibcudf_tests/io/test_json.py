@@ -14,12 +14,11 @@ def test_write_json_basic(table_data, source_or_sink, lines, rows_per_chunk):
     plc_table_w_meta, pa_table = table_data
     sink = source_or_sink
 
-    kwargs = {}
-    if rows_per_chunk <= plc_table_w_meta.tbl.num_rows():
-        kwargs["rows_per_chunk"] = rows_per_chunk
-
     plc.io.json.write_json(
-        plc.io.SinkInfo([sink]), plc_table_w_meta, lines=lines, **kwargs
+        plc.io.SinkInfo([sink]),
+        plc_table_w_meta,
+        lines=lines,
+        rows_per_chunk=rows_per_chunk,
     )
 
     exp = pa_table.to_pandas()

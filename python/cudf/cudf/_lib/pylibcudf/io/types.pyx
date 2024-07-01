@@ -205,15 +205,15 @@ cdef class SinkInfo:
         if not sinks:
             raise ValueError("Need to pass at least one sink")
 
+        if isinstance(sinks[0], os.PathLike):
+            sinks = [os.path.expanduser(s) for s in sinks]
+
         cdef object initial_sink_cls = type(sinks[0])
 
         if not all(isinstance(s, initial_sink_cls) for s in sinks):
             raise ValueError("All sinks must be of the same type!")
 
-        if isinstance(sinks[0], os.PathLike):
-            sinks = [os.path.expanduser(s) for s in sinks]
-
-        if isinstance(sinks[0], (io.StringIO, io.BytesIO, io.TextIOBase)):
+        if initial_sink_cls in {io.StringIO, io.BytesIO, io.TextIOBase}:
             data_sinks.reserve(len(sinks))
             if isinstance(sinks[0], (io.StringIO, io.BytesIO)):
                 for s in sinks:
