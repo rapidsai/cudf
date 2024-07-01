@@ -182,7 +182,10 @@ class table_view_base {
 };
 
 /**
- * @copydoc bool has_nested_columns(table_view const& table)
+ * @brief Determine if any nested columns exist in a given table.
+ *
+ * @param table The input table
+ * @return Whether nested columns exist in the input table
  */
 bool has_nested_columns(table_view const& table);
 
