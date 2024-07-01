@@ -1,10 +1,8 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 import itertools
 import warnings
-from contextlib import ExitStack
 from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
-from operator import getitem
 
 import numpy as np
 import pandas as pd
@@ -23,16 +21,11 @@ except ImportError:
 import cudf
 from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
-from cudf.io.parquet import (
-    _apply_post_filters,
-    _default_open_file_options,
-    _normalize_filters,
-)
+from cudf.io.parquet import _apply_post_filters, _normalize_filters
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
 from cudf.utils.ioutils import (
     _ROW_GROUP_SIZE_BYTES_DEFAULT,
     _is_local_filesystem,
-    _open_remote_files,
 )
 
 
@@ -99,130 +92,26 @@ class CudfEngine(ArrowDatasetEngine):
         dataset_kwargs = dataset_kwargs or {}
         dataset_kwargs["partitioning"] = partitioning or "hive"
 
-        if False:
+        paths_or_fobs = paths
+        if not _is_local_filesystem(fs):
             from cudf.utils.ioutils import _get_remote_bytes_parquet
 
-            if False:
-                paths_or_fobs = paths
-                if not _is_local_filesystem(fs):
-                    from concurrent.futures import (
-                        ThreadPoolExecutor as PoolExecutor,
-                    )
+            paths_or_fobs = _get_remote_bytes_parquet(
+                paths,
+                fs,
+                columns=columns,
+                row_groups=row_groups[0],
+            )
 
-                    from dask import config
-                    from dask.base import tokenize
-                    from dask.distributed import get_worker
-                    from dask.threaded import get
-                    from dask.utils import apply
-
-                    # from dask.multiprocessing import get
-                    # from concurrent.futures import ProcessPoolExecutor as PoolExecutor
-
-                    token = tokenize(paths)
-                    chunk_name = f"read-chunk-{token}"
-                    dsk = {
-                        (chunk_name, i): (
-                            getitem,
-                            (
-                                apply,
-                                _get_remote_bytes_parquet,
-                                [[path], fs],
-                                dict(
-                                    columns=columns, row_groups=row_groups[i]
-                                ),
-                            ),
-                            0,
-                        )
-                        for i, path in enumerate(paths)
-                    }
-                    dsk[chunk_name] = (
-                        partial(
-                            cudf.read_parquet,
-                            columns=columns,
-                            row_groups=row_groups if row_groups else None,
-                            dataset_kwargs=dataset_kwargs,
-                            categorical_partitions=False,
-                            **kwargs,
-                        ),
-                        list(dsk.keys()),
-                    )
-
-                    try:
-                        worker = get_worker()
-                        if not hasattr(worker, "_rapids_executor"):
-                            num_threads = 10
-                            worker._rapids_executor = PoolExecutor(num_threads)
-                        with config.set(pool=worker._rapids_executor):
-                            df = get(dsk, chunk_name)
-                    except ValueError:
-                        df = get(dsk, chunk_name)
-
-            else:
-                paths_or_fobs = paths
-                if not _is_local_filesystem(fs):
-                    paths_or_fobs = _get_remote_bytes_parquet(
-                        paths,
-                        fs,
-                        columns=columns,
-                        row_groups=row_groups[0],
-                    )
-
-                df = cudf.read_parquet(
-                    paths_or_fobs,
-                    engine="cudf",
-                    columns=columns,
-                    row_groups=row_groups if row_groups else None,
-                    dataset_kwargs=dataset_kwargs,
-                    categorical_partitions=False,
-                    **kwargs,
-                )
-        else:
-            with ExitStack() as stack:
-                # Non-local filesystem handling
-                paths_or_fobs = paths
-                if not _is_local_filesystem(fs):
-                    paths_or_fobs = _open_remote_files(
-                        paths_or_fobs,
-                        fs,
-                        context_stack=stack,
-                        **_default_open_file_options(
-                            open_file_options, columns, row_groups
-                        ),
-                    )
-
-                # Use cudf to read in data
-                try:
-                    df = cudf.read_parquet(
-                        paths_or_fobs,
-                        engine="cudf",
-                        columns=columns,
-                        row_groups=row_groups if row_groups else None,
-                        dataset_kwargs=dataset_kwargs,
-                        categorical_partitions=False,
-                        **kwargs,
-                    )
-                except RuntimeError as err:
-                    # TODO: Remove try/except after null-schema issue is resolved
-                    # (See: https://github.com/rapidsai/cudf/issues/12702)
-                    if len(paths_or_fobs) > 1:
-                        df = cudf.concat(
-                            [
-                                cudf.read_parquet(
-                                    pof,
-                                    engine="cudf",
-                                    columns=columns,
-                                    row_groups=row_groups[i]
-                                    if row_groups
-                                    else None,
-                                    dataset_kwargs=dataset_kwargs,
-                                    categorical_partitions=False,
-                                    **kwargs,
-                                )
-                                for i, pof in enumerate(paths_or_fobs)
-                            ]
-                        )
-                    else:
-                        raise err
+        df = cudf.read_parquet(
+            paths_or_fobs,
+            engine="cudf",
+            columns=columns,
+            row_groups=row_groups if row_groups else None,
+            dataset_kwargs=dataset_kwargs,
+            categorical_partitions=False,
+            **kwargs,
+        )
 
         # Apply filters (if any are defined)
         df = _apply_post_filters(df, filters)
