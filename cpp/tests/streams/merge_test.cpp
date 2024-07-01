@@ -50,8 +50,11 @@ TYPED_TEST(MergeTest_, MergeIsZeroWhenShouldNotBeZero)
   cudf::table_view right_view{{rightColWrap1}};
   cudf::table_view expected{{leftColWrap1}};
 
-  auto result = cudf::merge({left_view, right_view}, key_cols, column_order, null_precedence);
-  auto result = cudf::merge({left_view, right_view}, key_cols, column_order, null_precedence, cudf::test::get_default_stream());
+  auto result = cudf::merge({left_view, right_view},
+                            key_cols,
+                            column_order,
+                            null_precedence,
+                            cudf::test::get_default_stream());
 
   int expected_len = 5;
   ASSERT_EQ(result->num_rows(), expected_len);
@@ -103,17 +106,28 @@ TEST_F(MergeTest, KeysWithNulls)
     for (auto np : null_precedences) {
       std::vector<cudf::order> column_order{co};
       std::vector<cudf::null_order> null_precedence{np};
-      auto sorted1 =
-        cudf::sort(cudf::table_view({data1}), column_order, null_precedence, cudf::test::get_default_stream())->release();
-      auto col1 = sorted1.front()->view();
-      auto sorted2 =
-        cudf::sort(cudf::table_view({data2}), column_order, null_precedence, cudf::test::get_default_stream())->release();
+      auto sorted1 = cudf::sort(cudf::table_view({data1}),
+                                column_order,
+                                null_precedence,
+                                cudf::test::get_default_stream())
+                       ->release();
+      auto col1    = sorted1.front()->view();
+      auto sorted2 = cudf::sort(cudf::table_view({data2}),
+                                column_order,
+                                null_precedence,
+                                cudf::test::get_default_stream())
+                       ->release();
       auto col2 = sorted2.front()->view();
 
-      auto result = cudf::merge(
-        {cudf::table_view({col1}), cudf::table_view({col2})}, {0}, column_order, null_precedence, cudf::test::get_default_stream());
-      auto sorted_all =
-        cudf::sort(cudf::table_view({all_data->view()}), column_order, null_precedence, cudf::test::get_default_stream());
+      auto result     = cudf::merge({cudf::table_view({col1}), cudf::table_view({col2})},
+                                    {0},
+                                column_order,
+                                null_precedence,
+                                cudf::test::get_default_stream());
+      auto sorted_all = cudf::sort(cudf::table_view({all_data->view()}),
+                                   column_order,
+                                   null_precedence,
+                                   cudf::test::get_default_stream());
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_all->view().column(0), result->view().column(0));
     }
 }
