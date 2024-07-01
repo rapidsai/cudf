@@ -167,6 +167,8 @@ def from_polars(dtype: pl.DataType) -> plc.DataType:
         return plc.DataType(plc.TypeId.EMPTY)
     elif isinstance(dtype, pl.List):
         # TODO: This doesn't consider the value type.
+        # Recurse to catch unsupported inner types
+        _ = from_polars(dtype.inner)
         return plc.DataType(plc.TypeId.LIST)
     else:
         raise NotImplementedError(f"{dtype=} conversion not supported")
