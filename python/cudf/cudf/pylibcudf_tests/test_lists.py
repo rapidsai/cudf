@@ -136,23 +136,22 @@ def test_index_of_list_column(test_data, column):
     assert_column_eq(expect, res)
 
 
-@pytest.mark.parametrize(
-    "index, expect",
-    [
-        (
-            plc.interop.from_arrow(pa.array([0, 1, -4, -1])),
-            pa.array([0, None, None, 7]),
-        ),
-        (
-            -1,
-            pa.array([1, 2, 5, 7]),
-        ),
-    ],
-)
-def test_extract_list_element(test_data, index, expect):
+def test_extract_list_element_scalar(test_data):
     arr = pa.array(test_data[0][0])
     plc_column = plc.interop.from_arrow(arr)
 
-    res = plc.lists.extract_list_element(plc_column, index)
+    res = plc.lists.extract_list_element(plc_column, 0)
+    expect = pa.compute.list_element(test_data[0][0], 0)
+
+    assert_column_eq(expect, res)
+
+
+def test_extract_list_element_column(test_data):
+    arr = pa.array(test_data[0][0])
+    plc_column = plc.interop.from_arrow(arr)
+    indices = plc.interop.from_arrow(pa.array([0, 1, -4, -1]))
+    expect = pa.array([0, None, None, 7])
+
+    res = plc.lists.extract_list_element(plc_column, indices)
 
     assert_column_eq(expect, res)

@@ -115,7 +115,7 @@ def sort_lists(Column col, bool ascending, str na_position):
 @acquire_spill_lock()
 def extract_element_scalar(Column col, size_type index):
     return Column.from_pylibcudf(
-        pylibcudf.lists.extract_list_elements(
+        pylibcudf.lists.extract_list_element(
             col.to_pylibcudf(mode="read"),
             index,
         )
@@ -125,7 +125,7 @@ def extract_element_scalar(Column col, size_type index):
 @acquire_spill_lock()
 def extract_element_column(Column col, Column index):
     return Column.from_pylibcudf(
-        pylibcudf.lists.extract_list_elements(
+        pylibcudf.lists.extract_list_element(
             col.to_pylibcudf(mode="read"),
             index.to_pylibcudf(mode="read"),
         )
