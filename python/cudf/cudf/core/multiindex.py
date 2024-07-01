@@ -349,9 +349,14 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         data: MutableMapping,
         name: Any = None,
     ) -> MultiIndex:
-        obj = cls.from_frame(cudf.DataFrame._from_data(data=data))
+        obj = cls.__new__(cls)
+        super(cls, obj).__init__()
+        obj._name = None
+        obj._data = ColumnAccessor(data)
+        obj.names = obj._data.names
         if name is not None:
             obj.name = name
+        obj._compute_levels_and_codes()
         return obj
 
     @property  # type: ignore
@@ -420,8 +425,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         2020-08-28 AMZN  3401.80
                    MSFT   228.91
         """
-
-        mi = MultiIndex._from_data(self._data.copy(deep=deep))
+        mi = type(self)._from_data(self._data.copy(deep=deep))
         if self._levels is not None:
             mi._levels = [idx.copy(deep=deep) for idx in self._levels]
         if self._codes is not None:
@@ -1269,25 +1273,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     ('NJ', 'Precip')],
                    names=['state', 'observation'])
         """
-        obj = cls.__new__(cls)
-        super(cls, obj).__init__()
-
-        source_data = df.copy(deep=False)
-        source_data.reset_index(drop=True, inplace=True)
-        if isinstance(source_data, pd.DataFrame):
-            source_data = cudf.DataFrame.from_pandas(source_data)
-
-        names = names if names is not None else source_data._data.names
-        # if names are unique
-        # try using those as the source_data column names:
-        if len(dict.fromkeys(names)) == len(names):
-            source_data.columns = names
-        obj._name = None
-        obj._data = source_data._data
-        obj.names = names
-        obj._codes = None
-        obj._levels = None
-        return obj
+        if isinstance(df, pd.DataFrame):
+            source_data = cudf.DataFrame.from_pandas(df)
+        else:
+            source_data = df
+        names = names if names is not None else source_data._column_names
+        return cls.from_arrays(source_data._columns, names=names)
 
     @classmethod
     @_performance_tracking
@@ -2079,6 +2070,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         res = super()._copy_type_metadata(other)
         if isinstance(other, MultiIndex):
             res._names = other._names
+        res._compute_levels_and_codes()
         return res
 
     @_performance_tracking
