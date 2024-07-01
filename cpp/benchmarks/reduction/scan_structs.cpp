@@ -54,22 +54,15 @@ static void nvbench_structs_scan(nvbench::state& state)
   auto const stream      = cudf::get_default_stream();
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  int64_t result_size = 0;
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch& launch, auto& timer) {
-               timer.start();
-               auto const result = cudf::detail::scan_inclusive(
-                 input_view, *agg, null_policy, stream, rmm::mr::get_current_device_resource());
-               timer.stop();
-
-               // Estimating the result size will launch a kernel. Do not include it in measuring
-               // time.
-               result_size += estimate_size(result->view());
-             });
+  std::unique_ptr<cudf::column> result = nullptr;
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    result = cudf::detail::scan_inclusive(
+      input_view, *agg, null_policy, stream, rmm::mr::get_current_device_resource());
+  });
 
   state.add_element_count(input_view.size());
   state.add_global_memory_reads(estimate_size(input_view));
-  state.add_global_memory_writes(result_size);
+  state.add_global_memory_writes(estimate_size(result->view()));
 
   set_throughputs(state);
 }

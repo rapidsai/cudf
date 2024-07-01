@@ -41,23 +41,16 @@ static void nvbench_reduction_scan(nvbench::state& state, nvbench::type_list<typ
   auto const new_tbl = cudf::repeat(table->view(), 2);
   cudf::column_view input(new_tbl->view().column(0));
 
-  int64_t result_size = 0;
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch& launch, auto& timer) {
-               rmm::cuda_stream_view stream_view{launch.get_stream()};
-               timer.start();
-               auto result = cudf::detail::inclusive_dense_rank_scan(
-                 input, stream_view, rmm::mr::get_current_device_resource());
-               timer.stop();
-
-               // Estimating the result size will launch a kernel. Do not include it in measuring
-               // time.
-               result_size += estimate_size(result->view());
-             });
+  std::unique_ptr<cudf::column> result = nullptr;
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    rmm::cuda_stream_view stream_view{launch.get_stream()};
+    result = cudf::detail::inclusive_dense_rank_scan(
+      input, stream_view, rmm::mr::get_current_device_resource());
+  });
 
   state.add_element_count(input.size());
   state.add_global_memory_reads(estimate_size(input));
-  state.add_global_memory_writes(result_size);
+  state.add_global_memory_writes(estimate_size(result->view()));
 
   set_throughputs(state);
 }
