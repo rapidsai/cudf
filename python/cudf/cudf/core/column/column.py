@@ -927,13 +927,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @property
     def is_monotonic_increasing(self) -> bool:
-        return not self.has_nulls() and libcudf.sort.is_sorted(
+        return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
             [self], [True], None
         )
 
     @property
     def is_monotonic_decreasing(self) -> bool:
-        return not self.has_nulls() and libcudf.sort.is_sorted(
+        return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
             [self], [False], None
         )
 
@@ -959,7 +959,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         raise NotImplementedError()
 
     def astype(self, dtype: Dtype, copy: bool = False) -> ColumnBase:
-        if dtype == "category":
+        if len(self) == 0:
+            dtype = cudf.dtype(dtype)
+            if self.dtype == dtype:
+                result = self
+            else:
+                result = column_empty(0, dtype=dtype, masked=self.nullable)
+        elif dtype == "category":
             # TODO: Figure out why `cudf.dtype("category")`
             # astype's different than just the string
             result = self.as_categorical_column(dtype)
