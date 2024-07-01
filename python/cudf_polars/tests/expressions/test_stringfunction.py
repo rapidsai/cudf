@@ -106,12 +106,6 @@ def test_contains_invalid(ldf):
         query.collect(post_opt_callback=partial(execute_with_cudf, raise_on_fail=True))
 
 
-@pytest.mark.parametrize("offset,length", [(1, 3), (0, 3), (0, 0), (-3, 1), (-100, 5)])
-def test_slice(ldf, offset, length):
-    query = ldf.select(pl.col("a").str.slice(offset, length))
-    assert_gpu_result_equal(query)
-
-
 @pytest.mark.parametrize("offset", [1, -1, 0, 100, -100])
 def test_slice_scalars_offset(ldf, offset):
     query = ldf.select(pl.col("a").str.slice(offset))
@@ -124,21 +118,3 @@ def test_slice_scalars_offset(ldf, offset):
 def test_slice_scalars_length_and_offset(ldf, offset, length):
     query = ldf.select(pl.col("a").str.slice(offset, length))
     assert_gpu_result_equal(query)
-
-
-def test_slice_column():
-    df = pl.LazyFrame(
-        {
-            "a": ["a", "bcdefesf", "gsdfasd"],
-            "b": pl.Series([1, 2, 3], dtype=pl.Int32()),
-            "c": pl.Series([3, 5, 3], dtype=pl.Int32()),
-        }
-    )
-    query = df.select(pl.col.a.str.slice(pl.col.b, pl.col.c))
-    assert_gpu_result_equal(query)
-
-
-# def test_slice_column_and_literal():
-#    df = pl.LazyFrame({"a": ["a", "bcdefesf", "gsdfasd"], "b": pl.Series([1, 2, -2], dtype=pl.Int32())})
-#    query = df.select(pl.col.a.str.slice(pl.col.b, 2))
-#    assert_gpu_result_equal(query)

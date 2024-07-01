@@ -683,6 +683,11 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         "Regex contains only supports a scalar pattern"
                     )
+        elif self.name == pl_expr.StringFunction.Slice:
+            if not all(isinstance(child, Literal) for child in self.children[1:]):
+                raise NotImplementedError(
+                    "Slice only supports literal start and stop values"
+                )
 
     def do_evaluate(
         self,
@@ -735,65 +740,6 @@ class StringFunction(Expr):
                         plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
                     )
                 )
-            else:
-                # funnel to column overload
-                if isinstance(expr_offset, Literal):
-                    offsets_col = plc.column_factories.make_column_from_scalar(
-                        expr_offset.value, df.num_rows
-                    )
-                else:
-                    offsets_col = expr_offset.evaluate(
-                        df, context=context, mapping=mapping
-                    )
-                if isinstance(expr_length, Literal):
-                    length_col = plc.column_factories.make_column_from_scalar(
-                        expr_length.value, df.num_rows
-                    )
-                else:
-                    length_col = expr_length.evaluate(
-                        df, context=context, mapping=mapping
-                    )
-
-                if_ = plc.binaryop.binary_operation(
-                    offsets_col.obj,
-                    plc.interop.from_arrow(pa.scalar(0, type=pa.int32())),
-                    plc.binaryop.BinaryOperator.LESS,
-                    plc.DataType(plc.TypeId.BOOL8),
-                )
-                otherwise = plc.binaryop.binary_operation(
-                    offsets_col.obj,
-                    length_col.obj,
-                    plc.binaryop.BinaryOperator.ADD,
-                    plc.DataType(plc.TypeId.INT32),
-                )
-                new_starts = plc.copying.copy_if_else(otherwise, offsets_col.obj, if_)
-
-                stops = plc.binaryop.binary_operation(
-                    new_starts,
-                    length_col.obj,
-                    plc.binaryop.BinaryOperator.ADD,
-                    plc.DataType(plc.TypeId.INT32),
-                )
-
-                stops_lt_0 = plc.binaryop.binary_operation(
-                    stops,
-                    plc.interop.from_arrow(pa.scalar(0, type=pa.int32())),
-                    plc.binaryop.BinaryOperator.LESS,
-                    plc.DataType(plc.TypeId.BOOL8),
-                )
-
-                stops = plc.copying.copy_if_else(
-                    plc.column_factories.make_column_from_scalar(
-                        plc.interop.from_arrow(pa.scalar(0, type=pa.int32())),
-                        df.num_rows,
-                    ),
-                    stops,
-                    stops_lt_0,
-                )
-                return Column(
-                    plc.strings.slice.slice_strings(column.obj, new_starts, stops)
-                )
-
         columns = [
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
