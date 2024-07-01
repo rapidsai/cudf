@@ -6,7 +6,6 @@ from decimal import Decimal
 import numpy as np
 import pyarrow as pa
 import pytest
-from packaging import version
 
 import cudf
 from cudf.core.column import Decimal32Column, Decimal64Column, NumericalColumn
