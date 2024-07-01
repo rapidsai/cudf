@@ -157,7 +157,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                         "Decimal columns only support binary operations with "
                         "integer numerical columns."
                     )
-                other = other.as_decimal_column(
+                other = other.astype(
                     self.dtype.__class__(self.dtype.__class__.MAX_PRECISION, 0)
                 )
             elif not isinstance(other, DecimalBaseColumn):
